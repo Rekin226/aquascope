@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aquascope"
-version = "0.1.0"
+version = "0.2.0"
 description = "Open-source water data aggregation toolkit with AI-powered research methodology recommendations"
 readme = "README.md"
 license = {text = "MIT"}
@@ -19,38 +19,49 @@ keywords = [
     "taiwan",
     "USGS",
     "SDG6",
+    "GEMStat",
     "AI",
     "research-methodology",
     "environmental-science",
+    "data-analysis",
+    "EDA",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Hydrology",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
     "httpx>=0.25",
     "pydantic>=2.0",
+    "pandas>=2.0",
+    "numpy>=1.24",
 ]
 
 [project.optional-dependencies]
 ml = [
-    "pandas>=2.0",
     "scikit-learn>=1.3",
     "xgboost>=2.0",
+    "statsmodels>=0.14",
+    "pymannkendall>=1.4",
+    "scipy>=1.11",
+]
+viz = [
     "matplotlib>=3.7",
+    "seaborn>=0.13",
 ]
 llm = [
     "openai>=1.0",
 ]
 all = [
-    "aquascope[ml,llm]",
+    "aquascope[ml,viz,llm]",
 ]
 dev = [
     "pytest>=7.0",
@@ -58,6 +69,7 @@ dev = [
     "ruff>=0.3",
     "mypy>=1.8",
     "pre-commit>=3.0",
+    "nbformat>=5.0",
 ]
 
 [project.scripts]
@@ -65,9 +77,10 @@ aquascope = "aquascope.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Rekin226/aquascope"
-Documentation = "https://github.com/Rekin226/aquascope#readme"
+Documentation = "https://github.com/Rekin226/aquascope/wiki"
 Repository = "https://github.com/Rekin226/aquascope"
 Issues = "https://github.com/Rekin226/aquascope/issues"
+Changelog = "https://github.com/Rekin226/aquascope/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 include = ["aquascope*"]
@@ -81,6 +94,7 @@ select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
 "aquascope/ai_engine/knowledge_base.py" = ["E501"]
+"aquascope/pipelines/model_builder.py" = ["N806", "E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

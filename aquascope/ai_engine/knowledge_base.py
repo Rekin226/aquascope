@@ -264,7 +264,246 @@ METHODOLOGIES: list[ResearchMethodology] = [
         ],
         tags=["SDG", "policy", "benchmarking", "global", "indicators"],
     ),
+
+    # ── v0.2.0 additions ─────────────────────────────────────────────
+
+    ResearchMethodology(
+        id="arima_forecast",
+        name="ARIMA / SARIMA Time-Series Forecasting",
+        category="statistical",
+        description=(
+            "Auto-Regressive Integrated Moving Average model for forecasting "
+            "seasonal and non-seasonal water quality time-series.  Suitable for "
+            "monthly or quarterly data with clear temporal autocorrelation."
+        ),
+        applicable_parameters=["DO", "BOD5", "COD", "NH3-N", "pH", "Flow", "Water level"],
+        data_requirements=["univariate time-series", "≥ 24 monthly observations", "stationary or differentiable"],
+        typical_scale="field",
+        complexity="medium",
+        references=[
+            "Box, G.E.P. & Jenkins, G.M. (1976). Time Series Analysis: Forecasting and Control. Holden-Day.",
+        ],
+        tags=["ARIMA", "SARIMA", "forecasting", "time-series", "statistical"],
+    ),
+    ResearchMethodology(
+        id="transformer_forecast",
+        name="Transformer-Based Time-Series Forecasting",
+        category="machine_learning",
+        description=(
+            "Self-attention neural network architecture for capturing long-range "
+            "dependencies in water quality time-series.  State-of-the-art performance "
+            "on many forecasting benchmarks."
+        ),
+        applicable_parameters=["DO", "BOD5", "COD", "NH3-N", "pH", "Flow", "Turbidity"],
+        data_requirements=["high-frequency time-series", "≥ 3 years", "multi-variate preferred"],
+        typical_scale="regional",
+        complexity="high",
+        references=[
+            "Vaswani, A. et al. (2017). Attention Is All You Need. NeurIPS 2017.",
+        ],
+        tags=["transformer", "attention", "deep-learning", "forecasting", "time-series"],
+    ),
+    ResearchMethodology(
+        id="bayesian_network",
+        name="Bayesian Network for Causal Inference",
+        category="machine_learning",
+        description=(
+            "Probabilistic graphical model to discover causal relationships "
+            "between water quality parameters, land use, and pollution sources."
+        ),
+        applicable_parameters=["DO", "BOD5", "COD", "NH3-N", "TP", "Conductivity", "pH"],
+        data_requirements=["multi-parameter dataset", "≥ 100 samples", "domain knowledge for priors"],
+        typical_scale="regional",
+        complexity="high",
+        references=[
+            "Pearl, J. (2009). Causality: Models, Reasoning, and Inference. 2nd ed. Cambridge University Press.",
+        ],
+        tags=["Bayesian", "causal", "probabilistic", "network", "inference"],
+    ),
+    ResearchMethodology(
+        id="svr_prediction",
+        name="Support Vector Regression (SVR)",
+        category="machine_learning",
+        description=(
+            "Kernel-based regression for nonlinear water quality prediction.  "
+            "Effective with small-to-medium datasets and high-dimensional inputs."
+        ),
+        applicable_parameters=["DO", "BOD5", "COD", "NH3-N", "Turbidity", "Chlorophyll-a"],
+        data_requirements=["tabular multi-parameter dataset", "≥ 100 samples"],
+        typical_scale="field",
+        complexity="medium",
+        references=[
+            "Drucker, H. et al. (1997). Support Vector Regression Machines. NeurIPS 1997.",
+        ],
+        tags=["SVR", "SVM", "regression", "kernel", "nonlinear"],
+    ),
+    ResearchMethodology(
+        id="kriging_interpolation",
+        name="Kriging / Geostatistical Interpolation",
+        category="remote_sensing",
+        description=(
+            "Spatial interpolation using variogram modelling to estimate water "
+            "quality at unsampled locations.  Produces prediction maps with "
+            "uncertainty estimates."
+        ),
+        applicable_parameters=["DO", "BOD5", "COD", "NH3-N", "Conductivity", "pH", "Hardness"],
+        data_requirements=["georeferenced point data", "≥ 30 stations", "spatial coordinates"],
+        typical_scale="regional",
+        complexity="medium",
+        references=[
+            "Cressie, N. (1993). Statistics for Spatial Data. Wiley.",
+        ],
+        tags=["kriging", "geostatistics", "spatial", "interpolation", "mapping"],
+    ),
+    ResearchMethodology(
+        id="hec_ras_modelling",
+        name="HEC-RAS Hydraulic Modelling",
+        category="hydrological_modelling",
+        description=(
+            "1D/2D hydraulic modelling for flood inundation mapping, river "
+            "profile analysis, and dam-break simulation using the US Army "
+            "Corps of Engineers HEC-RAS software."
+        ),
+        applicable_parameters=["Flow", "Water level", "Channel geometry"],
+        data_requirements=["river cross-sections", "flow data", "DEM", "boundary conditions"],
+        typical_scale="regional",
+        complexity="high",
+        references=[
+            "Brunner, G.W. (2020). HEC-RAS River Analysis System: Hydraulic Reference Manual. US Army Corps of Engineers.",
+        ],
+        tags=["HEC-RAS", "hydraulic", "flood", "modelling", "1D", "2D"],
+    ),
+    ResearchMethodology(
+        id="qual2k_modelling",
+        name="QUAL2K River Water Quality Modelling",
+        category="process_engineering",
+        description=(
+            "Steady-state, one-dimensional river water quality model for simulating "
+            "dissolved oxygen, BOD, nutrients, and temperature along a river reach."
+        ),
+        applicable_parameters=["DO", "BOD5", "NH3-N", "NO3-N", "TP", "Temperature"],
+        data_requirements=["river geometry", "flow data", "point source inputs", "upstream boundary conditions"],
+        typical_scale="field",
+        complexity="high",
+        references=[
+            "Chapra, S.C. et al. (2008). QUAL2K: A Modeling Framework for Simulating River and Stream Water Quality. EPA.",
+        ],
+        tags=["QUAL2K", "river", "water-quality", "modelling", "DO", "steady-state"],
+    ),
+    ResearchMethodology(
+        id="monte_carlo_uncertainty",
+        name="Monte Carlo Uncertainty Analysis",
+        category="statistical",
+        description=(
+            "Propagate parameter uncertainty through water quality models using "
+            "random sampling.  Quantifies confidence intervals on predictions "
+            "and identifies most sensitive parameters."
+        ),
+        applicable_parameters=["DO", "BOD5", "COD", "NH3-N", "Flow", "Temperature"],
+        data_requirements=["parameter distributions", "model equations", "≥ 1000 simulations"],
+        typical_scale="field",
+        complexity="medium",
+        references=[
+            "Metropolis, N. & Ulam, S. (1949). The Monte Carlo Method. JASA 44:335-341.",
+        ],
+        tags=["Monte-Carlo", "uncertainty", "sensitivity", "simulation", "stochastic"],
+    ),
+    ResearchMethodology(
+        id="wavelet_analysis",
+        name="Wavelet Transform Analysis",
+        category="statistical",
+        description=(
+            "Multi-resolution time-frequency analysis to detect periodic patterns, "
+            "regime shifts, and scale-dependent relationships in hydrological "
+            "and water quality time-series."
+        ),
+        applicable_parameters=["DO", "Flow", "Water level", "Precipitation", "Temperature"],
+        data_requirements=["long time-series", "≥ 5 years", "regular interval"],
+        typical_scale="regional",
+        complexity="medium",
+        references=[
+            "Torrence, C. & Compo, G.P. (1998). A Practical Guide to Wavelet Analysis. BAMS 79(1):61-78.",
+        ],
+        tags=["wavelet", "time-frequency", "periodicity", "multi-scale", "spectral"],
+    ),
+    ResearchMethodology(
+        id="copula_analysis",
+        name="Copula-Based Dependence Modelling",
+        category="statistical",
+        description=(
+            "Model multivariate dependence structure between water quality "
+            "parameters or hydrological variables using copula functions, "
+            "capturing tail dependencies that correlation misses."
+        ),
+        applicable_parameters=["Flow", "Water level", "Precipitation", "DO", "COD"],
+        data_requirements=["paired observations", "≥ 50 samples", "marginal distributions"],
+        typical_scale="regional",
+        complexity="high",
+        references=[
+            "Nelsen, R.B. (2006). An Introduction to Copulas. 2nd ed. Springer.",
+        ],
+        tags=["copula", "dependence", "multivariate", "joint-distribution", "extremes"],
+    ),
+    ResearchMethodology(
+        id="transfer_learning_wq",
+        name="Transfer Learning for Water Quality",
+        category="machine_learning",
+        description=(
+            "Fine-tune pre-trained deep learning models on local water quality data, "
+            "leveraging knowledge from data-rich regions to improve predictions in "
+            "data-scarce environments."
+        ),
+        applicable_parameters=["DO", "BOD5", "COD", "NH3-N", "pH", "Turbidity"],
+        data_requirements=["source domain dataset (large)", "target domain dataset (small, ≥ 50)", "similar parameters"],
+        typical_scale="regional",
+        complexity="high",
+        references=[
+            "Pan, S.J. & Yang, Q. (2010). A Survey on Transfer Learning. IEEE TKDE 22(10):1345-1359.",
+        ],
+        tags=["transfer-learning", "deep-learning", "data-scarce", "fine-tuning"],
+    ),
+    ResearchMethodology(
+        id="constructed_wetland_design",
+        name="Constructed Wetland Design Optimisation",
+        category="process_engineering",
+        description=(
+            "Design and optimise nature-based treatment systems using constructed "
+            "wetlands for decentralised wastewater treatment.  Evaluate hydraulic "
+            "loading, vegetation selection, and pollutant removal efficiency."
+        ),
+        applicable_parameters=["BOD5", "COD", "NH3-N", "TN", "TP", "SS", "E.coli"],
+        data_requirements=["influent/effluent quality", "hydraulic loading rates", "climate data"],
+        typical_scale="pilot",
+        complexity="medium",
+        references=[
+            "Kadlec, R.H. & Wallace, S. (2009). Treatment Wetlands. 2nd ed. CRC Press.",
+        ],
+        tags=["wetland", "nature-based", "wastewater", "treatment", "NBS"],
+    ),
+    ResearchMethodology(
+        id="correlation_analysis",
+        name="Pearson / Spearman Correlation Analysis",
+        category="statistical",
+        description=(
+            "Quantify linear (Pearson) or monotonic (Spearman) relationships between "
+            "water quality parameters.  Foundation for identifying co-varying pollutants "
+            "and potential cause-effect links."
+        ),
+        applicable_parameters=["DO", "BOD5", "COD", "NH3-N", "SS", "pH", "Conductivity", "Temperature", "TP"],
+        data_requirements=["paired measurements", "≥ 30 samples", "multi-parameter"],
+        typical_scale="field",
+        complexity="low",
+        references=[
+            "Helsel, D.R. & Hirsch, R.M. (2002). Statistical Methods in Water Resources. USGS TWRI Book 4.",
+        ],
+        tags=["correlation", "Pearson", "Spearman", "bivariate", "association"],
+    ),
 ]
+
+
+def get_all_methodologies() -> list[ResearchMethodology]:
+    """Return the full methodology catalogue."""
+    return list(METHODOLOGIES)
 
 
 def get_methodology(method_id: str) -> ResearchMethodology | None:

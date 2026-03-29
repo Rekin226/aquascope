@@ -106,7 +106,7 @@ class SDG6Collector(BaseCollector):
                         country_code=rec.get("GeoAreaCode", ""),
                         country_name=rec.get("GeoAreaName"),
                         year=int(rec.get("TimePeriod", 0)),
-                        value=float(val) if val not in (None, "", "NA") else None,
+                        value=float(val) if val is not None and val not in ("", "NA") else None,
                         unit=rec.get("Units"),
                         series_code=rec.get("SeriesCode"),
                     )

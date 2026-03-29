@@ -7,10 +7,29 @@ import pytest
 from aquascope.pipelines.model_builder import (
     PipelineResult,
     list_available_pipelines,
+    run_a2o_nutrient,
+    run_bayesian_network,
+    run_constructed_wetland,
+    run_copula_analysis,
     run_correlation_analysis,
+    run_gis_watershed,
+    run_hec_ras,
+    run_kriging,
+    run_lstm_forecasting,
+    run_mbbr_pilot,
+    run_mbr_optimisation,
+    run_monte_carlo,
     run_pca_clustering,
     run_pipeline,
+    run_qual2k,
     run_random_forest,
+    run_satellite_eutrophication,
+    run_sdg6_benchmarking,
+    run_svr_prediction,
+    run_swat,
+    run_transfer_learning,
+    run_transformer_forecast,
+    run_wavelet_analysis,
     run_wqi,
 )
 
@@ -55,7 +74,7 @@ class TestPipelineRegistry:
         assert "wqi_calculation" in pipelines
         assert "pca_clustering" in pipelines
         assert "correlation_analysis" in pipelines
-        assert len(pipelines) >= 7
+        assert len(pipelines) >= 26
 
     def test_run_unknown_pipeline(self):
         with pytest.raises(ValueError, match="No pipeline"):
@@ -140,3 +159,350 @@ class TestDispatcher:
         df = _make_wqi_df()
         result = run_pipeline("wqi_calculation", df)
         assert result.method_id == "wqi_calculation"
+
+
+class TestSVRPrediction:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_svr_prediction(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "svr_prediction"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_svr_prediction(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestBayesianNetwork:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_bayesian_network(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "bayesian_network"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_bayesian_network(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestMonteCarlo:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_monte_carlo(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "monte_carlo_uncertainty"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_monte_carlo(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestWaveletAnalysis:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_wavelet_analysis(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "wavelet_analysis"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_wavelet_analysis(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestCopulaAnalysis:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_copula_analysis(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "copula_analysis"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_copula_analysis(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestKriging:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        rng = np.random.default_rng(99)
+        df["latitude"] = rng.uniform(24.0, 25.5, len(df))
+        df["longitude"] = rng.uniform(120.0, 121.5, len(df))
+        result = run_kriging(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "kriging_interpolation"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+            "latitude": [24.5],
+            "longitude": [120.5],
+        })
+        result = run_kriging(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestLSTMForecasting:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_lstm_forecasting(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "lstm_forecasting"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_lstm_forecasting(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestTransformerForecast:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_transformer_forecast(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "transformer_forecast"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_transformer_forecast(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestTransferLearning:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_transfer_learning(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "transfer_learning_wq"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_transfer_learning(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestSDG6Benchmarking:
+    def test_returns_result(self):
+        df = _make_multivariate_df()
+        result = run_sdg6_benchmarking(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "sdg6_benchmarking"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_sdg6_benchmarking(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestSatelliteEutrophication:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_satellite_eutrophication(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "satellite_eutrophication"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_satellite_eutrophication(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestGISWatershed:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_gis_watershed(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "gis_watershed_analysis"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_gis_watershed(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestHECRAS:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_hec_ras(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "hec_ras_modelling"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_hec_ras(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestQUAL2K:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_qual2k(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "qual2k_modelling"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_qual2k(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestSWAT:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_swat(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "swat_modelling"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_swat(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestMBBRPilot:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_mbbr_pilot(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "mbbr_pilot_study"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_mbbr_pilot(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestMBROptimisation:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_mbr_optimisation(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "mbr_optimisation"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_mbr_optimisation(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestA2ONutrient:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_a2o_nutrient(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "a2o_nutrient_removal"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_a2o_nutrient(df)
+        assert isinstance(result, PipelineResult)
+
+
+class TestConstructedWetland:
+    def test_returns_result(self):
+        df = _make_multivariate_df(n_per_param=100)
+        result = run_constructed_wetland(df)
+        assert isinstance(result, PipelineResult)
+        assert result.method_id == "constructed_wetland_design"
+
+    def test_insufficient_data(self):
+        df = pd.DataFrame({
+            "parameter": ["DO"],
+            "value": [5.0],
+            "station_id": ["ST001"],
+            "sample_datetime": ["2024-01-01T00:00:00"],
+        })
+        result = run_constructed_wetland(df)
+        assert isinstance(result, PipelineResult)

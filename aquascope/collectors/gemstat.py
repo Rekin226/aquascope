@@ -74,14 +74,61 @@ class GEMStatCollector(BaseCollector):
 
     def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample]:
         """
-        For Zenodo metadata, return an empty list.
-        Actual data parsing happens via ``parse_gemstat_csv()``.
+        Normalise raw GEMStat data into WaterQualitySample records.
+
+        If *raw* contains Zenodo file metadata (from ``fetch_raw``),
+        logs the available files and returns an empty list.
+        If *raw* contains actual observation dicts (e.g. pre-parsed CSV rows),
+        converts them into WaterQualitySample records.
         """
-        logger.info(
-            "GEMStat files available for download: %s",
-            [f["filename"] for f in raw],
-        )
-        return []
+        if not raw:
+            return []
+
+        # Detect Zenodo metadata vs. observation rows
+        if "download_url" in raw[0]:
+            logger.info(
+                "GEMStat files available for download: %s",
+                [f["filename"] for f in raw],
+            )
+            return []
+
+        # Treat raw as pre-parsed observation dicts
+        samples: list[WaterQualitySample] = []
+        for row in raw:
+            try:
+                val_str = row.get("Analysis Result", row.get("Value", ""))
+                if not val_str or str(val_str).strip() in ("", "-", "ND"):
+                    continue
+
+                loc = None
+                lat = row.get("Latitude")
+                lon = row.get("Longitude")
+                if lat and lon:
+                    loc = GeoLocation(latitude=float(lat), longitude=float(lon))
+
+                date_str = row.get("Sample Date", row.get("Date", ""))
+                if not date_str:
+                    logger.debug("Skipping GEMStat row without date")
+                    continue
+                sample_dt = datetime.strptime(str(date_str)[:10], "%Y-%m-%d")
+
+                samples.append(
+                    WaterQualitySample(
+                        source=DataSource.GEMSTAT,
+                        station_id=row.get("GEMS Station Number", "unknown"),
+                        station_name=row.get("Station Name"),
+                        location=loc,
+                        sample_datetime=sample_dt,
+                        parameter=row.get("Parameter", "unknown"),
+                        value=float(val_str),
+                        unit=row.get("Unit", ""),
+                        county=row.get("Country Code", ""),
+                    )
+                )
+            except (ValueError, KeyError, TypeError) as exc:
+                logger.debug("Skipping GEMStat row: %s", exc)
+
+        return samples
 
     @staticmethod
     def parse_gemstat_csv(csv_content: str, max_records: int = 10000) -> list[WaterQualitySample]:
@@ -111,7 +158,10 @@ class GEMStatCollector(BaseCollector):
                     loc = GeoLocation(latitude=float(lat), longitude=float(lon))
 
                 date_str = row.get("Sample Date", row.get("Date", ""))
-                sample_dt = datetime.strptime(date_str[:10], "%Y-%m-%d") if date_str else datetime.now()
+                if not date_str:
+                    logger.debug("Skipping GEMStat CSV row without date")
+                    continue
+                sample_dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
 
                 samples.append(
                     WaterQualitySample(

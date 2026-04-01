@@ -1,0 +1,13 @@
+include LICENSE
+include README.md
+include CHANGELOG.md
+include CONTRIBUTING.md
+include paper.md
+include paper.bib
+recursive-include aquascope *.py
+recursive-include data *.json *.csv *.md
+recursive-include docs *.md *.rst
+recursive-include examples *.py *.md
+prune tests
+prune notebooks
+prune venv

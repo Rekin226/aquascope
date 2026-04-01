@@ -2,6 +2,31 @@
 
 All notable changes to AquaScope are documented here.
 
+## [0.4.0] — 2026-04-01
+
+### Added
+- **Groundwater module** (`aquascope/groundwater/`) — GRACE satellite data integration, well monitoring, recharge estimation, and aquifer hydraulics analysis
+- **Climate projections module** (`aquascope/climate/`) — CMIP6 scenario analysis, statistical downscaling, Palmer Drought Severity Index (PDSI), and climate impact assessment
+- **JOSS paper** — Added `paper.md` and `paper.bib` for Journal of Open Source Software submission
+- **EU Water Framework Directive collector** (in progress) — European water body status and compliance data
+- **Japan MLIT collector** (in progress) — Japanese river and water quality monitoring data
+- **Korea WAMIS collector** (in progress) — Korean water resources management information
+- **15 data source collectors** total across global water monitoring networks
+- **New CLI commands**: `groundwater`, `climate` for the new modules
+- **New convenience API functions** in `aquascope.api` for streamlined programmatic access
+- **Agricultural water module** (`aquascope/agri/`) — crop water demand, ET₀ calculation, water balance, productivity benchmarking, and irrigation planning
+- **Alerts module** (`aquascope/alerts/`) — threshold-based monitoring, anomaly checking, and notification system
+- **Advanced analysis** — changepoint detection, copula modelling
+- **Hydrological modelling** (`aquascope/hydrology/`) — rainfall-runoff, routing, flood frequency, baseflow separation, CAMELS benchmarking
+- **AI agent and planner** — multi-step research planning and autonomous execution
+- **685+ tests** across all modules
+
+### Changed
+- Bumped version to 0.4.0
+- Expanded optional dependency groups: `forecast`, `copernicus`, `scientific`, `dashboard`, `spatial`
+- Added Python 3.13 classifier
+- GitHub Actions publish workflow for PyPI releases via trusted publishing
+
 ## [0.2.0] — 2026-03-12
 
 ### Added

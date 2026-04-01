@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -17,8 +16,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install ruff
+          cache: pip
+      - run: pip install -e ".[dev,all]"
       - run: ruff check aquascope/ tests/
+      - run: mypy aquascope/ --ignore-missing-imports
 
   test:
     runs-on: ubuntu-latest
@@ -30,15 +31,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install -e ".[dev,ml]"
-      - run: pytest --cov=aquascope --cov-report=term-missing
-
-  type-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+          cache: pip
+      - run: pip install -e ".[dev,all]"
+      - run: pytest --cov=aquascope --cov-report=term-missing --cov-report=xml
+      - name: Upload coverage artifact
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
         with:
-          python-version: "3.12"
-      - run: pip install -e ".[dev,ml]"
-      - run: mypy aquascope/ --ignore-missing-imports
+          name: coverage-report
+          path: coverage.xml

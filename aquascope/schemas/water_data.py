@@ -23,6 +23,15 @@ class DataSource(str, Enum):
     SDG6 = "sdg6"
     GEMSTAT = "gemstat"
     WQP = "wqp"
+    OPENMETEO = "openmeteo"
+    COPERNICUS = "copernicus"
+    AQUASTAT = "aquastat"
+    WAPOR = "wapor"
+    USGS_GW = "usgs_groundwater"
+    GRACE = "grace"
+    EU_WFD = "eu_wfd"
+    JAPAN_MLIT = "japan_mlit"
+    KOREA_WAMIS = "korea_wamis"
 
 
 class GeoLocation(BaseModel):

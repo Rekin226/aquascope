@@ -83,13 +83,63 @@ class CachedHTTPClient:
         path.write_text(json.dumps(data, ensure_ascii=False, default=str))
 
     # ── public API ───────────────────────────────────────────────────
+    @staticmethod
+    def _parse_response_json(resp: httpx.Response) -> Any:
+        """
+        Parse JSON from *resp*, handling common pitfalls:
+
+        - Raises ``ValueError`` with a clear message if Content-Type indicates
+          HTML or XML (the server returned an error page instead of JSON).
+        - Strips a UTF-8 BOM (``\\ufeff``) and leading/trailing whitespace
+          before parsing, which fixes the ``JSONDecodeError: Expecting value:
+          line 5 column 1`` class of failures.
+        - On ``JSONDecodeError``, logs and re-raises with the first 200 chars
+          of the body so callers can diagnose unexpected formats.
+        """
+        content_type = resp.headers.get("content-type", "")
+
+        if "text/html" in content_type:
+            preview = resp.text[:500]
+            raise ValueError(
+                f"Expected JSON but received HTML (Content-Type: {content_type!r}). "
+                f"The server may have returned an error page. "
+                f"Response preview: {preview!r}"
+            )
+        if "text/xml" in content_type or "application/xml" in content_type:
+            preview = resp.text[:500]
+            raise ValueError(
+                f"Expected JSON but received XML (Content-Type: {content_type!r}). "
+                f"Response preview: {preview!r}"
+            )
+
+        # Strip BOM (\ufeff) and surrounding whitespace before parsing.
+        text = resp.text.lstrip("\ufeff").strip()
+
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as exc:
+            preview = text[:200]
+            raise ValueError(
+                f"JSON decode failed ({exc}). "
+                f"First 200 chars of response: {preview!r}"
+            ) from exc
+
     def get_json(
         self,
         path: str,
         params: dict | None = None,
+        headers: dict | None = None,
         use_cache: bool = True,
     ) -> Any:
-        """GET *path* and return parsed JSON, with cache + retries."""
+        """GET *path* and return parsed JSON, with cache + retries.
+
+        Args:
+            path: URL path (appended to ``base_url``) or a full URL.
+            params: Optional query parameters.
+            headers: Optional extra request headers (e.g. ``{"Accept":
+                "application/json"}``).
+            use_cache: Whether to read/write the disk cache.
+        """
         url = f"{self.base_url}/{path.lstrip('/')}" if self.base_url else path
 
         if use_cache:
@@ -104,9 +154,9 @@ class CachedHTTPClient:
             if self.rate_limiter:
                 self.rate_limiter.wait_if_needed()
             try:
-                resp = self._client.get(url, params=params)
+                resp = self._client.get(url, params=params, headers=headers)
                 resp.raise_for_status()
-                data = resp.json()
+                data = self._parse_response_json(resp)
                 if use_cache:
                     self._write_cache(key, data)
                 return data

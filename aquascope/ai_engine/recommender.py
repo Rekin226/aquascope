@@ -15,6 +15,8 @@ import logging
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+import httpx
+
 from aquascope.ai_engine.knowledge_base import (
     METHODOLOGIES,
     ResearchMethodology,
@@ -171,82 +173,160 @@ def recommend(
 
 # ── Optional LLM-enhanced recommendation ─────────────────────────────
 
+_OPENAI_HOST = "api.openai.com"
+
+
+def _build_prompts(profile: DatasetProfile, top_k: int) -> tuple[str, str]:
+    """Build (system_prompt, user_prompt). Uses a compact KB to reduce token count."""
+    profile_json = json.dumps(asdict(profile), ensure_ascii=False)
+
+    # Compact KB — only the fields the LLM needs for matching.
+    compact_kb = [
+        {
+            "id": m.id,
+            "name": m.name,
+            "category": m.category,
+            "params": m.applicable_parameters,
+            "scale": m.typical_scale,
+            "tags": m.tags,
+        }
+        for m in METHODOLOGIES
+    ]
+    kb_json = json.dumps(compact_kb, ensure_ascii=False)
+
+    system_prompt = (
+        "You are a water-resources research advisor. "
+        "Output ONLY a JSON array — no markdown, no explanation, no code fences. "
+        f"Pick the top {top_k} methodologies from the catalogue that best fit the dataset. "
+        "Each element must have exactly: "
+        "\"id\" (string), \"score\" (integer 0-100), \"rationale\" (one sentence)."
+    )
+    user_prompt = (
+        f"Dataset: {profile_json}\n\n"
+        f"Catalogue: {kb_json}"
+    )
+    return system_prompt, user_prompt
+
+
+def _parse_llm_output(raw_text: str, top_k: int) -> list[Recommendation]:
+    import re as _re
+
+    raw_text = _re.sub(r"```(?:json)?\s*", "", raw_text).strip().rstrip("`").strip()
+    parsed = json.loads(raw_text)
+    items = parsed if isinstance(parsed, list) else parsed.get("recommendations", [])
+
+    results: list[Recommendation] = []
+    for item in items[:top_k]:
+        method = next((m for m in METHODOLOGIES if m.id == item["id"]), None)
+        if method:
+            results.append(
+                Recommendation(
+                    methodology=method,
+                    score=float(item.get("score", 50)),
+                    rationale=item.get("rationale", ""),
+                )
+            )
+    return results
+
+
+def _call_ollama_native(
+    base_url: str,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    timeout: float,
+) -> str:
+    """
+    Call Ollama's native /api/chat endpoint via httpx.
+
+    Using the native endpoint (instead of the OpenAI-compatible /v1/chat/completions)
+    lets us pass Ollama-specific options like think=false (disables qwen3/deepseek
+    chain-of-thought mode which would otherwise generate thousands of reasoning tokens
+    and time out on every request).
+    """
+    import httpx
+
+    # Derive native host from base_url, e.g.
+    # "http://localhost:11434/v1" → "http://localhost:11434"
+    native_base = base_url.rstrip("/")
+    if native_base.endswith("/v1"):
+        native_base = native_base[:-3]
+    chat_url = f"{native_base}/api/chat"
+
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "stream": False,
+        "think": False,          # disable qwen3 / deepseek thinking mode
+        "options": {
+            "temperature": 0.3,
+            "num_predict": 1024,  # cap output tokens for local models
+        },
+    }
+
+    resp = httpx.post(chat_url, json=payload, timeout=timeout)
+    resp.raise_for_status()
+    return resp.json()["message"]["content"]
+
+
 def recommend_with_llm(
     profile: DatasetProfile,
     top_k: int = 5,
     model: str = "gpt-4o-mini",
     api_key: str | None = None,
     base_url: str | None = None,
+    timeout: float = 120.0,
 ) -> list[Recommendation]:
     """
     Use an LLM to provide more nuanced methodology recommendations.
 
     Falls back to rule-based if the LLM call fails.
 
-    Supports OpenAI-compatible APIs (OpenAI, Anthropic via proxy,
-    local Ollama at http://localhost:11434/v1).
+    Supports:
+    - OpenAI API (base_url=None or contains api.openai.com): uses openai library.
+    - Local Ollama (base_url like "http://localhost:11434/v1"): calls Ollama's
+      native /api/chat endpoint directly via httpx, bypassing the openai client
+      compatibility issues (broken timeout, unsupported parameters, qwen3 thinking
+      mode causing runaway token generation).
     """
-    try:
-        from openai import OpenAI
-    except ImportError:
-        logger.warning("openai package not installed; falling back to rule-based.")
-        return recommend(profile, top_k=top_k)
-
-    # Build a compact JSON of the knowledge base
-    kb_json = json.dumps(
-        [asdict(m) for m in METHODOLOGIES], indent=1, ensure_ascii=False
-    )
-    profile_json = json.dumps(asdict(profile), indent=1, ensure_ascii=False)
-
-    system_prompt = (
-        "You are an expert water-resources research advisor. "
-        "Given a dataset profile and a catalogue of research methodologies, "
-        "recommend the most suitable methodologies. "
-        "For each recommendation, provide: methodology id, a relevance score (0-100), "
-        "and a concise rationale explaining why it fits the dataset. "
-        "Return valid JSON: a list of objects with keys 'id', 'score', 'rationale'. "
-        f"Return at most {top_k} recommendations sorted by score descending."
-    )
-
-    user_prompt = (
-        f"## Dataset Profile\n```json\n{profile_json}\n```\n\n"
-        f"## Available Methodologies\n```json\n{kb_json}\n```"
-    )
+    is_openai = base_url is None or _OPENAI_HOST in base_url
+    system_prompt, user_prompt = _build_prompts(profile, top_k)
 
     try:
-        client_kwargs: dict[str, Any] = {}
-        if api_key:
-            client_kwargs["api_key"] = api_key
-        if base_url:
-            client_kwargs["base_url"] = base_url
+        if is_openai:
+            try:
+                import httpx
+                from openai import OpenAI
+            except ImportError:
+                logger.warning("openai package not installed; falling back to rule-based.")
+                return recommend(profile, top_k=top_k)
 
-        client = OpenAI(**client_kwargs)
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.3,
-            response_format={"type": "json_object"},
-        )
+            client = OpenAI(
+                api_key=api_key or "openai",
+                base_url=base_url or None,
+                timeout=httpx.Timeout(timeout, connect=10.0),
+            )
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.3,
+                max_tokens=1024,
+                response_format={"type": "json_object"},
+            )
+            raw_text = resp.choices[0].message.content or "[]"
+        else:
+            # Non-OpenAI provider: use Ollama's native API via httpx.
+            raw_text = _call_ollama_native(
+                base_url, model, system_prompt, user_prompt, timeout  # type: ignore[arg-type]
+            )
 
-        raw_text = resp.choices[0].message.content or "[]"
-        parsed = json.loads(raw_text)
-        items = parsed if isinstance(parsed, list) else parsed.get("recommendations", [])
-
-        results: list[Recommendation] = []
-        for item in items[:top_k]:
-            method = next((m for m in METHODOLOGIES if m.id == item["id"]), None)
-            if method:
-                results.append(
-                    Recommendation(
-                        methodology=method,
-                        score=float(item.get("score", 50)),
-                        rationale=item.get("rationale", ""),
-                    )
-                )
-        return results
+        return _parse_llm_output(raw_text, top_k)
 
     except Exception as exc:
         logger.warning("LLM recommendation failed (%s); falling back to rule-based.", exc)

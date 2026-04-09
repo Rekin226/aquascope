@@ -10,11 +10,14 @@ from aquascope.collectors.korea_wamis import KoreaWAMISCollector
 from aquascope.collectors.openmeteo import OpenMeteoCollector
 from aquascope.collectors.sdg6 import SDG6Collector
 from aquascope.collectors.taiwan_civil_iot import TaiwanCivilIoTCollector
+from aquascope.collectors.taiwan_datagov import TaiwanDataGovCollector
 from aquascope.collectors.taiwan_moenv import TaiwanMOENVCollector
 from aquascope.collectors.taiwan_wra import (
     TaiwanWRAReservoirCollector,
     TaiwanWRAWaterLevelCollector,
 )
+from aquascope.collectors.taiwan_wra_fhy import TaiwanWRAFhyCollector
+from aquascope.collectors.taiwan_wra_iot import TaiwanWRAIoTCollector
 from aquascope.collectors.usgs import USGSCollector
 from aquascope.collectors.wapor import WaPORCollector
 from aquascope.collectors.wqp import WQPCollector
@@ -30,7 +33,10 @@ __all__ = [
     "OpenMeteoCollector",
     "SDG6Collector",
     "TaiwanCivilIoTCollector",
+    "TaiwanDataGovCollector",
     "TaiwanMOENVCollector",
+    "TaiwanWRAFhyCollector",
+    "TaiwanWRAIoTCollector",
     "TaiwanWRAReservoirCollector",
     "TaiwanWRAWaterLevelCollector",
     "USGSCollector",

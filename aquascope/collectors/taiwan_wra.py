@@ -26,7 +26,7 @@ from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
 
 logger = logging.getLogger(__name__)
 
-WRA_BASE = "https://opendata.wra.gov.tw/openapi/api/v2"
+WRA_BASE = "https://opendata.wra.gov.tw/api/v2"
 
 # ── Dataset UUIDs ────────────────────────────────────────────────────
 WATER_LEVEL_DATASET = "73c4c3de-4045-4765-abeb-89f9f9cd5ff0"
@@ -61,18 +61,22 @@ class TaiwanWRAWaterLevelCollector(BaseCollector):
         readings: list[WaterLevelReading] = []
         for rec in raw:
             try:
-                level_str = rec.get("WaterLevel") or rec.get("waterLevel")
+                level_str = (
+                    rec.get("WaterLevel")
+                    or rec.get("waterLevel")
+                    or rec.get("waterlevel")
+                )
                 if not level_str or str(level_str).strip() in ("", "-", "--"):
                     continue
 
                 readings.append(
                     WaterLevelReading(
                         source=DataSource.TAIWAN_WRA,
-                        station_id=rec.get("StationIdentifier", rec.get("ST_NO", "unknown")),
-                        station_name=rec.get("StationName"),
+                        station_id=rec.get("StationIdentifier", rec.get("ST_NO", rec.get("stationid", "unknown"))),
+                        station_name=rec.get("StationName", rec.get("observatoryidentifier")),
                         location=None,
                         reading_datetime=datetime.fromisoformat(
-                            rec.get("RecordTime", rec.get("recordTime", ""))
+                            rec.get("RecordTime", rec.get("recordTime", rec.get("datetime", "")))
                         ),
                         water_level=float(level_str),
                         unit="m",

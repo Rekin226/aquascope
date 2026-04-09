@@ -32,6 +32,9 @@ class DataSource(str, Enum):
     EU_WFD = "eu_wfd"
     JAPAN_MLIT = "japan_mlit"
     KOREA_WAMIS = "korea_wamis"
+    TAIWAN_WRA_FHY = "taiwan_wra_fhy"
+    TAIWAN_WRA_IOT = "taiwan_wra_iot"
+    TAIWAN_DATAGOV = "taiwan_datagov"
 
 
 class GeoLocation(BaseModel):

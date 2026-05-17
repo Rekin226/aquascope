@@ -203,6 +203,29 @@ print(cps.change_year, cps.p_value)
 print(cop.family, cop.theta, cop.aic)
 ```
 
+### 7. Bayesian regression with uncertainty quantification
+
+```python
+from aquascope.api import bayesian_regression
+
+# Annual rainfall → runoff with full posterior + convergence diagnostics
+posterior = bayesian_regression(X=annual_precip, y=annual_runoff)
+
+print(posterior.posterior_mean)
+# {'beta_0': 12.4, 'beta_1': 0.82, 'sigma2': 41.6}
+
+print(posterior.credible_intervals["beta_1"])
+# (0.78, 0.86)        ← 95% credible interval on slope
+
+print(posterior.r_hat)
+# {'beta_0': 1.00, 'beta_1': 1.00, 'sigma2': 1.00}    ← Gelman–Rubin, converged
+
+print(posterior.dic, posterior.effective_sample_size["beta_1"])
+# 124.7  9842.0       ← model fit + effective sample size
+```
+
+Switch to MCMC with `degree>1` for polynomial models, or pass `prior_precision` for informative priors. Conjugate linear, polynomial, and Metropolis-Hastings backends are all available.
+
 ---
 
 ## 💻 CLI
@@ -233,16 +256,25 @@ Run `aquascope --help` for the full command list.
 
 ---
 
-## 🌍 Data at a glance
+## 🌍 Data sources at a glance
 
 12 unified data sources spanning four regions:
 
-- 🌎 **Americas** — USGS (streamflow + water quality), Water Quality Portal (400+ agencies)
+- 🌎 **Americas** — USGS (streamflow + WQ), Water Quality Portal (400+ agencies)
 - 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / Civil IoT, Japan MLIT, Korea WAMIS
 - 🌐 **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo, FAO AQUASTAT, FAO WaPOR
 
 Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/data_sources.md). Want to add your country's water service? See [adding a data source](docs/guides/adding_data_source.md).
+
+---
+
+## 🧪 Scientifically validated
+
+- **534 tests** — covering every collector, hydrology method, and pipeline
+- **CAMELS benchmark** — a 10-catchment validation subset of the [CAMELS dataset](https://ral.ucar.edu/solutions/products/camels) ships with the repo at `data/camels_benchmark/` and runs as part of CI
+- **Every method cited** — equations, decision trees, and DOI references for all 26 methodologies live in the [theory guide](docs/theory.md)
+- **JOSS paper in submission** — see [`paper.md`](paper.md) and [`paper.bib`](paper.bib)
 
 ---
 

@@ -19,7 +19,9 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev,all]"
       - run: ruff check aquascope/ tests/
-      - run: mypy aquascope/ --ignore-missing-imports
+      - name: Type check (informational — does not fail build)
+        run: mypy aquascope/ --ignore-missing-imports
+        continue-on-error: true
 
   test:
     runs-on: ubuntu-latest

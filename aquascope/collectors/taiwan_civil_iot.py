@@ -35,11 +35,8 @@ class TaiwanCivilIoTCollector(BaseCollector):
     Collect real-time water resource data from Taiwan's Civil IoT
     SensorThings API.
 
-    Parameters
-    ----------
-    entity : str
-        SensorThings entity to query: ``"Things"``, ``"Datastreams"``,
-        ``"Observations"``.
+    The ``entity`` parameter is consumed by :meth:`fetch_raw`, not by
+    ``__init__``; see that method's docstring for valid values.
     """
 
     name = "taiwan_civil_iot"

@@ -10,6 +10,8 @@ copyright: Copyright &copy; 2026 Rekin226 — released under the project license
 theme:
   name: material
   language: en
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
   features:
     - navigation.tabs
     - navigation.tabs.sticky
@@ -42,7 +44,7 @@ theme:
 
 plugins:
   - search
-  # - social  # OG image cards for Reddit/HN previews. Needs `brew install cairo` (libcairo system lib). Enable when ready.
+  - social  # OG image cards for Reddit/HN previews; requires libcairo (brew install cairo).
   - mkdocstrings:
       handlers:
         python:

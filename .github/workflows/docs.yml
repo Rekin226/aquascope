@@ -33,14 +33,16 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      - name: Install system deps for social-card plugin (libcairo, etc.)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libcairo2-dev libfreetype-dev libffi-dev libjpeg-dev libpng-dev libz-dev pkg-config
+
       - name: Install package + docs extras
         run: pip install -e ".[docs]"
 
       - name: Build site
-        # TODO: re-enable --strict once pre-existing content warnings are cleaned up
-        # (one docstring/signature mismatch in collectors/taiwan_civil_iot.py,
-        #  one mkdocstrings cross-ref in ai_engine/model_recommender.py).
-        run: mkdocs build
+        run: mkdocs build --strict
 
       - uses: actions/upload-pages-artifact@v3
         with:

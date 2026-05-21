@@ -49,8 +49,8 @@ class ModelRecommender:
     -------
     >>> rec = ModelRecommender()
     >>> picks = rec.recommend("flood", "forecast")
-    >>> [p.model_id for p in picks]
-    ['prophet', 'lstm', 'random_forest']
+    >>> picks[0].model_id
+    'prophet'
     """
 
     def recommend(

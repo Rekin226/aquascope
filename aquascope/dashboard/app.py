@@ -978,8 +978,10 @@ def main() -> None:
     label_to_key = {label: key for key, (label, _) in _PAGES.items()}
     selected_key = label_to_key[selected_label]
 
+    from aquascope import __version__ as _aquascope_version
+
     st.sidebar.markdown("---")
-    st.sidebar.caption(f"AquaScope v0.2.0 | Dashboard v{__version__}")
+    st.sidebar.caption(f"AquaScope v{_aquascope_version} | Dashboard v{__version__}")
 
     # Session state info in sidebar
     if "collected_data" in st.session_state and st.session_state["collected_data"] is not None:

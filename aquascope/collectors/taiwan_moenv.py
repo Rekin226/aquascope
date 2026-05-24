@@ -77,6 +77,7 @@ class TaiwanMOENVCollector(BaseCollector):
             or CachedHTTPClient(
                 base_url=MOENV_BASE,
                 rate_limiter=RateLimiter(max_calls=20, period_seconds=60),
+                verify=False,
             )
         )
         self.api_key = api_key

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from aquascope.collectors.base import BaseCollector
@@ -79,7 +79,8 @@ class USGSCollector(BaseCollector):
     def fetch_raw(
         self,
         collection: str = "daily",
-        datetime_range: str = "P30D",
+        datetime_range: str | None = None,
+        days: int | None = None,
         limit: int = 500,
         **kwargs,
     ) -> list[dict]:
@@ -90,11 +91,25 @@ class USGSCollector(BaseCollector):
         ----------
         collection : str
             ``"daily"`` | ``"sta"`` | ``"discrete"``
-        datetime_range : str
-            ISO 8601 duration or interval, e.g. ``"P7D"`` for last 7 days.
+        datetime_range : str, optional
+            Explicit ISO 8601 interval ``"<start>/<end>"`` (USGS does NOT accept
+            ISO durations like ``P7D``). If omitted, an interval is built from
+            ``days``.
+        days : int, optional
+            Last N days from now (UTC). Defaults to 30 when ``datetime_range``
+            is not supplied.
         limit : int
             Max features per page.
         """
+        if datetime_range is None:
+            window_days = days if days is not None else 30
+            end = datetime.now(timezone.utc)
+            start = end - timedelta(days=window_days)
+            datetime_range = (
+                f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/"
+                f"{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+            )
+
         all_features: list[dict] = []
         params: dict[str, Any] = {
             "f": "json",

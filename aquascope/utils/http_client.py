@@ -53,6 +53,7 @@ class CachedHTTPClient:
         cache_dir: Path | None = None,
         cache_ttl_seconds: int = 3600,
         rate_limiter: RateLimiter | None = None,
+        verify: bool = True,
     ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -60,7 +61,22 @@ class CachedHTTPClient:
         self.cache_dir = cache_dir or DEFAULT_CACHE_DIR
         self.cache_ttl = cache_ttl_seconds
         self.rate_limiter = rate_limiter
-        self._client = httpx.Client(timeout=timeout, follow_redirects=True)
+
+        if not verify:
+            import warnings
+
+            import urllib3
+
+            warnings.filterwarnings(
+                "ignore", category=urllib3.exceptions.InsecureRequestWarning
+            )
+            logger.warning(
+                "TLS verification DISABLED for base_url=%s — only use this for "
+                "open-data hosts known to ship broken cert chains.",
+                base_url,
+            )
+
+        self._client = httpx.Client(timeout=timeout, follow_redirects=True, verify=verify)
 
     # ── cache helpers ────────────────────────────────────────────────
     def _cache_key(self, url: str, params: dict | None) -> str:
@@ -140,7 +156,10 @@ class CachedHTTPClient:
                 "application/json"}``).
             use_cache: Whether to read/write the disk cache.
         """
-        url = f"{self.base_url}/{path.lstrip('/')}" if self.base_url else path
+        if path.startswith(("http://", "https://")):
+            url = path
+        else:
+            url = f"{self.base_url}/{path.lstrip('/')}" if self.base_url else path
 
         if use_cache:
             key = self._cache_key(url, params)

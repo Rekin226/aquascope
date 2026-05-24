@@ -36,6 +36,13 @@ _DATA_SOURCES: list[tuple[str, str]] = [
     ("copernicus", "Copernicus Climate Data"),
 ]
 
+# Sources that require a free user-provided API key to return any data.
+# Map: source_key -> (display_label, signup_url)
+_API_KEY_SOURCES: dict[str, tuple[str, str]] = {
+    "taiwan_moenv": ("Taiwan MOENV", "https://data.moenv.gov.tw/en/apikey"),
+    "copernicus": ("Copernicus CDS", "https://cds.climate.copernicus.eu/how-to-api"),
+}
+
 _PLOT_TYPES: list[tuple[str, str]] = [
     ("timeseries", "📈 Time Series"),
     ("boxplot", "📦 Box Plot"),
@@ -163,11 +170,23 @@ def page_data_collection() -> None:
     st.title("📊 Data Collection")
     st.markdown("Fetch water data from any of AquaScope's supported sources.")
 
+    def _label(key: str) -> str:
+        base = dict(_DATA_SOURCES)[key]
+        return f"🔑 {base}" if key in _API_KEY_SOURCES else base
+
     source_key = st.selectbox(
         "Data Source",
         options=[k for k, _ in _DATA_SOURCES],
-        format_func=lambda k: dict(_DATA_SOURCES)[k],
+        format_func=_label,
     )
+
+    if source_key in _API_KEY_SOURCES:
+        provider, signup_url = _API_KEY_SOURCES[source_key]
+        st.info(
+            f"🔑 **{provider} requires a free API key.** "
+            f"Get one at [{signup_url}]({signup_url}) and paste it below — "
+            f"without it, the API will reject the request."
+        )
 
     st.subheader("Parameters")
     col1, col2 = st.columns(2)
@@ -188,10 +207,32 @@ def page_data_collection() -> None:
             kwargs["mode"] = st.selectbox("Mode", ["weather", "forecast", "flood"])
 
     elif source_key == "usgs":
-        kwargs["days"] = st.slider("Days of data", 1, 365, 30)
+        kwargs["days"] = st.slider("Days of data", 1, 365, 3)
+        st.caption(
+            "USGS daily data is large — 30+ days can paginate for several minutes. "
+            "Start with 1–3 days for a quick demo."
+        )
 
     elif source_key == "sdg6":
-        kwargs["countries"] = st.text_input("Country codes (comma-separated ISO3)", "TWN")
+        kwargs["country_codes"] = st.text_input("Country codes (comma-separated ISO3)", "TWN")
+        kwargs["indicator_codes"] = [
+            st.selectbox(
+                "Indicator",
+                ["6.1.1", "6.2.1", "6.3.1", "6.3.2", "6.4.1", "6.4.2", "6.5.1", "6.5.2", "6.6.1"],
+                index=5,
+                format_func=lambda c: f"{c} ({ {
+                    '6.1.1': 'Safely managed drinking water',
+                    '6.2.1': 'Safely managed sanitation',
+                    '6.3.1': 'Safely treated wastewater',
+                    '6.3.2': 'Good ambient water quality',
+                    '6.4.1': 'Water-use efficiency',
+                    '6.4.2': 'Water stress',
+                    '6.5.1': 'IWRM implementation',
+                    '6.5.2': 'Transboundary cooperation',
+                    '6.6.1': 'Water-related ecosystems',
+                }[c]})",
+            )
+        ]
 
     elif source_key == "wqp":
         kwargs["state"] = st.text_input("US State code (e.g. US:06)", "US:06")

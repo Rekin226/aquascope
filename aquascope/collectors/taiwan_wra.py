@@ -50,6 +50,7 @@ class TaiwanWRAWaterLevelCollector(BaseCollector):
                 base_url=WRA_BASE,
                 rate_limiter=RateLimiter(max_calls=15, period_seconds=60),
                 cache_ttl_seconds=600,  # 10-min TTL to match update freq
+                verify=False,
             )
         )
 
@@ -101,6 +102,7 @@ class TaiwanWRAReservoirCollector(BaseCollector):
                 base_url=WRA_BASE,
                 rate_limiter=RateLimiter(max_calls=15, period_seconds=60),
                 cache_ttl_seconds=3600,
+                verify=False,
             )
         )
 

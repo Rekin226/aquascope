@@ -48,6 +48,7 @@ class TaiwanCivilIoTCollector(BaseCollector):
                 base_url=CIVIL_IOT_BASE,
                 rate_limiter=RateLimiter(max_calls=10, period_seconds=60),
                 cache_ttl_seconds=600,
+                verify=False,
             )
         )
 

@@ -66,6 +66,7 @@ WHO_GUIDELINES: dict[str, tuple[float, float, str]] = {
     "mercury": (0, 0.001, "mg/L"),
 }
 
+_WORKFLOW_STEPS = ["📊 Collect", "🔬 Analyze", "📈 Visualize", "🌊 Hydrology"]
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -111,6 +112,95 @@ def _load_json(uploaded_file) -> pd.DataFrame:
     return pd.read_json(StringIO(content))
 
 
+def _load_demo_data() -> pd.DataFrame:
+    """Build a compact demo water-quality dataset that works across all dashboard pages."""
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(42)
+    dates = pd.date_range("2023-01-01", periods=180, freq="D")
+    params = ["ph", "dissolved_oxygen", "turbidity", "nitrate"]
+
+    # Seasonal signal so time-series plots look interesting
+    t = np.linspace(0, 4 * np.pi, len(dates))
+
+    rows = []
+    for i, date in enumerate(dates):
+        discharge = max(0.1, 5.0 + 3.0 * np.sin(t[i]) + rng.normal(0, 0.5))
+        for param in params:
+            base = {
+                "ph": 7.2 + 0.5 * np.sin(t[i]),
+                "dissolved_oxygen": 7.0 + 2.0 * np.cos(t[i]),
+                "turbidity": 3.5 + 2.0 * np.abs(np.sin(t[i])),
+                "nitrate": 30.0 + 20.0 * np.sin(t[i] + 1),
+            }[param]
+            noise = rng.normal(0, {"ph": 0.3, "dissolved_oxygen": 0.8, "turbidity": 0.5, "nitrate": 5.0}[param])
+            rows.append({
+                "sample_datetime": date,
+                "station_id": "DEMO-001",
+                "station_name": "Tamsui River Demo Station",
+                "parameter": param,
+                "value": round(float(base + noise), 3),
+                "discharge": round(float(discharge), 3),
+                "latitude": 25.17,
+                "longitude": 121.44,
+                "source": "demo",
+            })
+
+    return pd.DataFrame(rows)
+
+
+def _show_workflow_step(st, current: int) -> None:
+    """Render a compact workflow progress indicator."""
+    steps_display = "  →  ".join(
+        f"**{s}**" if i == current else s
+        for i, s in enumerate(_WORKFLOW_STEPS)
+    )
+    st.caption(f"Workflow: {steps_display}")
+    st.progress(current / (len(_WORKFLOW_STEPS) - 1))
+
+
+def _demo_data_cta(st) -> bool:
+    """Show a 'Load demo dataset' button. Returns True if demo data was loaded."""
+    if st.button("Load demo dataset", key=f"demo_{id(st)}", use_container_width=False):
+        st.session_state["collected_data"] = _load_demo_data()
+        st.session_state["collected_source"] = "demo"
+        st.rerun()
+    return False
+
+
+def _inject_global_css(st) -> None:
+    """Inject CSS tweaks: hide Deploy button, style nav, fix sidebar H1."""
+    st.markdown(
+        """
+        <style>
+        /* P5: Hide the Streamlit Deploy button — not relevant for end users */
+        [data-testid="stDeployButton"],
+        [data-testid="stAppDeployButton"] { display: none !important; }
+
+        /* Sidebar nav: tighten spacing, remove radio dot visual noise */
+        section[data-testid="stSidebar"] .stRadio > div {
+            gap: 0.1rem;
+        }
+        section[data-testid="stSidebar"] .stRadio label {
+            padding: 0.45rem 0.6rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        section[data-testid="stSidebar"] .stRadio label:hover {
+            background: rgba(0, 0, 0, 0.06);
+        }
+        /* Hide the radio circle — the active highlight is enough */
+        section[data-testid="stSidebar"] .stRadio [role="radio"] {
+            display: none;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Page: Home
 # ---------------------------------------------------------------------------
@@ -120,6 +210,7 @@ def page_home() -> None:
     """Render the Home overview page."""
     st = _require_streamlit()
 
+    # P6: Use st.title here (H1). Sidebar uses st.sidebar.markdown("## …") = H2.
     st.title("🌊 AquaScope Dashboard")
     st.markdown(
         """
@@ -141,21 +232,47 @@ def page_home() -> None:
     col2.metric("Plot Types", str(len(_PLOT_TYPES)))
     col3.metric("AI Methodologies", "26")
 
-    st.divider()
-    st.subheader("Quick Start")
-    st.markdown(
-        """
-        1. Go to **📊 Data Collection** to fetch water data from any source.
-        2. Explore your data with **🔬 Analysis** (EDA + quality checks).
-        3. Create charts in **📈 Visualization**.
-        4. Run hydrological models in **🌊 Hydrology**.
-        5. Get AI methodology suggestions in **🤖 AI Recommender**.
-        """
-    )
-
     if "collected_data" in st.session_state and st.session_state["collected_data"] is not None:
         df = st.session_state["collected_data"]
         st.success(f"✅ Active dataset: **{len(df)} records**, {df.columns.tolist()}")
+
+    st.divider()
+
+    # P7: Interactive workflow cards with navigation buttons
+    st.subheader("Quick Start")
+    st.caption("Follow these steps to go from raw data to publication-ready analysis.")
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        st.markdown("**Step 1 — Collect**")
+        st.caption("Fetch from 10+ real water data sources, or load a demo dataset to explore the app instantly.")
+        if st.button("📊 Data Collection →", key="qs_collect", use_container_width=True):
+            st.session_state["current_page"] = "📊 Data Collection"
+            st.rerun()
+
+    with c2:
+        st.markdown("**Step 2 — Analyze**")
+        st.caption("Run EDA and quality assessment. Detect outliers, nulls, and get preprocessing recommendations.")
+        if st.button("🔬 Analysis →", key="qs_analysis", use_container_width=True):
+            st.session_state["current_page"] = "🔬 Analysis"
+            st.rerun()
+
+    with c3:
+        st.markdown("**Step 3 — Visualize**")
+        st.caption("Create time-series, boxplots, station maps, flow duration curves, and more.")
+        if st.button("📈 Visualization →", key="qs_viz", use_container_width=True):
+            st.session_state["current_page"] = "📈 Visualization"
+            st.rerun()
+
+    with c4:
+        st.markdown("**Step 4 — Insights**")
+        st.caption("Run hydrology models, get AI methodology suggestions, and check WHO quality alerts.")
+        if st.button("🤖 AI Recommender →", key="qs_ai", use_container_width=True):
+            st.session_state["current_page"] = "🤖 AI Recommender"
+            st.rerun()
+
+    st.divider()
+    st.caption("No data yet? Click **📊 Data Collection** above and choose a source, or use **Load demo dataset** on any analysis page.")
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +357,7 @@ def page_data_collection() -> None:
     if api_key:
         kwargs["api_key"] = api_key
 
+    # P3: Use type="primary" with blue theme from config.toml (no longer red)
     if st.button("🚀 Collect Data", type="primary"):
         with st.spinner(f"Collecting from {dict(_DATA_SOURCES).get(source_key, source_key)}…"):
             try:
@@ -266,6 +384,9 @@ def page_data_collection() -> None:
                 st.error(f"Collection failed: {exc}")
                 logger.exception("Data collection error")
 
+    st.divider()
+    st.caption("Don't have API credentials yet? Use **Load demo dataset** on the Analysis page to explore the dashboard with sample water quality data.")
+
 
 # ---------------------------------------------------------------------------
 # Page: Analysis
@@ -279,6 +400,10 @@ def page_analysis() -> None:
     st.title("🔬 Analysis")
     st.markdown("Run exploratory data analysis and quality assessment on your water data.")
 
+    # P4: Workflow progress
+    _show_workflow_step(st, 1)
+    st.markdown("")
+
     # Data source selection
     data_source = st.radio(
         "Data source",
@@ -291,9 +416,19 @@ def page_analysis() -> None:
     if data_source == "Use collected data (session)":
         df = st.session_state.get("collected_data")
         if df is None:
-            st.info("No data in session. Collect data first or upload a file.")
+            # P1: Demo data CTA in empty state
+            st.info("No data in session. Collect data first, upload a file, or load the demo dataset.")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.caption("The demo dataset contains 180 days of synthetic water quality readings (pH, DO, turbidity, nitrate) with seasonal patterns — enough to explore all dashboard features.")
+            with col2:
+                if st.button("Load demo dataset", use_container_width=True, key="demo_analysis"):
+                    st.session_state["collected_data"] = _load_demo_data()
+                    st.session_state["collected_source"] = "demo"
+                    st.rerun()
             return
-        st.success(f"Using session data: {len(df)} records")
+        src_label = st.session_state.get("collected_source", "session")
+        st.success(f"Using session data: {len(df)} records ({src_label})")
     elif data_source == "Upload CSV":
         uploaded = st.file_uploader("Upload CSV file", type=["csv"])
         if uploaded:
@@ -411,9 +546,22 @@ def page_visualization() -> None:
     st.title("📈 Visualization")
     st.markdown("Create publication-quality plots from your water data.")
 
+    # P4: Workflow progress
+    _show_workflow_step(st, 2)
+    st.markdown("")
+
     df = st.session_state.get("collected_data")
     if df is None:
-        st.info("No data in session. Collect or upload data first (go to **📊 Data Collection** or **🔬 Analysis**).")
+        # P1: Demo data CTA in empty state
+        st.info("No data in session. Collect or upload data first, or load the demo dataset below.")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.caption("The demo dataset includes time-series, multi-parameter, and station map data — perfect for exploring all 9 plot types.")
+        with col2:
+            if st.button("Load demo dataset", use_container_width=True, key="demo_viz"):
+                st.session_state["collected_data"] = _load_demo_data()
+                st.session_state["collected_source"] = "demo"
+                st.rerun()
         return
 
     plot_key = st.selectbox(
@@ -575,9 +723,22 @@ def page_hydrology() -> None:
     st.title("🌊 Hydrology")
     st.markdown("Run hydrological analyses with interactive parameter controls.")
 
+    # P4: Workflow progress
+    _show_workflow_step(st, 3)
+    st.markdown("")
+
     df = st.session_state.get("collected_data")
     if df is None:
-        st.info("No data in session. Collect discharge data first or upload via **🔬 Analysis**.")
+        # P1: Demo data CTA in empty state
+        st.info("No data in session. Collect discharge data first or load the demo dataset.")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.caption("The demo dataset includes a `discharge` column with seasonal flow patterns — ready for FDC, baseflow separation, and flood frequency analysis.")
+        with col2:
+            if st.button("Load demo dataset", use_container_width=True, key="demo_hydro"):
+                st.session_state["collected_data"] = _load_demo_data()
+                st.session_state["collected_source"] = "demo"
+                st.rerun()
         return
 
     analysis = st.selectbox(
@@ -772,7 +933,11 @@ def page_ai_recommender() -> None:
     with tab_auto:
         df = st.session_state.get("collected_data")
         if df is None:
-            st.info("No data in session. Collect data first, then come back here for auto-recommendations.")
+            st.info("No data in session. Load demo data or collect data first, then return here for auto-recommendations.")
+            if st.button("Load demo dataset", key="demo_ai", use_container_width=False):
+                st.session_state["collected_data"] = _load_demo_data()
+                st.session_state["collected_source"] = "demo"
+                st.rerun()
             return
 
         st.success(f"Dataset loaded: {len(df)} records")
@@ -858,7 +1023,16 @@ def page_water_quality_alerts() -> None:
 
     df = st.session_state.get("collected_data")
     if df is None:
-        st.info("No data in session. Collect water quality data first.")
+        # P1: Demo data CTA in empty state
+        st.info("No data in session. Collect water quality data first or load the demo dataset.")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.caption("The demo dataset includes pH, dissolved oxygen, turbidity, and nitrate — all checked against WHO guidelines, with intentional exceedances for illustration.")
+        with col2:
+            if st.button("Load demo dataset", use_container_width=True, key="demo_alerts"):
+                st.session_state["collected_data"] = _load_demo_data()
+                st.session_state["collected_source"] = "demo"
+                st.rerun()
         return
 
     # Show reference thresholds
@@ -1004,18 +1178,34 @@ def main() -> None:
         page_title="AquaScope Dashboard",
         page_icon="🌊",
         layout="wide",
-        initial_sidebar_state="expanded",
+        # P8: "auto" collapses sidebar on mobile automatically
+        initial_sidebar_state="auto",
     )
 
-    # Sidebar navigation
-    st.sidebar.title("🌊 AquaScope")
-    st.sidebar.markdown("---")
+    # P5 + P3: Inject global CSS — hides Deploy button, styles nav radio as link list
+    _inject_global_css(st)
 
     page_labels = [label for label, _ in _PAGES.values()]
 
-    selected_label = st.sidebar.radio("Navigate", page_labels, index=0)
+    # P5: Sidebar uses H2 markdown (not st.sidebar.title which renders as H1)
+    # so the main page title remains the sole H1. (P6)
+    st.sidebar.markdown("## 🌊 AquaScope")
+    st.sidebar.markdown("---")
 
-    # Map label back to key
+    # P2 + P5: "Navigate" label hidden via label_visibility; CSS removes radio dots
+    # so it looks like a clean link list.
+    # key="current_page" lets Home page buttons update the selection via session_state.
+    if "current_page" not in st.session_state:
+        st.session_state["current_page"] = page_labels[0]
+
+    selected_label = st.sidebar.radio(
+        "Navigate",
+        page_labels,
+        key="current_page",
+        label_visibility="collapsed",
+    )
+
+    # Map label back to page key
     label_to_key = {label: key for key, (label, _) in _PAGES.items()}
     selected_key = label_to_key[selected_label]
 

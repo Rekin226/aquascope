@@ -371,11 +371,11 @@ def page_data_collection() -> None:
                 st.success(f"✅ Collected **{len(df)} records**")
 
                 st.subheader("Data Preview")
-                st.dataframe(df.head(100), use_container_width=True)
+                st.dataframe(df.head(100), width="stretch")
 
                 st.download_button(
                     "⬇️ Download data",
-                    data=df.to_csv(index=False) if output_fmt == "csv" else df.to_json(orient="records", indent=2),
+                    data=df.to_csv(index=False) if output_fmt == "csv" else df.to_json(orient="records", indent=2, date_format="iso"),
                     file_name=f"aquascope_{source_key}.{output_fmt}",
                     mime="text/csv" if output_fmt == "csv" else "application/json",
                 )
@@ -442,7 +442,7 @@ def page_analysis() -> None:
         st.warning("Please provide data to analyse.")
         return
 
-    st.dataframe(df.head(20), use_container_width=True)
+    st.dataframe(df.head(20), width="stretch")
     st.divider()
 
     tab_eda, tab_quality = st.tabs(["📊 EDA Report", "🔍 Quality Assessment"])
@@ -481,7 +481,7 @@ def page_analysis() -> None:
                             }
                             for p in report.parameters
                         ]
-                        st.dataframe(pd.DataFrame(param_rows), use_container_width=True)
+                        st.dataframe(pd.DataFrame(param_rows), width="stretch")
 
                 except Exception as exc:
                     st.error(f"EDA failed: {exc}")
@@ -524,7 +524,7 @@ def page_analysis() -> None:
                             cleaned = preprocess(df, steps=selected_steps)
                             st.session_state["collected_data"] = cleaned
                             st.success(f"✅ Preprocessed: {len(cleaned)} records (was {len(df)})")
-                            st.dataframe(cleaned.head(20), use_container_width=True)
+                            st.dataframe(cleaned.head(20), width="stretch")
 
                 except Exception as exc:
                     st.error(f"Quality assessment failed: {exc}")
@@ -614,7 +614,20 @@ def _render_boxplot(st, df: pd.DataFrame, title: str) -> None:
     """Render a box plot."""
     from aquascope.viz import plot_boxplot
 
-    fig = plot_boxplot(df, title=title or "Box Plot")
+    num_cols = list(df.select_dtypes(include="number").columns)
+    cat_cols = list(df.select_dtypes(exclude="number").columns)
+
+    default_val = "value" if "value" in num_cols else (num_cols[0] if num_cols else None)
+    default_grp = next((c for c in ("parameter", "station_name", "station_id") if c in cat_cols), cat_cols[0] if cat_cols else None)
+
+    if not num_cols or not cat_cols:
+        st.warning("Need at least one numeric column and one categorical column for a box plot.")
+        return
+
+    value_col = st.selectbox("Value column", num_cols, index=num_cols.index(default_val) if default_val else 0, key="bp_val")
+    group_col = st.selectbox("Group column", cat_cols, index=cat_cols.index(default_grp) if default_grp else 0, key="bp_grp")
+
+    fig = plot_boxplot(df, value_col=value_col, group_col=group_col, title=title or "Box Plot")
     st.pyplot(fig)
     import matplotlib.pyplot as plt
 
@@ -634,9 +647,35 @@ def _render_heatmap(st, df: pd.DataFrame, title: str) -> None:
 
 def _render_who_exceedances(st, df: pd.DataFrame, title: str) -> None:
     """Render WHO exceedance chart."""
+    import pandas as pd
+
     from aquascope.viz import plot_who_exceedances
 
-    fig = plot_who_exceedances(df, title=title or "WHO Guideline Exceedances")
+    if "parameter" not in df.columns or "value" not in df.columns:
+        st.warning("WHO Exceedances requires `parameter` and `value` columns.")
+        return
+
+    rows = []
+    for param, (lo, hi, _unit) in WHO_GUIDELINES.items():
+        subset = df[df["parameter"].str.lower() == param]["value"].dropna()
+        if subset.empty:
+            continue
+        n = len(subset)
+        if hi == float("inf"):
+            n_exceed = int((subset < lo).sum())
+        elif lo == 0:
+            n_exceed = int((subset > hi).sum())
+        else:
+            n_exceed = int(((subset < lo) | (subset > hi)).sum())
+        pct = n_exceed / n * 100
+        rows.append({"variable": param, "pct_exceedances": round(pct, 1), "status": "FAIL" if n_exceed > 0 else "PASS"})
+
+    if not rows:
+        st.info("No WHO-monitored parameters found in dataset.")
+        return
+
+    who_df = pd.DataFrame(rows)
+    fig = plot_who_exceedances(who_df, title=title or "WHO Guideline Exceedances")
     st.pyplot(fig)
     import matplotlib.pyplot as plt
 
@@ -671,7 +710,14 @@ def _render_fdc(st, df: pd.DataFrame, title: str) -> None:
     """Render a flow duration curve."""
     from aquascope.viz import plot_fdc
 
-    fig = plot_fdc(df, title=title or "Flow Duration Curve")
+    num_cols = list(df.select_dtypes(include="number").columns)
+    if not num_cols:
+        st.warning("No numeric columns found for Flow Duration Curve.")
+        return
+    default = "discharge" if "discharge" in num_cols else num_cols[0]
+    col = st.selectbox("Discharge column", num_cols, index=num_cols.index(default), key="fdc_col")
+
+    fig = plot_fdc(df[col].dropna(), title=title or "Flow Duration Curve")
     st.pyplot(fig)
     import matplotlib.pyplot as plt
 
@@ -680,9 +726,24 @@ def _render_fdc(st, df: pd.DataFrame, title: str) -> None:
 
 def _render_hydrograph(st, df: pd.DataFrame, title: str) -> None:
     """Render a hydrograph."""
+    import pandas as pd
+
     from aquascope.viz import plot_hydrograph
 
-    fig = plot_hydrograph(df, title=title or "Hydrograph")
+    num_cols = list(df.select_dtypes(include="number").columns)
+    if not num_cols:
+        st.warning("No numeric columns found for Hydrograph.")
+        return
+    default = "discharge" if "discharge" in num_cols else num_cols[0]
+    total_col = st.selectbox("Discharge column", num_cols, index=num_cols.index(default), key="hg_col")
+
+    plot_df = df.copy()
+    for dt_col in ("sample_datetime", "reading_datetime", "date", "datetime"):
+        if dt_col in plot_df.columns:
+            plot_df.index = pd.to_datetime(plot_df[dt_col])
+            break
+
+    fig = plot_hydrograph(plot_df, total_col=total_col, baseflow_col=None, title=title or "Hydrograph")
     st.pyplot(fig)
     import matplotlib.pyplot as plt
 
@@ -691,9 +752,24 @@ def _render_hydrograph(st, df: pd.DataFrame, title: str) -> None:
 
 def _render_spi_timeline(st, df: pd.DataFrame, title: str) -> None:
     """Render an SPI timeline."""
+    import pandas as pd
+
     from aquascope.viz import plot_spi_timeline
 
-    fig = plot_spi_timeline(df, title=title or "SPI Timeline")
+    num_cols = list(df.select_dtypes(include="number").columns)
+    if not num_cols:
+        st.warning("No numeric columns found for SPI Timeline.")
+        return
+    spi_candidates = [c for c in num_cols if "spi" in c.lower()] or num_cols
+    spi_col = st.selectbox("SPI column", spi_candidates, key="spi_col")
+
+    plot_df = df[[spi_col]].copy()
+    for dt_col in ("sample_datetime", "reading_datetime", "date", "datetime"):
+        if dt_col in df.columns:
+            plot_df.index = pd.to_datetime(df[dt_col])
+            break
+
+    fig = plot_spi_timeline(plot_df, spi_col=spi_col, title=title or "SPI Timeline")
     st.pyplot(fig)
     import matplotlib.pyplot as plt
 
@@ -701,10 +777,30 @@ def _render_spi_timeline(st, df: pd.DataFrame, title: str) -> None:
 
 
 def _render_return_periods(st, df: pd.DataFrame, title: str) -> None:
-    """Render return period plot."""
+    """Render return period plot — fits GEV to the selected column first."""
+    import pandas as pd
+
+    from aquascope.hydrology import fit_gev
     from aquascope.viz import plot_return_periods
 
-    fig = plot_return_periods(df, title=title or "Return Periods")
+    num_cols = list(df.select_dtypes(include="number").columns)
+    if not num_cols:
+        st.warning("No numeric columns found for Return Periods.")
+        return
+    default = "discharge" if "discharge" in num_cols else num_cols[0]
+    col = st.selectbox("Discharge column", num_cols, index=num_cols.index(default), key="rp_col")
+
+    q = df[col].dropna()
+    # fit_gev needs a DatetimeIndex to extract annual maxima
+    for dt_col in ("sample_datetime", "reading_datetime", "date", "datetime"):
+        if dt_col in df.columns:
+            q.index = pd.to_datetime(df.loc[q.index, dt_col])
+            break
+
+    with st.spinner("Fitting GEV distribution…"):
+        result = fit_gev(q)
+
+    fig = plot_return_periods(result.return_periods, observed_max=float(q.max()), title=title or "Return Periods")
     st.pyplot(fig)
     import matplotlib.pyplot as plt
 
@@ -782,13 +878,17 @@ def _hydro_fdc(st, df: pd.DataFrame) -> None:
     result = flow_duration_curve(q)
 
     st.subheader("Results")
+    import pandas as pd
+
+    q50 = result.percentiles.get(50, float("nan"))
+    q95 = result.percentiles.get(95, float("nan"))
     col1, col2 = st.columns(2)
-    col1.metric("Q50 (median)", f"{result.q50:.3f}")
-    col2.metric("Q95 (low-flow)", f"{result.q95:.3f}")
+    col1.metric("Q50 (median)", f"{q50:.3f}")
+    col2.metric("Q95 (low-flow)", f"{q95:.3f}")
 
     from aquascope.viz import plot_fdc
 
-    fig = plot_fdc(result)
+    fig = plot_fdc(pd.Series(result.discharge))
     st.pyplot(fig)
     plt.close(fig)
 
@@ -816,7 +916,7 @@ def _hydro_baseflow(st, df: pd.DataFrame) -> None:
 
     if method == "Lyne-Hollick":
         passes = st.slider("Number of passes", 1, 5, 3)
-        result = lyne_hollick(q, alpha=alpha, passes=passes)
+        result = lyne_hollick(q, alpha=alpha, n_passes=passes)
     else:
         bfi_max = st.slider("BFI_max", 0.1, 1.0, 0.8, 0.05)
         result = eckhardt(q, alpha=alpha, bfi_max=bfi_max)
@@ -826,7 +926,7 @@ def _hydro_baseflow(st, df: pd.DataFrame) -> None:
 
     from aquascope.viz import plot_hydrograph
 
-    fig = plot_hydrograph(result)
+    fig = plot_hydrograph(result.df, total_col="total", baseflow_col="baseflow")
     st.pyplot(fig)
     plt.close(fig)
 
@@ -859,7 +959,7 @@ def _hydro_recession(st, df: pd.DataFrame) -> None:
             {"Start": s.start, "End": s.end, "Duration": s.duration, "K": round(s.k, 4)}
             for s in result.segments
         ]
-        st.dataframe(pd.DataFrame(seg_data), use_container_width=True)
+        st.dataframe(pd.DataFrame(seg_data), width="stretch")
 
 
 def _hydro_flood_freq(st, df: pd.DataFrame) -> None:
@@ -882,20 +982,21 @@ def _hydro_flood_freq(st, df: pd.DataFrame) -> None:
     result = fit_gev(q)
 
     st.subheader("GEV Distribution Fit")
+    shape, loc, scale = result.params if len(result.params) == 3 else (0.0, 0.0, 1.0)
     col1, col2, col3 = st.columns(3)
-    col1.metric("Shape (ξ)", f"{result.shape:.4f}")
-    col2.metric("Location (μ)", f"{result.loc:.2f}")
-    col3.metric("Scale (σ)", f"{result.scale:.2f}")
+    col1.metric("Shape (ξ)", f"{shape:.4f}")
+    col2.metric("Location (μ)", f"{loc:.2f}")
+    col3.metric("Scale (σ)", f"{scale:.2f}")
 
-    if hasattr(result, "return_levels") and result.return_levels:
+    if result.return_periods:
         import pandas as pd
 
-        rl_data = [{"Return Period (yr)": rp, "Discharge": round(val, 2)} for rp, val in result.return_levels.items()]
-        st.dataframe(pd.DataFrame(rl_data), use_container_width=True)
+        rl_data = [{"Return Period (yr)": rp, "Discharge": round(val, 2)} for rp, val in result.return_periods.items()]
+        st.dataframe(pd.DataFrame(rl_data), width="stretch")
 
     from aquascope.viz import plot_return_periods
 
-    fig = plot_return_periods(result)
+    fig = plot_return_periods(result.return_periods, observed_max=float(q.max()))
     st.pyplot(fig)
     plt.close(fig)
 
@@ -1002,8 +1103,8 @@ def _display_recommendations(st, recs: list) -> None:
             st.markdown(f"**Description:** {rec.methodology.description}")
             if rec.rationale:
                 st.markdown(f"**Rationale:** {rec.rationale}")
-            if rec.methodology.required_parameters:
-                st.markdown(f"**Required parameters:** {', '.join(rec.methodology.required_parameters)}")
+            if rec.methodology.applicable_parameters:
+                st.markdown(f"**Applicable parameters:** {', '.join(rec.methodology.applicable_parameters)}")
             if rec.methodology.tags:
                 st.markdown(f"**Tags:** {', '.join(rec.methodology.tags)}")
             st.progress(rec.score / 100)
@@ -1040,10 +1141,10 @@ def page_water_quality_alerts() -> None:
         import pandas as pd
 
         ref_rows = [
-            {"Parameter": param, "Min": lo, "Max": hi if hi != float("inf") else "∞", "Unit": unit}
+            {"Parameter": param, "Min": str(lo), "Max": "∞" if hi == float("inf") else str(hi), "Unit": unit}
             for param, (lo, hi, unit) in WHO_GUIDELINES.items()
         ]
-        st.dataframe(pd.DataFrame(ref_rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(ref_rows), width="stretch")
 
     # Check if the data has the right structure
     if "parameter" not in df.columns or "value" not in df.columns:
@@ -1138,7 +1239,7 @@ def _check_exceedances(st, df) -> None:
 
     if results:
         result_df = pd.DataFrame(results)
-        st.dataframe(result_df, use_container_width=True)
+        st.dataframe(result_df, width="stretch")
 
         alerts = [r for r in results if "ALERT" in r["Status"]]
         warnings = [r for r in results if "Warning" in r["Status"]]

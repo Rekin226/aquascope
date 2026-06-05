@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aquascope"
-version = "0.4.0"
+version = "0.5.0"
 description = "Open-source water data aggregation toolkit with AI-powered research methodology recommendations"
 readme = "README.md"
 license = {text = "MIT"}
@@ -114,7 +114,7 @@ aquascope = "aquascope.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Rekin226/aquascope"
-Documentation = "https://github.com/Rekin226/aquascope/wiki"
+Documentation = "https://rekin226.github.io/aquascope/"
 Repository = "https://github.com/Rekin226/aquascope"
 Issues = "https://github.com/Rekin226/aquascope/issues"
 Changelog = "https://github.com/Rekin226/aquascope/blob/main/CHANGELOG.md"

@@ -81,7 +81,9 @@ class USGSCollector(BaseCollector):
         collection: str = "daily",
         datetime_range: str | None = None,
         days: int | None = None,
-        limit: int = 500,
+        limit: int = 10_000,
+        bbox: str | None = None,
+        max_items: int | None = 2_000,
         **kwargs,
     ) -> list[dict]:
         """
@@ -99,7 +101,14 @@ class USGSCollector(BaseCollector):
             Last N days from now (UTC). Defaults to 30 when ``datetime_range``
             is not supplied.
         limit : int
-            Max features per page.
+            Max features per page. Larger values mean fewer round-trips.
+        bbox : str, optional
+            Bounding box filter ``"minLon,minLat,maxLon,maxLat"`` (WGS84).
+            Without this the API returns data for every US monitoring location,
+            which can require hundreds of paginated requests.
+        max_items : int, optional
+            Hard cap on total records fetched (across all pages). Keeps response
+            times predictable. ``None`` means no cap.
         """
         if datetime_range is None:
             window_days = days if days is not None else 30
@@ -117,12 +126,19 @@ class USGSCollector(BaseCollector):
             "datetime": datetime_range,
             "api_key": self.api_key,
         }
+        if bbox:
+            params["bbox"] = bbox
 
         url = f"collections/{collection}/items"
         while True:
             data = self.client.get_json(url, params=params)
             features = data.get("features", [])
             all_features.extend(features)
+
+            if max_items is not None and len(all_features) >= max_items:
+                all_features = all_features[:max_items]
+                logger.debug("USGS max_items=%d reached — stopping pagination.", max_items)
+                break
 
             # follow pagination
             next_link = next(

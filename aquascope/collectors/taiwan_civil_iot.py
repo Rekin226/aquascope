@@ -56,7 +56,9 @@ class TaiwanCivilIoTCollector(BaseCollector):
         self,
         entity: str = "Datastreams",
         top: int = 100,
-        expand: str = "Thing,Observations($top=1;$orderby=phenomenonTime desc)",
+        expand: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         **kwargs,
     ) -> list[dict]:
         """
@@ -68,9 +70,22 @@ class TaiwanCivilIoTCollector(BaseCollector):
             ``"Things"`` | ``"Datastreams"`` | ``"Observations"``
         top : int
             Max items per page.
-        expand : str
-            OData $expand clause.
+        expand : str, optional
+            OData $expand clause. If not given, one is built from
+            ``start_date`` / ``end_date``.
+        start_date : str, optional
+            ISO date string ``"YYYY-MM-DD"`` — filters ``phenomenonTime ge``.
+        end_date : str, optional
+            ISO date string ``"YYYY-MM-DD"`` — filters ``phenomenonTime le``.
         """
+        if expand is None:
+            time_parts = []
+            if start_date:
+                time_parts.append(f"phenomenonTime ge {start_date}T00:00:00Z")
+            if end_date:
+                time_parts.append(f"phenomenonTime le {end_date}T23:59:59Z")
+            filter_clause = (";$filter=" + " and ".join(time_parts)) if time_parts else ""
+            expand = f"Thing,Observations($top=5;$orderby=phenomenonTime desc{filter_clause})"
         all_items: list[dict] = []
         params = {"$top": top, "$expand": expand}
 

@@ -172,6 +172,31 @@ def recommend(
 # ── Optional LLM-enhanced recommendation ─────────────────────────────
 
 _OPENAI_HOST = "api.openai.com"
+_HUGGINGFACE_HOST = "api-inference.huggingface.co"
+_GROQ_HOST = "api.groq.com"
+
+# Public constants used by the dashboard UI
+PROVIDER_BASE_URLS: dict[str, str | None] = {
+    "openai": None,
+    "huggingface": "https://api-inference.huggingface.co/v1/",
+    "groq": "https://api.groq.com/openai/v1",
+    "ollama": "http://localhost:11434/v1",
+}
+
+PROVIDER_MODELS: dict[str, list[str]] = {
+    "openai": ["gpt-4o-mini", "gpt-4o"],
+    "huggingface": [
+        "mistralai/Mistral-7B-Instruct-v0.3",
+        "HuggingFaceH4/zephyr-7b-beta",
+        "meta-llama/Meta-Llama-3-8B-Instruct",
+    ],
+    "groq": [
+        "llama-3.1-8b-instant",
+        "mixtral-8x7b-32768",
+        "llama3-8b-8192",
+    ],
+    "ollama": ["mistral", "llama3.2", "qwen2.5:7b"],
+}
 
 
 def _build_prompts(profile: DatasetProfile, top_k: int) -> tuple[str, str]:
@@ -283,18 +308,29 @@ def recommend_with_llm(
 
     Falls back to rule-based if the LLM call fails.
 
-    Supports:
-    - OpenAI API (base_url=None or contains api.openai.com): uses openai library.
-    - Local Ollama (base_url like "http://localhost:11434/v1"): calls Ollama's
-      native /api/chat endpoint directly via httpx, bypassing the openai client
-      compatibility issues (broken timeout, unsupported parameters, qwen3 thinking
-      mode causing runaway token generation).
+    Supported providers (detected from base_url):
+    - OpenAI (base_url=None or api.openai.com)
+    - HuggingFace Inference API (api-inference.huggingface.co) — free tier
+    - Groq (api.groq.com) — free tier
+    - Ollama local (localhost) — uses native /api/chat to avoid openai-client quirks
     """
-    is_openai = base_url is None or _OPENAI_HOST in base_url
+    if base_url and _HUGGINGFACE_HOST in base_url:
+        provider = "huggingface"
+    elif base_url and _GROQ_HOST in base_url:
+        provider = "groq"
+    elif base_url and "localhost" in base_url:
+        provider = "ollama"
+    else:
+        provider = "openai"
+
     system_prompt, user_prompt = _build_prompts(profile, top_k)
 
     try:
-        if is_openai:
+        if provider == "ollama":
+            raw_text = _call_ollama_native(
+                base_url, model, system_prompt, user_prompt, timeout  # type: ignore[arg-type]
+            )
+        else:
             try:
                 import httpx
                 from openai import OpenAI
@@ -303,11 +339,11 @@ def recommend_with_llm(
                 return recommend(profile, top_k=top_k)
 
             client = OpenAI(
-                api_key=api_key or "openai",
+                api_key=api_key or "dummy",
                 base_url=base_url or None,
                 timeout=httpx.Timeout(timeout, connect=10.0),
             )
-            resp = client.chat.completions.create(
+            kwargs: dict[str, Any] = dict(
                 model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -315,14 +351,13 @@ def recommend_with_llm(
                 ],
                 temperature=0.3,
                 max_tokens=1024,
-                response_format={"type": "json_object"},
             )
+            # json_object mode is reliable on OpenAI and Groq; HF models vary
+            if provider in ("openai", "groq"):
+                kwargs["response_format"] = {"type": "json_object"}
+
+            resp = client.chat.completions.create(**kwargs)
             raw_text = resp.choices[0].message.content or "[]"
-        else:
-            # Non-OpenAI provider: use Ollama's native API via httpx.
-            raw_text = _call_ollama_native(
-                base_url, model, system_prompt, user_prompt, timeout  # type: ignore[arg-type]
-            )
 
         return _parse_llm_output(raw_text, top_k)
 

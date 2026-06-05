@@ -118,17 +118,25 @@ class TaiwanWRAReservoirCollector(BaseCollector):
                     v = rec.get(key)
                     return float(v) if v and str(v).strip() not in ("", "-", "--") else None
 
+                capacity = _float("capacity")
+                nwlmax = _float("nwlmax")
+                pct = round(capacity / nwlmax * 100, 1) if capacity is not None and nwlmax else None
+
+                dt_str = rec.get("datetime", "")
+                if not dt_str:
+                    continue
+
                 records.append(
                     ReservoirStatus(
                         source=DataSource.TAIWAN_WRA,
-                        reservoir_name=rec.get("ReservoirName", "unknown"),
-                        date=datetime.fromisoformat(rec.get("RecordTime", rec.get("ObservationDate", ""))),
-                        effective_capacity_m3=_float("EffectiveCapacity"),
-                        current_storage_m3=_float("CurrentCapacity"),
-                        storage_percentage=_float("PercentageOfStorage"),
-                        inflow_cms=_float("InflowVolume"),
-                        outflow_cms=_float("OutflowVolume"),
-                        water_level=_float("WaterLevel"),
+                        reservoir_name=rec.get("reservoirname", "unknown"),
+                        date=datetime.fromisoformat(dt_str),
+                        effective_capacity_m3=nwlmax,
+                        current_storage_m3=capacity,
+                        storage_percentage=pct,
+                        inflow_cms=_float("inflow"),
+                        outflow_cms=_float("outflow"),
+                        water_level=_float("dwl"),
                     )
                 )
             except (ValueError, KeyError, TypeError) as exc:

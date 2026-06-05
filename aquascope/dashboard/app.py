@@ -247,28 +247,28 @@ def page_home() -> None:
         st.markdown("**Step 1 — Collect**")
         st.caption("Fetch from 10+ real water data sources, or load a demo dataset to explore the app instantly.")
         if st.button("📊 Data Collection →", key="qs_collect", use_container_width=True):
-            st.session_state["current_page"] = "📊 Data Collection"
+            st.session_state["_nav_pending"] = "📊 Data Collection"
             st.rerun()
 
     with c2:
         st.markdown("**Step 2 — Analyze**")
         st.caption("Run EDA and quality assessment. Detect outliers, nulls, and get preprocessing recommendations.")
         if st.button("🔬 Analysis →", key="qs_analysis", use_container_width=True):
-            st.session_state["current_page"] = "🔬 Analysis"
+            st.session_state["_nav_pending"] = "🔬 Analysis"
             st.rerun()
 
     with c3:
         st.markdown("**Step 3 — Visualize**")
         st.caption("Create time-series, boxplots, station maps, flow duration curves, and more.")
         if st.button("📈 Visualization →", key="qs_viz", use_container_width=True):
-            st.session_state["current_page"] = "📈 Visualization"
+            st.session_state["_nav_pending"] = "📈 Visualization"
             st.rerun()
 
     with c4:
         st.markdown("**Step 4 — Insights**")
         st.caption("Run hydrology models, get AI methodology suggestions, and check WHO quality alerts.")
         if st.button("🤖 AI Recommender →", key="qs_ai", use_container_width=True):
-            st.session_state["current_page"] = "🤖 AI Recommender"
+            st.session_state["_nav_pending"] = "🤖 AI Recommender"
             st.rerun()
 
     st.divider()
@@ -313,7 +313,26 @@ def page_data_collection() -> None:
 
     # Source-specific parameters
     kwargs: dict = {}
-    if source_key in ("openmeteo", "copernicus"):
+    if source_key == "taiwan_wra_level":
+        st.info("Real-time snapshot — returns current readings from all river stations. No historical date range is available via this API.")
+
+    elif source_key == "taiwan_wra_reservoir":
+        st.info("Daily snapshot — returns the most recent day's reservoir data. No historical date range is available via this API.")
+
+    elif source_key == "taiwan_moenv":
+        kwargs["limit"] = st.slider("Records to fetch (most recent first)", 100, 5_000, 500, step=100)
+
+    elif source_key == "taiwan_civil_iot":
+        st.caption("SensorThings API — filter by date range to narrow observations.")
+        _c1, _c2 = st.columns(2)
+        _sd = _c1.date_input("Start Date", value=None, key="ciot_start")
+        _ed = _c2.date_input("End Date", value=None, key="ciot_end")
+        if _sd:
+            kwargs["start_date"] = str(_sd)
+        if _ed:
+            kwargs["end_date"] = str(_ed)
+
+    elif source_key in ("openmeteo", "copernicus"):
         c1, c2 = st.columns(2)
         kwargs["latitude"] = c1.number_input("Latitude", value=25.0, min_value=-90.0, max_value=90.0)
         kwargs["longitude"] = c2.number_input("Longitude", value=121.5, min_value=-180.0, max_value=180.0)
@@ -324,14 +343,60 @@ def page_data_collection() -> None:
             kwargs["mode"] = st.selectbox("Mode", ["weather", "forecast", "flood"])
 
     elif source_key == "usgs":
-        kwargs["days"] = st.slider("Days of data", 1, 365, 3)
+        kwargs["days"] = st.slider("Days of data", 1, 30, 3)
         st.caption(
-            "USGS daily data is large — 30+ days can paginate for several minutes. "
-            "Start with 1–3 days for a quick demo."
+            "USGS covers thousands of US stations — use a region filter to keep response times under 30 s."
         )
 
+        _USGS_REGIONS = {
+            "No filter (all US — slow)": None,
+            "Northeast US": "-80,37,-66,48",
+            "Southeast US": "-92,24,-80,37",
+            "Midwest US": "-104,36,-80,48",
+            "Pacific Northwest": "-125,42,-104,50",
+            "Southwest US": "-125,32,-104,42",
+            "Custom bbox": "__custom__",
+        }
+        region_label = st.selectbox("Region filter", list(_USGS_REGIONS.keys()), index=1)
+        bbox_val = _USGS_REGIONS[region_label]
+        if bbox_val == "__custom__":
+            bbox_val = st.text_input(
+                "Bounding box (minLon,minLat,maxLon,maxLat)",
+                placeholder="-80,37,-66,48",
+            ) or None
+        if bbox_val:
+            kwargs["bbox"] = bbox_val
+
+        kwargs["max_items"] = st.slider("Max records", 100, 10_000, 2_000, step=100)
+
     elif source_key == "sdg6":
-        kwargs["country_codes"] = st.text_input("Country codes (comma-separated ISO3)", "TWN")
+        _SDG6_COUNTRIES = {
+            "Taiwan": "TWN", "China": "CHN", "Japan": "JPN", "South Korea": "KOR",
+            "India": "IND", "Indonesia": "IDN", "Philippines": "PHL",
+            "Vietnam": "VNM", "Thailand": "THA", "Malaysia": "MYS",
+            "Singapore": "SGP", "Bangladesh": "BGD", "Pakistan": "PAK",
+            "Nepal": "NPL", "Sri Lanka": "LKA",
+            "United States": "USA", "Canada": "CAN", "Mexico": "MEX",
+            "Brazil": "BRA", "Argentina": "ARG", "Chile": "CHL",
+            "United Kingdom": "GBR", "France": "FRA", "Germany": "DEU",
+            "Italy": "ITA", "Spain": "ESP", "Portugal": "PRT",
+            "Netherlands": "NLD", "Belgium": "BEL", "Switzerland": "CHE",
+            "Austria": "AUT", "Sweden": "SWE", "Norway": "NOR",
+            "Finland": "FIN", "Denmark": "DNK", "Poland": "POL",
+            "Russia": "RUS", "Ukraine": "UKR", "Turkey": "TUR",
+            "Australia": "AUS", "New Zealand": "NZL",
+            "South Africa": "ZAF", "Egypt": "EGY", "Nigeria": "NGA",
+            "Kenya": "KEN", "Ethiopia": "ETH", "Morocco": "MAR",
+            "Saudi Arabia": "SAU", "UAE": "ARE", "Israel": "ISR",
+            "Iran": "IRN", "Iraq": "IRQ",
+        }
+        _selected_names = st.multiselect(
+            "Countries",
+            list(_SDG6_COUNTRIES.keys()),
+            default=["Germany"],
+            help="Taiwan is not included in UN SDG data. Try Germany, United States, India, etc.",
+        )
+        kwargs["country_codes"] = ",".join(_SDG6_COUNTRIES[n] for n in _selected_names) if _selected_names else None
         kwargs["indicator_codes"] = [
             st.selectbox(
                 "Indicator",
@@ -351,8 +416,59 @@ def page_data_collection() -> None:
             )
         ]
 
+    elif source_key == "gemstat":
+        st.info(
+            "📦 GEMStat data is a ~200 MB archive hosted on Zenodo. "
+            "The first collection downloads and caches it locally — this takes 1–3 minutes. "
+            "Subsequent runs load from the local cache instantly."
+        )
+        st.caption("Taiwan is not in GEMStat — use Taiwan MOENV or WRA for Taiwan data.")
+        _GEMSTAT_COUNTRIES = [
+            "Argentina", "Austria", "Belgium", "Bosnia and Herzegovina", "Bulgaria",
+            "Canada", "Croatia", "Cyprus", "Czechia", "Denmark", "Estonia", "Finland",
+            "France", "Germany", "Greece", "Hungary", "Iceland", "India", "Ireland",
+            "Italy", "Latvia", "Liechtenstein", "Lithuania", "Luxembourg",
+            "Macedonia (the former Yugoslav Republic of)", "Malta", "Mexico",
+            "Montenegro", "Netherlands (-the )", "Norway", "Poland", "Portugal",
+            "Romania", "Serbia", "Slovakia", "Slovenia", "Spain", "Sweden",
+            "Switzerland", "Turkey", "United States of America (the)", "Uruguay",
+        ]
+        kwargs["country"] = st.selectbox("Country", _GEMSTAT_COUNTRIES, index=_GEMSTAT_COUNTRIES.index("Germany"))
+        _gc1, _gc2 = st.columns(2)
+        _gsd = _gc1.date_input("Start Date (optional)", value=None, key="gemstat_start")
+        _ged = _gc2.date_input("End Date (optional)", value=None, key="gemstat_end")
+        if _gsd:
+            kwargs["start_date"] = str(_gsd)
+        if _ged:
+            kwargs["end_date"] = str(_ged)
+        kwargs["max_records"] = st.slider("Max records", 500, 20_000, 5_000, step=500)
+
     elif source_key == "wqp":
-        kwargs["state"] = st.text_input("US State code (e.g. US:06)", "US:06")
+        _WQP_STATES = {
+            "Alabama": "US:01", "Alaska": "US:02", "Arizona": "US:04",
+            "Arkansas": "US:05", "California": "US:06", "Colorado": "US:08",
+            "Connecticut": "US:09", "Delaware": "US:10", "Florida": "US:12",
+            "Georgia": "US:13", "Hawaii": "US:15", "Idaho": "US:16",
+            "Illinois": "US:17", "Indiana": "US:18", "Iowa": "US:19",
+            "Kansas": "US:20", "Kentucky": "US:21", "Louisiana": "US:22",
+            "Maine": "US:23", "Maryland": "US:24", "Massachusetts": "US:25",
+            "Michigan": "US:26", "Minnesota": "US:27", "Mississippi": "US:28",
+            "Missouri": "US:29", "Montana": "US:30", "Nebraska": "US:31",
+            "Nevada": "US:32", "New Hampshire": "US:33", "New Jersey": "US:34",
+            "New Mexico": "US:35", "New York": "US:36", "North Carolina": "US:37",
+            "North Dakota": "US:38", "Ohio": "US:39", "Oklahoma": "US:40",
+            "Oregon": "US:41", "Pennsylvania": "US:42", "Rhode Island": "US:44",
+            "South Carolina": "US:45", "South Dakota": "US:46", "Tennessee": "US:47",
+            "Texas": "US:48", "Utah": "US:49", "Vermont": "US:50",
+            "Virginia": "US:51", "Washington": "US:53", "West Virginia": "US:54",
+            "Wisconsin": "US:55", "Wyoming": "US:56",
+        }
+        _wqp_state_name = st.selectbox(
+            "State",
+            list(_WQP_STATES.keys()),
+            index=list(_WQP_STATES.keys()).index("California"),
+        )
+        kwargs["state_code"] = _WQP_STATES[_wqp_state_name]
 
     if api_key:
         kwargs["api_key"] = api_key
@@ -948,15 +1064,20 @@ def _hydro_recession(st, df: pd.DataFrame) -> None:
     result = recession_analysis(q, min_length=min_length)
 
     st.subheader("Results")
-    col1, col2 = st.columns(2)
-    col1.metric("Recession constant (K)", f"{result.k:.4f}")
-    col2.metric("Segments found", str(result.n_segments))
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Recession constant (K)", f"{result.recession_constant:.4f}" if result.recession_constant else "N/A")
+    col2.metric("Segments found", str(len(result.segments)))
+    col3.metric("R²", f"{result.r_squared:.3f}" if result.r_squared else "N/A")
 
     if result.segments:
         import pandas as pd
 
         seg_data = [
-            {"Start": s.start, "End": s.end, "Duration": s.duration, "K": round(s.k, 4)}
+            {
+                "Start": s.start,
+                "End": s.end,
+                "Duration (days)": (s.end - s.start).days if hasattr(s.end, "days") else len(s.discharge),
+            }
             for s in result.segments
         ]
         st.dataframe(pd.DataFrame(seg_data), width="stretch")
@@ -1005,6 +1126,71 @@ def _hydro_flood_freq(st, df: pd.DataFrame) -> None:
 # Page: AI Recommender
 # ---------------------------------------------------------------------------
 
+_PROVIDER_LABELS = {
+    "rule_based": "Rule-based (free, no key needed)",
+    "huggingface": "HuggingFace Inference API (free)",
+    "groq": "Groq (free tier — fast open-source models)",
+    "openai": "OpenAI",
+    "ollama": "Ollama (local)",
+}
+
+_PROVIDER_KEY_LINKS = {
+    "huggingface": ("Get free HF token", "https://huggingface.co/settings/tokens"),
+    "groq": ("Get free Groq key", "https://console.groq.com/keys"),
+    "openai": ("OpenAI API keys", "https://platform.openai.com/api-keys"),
+    "ollama": None,
+}
+
+
+def _render_llm_config(st) -> dict | None:
+    """Render LLM provider config UI; returns config dict or None for rule-based."""
+    from aquascope.ai_engine.recommender import PROVIDER_BASE_URLS, PROVIDER_MODELS
+
+    with st.expander("⚙️ LLM Enhancement (optional)", expanded=False):
+        st.caption(
+            "Augment rule-based scoring with a language model for richer rationales. "
+            "HuggingFace and Groq both offer free tiers — no credit card required."
+        )
+        provider = st.selectbox(
+            "Provider",
+            list(_PROVIDER_LABELS.keys()),
+            format_func=lambda k: _PROVIDER_LABELS[k],
+            key="llm_provider",
+        )
+        if provider == "rule_based":
+            return None
+
+        default_models = PROVIDER_MODELS.get(provider, [])
+        model = st.selectbox(
+            "Model",
+            default_models + ["(custom)"],
+            key="llm_model_select",
+        )
+        if model == "(custom)":
+            model = st.text_input("Custom model name", key="llm_model_custom")
+
+        link_info = _PROVIDER_KEY_LINKS.get(provider)
+        if link_info:
+            label, url = link_info
+            st.caption(f"[{label}]({url})")
+
+        if provider == "ollama":
+            base_url = st.text_input(
+                "Ollama base URL",
+                value=PROVIDER_BASE_URLS["ollama"],
+                key="llm_base_url",
+            )
+            api_key = None
+        else:
+            api_key = st.text_input("API Key", type="password", key="llm_api_key")
+            base_url = PROVIDER_BASE_URLS.get(provider)
+
+        if not model:
+            st.warning("Select or enter a model name.")
+            return None
+
+        return {"provider": provider, "model": model, "api_key": api_key or None, "base_url": base_url}
+
 
 def page_ai_recommender() -> None:
     """Render the AI Recommender page."""
@@ -1012,6 +1198,8 @@ def page_ai_recommender() -> None:
 
     st.title("🤖 AI Methodology Recommender")
     st.markdown("Get research methodology recommendations based on your dataset characteristics.")
+
+    llm_config = _render_llm_config(st)
 
     tab_manual, tab_auto = st.tabs(["Manual Profile", "Auto-detect from Data"])
 
@@ -1029,7 +1217,7 @@ def page_ai_recommender() -> None:
         top_k = st.slider("Number of recommendations", 1, 20, 5)
 
         if st.button("🔍 Get Recommendations", key="btn_rec_manual"):
-            _run_recommendations(st, goal, parameters, scope, keywords, n_records, n_stations, years, top_k)
+            _run_recommendations(st, goal, parameters, scope, keywords, n_records, n_stations, years, top_k, llm_config)
 
     with tab_auto:
         df = st.session_state.get("collected_data")
@@ -1048,14 +1236,22 @@ def page_ai_recommender() -> None:
         if st.button("🔍 Auto-recommend from Data", key="btn_rec_auto"):
             with st.spinner("Profiling dataset and generating recommendations…"):
                 try:
-                    from aquascope.ai_engine.recommender import recommend
+                    from aquascope.ai_engine.recommender import recommend, recommend_with_llm
                     from aquascope.analysis.eda import profile_dataset
 
                     profile = profile_dataset(df)
                     if goal_auto:
                         profile.research_goal = goal_auto
 
-                    recs = recommend(profile, top_k=top_k_auto)
+                    if llm_config:
+                        recs = recommend_with_llm(
+                            profile, top_k=top_k_auto,
+                            model=llm_config["model"],
+                            api_key=llm_config["api_key"],
+                            base_url=llm_config["base_url"],
+                        )
+                    else:
+                        recs = recommend(profile, top_k=top_k_auto)
                     _display_recommendations(st, recs)
                 except Exception as exc:
                     st.error(f"Recommendation failed: {exc}")
@@ -1065,11 +1261,12 @@ def page_ai_recommender() -> None:
 def _run_recommendations(
     st, goal: str, parameters: str, scope: str, keywords: str,
     n_records: int, n_stations: int, years: float, top_k: int,
+    llm_config: dict | None = None,
 ) -> None:
-    """Run the rule-based recommender with manual profile inputs."""
+    """Run the recommender (rule-based, or LLM-enhanced if llm_config provided)."""
     with st.spinner("Generating recommendations…"):
         try:
-            from aquascope.ai_engine.recommender import DatasetProfile, recommend
+            from aquascope.ai_engine.recommender import DatasetProfile, recommend, recommend_with_llm
 
             profile = DatasetProfile(
                 parameters=[p.strip() for p in parameters.split(",") if p.strip()],
@@ -1081,7 +1278,15 @@ def _run_recommendations(
                 keywords=[k.strip() for k in keywords.split(",") if k.strip()],
             )
 
-            recs = recommend(profile, top_k=top_k)
+            if llm_config:
+                recs = recommend_with_llm(
+                    profile, top_k=top_k,
+                    model=llm_config["model"],
+                    api_key=llm_config["api_key"],
+                    base_url=llm_config["base_url"],
+                )
+            else:
+                recs = recommend(profile, top_k=top_k)
             _display_recommendations(st, recs)
         except Exception as exc:
             st.error(f"Recommendation failed: {exc}")
@@ -1186,12 +1391,15 @@ def page_water_quality_alerts() -> None:
                 wq.load_dataframes(param_dfs)
                 exceedances = wq.check_who_guidelines()
 
-                if exceedances:
-                    st.warning(f"⚠️ Found exceedances in **{len(exceedances)}** parameters")
-                    for param, info in exceedances.items():
-                        st.markdown(f"- **{param}**: {info}")
+                if exceedances.empty:
+                    st.info("No WHO guideline data available for the loaded parameters.")
                 else:
-                    st.success("✅ All parameters within WHO guidelines")
+                    exceeded = exceedances[exceedances["status"] == "EXCEEDANCE"]
+                    if not exceeded.empty:
+                        st.warning(f"⚠️ Found exceedances in **{len(exceeded)}** parameters")
+                    else:
+                        st.success("✅ All parameters within WHO guidelines")
+                    st.dataframe(exceedances[["variable", "n_measurements", "mean", "n_exceedances", "pct_exceedances", "guideline_low", "guideline_high", "status"]])
             except Exception as exc:
                 st.error(f"Challenge analysis failed: {exc}")
                 logger.exception("Water quality challenge error")
@@ -1295,8 +1503,11 @@ def main() -> None:
 
     # P2 + P5: "Navigate" label hidden via label_visibility; CSS removes radio dots
     # so it looks like a clean link list.
-    # key="current_page" lets Home page buttons update the selection via session_state.
-    if "current_page" not in st.session_state:
+    # Apply pending navigation BEFORE the radio widget is instantiated — writing to a
+    # widget-bound key after instantiation raises StreamlitAPIException.
+    if "_nav_pending" in st.session_state:
+        st.session_state["current_page"] = st.session_state.pop("_nav_pending")
+    elif "current_page" not in st.session_state:
         st.session_state["current_page"] = page_labels[0]
 
     selected_label = st.sidebar.radio(

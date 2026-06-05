@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __author__ = "AquaScope Contributors"
 __license__ = "MIT"
 

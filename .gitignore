@@ -42,3 +42,4 @@ htmlcov/
 # MkDocs build output + plugin cache
 site/
 .cache/
+.gstack/

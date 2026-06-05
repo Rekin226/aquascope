@@ -96,5 +96,5 @@ def _save_or_show(fig, save_path: str | None, tight: bool = True) -> None:
     if save_path:
         fig.savefig(save_path, dpi=DEFAULT_DPI, bbox_inches="tight")
         plt.close(fig)
-    else:
+    elif plt.get_backend().lower() != "agg":
         plt.show()

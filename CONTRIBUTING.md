@@ -5,7 +5,7 @@ Thank you for your interest in contributing to AquaScope! This project aims to b
 ## Finding Something to Work On
 
 - Browse issues labeled [`good first issue`](https://github.com/Rekin226/aquascope/labels/good%20first%20issue) — these are scoped, self-contained, and have clear acceptance criteria.
-- Want to add your country's water data? See the pinned [**Data sources wanted**](https://github.com/Rekin226/aquascope/issues) meta-issue.
+- Want to add your country's water data? See the pinned [**Data sources wanted**](https://github.com/Rekin226/aquascope/issues/11) meta-issue.
 - **To claim an issue**, just comment on it (e.g. "I'd like to work on this"). A maintainer will assign it to you — outside contributors can't self-assign, so the comment is how we hand it over. This avoids two people doing the same work.
 
 ## Ways to Contribute

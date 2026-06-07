@@ -13,9 +13,9 @@ in :mod:`aquascope.models.analysis`.
 """
 
 from __future__ import annotations
-from typing import Literal
 
 import logging
+from typing import Literal
 
 import numpy as np
 import pandas as pd

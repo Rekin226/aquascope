@@ -34,6 +34,11 @@ _DATA_SOURCES: list[tuple[str, str]] = [
     ("wqp", "WQP (Water Quality Portal)"),
     ("openmeteo", "Open-Meteo (Weather/Hydro)"),
     ("copernicus", "Copernicus Climate Data"),
+    ("aquastat", "AQUASTAT (FAO Global Water)"),
+    ("eu_wfd", "EU WFD (Water Framework Directive)"),
+    ("japan_mlit", "Japan MLIT (Water Info)"),
+    ("korea_wamis", "Korea WAMIS (Water Resources)"),
+    ("wapor", "WaPOR (FAO Evapotranspiration)"),
 ]
 
 # Sources that require a free user-provided API key to return any data.
@@ -218,7 +223,7 @@ def page_home() -> None:
         AI-powered research methodology recommendations.
 
         ### Features
-        - 📊 **10 data collectors** — Taiwan MOENV, USGS, GEMStat, WQP, SDG6, Open-Meteo, Copernicus & more
+        - 📊 **15 data collectors** — USGS, GEMStat, AQUASTAT, EU WFD, Japan MLIT, Korea WAMIS, WaPOR, Open-Meteo & more
         - 🔬 **Automated EDA & quality assessment** on collected data
         - 🤖 **AI recommender** — rule-based + optional LLM-enhanced methodology suggestions
         - 🌊 **Hydrology toolkit** — flow duration curves, baseflow separation, recession analysis, flood frequency
@@ -228,7 +233,7 @@ def page_home() -> None:
     )
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Data Sources", "10")
+    col1.metric("Data Sources", "15")
     col2.metric("Plot Types", str(len(_PLOT_TYPES)))
     col3.metric("AI Methodologies", "26")
 
@@ -245,7 +250,7 @@ def page_home() -> None:
 
     with c1:
         st.markdown("**Step 1 — Collect**")
-        st.caption("Fetch from 10+ real water data sources, or load a demo dataset to explore the app instantly.")
+        st.caption("Fetch from 15 real water data sources, or load a demo dataset to explore the app instantly.")
         if st.button("📊 Data Collection →", key="qs_collect", use_container_width=True):
             st.session_state["_nav_pending"] = "📊 Data Collection"
             st.rerun()
@@ -470,6 +475,89 @@ def page_data_collection() -> None:
             index=list(_WQP_STATES.keys()).index("California"),
         )
         kwargs["state_code"] = _WQP_STATES[_wqp_state_name]
+
+    elif source_key == "aquastat":
+        st.caption("FAO AQUASTAT global water resources and agricultural water use indicators.")
+        _AQUASTAT_COUNTRIES = {
+            "Global (all countries)": "all", "Egypt": "EGY", "India": "IND",
+            "United States": "USA", "Brazil": "BRA", "China": "CHN",
+            "France": "FRA", "Germany": "DEU", "Nigeria": "NGA",
+            "Australia": "AUS", "Mexico": "MEX", "Spain": "ESP",
+        }
+        _ac = st.selectbox("Country", list(_AQUASTAT_COUNTRIES.keys()))
+        kwargs["country_code"] = _AQUASTAT_COUNTRIES[_ac]
+        _yc1, _yc2 = st.columns(2)
+        kwargs["start_year"] = int(_yc1.number_input("Start year", 1960, 2023, 2000, step=1))
+        kwargs["end_year"] = int(_yc2.number_input("End year", 1960, 2023, 2023, step=1))
+
+    elif source_key == "eu_wfd":
+        st.caption("EU Water Framework Directive monitoring via the EEA DiscoData API.")
+        _EU_COUNTRIES = {
+            "Germany": "DE", "France": "FR", "Spain": "ES", "Italy": "IT",
+            "Netherlands": "NL", "Poland": "PL", "Austria": "AT",
+            "Belgium": "BE", "Sweden": "SE", "Finland": "FI",
+        }
+        _ec = st.selectbox("Country", list(_EU_COUNTRIES.keys()))
+        kwargs["country"] = _EU_COUNTRIES[_ec]
+        kwargs["water_body_type"] = st.selectbox("Water body type", ["river", "lake", "groundwater"])
+        if st.checkbox("Filter by year"):
+            kwargs["year"] = int(st.number_input("Year", 2000, 2023, 2018, step=1))
+
+    elif source_key == "japan_mlit":
+        st.caption("Japan MLIT Water Information System.")
+        kwargs["prefecture"] = st.selectbox(
+            "Prefecture",
+            ["Tokyo", "Osaka", "Kyoto", "Aichi", "Niigata", "Hokkaido", "Fukuoka"],
+        )
+        kwargs["parameter"] = st.selectbox(
+            "Parameter", ["water_level", "discharge", "water_quality", "rainfall"]
+        )
+        _jc1, _jc2 = st.columns(2)
+        _jsd = _jc1.date_input("Start Date (optional)", value=None, key="mlit_start")
+        _jed = _jc2.date_input("End Date (optional)", value=None, key="mlit_end")
+        if _jsd:
+            kwargs["start_date"] = str(_jsd)
+        if _jed:
+            kwargs["end_date"] = str(_jed)
+
+    elif source_key == "korea_wamis":
+        st.caption("Korea WAMIS (Water Resources Management Information System).")
+        kwargs["basin"] = st.selectbox(
+            "Basin", ["Han", "Nakdong", "Geum", "Yeongsan", "Seomjin"]
+        )
+        kwargs["parameter"] = st.selectbox(
+            "Parameter", ["water_level", "discharge", "water_quality", "dam_storage"]
+        )
+        _kc1, _kc2 = st.columns(2)
+        _ksd = _kc1.date_input("Start Date (optional)", value=None, key="wamis_start")
+        _ked = _kc2.date_input("End Date (optional)", value=None, key="wamis_end")
+        if _ksd:
+            kwargs["start_date"] = str(_ksd)
+        if _ked:
+            kwargs["end_date"] = str(_ked)
+
+    elif source_key == "wapor":
+        st.caption("FAO WaPOR remote-sensing evapotranspiration and productivity data.")
+        kwargs["variable"] = st.selectbox(
+            "Variable",
+            ["RET", "AETI", "NPP"],
+            format_func=lambda v: {
+                "RET": "RET — reference evapotranspiration",
+                "AETI": "AETI — actual ET & interception",
+                "NPP": "NPP — net primary production",
+            }[v],
+        )
+        _wc1, _wc2 = st.columns(2)
+        kwargs["start_date"] = str(_wc1.date_input("Start Date", key="wapor_start"))
+        kwargs["end_date"] = str(_wc2.date_input("End Date", key="wapor_end"))
+        _bbox_str = st.text_input(
+            "Bounding box (west,south,east,north)", placeholder="31.0,29.0,32.0,30.5"
+        )
+        if _bbox_str.strip():
+            try:
+                kwargs["bbox"] = tuple(float(x) for x in _bbox_str.split(","))
+            except ValueError:
+                st.warning("Bounding box must be four comma-separated numbers.")
 
     if api_key:
         kwargs["api_key"] = api_key

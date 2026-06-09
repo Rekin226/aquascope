@@ -35,6 +35,7 @@ class DataSource(str, Enum):
     TAIWAN_WRA_FHY = "taiwan_wra_fhy"
     TAIWAN_WRA_IOT = "taiwan_wra_iot"
     TAIWAN_DATAGOV = "taiwan_datagov"
+    INDIA_WRIS = "india_wris"
 
 
 class GeoLocation(BaseModel):

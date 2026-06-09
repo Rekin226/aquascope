@@ -5,6 +5,7 @@ from aquascope.collectors.base import BaseCollector
 from aquascope.collectors.copernicus import CopernicusCollector
 from aquascope.collectors.eu_wfd import EUWFDCollector
 from aquascope.collectors.gemstat import GEMStatCollector
+from aquascope.collectors.india_wris import IndiaWRISCollector
 from aquascope.collectors.japan_mlit import JapanMLITCollector
 from aquascope.collectors.korea_wamis import KoreaWAMISCollector
 from aquascope.collectors.openmeteo import OpenMeteoCollector
@@ -42,4 +43,5 @@ __all__ = [
     "USGSCollector",
     "WaPORCollector",
     "WQPCollector",
+    "IndiaWRISCollector",
 ]

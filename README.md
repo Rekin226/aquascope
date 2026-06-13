@@ -30,7 +30,7 @@
 
 ---
 
-AquaScope unifies **15 global water-data APIs** behind one Python schema, then layers a full scientific computing stack on top — from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements** — wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **7 analysis pipelines**. Validated against the CAMELS benchmark with 525 tests.
+AquaScope unifies **15 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top — from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements** — wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **7 analysis pipelines**. Validated against the CAMELS benchmark with 525 tests.
 
 ---
 
@@ -120,7 +120,7 @@ print(sig["flashiness"])       # Richards-Baker flashiness index
 
 22 signatures across magnitude, variability, timing, recession, and flashiness — see [docs/features.md](docs/features.md#hydrological-analysis).
 
-### 3. Collect data from any of the 12 sources
+### 3. Collect data from any of the 15 sources
 
 ```python
 from aquascope.collectors import USGSCollector, AquastatCollector, WaporCollector
@@ -259,7 +259,7 @@ Run `aquascope --help` for the full command list.
 
 ## 🌍 Data sources at a glance
 
-12 unified data sources spanning four regions:
+15 unified data sources spanning four regions:
 
 - 🌎 **Americas** — USGS (streamflow + WQ), Water Quality Portal (400+ agencies)
 - 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5
@@ -284,7 +284,7 @@ Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/d
 | Resource | What it covers |
 | :--- | :--- |
 | [Features](docs/features.md) | Full capability list — hydrology, agriculture, ML, spatial, I/O |
-| [Data sources](docs/data_sources.md) | All 12 sources, endpoints, API-key requirements |
+| [Data sources](docs/data_sources.md) | All 15 sources, endpoints, API-key requirements |
 | [Theory guide](docs/theory.md) | Equations, DOI citations, decision trees for every method |
 | [Methodology matrix](docs/methodology_matrix.md) | When to use which method |
 | [Architecture](docs/guides/architecture.md) | How AquaScope is structured internally |
@@ -303,6 +303,25 @@ We welcome contributions from the global water and agriculture research communit
 - **New research methodologies** — expand the AI recommender
 - **New crop coefficients** — extend the FAO Kc table
 - **Jupyter tutorials** and validation studies — compare against HEC-SSP, R packages, etc.
+
+### 📌 Where to start
+
+📍 **[Data sources wanted — help us map every country's water data 🌍](https://github.com/Rekin226/aquascope/issues/11)** — our pinned meta-issue. Want your country in AquaScope? Start here.
+
+New contributor? These [`good first issue`](https://github.com/Rekin226/aquascope/labels/good%20first%20issue)s are scoped with clear acceptance criteria — just comment to claim one:
+
+| Area | Open issues |
+| :--- | :--- |
+| 🌍 **New data collectors** | [India](https://github.com/Rekin226/aquascope/issues/16) · [Brazil](https://github.com/Rekin226/aquascope/issues/17) · [Canada](https://github.com/Rekin226/aquascope/issues/18) · [UK](https://github.com/Rekin226/aquascope/issues/19) · [South Africa](https://github.com/Rekin226/aquascope/issues/20) · [Australia](https://github.com/Rekin226/aquascope/issues/4) |
+| 🌾 **Agriculture** | [Kc for millet/cassava/chickpea](https://github.com/Rekin226/aquascope/issues/21) · [dual crop coefficient](https://github.com/Rekin226/aquascope/issues/22) · [Kc for sorghum/groundnut/sugar beet](https://github.com/Rekin226/aquascope/issues/5) |
+| 📈 **Methodologies** | [SPEI drought index](https://github.com/Rekin226/aquascope/issues/23) · [Budyko framework](https://github.com/Rekin226/aquascope/issues/24) |
+| 📊 **Visualization** | [interactive Plotly hydrograph](https://github.com/Rekin226/aquascope/issues/25) · [double-mass curve](https://github.com/Rekin226/aquascope/issues/26) |
+| 💻 **CLI** | [`--output` to JSON/CSV](https://github.com/Rekin226/aquascope/issues/27) · [shell completion](https://github.com/Rekin226/aquascope/issues/28) · [geojson format](https://github.com/Rekin226/aquascope/issues/7) |
+| 📚 **Docs & tutorials** | [Colab/Binder badges](https://github.com/Rekin226/aquascope/issues/29) · [groundwater notebook](https://github.com/Rekin226/aquascope/issues/30) · [agri irrigation notebook](https://github.com/Rekin226/aquascope/issues/6) · [translate the docs (zh/fr/ja)](https://github.com/Rekin226/aquascope/issues/31) |
+| 🧪 **Code quality & tests** | [type annotations](https://github.com/Rekin226/aquascope/issues/32) · [SoilWaterBalance edge-case tests](https://github.com/Rekin226/aquascope/issues/33) |
+| 🚀 **Infra** | [hosted Streamlit demo](https://github.com/Rekin226/aquascope/issues/34) |
+
+Browse the [full issue list](https://github.com/Rekin226/aquascope/issues) or vote on what to build next in [Discussions → Ideas](https://github.com/Rekin226/aquascope/discussions/categories/ideas).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), the [adding a data source](docs/guides/adding_data_source.md) guide, and the [adding a methodology](docs/guides/adding_methodology.md) guide.
 

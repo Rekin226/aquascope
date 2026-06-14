@@ -1,6 +1,6 @@
 site_name: AquaScope
 site_url: https://rekin226.github.io/aquascope/
-site_description: Hydrology toolkit for Python — flood frequency, baseflow, FAO-56 crop water, AI methodology recommender, 12 data sources
+site_description: Hydrology toolkit for Python — flood frequency, baseflow, FAO-56 crop water, AI methodology recommender, 15 data sources
 site_author: Rekin226
 repo_url: https://github.com/Rekin226/aquascope
 repo_name: Rekin226/aquascope

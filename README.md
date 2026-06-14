@@ -162,12 +162,13 @@ eto = penman_monteith_daily(
 # Crop water requirement for maize from planting through harvest
 cwr = crop_water_requirement(eto_series, crop="maize", planting_date=date(2026, 4, 1))
 
-# Soil water balance with auto-irrigation triggers
+# Soil water balance with auto-irrigation triggers — returns a daily DataFrame
 soil    = SoilProperties(field_capacity=0.30, wilting_point=0.15, root_depth=1.0)
 balance = SoilWaterBalance(soil).auto_irrigate(
-    etc=cwr.etc, precip=precip_series, efficiency=0.7,
+    cwr["etc"], precip_series, efficiency=0.7,
 )
-print(balance.total_irrigation_mm, balance.deficit_days)
+print(balance["irrigation_mm"].sum())             # total irrigation applied (mm)
+print(int(balance["irrigation_trigger"].sum()))   # number of deficit days
 ```
 
 ### 5. AI methodology recommender

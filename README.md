@@ -325,6 +325,30 @@ Browse the [full issue list](https://github.com/Rekin226/aquascope/issues) or vo
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), the [adding a data source](docs/guides/adding_data_source.md) guide, and the [adding a methodology](docs/guides/adding_methodology.md) guide.
 
+### 🪜 The contributor ladder
+
+We want contributors to grow, not vanish after one PR. There's a clear path: start with a [`good first issue`](https://github.com/Rekin226/aquascope/labels/good%20first%20issue), then graduate to a [`good second issue`](https://github.com/Rekin226/aquascope/labels/good%20second%20issue) (a bigger self-contained piece that builds on what you learned), and after a few PRs in one area we'll invite you to help triage and review. See [CONTRIBUTORS.md](CONTRIBUTORS.md) for details.
+
+## 🙌 Contributors
+
+Thanks to these wonderful people who make AquaScope possible ([emoji key](CONTRIBUTORS.md#contribution-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/Rekin226"><img src="https://github.com/Rekin226.png?size=100" width="100px;" alt="Abdoul Rachid Ouedraogo"/><br /><sub><b>Abdoul Rachid Ouedraogo</b></sub></a><br />💻 📖 🚧</td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/vaishnavidesai09"><img src="https://github.com/vaishnavidesai09.png?size=100" width="100px;" alt="Vaishnavi Desai"/><br /><sub><b>Vaishnavi Desai</b></sub></a><br />🔌</td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/Karthick03219"><img src="https://github.com/Karthick03219.png?size=100" width="100px;" alt="Karthick"/><br /><sub><b>Karthick</b></sub></a><br />💻</td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/sagiB74"><img src="https://github.com/sagiB74.png?size=100" width="100px;" alt="sagiB74"/><br /><sub><b>sagiB74</b></sub></a><br />⚠️</td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/laishettikarthik-tech"><img src="https://github.com/laishettikarthik-tech.png?size=100" width="100px;" alt="Karthik Laishetti"/><br /><sub><b>Karthik Laishetti</b></sub></a><br />💻 🐛</td>
+    </tr>
+  </tbody>
+</table>
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+Your first merged PR puts you on this board, every kind of contribution counts. See [CONTRIBUTORS.md](CONTRIBUTORS.md).
+
 ## 📜 Citation
 
 If you use AquaScope in your research, please cite:

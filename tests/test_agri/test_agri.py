@@ -337,6 +337,38 @@ class TestSoilWaterBalance:
         df = swb.auto_irrigate(etc, precip)
         assert df["irrigation_mm"].sum() > 0
 
+    def test_auto_irrigate_no_deep_percolation_from_efficiency_loss(self):
+        """Application/conveyance losses must not appear as deep percolation.
+
+        Regression test for issue #38: previously, the full gross
+        irrigation (net_needed / efficiency) was passed into step(),
+        so at low efficiency the "extra" water counted as deep
+        percolation even though it never reached the root zone.
+        """
+        n_days = 14
+        etc = _make_daily_series(n_days, 10.0)
+        precip = _make_daily_series(n_days, 0.0)
+
+        for efficiency in (0.9, 0.5):
+            swb = SoilWaterBalance(self.soil)
+            df = swb.auto_irrigate(etc, precip, efficiency=efficiency)
+            assert df["deep_percolation_mm"].sum() == pytest.approx(0.0, abs=0.01)
+
+    def test_auto_irrigate_gross_reflects_efficiency(self):
+        """irrigation_mm (gross applied/pumped) should rise as efficiency drops."""
+        n_days = 14
+        etc = _make_daily_series(n_days, 10.0)
+        precip = _make_daily_series(n_days, 0.0)
+
+        applied = {}
+        for efficiency in (0.9, 0.5):
+            swb = SoilWaterBalance(self.soil)
+            df = swb.auto_irrigate(etc, precip, efficiency=efficiency)
+            applied[efficiency] = df["irrigation_mm"].sum()
+
+        assert applied[0.5] > applied[0.9]
+        
+
     def test_deep_percolation_after_heavy_rain(self):
         """DP > 0 when P pushes moisture above FC."""
         swb = SoilWaterBalance(self.soil, initial_depletion=5.0)

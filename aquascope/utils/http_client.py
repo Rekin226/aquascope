@@ -194,6 +194,29 @@ class CachedHTTPClient:
 
         raise RuntimeError(f"All {self.retries} attempts failed for {url}") from last_exc
 
+
+    def post_json(
+        self,
+        path: str,
+        params: dict | None = None,
+        headers: dict | None = None,) -> Any:
+        if path.startswith(("http://", "https://")):
+            url = path
+        else:
+            url = f"{self.base_url}/{path.lstrip('/')}" if self.base_url else path
+
+        if self.rate_limiter:
+            self.rate_limiter.wait_if_needed()
+
+        resp = self._client.post(
+            url,
+            params=params,
+            headers=headers,
+        )
+
+        resp.raise_for_status()
+        return self._parse_response_json(resp)
+
     def close(self) -> None:
         self._client.close()
 
@@ -202,3 +225,5 @@ class CachedHTTPClient:
 
     def __exit__(self, *args):
         self.close()
+
+

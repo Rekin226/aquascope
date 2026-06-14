@@ -27,7 +27,7 @@ Quick start::
 
 from __future__ import annotations
 
-from aquascope.hydrology.baseflow import BaseflowResult, eckhardt, lyne_hollick
+from aquascope.hydrology.baseflow import BaseflowResult, eckhardt, lyne_hollick, ukih
 from aquascope.hydrology.flood_frequency import (
     EMAResult,
     FloodFreqResult,
@@ -90,10 +90,11 @@ __all__ = [
     "FDCResult",
     "flow_duration_curve",
     "low_flow_stat",
-    # baseflow
+   # baseflow
     "BaseflowResult",
     "lyne_hollick",
     "eckhardt",
+    "ukih",
     # recession
     "RecessionResult",
     "RecessionSegment",

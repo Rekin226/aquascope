@@ -35,6 +35,16 @@ The roadmap reflects what's shipped, what's in-flight, and what's planned. Open 
 - [ ] ReadTheDocs hosting
 - [ ] NumFOCUS Sponsored Project application
 
+## Good first issues — up for grabs
+
+Newcomers welcome. Just comment to claim one, then follow the [contributor ladder](CONTRIBUTING.md) (`good first issue` → `good second issue` → area owner).
+
+- [ ] Edge-case tests for the FAO-56 ETo functions ([#40](https://github.com/Rekin226/aquascope/issues/40))
+- [ ] Colorblind-safe plot palette in `viz/styles.py` ([#41](https://github.com/Rekin226/aquascope/issues/41))
+- [ ] Edge-case tests for baseflow separation ([#42](https://github.com/Rekin226/aquascope/issues/42))
+
+**Ready for more?** The [`good second issue`](https://github.com/Rekin226/aquascope/labels/good%20second%20issue) tier: UKIH baseflow method ([#43](https://github.com/Rekin226/aquascope/issues/43)), Mann-Kendall trend test + Sen's slope ([#44](https://github.com/Rekin226/aquascope/issues/44)), flow-duration-curve slope + runoff ratio ([#45](https://github.com/Rekin226/aquascope/issues/45)).
+
 ## How to influence the roadmap
 
 - 👍 **Vote** on existing requests in [Discussions → Ideas](https://github.com/Rekin226/aquascope/discussions/categories/ideas)

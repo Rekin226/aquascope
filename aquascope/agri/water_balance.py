@@ -216,7 +216,7 @@ class SoilWaterBalance:
 
         return pd.DataFrame(rows)
 
-def auto_irrigate(
+    def auto_irrigate(
         self,
         etc_series: pd.Series,
         precip_series: pd.Series,

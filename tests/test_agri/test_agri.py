@@ -365,8 +365,7 @@ class TestSoilWaterBalance:
             swb = SoilWaterBalance(self.soil)
             df = swb.auto_irrigate(etc, precip, efficiency=efficiency)
             applied[efficiency] = df["irrigation_mm"].sum()
-
-        assert applied[0.5] > applied[0.9]
+            assert applied[0.5] > applied[0.9]
         
     def test_deep_percolation_after_heavy_rain(self):
         """DP > 0 when P pushes moisture above FC."""

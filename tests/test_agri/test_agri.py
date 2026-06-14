@@ -368,7 +368,6 @@ class TestSoilWaterBalance:
 
         assert applied[0.5] > applied[0.9]
         
-
     def test_deep_percolation_after_heavy_rain(self):
         """DP > 0 when P pushes moisture above FC."""
         swb = SoilWaterBalance(self.soil, initial_depletion=5.0)

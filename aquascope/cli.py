@@ -22,6 +22,9 @@ import sys
 from datetime import date
 from pathlib import Path
 
+#----------------------------------------------------------
+from aquascope.collectors.india_wris import IndiaWRISCollector
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
@@ -104,6 +107,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "eu_wfd": lambda: EUWFDCollector(),
         "japan_mlit": lambda: JapanMLITCollector(),
         "korea_wamis": lambda: KoreaWAMISCollector(),
+        "india_wris": lambda: IndiaWRISCollector(),
     }
 
     if source not in collector_map:

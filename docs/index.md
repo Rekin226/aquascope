@@ -44,7 +44,7 @@ pip install "aquascope[all]"       # everything: ML, viz, spatial, dashboard
 | Non-stationary GEV                           |    ✅     |   no    | partial  |          no           |
 | Baseflow separation (Lyne-Hollick, Eckhardt) |    ✅     |   no    |    no    |          no           |
 | FAO-56 Penman–Monteith ET₀ + crop water      |    ✅     |   no    |    no    |          no           |
-| 12 unified data collectors                   |    ✅     |   no    |    no    |       per-source       |
+| 15 unified data collectors                   |    ✅     |   no    |    no    |       per-source       |
 | AI methodology recommender                   |    ✅     |   no    |    no    |          no           |
 | Interactive Streamlit dashboard              |    ✅     |   no    |    no    |          no           |
 | Free, MIT, Python-native                     |    ✅     | partial |    ✅    |        varies         |

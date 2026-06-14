@@ -50,7 +50,7 @@ print(len(records), "records")
 print(records[0])
 ```
 
-Every collector returns records in the **same Pydantic schema**, so downstream analyses don't care where the data came from. Switch `USGSCollector` to `WaporCollector`, `AquastatCollector`, or any of the [12 sources](data_sources.md). The rest of your code stays the same.
+Every collector returns records in the **same Pydantic schema**, so downstream analyses don't care where the data came from. Switch `USGSCollector` to `WaporCollector`, `AquastatCollector`, or any of the [15 sources](data_sources.md). The rest of your code stays the same.
 
 ---
 
@@ -144,7 +144,7 @@ You've now done end-to-end: collect, analyze, diagnose, recommend. The natural n
 - **[Features](features.md)**: the complete capability catalog.
 - **[Methodology matrix](methodology_matrix.md)**: when to use which method, decision-tree style.
 - **[Theory guide](theory.md)**: equations, citations, and decision trees for every method (668 lines, the closest thing AquaScope has to a textbook).
-- **[Data sources](data_sources.md)**: all 12 collectors with endpoint details and API-key requirements.
+- **[Data sources](data_sources.md)**: all 15 collectors with endpoint details and API-key requirements.
 - **[Integration guides](integration_guides/xarray_integration.md)**: interop with xarray, QGIS, R.
 
 Stuck? Check the [FAQ](faq.md), [troubleshooting](troubleshooting.md), or open a [discussion](https://github.com/Rekin226/aquascope/discussions).

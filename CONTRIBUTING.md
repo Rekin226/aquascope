@@ -8,6 +8,16 @@ Thank you for your interest in contributing to AquaScope! This project aims to b
 - Want to add your country's water data? See the pinned [**Data sources wanted**](https://github.com/Rekin226/aquascope/issues/11) meta-issue.
 - **To claim an issue**, just comment on it (e.g. "I'd like to work on this"). A maintainer will assign it to you — outside contributors can't self-assign, so the comment is how we hand it over. This avoids two people doing the same work.
 
+### The contributor ladder
+
+We'd love for you to stick around past your first PR, so there's a clear path to grow:
+
+1. **First PR** — start with a [`good first issue`](https://github.com/Rekin226/aquascope/labels/good%20first%20issue). Scoped, self-contained, clear acceptance criteria.
+2. **Ready for more** — graduate to a [`good second issue`](https://github.com/Rekin226/aquascope/labels/good%20second%20issue): a slightly larger, self-contained piece (a new method, a new module) that builds on what you just learned. When we merge your first PR, we'll usually point you straight at one that fits.
+3. **Area owner** — after a few PRs in one area (agriculture, hydrology, collectors, ...), we'll invite you to help **triage and review** issues there. This is how contributors become maintainers.
+
+Every merged PR is also credited in [CONTRIBUTORS.md](CONTRIBUTORS.md) and the README, code, tests, docs, data, and translations all count. If you want to take on more, just say so on any issue or in [Discussions](https://github.com/Rekin226/aquascope/discussions).
+
 ## Ways to Contribute
 
 ### 1. Add a New Data Source Collector

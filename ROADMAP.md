@@ -4,7 +4,7 @@ The roadmap reflects what's shipped, what's in-flight, and what's planned. Open 
 
 ## Shipped
 
-- [x] 12 data source collectors (Taiwan, USA, Global, FAO)
+- [x] 15 data source collectors (Taiwan, USA, Global, FAO)
 - [x] 15 data source collectors (Taiwan ×4, USA ×2, Global ×5, FAO ×2, EU, Japan, Korea)
 - [x] Rule-based + LLM methodology recommender (26 methods, OpenAI / Groq / HuggingFace / Ollama)
 - [x] 7 auto-executable analysis pipelines

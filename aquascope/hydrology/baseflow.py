@@ -148,3 +148,96 @@ def eckhardt(
     bfi = float(bf.sum() / q.sum()) if q.sum() > 0 else 0.0
     logger.info("Eckhardt: BFI=%.3f, alpha=%.3f, BFI_max=%.2f", bfi, alpha, bfi_max)
     return BaseflowResult(df=result_df, bfi=bfi, method="eckhardt")
+
+def ukih(
+    discharge: pd.Series,
+    *,
+    block_size: int = 5,
+) -> BaseflowResult:
+    """Separate baseflow using the UKIH smoothed-minima (sliding-interval) method.
+
+    The record is divided into non-overlapping blocks of ``block_size``
+    days. The minimum discharge in each block is a candidate turning
+    point if 0.9 times its value is less than both neighbouring block
+    minima. Baseflow is then linearly interpolated between turning
+    points and capped at the observed discharge.
+
+    Parameters
+    ----------
+    discharge:
+        Daily discharge series with a DatetimeIndex.
+    block_size:
+        Number of days per non-overlapping block (N). Default 5, as
+        recommended by the Institute of Hydrology (1980).
+
+    Returns
+    -------
+    A :class:`BaseflowResult` with separated components and BFI.
+
+    References
+    ----------
+    Institute of Hydrology (1980). Low Flow Studies Report No. 1.
+    Wallingford, UK.
+    """
+    q = discharge.dropna().values.astype(float).copy()
+    idx = discharge.dropna().index
+    n = len(q)
+
+    if n == 0:
+        empty = pd.DataFrame({"total": [], "baseflow": [], "quickflow": []})
+        return BaseflowResult(df=empty, bfi=0.0, method="ukih")
+
+    # Step 1: divide into non-overlapping blocks; record each block's
+    # minimum value and its position in the full series.
+    block_min_positions: list[int] = []
+    block_min_values: list[float] = []
+    for start in range(0, n, block_size):
+        end = min(start + block_size, n)
+        block = q[start:end]
+        local_pos = start + int(np.argmin(block))
+        block_min_positions.append(local_pos)
+        block_min_values.append(float(block[np.argmin(block)]))
+
+    # Step 2: a block minimum Q_i is a turning point if 0.9 * Q_i is
+    # less than both neighbouring block minima. Endpoints check only
+    # their single available neighbour.
+    turning_positions: list[int] = []
+    turning_values: list[float] = []
+
+    m = len(block_min_values)
+    for i in range(m):
+        qi = block_min_values[i]
+        is_turning = True
+        if i > 0 and not (0.9 * qi < block_min_values[i - 1]):
+            is_turning = False
+        if i < m - 1 and not (0.9 * qi < block_min_values[i + 1]):
+            is_turning = False
+        if is_turning:
+            turning_positions.append(block_min_positions[i])
+            turning_values.append(qi)
+
+    # Step 3: linearly interpolate baseflow between turning points,
+    # flat-extending before the first and after the last. Fall back
+    # to a flat line at the overall minimum if no turning points exist.
+    if turning_positions:
+        positions = np.arange(n)
+        baseflow = np.interp(positions, turning_positions, turning_values)
+    else:
+        baseflow = np.full(n, float(np.min(q)))
+
+    # Step 4: cap baseflow at observed total flow and ensure non-negative.
+    baseflow = np.clip(baseflow, 0.0, q)
+
+    quickflow = q - baseflow
+
+    result_df = pd.DataFrame(
+        {"total": q, "baseflow": baseflow, "quickflow": quickflow},
+        index=idx,
+    )
+
+    bfi = float(baseflow.sum() / q.sum()) if q.sum() > 0 else 0.0
+    logger.info(
+        "UKIH: BFI=%.3f, block_size=%d, %d turning points",
+        bfi, block_size, len(turning_positions),
+    )
+    return BaseflowResult(df=result_df, bfi=bfi, method="ukih")

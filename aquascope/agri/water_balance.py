@@ -216,7 +216,7 @@ class SoilWaterBalance:
 
         return pd.DataFrame(rows)
 
-    def auto_irrigate(
+  def auto_irrigate(
         self,
         etc_series: pd.Series,
         precip_series: pd.Series,
@@ -231,12 +231,21 @@ class SoilWaterBalance:
         precip_series : pandas.Series
             Daily precipitation (mm).
         efficiency : float
-            Irrigation system efficiency (0–1).
+            Irrigation system efficiency (0-1).
 
         Returns
         -------
         pandas.DataFrame
             Daily water balance with ``irrigation_mm`` column.
+
+        Notes
+        -----
+        ``irrigation_mm`` reports the *gross* water applied (water pumped),
+        accounting for conveyance/application efficiency. Only the *net*
+        depth - the amount that actually reaches the root zone, i.e. the
+        depletion being refilled - is passed into :meth:`step`, so
+        conveyance/application losses are not double-counted as
+        ``deep_percolation_mm``.
         """
         import pandas as pd
 
@@ -245,20 +254,24 @@ class SoilWaterBalance:
             etc_val = float(etc_series.loc[idx])
             precip_val = float(precip_series.loc[idx]) if idx in precip_series.index else 0.0
 
-            # Auto-irrigate: if depletion would exceed RAW, apply enough water
-            irrigation = 0.0
+            # Auto-irrigate: if depletion would exceed RAW, refill the root
+            # zone to field capacity. `net_applied` is what reaches the soil
+            # (used in the balance); `gross_applied` is what was pumped
+            # (reported to the user).
+            gross_applied = 0.0
+            net_applied = 0.0
             if self.depletion >= self.raw:
-                # Refill to field capacity
                 net_needed = self.depletion
-                irrigation = net_needed / efficiency if efficiency > 0 else net_needed
+                gross_applied = net_needed / efficiency if efficiency > 0 else net_needed
+                net_applied = net_needed
 
-            status = self.step(etc_val, precipitation=precip_val, irrigation=irrigation)
+            status = self.step(etc_val, precipitation=precip_val, irrigation=net_applied)
             rows.append({
                 "date": idx,
                 "soil_moisture_mm": status.soil_moisture_mm,
                 "depletion_mm": status.depletion_mm,
                 "deep_percolation_mm": status.deep_percolation_mm,
-                "irrigation_mm": round(irrigation, 2),
+                "irrigation_mm": round(gross_applied, 2),
                 "irrigation_trigger": status.irrigation_trigger,
             })
 

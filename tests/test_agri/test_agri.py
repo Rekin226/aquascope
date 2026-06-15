@@ -7,16 +7,20 @@ from __future__ import annotations
 
 from datetime import date
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from aquascope.agri.crop_water import (
     DEFAULT_STAGE_LENGTHS,
     KC_TABLE,
+    KCB_TABLE,
+    compute_ke,
     crop_et,
     crop_water_requirement,
     effective_rainfall,
     get_kc,
+    get_kcb,
     irrigation_schedule,
 )
 from aquascope.agri.eto import (
@@ -248,6 +252,150 @@ class TestCropWaterRequirement:
         eto = _make_daily_series(30, 5.0)
         with pytest.raises(ValueError):
             crop_water_requirement(eto, "unicorn_grass", date(2024, 1, 1))
+
+    # ── dual method ───────────────────────────────────────────────────────
+
+    def test_dual_method_returns_extra_columns(self):
+        """Dual method DataFrame must contain kcb, ke, kc_dual columns."""
+        n_days = sum(DEFAULT_STAGE_LENGTHS["maize"].values())
+        eto = _make_daily_series(n_days + 30, 5.0)
+        df = crop_water_requirement(eto, "maize", date(2024, 1, 1), method="dual")
+        for col in ("kcb", "ke", "kc_dual"):
+            assert col in df.columns, f"Missing column: {col}"
+
+    def test_single_method_no_dual_columns(self):
+        """Single method (default) must NOT contain kcb/ke/kc_dual columns."""
+        n_days = sum(DEFAULT_STAGE_LENGTHS["maize"].values())
+        eto = _make_daily_series(n_days + 30, 5.0)
+        df = crop_water_requirement(eto, "maize", date(2024, 1, 1), method="single")
+        for col in ("kcb", "ke", "kc_dual"):
+            assert col not in df.columns, f"Unexpected column in single mode: {col}"
+
+    def test_dual_kc_dual_equals_kcb_plus_ke(self):
+        """kc_dual must equal kcb + ke for every row."""
+        n_days = sum(DEFAULT_STAGE_LENGTHS["maize"].values())
+        eto = _make_daily_series(n_days + 30, 5.0)
+        df = crop_water_requirement(eto, "maize", date(2024, 1, 1), method="dual")
+        np.testing.assert_allclose(
+            df["kc_dual"].values,
+            (df["kcb"] + df["ke"]).round(3).values,
+            rtol=1e-4,
+        )
+
+    def test_dual_etc_equals_kc_dual_times_eto(self):
+        """ETc must equal kc_dual × ETo for every row."""
+        n_days = sum(DEFAULT_STAGE_LENGTHS["maize"].values())
+        eto_val = 5.0
+        eto = _make_daily_series(n_days + 30, eto_val)
+        df = crop_water_requirement(eto, "maize", date(2024, 1, 1), method="dual")
+        expected = (df["kc_dual"] * eto_val).round(2)
+        np.testing.assert_allclose(df["etc"].values, expected.values, rtol=1e-3)
+
+    def test_dual_ke_non_negative(self):
+        """Ke must never be negative."""
+        n_days = sum(DEFAULT_STAGE_LENGTHS["tomato"].values())
+        eto = _make_daily_series(n_days + 30, 4.0)
+        df = crop_water_requirement(eto, "tomato", date(2024, 3, 1), method="dual")
+        assert (df["ke"] >= 0).all()
+
+    def test_dual_kcb_plus_ke_le_kc_max(self):
+        """kcb + ke must not exceed kc_max (default 1.20)."""
+        n_days = sum(DEFAULT_STAGE_LENGTHS["maize"].values())
+        eto = _make_daily_series(n_days + 30, 5.0)
+        df = crop_water_requirement(eto, "maize", date(2024, 1, 1), method="dual")
+        assert (df["kc_dual"] <= 1.20 + 1e-6).all()
+
+    def test_invalid_method_raises(self):
+        """Unknown method string must raise ValueError."""
+        eto = _make_daily_series(30, 5.0)
+        with pytest.raises(ValueError, match="method"):
+            crop_water_requirement(eto, "maize", date(2024, 1, 1), method="triple")
+
+    def test_dual_vs_single_etc_differs(self):
+        """Dual ETc should differ from single ETc for most crops."""
+        n_days = sum(DEFAULT_STAGE_LENGTHS["maize"].values())
+        eto = _make_daily_series(n_days + 30, 5.0)
+        single = crop_water_requirement(eto, "maize", date(2024, 1, 1), method="single")
+        dual = crop_water_requirement(eto, "maize", date(2024, 1, 1), method="dual")
+        assert not (single["etc"] == dual["etc"]).all()
+
+    def test_dual_fao56_worked_example(self):
+        """
+        Hand-checked FAO-56 dual Kc example — maize mid-season.
+
+        FAO-56 Table 17: Kcb_mid (maize) = 1.15
+        compute_ke with defaults (kr=1, few=1, kc_max=1.20):
+            Ke = min(1 * (1.20 - 1.15), 1 * 1.20) = min(0.05, 1.20) = 0.05
+        kc_dual = 1.15 + 0.05 = 1.20
+        ETo = 6.0 mm/day → ETc = 1.20 × 6.0 = 7.20 mm/day
+        """
+        lengths = DEFAULT_STAGE_LENGTHS["maize"]
+        n_days = sum(lengths.values())
+        eto = _make_daily_series(n_days + 10, 6.0)
+        df = crop_water_requirement(eto, "maize", date(2024, 1, 1), method="dual")
+
+        mid_rows = df[df["stage"] == "mid"]
+        assert len(mid_rows) > 0
+
+        np.testing.assert_allclose(mid_rows["kcb"].values, 1.15, rtol=1e-3)
+        np.testing.assert_allclose(mid_rows["ke"].values, 0.05, rtol=1e-3)
+        np.testing.assert_allclose(mid_rows["kc_dual"].values, 1.20, rtol=1e-3)
+        np.testing.assert_allclose(mid_rows["etc"].values, 7.20, rtol=1e-3)
+
+
+class TestComputeKe:
+    """Tests for the soil-evaporation coefficient helper."""
+
+    def test_wet_bare_soil_upper_bound(self):
+        """kr=1, few=1: Ke = min(kc_max - kcb, kc_max)."""
+        ke = compute_ke(kcb=0.15, kc_max=1.20, few=1.0, kr=1.0)
+        assert abs(ke - 1.05) < 1e-6
+
+    def test_ke_zero_when_kcb_equals_kc_max(self):
+        """When Kcb = kc_max, Ke must be 0."""
+        ke = compute_ke(kcb=1.20, kc_max=1.20)
+        assert ke == pytest.approx(0.0, abs=1e-6)
+
+    def test_ke_non_negative(self):
+        """Ke must never be negative."""
+        ke = compute_ke(kcb=1.25, kc_max=1.20)
+        assert ke >= 0.0
+
+    def test_kr_reduces_ke(self):
+        """Lower kr (dry soil) should reduce Ke."""
+        ke_wet = compute_ke(kcb=0.15, kc_max=1.20, kr=1.0)
+        ke_dry = compute_ke(kcb=0.15, kc_max=1.20, kr=0.3)
+        assert ke_dry < ke_wet
+
+    def test_few_limits_ke(self):
+        """Ke cannot exceed few × kc_max."""
+        few = 0.4
+        ke = compute_ke(kcb=0.15, kc_max=1.20, few=few, kr=1.0)
+        assert ke <= few * 1.20 + 1e-9
+
+
+class TestGetKcb:
+    """Tests for KCB_TABLE lookup."""
+
+    def test_known_crop_mid(self):
+        """Kcb mid for maize = 1.15 per FAO-56 Table 17."""
+        assert get_kcb("maize", "mid") == pytest.approx(1.15)
+
+    def test_all_stages_returned(self):
+        """get_kcb without stage returns dict with initial/mid/late."""
+        result = get_kcb("tomato")
+        assert isinstance(result, dict)
+        assert set(result.keys()) == {"initial", "mid", "late"}
+
+    def test_unknown_crop_raises(self):
+        """Raises ValueError for unknown crop."""
+        with pytest.raises(ValueError, match="Unknown crop"):
+            get_kcb("dragon_fruit")
+
+    def test_all_crops_have_kcb(self):
+        """Every crop in KC_TABLE must also have a KCB_TABLE entry."""
+        for crop in KC_TABLE:
+            assert crop in KCB_TABLE, f"Missing KCB entry for {crop}"
 
 
 class TestEffectiveRainfall:

@@ -31,7 +31,7 @@ See [docs/data_sources.md](data_sources.md) for the full list with endpoints and
 
 - **FAO-56 Penman-Monteith ET₀** — reference evapotranspiration with all intermediate steps
 - **Hargreaves ET₀** — temperature-only alternative
-- **Crop water requirements** — 20 crops with FAO-56 Kc coefficients and growth stages
+- **Crop water requirements** — 20 crops with FAO-56 Kc coefficients and growth stages; single (Kc) and dual (Kcb + Ke) coefficient modes
 - **Irrigation scheduling** — effective rainfall, net/gross demand, efficiency
 - **Soil water balance** — daily tracking, depletion, auto-irrigation triggers
 - **WaPOR productivity workflows** — biomass water productivity and AETI-to-RET performance metrics

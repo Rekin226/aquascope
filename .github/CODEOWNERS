@@ -1,0 +1,16 @@
+# Code owners for AquaScope
+#
+# GitHub auto-requests a review from the listed owner when a PR touches
+# matching paths. See https://docs.github.com/articles/about-code-owners
+#
+# NOTE: A code owner is only auto-requested if they have *write* access to
+# the repo. Entries for read-access collaborators stay dormant until their
+# access is upgraded, so this file is safe to land ahead of time. See
+# MAINTAINERS.md for the area-owner ladder.
+
+# Default owner for anything not matched below.
+*                       @Rekin226
+
+# Area owners (see MAINTAINERS.md).
+/aquascope/hydrology/   @laishettikarthik-tech
+/tests/test_hydrology/  @laishettikarthik-tech

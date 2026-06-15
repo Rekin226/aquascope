@@ -14,7 +14,7 @@ We'd love for you to stick around past your first PR, so there's a clear path to
 
 1. **First PR** — start with a [`good first issue`](https://github.com/Rekin226/aquascope/labels/good%20first%20issue). Scoped, self-contained, clear acceptance criteria.
 2. **Ready for more** — graduate to a [`good second issue`](https://github.com/Rekin226/aquascope/labels/good%20second%20issue): a slightly larger, self-contained piece (a new method, a new module) that builds on what you just learned. When we merge your first PR, we'll usually point you straight at one that fits.
-3. **Area owner** — after a few PRs in one area (agriculture, hydrology, collectors, ...), we'll invite you to help **triage and review** issues there. This is how contributors become maintainers.
+3. **Area owner** — after a few PRs in one area (agriculture, hydrology, collectors, ...), we'll invite you to help **triage and review** issues there, and add you to [MAINTAINERS.md](MAINTAINERS.md). This is how contributors become maintainers.
 
 Every merged PR is also credited in [CONTRIBUTORS.md](CONTRIBUTORS.md) and the README, code, tests, docs, data, and translations all count. If you want to take on more, just say so on any issue or in [Discussions](https://github.com/Rekin226/aquascope/discussions).
 

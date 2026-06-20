@@ -931,7 +931,7 @@ def main() -> None:
     p_collect.add_argument("--end-date", default=None, help="End date YYYY-MM-DD (openmeteo/copernicus)")
     p_collect.add_argument("--start-year", type=int, default=2000, help="Start year (AQUASTAT)")
     p_collect.add_argument("--end-year", type=int, default=2023, help="End year (AQUASTAT)")
-    p_collect.add_argument("--format", default="json", choices=["json", "csv"], help="Output format")
+    p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")
     p_collect.add_argument("--year", type=int, default=None, help="Year filter (EU WFD)")
     p_collect.add_argument(
         "--water-body-type", default=None,

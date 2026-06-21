@@ -26,6 +26,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from aquascope.analysis import metrics
 from aquascope.hydrology.signatures import SignatureReport, similarity_score
 
 logger = logging.getLogger(__name__)
@@ -488,31 +489,14 @@ def _compute_transfer_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[st
         return {}
 
     residuals = y_true - y_pred
-    ss_res = float(np.sum(residuals ** 2))
-    ss_tot = float(np.sum((y_true - y_true.mean()) ** 2))
-
-    nse = 1.0 - ss_res / ss_tot if ss_tot > 0 else float("nan")
-    rmse = float(np.sqrt(np.mean(residuals ** 2)))
     mae = float(np.mean(np.abs(residuals)))
 
-    # Kling-Gupta Efficiency
-    if len(y_true) > 1 and y_true.std() > 0 and y_true.mean() != 0:
-        r = float(np.corrcoef(y_true, y_pred)[0, 1])
-        alpha = float(y_pred.std() / y_true.std())
-        beta = float(y_pred.mean() / y_true.mean())
-        kge = 1.0 - np.sqrt((r - 1) ** 2 + (alpha - 1) ** 2 + (beta - 1) ** 2)
-    else:
-        kge = float("nan")
-
-    # Percent bias
-    pbias = float(np.sum(y_pred - y_true) / np.sum(y_true) * 100) if np.sum(y_true) != 0 else float("nan")
-
     return {
-        "NSE": round(float(nse), 4),
-        "KGE": round(float(kge), 4),
-        "RMSE": round(rmse, 4),
+        "NSE": round(metrics.nse(y_true, y_pred), 4),
+        "KGE": round(metrics.kge(y_true, y_pred), 4),
+        "RMSE": round(metrics.rmse(y_true, y_pred), 4),
         "MAE": round(mae, 4),
-        "PBIAS": round(pbias, 4),
+        "PBIAS": round(metrics.pbias(y_true, y_pred), 4),
     }
 
 

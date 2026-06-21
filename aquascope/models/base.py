@@ -8,6 +8,8 @@ import logging
 import numpy as np
 import pandas as pd
 
+from aquascope.analysis import metrics
+
 logger = logging.getLogger(__name__)
 
 
@@ -85,26 +87,19 @@ class BaseHydroModel(abc.ABC):
             return {}
 
         residuals = y_true - y_pred
-        ss_res = np.sum(residuals**2)
-        ss_tot = np.sum((y_true - y_true.mean()) ** 2)
-
-        nse = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
-        rmse = float(np.sqrt(np.mean(residuals**2)))
         mae = float(np.mean(np.abs(residuals)))
-        r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
 
-        # Kling-Gupta Efficiency
-        r = float(np.corrcoef(y_true, y_pred)[0, 1]) if len(y_true) > 1 else float("nan")
-        alpha = float(y_pred.std() / y_true.std()) if y_true.std() > 0 else float("nan")
-        beta = float(y_pred.mean() / y_true.mean()) if y_true.mean() != 0 else float("nan")
-        kge = 1 - np.sqrt((r - 1) ** 2 + (alpha - 1) ** 2 + (beta - 1) ** 2)
+        nse_val = metrics.nse(y_true, y_pred)
+        kge_val = metrics.kge(y_true, y_pred)
+        rmse_val = metrics.rmse(y_true, y_pred)
+        r2_val = metrics.r2(y_true, y_pred)
 
         return {
-            "nse": round(float(nse), 4),
-            "kge": round(float(kge), 4),
-            "rmse": round(rmse, 4),
+            "nse": round(nse_val, 4) if not np.isnan(nse_val) else float("nan"),
+            "kge": round(kge_val, 4) if not np.isnan(kge_val) else float("nan"),
+            "rmse": round(rmse_val, 4) if not np.isnan(rmse_val) else float("nan"),
             "mae": round(mae, 4),
-            "r2": round(float(r2), 4),
+            "r2": round(r2_val, 4) if not np.isnan(r2_val) else float("nan"),
             "n_samples": len(y_true),
         }
 

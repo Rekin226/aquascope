@@ -39,7 +39,7 @@ def save_records(
     prefix : str
         File name prefix.
     fmt : str
-        ``"json"`` or ``"csv"``.
+        ``"json"`` or ``"csv"`` or ``"geojson"``.
 
     Returns
     -------
@@ -62,6 +62,8 @@ def save_records(
             raise ImportError("pandas is required for CSV export.  pip install pandas")  # noqa: B904
         df = pd.DataFrame(dicts)
         df.to_csv(filepath, index=False)
+    elif fmt == "geojson":
+        export_geojson(records, filepath)
     else:
         raise ValueError(f"Unsupported format: {fmt!r}")
 

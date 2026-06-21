@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 from pydantic import BaseModel
 
-from aquascope.utils.storage import export_geojson
+from aquascope.utils.storage import export_geojson, save_records
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -84,6 +84,16 @@ class TestExportGeoJSON:
         data = json.loads(out.read_text())
         assert data["type"] == "FeatureCollection"
         assert len(data["features"]) == 0
+
+    def test_save_records_geojson(self, tmp_path: Path) -> None:
+        out = save_records(self.records, tmp_path, prefix="test", fmt="geojson")
+        assert out.suffix == ".geojson"
+        assert out.exists()
+        data = json.loads(out.read_text())
+        assert data["type"] == "FeatureCollection"
+        assert len(data["features"]) == 2
+        assert data["features"][0]["geometry"]["type"] == "Point"
+
 
 
 # ---------------------------------------------------------------------------

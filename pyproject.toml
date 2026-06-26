@@ -91,7 +91,7 @@ all = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "ruff>=0.3",
+    "ruff==0.15.20",
     "mypy>=1.8",
     "pre-commit>=3.0",
     "nbformat>=5.0",

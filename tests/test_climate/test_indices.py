@@ -48,6 +48,25 @@ class TestPalmerDroughtSeverityIndex:
         result = palmer_drought_severity_index(wet_precip, low_pet)
         assert result.iloc[-1] > 0
 
+    def test_series_name_is_pdsi(self):
+        result = palmer_drought_severity_index(self.precip, self.pet)
+        assert result.name == "PDSI"
+
+    def test_no_nan_in_output(self):
+        result = palmer_drought_severity_index(self.precip, self.pet)
+        assert not result.isna().any()
+
+    def test_first_value_is_zero(self):
+        result = palmer_drought_severity_index(self.precip, self.pet)
+        assert result.iloc[0] == 0.0
+
+    def test_drier_gives_lower_pdsi(self):
+        idx = pd.date_range("2000-01-01", periods=36, freq="MS")
+        pet = pd.Series(np.full(36, 60.0), index=idx)
+        wet = palmer_drought_severity_index(pd.Series(np.full(36, 120.0), index=idx), pet)
+        dry = palmer_drought_severity_index(pd.Series(np.full(36, 5.0), index=idx), pet)
+        assert dry.mean() < wet.mean()
+
 
 class TestAridityIndex:
     def test_humid(self):
@@ -73,6 +92,22 @@ class TestAridityIndex:
             assert False, "Expected ValueError"
         except ValueError:
             pass
+
+    def test_dry_sub_humid(self):
+        result = aridity_index(600, 1000)
+        assert result.classification == "dry sub-humid"
+
+    def test_negative_pet_raises(self):
+        try:
+            aridity_index(500, -100)
+            assert False, "Expected ValueError"
+        except ValueError:
+            pass
+
+    def test_higher_precip_higher_index(self):
+        r1 = aridity_index(200, 1000)
+        r2 = aridity_index(600, 1000)
+        assert r2.index > r1.index
 
 
 class TestHeatWaveIndex:
@@ -104,6 +139,19 @@ class TestHeatWaveIndex:
         result = heat_wave_index(self.tmax, threshold_percentile=90, min_duration=30)
         assert result.n_events == 0
 
+    def test_zero_events_fields(self):
+        idx = pd.date_range("2000-01-01", periods=365, freq="D")
+        tmax = pd.Series(np.full(365, 25.0), index=idx)
+        result = heat_wave_index(tmax, min_duration=30)
+        assert result.n_events == 0
+        assert result.max_duration == 0
+        assert result.mean_duration == 0.0
+        assert result.mean_intensity == 0.0
+
+    def test_events_list_length_matches_n_events(self):
+        result = heat_wave_index(self.tmax, threshold_percentile=90, min_duration=3)
+        assert len(result.events) == result.n_events
+
 
 class TestConsecutiveDryDays:
     def setup_method(self):
@@ -128,6 +176,23 @@ class TestConsecutiveDryDays:
         result = consecutive_dry_days(self.precip, threshold_mm=1.0)
         assert result.by_year[2000] >= result.by_year[2001]
 
+    def test_all_dry_max_cdd_equals_year_length(self):
+        idx = pd.date_range("2000-01-01", periods=365, freq="D")
+        precip = pd.Series(np.zeros(365), index=idx)
+        result = consecutive_dry_days(precip, threshold_mm=1.0)
+        assert result.max_cdd == 365
+
+    def test_all_wet_max_cdd_is_zero(self):
+        idx = pd.date_range("2000-01-01", periods=365, freq="D")
+        precip = pd.Series(np.full(365, 5.0), index=idx)
+        result = consecutive_dry_days(precip, threshold_mm=1.0)
+        assert result.max_cdd == 0
+
+    def test_mean_cdd_matches_manual(self):
+        result = consecutive_dry_days(self.precip, threshold_mm=1.0)
+        expected = np.mean(list(result.by_year.values()))
+        assert abs(result.mean_cdd - expected) < 1e-9
+
 
 class TestConsecutiveWetDays:
     def setup_method(self):
@@ -144,6 +209,23 @@ class TestConsecutiveWetDays:
     def test_mean_cwd_positive(self):
         result = consecutive_wet_days(self.precip, threshold_mm=1.0)
         assert result.mean_cwd > 0
+
+    def test_all_wet_max_cwd_equals_year_length(self):
+        idx = pd.date_range("2000-01-01", periods=365, freq="D")
+        precip = pd.Series(np.full(365, 5.0), index=idx)
+        result = consecutive_wet_days(precip, threshold_mm=1.0)
+        assert result.max_cwd == 365
+
+    def test_all_dry_max_cwd_is_zero(self):
+        idx = pd.date_range("2000-01-01", periods=365, freq="D")
+        precip = pd.Series(np.zeros(365), index=idx)
+        result = consecutive_wet_days(precip, threshold_mm=1.0)
+        assert result.max_cwd == 0
+
+    def test_mean_cwd_matches_manual(self):
+        result = consecutive_wet_days(self.precip, threshold_mm=1.0)
+        expected = np.mean(list(result.by_year.values()))
+        assert abs(result.mean_cwd - expected) < 1e-9
 
 
 class TestPrecipitationConcentrationIndex:
@@ -170,3 +252,14 @@ class TestPrecipitationConcentrationIndex:
         monthly = pd.Series(np.full(24, 100.0))
         pci = precipitation_concentration_index(monthly)
         assert abs(pci - 8.33) < 0.1
+
+    def test_all_zero_returns_zero(self):
+        monthly = pd.Series(np.zeros(12))
+        pci = precipitation_concentration_index(monthly)
+        assert pci == 0.0
+
+    def test_more_concentrated_gives_higher_pci(self):
+        uniform = pd.Series(np.full(12, 100.0))
+        seasonal = pd.Series([0.0] * 11 + [1200.0])
+        assert precipitation_concentration_index(seasonal) > \
+               precipitation_concentration_index(uniform)

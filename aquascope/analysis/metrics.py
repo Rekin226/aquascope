@@ -247,3 +247,25 @@ def crps_ensemble(observed: np.ndarray, ensemble: np.ndarray) -> float:
     pairwise = np.abs(ens[:, :, None] - ens[:, None, :]).sum(axis=(1, 2))
     term2 = pairwise / (2.0 * m * m)
     return float(np.mean(term1 - term2))
+
+
+def crps_from_quantiles(
+    observed: np.ndarray, quantile_preds: dict[float, np.ndarray]
+) -> float:
+    """Approximate CRPS from a set of predictive quantiles.
+
+    Uses the quantile decomposition ``CRPS = 2 * integral_0^1 pinball_q dq``,
+    approximated as ``2 * mean_q pinball_loss(obs, pred_q, q)`` over the
+    provided quantile levels. Accuracy improves with a denser, more uniform
+    set of quantiles. Lets the residual quantile-band method report a CRPS
+    without forming an explicit ensemble. Reference: Gneiting & Raftery (2007).
+    """
+    if not quantile_preds:
+        return float("nan")
+    losses = [
+        pinball_loss(observed, pred, q) for q, pred in quantile_preds.items()
+    ]
+    losses = [v for v in losses if np.isfinite(v)]
+    if not losses:
+        return float("nan")
+    return float(2.0 * np.mean(losses))

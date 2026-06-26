@@ -7,6 +7,7 @@ import pytest
 
 from aquascope.analysis.metrics import (
     crps_ensemble,
+    crps_from_quantiles,
     kge,
     log_nse,
     mpiw,
@@ -250,3 +251,21 @@ class TestCRPSEnsemble:
         obs = np.array([10.0, np.nan])
         ens = np.array([[8.0, 8.0], [0.0, 0.0]])
         assert crps_ensemble(obs, ens) == pytest.approx(2.0)
+
+
+class TestCRPSFromQuantiles:
+    def test_perfect_prediction_is_zero(self):
+        obs = np.array([1.0, 2.0, 3.0])
+        preds = {q: obs.copy() for q in (0.1, 0.5, 0.9)}
+        assert crps_from_quantiles(obs, preds) == pytest.approx(0.0)
+
+    def test_constant_offset_matches_pinball_integral(self):
+        # All quantiles predict 8 while obs is 10, on a symmetric grid:
+        # 2 * mean_q (q * 2) over q in {0.1..0.9} = 2 * (2 * 0.5) = 2.0 = |10-8|.
+        obs = np.array([10.0])
+        grid = np.round(np.arange(0.1, 0.95, 0.1), 2)
+        preds = {float(q): np.array([8.0]) for q in grid}
+        assert crps_from_quantiles(obs, preds) == pytest.approx(2.0, abs=1e-9)
+
+    def test_empty_returns_nan(self):
+        assert math.isnan(crps_from_quantiles(np.array([1.0]), {}))

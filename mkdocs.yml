@@ -117,10 +117,11 @@ nav:
     - Adding a data source: guides/adding_data_source.md
     - Adding a methodology: guides/adding_methodology.md
     - FAO agriculture plan: guides/fao_agriculture_plan.md
+    - Uncertainty quantification: guides/uncertainty.md
   - Integration:
     - QGIS: integration_guides/qgis_integration.md
     - R: integration_guides/r_integration.md
-    - xarray: integration_guides/xarray_integration.md
+    - xarray and GeoPandas: integration_guides/xarray_integration.md
   - API Reference: api.md
   - FAQ: faq.md
   - Troubleshooting: troubleshooting.md

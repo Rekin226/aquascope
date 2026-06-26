@@ -1,5 +1,4 @@
 """Tests for aquascope.utils.collect_many."""
-
 from __future__ import annotations
 
 import threading

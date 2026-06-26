@@ -226,8 +226,7 @@ class KoreaWAMISCollector(BaseCollector):
             params["enddt"] = end_date.replace("-", "")
 
         try:
-            response = self.client.get(url, params=params)
-            data = response.json()
+            data = self.client.get_json(url, params=params)
             if isinstance(data, list):
                 return data
             if isinstance(data, dict):

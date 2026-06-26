@@ -14,6 +14,7 @@ Collections
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -55,16 +56,19 @@ class USGSCollector(BaseCollector):
 
     Parameters
     ----------
-    api_key : str
-        Optional USGS API key for higher rate limits (get one at
-        https://api.waterdata.usgs.gov/docs/ogcapi/#api-keys).
+    api_key : str | None
+        USGS API key for higher rate limits (get one at
+        https://api.waterdata.usgs.gov/docs/ogcapi/#api-keys). If omitted,
+        the collector reads the ``USGS_API_KEY`` environment variable, and
+        falls back to the shared ``DEMO_KEY`` (heavily rate-limited) with a
+        warning if neither is set.
     """
 
     name = "usgs"
 
     def __init__(
         self,
-        api_key: str = "DEMO_KEY",
+        api_key: str | None = None,
         client: CachedHTTPClient | None = None,
     ):
         super().__init__(
@@ -74,7 +78,15 @@ class USGSCollector(BaseCollector):
                 rate_limiter=RateLimiter(max_calls=25, period_seconds=60),
             )
         )
-        self.api_key = api_key
+        resolved = api_key or os.environ.get("USGS_API_KEY")
+        if not resolved:
+            logger.warning(
+                "No USGS API key provided (pass api_key=... or set USGS_API_KEY). "
+                "Falling back to the shared DEMO_KEY, which is heavily "
+                "rate-limited and may fail under load."
+            )
+            resolved = "DEMO_KEY"
+        self.api_key = resolved
 
     def fetch_raw(
         self,

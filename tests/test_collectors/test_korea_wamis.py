@@ -185,40 +185,34 @@ class TestKoreaWAMISFetchRaw:
 
     def test_fetch_raw_handles_connection_error(self):
         mock_client = MagicMock()
-        mock_client.get.side_effect = ConnectionError("test error")
+        mock_client.get_json.side_effect = ConnectionError("test error")
         collector = KoreaWAMISCollector(client=mock_client)
         result = collector.fetch_raw(station_id="12345")
         assert result == []
 
     def test_fetch_raw_builds_station_param(self):
         mock_client = MagicMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = []
-        mock_client.get.return_value = mock_response
+        mock_client.get_json.return_value = []
         collector = KoreaWAMISCollector(client=mock_client)
         collector.fetch_raw(station_id="1018680")
-        call_args = mock_client.get.call_args
+        call_args = mock_client.get_json.call_args
         assert call_args[1]["params"]["obscd"] == "1018680"
 
     def test_fetch_raw_builds_date_params(self):
         mock_client = MagicMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = []
-        mock_client.get.return_value = mock_response
+        mock_client.get_json.return_value = []
         collector = KoreaWAMISCollector(client=mock_client)
         collector.fetch_raw(start_date="2023-01-01", end_date="2023-12-31")
-        call_args = mock_client.get.call_args
+        call_args = mock_client.get_json.call_args
         assert call_args[1]["params"]["startdt"] == "20230101"
         assert call_args[1]["params"]["enddt"] == "20231231"
 
     def test_fetch_raw_basin_filter(self):
         mock_client = MagicMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = []
-        mock_client.get.return_value = mock_response
+        mock_client.get_json.return_value = []
         collector = KoreaWAMISCollector(client=mock_client)
         collector.fetch_raw(basin="Han")
-        call_args = mock_client.get.call_args
+        call_args = mock_client.get_json.call_args
         assert call_args[1]["params"]["basin"] == "한강"
 
 

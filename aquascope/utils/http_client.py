@@ -195,6 +195,63 @@ class CachedHTTPClient:
         raise RuntimeError(f"All {self.retries} attempts failed for {url}") from last_exc
 
 
+    def get_text(
+        self,
+        path: str,
+        params: dict | None = None,
+        headers: dict | None = None,
+        use_cache: bool = True,
+    ) -> str:
+        """GET *path* and return the raw response body as text.
+
+        Shares the same retry, rate-limit, and disk-cache behaviour as
+        :meth:`get_json`, but does not attempt JSON parsing. Use this for
+        endpoints that return CSV or other plain-text payloads.
+        """
+        if path.startswith(("http://", "https://")):
+            url = path
+        else:
+            url = f"{self.base_url}/{path.lstrip('/')}" if self.base_url else path
+
+        if use_cache:
+            # Suffix the cache key so text payloads never collide with the
+            # JSON cache for the same URL.
+            key = f"{self._cache_key(url, params)}-text"
+            path_cache = self.cache_dir / f"{key}.txt"
+            if path_cache.exists():
+                age = time.time() - path_cache.stat().st_mtime
+                if age <= self.cache_ttl:
+                    logger.debug("Cache hit for %s", url)
+                    return path_cache.read_text()
+                path_cache.unlink(missing_ok=True)
+
+        last_exc: Exception | None = None
+        for attempt in range(1, self.retries + 1):
+            if self.rate_limiter:
+                self.rate_limiter.wait_if_needed()
+            try:
+                resp = self._client.get(url, params=params, headers=headers)
+                resp.raise_for_status()
+                text = resp.text
+                if use_cache:
+                    self.cache_dir.mkdir(parents=True, exist_ok=True)
+                    (self.cache_dir / f"{key}.txt").write_text(text)
+                return text
+            except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+                last_exc = exc
+                wait = 2**attempt
+                logger.warning(
+                    "Attempt %d/%d failed for %s: %s — retrying in %ds",
+                    attempt,
+                    self.retries,
+                    url,
+                    exc,
+                    wait,
+                )
+                time.sleep(wait)
+
+        raise RuntimeError(f"All {self.retries} attempts failed for {url}") from last_exc
+
     def post_json(
         self,
         path: str,

@@ -93,14 +93,11 @@ class WQPCollector(BaseCollector):
         if bbox:
             params["bBox"] = bbox
 
-        # WQP returns CSV, so we need to handle it differently
-        import httpx
-
-        url = f"{WQP_BASE}/Result/search"
+        # WQP returns CSV. Route through the shared client so the request
+        # gets retries, rate-limiting, and disk caching like every other
+        # collector (get_text skips JSON parsing for the CSV payload).
         try:
-            resp = httpx.get(url, params=params, timeout=60, follow_redirects=True)
-            resp.raise_for_status()
-            text = resp.text
+            text = self.client.get_text("/Result/search", params=params)
         except Exception as exc:
             logger.error("WQP fetch failed: %s", exc)
             return []

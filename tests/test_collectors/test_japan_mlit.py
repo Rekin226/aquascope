@@ -154,29 +154,25 @@ class TestJapanMLITFetchRaw:
 
     def test_fetch_raw_handles_connection_error(self):
         mock_client = MagicMock()
-        mock_client.get.side_effect = ConnectionError("test error")
+        mock_client.get_json.side_effect = ConnectionError("test error")
         collector = JapanMLITCollector(client=mock_client)
         result = collector.fetch_raw(station_id="12345")
         assert result == []
 
     def test_fetch_raw_builds_station_param(self):
         mock_client = MagicMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = []
-        mock_client.get.return_value = mock_response
+        mock_client.get_json.return_value = []
         collector = JapanMLITCollector(client=mock_client)
         collector.fetch_raw(station_id="305041281005030")
-        call_args = mock_client.get.call_args
+        call_args = mock_client.get_json.call_args
         assert call_args[1]["params"]["StationID"] == "305041281005030"
 
     def test_fetch_raw_builds_date_params(self):
         mock_client = MagicMock()
-        mock_response = MagicMock()
-        mock_response.json.return_value = []
-        mock_client.get.return_value = mock_response
+        mock_client.get_json.return_value = []
         collector = JapanMLITCollector(client=mock_client)
         collector.fetch_raw(start_date="2023-01-01", end_date="2023-12-31")
-        call_args = mock_client.get.call_args
+        call_args = mock_client.get_json.call_args
         assert call_args[1]["params"]["StartDate"] == "20230101"
         assert call_args[1]["params"]["EndDate"] == "20231231"
 

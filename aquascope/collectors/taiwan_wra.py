@@ -19,12 +19,34 @@ from datetime import datetime
 from aquascope.collectors.base import BaseCollector
 from aquascope.schemas.water_data import (
     DataSource,
+    GeoLocation,
     ReservoirStatus,
     WaterLevelReading,
 )
 from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
 
 logger = logging.getLogger(__name__)
+
+# Coordinate field names seen across WRA dataset variants (TWD97 / WGS84).
+_LAT_KEYS = ("Latitude", "latitude", "TWD97Lat", "lat", "LAT", "Y")
+_LON_KEYS = ("Longitude", "longitude", "TWD97Lon", "lon", "LON", "X")
+
+
+def _extract_location(rec: dict) -> GeoLocation | None:
+    """Build a GeoLocation from whichever lat/lon keys the record carries.
+
+    WRA's real-time level feed often omits coordinates (station metadata
+    lives in a separate dataset), so this returns ``None`` when absent
+    rather than dropping the reading.
+    """
+    lat = next((rec[k] for k in _LAT_KEYS if rec.get(k) not in (None, "")), None)
+    lon = next((rec[k] for k in _LON_KEYS if rec.get(k) not in (None, "")), None)
+    if lat is None or lon is None:
+        return None
+    try:
+        return GeoLocation(latitude=float(lat), longitude=float(lon))
+    except (ValueError, TypeError):
+        return None
 
 WRA_BASE = "https://opendata.wra.gov.tw/api/v2"
 
@@ -75,7 +97,7 @@ class TaiwanWRAWaterLevelCollector(BaseCollector):
                         source=DataSource.TAIWAN_WRA,
                         station_id=rec.get("StationIdentifier", rec.get("ST_NO", rec.get("stationid", "unknown"))),
                         station_name=rec.get("StationName", rec.get("observatoryidentifier")),
-                        location=None,
+                        location=_extract_location(rec),
                         reading_datetime=datetime.fromisoformat(
                             rec.get("RecordTime", rec.get("recordTime", rec.get("datetime", "")))
                         ),

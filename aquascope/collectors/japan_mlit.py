@@ -213,8 +213,7 @@ class JapanMLITCollector(BaseCollector):
         params["format"] = "json"
 
         try:
-            response = self.client.get(url, params=params)
-            data = response.json()
+            data = self.client.get_json(url, params=params)
             if isinstance(data, list):
                 return data
             if isinstance(data, dict):

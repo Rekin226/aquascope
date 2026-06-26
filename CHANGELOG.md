@@ -2,6 +2,35 @@
 
 All notable changes to AquaScope are documented here.
 
+## [0.7.0] — 2026-06-26
+
+Interoperability and uncertainty: AquaScope now composes with the scientific-Python
+geo stack and reports calibrated uncertainty on model output.
+
+### Added
+- **xarray / GeoPandas interop** (`io/interop.py`): `records_to_xarray()` converts
+  time-series records to an `xarray.Dataset` (dims `(time, station_id)`, per-parameter
+  variables, lat/lon coords); `records_to_geodataframe()` converts point records to a
+  `geopandas.GeoDataFrame` (Point geometry, EPSG:4326). Every collector also accepts
+  `collect(as_xarray=...)` / `collect(as_geodataframe=...)`. New `[interop]` extra (#70).
+- **GR4J quantile prediction intervals** (`models/rainfall_runoff.py`): `predict_quantiles()`
+  produces calibrated uncertainty bands via a residual or parameter-ensemble method
+  (heteroscedastic option); the deterministic `simulate()` path is unchanged (#77).
+- **Probabilistic metrics** (`analysis/metrics.py`): `pinball_loss`, `picp`, `mpiw`,
+  `crps_ensemble`, and `crps_from_quantiles` for scoring interval and ensemble
+  forecasts (#76).
+- **Multi-basin UQ benchmark** (`examples/12_uq_camels_benchmark.py`): GR4J quantile UQ
+  across the bundled CAMELS basins with per-basin and aggregate PICP/CRPS and a
+  reliability diagram. On the bundled basins the residual method reaches ~0.90
+  central-interval coverage against the 0.90 nominal target (#78).
+- **Documentation**: an uncertainty-quantification guide and an updated xarray/GeoPandas
+  integration guide.
+
+### Changed
+- `require()` gains a `group` override so optional-dependency errors point at the
+  correct extra (e.g. `[interop]`).
+- JOSS paper (`paper.md`) condensed and updated to v0.7.0 with the interop and UQ work.
+
 ## [0.6.0] — 2026-06-26
 
 ### Added

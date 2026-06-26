@@ -11,8 +11,10 @@ abstract: >-
   single, coherent interface to 19 global water data sources and
   implements 26 hydrological, statistical, and agri-water methods.
 authors:
-  - name: AquaScope Contributors
-    website: https://github.com/Rekin226/aquascope/graphs/contributors
+  - family-names: Ouedraogo
+    given-names: Abdoul Rachid
+    orcid: "https://orcid.org/0000-0002-4616-4153"
+    affiliation: "National Central University, Taiwan"
 version: 0.6.0
 date-released: "2026-06-26"
 license: MIT
@@ -40,7 +42,9 @@ references:
       Aggregation, Hydrological Analysis, and AI-Powered Research
       Methodology Recommendations
     authors:
-      - name: AquaScope Contributors
+      - family-names: Ouedraogo
+        given-names: Abdoul Rachid
+        orcid: "https://orcid.org/0000-0002-4616-4153"
     journal: Journal of Open Source Software
     status: submitted
     year: 2025
@@ -48,8 +52,9 @@ preferred-citation:
   type: software
   title: AquaScope
   authors:
-    - name: AquaScope Contributors
-      website: https://github.com/Rekin226/aquascope/graphs/contributors
+    - family-names: Ouedraogo
+      given-names: Abdoul Rachid
+      orcid: "https://orcid.org/0000-0002-4616-4153"
   version: 0.6.0
   date-released: "2026-06-26"
   license: MIT

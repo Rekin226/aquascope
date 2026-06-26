@@ -155,6 +155,96 @@ def _load_demo_data() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _load_demo_streamflow(n_years: int = 40, seed: int = 7):
+    """Build a multi-decade daily-discharge series for frequency & signature analysis.
+
+    Returns a ``pandas.Series`` indexed by a daily ``DatetimeIndex`` — long enough
+    (≥3 annual maxima, ≥365 days) for extreme-value fitting and hydrological
+    signatures.
+    """
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(seed)
+    end_year = 2023
+    idx = pd.date_range(f"{end_year - n_years + 1}-01-01", f"{end_year}-12-31", freq="D")
+    doy = idx.dayofyear.to_numpy()
+
+    # Seasonal baseflow (wet summer monsoon peak ~ day 200)
+    seasonal = 6.0 + 4.0 * np.sin(2 * np.pi * (doy - 100) / 365.25)
+    baseflow = np.clip(seasonal, 1.0, None)
+
+    # Stochastic storm quickflow, amplified in the wet season
+    wet = 0.5 + 0.5 * np.clip(np.sin(2 * np.pi * (doy - 100) / 365.25), 0, 1)
+    storms = rng.gamma(shape=1.3, scale=3.0, size=len(idx)) * wet
+    # Occasional large flood pulses so annual maxima have spread
+    flood_mask = rng.random(len(idx)) < 0.01
+    storms = storms + flood_mask * rng.gamma(shape=2.0, scale=12.0, size=len(idx)) * wet
+
+    flow = np.clip(baseflow + storms, 0.1, None)
+    return pd.Series(np.round(flow, 3), index=idx, name="discharge")
+
+
+def _load_demo_weather(days: int = 150, start: str = "2023-03-01", seed: int = 11):
+    """Build a growing-season daily weather DataFrame + precipitation for FAO-56.
+
+    Returns ``(weather_df, precip_series)`` where *weather_df* has the columns
+    required by :func:`aquascope.agri.eto.penman_monteith_series`
+    (``t_min``, ``t_max``, ``rh_min``, ``rh_max``, ``wind_speed``,
+    ``solar_radiation``) on a daily ``DatetimeIndex``.
+    """
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(seed)
+    idx = pd.date_range(start, periods=days, freq="D")
+    t = np.arange(days)
+    warming = 6.0 * np.sin(np.pi * t / days)  # warms toward mid-season
+
+    t_min = 14.0 + warming + rng.normal(0, 1.0, days)
+    t_max = 26.0 + warming + rng.normal(0, 1.2, days)
+    rh_max = np.clip(82.0 + rng.normal(0, 4.0, days), 50, 100)
+    rh_min = np.clip(45.0 + rng.normal(0, 5.0, days), 15, rh_max - 5)
+    wind = np.clip(2.0 + rng.normal(0, 0.4, days), 0.5, None)
+    solar = np.clip(20.0 + 6.0 * np.sin(np.pi * t / days) + rng.normal(0, 1.5, days), 5, None)
+
+    weather = pd.DataFrame(
+        {
+            "t_min": np.round(t_min, 2),
+            "t_max": np.round(t_max, 2),
+            "rh_min": np.round(rh_min, 1),
+            "rh_max": np.round(rh_max, 1),
+            "wind_speed": np.round(wind, 2),
+            "solar_radiation": np.round(solar, 2),
+        },
+        index=idx,
+    )
+    # Convective rainfall, more frequent mid-season
+    rain_prob = 0.12 + 0.18 * np.clip(np.sin(np.pi * t / days), 0, 1)
+    precip = np.where(rng.random(days) < rain_prob, rng.gamma(2.0, 6.0, days), 0.0)
+    precip_series = pd.Series(np.round(precip, 2), index=idx, name="precipitation")
+    return weather, precip_series
+
+
+def _series_with_datetime(df, col: str):
+    """Extract ``df[col]`` as a Series, attaching a DatetimeIndex if a date column exists.
+
+    Returns the (possibly datetime-indexed) Series. Used by analyses that need a
+    ``DatetimeIndex`` (extreme events, flow signatures).
+    """
+    import pandas as pd
+
+    series = df[col].dropna()
+    for dt_col in ("sample_datetime", "reading_datetime", "date", "datetime"):
+        if dt_col in df.columns:
+            try:
+                series.index = pd.to_datetime(df.loc[series.index, dt_col])
+            except Exception:  # noqa: BLE001 - fall back to integer index
+                pass
+            break
+    return series
+
+
 def _show_workflow_step(st, current: int) -> None:
     """Render a compact workflow progress indicator."""
     steps_display = "  →  ".join(
@@ -223,19 +313,26 @@ def page_home() -> None:
         AI-powered research methodology recommendations.
 
         ### Features
-        - 📊 **15 data collectors** — USGS, GEMStat, AQUASTAT, EU WFD, Japan MLIT, Korea WAMIS, WaPOR, Open-Meteo & more
+        - 📊 **19 data collectors** — USGS, GEMStat, AQUASTAT, EU WFD, Japan MLIT, Korea WAMIS, WaPOR, Open-Meteo & more
+        - 🌊 **Hydrology toolkit** — flow duration curves, baseflow separation (Lyne-Hollick / Eckhardt / UKIH), recession analysis, flow signatures, flood frequency
+        - 🌀 **Extreme-value analysis** — GEV / Log-Pearson III / Gumbel return levels with bootstrap confidence bounds
+        - 🌾 **Agricultural water** — FAO-56 Penman-Monteith ET₀, single & dual (Kcb + Ke) crop coefficients, irrigation scheduling
         - 🔬 **Automated EDA & quality assessment** on collected data
         - 🤖 **AI recommender** — rule-based + optional LLM-enhanced methodology suggestions
-        - 🌊 **Hydrology toolkit** — flow duration curves, baseflow separation, recession analysis, flood frequency
         - 📈 **Publication-quality visualisations** with matplotlib/seaborn/folium
         - ⚠️ **Water quality alerts** against WHO/EPA/EU thresholds
         """
     )
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Data Sources", "15")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Data Sources", "19")
     col2.metric("Plot Types", str(len(_PLOT_TYPES)))
-    col3.metric("AI Methodologies", "26")
+    col3.metric("Hydrology + Agri models", "20+")
+    col4.metric("AI Methodologies", "26")
+    st.caption(
+        "One toolkit spanning hydrology, agricultural water, groundwater, climate, "
+        "and AI-assisted methodology selection."
+    )
 
     if "collected_data" in st.session_state and st.session_state["collected_data"] is not None:
         df = st.session_state["collected_data"]
@@ -274,6 +371,30 @@ def page_home() -> None:
         st.caption("Run hydrology models, get AI methodology suggestions, and check WHO quality alerts.")
         if st.button("🤖 AI Recommender →", key="qs_ai", use_container_width=True):
             st.session_state["_nav_pending"] = "🤖 AI Recommender"
+            st.rerun()
+
+    st.divider()
+
+    st.subheader("Analytical Showcase")
+    st.caption("Dive straight into AquaScope's quantitative depth — every page runs on real library functions with demo data built in.")
+    a1, a2, a3 = st.columns(3)
+    with a1:
+        st.markdown("**🌊 Hydrology Lab**")
+        st.caption("Baseflow separation (Lyne-Hollick / Eckhardt / UKIH), flow-duration curves, recession constants, and 20+ flow signatures.")
+        if st.button("Open Hydrology →", key="cta_hydro", use_container_width=True):
+            st.session_state["_nav_pending"] = "🌊 Hydrology"
+            st.rerun()
+    with a2:
+        st.markdown("**🌀 Extreme Events**")
+        st.caption("Fit GEV / Log-Pearson III / Gumbel to annual maxima and read off design return levels with bootstrap confidence bounds.")
+        if st.button("Open Extreme Events →", key="cta_extreme", use_container_width=True):
+            st.session_state["_nav_pending"] = "🌀 Extreme Events"
+            st.rerun()
+    with a3:
+        st.markdown("**🌾 Agricultural Water**")
+        st.caption("FAO-56 Penman-Monteith ET₀ with single & dual (Kcb + Ke) crop coefficients and full irrigation scheduling.")
+        if st.button("Open Agri Water →", key="cta_agri", use_container_width=True):
+            st.session_state["_nav_pending"] = "🌾 Agricultural Water"
             st.rerun()
 
     st.divider()
@@ -1044,7 +1165,13 @@ def page_hydrology() -> None:
 
     analysis = st.selectbox(
         "Analysis type",
-        ["Flow Duration Curve", "Baseflow Separation", "Recession Analysis", "Flood Frequency"],
+        [
+            "Flow Duration Curve",
+            "Baseflow Separation",
+            "Recession Analysis",
+            "Flood Frequency",
+            "Flow Signatures",
+        ],
     )
 
     st.divider()
@@ -1058,6 +1185,8 @@ def page_hydrology() -> None:
             _hydro_recession(st, df)
         elif analysis == "Flood Frequency":
             _hydro_flood_freq(st, df)
+        elif analysis == "Flow Signatures":
+            _hydro_signatures(st, df)
     except Exception as exc:
         st.error(f"Hydrology analysis failed: {exc}")
         logger.exception("Hydrology error")
@@ -1105,14 +1234,12 @@ def _hydro_baseflow(st, df: pd.DataFrame) -> None:
 
     matplotlib.use("Agg")
 
-    from aquascope.hydrology import eckhardt, lyne_hollick
+    from aquascope.hydrology import eckhardt, lyne_hollick, ukih
 
     columns = list(df.select_dtypes(include="number").columns)
     col = st.selectbox("Discharge column", columns, key="bf_col")
 
-    method = st.radio("Method", ["Lyne-Hollick", "Eckhardt"], horizontal=True)
-
-    alpha = st.slider("Filter parameter (α)", 0.90, 0.99, 0.925, 0.005)
+    method = st.radio("Method", ["Lyne-Hollick", "Eckhardt", "UKIH"], horizontal=True)
 
     q = df[col].dropna()
     if q.empty:
@@ -1120,11 +1247,17 @@ def _hydro_baseflow(st, df: pd.DataFrame) -> None:
         return
 
     if method == "Lyne-Hollick":
+        alpha = st.slider("Filter parameter (α)", 0.90, 0.99, 0.925, 0.005)
         passes = st.slider("Number of passes", 1, 5, 3)
         result = lyne_hollick(q, alpha=alpha, n_passes=passes)
-    else:
+    elif method == "Eckhardt":
+        alpha = st.slider("Filter parameter (α)", 0.90, 0.99, 0.925, 0.005)
         bfi_max = st.slider("BFI_max", 0.1, 1.0, 0.8, 0.05)
         result = eckhardt(q, alpha=alpha, bfi_max=bfi_max)
+    else:  # UKIH smoothed-minima
+        block_size = st.slider("Block size (days)", 3, 10, 5)
+        st.caption("UKIH divides the record into non-overlapping blocks, picks turning points, and interpolates baseflow between them.")
+        result = ukih(q, block_size=block_size)
 
     st.subheader("Results")
     st.metric("Baseflow Index (BFI)", f"{result.bfi:.3f}")
@@ -1209,6 +1342,401 @@ def _hydro_flood_freq(st, df: pd.DataFrame) -> None:
     fig = plot_return_periods(result.return_periods, observed_max=float(q.max()))
     st.pyplot(fig)
     plt.close(fig)
+
+
+def _hydro_signatures(st, df: pd.DataFrame) -> None:
+    """Hydrological signatures from a daily streamflow series.
+
+    Calls :func:`aquascope.hydrology.compute_signatures`, which needs a
+    datetime-indexed series with ≥365 non-NaN values.
+    """
+    from aquascope.hydrology import compute_signatures
+
+    columns = list(df.select_dtypes(include="number").columns)
+    default = "discharge" if "discharge" in columns else (columns[0] if columns else None)
+    if default is None:
+        st.warning("No numeric columns found for flow signatures.")
+        return
+    col = st.selectbox("Discharge column", columns, index=columns.index(default), key="sig_col")
+
+    q = _series_with_datetime(df, col)
+    import pandas as pd
+
+    if not isinstance(q.index, pd.DatetimeIndex):
+        st.warning(
+            "Flow signatures need a daily series with a date column "
+            "(`sample_datetime`/`date`). Load the demo dataset for a ready-made "
+            "40-year streamflow record."
+        )
+        if st.button("Load 40-year demo streamflow", key="sig_demo"):
+            demo = _load_demo_streamflow()
+            st.session_state["collected_data"] = demo.reset_index().rename(
+                columns={"index": "sample_datetime", "discharge": "discharge"}
+            )
+            st.session_state["collected_source"] = "demo_streamflow"
+            st.rerun()
+        return
+
+    if len(q) < 365:
+        st.warning(f"Need at least 365 daily values — got {len(q)}. Try the 40-year demo streamflow.")
+        if st.button("Load 40-year demo streamflow", key="sig_demo2"):
+            demo = _load_demo_streamflow()
+            st.session_state["collected_data"] = demo.reset_index().rename(
+                columns={"index": "sample_datetime", "discharge": "discharge"}
+            )
+            st.session_state["collected_source"] = "demo_streamflow"
+            st.rerun()
+        return
+
+    with st.spinner("Computing hydrological signatures…"):
+        report = compute_signatures(q)
+
+    st.subheader("Flow Signatures")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Mean flow", f"{report.mean_flow:.2f}")
+    c2.metric("Baseflow Index", f"{report.baseflow_index:.3f}")
+    c3.metric("Flashiness (R-B)", f"{report.flashiness_index:.3f}")
+    c4.metric("Q5/Q95 ratio", f"{report.q5_q95_ratio:.1f}")
+
+    c5, c6, c7, c8 = st.columns(4)
+    c5.metric("Q5 (high flow)", f"{report.q5:.2f}")
+    c6.metric("Q95 (low flow)", f"{report.q95:.2f}")
+    c7.metric("Peak month", str(report.peak_month))
+    c8.metric("Seasonality", f"{report.seasonality_index:.3f}")
+
+    import pandas as pd
+
+    sig_rows = [
+        ("Mean flow", report.mean_flow),
+        ("Median flow", report.median_flow),
+        ("Coefficient of variation", report.cv),
+        ("IQR", report.iqr),
+        ("High-flow frequency (/yr)", report.high_flow_frequency),
+        ("High-flow duration (days)", report.high_flow_duration),
+        ("Low-flow frequency (/yr)", report.low_flow_frequency),
+        ("Low-flow duration (days)", report.low_flow_duration),
+        ("Zero-flow fraction", report.zero_flow_fraction),
+        ("Rising-limb density", report.rising_limb_density),
+        ("Mean recession constant", report.mean_recession_constant),
+    ]
+    sig_df = pd.DataFrame(
+        [{"Signature": n, "Value": round(v, 4) if v is not None else None} for n, v in sig_rows]
+    )
+    with st.expander("All signatures", expanded=True):
+        st.dataframe(sig_df, width="stretch")
+
+
+# ---------------------------------------------------------------------------
+# Page: Extreme Events
+# ---------------------------------------------------------------------------
+
+
+def page_extreme_events() -> None:
+    """Frequency analysis of hydrological extremes (GEV / LP3 / Gumbel)."""
+    st = _require_streamlit()
+    import matplotlib
+
+    matplotlib.use("Agg")
+
+    st.title("🌀 Extreme Events")
+    st.markdown(
+        "Block-maxima frequency analysis for floods and droughts. Fit a "
+        "**GEV**, **Log-Pearson III**, or **Gumbel** distribution to annual "
+        "maxima and estimate design return levels with bootstrap confidence "
+        "bounds — powered by `aquascope.analysis.extreme_events`."
+    )
+
+    import pandas as pd
+
+    src = st.radio(
+        "Data source",
+        ["Demo streamflow (40 yrs)", "Use session data"],
+        horizontal=True,
+    )
+
+    series = None
+    if src == "Demo streamflow (40 yrs)":
+        series = _load_demo_streamflow()
+        st.caption(f"Loaded synthetic daily discharge: {len(series)} days, {series.index.year.nunique()} years.")
+    else:
+        df = st.session_state.get("collected_data")
+        if df is None:
+            st.info("No data in session. Collect data first, or switch to the demo streamflow above.")
+            return
+        num_cols = list(df.select_dtypes(include="number").columns)
+        if not num_cols:
+            st.warning("No numeric columns in the session dataset.")
+            return
+        default = "discharge" if "discharge" in num_cols else num_cols[0]
+        col = st.selectbox("Value column", num_cols, index=num_cols.index(default))
+        series = _series_with_datetime(df, col)
+
+    st.divider()
+
+    c1, c2, c3 = st.columns(3)
+    dist_label = c1.selectbox(
+        "Distribution",
+        ["GEV", "Log-Pearson III", "Gumbel"],
+    )
+    dist = {"GEV": "gev", "Log-Pearson III": "lp3", "Gumbel": "gumbel"}[dist_label]
+    conf = c2.slider("Confidence level", 0.80, 0.99, 0.95, 0.01)
+    n_boot = c3.select_slider("Bootstrap samples", options=[100, 200, 300, 500, 1000], value=300)
+
+    rp_options = [2, 5, 10, 25, 50, 100, 200, 500]
+    return_periods = st.multiselect(
+        "Return periods (years)", rp_options, default=[2, 5, 10, 25, 50, 100]
+    )
+    if not return_periods:
+        st.warning("Select at least one return period.")
+        return
+
+    if not st.button("📐 Run Frequency Analysis", type="primary"):
+        return
+
+    try:
+        from aquascope.analysis.extreme_events import (
+            estimate_return_periods,
+            fit_distribution,
+        )
+
+        # Need ≥3 annual maxima; surface a friendly message otherwise.
+        if isinstance(series.index, pd.DatetimeIndex):
+            n_years = series.resample("YE").max().dropna().shape[0]
+        else:
+            n_years = series.dropna().shape[0]
+        if n_years < 3:
+            st.error(
+                f"Need at least 3 annual maxima for frequency analysis — found {n_years}. "
+                "Use the demo streamflow or a longer record."
+            )
+            return
+
+        with st.spinner("Fitting distribution and bootstrapping return levels…"):
+            fit = fit_distribution(series, distribution=dist)
+            result = estimate_return_periods(
+                series,
+                distribution=dist,
+                return_periods=tuple(float(t) for t in return_periods),
+                confidence_level=conf,
+                n_bootstrap=int(n_boot),
+            )
+    except Exception as exc:
+        st.error(f"Frequency analysis failed: {exc}")
+        logger.exception("Extreme events error")
+        return
+
+    st.subheader("Goodness of Fit")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Distribution", dist_label)
+    m2.metric("AIC", f"{fit.aic:.1f}")
+    m3.metric("KS p-value", f"{fit.ks_pvalue:.3f}")
+    m4.metric("Annual maxima (n)", str(fit.n_samples))
+    st.caption("Fitted parameters: " + ", ".join(f"{k} = {v:.4g}" for k, v in fit.parameters.items()))
+
+    st.subheader("Return Levels")
+    table = pd.DataFrame(
+        {
+            "Return Period (yr)": result.return_periods,
+            "Return Level": [round(x, 2) for x in result.return_levels],
+            f"Lower ({int(conf * 100)}%)": [round(x, 2) for x in result.lower_bound],
+            f"Upper ({int(conf * 100)}%)": [round(x, 2) for x in result.upper_bound],
+        }
+    )
+    st.dataframe(table, width="stretch")
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    periods = np.asarray(result.return_periods, dtype=float)
+    levels = np.asarray(result.return_levels, dtype=float)
+    ax.plot(periods, levels, "o-", color="#1f77b4", label="Return level")
+    ax.fill_between(
+        periods, result.lower_bound, result.upper_bound,
+        alpha=0.2, color="#1f77b4", label=f"{int(conf * 100)}% CI",
+    )
+
+    # Empirical annual maxima via Weibull plotting position
+    if isinstance(series.index, pd.DatetimeIndex):
+        amax = series.resample("YE").max().dropna().to_numpy()
+    else:
+        amax = series.dropna().to_numpy()
+    amax_sorted = np.sort(amax)
+    n = amax_sorted.size
+    ranks = np.arange(1, n + 1)
+    emp_T = (n + 1) / (n + 1 - ranks)  # Weibull plotting position
+    ax.scatter(emp_T, amax_sorted, color="#d62728", s=25, zorder=5, label="Observed (Weibull)")
+
+    ax.set_xscale("log")
+    ax.set_xlabel("Return period (years)")
+    ax.set_ylabel("Magnitude")
+    ax.set_title(f"{dist_label} return-level curve")
+    ax.grid(True, which="both", alpha=0.3)
+    ax.legend()
+    st.pyplot(fig)
+    plt.close(fig)
+
+    st.download_button(
+        "⬇️ Download return levels (CSV)",
+        data=table.to_csv(index=False),
+        file_name=f"aquascope_return_levels_{dist}.csv",
+        mime="text/csv",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Page: Agricultural Water
+# ---------------------------------------------------------------------------
+
+# Crops with both default stage lengths and Kc/Kcb table entries.
+_AGRI_CROPS = [
+    "maize", "wheat_winter", "rice_paddy", "soybean", "potato", "tomato",
+    "cotton", "sugarcane", "barley", "onion", "cabbage", "sunflower",
+    "citrus", "grape",
+]
+
+
+def page_agri_water() -> None:
+    """FAO-56 reference ET, crop water demand, and irrigation scheduling."""
+    st = _require_streamlit()
+    import matplotlib
+
+    matplotlib.use("Agg")
+
+    st.title("🌾 Agricultural Water")
+    st.markdown(
+        "FAO-56 **Penman-Monteith** reference ET₀, crop water requirements, and "
+        "irrigation scheduling. Toggle between the **single** crop-coefficient "
+        "(Kc) method and the **dual** (Kcb + Ke) method that splits transpiration "
+        "from soil evaporation — powered by `aquascope.agri`."
+    )
+
+    import pandas as pd
+
+    st.subheader("1 · Weather & site")
+    weather, precip = _load_demo_weather()
+    st.caption(
+        f"Using a demo growing-season weather record ({len(weather)} days from "
+        f"{weather.index[0].date()}). Replace with real Open-Meteo data via the "
+        "collectors module in production."
+    )
+    c1, c2 = st.columns(2)
+    latitude = c1.number_input("Latitude (°)", -90.0, 90.0, 25.0, 0.5)
+    elevation = c2.number_input("Elevation (m)", -100.0, 5000.0, 10.0, 10.0)
+
+    st.subheader("2 · Crop & scheduling")
+    c3, c4, c5 = st.columns(3)
+    crop = c3.selectbox("Crop", _AGRI_CROPS, index=0)
+    planting = c4.date_input("Planting date", value=weather.index[0].date())
+    efficiency = c5.slider("Irrigation efficiency", 0.4, 1.0, 0.7, 0.05)
+
+    method_label = st.radio(
+        "Crop-coefficient method",
+        ["Single (Kc)", "Dual (Kcb + Ke)"],
+        horizontal=True,
+        help="Dual splits ETc into basal transpiration (Kcb) and soil evaporation (Ke).",
+    )
+    method = "dual" if method_label.startswith("Dual") else "single"
+
+    kc_max, few, kr = 1.20, 1.0, 1.0
+    if method == "dual":
+        d1, d2, d3 = st.columns(3)
+        kc_max = d1.slider("Kc_max (after wetting)", 1.0, 1.4, 1.20, 0.05)
+        few = d2.slider("Exposed-wetted fraction (few)", 0.1, 1.0, 1.0, 0.05)
+        kr = d3.slider("Evaporation reduction (Kr)", 0.1, 1.0, 1.0, 0.05)
+
+    if not st.button("💧 Compute Irrigation Schedule", type="primary"):
+        return
+
+    try:
+        from aquascope.agri import irrigation_schedule
+        from aquascope.agri.eto import penman_monteith_series
+
+        with st.spinner("Computing ET₀ (Penman-Monteith) and scheduling…"):
+            eto = penman_monteith_series(weather, latitude=latitude, elevation=elevation)
+            sched = irrigation_schedule(
+                eto, precip, crop, planting,
+                efficiency=efficiency, method=method,
+                kc_max=kc_max, few=few, kr=kr,
+            )
+    except Exception as exc:
+        st.error(f"Agricultural water computation failed: {exc}")
+        logger.exception("Agri water error")
+        return
+
+    st.subheader("Season Summary")
+    total_etc = float(sched["etc"].sum())
+    total_net = float(sched["net_irrigation"].sum())
+    total_gross = float(sched["gross_irrigation"].sum())
+    total_rain = float(sched["effective_rain"].sum())
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Season ET₀", f"{float(eto.mean()):.2f} mm/d")
+    m2.metric("Crop ET (ETc)", f"{total_etc:.0f} mm")
+    m3.metric("Net irrigation", f"{total_net:.0f} mm")
+    m4.metric("Gross irrigation", f"{total_gross:.0f} mm")
+    st.caption(
+        f"Effective rainfall over season: {total_rain:.0f} mm · "
+        f"Season length: {len(sched)} days · Method: {method_label}"
+    )
+
+    import matplotlib.pyplot as plt
+
+    tab_demand, tab_kc, tab_sched = st.tabs(
+        ["💧 Water Demand", "📈 Crop Coefficients", "🗓️ Schedule Table"]
+    )
+
+    dates = pd.to_datetime(sched["date"])
+
+    with tab_demand:
+        fig, ax = plt.subplots(figsize=(9, 4.5))
+        ax.bar(dates, sched["effective_rain"], color="#2ca02c", alpha=0.5, label="Effective rain")
+        ax.plot(dates, sched["etc"], color="#d62728", lw=1.8, label="Crop ET (ETc)")
+        ax.plot(dates, sched["eto"], color="#1f77b4", lw=1.0, ls="--", label="ET₀")
+        ax.set_ylabel("mm/day")
+        ax.set_title(f"{crop} — daily water demand vs effective rainfall")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        fig.autofmt_xdate()
+        st.pyplot(fig)
+        plt.close(fig)
+
+        fig2, ax2 = plt.subplots(figsize=(9, 3.5))
+        ax2.fill_between(dates, sched["gross_irrigation"].cumsum(), color="#9467bd", alpha=0.4, label="Cumulative gross")
+        ax2.plot(dates, sched["net_irrigation"].cumsum(), color="#6a3d9a", lw=1.8, label="Cumulative net")
+        ax2.set_ylabel("mm")
+        ax2.set_title("Cumulative irrigation requirement")
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+        fig2.autofmt_xdate()
+        st.pyplot(fig2)
+        plt.close(fig2)
+
+    with tab_kc:
+        fig, ax = plt.subplots(figsize=(9, 4.5))
+        if method == "dual":
+            ax.plot(dates, sched["kcb"], color="#2ca02c", lw=1.8, label="Kcb (basal/transpiration)")
+            ax.plot(dates, sched["ke"], color="#ff7f0e", lw=1.5, label="Ke (soil evaporation)")
+            ax.plot(dates, sched["kc_dual"], color="#1f77b4", lw=2.0, label="Kc = Kcb + Ke")
+            ax.set_title(f"{crop} — dual crop coefficients")
+        else:
+            ax.plot(dates, sched["kc"], color="#1f77b4", lw=2.0, label="Kc (single)")
+            ax.set_title(f"{crop} — single crop coefficient")
+        ax.set_ylabel("coefficient")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        fig.autofmt_xdate()
+        st.pyplot(fig)
+        plt.close(fig)
+        st.caption("Stages: initial → development → mid-season → late-season (FAO-56).")
+
+    with tab_sched:
+        st.dataframe(sched, width="stretch")
+        st.download_button(
+            "⬇️ Download schedule (CSV)",
+            data=sched.to_csv(index=False),
+            file_name=f"aquascope_irrigation_{crop}_{method}.csv",
+            mime="text/csv",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1563,6 +2091,8 @@ _PAGES: dict[str, tuple[str, callable]] = {
     "analysis": ("🔬 Analysis", page_analysis),
     "visualization": ("📈 Visualization", page_visualization),
     "hydrology": ("🌊 Hydrology", page_hydrology),
+    "extreme_events": ("🌀 Extreme Events", page_extreme_events),
+    "agri_water": ("🌾 Agricultural Water", page_agri_water),
     "ai_recommender": ("🤖 AI Recommender", page_ai_recommender),
     "alerts": ("⚠️ Water Quality Alerts", page_water_quality_alerts),
 }

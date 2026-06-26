@@ -30,7 +30,7 @@
 
 ---
 
-AquaScope unifies **15 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top — from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements** — wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **7 analysis pipelines**. Validated against the CAMELS benchmark with 525 tests.
+AquaScope unifies **19 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top — from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements** — wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **7 analysis pipelines**. Validated against the CAMELS benchmark with 820+ tests.
 
 ---
 
@@ -120,7 +120,7 @@ print(sig["flashiness"])       # Richards-Baker flashiness index
 
 22 signatures across magnitude, variability, timing, recession, and flashiness — see [docs/features.md](docs/features.md#hydrological-analysis).
 
-### 3. Collect data from any of the 15 sources
+### 3. Collect data from any of the 19 sources
 
 ```python
 from aquascope.collectors import USGSCollector, AquastatCollector, WaporCollector
@@ -273,7 +273,7 @@ Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/d
 
 ## 🧪 Scientifically validated
 
-- **534 tests** — covering every collector, hydrology method, and pipeline (525 passing in the core suite; spatial tests require `rasterio`)
+- **820+ tests** — covering every collector, hydrology method, and pipeline (spatial and ARIMA tests require the optional `[all]` / `[ml]` extras)
 - **CAMELS benchmark** — a 10-catchment validation subset of the [CAMELS dataset](https://ral.ucar.edu/solutions/products/camels) ships with the repo at `data/camels_benchmark/` and runs as part of CI
 - **Every method cited** — equations, decision trees, and DOI references for all 26 methodologies live in the [theory guide](docs/theory.md)
 - **JOSS paper in submission** — see [`paper.md`](paper.md) and [`paper.bib`](paper.bib)
@@ -285,7 +285,7 @@ Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/d
 | Resource | What it covers |
 | :--- | :--- |
 | [Features](docs/features.md) | Full capability list — hydrology, agriculture, ML, spatial, I/O |
-| [Data sources](docs/data_sources.md) | All 15 sources, endpoints, API-key requirements |
+| [Data sources](docs/data_sources.md) | All 19 sources, endpoints, API-key requirements |
 | [Theory guide](docs/theory.md) | Equations, DOI citations, decision trees for every method |
 | [Methodology matrix](docs/methodology_matrix.md) | When to use which method |
 | [Architecture](docs/guides/architecture.md) | How AquaScope is structured internally |
@@ -360,7 +360,7 @@ If you use AquaScope in your research, please cite:
   author  = {AquaScope Contributors},
   year    = {2026},
   url     = {https://github.com/Rekin226/aquascope},
-  version = {0.5.0},
+  version = {0.6.0},
   license = {MIT}
 }
 ```

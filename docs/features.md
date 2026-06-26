@@ -4,7 +4,7 @@ Complete capability reference for AquaScope. For installation and a quick exampl
 
 ---
 
-## Data Collection (15 sources)
+## Data Collection (19 sources)
 
 - **Taiwan** — MOENV water quality, WRA levels/reservoirs, Civil IoT sensors
 - **USA** — USGS streamflow, Water Quality Portal (400+ agencies)
@@ -90,7 +90,7 @@ For when-to-use-which guidance, see the [methodology matrix](methodology_matrix.
 
 ## Infrastructure
 
-- **534 tests** with CAMELS benchmark validation
+- **820+ tests** with CAMELS benchmark validation
 - **Interactive dashboard** — 7-page Streamlit app
 - **14 CLI commands** — `collect`, `recommend`, `eda`, `quality`, `run`, `solve`, `forecast`, `plot`, `hydro`, `alerts`, `dashboard`, `agri`, `list-methods`, `list-sources`
 - **[Theory guide](theory.md)** — mathematical equations, DOI citations, decision trees

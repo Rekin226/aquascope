@@ -4,17 +4,18 @@ The roadmap reflects what's shipped, what's in-flight, and what's planned. Open 
 
 ## Shipped
 
-- [x] 15 data source collectors (Taiwan, USA, Global, FAO)
-- [x] 15 data source collectors (Taiwan ×4, USA ×2, Global ×5, FAO ×2, EU, Japan, Korea)
+- [x] 19 data source collectors (Taiwan ×7, USA ×2, Global ×4, FAO ×2, EU, Japan, Korea, India)
 - [x] Rule-based + LLM methodology recommender (26 methods, OpenAI / Groq / HuggingFace / Ollama)
 - [x] 7 auto-executable analysis pipelines
 - [x] Bulletin 17C flood frequency with EMA
-- [x] FAO-56 Penman-Monteith + crop water requirements
+- [x] FAO-56 Penman-Monteith + crop water requirements (single Kc + dual Kcb/Ke modes)
+- [x] Baseflow separation (Eckhardt, Lyne-Hollick, UKIH smoothed-minima)
+- [x] Extreme-events frequency analysis (annual maxima/minima, return periods)
 - [x] Bayesian UQ, copulas, ensembles, transfer learning
 - [x] Spatial hydrology (DEM, watershed, Strahler)
 - [x] Scientific I/O (WaterML, HEC, SWMM, NetCDF, HDF5)
 - [x] Interactive Streamlit dashboard
-- [x] 534+ tests with CAMELS benchmark validation
+- [x] 820+ tests with CAMELS benchmark validation
 - [x] Theory guide with equations and DOI citations
 - [x] EU Water Framework Directive collector
 - [x] Japan MLIT / Korea WAMIS collectors

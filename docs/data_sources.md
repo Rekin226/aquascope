@@ -1,6 +1,8 @@
 # Data Sources
 
-AquaScope ships **17 collectors** that normalise data from 12 upstream agencies into one unified Pydantic schema. One API call per source, one schema across the toolkit.
+AquaScope ships **19 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
+
+Most sources emit point observations and share the unified `water_data` schema (`WaterQualitySample`, `WaterLevelReading`, `ReservoirStatus`). Three aggregate/gridded sources use purpose-built record types that match their data shape: **FAO AQUASTAT** returns country-level `AquastatRecord`, **UN SDG 6** returns `SDG6Indicator`, and **FAO WaPOR** returns gridded `WaPORObservation`.
 
 To request a new source, open an [issue](https://github.com/Rekin226/aquascope/issues/new/choose) using the *New Data Source Request* template, or join the [Discussion](https://github.com/Rekin226/aquascope/discussions) thread on data-source priorities.
 
@@ -13,6 +15,9 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [Taiwan MOENV](https://data.moenv.gov.tw) | Taiwan | River / tap water quality, RPI | REST | ✅ |
 | [Taiwan WRA](https://opendata.wra.gov.tw) | Taiwan | Water levels, reservoir status | REST | ✅ |
 | [Taiwan Civil IoT](https://sta.ci.taiwan.gov.tw) | Taiwan | Real-time sensors (level, flow, rain) | SensorThings | ✅ |
+| [Taiwan WRA FHY](https://fhy.wra.gov.tw) | Taiwan | Real-time water level, rainfall, discharge | REST | ✅ |
+| [Taiwan WRA IoT](https://iot.wra.gov.tw) | Taiwan | Groundwater level, rainfall accumulation | REST | ✅ |
+| [Taiwan data.gov.tw](https://data.gov.tw) | Taiwan | Real-time river + groundwater level | REST | ✅ |
 | [USGS](https://api.waterdata.usgs.gov) | USA | Streamflow, water quality, gage height | OGC | ✅ |
 | [Water Quality Portal](https://waterqualitydata.us) | USA | Integrated WQ from 400+ agencies | REST / CSV | ✅ |
 | [GEMStat](https://gemstat.org) | Global | Freshwater quality (170+ countries) | Zenodo | ✅ |
@@ -24,6 +29,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [EU WFD](https://www.eea.europa.eu) | Europe | Water Framework Directive status | REST | ✅ |
 | [Japan MLIT](https://www.mlit.go.jp) | Japan | Hydrometeorology, river observations | REST | ✅ |
 | [Korea WAMIS](https://www.wamis.go.kr) | Korea | Hydrology, dam operations | REST | ✅ |
+| [India WRIS](https://indiawris.gov.in) | India | River water level | REST | ✅ |
 
 ---
 

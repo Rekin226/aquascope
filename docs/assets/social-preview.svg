@@ -81,7 +81,7 @@
     </g>
     <g transform="translate(910,440)">
       <rect width="240" height="120" rx="14" fill="#ffffff" fill-opacity="0.06" stroke="#22d3ee" stroke-opacity="0.35"/>
-      <text x="120" y="58" font-size="44" font-weight="700" fill="#67e8f9" text-anchor="middle">534</text>
+      <text x="120" y="58" font-size="44" font-weight="700" fill="#67e8f9" text-anchor="middle">820+</text>
       <text x="120" y="92" font-size="17" fill="#9be8f5" text-anchor="middle">tests passing</text>
     </g>
   </g>

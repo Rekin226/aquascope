@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aquascope"
-version = "0.5.0"
+version = "0.6.0"
 description = "Open-source water data aggregation toolkit with AI-powered research methodology recommendations"
 readme = "README.md"
 license = {text = "MIT"}
@@ -155,7 +155,7 @@ omit = ["aquascope/dashboard/*"]
 
 [tool.coverage.report]
 show_missing = true
-fail_under = 60
+fail_under = 70
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",

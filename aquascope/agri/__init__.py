@@ -12,7 +12,11 @@ from aquascope.agri.benchmark import (
     list_benchmark_metrics,
 )
 from aquascope.agri.crop_water import crop_water_requirement, get_kc, irrigation_schedule
-from aquascope.agri.eto import hargreaves, penman_monteith_daily
+from aquascope.agri.eto import (
+    hargreaves,
+    penman_monteith_daily,
+    penman_monteith_series,
+)
 from aquascope.agri.planner import (
     IrrigationPlan,
     default_season_end_date,
@@ -30,6 +34,7 @@ __all__ = [
     "AgricultureBenchmarkResult",
     "benchmark_aquastat",
     "penman_monteith_daily",
+    "penman_monteith_series",
     "hargreaves",
     "get_kc",
     "crop_water_requirement",

@@ -10,7 +10,7 @@ tags:
   - FAO-56
   - evapotranspiration
 authors:
-  - name: Ouedraogo Abdoul Rachid
+  - name: Ouédraogo Abdoul Rachid
     orcid: 0000-0002-4616-4153
     affiliation: 1
 affiliations:

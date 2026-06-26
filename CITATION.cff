@@ -11,7 +11,7 @@ abstract: >-
   single, coherent interface to 19 global water data sources and
   implements 26 hydrological, statistical, and agri-water methods.
 authors:
-  - family-names: Ouedraogo
+  - family-names: Ouédraogo
     given-names: Abdoul Rachid
     orcid: "https://orcid.org/0000-0002-4616-4153"
     affiliation: "National Central University, Taiwan"
@@ -42,7 +42,7 @@ references:
       Aggregation, Hydrological Analysis, and AI-Powered Research
       Methodology Recommendations
     authors:
-      - family-names: Ouedraogo
+      - family-names: Ouédraogo
         given-names: Abdoul Rachid
         orcid: "https://orcid.org/0000-0002-4616-4153"
     journal: Journal of Open Source Software
@@ -52,7 +52,7 @@ preferred-citation:
   type: software
   title: AquaScope
   authors:
-    - family-names: Ouedraogo
+    - family-names: Ouédraogo
       given-names: Abdoul Rachid
       orcid: "https://orcid.org/0000-0002-4616-4153"
   version: 0.6.0

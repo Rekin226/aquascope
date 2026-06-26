@@ -5,7 +5,6 @@ from __future__ import annotations
 import threading
 import time
 
-
 from aquascope.utils.collect_many import (
     CollectFailure,
     CollectRequest,

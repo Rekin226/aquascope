@@ -14,6 +14,12 @@ All notable changes to AquaScope are documented here.
   (the input to a Standardised Groundwater Index) or `"daily"`. Rate-limits
   and caches every request. This unlocks monthly SGI and SPI/SPEI
   drought-propagation analysis on AquaScope-collected data.
+- **Well coordinates for daily groundwater**: `TaiwanWRAGroundwaterDailyCollector`
+  gains `with_metadata=True` (default), joining the open-data 井況 well-status
+  dataset to populate each reading's `location` (TWD97 → WGS84) and
+  `well_depth_m`. The gweb station id matches the suffix of the open-data
+  `wellidentifier` after `GW` (with a well-name fallback), making the daily
+  series spatially complete.
 
 ### Changed
 - `CachedHTTPClient.post_json()` now sends a JSON body and shares the retry,

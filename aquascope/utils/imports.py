@@ -18,6 +18,7 @@ _INSTALL_MAP = {
     "rasterio": "spatial",
     "geopandas": "spatial",
     "shapely": "spatial",
+    "pyproj": "spatial",
     "streamlit": "dashboard",
     "openai": "llm",
 }

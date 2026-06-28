@@ -38,7 +38,27 @@ SAMPLE = [
 
 
 def _collector(**kw):
+    kw.setdefault("with_metadata", False)
     return TaiwanWRAGroundwaterCollector(client=MagicMock(), **kw)
+
+
+# A 井況 metadata row for well W1 (TWD97 coords near Tainan, Chianan Plain).
+META_ROWS = [
+    {
+        "wellidentifier": "W1",
+        "wellname": "Test Well 1",
+        "groundwaterzone": "嘉南平原",
+        "welldepth": "39.0",
+        "locationbytwd97": "208675.89 2475257.40",
+    },
+    {  # corrupt coordinates -> location should be rejected
+        "wellidentifier": "W3",
+        "wellname": "Bad Coords",
+        "groundwaterzone": "屏東平原",
+        "welldepth": "20.0",
+        "locationbytwd97": "1.0 1.0",
+    },
+]
 
 
 class TestGroundwaterCollector:
@@ -83,8 +103,38 @@ class TestGroundwaterCollector:
     def test_fetch_raw_uses_annual_dataset(self):
         client = MagicMock()
         client.get_json.return_value = SAMPLE
-        col = TaiwanWRAGroundwaterCollector(client=client)
+        col = TaiwanWRAGroundwaterCollector(client=client, with_metadata=False)
         out = col.fetch_raw()
         assert out == SAMPLE
         # called with the dangling annual-groundwater UUID
         assert "f3ae2889" in client.get_json.call_args[0][0]
+
+
+class TestMetadataEnrichment:
+    def test_join_fills_aquifer_depth_location(self):
+        # Two get_json calls: metadata first, then the annual series.
+        client = MagicMock()
+        client.get_json.side_effect = [META_ROWS, SAMPLE]
+        col = TaiwanWRAGroundwaterCollector(with_metadata=True, client=client)
+        recs = list(col.collect())
+        by_id = {r.station_id: r for r in recs}
+        w1 = by_id["W1"]
+        assert w1.aquifer_name == "嘉南平原"
+        assert w1.well_depth_m == 39.0
+        assert w1.station_name == "Test Well 1"
+        assert w1.location is not None
+        # TWD97 (208675, 2475257) -> a valid point in southern Taiwan
+        assert 21.9 < w1.location.latitude < 25.3
+        assert 119.5 < w1.location.longitude < 122.0
+
+    def test_corrupt_coords_rejected_metadata_kept(self):
+        client = MagicMock()
+        client.get_json.side_effect = [META_ROWS, SAMPLE]
+        col = TaiwanWRAGroundwaterCollector(
+            statistic="minimum", with_metadata=True, client=client
+        )
+        recs = {r.station_id: r for r in col.collect()}
+        w3 = recs["W3"]
+        assert w3.location is None  # out-of-Taiwan coords filtered
+        assert w3.aquifer_name == "屏東平原"  # but zone/depth still populated
+        assert w3.well_depth_m == 20.0

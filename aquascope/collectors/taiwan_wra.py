@@ -84,6 +84,77 @@ WATER_LEVEL_DATASET = "73c4c3de-4045-4765-abeb-89f9f9cd5ff0"
 RESERVOIR_DAILY_DATASET = "51023e88-4c76-4dbc-bbb9-470da690d539"
 RESERVOIR_CONDITION_DATASET = "2be9044c-6e44-4856-aad5-dd108c2e6679"
 GROUNDWATER_ANNUAL_DATASET = "f3ae2889-ccaf-45a3-a546-0edd8d9fd2da"
+GROUNDWATER_WELL_METADATA_DATASET = "3e86faea-e94a-4a91-a870-852d73e83c3d"
+
+# Lazily-built TWD97 (EPSG:3826) -> WGS84 transformer for WRA well coordinates.
+_TWD97_TRANSFORMER = None
+_TWD97_PYPROJ_MISSING = False
+
+
+def _twd97_to_location(twd97: str | None) -> GeoLocation | None:
+    """Convert a WRA ``locationbytwd97`` "X Y" string to a WGS84 GeoLocation.
+
+    Best-effort: returns None for blank/invalid coords, or when ``pyproj`` is
+    not installed (logged once; aquifer and depth metadata still populate).
+    """
+    global _TWD97_TRANSFORMER, _TWD97_PYPROJ_MISSING
+    if not twd97:
+        return None
+    parts = str(twd97).split()
+    if len(parts) != 2:
+        return None
+    try:
+        x, y = float(parts[0]), float(parts[1])
+    except ValueError:
+        return None
+    if x <= 0 or y <= 0:
+        return None
+    if _TWD97_TRANSFORMER is None:
+        if _TWD97_PYPROJ_MISSING:
+            return None
+        from aquascope.utils.imports import require
+
+        try:
+            pyproj = require("pyproj", feature="TWD97 well coordinates", group="spatial")
+        except ImportError:
+            _TWD97_PYPROJ_MISSING = True
+            logger.warning(
+                "pyproj not installed; WRA well coordinates unavailable "
+                "(install aquascope[spatial]). Aquifer and depth still populate."
+            )
+            return None
+        _TWD97_TRANSFORMER = pyproj.Transformer.from_crs(
+            "EPSG:3826", "EPSG:4326", always_xy=True
+        )
+    lon, lat = _TWD97_TRANSFORMER.transform(x, y)
+    # QA: a few well records carry corrupt coordinates that convert to points
+    # far outside Taiwan. Reject anything beyond a generous national bounding
+    # box (covers the main island plus Penghu, Kinmen, Matsu, Lanyu).
+    if not (21.5 <= lat <= 26.5 and 118.0 <= lon <= 122.5):
+        return None
+    try:
+        return GeoLocation(latitude=float(lat), longitude=float(lon))
+    except (ValueError, TypeError):
+        return None
+
+
+def _build_well_metadata(rows: list[dict]) -> dict[str, dict]:
+    """Index the WRA well-status (井況) records by well identifier."""
+    meta: dict[str, dict] = {}
+    for r in rows:
+        wid = r.get("wellidentifier")
+        if not wid:
+            continue
+        depth = _parse_gw_value(r.get("welldepth"))
+        if depth is None:
+            depth = _parse_gw_value(r.get("finishdepth"))
+        meta[str(wid)] = {
+            "station_name": r.get("wellname") or None,
+            "aquifer_name": r.get("groundwaterzone") or None,
+            "well_depth_m": depth,
+            "location": _twd97_to_location(r.get("locationbytwd97")),
+        }
+    return meta
 
 
 class TaiwanWRAWaterLevelCollector(BaseCollector):
@@ -215,6 +286,13 @@ class TaiwanWRAGroundwaterCollector(BaseCollector):
         keep a placeholder year, or a number (e.g. ``0.0``) to substitute a
         constant — but note that substituting ``0`` injects a real-looking
         zero-elevation reading that will distort trend and drawdown results.
+    with_metadata : bool
+        When ``True`` (default), also fetch the WRA well-status (井況) dataset
+        and join it on the well identifier, populating each reading's
+        ``aquifer_name`` (groundwater zone), ``well_depth_m``, ``station_name``,
+        and ``location`` (TWD97 coordinates converted to WGS84 via ``pyproj``;
+        left ``None`` if ``pyproj`` is not installed). Set ``False`` to skip the
+        extra request when only the level series is needed.
     """
 
     name = "taiwan_wra_groundwater"
@@ -223,6 +301,7 @@ class TaiwanWRAGroundwaterCollector(BaseCollector):
         self,
         statistic: str = "average",
         na_value: float | None = None,
+        with_metadata: bool = True,
         client: CachedHTTPClient | None = None,
     ):
         if statistic not in _GW_STATISTIC_FIELDS:
@@ -240,8 +319,15 @@ class TaiwanWRAGroundwaterCollector(BaseCollector):
         )
         self.statistic = statistic
         self.na_value = na_value
+        self.with_metadata = with_metadata
+        self._well_meta: dict[str, dict] = {}
 
     def fetch_raw(self, **kwargs) -> list[dict]:
+        if self.with_metadata:
+            meta_rows = self.client.get_json(GROUNDWATER_WELL_METADATA_DATASET)
+            if isinstance(meta_rows, dict):
+                meta_rows = meta_rows.get("responseData", meta_rows.get("records", []))
+            self._well_meta = _build_well_metadata(meta_rows)
         data = self.client.get_json(GROUNDWATER_ANNUAL_DATASET)
         return data if isinstance(data, list) else data.get("responseData", data.get("records", []))
 
@@ -261,15 +347,19 @@ class TaiwanWRAGroundwaterCollector(BaseCollector):
                         continue  # drop missing-data well-years
                     level = self.na_value
 
+                meta = self._well_meta.get(str(well), {})
                 readings.append(
                     GroundwaterLevel(
                         source=DataSource.TAIWAN_WRA,
                         station_id=str(well),
+                        station_name=meta.get("station_name"),
                         # Annual value: stamp mid-year as the series centroid.
                         measurement_datetime=datetime(int(year), 7, 1),
                         water_level_m=level,
                         unit="m",
-                        location=_extract_location(rec),
+                        location=meta.get("location") or _extract_location(rec),
+                        aquifer_name=meta.get("aquifer_name"),
+                        well_depth_m=meta.get("well_depth_m"),
                     )
                 )
             except (ValueError, KeyError, TypeError) as exc:

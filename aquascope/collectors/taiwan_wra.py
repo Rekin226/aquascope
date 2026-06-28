@@ -415,6 +415,33 @@ def _parse_date(value: str | date | None) -> date | None:
     return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
 
 
+def _build_gweb_well_metadata(rows: list[dict]) -> dict[str, dict]:
+    """Index the open-data 井況 metadata for joining to gweb daily wells.
+
+    The gweb station id (e.g. ``07010211``) is the suffix of the open-data
+    ``wellidentifier`` after ``GW`` (e.g. ``3132014GW07010211``). We index each
+    well's coordinates and depth by that suffix code AND by well name, so the
+    daily collector can attach location even when one key is ambiguous.
+    """
+    meta: dict[str, dict] = {}
+    for r in rows:
+        wid = str(r.get("wellidentifier") or "")
+        code = wid.split("GW")[-1] if "GW" in wid else wid
+        depth = _parse_gw_value(r.get("welldepth"))
+        if depth is None:
+            depth = _parse_gw_value(r.get("finishdepth"))
+        info = {
+            "location": _twd97_to_location(r.get("locationbytwd97")),
+            "well_depth_m": depth,
+        }
+        if code:
+            meta.setdefault(f"code::{code}", info)
+        name = (r.get("wellname") or "").strip()
+        if name:
+            meta.setdefault(f"name::{name}", info)
+    return meta
+
+
 class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
     """Collect DAILY groundwater-level series from the WRA gweb HydroInfo portal.
 
@@ -447,6 +474,12 @@ class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
         reading per well per day (far larger).
     window_years : int
         Chunk size (years) for the windowed chart pulls. Default 5.
+    with_metadata : bool
+        When ``True`` (default), join the open-data 井況 well-status dataset to
+        populate each reading's ``location`` (TWD97 coordinates converted to
+        WGS84) and ``well_depth_m``. The gweb station id is matched to the
+        suffix of the open-data ``wellidentifier`` after ``GW`` (falling back to
+        the well name). Set ``False`` to skip the extra open-data request.
 
     Notes
     -----
@@ -465,6 +498,7 @@ class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
         end: str | date | None = None,
         aggregate: str = "monthly",
         window_years: int = 5,
+        with_metadata: bool = True,
         client: CachedHTTPClient | None = None,
     ):
         if aggregate not in ("monthly", "daily"):
@@ -482,9 +516,35 @@ class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
         self.stations = list(stations) if stations else None
         self.aggregate = aggregate
         self.window_years = max(1, int(window_years))
+        self.with_metadata = with_metadata
         self.start = _parse_date(start)
         self.end = _parse_date(end)
         self._session_ready = False
+        self._well_meta: dict[str, dict] = {}
+
+    def _load_well_metadata(self) -> None:
+        """Fetch the open-data 井況 dataset and index it for coordinate joins."""
+        if self._well_meta:
+            return
+        meta_client = CachedHTTPClient(
+            base_url=WRA_BASE,
+            rate_limiter=RateLimiter(max_calls=15, period_seconds=60),
+            cache_ttl_seconds=86400,
+            verify=False,
+        )
+        rows = meta_client.get_json(GROUNDWATER_WELL_METADATA_DATASET)
+        if isinstance(rows, dict):
+            rows = rows.get("responseData", rows.get("records", []))
+        self._well_meta = _build_gweb_well_metadata(rows)
+
+    def _meta_for(self, station_no: str, station_name: str | None) -> dict:
+        if not self._well_meta:
+            return {}
+        return (
+            self._well_meta.get(f"code::{station_no}")
+            or (self._well_meta.get(f"name::{station_name.strip()}") if station_name else None)
+            or {}
+        )
 
     # ── portal helpers ───────────────────────────────────────────────
     def _ensure_session(self) -> None:
@@ -554,6 +614,8 @@ class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
 
     # ── BaseCollector contract ───────────────────────────────────────
     def fetch_raw(self, **kwargs) -> list[dict]:
+        if self.with_metadata:
+            self._load_well_metadata()
         # Build the (station, zone) work list.
         work: list[tuple[str, str, str]] = []  # (station_no, station_name, zone_name)
         if self.stations:
@@ -602,16 +664,19 @@ class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
                     (datetime(y, m, 15), sum(vs) / len(vs))
                     for (y, m), vs in sorted(buckets.items())
                 ]
+            meta = self._meta_for(rec["station_no"], rec.get("station_name"))
             for dt, value in points:
                 readings.append(
                     GroundwaterLevel(
                         source=DataSource.TAIWAN_WRA,
                         station_id=rec["station_no"],
                         station_name=rec.get("station_name"),
+                        location=meta.get("location"),
                         measurement_datetime=dt,
                         water_level_m=value,
                         unit="m",
                         aquifer_name=rec.get("zone"),
+                        well_depth_m=meta.get("well_depth_m"),
                     )
                 )
         return readings

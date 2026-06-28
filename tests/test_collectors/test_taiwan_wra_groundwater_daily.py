@@ -17,6 +17,7 @@ from aquascope.collectors.taiwan_wra import (
     _GWEB_HISTORY,
     _GWEB_STATION_LIST,
     TaiwanWRAGroundwaterDailyCollector,
+    _build_gweb_well_metadata,
 )
 from aquascope.schemas.water_data import DataSource
 
@@ -55,7 +56,8 @@ class _FakeClient:
 
 
 def test_monthly_aggregation_one_well():
-    c = TaiwanWRAGroundwaterDailyCollector(zones=["zhuoshui fan"], client=_FakeClient())
+    c = TaiwanWRAGroundwaterDailyCollector(zones=["zhuoshui fan"], with_metadata=False,
+                                           client=_FakeClient())
     recs = c.collect()
     # 24 months across 2020-2021.
     assert len(recs) == 24
@@ -71,7 +73,7 @@ def test_monthly_aggregation_one_well():
 
 def test_daily_aggregation_drops_nulls():
     c = TaiwanWRAGroundwaterDailyCollector(zones=["zhuoshui fan"], aggregate="daily",
-                                           client=_FakeClient())
+                                           with_metadata=False, client=_FakeClient())
     recs = c.collect()
     total_days = (_FakeClient.SPAN_HI - _FakeClient.SPAN_LO).days + 1
     assert len(recs) == total_days - 1  # one null day dropped
@@ -80,7 +82,7 @@ def test_daily_aggregation_drops_nulls():
 
 def test_zone_alias_and_session_bootstrap():
     fake = _FakeClient()
-    c = TaiwanWRAGroundwaterDailyCollector(zones=["050"], client=fake)
+    c = TaiwanWRAGroundwaterDailyCollector(zones=["050"], with_metadata=False, client=fake)
     c.collect()
     # Session GET happens once before any POST.
     assert fake.calls[0].startswith("GET ")
@@ -89,7 +91,8 @@ def test_zone_alias_and_session_bootstrap():
 
 def test_start_end_clip():
     c = TaiwanWRAGroundwaterDailyCollector(
-        zones=["zhuoshui fan"], start="2021-01-01", end="2021-12-31", client=_FakeClient()
+        zones=["zhuoshui fan"], start="2021-01-01", end="2021-12-31",
+        with_metadata=False, client=_FakeClient()
     )
     recs = c.collect()
     assert {r.measurement_datetime.year for r in recs} == {2021}
@@ -98,7 +101,8 @@ def test_start_end_clip():
 
 def test_explicit_stations_skip_zone_discovery():
     fake = _FakeClient()
-    c = TaiwanWRAGroundwaterDailyCollector(stations=["07010211"], client=fake)
+    c = TaiwanWRAGroundwaterDailyCollector(stations=["07010211"], with_metadata=False,
+                                           client=fake)
     c.collect()
     assert f"POST {_GWEB_AREA_LIST}" not in fake.calls
     assert f"POST {_GWEB_STATION_LIST}" not in fake.calls
@@ -107,3 +111,36 @@ def test_explicit_stations_skip_zone_discovery():
 def test_bad_aggregate_raises():
     with pytest.raises(ValueError, match="aggregate"):
         TaiwanWRAGroundwaterDailyCollector(aggregate="weekly")
+
+
+def test_well_metadata_builder_keys_by_gw_suffix_and_name():
+    rows = [{
+        "wellidentifier": "3132014GW07010211", "wellname": "東芳(1)",
+        "locationbytwd97": "200779.08 2662059.14", "welldepth": "48.0",
+    }]
+    meta = _build_gweb_well_metadata(rows)
+    assert "code::07010211" in meta  # gweb id == suffix after GW
+    assert "name::東芳(1)" in meta
+    assert meta["code::07010211"]["well_depth_m"] == pytest.approx(48.0)
+    # TWD97 -> WGS84 lands inside Taiwan (pyproj optional; skip if absent).
+    loc = meta["code::07010211"]["location"]
+    if loc is not None:
+        assert 21.5 <= loc.latitude <= 26.5 and 118.0 <= loc.longitude <= 122.5
+
+
+def test_metadata_join_populates_location_and_depth():
+    from aquascope.schemas.water_data import GeoLocation
+
+    c = TaiwanWRAGroundwaterDailyCollector(zones=["zhuoshui fan"], with_metadata=False,
+                                           client=_FakeClient())
+    # Inject a pre-built metadata index (skips the open-data fetch).
+    c._well_meta = {
+        "code::07010211": {
+            "location": GeoLocation(latitude=23.5, longitude=120.3),
+            "well_depth_m": 48.0,
+        }
+    }
+    recs = c.collect()
+    assert recs[0].location is not None
+    assert recs[0].location.latitude == pytest.approx(23.5)
+    assert recs[0].well_depth_m == pytest.approx(48.0)

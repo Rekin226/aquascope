@@ -2,6 +2,24 @@
 
 All notable changes to AquaScope are documented here.
 
+## [Unreleased]
+
+### Added
+- **Daily Taiwan groundwater** (`collectors/taiwan_wra.py`):
+  `TaiwanWRAGroundwaterDailyCollector` reaches the sub-annual (daily)
+  groundwater-level series from the WRA gweb HydroInfo portal, which the
+  open-data API does not expose (it tops out at annual statistics). Per-well
+  records span roughly 2005-2025 (Zhuoshui/Choushui fan back to the late
+  1990s). Supports zone aliases, date clipping, and `aggregate="monthly"`
+  (the input to a Standardised Groundwater Index) or `"daily"`. Rate-limits
+  and caches every request. This unlocks monthly SGI and SPI/SPEI
+  drought-propagation analysis on AquaScope-collected data.
+
+### Changed
+- `CachedHTTPClient.post_json()` now sends a JSON body and shares the retry,
+  rate-limit, and body-keyed disk-cache behaviour of `get_json()` (previously
+  a thin wrapper with no body, retries, or caching).
+
 ## [0.7.0] — 2026-06-26
 
 Interoperability and uncertainty: AquaScope now composes with the scientific-Python

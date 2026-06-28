@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from aquascope.collectors.base import BaseCollector
 from aquascope.schemas.groundwater import GroundwaterLevel
@@ -364,4 +364,254 @@ class TaiwanWRAGroundwaterCollector(BaseCollector):
                 )
             except (ValueError, KeyError, TypeError) as exc:
                 logger.debug("Skipping WRA groundwater record: %s", exc)
+        return readings
+
+
+# ── WRA gweb HydroInfo portal (DAILY groundwater) ────────────────────
+# The open-data API tops out at annual statistics. The interactive
+# hydrological portal (gweb.wra.gov.tw/HydroInfo/GroundWaterQuery) serves the
+# underlying DAILY groundwater-level series through JSON POST endpoints that
+# need only a session cookie (no login). Recipe validated 2026-06-28.
+GWEB_BASE = "https://gweb.wra.gov.tw"
+_GWEB_QUERY = "/HydroInfo/GroundWaterQuery"
+_GWEB_SESSION_PAGE = f"{_GWEB_QUERY}/"
+_GWEB_AREA_LIST = f"{_GWEB_QUERY}/GetGWAreaList"
+_GWEB_STATION_LIST = f"{_GWEB_QUERY}/GetGWStationList"
+_GWEB_HISTORY = f"{_GWEB_QUERY}/GetHistoryWaterLevel"
+_GWEB_CHART = f"{_GWEB_QUERY}/GetStationChartData"
+
+# English aliases for the 11 groundwater zones (accepted in `zones=`).
+_GWEB_ZONE_ALIASES = {
+    "taipei basin": "010", "taipei": "010", "臺北盆地": "010",
+    "taoyuan": "020", "taoyuan-zhongli": "020", "桃園中壢臺地": "020",
+    "xinmiao": "030", "新苗地區": "030",
+    "taichung": "040", "臺中地區": "040",
+    "zhuoshui fan": "050", "zhuoshui": "050", "choushui": "050", "濁水溪沖積扇": "050",
+    "chianan": "060", "chianan plain": "060", "嘉南平原": "060",
+    "pingtung": "070", "pingtung plain": "070", "屏東平原": "070",
+    "lanyang": "080", "lanyang plain": "080", "蘭陽平原": "080",
+    "hualien-taitung": "090", "huadong": "090", "花東縱谷": "090",
+    "penghu": "100", "澎湖地區": "100",
+    "kinmen": "110", "金門地區": "110",
+}
+
+
+def _gweb_headers() -> dict:
+    return {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+        ),
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": f"{GWEB_BASE}{_GWEB_SESSION_PAGE}",
+        "Origin": GWEB_BASE,
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+    }
+
+
+def _parse_date(value: str | date | None) -> date | None:
+    if value is None or isinstance(value, date):
+        return value
+    return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+
+
+class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
+    """Collect DAILY groundwater-level series from the WRA gweb HydroInfo portal.
+
+    Unlike :class:`TaiwanWRAGroundwaterCollector` (annual statistics from the
+    open-data API), this collector reaches the sub-annual series the open-data
+    API does not expose, which is what drought-propagation methods (monthly
+    SGI, SPI/SPEI lag analysis) require. Per-well daily records span roughly
+    2005-2025, with the Zhuoshui (Choushui) fan back to 1997.
+
+    The portal throttles request bursts and resets connections, so this
+    collector rate-limits and caches every POST. A full national pull is
+    thousands of requests; scope with ``zones`` or ``stations`` for a focused
+    study. Re-runs are served from cache.
+
+    Parameters
+    ----------
+    zones : list[str] | None
+        Aquifer zones to include, by English alias (e.g. ``"zhuoshui fan"``),
+        Chinese name, or numeric code (``"050"``). ``None`` (default) pulls all
+        11 zones (heavy; expect thousands of requests).
+    stations : list[str] | None
+        Explicit station identifiers (e.g. ``"07010211"``). When given, zone
+        discovery is skipped and only these wells are fetched.
+    start, end : str | date | None
+        Clip the date range (``"YYYY-MM-DD"``). ``None`` uses each well's full
+        available span (read from the portal's history summary).
+    aggregate : str
+        ``"monthly"`` (default) emits one reading per well per month (the mean
+        of that month's daily values: the input to SGI). ``"daily"`` emits one
+        reading per well per day (far larger).
+    window_years : int
+        Chunk size (years) for the windowed chart pulls. Default 5.
+
+    Notes
+    -----
+    ``water_level_m`` carries the WRA-reported groundwater level relative to its
+    datum (Taiwan Vertical Datum), NOT depth below ground surface; values are
+    signed. Verify the datum per aquifer before interpreting drawdown.
+    """
+
+    name = "taiwan_wra_groundwater_daily"
+
+    def __init__(
+        self,
+        zones: Sequence[str] | None = None,
+        stations: Sequence[str] | None = None,
+        start: str | date | None = None,
+        end: str | date | None = None,
+        aggregate: str = "monthly",
+        window_years: int = 5,
+        client: CachedHTTPClient | None = None,
+    ):
+        if aggregate not in ("monthly", "daily"):
+            raise ValueError(f"aggregate must be 'monthly' or 'daily'; got {aggregate!r}.")
+        super().__init__(
+            client
+            or CachedHTTPClient(
+                base_url=GWEB_BASE,
+                rate_limiter=RateLimiter(max_calls=15, period_seconds=60),
+                cache_ttl_seconds=7 * 86400,  # daily series are static; cache a week
+                verify=False,
+            )
+        )
+        self.zones = list(zones) if zones else None
+        self.stations = list(stations) if stations else None
+        self.aggregate = aggregate
+        self.window_years = max(1, int(window_years))
+        self.start = _parse_date(start)
+        self.end = _parse_date(end)
+        self._session_ready = False
+
+    # ── portal helpers ───────────────────────────────────────────────
+    def _ensure_session(self) -> None:
+        if self._session_ready:
+            return
+        # A plain GET sets the session cookie on the shared httpx client.
+        self.client.get_text(_GWEB_SESSION_PAGE, headers=_gweb_headers(), use_cache=False)
+        self._session_ready = True
+
+    def _post(self, path: str, body: dict) -> object:
+        self._ensure_session()
+        return self.client.post_json(path, json_body=body, headers=_gweb_headers())
+
+    def _resolve_zone_codes(self) -> list[tuple[str, str]]:
+        """Return [(code, name)] for the requested zones (all if None)."""
+        areas = self._post(_GWEB_AREA_LIST, {})
+        all_zones = [
+            (str(a.get("Value")).strip(), str(a.get("Text") or "").strip())
+            for a in (areas or [])
+            if a.get("Value")
+        ]
+        if not self.zones:
+            return all_zones
+        wanted: set[str] = set()
+        for z in self.zones:
+            key = str(z).strip()
+            code = _GWEB_ZONE_ALIASES.get(key.lower(), _GWEB_ZONE_ALIASES.get(key, key))
+            wanted.add(code)
+        return [(c, n) for c, n in all_zones if c in wanted]
+
+    def _stations_for_zone(self, code: str) -> list[tuple[str, str]]:
+        rows = self._post(_GWEB_STATION_LIST, {"region": code})
+        return [
+            (str(r.get("Value")).strip(), str(r.get("Text") or "").strip())
+            for r in (rows or [])
+            if r.get("Value")
+        ]
+
+    def _span(self, station_no: str) -> tuple[date | None, date | None]:
+        h = self._post(_GWEB_HISTORY, {"stationNo": station_no})
+        if not isinstance(h, dict):
+            return None, None
+        return _parse_date(h.get("AVG_MIN_DATE")), _parse_date(h.get("AVG_MAX_DATE"))
+
+    def _daily_series(self, station_no: str, lo: date, hi: date) -> list[tuple[date, float]]:
+        """Stitch the daily series over [lo, hi] in windowed chart pulls."""
+        out: list[tuple[date, float]] = []
+        w_start = lo
+        while w_start <= hi:
+            w_end = min(date(w_start.year + self.window_years, w_start.month, 1)
+                        - timedelta(days=1), hi)
+            data = self._post(
+                _GWEB_CHART,
+                {"stationNo": station_no,
+                 "startDate": w_start.isoformat(), "endDate": w_end.isoformat()},
+            )
+            arr = data.get("WaterLevelData") if isinstance(data, dict) else None
+            for i, v in enumerate(arr or []):
+                if v is None:
+                    continue
+                try:
+                    out.append((w_start + timedelta(days=i), float(v)))
+                except (TypeError, ValueError):
+                    continue
+            w_start = w_end + timedelta(days=1)
+        return out
+
+    # ── BaseCollector contract ───────────────────────────────────────
+    def fetch_raw(self, **kwargs) -> list[dict]:
+        # Build the (station, zone) work list.
+        work: list[tuple[str, str, str]] = []  # (station_no, station_name, zone_name)
+        if self.stations:
+            work = [(s, "", "") for s in self.stations]
+        else:
+            for code, zname in self._resolve_zone_codes():
+                for st, sname in self._stations_for_zone(code):
+                    work.append((st, sname, zname))
+
+        raw: list[dict] = []
+        for station_no, station_name, zone_name in work:
+            lo, hi = self._span(station_no)
+            if lo is None or hi is None:
+                logger.debug("No span for WRA gweb station %s; skipping", station_no)
+                continue
+            if self.start and self.start > lo:
+                lo = self.start
+            if self.end and self.end < hi:
+                hi = self.end
+            if lo > hi:
+                continue
+            series = self._daily_series(station_no, lo, hi)
+            raw.append({
+                "station_no": station_no,
+                "station_name": station_name or None,
+                "zone": zone_name or None,
+                "series": [(d.isoformat(), v) for d, v in series],
+            })
+        return raw
+
+    def normalise(self, raw: list[dict]) -> Sequence[GroundwaterLevel]:
+        readings: list[GroundwaterLevel] = []
+        for rec in raw:
+            series = [(_parse_date(d), v) for d, v in rec.get("series", [])]
+            series = [(d, v) for d, v in series if d is not None]
+            if not series:
+                continue
+            if self.aggregate == "daily":
+                points = [(datetime(d.year, d.month, d.day), v) for d, v in series]
+            else:
+                # Monthly mean, stamped mid-month (the SGI input).
+                buckets: dict[tuple[int, int], list[float]] = {}
+                for d, v in series:
+                    buckets.setdefault((d.year, d.month), []).append(v)
+                points = [
+                    (datetime(y, m, 15), sum(vs) / len(vs))
+                    for (y, m), vs in sorted(buckets.items())
+                ]
+            for dt, value in points:
+                readings.append(
+                    GroundwaterLevel(
+                        source=DataSource.TAIWAN_WRA,
+                        station_id=rec["station_no"],
+                        station_name=rec.get("station_name"),
+                        measurement_datetime=dt,
+                        water_level_m=value,
+                        unit="m",
+                        aquifer_name=rec.get("zone"),
+                    )
+                )
         return readings

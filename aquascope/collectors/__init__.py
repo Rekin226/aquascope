@@ -15,6 +15,7 @@ from aquascope.collectors.taiwan_datagov import TaiwanDataGovCollector
 from aquascope.collectors.taiwan_moenv import TaiwanMOENVCollector
 from aquascope.collectors.taiwan_wra import (
     TaiwanWRAGroundwaterCollector,
+    TaiwanWRAGroundwaterDailyCollector,
     TaiwanWRAReservoirCollector,
     TaiwanWRAWaterLevelCollector,
 )
@@ -39,6 +40,7 @@ __all__ = [
     "TaiwanMOENVCollector",
     "TaiwanWRAFhyCollector",
     "TaiwanWRAGroundwaterCollector",
+    "TaiwanWRAGroundwaterDailyCollector",
     "TaiwanWRAIoTCollector",
     "TaiwanWRAReservoirCollector",
     "TaiwanWRAWaterLevelCollector",

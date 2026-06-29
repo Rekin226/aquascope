@@ -5,6 +5,14 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
+- **Drought indices** (`groundwater/drought.py`, `climate/indices.py`):
+  `standardised_groundwater_index()` (SGI, Bloomfield & Marchant 2013: per
+  calendar-month non-parametric normal-scores transform) and
+  `standardized_precipitation_index()` (SPI, McKee 1993: gamma fit with zero
+  handling and configurable accumulation scale), plus `drought_events()` to
+  extract runs below a threshold from any standardised index. These make
+  groundwater-meteorological drought-propagation analysis (SGI vs SPI lag) a
+  first-class AquaScope workflow.
 - **Daily Taiwan groundwater** (`collectors/taiwan_wra.py`):
   `TaiwanWRAGroundwaterDailyCollector` reaches the sub-annual (daily)
   groundwater-level series from the WRA gweb HydroInfo portal, which the

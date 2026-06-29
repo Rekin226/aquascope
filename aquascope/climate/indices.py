@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 logger = logging.getLogger(__name__)
 
@@ -440,3 +441,67 @@ def precipitation_concentration_index(precip_monthly: pd.Series) -> float:
         return 0.0
 
     return float(np.sum(p**2) / total**2 * 100)
+
+
+def standardized_precipitation_index(
+    precip_monthly: pd.Series,
+    scale: int = 3,
+    per_month: bool = True,
+    min_per_group: int = 10,
+) -> pd.Series:
+    """Standardized Precipitation Index (SPI), McKee et al. (1993).
+
+    Monthly precipitation is accumulated over ``scale`` months, a gamma
+    distribution is fitted (with explicit zero handling), and the cumulative
+    probability is mapped to a standard-normal score. The result is unitless,
+    centred on zero, with SPI < -1 indicating meteorological drought; it is
+    directly comparable to the Standardised Groundwater Index for
+    drought-propagation analysis.
+
+    Parameters
+    ----------
+    precip_monthly:
+        Monthly precipitation totals (mm) with a ``DatetimeIndex``.
+    scale:
+        Accumulation period in months (e.g. 3 -> SPI-3). Larger scales capture
+        longer droughts that propagate to groundwater.
+    per_month:
+        When ``True`` (default), fit a separate gamma per calendar month, which
+        removes the seasonal cycle (standard practice). When ``False``, fit one
+        gamma to all accumulated values.
+    min_per_group:
+        Minimum positive values needed to fit a gamma for a group; groups with
+        fewer yield ``NaN``.
+
+    Returns
+    -------
+    pd.Series
+        SPI indexed like the accumulated series, named ``"spi"``.
+    """
+    if not isinstance(precip_monthly.index, pd.DatetimeIndex):
+        raise ValueError("precip_monthly must have a DatetimeIndex.")
+    if scale < 1:
+        raise ValueError("scale must be >= 1 month.")
+    s = precip_monthly.sort_index().astype(float)
+    acc = s.rolling(scale).sum().dropna()
+    if acc.empty:
+        raise ValueError("Series too short for the requested accumulation scale.")
+
+    spi = pd.Series(np.nan, index=acc.index, dtype=float, name="spi")
+    groups = (range(1, 13) if per_month else [None])
+    for g in groups:
+        idx = acc.index if g is None else acc.index[acc.index.month == g]
+        vals = acc.loc[idx]
+        pos = vals[vals > 0]
+        if len(pos) < min_per_group:
+            logger.debug("SPI group %s has %d positive obs (< %d); left NaN.",
+                         g, len(pos), min_per_group)
+            continue
+        # Mixed distribution: point mass at zero (prob q) + gamma on positives.
+        q = float((vals == 0).mean())
+        a, loc, scl = stats.gamma.fit(pos.values, floc=0.0)
+        cdf = q + (1.0 - q) * stats.gamma.cdf(vals.values, a, loc=loc, scale=scl)
+        cdf = np.where(vals.values == 0, q / 2.0, cdf)  # zeros -> lower half of mass
+        cdf = np.clip(cdf, 1e-6, 1 - 1e-6)
+        spi.loc[idx] = stats.norm.ppf(cdf)
+    return spi

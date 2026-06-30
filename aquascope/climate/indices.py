@@ -535,7 +535,7 @@ def spi(
     ValueError
         If *scale* < 1 or the series has fewer than ``scale + 1`` values.
 
-    References
+   References
     ----------
     McKee, T. B., Doesken, N. J., & Kleist, J. (1993). The relationship
         of drought frequency and duration to time scales. Proceedings of
@@ -543,8 +543,6 @@ def spi(
     World Meteorological Organization (2012). Standardized Precipitation
         Index User Guide. WMO-No. 1090. Geneva.
     """
-    from scipy import stats
-
     if scale < 1:
         raise ValueError(f"scale must be >= 1, got {scale}")
     if len(precipitation) < scale + 1:

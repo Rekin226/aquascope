@@ -30,7 +30,7 @@
 
 ---
 
-AquaScope unifies **19 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top — from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements** — wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **7 analysis pipelines**. Validated against the CAMELS benchmark with 820+ tests.
+AquaScope unifies **20 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top — from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements** — wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **7 analysis pipelines**. Validated against the CAMELS benchmark with 820+ tests.
 
 ---
 
@@ -121,7 +121,7 @@ print(sig["flashiness"])       # Richards-Baker flashiness index
 
 22 signatures across magnitude, variability, timing, recession, and flashiness — see [docs/features.md](docs/features.md#hydrological-analysis).
 
-### 3. Collect data from any of the 19 sources
+### 3. Collect data from any of the 20 sources
 
 ```python
 from aquascope.collectors import USGSCollector, AquastatCollector, WaporCollector
@@ -286,7 +286,7 @@ Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/d
 | Resource | What it covers |
 | :--- | :--- |
 | [Features](docs/features.md) | Full capability list — hydrology, agriculture, ML, spatial, I/O |
-| [Data sources](docs/data_sources.md) | All 19 sources, endpoints, API-key requirements |
+| [Data sources](docs/data_sources.md) | All 20 sources, endpoints, API-key requirements |
 | [Theory guide](docs/theory.md) | Equations, DOI citations, decision trees for every method |
 | [Methodology matrix](docs/methodology_matrix.md) | When to use which method |
 | [Architecture](docs/guides/architecture.md) | How AquaScope is structured internally |

@@ -8,7 +8,7 @@
 [![Tests](https://img.shields.io/badge/tests-820%2B%20passing-brightgreen.svg)](https://github.com/Rekin226/aquascope/actions)
 [![GitHub stars](https://img.shields.io/github/stars/Rekin226/aquascope?style=social)](https://github.com/Rekin226/aquascope/stargazers)
 
-AquaScope unifies **19 global water-data APIs** behind one Python schema. On top of that it layers a full scientific computing stack, from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements**, wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **7 analysis pipelines**. Validated against the CAMELS benchmark with 820+ tests.
+AquaScope unifies **20 global water-data APIs** behind one Python schema. On top of that it layers a full scientific computing stack, from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements**, wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **7 analysis pipelines**. Validated against the CAMELS benchmark with 820+ tests.
 
 ---
 
@@ -44,7 +44,7 @@ pip install "aquascope[all]"       # everything: ML, viz, spatial, dashboard
 | Non-stationary GEV                           |    ✅     |   no    | partial  |          no           |
 | Baseflow separation (Lyne-Hollick, Eckhardt) |    ✅     |   no    |    no    |          no           |
 | FAO-56 Penman–Monteith ET₀ + crop water      |    ✅     |   no    |    no    |          no           |
-| 19 unified data collectors                   |    ✅     |   no    |    no    |       per-source       |
+| 20 unified data collectors                   |    ✅     |   no    |    no    |       per-source       |
 | AI methodology recommender                   |    ✅     |   no    |    no    |          no           |
 | Interactive Streamlit dashboard              |    ✅     |   no    |    no    |          no           |
 | Free, MIT, Python-native                     |    ✅     | partial |    ✅    |        varies         |

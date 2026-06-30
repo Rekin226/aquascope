@@ -1,6 +1,6 @@
 # Data Sources
 
-AquaScope ships **19 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
+AquaScope ships **20 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
 
 Most sources emit point observations and share the unified `water_data` schema (`WaterQualitySample`, `WaterLevelReading`, `ReservoirStatus`). Three aggregate/gridded sources use purpose-built record types that match their data shape: **FAO AQUASTAT** returns country-level `AquastatRecord`, **UN SDG 6** returns `SDG6Indicator`, and **FAO WaPOR** returns gridded `WaPORObservation`.
 
@@ -18,6 +18,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [Taiwan WRA FHY](https://fhy.wra.gov.tw) | Taiwan | Real-time water level, rainfall, discharge | REST | ✅ |
 | [Taiwan WRA IoT](https://iot.wra.gov.tw) | Taiwan | Groundwater level, rainfall accumulation | REST | ✅ |
 | [Taiwan data.gov.tw](https://data.gov.tw) | Taiwan | Real-time river + groundwater level | REST | ✅ |
+| [Taiwan WRA Groundwater](https://opendata.wra.gov.tw) | Taiwan | Annual groundwater levels + well metadata (992 wells, 1992–) | REST | ✅ |
 | [USGS](https://api.waterdata.usgs.gov) | USA | Streamflow, water quality, gage height | OGC | ✅ |
 | [Water Quality Portal](https://waterqualitydata.us) | USA | Integrated WQ from 400+ agencies | REST / CSV | ✅ |
 | [GEMStat](https://gemstat.org) | Global | Freshwater quality (170+ countries) | Zenodo | ✅ |

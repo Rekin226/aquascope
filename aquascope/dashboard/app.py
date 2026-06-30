@@ -313,7 +313,7 @@ def page_home() -> None:
         AI-powered research methodology recommendations.
 
         ### Features
-        - 📊 **19 data collectors** — USGS, GEMStat, AQUASTAT, EU WFD, Japan MLIT, Korea WAMIS, WaPOR, Open-Meteo & more
+        - 📊 **20 data collectors** — USGS, GEMStat, AQUASTAT, EU WFD, Japan MLIT, Korea WAMIS, WaPOR, Open-Meteo & more
         - 🌊 **Hydrology toolkit** — flow duration curves, baseflow separation (Lyne-Hollick / Eckhardt / UKIH), recession analysis, flow signatures, flood frequency
         - 🌀 **Extreme-value analysis** — GEV / Log-Pearson III / Gumbel return levels with bootstrap confidence bounds
         - 🌾 **Agricultural water** — FAO-56 Penman-Monteith ET₀, single & dual (Kcb + Ke) crop coefficients, irrigation scheduling

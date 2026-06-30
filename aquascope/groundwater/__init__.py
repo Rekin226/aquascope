@@ -15,6 +15,11 @@ from aquascope.groundwater.aquifer import (
     theis_drawdown,
     theis_recovery,
 )
+from aquascope.groundwater.drought import (
+    DroughtEvent,
+    drought_events,
+    standardised_groundwater_index,
+)
 from aquascope.groundwater.grace import (
     DepletionResult,
     GRACEProcessor,
@@ -56,6 +61,9 @@ __all__ = [
     "trend_detection",
     "seasonal_decomposition",
     "recession_analysis",
+    "DroughtEvent",
+    "standardised_groundwater_index",
+    "drought_events",
     # recharge
     "RechargeResult",
     "water_table_fluctuation",

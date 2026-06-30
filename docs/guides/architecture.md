@@ -27,7 +27,7 @@ flowchart TB
     end
 
     subgraph Data["Data Layer"]
-        COL["Collectors · 19 sources<br/>Taiwan · USA · Global · FAO"]
+        COL["Collectors · 20 sources<br/>Taiwan · USA · Global · FAO"]
         SCHEMA["Unified Pydantic Schemas"]
         IO["Scientific I/O<br/>WaterML · HEC · SWMM · NetCDF · HDF5"]
     end

@@ -90,6 +90,36 @@ class TestTrendDetection:
             trend_detection(pd.Series([1.0, 2.0], index=_daily_index(2)))
 
 
+class TestModifiedMannKendall:
+    """Hamed-Rao and TFPW variants (optional pymannkendall dependency)."""
+
+    def _series(self):
+        pytest.importorskip("pymannkendall", reason="needs aquascope[ml]")
+        idx = pd.date_range("1992-07-01", periods=33, freq="YS")
+        rng = np.random.default_rng(1)
+        y = np.cumsum(rng.normal(-0.05, 0.3, 33)) + 10
+        return pd.Series(y, index=idx)
+
+    def test_hamed_rao_detects_decline(self):
+        r = trend_detection(self._series(), method="modified_mann_kendall")
+        assert r.trend == "decreasing"
+        assert r.method == "modified_mann_kendall"
+        assert 0.0 <= r.p_value <= 1.0
+
+    def test_tfpw_runs(self):
+        r = trend_detection(self._series(), method="tfpw")
+        assert r.trend in {"increasing", "decreasing", "no trend"}
+        assert r.method == "tfpw"
+
+    def test_serial_correlation_correction_widens_p(self):
+        # On an autocorrelated series, Hamed-Rao p should be >= plain-MK p
+        # (the variance correction reduces overconfidence).
+        s = self._series()
+        p_plain = trend_detection(s, method="mann_kendall").p_value
+        p_mod = trend_detection(s, method="modified_mann_kendall").p_value
+        assert p_mod >= p_plain - 1e-9
+
+
 class TestSeasonalDecomposition:
     def setup_method(self):
         n = 730  # 2 years of daily data

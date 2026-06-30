@@ -8,7 +8,7 @@ abstract: >-
   AquaScope is an open-source Python toolkit for unified water data
   aggregation, hydrological analysis, agricultural water management,
   and AI-powered research methodology recommendations. It provides a
-  single, coherent interface to 19 global water data sources and
+  single, coherent interface to 20 global water data sources and
   implements 26 hydrological, statistical, and agri-water methods.
 authors:
   - family-names: Ouédraogo

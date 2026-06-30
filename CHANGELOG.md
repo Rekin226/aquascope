@@ -2,6 +2,50 @@
 
 All notable changes to AquaScope are documented here.
 
+## [Unreleased]
+
+### Added
+- **Worked example** (`examples/13_groundwater_drought_sgi.py`): an end-to-end
+  case study, data to result, characterising Taiwan's 2020-2021 groundwater
+  drought. AquaScope collects daily groundwater (`TaiwanWRAGroundwaterDailyCollector`)
+  and ERA5 rainfall (`OpenMeteoCollector`) for representative aquifers, computes
+  SGI and SPI, and reports each aquifer's drought-propagation timescale (7-23
+  months) and 2021 drought severity (SGI down to ~-2, severe).
+- **Drought indices** (`groundwater/drought.py`, `climate/indices.py`):
+  `standardised_groundwater_index()` (SGI, Bloomfield & Marchant 2013: per
+  calendar-month non-parametric normal-scores transform) and
+  `standardized_precipitation_index()` (SPI, McKee 1993: gamma fit with zero
+  handling and configurable accumulation scale), plus `drought_events()` to
+  extract runs below a threshold from any standardised index. These make
+  groundwater-meteorological drought-propagation analysis (SGI vs SPI lag) a
+  first-class AquaScope workflow.
+- **Daily Taiwan groundwater** (`collectors/taiwan_wra.py`):
+  `TaiwanWRAGroundwaterDailyCollector` reaches the sub-annual (daily)
+  groundwater-level series from the WRA gweb HydroInfo portal, which the
+  open-data API does not expose (it tops out at annual statistics). Per-well
+  records span roughly 2005-2025 (Zhuoshui/Choushui fan back to the late
+  1990s). Supports zone aliases, date clipping, and `aggregate="monthly"`
+  (the input to a Standardised Groundwater Index) or `"daily"`. Rate-limits
+  and caches every request. This unlocks monthly SGI and SPI/SPEI
+  drought-propagation analysis on AquaScope-collected data.
+- **Well coordinates for daily groundwater**: `TaiwanWRAGroundwaterDailyCollector`
+  gains `with_metadata=True` (default), joining the open-data 井況 well-status
+  dataset to populate each reading's `location` (TWD97 → WGS84) and
+  `well_depth_m`. The gweb station id matches the suffix of the open-data
+  `wellidentifier` after `GW` (with a well-name fallback), making the daily
+  series spatially complete.
+
+### Changed
+- `CachedHTTPClient.post_json()` now sends a JSON body and shares the retry,
+  rate-limit, and body-keyed disk-cache behaviour of `get_json()` (previously
+  a thin wrapper with no body, retries, or caching).
+
+### Fixed
+- `TaiwanWRAGroundwaterDailyCollector` now drops the gweb missing-data sentinel
+  (`-9998`) and de-duplicates window overlaps (the portal can return data past
+  the requested `endDate`, so the same well-day appeared twice with different
+  values; the later window now wins). Previously these leaked into the series.
+
 ## [0.7.0] — 2026-06-26
 
 Interoperability and uncertainty: AquaScope now composes with the scientific-Python

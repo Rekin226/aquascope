@@ -50,7 +50,7 @@ print(len(records), "records")
 print(records[0])
 ```
 
-Every collector returns **typed Pydantic records**. Point-observation sources (river/groundwater level, water quality, reservoir status) share the unified `water_data` schema, so you can swap, for example, `USGSCollector` for any other point source and the rest of your code stays the same. Aggregate and gridded sources use purpose-built record types that fit their data: `AquastatCollector` returns country-level `AquastatRecord`, `SDG6Collector` returns `SDG6Indicator`, and `WaPORCollector` returns gridded `WaPORObservation`. See [Data sources](data_sources.md) for which schema each of the [19 sources](data_sources.md) emits.
+Every collector returns **typed Pydantic records**. Point-observation sources (river/groundwater level, water quality, reservoir status) share the unified `water_data` schema, so you can swap, for example, `USGSCollector` for any other point source and the rest of your code stays the same. Aggregate and gridded sources use purpose-built record types that fit their data: `AquastatCollector` returns country-level `AquastatRecord`, `SDG6Collector` returns `SDG6Indicator`, and `WaPORCollector` returns gridded `WaPORObservation`. See [Data sources](data_sources.md) for which schema each of the [20 sources](data_sources.md) emits.
 
 ---
 
@@ -144,7 +144,7 @@ You've now done end-to-end: collect, analyze, diagnose, recommend. The natural n
 - **[Features](features.md)**: the complete capability catalog.
 - **[Methodology matrix](methodology_matrix.md)**: when to use which method, decision-tree style.
 - **[Theory guide](theory.md)**: equations, citations, and decision trees for every method (668 lines, the closest thing AquaScope has to a textbook).
-- **[Data sources](data_sources.md)**: all 19 collectors with endpoint details and API-key requirements.
+- **[Data sources](data_sources.md)**: all 20 collectors with endpoint details and API-key requirements.
 - **[Integration guides](integration_guides/xarray_integration.md)**: interop with xarray, QGIS, R.
 
 Stuck? Check the [FAQ](faq.md), [troubleshooting](troubleshooting.md), or open a [discussion](https://github.com/Rekin226/aquascope/discussions).

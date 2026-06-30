@@ -189,22 +189,55 @@ def well_hydrograph(
     return HydrographResult(series=clean, stats=desc, correlation=corr, lag_days=lag)
 
 
+_MODIFIED_MK_METHODS = {
+    "modified_mann_kendall": "hamed_rao_modification_test",
+    "tfpw": "trend_free_pre_whitening_modification_test",
+}
+
+
+def _modified_mann_kendall(y: np.ndarray, method: str) -> WellTrendResult:
+    """Run an autocorrelation-aware Mann-Kendall variant via pymannkendall.
+
+    ``modified_mann_kendall`` applies the Hamed & Rao (1998) variance
+    correction for serial correlation; ``tfpw`` applies Yue et al. (2002)
+    trend-free pre-whitening. Both guard against the inflated significance
+    that plain MK gives on autocorrelated series (e.g. annual groundwater
+    levels with multi-year persistence).
+    """
+    from aquascope.utils.imports import require
+
+    mk = require("pymannkendall", feature="modified Mann-Kendall", group="ml")
+    result = getattr(mk, _MODIFIED_MK_METHODS[method])(y)
+    return WellTrendResult(
+        trend=result.trend,
+        p_value=float(result.p),
+        slope=float(result.slope),
+        intercept=float(result.intercept),
+        z_statistic=float(result.z),
+        method=method,
+    )
+
+
 def trend_detection(
     levels: pd.Series,
     method: str = "mann_kendall",
 ) -> WellTrendResult:
-    """Detect monotonic trend using Mann-Kendall test with Sen's slope.
-
-    Uses a pure scipy implementation — no external ``pymannkendall``
-    dependency required.
+    """Detect monotonic trend using a Mann-Kendall test with Sen's slope.
 
     Parameters
     ----------
     levels:
         Water-level series with DatetimeIndex.
     method:
-        Trend detection method. Currently only ``"mann_kendall"`` is
-        supported.
+        - ``"mann_kendall"`` (default): the original test, pure-scipy, no
+          extra dependency.
+        - ``"modified_mann_kendall"``: Hamed & Rao (1998) variance correction
+          for serial correlation (recommended for autocorrelated series such
+          as annual groundwater levels).
+        - ``"tfpw"``: trend-free pre-whitening (Yue et al. 2002).
+
+        The modified variants delegate to the validated ``pymannkendall``
+        package (the optional ``[ml]`` extra).
 
     Returns
     -------
@@ -216,10 +249,16 @@ def trend_detection(
     ValueError
         If series has fewer than 3 observations or method is unknown.
     """
-    if method != "mann_kendall":
-        raise ValueError(f"Unknown method: {method!r}. Supported: 'mann_kendall'.")
     if len(levels) < 3:
         raise ValueError("Need at least 3 data points for trend detection.")
+
+    if method in _MODIFIED_MK_METHODS:
+        return _modified_mann_kendall(levels.dropna().values.astype(float), method)
+    if method != "mann_kendall":
+        raise ValueError(
+            f"Unknown method: {method!r}. Supported: 'mann_kendall', "
+            f"'modified_mann_kendall', 'tfpw'."
+        )
 
     y = levels.dropna().values.astype(float)
     n = len(y)

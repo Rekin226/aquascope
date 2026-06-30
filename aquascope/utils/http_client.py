@@ -255,24 +255,63 @@ class CachedHTTPClient:
     def post_json(
         self,
         path: str,
+        json_body: Any | None = None,
         params: dict | None = None,
-        headers: dict | None = None,) -> Any:
+        headers: dict | None = None,
+        use_cache: bool = True,
+    ) -> Any:
+        """POST *path* (optionally with a JSON body) and return parsed JSON.
+
+        Shares the retry, rate-limit, and disk-cache behaviour of
+        :meth:`get_json`. The cache key includes the JSON body, so different
+        payloads to the same URL cache independently. Use this for portals that
+        expose data through ``POST`` actions (e.g. the WRA gweb HydroInfo
+        endpoints), where caching is important to avoid re-hammering a server
+        that throttles request bursts.
+        """
         if path.startswith(("http://", "https://")):
             url = path
         else:
             url = f"{self.base_url}/{path.lstrip('/')}" if self.base_url else path
 
-        if self.rate_limiter:
-            self.rate_limiter.wait_if_needed()
+        # Cache key folds in the JSON body so distinct payloads do not collide.
+        cache_params = dict(params or {})
+        if json_body is not None:
+            cache_params["__body__"] = json_body
+        if use_cache:
+            key = f"{self._cache_key(url, cache_params)}-post"
+            cached = self._read_cache(key)
+            if cached is not None:
+                logger.debug("Cache hit (POST) for %s", url)
+                return cached
 
-        resp = self._client.post(
-            url,
-            params=params,
-            headers=headers,
-        )
+        last_exc: Exception | None = None
+        for attempt in range(1, self.retries + 1):
+            if self.rate_limiter:
+                self.rate_limiter.wait_if_needed()
+            try:
+                resp = self._client.post(
+                    url, json=json_body, params=params, headers=headers
+                )
+                resp.raise_for_status()
+                data = self._parse_response_json(resp)
+                if use_cache:
+                    self._write_cache(key, data)
+                return data
+            except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+                last_exc = exc
+                wait = 2**attempt
+                logger.warning(
+                    "Attempt %d/%d failed for POST %s: %s — retrying in %ds",
+                    attempt,
+                    self.retries,
+                    url,
+                    exc,
+                    wait,
+                )
+                time.sleep(wait)
 
-        resp.raise_for_status()
-        return self._parse_response_json(resp)
+        raise RuntimeError(f"All {self.retries} attempts failed for POST {url}") from last_exc
 
     def close(self) -> None:
         self._client.close()

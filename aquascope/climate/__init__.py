@@ -47,12 +47,18 @@ __all__ = [
     "evaluate_downscaling",
     "quantile_delta_mapping",
     "quantile_mapping",
-   # indices
+  # indices
     "AridityResult",
     "CDDResult",
     "CWDResult",
     "HeatWaveResult",
+    "aridity_index",
+    "consecutive_dry_days",
+    "consecutive_wet_days",
     "drought_class",
+    "heat_wave_index",
+    "palmer_drought_severity_index",
+    "precipitation_concentration_index",
     "standardized_precipitation_index",
     # scenarios
     "DroughtStats",

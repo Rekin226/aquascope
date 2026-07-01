@@ -14,7 +14,6 @@ from aquascope.climate.indices import (
     CDDResult,
     CWDResult,
     HeatWaveResult,
-    SPIResult,
     aridity_index,
     consecutive_dry_days,
     consecutive_wet_days,
@@ -22,7 +21,7 @@ from aquascope.climate.indices import (
     heat_wave_index,
     palmer_drought_severity_index,
     precipitation_concentration_index,
-    spi,
+    standardized_precipitation_index,
 )
 from aquascope.climate.scenarios import (
     DroughtStats,
@@ -53,15 +52,8 @@ __all__ = [
     "CDDResult",
     "CWDResult",
     "HeatWaveResult",
-    "SPIResult",
-    "aridity_index",
-    "consecutive_dry_days",
-    "consecutive_wet_days",
     "drought_class",
-    "heat_wave_index",
-    "palmer_drought_severity_index",
-    "precipitation_concentration_index",
-    "spi",
+    "standardized_precipitation_index",
     # scenarios
     "DroughtStats",
     "ReturnPeriodShift",

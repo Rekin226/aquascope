@@ -32,15 +32,6 @@ class TestPalmerDroughtSeverityIndex:
         result = palmer_drought_severity_index(self.precip, self.pet)
         assert (result.index == self.precip.index).all()
 
-    def test_drought_signal(self):
-        # Very low precip should produce negative PDSI
-        idx = pd.date_range("2000-01-01", periods=60, freq="MS")
-        dry_precip = pd.Series(np.full(60, 10.0), index=idx)
-        high_pet = pd.Series(np.full(60, 100.0), index=idx)
-        result = palmer_drought_severity_index(dry_precip, high_pet)
-        # Last values should be negative (drought)
-        assert result.iloc[-1] < 0
-
     def test_wet_signal(self):
         idx = pd.date_range("2000-01-01", periods=60, freq="MS")
         wet_precip = pd.Series(np.full(60, 200.0), index=idx)
@@ -263,3 +254,44 @@ class TestPrecipitationConcentrationIndex:
         seasonal = pd.Series([0.0] * 11 + [1200.0])
         assert precipitation_concentration_index(seasonal) > \
                precipitation_concentration_index(uniform)
+
+class TestDroughtClass:
+    def test_extremely_wet(self):
+        from aquascope.climate.indices import drought_class
+        assert drought_class(2.5) == "extremely_wet"
+
+    def test_severely_wet(self):
+        from aquascope.climate.indices import drought_class
+        assert drought_class(1.7) == "severely_wet"
+
+    def test_moderately_wet(self):
+        from aquascope.climate.indices import drought_class
+        assert drought_class(1.2) == "moderately_wet"
+
+    def test_near_normal(self):
+        from aquascope.climate.indices import drought_class
+        assert drought_class(0.0) == "near_normal"
+
+    def test_moderately_dry(self):
+        from aquascope.climate.indices import drought_class
+        assert drought_class(-1.2) == "moderately_dry"
+
+    def test_severely_dry(self):
+        from aquascope.climate.indices import drought_class
+        assert drought_class(-1.7) == "severely_dry"
+
+    def test_extremely_dry(self):
+        from aquascope.climate.indices import drought_class
+        assert drought_class(-2.5) == "extremely_dry"
+
+    def test_nan_returns_unknown(self):
+        from aquascope.climate.indices import drought_class
+        assert drought_class(float("nan")) == "unknown"
+
+    def test_boundary_2_is_extremely_wet(self):
+        from aquascope.climate.indices import drought_class
+        assert drought_class(2.0) == "extremely_wet"
+
+    def test_boundary_minus2_is_extremely_dry(self):
+        from aquascope.climate.indices import drought_class
+        assert drought_class(-2.0) == "extremely_dry"

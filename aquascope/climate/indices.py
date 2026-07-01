@@ -442,7 +442,6 @@ def precipitation_concentration_index(precip_monthly: pd.Series) -> float:
 
     return float(np.sum(p**2) / total**2 * 100)
 
-
 def standardized_precipitation_index(
     precip_monthly: pd.Series,
     scale: int = 3,
@@ -505,3 +504,43 @@ def standardized_precipitation_index(
         cdf = np.clip(cdf, 1e-6, 1 - 1e-6)
         spi.loc[idx] = stats.norm.ppf(cdf)
     return spi
+
+
+def drought_class(spi_value: float) -> str:
+    """Map an SPI value to a McKee et al. (1993) drought/wet category.
+
+    Parameters
+    ----------
+    spi_value : float
+        A single SPI value.
+
+    Returns
+    -------
+    str
+        One of: ``'extremely_wet'``, ``'severely_wet'``,
+        ``'moderately_wet'``, ``'near_normal'``,
+        ``'moderately_dry'``, ``'severely_dry'``, ``'extremely_dry'``,
+        or ``'unknown'`` for missing values.
+
+    References
+    ----------
+    McKee, T. B., Doesken, N. J., & Kleist, J. (1993). The relationship
+        of drought frequency and duration to time scales. Proceedings of
+        the 8th Conference on Applied Climatology, 17-22 January 1993,
+        Anaheim, California. American Meteorological Society.
+    """
+    if np.isnan(spi_value):
+        return "unknown"
+    if spi_value >= 2.0:
+        return "extremely_wet"
+    if spi_value >= 1.5:
+        return "severely_wet"
+    if spi_value >= 1.0:
+        return "moderately_wet"
+    if spi_value > -1.0:
+        return "near_normal"
+    if spi_value > -1.5:
+        return "moderately_dry"
+    if spi_value > -2.0:
+        return "severely_dry"
+    return "extremely_dry"

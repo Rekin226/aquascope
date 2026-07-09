@@ -22,6 +22,7 @@ env/
 data/cache/
 data/raw/
 data/processed/
+aquascope/collectors/data/
 
 # OS
 .DS_Store

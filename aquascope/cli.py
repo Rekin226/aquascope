@@ -70,6 +70,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         CopernicusCollector,
         EUWFDCollector,
         GEMStatCollector,
+        HubeauHydrometrieCollector,
         JapanMLITCollector,
         KoreaWAMISCollector,
         OpenMeteoCollector,
@@ -108,6 +109,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "japan_mlit": lambda: JapanMLITCollector(),
         "korea_wamis": lambda: KoreaWAMISCollector(),
         "india_wris": lambda: IndiaWRISCollector(),
+        "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
     }
 
     if source not in collector_map:
@@ -366,6 +368,7 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
         "openmeteo": ("Open-Meteo", "Global", "ERA5 reanalysis, weather forecasts, GloFAS discharge", "https://open-meteo.com"),
         "copernicus": ("Copernicus CDS", "Global", "GloFAS river discharge forecasts", "https://cds.climate.copernicus.eu"),
         "wapor": ("FAO WaPOR", "Global", "Satellite ET, biomass, and water productivity", "https://www.fao.org/in-action/remote-sensing-for-water-productivity"),
+        "hubeau_hydrometrie": ("Hub'Eau", "France", "Hydrometrie", "https://hubeau.eaufrance.fr/api/v2/hydrometrie"),
     }
 
     for src in DataSource:
@@ -912,7 +915,7 @@ def main() -> None:
             "taiwan_moenv", "taiwan_wra_level", "taiwan_wra_reservoir",
             "taiwan_wra_fhy", "taiwan_wra_iot", "taiwan_datagov",
             "usgs", "sdg6", "gemstat", "aquastat", "taiwan_civil_iot", "wqp",
-            "openmeteo", "copernicus", "wapor", "eu_wfd",
+            "openmeteo", "copernicus", "wapor", "eu_wfd", "hubeau_hydrometrie"
         ],
         help="Data source to collect from",
     )

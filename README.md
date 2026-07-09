@@ -264,7 +264,7 @@ Run `aquascope --help` for the full command list.
 15 unified data sources spanning four regions:
 
 - 🌎 **Americas** — USGS (streamflow + WQ), Water Quality Portal (400+ agencies)
-- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5
+- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / Civil IoT / DataGov, Japan MLIT, Korea WAMIS
 - 🌐 **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo, FAO AQUASTAT, FAO WaPOR
 

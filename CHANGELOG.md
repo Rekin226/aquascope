@@ -5,6 +5,17 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [0.8.0] - 2026-07-10
+
+Groundwater drought: daily Taiwan groundwater data, SGI and SPI drought
+indices, and an end-to-end drought-propagation case study.
+
+### Added
 - **Worked example** (`examples/13_groundwater_drought_sgi.py`): an end-to-end
   case study, data to result, characterising Taiwan's 2020-2021 groundwater
   drought. AquaScope collects daily groundwater (`TaiwanWRAGroundwaterDailyCollector`)

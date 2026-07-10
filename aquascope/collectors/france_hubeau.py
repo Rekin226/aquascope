@@ -143,6 +143,7 @@ class HubeauHydrometrieCollector(BaseCollector):
 
     def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample]:
         samples: list[WaterQualitySample] = []
+        skipped = 0
         for row in raw:
             try:
                 grandeur = row.get("grandeur_hydro", "")
@@ -151,6 +152,7 @@ class HubeauHydrometrieCollector(BaseCollector):
 
                 val = row.get("resultat_obs")
                 if val is None:
+                    skipped += 1
                     continue
 
                 # observations_tr includes coordinates directly on each row -
@@ -158,18 +160,29 @@ class HubeauHydrometrieCollector(BaseCollector):
                 lat, lon = row.get("latitude"), row.get("longitude")
                 loc = GeoLocation(latitude=lat, longitude=lon) if lat is not None and lon is not None else None
 
+                # Hub'Eau returns date_obs with a trailing "Z". datetime.fromisoformat() only
+                # accepts a bare "Z" on Python 3.11+; normalise it explicitly so this works on 3.10 too. 
+                # Stored tz-naive to match the convention used by other collectors in this codebase.
                 samples.append(
                     WaterQualitySample(
                         source=DataSource.HUBEAU,
                         station_id=row["code_station"],
                         station_name=row.get("libelle_station"),  # not present on this endpoint; stays None
                         location=loc,
-                        sample_datetime=datetime.fromisoformat(row["date_obs"]),
+                        sample_datetime=datetime.fromisoformat(row["date_obs"].replace("Z", "+00:00")).replace(tzinfo=None),
                         parameter=label,
                         value=float(val),
                         unit=unit,
                     )
                 )
             except (ValueError, KeyError, TypeError) as exc:
+                skipped += 1
                 logger.debug("Skipping Hub'Eau row: %s", exc)
+
+        if skipped:
+            logger.warning(
+                "Hub'Eau normalise(): skipped %d/%d row(s) (missing/invalid fields)",
+                skipped,
+                len(raw),
+            )
         return samples

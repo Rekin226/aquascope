@@ -28,6 +28,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [FAO AQUASTAT](https://www.fao.org/aquastat) | Global | Country-level water withdrawal, irrigation | FAOSTAT API | ✅ |
 | [FAO WaPOR](https://www.fao.org/in-action/remote-sensing-for-water-productivity) | Global | Satellite ET, biomass, water productivity | REST | ✅ |
 | [EU WFD](https://www.eea.europa.eu) | Europe | Water Framework Directive status | REST | ✅ |
+| [Hub'Eau](https://hubeau.eaufrance.fr/api/v2/hydrometrie) | France | River water level, discharge | REST | ✅ |
 | [Japan MLIT](https://www.mlit.go.jp) | Japan | Hydrometeorology, river observations | REST | ✅ |
 | [Korea WAMIS](https://www.wamis.go.kr) | Korea | Hydrology, dam operations | REST | ✅ |
 | [India WRIS](https://indiawris.gov.in) | India | River water level | REST | ✅ |
@@ -48,6 +49,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | Copernicus CDS | **Yes** | [Register](https://cds.climate.copernicus.eu/user/register) — free |
 | FAO AQUASTAT / WaPOR | No | Open access |
 | EU WFD | No | Open access |
+| Hub'Eau | No | Open access |
 | Japan MLIT / Korea WAMIS | No | Open access |
 
 ---

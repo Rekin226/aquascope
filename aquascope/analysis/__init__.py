@@ -36,8 +36,14 @@ from aquascope.analysis.quality import (
     preprocess,
     print_quality_report,
 )
+from aquascope.analysis.water_quality_index import (
+    CCMEWQIResult,
+    ccme_wqi,
+    wqi_category,
+)
 
 __all__ = [
+    "CCMEWQIResult",
     "ChangePoint",
     "ChangePointResult",
     "CopulaResult",
@@ -46,6 +52,7 @@ __all__ = [
     "QualityReport",
     "assess_quality",
     "binary_segmentation",
+    "ccme_wqi",
     "compare_copulas",
     "copula_density",
     "copula_function",
@@ -66,4 +73,5 @@ __all__ = [
     "regime_shift_detector",
     "tail_dependence",
     "to_pseudo_observations",
+    "wqi_category",
 ]

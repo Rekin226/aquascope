@@ -161,7 +161,7 @@ class HubeauHydrometrieCollector(BaseCollector):
                 loc = GeoLocation(latitude=lat, longitude=lon) if lat is not None and lon is not None else None
 
                 # Hub'Eau returns date_obs with a trailing "Z". datetime.fromisoformat() only
-                # accepts a bare "Z" on Python 3.11+; normalise it explicitly so this works on 3.10 too. 
+                # accepts a bare "Z" on Python 3.11+; normalise it explicitly so this works on 3.10 too.
                 # Stored tz-naive to match the convention used by other collectors in this codebase.
                 samples.append(
                     WaterQualitySample(

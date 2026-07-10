@@ -15,8 +15,8 @@ authors:
     given-names: Abdoul Rachid
     orcid: "https://orcid.org/0000-0002-4616-4153"
     affiliation: "National Central University, Taiwan"
-version: 0.7.0
-date-released: "2026-06-26"
+version: 0.8.0
+date-released: "2026-07-10"
 license: MIT
 repository-code: https://github.com/Rekin226/aquascope
 url: https://rekin226.github.io/aquascope
@@ -55,8 +55,8 @@ preferred-citation:
     - family-names: Ouédraogo
       given-names: Abdoul Rachid
       orcid: "https://orcid.org/0000-0002-4616-4153"
-  version: 0.7.0
-  date-released: "2026-06-26"
+  version: 0.8.0
+  date-released: "2026-07-10"
   license: MIT
   repository-code: https://github.com/Rekin226/aquascope
   url: https://rekin226.github.io/aquascope

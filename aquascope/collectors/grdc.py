@@ -145,30 +145,99 @@ class GRDCCollector(BaseCollector):
         return rows
 
     def _fetch_rseg(self) -> list[dict]:
-        """Fetch the RSEG satellite discharge extension from DaRUS (Dataverse API)."""
-        import csv
-        import io
+        """
+        Fetch the RSEG satellite discharge extension from DaRUS.
+
+        RSEG is distributed as a single NetCDF file (RSEG_V01.nc, ~200MB),
+        not CSV — see https://darus.uni-stuttgart.de/dataset.xhtml?persistentId=doi:10.18419/darus-3558.
+
+        Per Elmi et al. 2024 (Scientific Data), each station/time record carries
+        a "flag" (0 = in-situ, 1-3 = different remote-sensing methods). We only
+        emit flag >= 1 rows here as "satellite" — flag == 0 rows are the same
+        in-situ data already covered by the Zenodo in-situ source, and including
+        them here would double-count records.
+
+        Exact NetCDF variable names are resolved from a candidate list rather
+        than hardcoded, since they haven't been confirmed against the live file
+        in this environment. If none of the candidates match, a ValueError is
+        raised listing the real variable names — update _RSEG_VAR_CANDIDATES
+        with the correct name and re-run.
+        """
+        import hashlib
 
         import httpx
+        import xarray as xr
 
         dataset = self.client.get_json(DARUS_DATASET_API)
         files = dataset.get("data", {}).get("latestVersion", {}).get("files", [])
-        csv_files = [f for f in files if f["dataFile"]["contentType"] == "text/csv"]
-        if not csv_files:
-            logger.warning("GRDC/RSEG: no CSV files found in DaRUS dataset")
+        nc_file = next((f for f in files if f["dataFile"]["filename"].endswith(".nc")), None)
+        if nc_file is None:
+            logger.warning("GRDC/RSEG: no NetCDF file found in DaRUS dataset")
             return []
 
-        raw: list[dict] = []
-        for f in csv_files:
-            file_id = f["dataFile"]["id"]
-            url = DARUS_FILE_DOWNLOAD.format(file_id=file_id)
-            with httpx.stream("GET", url, follow_redirects=True, timeout=300) as resp:
+        file_id = nc_file["dataFile"]["id"]
+        checksum = nc_file["dataFile"].get("md5", str(file_id))
+        url = DARUS_FILE_DOWNLOAD.format(file_id=file_id)
+
+        cache_dir = Path("data/cache")
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_key = hashlib.md5(checksum.encode()).hexdigest()
+        nc_path = cache_dir / f"grdc_rseg_{cache_key}.nc"
+
+        if not nc_path.exists():
+            logger.info("GRDC/RSEG: downloading RSEG_V01.nc (~200MB) — one-time download…")
+            with httpx.stream("GET", url, follow_redirects=True, timeout=1800) as resp:
                 resp.raise_for_status()
-                content = b"".join(resp.iter_bytes()).decode("utf-8")
-            reader = csv.DictReader(io.StringIO(content))
-            for row in reader:
-                raw.append({**row, "source_type": "satellite"})
+                with nc_path.open("wb") as fh:
+                    for chunk in resp.iter_bytes(chunk_size=1_048_576):
+                        fh.write(chunk)
+        else:
+            logger.debug("GRDC/RSEG: using cached NetCDF %s", nc_path)
+
+        with xr.open_dataset(nc_path) as ds:
+            var = {
+                field: self._resolve_var(ds, field, candidates)
+                for field, candidates in self._RSEG_VAR_CANDIDATES.items()
+            }
+            df = ds[list(var.values())].to_dataframe().reset_index()
+            df = df.rename(columns={v: k for k, v in var.items()})
+
+        # Drop in-situ rows (flag == 0) — already covered by the Zenodo source.
+        if "flag" in df.columns:
+            df = df[df["flag"] >= 1]
+
+        df = df.dropna(subset=["discharge"])
+        raw = df.to_dict("records")
+        for row in raw:
+            row["source_type"] = "satellite"
+            row["station_id"] = str(row.get("station_id", row.get("grdc_no", "")))
+            # normalise() expects an ISO date string under "date", not a
+            # pandas/numpy Timestamp under "time".
+            ts = row.pop("time", None)
+            if ts is not None:
+                row["date"] = ts.isoformat()[:10] if hasattr(ts, "isoformat") else str(ts)[:10]
         return raw
+
+    _RSEG_VAR_CANDIDATES: dict[str, tuple[str, ...]] = {
+        "discharge": ("Q", "discharge", "Qmm", "Q_m3s"),
+        "uncertainty": ("Q_uncertainty", "uncertainty", "Q_error", "error"),
+        "flag": ("flag", "source_flag", "data_flag"),
+        "station_id": ("grdc_no", "GRDC_No", "station_id", "id"),
+        "latitude": ("lat", "latitude"),
+        "longitude": ("lon", "longitude"),
+        "time": ("time", "date"),
+    }
+
+    @staticmethod
+    def _resolve_var(ds, field: str, candidates: tuple[str, ...]) -> str:
+        for name in candidates:
+            if name in ds.variables:
+                return name
+        raise ValueError(
+            f"GRDC/RSEG: could not resolve a NetCDF variable for '{field}' "
+            f"(tried {candidates}). Actual variables in file: {list(ds.variables)}. "
+            f"Update GRDCCollector._RSEG_VAR_CANDIDATES['{field}'] with the correct name."
+        )
 
     def normalise(self, raw: list[dict]) -> Sequence[StreamflowReading]:
         records: list[StreamflowReading] = []

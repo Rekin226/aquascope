@@ -136,12 +136,108 @@ class TestGRDCFetchRaw:
         result = collector.fetch_raw(source_type="in_situ")
         assert result == []
 
-    def test_fetch_raw_no_csv_in_darus_dataset(self):
+    def test_fetch_raw_no_nc_file_in_darus_dataset(self):
         mock_client = MagicMock()
         mock_client.get_json.return_value = {"data": {"latestVersion": {"files": []}}}
         collector = GRDCCollector(client=mock_client)
         result = collector.fetch_raw(source_type="satellite")
         assert result == []
+
+
+class TestGRDCResolveVar:
+    def test_resolves_first_matching_candidate(self):
+        import xarray as xr
+
+        ds = xr.Dataset({"Q": (("time",), [1.0, 2.0])})
+        assert GRDCCollector._resolve_var(ds, "discharge", ("Q", "discharge")) == "Q"
+
+    def test_falls_through_to_second_candidate(self):
+        import xarray as xr
+
+        ds = xr.Dataset({"discharge": (("time",), [1.0, 2.0])})
+        assert GRDCCollector._resolve_var(ds, "discharge", ("Q", "discharge")) == "discharge"
+
+    def test_raises_with_actual_variable_names_when_no_match(self):
+        import xarray as xr
+
+        ds = xr.Dataset({"totally_unrelated_var": (("time",), [1.0])})
+        try:
+            GRDCCollector._resolve_var(ds, "discharge", ("Q", "discharge"))
+            assert False, "Should have raised ValueError"
+        except ValueError as exc:
+            assert "totally_unrelated_var" in str(exc)
+            assert "discharge" in str(exc)
+
+
+class TestGRDCRSEGParsing:
+    """End-to-end tests against a synthetic NetCDF file mirroring RSEG's known
+    structure (see Elmi et al. 2024, Scientific Data): a (time, station_id)
+    discharge grid with an uncertainty grid and a provenance flag
+    (0=in-situ, 1-3=different remote-sensing methods).
+    """
+
+    @staticmethod
+    def _build_fixture(tmp_path):
+        import numpy as np
+        import pandas as pd
+        import xarray as xr
+
+        ds = xr.Dataset(
+            {
+                "Q": (
+                    ("time", "station_id"),
+                    np.array(
+                        [
+                            [45.2, 100.1, 8.5],
+                            [47.8, 101.0, np.nan],
+                            [46.5, 99.5, 8.9],
+                        ]
+                    ),
+                ),
+                "Q_uncertainty": (("time", "station_id"), np.full((3, 3), 5.0)),
+                "flag": (("time", "station_id"), np.array([[0, 1, 2], [0, 1, 2], [1, 1, 2]])),
+                "lat": (("station_id",), np.array([51.2, 10.0, -3.5])),
+                "lon": (("station_id",), np.array([7.9, 20.0, 29.1])),
+            },
+            coords={
+                "time": pd.date_range("2020-01-01", periods=3, freq="MS"),
+                "station_id": ["6435060", "1234567", "RSEG_00123"],
+            },
+        )
+        path = tmp_path / "fixture_rseg.nc"
+        ds.to_netcdf(path)
+        return path
+
+    def test_flag_zero_rows_are_excluded(self, tmp_path):
+        import xarray as xr
+
+        path = self._build_fixture(tmp_path)
+        with xr.open_dataset(path) as ds:
+            var = {
+                field: GRDCCollector._resolve_var(ds, field, cands)
+                for field, cands in GRDCCollector._RSEG_VAR_CANDIDATES.items()
+            }
+            df = ds[list(var.values())].to_dataframe().reset_index()
+            df = df.rename(columns={v: k for k, v in var.items()})
+        # Station 6435060 has flag=0 for its first two timesteps and flag=1
+        # for its third — only the flag=1 row should survive filtering.
+        filtered = df[df["flag"] >= 1]
+        station_rows = filtered[filtered["station_id"] == "6435060"]
+        assert len(station_rows) == 1
+
+    def test_nan_discharge_rows_are_dropped(self, tmp_path):
+        import xarray as xr
+
+        path = self._build_fixture(tmp_path)
+        with xr.open_dataset(path) as ds:
+            var = {
+                field: GRDCCollector._resolve_var(ds, field, cands)
+                for field, cands in GRDCCollector._RSEG_VAR_CANDIDATES.items()
+            }
+            df = ds[list(var.values())].to_dataframe().reset_index()
+            df = df.rename(columns={v: k for k, v in var.items()})
+        df = df.dropna(subset=["discharge"])
+        assert not df["discharge"].isna().any()
 
 
 class TestGRDCParseStationFile:

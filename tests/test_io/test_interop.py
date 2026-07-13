@@ -17,9 +17,21 @@ from aquascope.io.interop import records_to_geodataframe, records_to_xarray
 from aquascope.schemas.water_data import (
     DataSource,
     GeoLocation,
+    StreamflowReading,
     WaterLevelReading,
     WaterQualitySample,
 )
+
+
+def _sf(station, dt, discharge, source_type="in_situ", loc=None):
+    return StreamflowReading(
+        source=DataSource.GRDC,
+        station_id=station,
+        reading_datetime=dt,
+        discharge_cms=discharge,
+        source_type=source_type,
+        location=loc,
+    )
 
 
 def _wq(station, dt, param, value, unit="mg/l", loc=None):
@@ -82,6 +94,31 @@ class TestRecordsToXarray:
         assert ds["water_level"].attrs.get("units") == "m"
         assert set(ds.dims) == {"time", "station_id"}
 
+    def test_streamflow_records(self):
+        ds = records_to_xarray(
+            [
+                _sf("6435060", datetime(2026, 1, 1), 45.2),
+                _sf("6435060", datetime(2026, 2, 1), 47.8),
+            ]
+        )
+        assert "discharge" in ds.data_vars
+        assert ds["discharge"].attrs.get("units") == "m3/s"
+        assert set(ds.dims) == {"time", "station_id"}
+
+    def test_streamflow_does_not_collide_with_water_level_branch(self):
+        # Regression test: StreamflowReading shares reading_datetime with
+        # WaterLevelReading, so discharge_cms must be checked first or this
+        # raises AttributeError trying to read r.water_level.
+        ds = records_to_xarray([_sf("6435060", datetime(2026, 1, 1), 45.2)])
+        assert "water_level" not in ds.data_vars
+        assert "discharge" in ds.data_vars
+
+    def test_streamflow_station_coords_present(self):
+        loc = GeoLocation(latitude=51.2, longitude=7.9)
+        ds = records_to_xarray([_sf("6435060", datetime(2026, 1, 1), 45.2, loc=loc)])
+        assert float(ds["lat"].sel(station_id="6435060")) == 51.2
+        assert float(ds["lon"].sel(station_id="6435060")) == 7.9
+
     def test_empty_input(self):
         ds = records_to_xarray([])
         assert len(ds.data_vars) == 0
@@ -110,8 +147,13 @@ class TestRecordsToGeoDataFrame:
         gdf = records_to_geodataframe(
             [
                 _wq("S1", datetime(2026, 1, 1), "DO", 8.5, loc=None),
-                _wq("S2", datetime(2026, 1, 1), "DO", 8.0,
-                    loc=GeoLocation(latitude=1.0, longitude=2.0)),
+                _wq(
+                    "S2",
+                    datetime(2026, 1, 1),
+                    "DO",
+                    8.0,
+                    loc=GeoLocation(latitude=1.0, longitude=2.0),
+                ),
             ]
         )
         assert len(gdf) == 2

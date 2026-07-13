@@ -45,7 +45,8 @@ def _attach_station_coords(ds: xarray.Dataset, loc_map: dict[str, Any]) -> xarra
 def records_to_xarray(records: Sequence[Any]) -> xarray.Dataset:
     """Convert time-series records to an ``xarray.Dataset``.
 
-    Supports ``WaterQualitySample`` (one data variable per parameter) and
+    Supports ``WaterQualitySample`` (one data variable per parameter),
+    ``StreamflowReading`` (a single ``discharge`` variable), and
     ``WaterLevelReading`` (a single ``water_level`` variable). The result has
     dimensions ``(time, station_id)`` with ``lat``/``lon`` station coordinates
     and per-variable ``units`` attributes.
@@ -61,8 +62,10 @@ def records_to_xarray(records: Sequence[Any]) -> xarray.Dataset:
 
     first = records[0]
 
-    # Discriminate on the timestamp field, which is unique per record type
-    # (ReservoirStatus also has water_level, so we cannot key on that).
+    # Discriminate on the timestamp/value field. StreamflowReading and
+    # WaterLevelReading both use reading_datetime, so discharge_cms must be
+    # checked first (ReservoirStatus also has water_level, so that alone
+    # isn't a safe discriminator either).
     if hasattr(first, "sample_datetime"):
         units: dict[str, str] = {}
         loc_map: dict[str, Any] = {}
@@ -90,6 +93,25 @@ def records_to_xarray(records: Sequence[Any]) -> xarray.Dataset:
             if units.get(str(param)):
                 ds[param].attrs["units"] = units[str(param)]
 
+    elif hasattr(first, "discharge_cms"):
+        loc_map = {}
+        unit: str | None = None
+        rows = []
+        for r in records:
+            rows.append(
+                {
+                    "time": r.reading_datetime,
+                    "station_id": r.station_id,
+                    "discharge": r.discharge_cms,
+                }
+            )
+            loc_map.setdefault(r.station_id, r.location)
+            unit = unit or r.unit
+        wide = pd.DataFrame(rows).groupby(["time", "station_id"])["discharge"].mean().to_frame()
+        ds = wide.to_xarray()
+        if unit:
+            ds["discharge"].attrs["units"] = unit
+
     elif hasattr(first, "reading_datetime"):
         loc_map = {}
         unit: str | None = None
@@ -104,20 +126,15 @@ def records_to_xarray(records: Sequence[Any]) -> xarray.Dataset:
             )
             loc_map.setdefault(r.station_id, r.location)
             unit = unit or r.unit
-        wide = (
-            pd.DataFrame(rows)
-            .groupby(["time", "station_id"])["water_level"]
-            .mean()
-            .to_frame()
-        )
+        wide = pd.DataFrame(rows).groupby(["time", "station_id"])["water_level"].mean().to_frame()
         ds = wide.to_xarray()
         if unit:
             ds["water_level"].attrs["units"] = unit
 
     else:
         raise TypeError(
-            "records_to_xarray supports WaterQualitySample and WaterLevelReading "
-            f"records; got {type(first).__name__}."
+            "records_to_xarray supports WaterQualitySample, WaterLevelReading, "
+            f"and StreamflowReading records; got {type(first).__name__}."
         )
 
     ds = _attach_station_coords(ds, loc_map)

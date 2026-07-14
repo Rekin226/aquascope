@@ -109,11 +109,11 @@ def records_to_xarray(records: Sequence[Any]) -> xarray.Dataset:
             )
             loc_map.setdefault(r.station_id, r.location)
             unit = unit or r.unit
-            
+
         wide = pd.DataFrame(rows).groupby(["time", "station_id"])[
             ["discharge", "catchment_area", "runoff"]
         ].mean()
-        
+
         ds = wide.to_xarray()
         if unit:
             ds["discharge"].attrs["units"] = unit

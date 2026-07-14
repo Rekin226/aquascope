@@ -84,12 +84,6 @@ from aquascope.hydrology.signatures import (
     seasonality_index,
     similarity_score,
 )
-from aquascope.hydrology.baseflow import calculate_bfi, filter_baseflow
-from aquascope.hydrology.flood_frequency import fit_flood_frequency
-from aquascope.hydrology.flow_duration import compute_fdc
-from aquascope.hydrology.rating_curve import fit_rating_curve, predict_discharge
-from aquascope.hydrology.recession import analyze_recession
-from aquascope.hydrology.signatures import compute_hydrologic_signatures
 from aquascope.hydrology.streamflow import stage_to_runoff
 
 __all__ = [
@@ -160,13 +154,6 @@ __all__ = [
     "recession_constant",
     "compare_signatures",
     "similarity_score",
-    "analyze_recession",
-    "calculate_bfi",
-    "compute_fdc",
-    "compute_hydrologic_signatures",
-    "filter_baseflow",
-    "fit_flood_frequency",
-    "fit_rating_curve",
-    "predict_discharge",
+    # streamflow
     "stage_to_runoff",
 ]

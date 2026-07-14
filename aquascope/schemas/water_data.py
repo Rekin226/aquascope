@@ -38,6 +38,7 @@ class DataSource(str, Enum):
     INDIA_WRIS = "india_wris"
     HUBEAU = "france_hubeau"
     UK_EA = "uk_ea"
+    GRDC = "grdc"
 
 class GeoLocation(BaseModel):
     """Geographic coordinates for a monitoring station or sample point."""
@@ -122,3 +123,21 @@ class SDG6Indicator(BaseModel):
     value: float | None = None
     unit: str | None = None
     series_code: str | None = None
+
+class StreamflowReading(BaseModel):
+    """A single river discharge (streamflow) observation."""
+
+    source: DataSource
+    station_id: str
+    station_name: str | None = None
+    location: GeoLocation | None = None
+    reading_datetime: datetime
+    discharge_cms: float = Field(..., description="Discharge in cubic meters per second")
+    source_type: str = Field(
+        ..., description="'in_situ' (gauge) or 'satellite' (remote sensing estimate)"
+    )
+    uncertainty_cms: float | None = Field(
+        None, description="Estimated uncertainty, satellite products only"
+    )
+    unit: str = "m3/s"
+    remark: str | None = None

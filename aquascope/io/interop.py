@@ -103,14 +103,22 @@ def records_to_xarray(records: Sequence[Any]) -> xarray.Dataset:
                     "time": r.reading_datetime,
                     "station_id": r.station_id,
                     "discharge": r.discharge_cms,
+                    "catchment_area": r.catchment_area_km2,
+                    "runoff": r.runoff_mm_day,
                 }
             )
             loc_map.setdefault(r.station_id, r.location)
             unit = unit or r.unit
-        wide = pd.DataFrame(rows).groupby(["time", "station_id"])["discharge"].mean().to_frame()
+            
+        wide = pd.DataFrame(rows).groupby(["time", "station_id"])[
+            ["discharge", "catchment_area", "runoff"]
+        ].mean()
+        
         ds = wide.to_xarray()
         if unit:
             ds["discharge"].attrs["units"] = unit
+        ds["catchment_area"].attrs["units"] = "km2"
+        ds["runoff"].attrs["units"] = "mm/day"
 
     elif hasattr(first, "reading_datetime"):
         loc_map = {}

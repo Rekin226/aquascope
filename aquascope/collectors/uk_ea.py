@@ -244,15 +244,9 @@ class UKEACollector(BaseCollector):
     def _extract_station_suid_from_measure_id(measure: str | None) -> str | None:
         if not measure:
             return None
-        name = measure.rsplit("/", 1)[-1]
+
         if len(name) >= 36 and name[36] == "-":
             return name[:36]
-        return None
-
-    @staticmethod
-    def _extract_station_id_from_measure_name(measure_name: str) -> str | None:
-        if len(measure_name) >= 36 and measure_name[36] == "-":
-            return measure_name[:36]
         return None
 
     @staticmethod

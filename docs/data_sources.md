@@ -57,3 +57,34 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 ## Adding a new source
 
 Want to add your country's water data? See the contributor guide: [adding a data source](guides/adding_data_source.md).
+
+## GRDC (Global Runoff Data Centre)
+
+**Source type:** `grdc`
+**Coverage:** Global river discharge — in-situ gauge stations + satellite discharge estimates
+**Collector:** `aquascope.collectors.grdc.GRDCCollector`
+
+Two `source_type` values, both required for downstream filtering (e.g. Prediction
+in Ungauged Basins, #53):
+
+- `in_situ` — curated gauge-station subset published on Zenodo
+  ([record 19126732](https://zenodo.org/records/19126732)).
+  **License: CC BY-NC 4.0 — non-commercial use only, attribution required.**
+- `satellite` — RSEG remote-sensing discharge extension, published on DaRUS
+  ([doi:10.18419/darus-3558](https://doi.org/10.18419/darus-3558)).
+
+The classic GRDC portal (grdc.bafg.de) requires an email request-form with ~24h
+turnaround and is not used by this collector — both sources above are directly
+downloadable.
+
+SAEM (a second satellite extension, [doi:10.18419/darus-4475](https://doi.org/10.18419/darus-4475))
+is not yet integrated — planned as a follow-up.
+
+**Usage:**
+```python
+from aquascope.collectors import GRDCCollector
+
+collector = GRDCCollector()
+in_situ = collector.collect(source_type="in_situ")
+satellite = collector.collect(source_type="satellite")
+```

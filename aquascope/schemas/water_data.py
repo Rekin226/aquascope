@@ -37,6 +37,7 @@ class DataSource(str, Enum):
     TAIWAN_DATAGOV = "taiwan_datagov"
     INDIA_WRIS = "india_wris"
     HUBEAU = "france_hubeau"
+    UK_EA = "uk_ea"
 
 class GeoLocation(BaseModel):
     """Geographic coordinates for a monitoring station or sample point."""

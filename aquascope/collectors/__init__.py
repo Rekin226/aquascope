@@ -25,6 +25,7 @@ from aquascope.collectors.taiwan_wra_iot import TaiwanWRAIoTCollector
 from aquascope.collectors.usgs import USGSCollector
 from aquascope.collectors.wapor import WaPORCollector
 from aquascope.collectors.wqp import WQPCollector
+from aquascope.collectors.uk_ea import UKEnvironmentAgencyCollector
 
 __all__ = [
     "AquastatCollector",
@@ -50,4 +51,5 @@ __all__ = [
     "WQPCollector",
     "IndiaWRISCollector",
     "HubeauHydrometrieCollector",
+    "UKEnvironmentAgencyCollector"
 ]

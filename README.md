@@ -264,7 +264,7 @@ Run `aquascope --help` for the full command list.
 15 unified data sources spanning four regions:
 
 - 🌎 **Americas** — USGS (streamflow + WQ), Water Quality Portal (400+ agencies)
-- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau
+- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau, UK Environment Agency
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / Civil IoT / DataGov, Japan MLIT, Korea WAMIS
 - 🌐 **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo, FAO AQUASTAT, FAO WaPOR
 
@@ -314,7 +314,7 @@ New contributor? These [`good first issue`](https://github.com/Rekin226/aquascop
 
 | Area | Open issues |
 | :--- | :--- |
-| 🌍 **New data collectors** | [India](https://github.com/Rekin226/aquascope/issues/16) · [Brazil](https://github.com/Rekin226/aquascope/issues/17) · [Canada](https://github.com/Rekin226/aquascope/issues/18) · [UK](https://github.com/Rekin226/aquascope/issues/19) · [South Africa](https://github.com/Rekin226/aquascope/issues/20) · [Australia](https://github.com/Rekin226/aquascope/issues/4) |
+| 🌍 **New data collectors** | [India](https://github.com/Rekin226/aquascope/issues/16) · [Brazil](https://github.com/Rekin226/aquascope/issues/17) · [Canada](https://github.com/Rekin226/aquascope/issues/18) · [South Africa](https://github.com/Rekin226/aquascope/issues/20) · [Australia](https://github.com/Rekin226/aquascope/issues/4) |
 | 🌾 **Agriculture** | [Kc for millet/cassava/chickpea](https://github.com/Rekin226/aquascope/issues/21) · [dual crop coefficient](https://github.com/Rekin226/aquascope/issues/22) · [Kc for sorghum/groundnut/sugar beet](https://github.com/Rekin226/aquascope/issues/5) |
 | 📈 **Methodologies** | [SPEI drought index](https://github.com/Rekin226/aquascope/issues/23) · [Budyko framework](https://github.com/Rekin226/aquascope/issues/24) |
 | 📊 **Visualization** | [interactive Plotly hydrograph](https://github.com/Rekin226/aquascope/issues/25) · [double-mass curve](https://github.com/Rekin226/aquascope/issues/26) |

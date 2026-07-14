@@ -32,6 +32,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [Japan MLIT](https://www.mlit.go.jp) | Japan | Hydrometeorology, river observations | REST | ✅ |
 | [Korea WAMIS](https://www.wamis.go.kr) | Korea | Hydrology, dam operations | REST | ✅ |
 | [India WRIS](https://indiawris.gov.in) | India | River water level | REST | ✅ |
+| [UK Environment Agency](https://environment.data.gov.uk) | UK | ? | REST | ✅ |
 
 ---
 
@@ -51,6 +52,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | EU WFD | No | Open access |
 | Hub'Eau | No | Open access |
 | Japan MLIT / Korea WAMIS | No | Open access |
+| UK Environment Agency | No | Open access |
 
 ---
 

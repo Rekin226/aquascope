@@ -92,11 +92,29 @@ class UKEACollector(BaseCollector):
                 "At least one of measure, station, station_wiski_id or observed_property must be provided."
             )
 
-        if days is not None:
+        # If min_date and max_date not provided, set date range to the last `days` days (default 30)
+        if not min_date and not max_date:
             end = date.today()
-            start = end - timedelta(days=days)
+            start = end - timedelta(days=days if days else 30)
             min_date = start.isoformat()
             max_date = end.isoformat()
+
+        # If only min_date is provided, set max_date to `days` days (default 30) after min_date (or, if that exceeds today, set max_date to today)
+        if min_date and not max_date:
+            end = date.fromisoformat(min_date) + timedelta(days=days if days else 30)
+            if end > date.today():
+                end = date.today()
+            max_date = end.isoformat()
+
+        # If only max_date is provided, set min_date to `days` days (default 30) before max_date
+        if not min_date and max_date:
+            start = date.fromisoformat(max_date) - timedelta(days=days if days else 30)
+            min_date = start.isoformat()
+
+        if min_date and max_date and days:
+            logger.warning(
+                "Both min_date/max_date and days were provided. Ignoring days and using min_date/max_date range."
+            )
 
         params: dict[str, Any] = {
             "_limit": limit,

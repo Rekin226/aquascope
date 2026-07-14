@@ -82,6 +82,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         TaiwanWRAIoTCollector,
         TaiwanWRAReservoirCollector,
         TaiwanWRAWaterLevelCollector,
+        UKEACollector,
         USGSCollector,
         WaPORCollector,
         WQPCollector,
@@ -101,6 +102,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "taiwan_wra_fhy": lambda: TaiwanWRAFhyCollector(),
         "taiwan_wra_iot": lambda: TaiwanWRAIoTCollector(),
         "taiwan_datagov": lambda: TaiwanDataGovCollector(),
+        "uk_ea": lambda: UKEACollector(),
         "wqp": lambda: WQPCollector(),
         "openmeteo": lambda: OpenMeteoCollector(mode=args.mode or "weather"),
         "copernicus": lambda: CopernicusCollector(),
@@ -121,6 +123,21 @@ def cmd_collect(args: argparse.Namespace) -> None:
     kwargs = {}
     if source == "usgs" and args.days:
         kwargs["datetime_range"] = f"P{args.days}D"
+    if source == "uk_ea":
+        if args.station:
+            kwargs["station"] = args.station
+        if args.station_wiski_id:
+            kwargs["station_wiski_id"] = args.station_wiski_id
+        if args.observed_property:
+            kwargs["observed_property"] = args.observed_property
+        if args.measure:
+            kwargs["measure"] = args.measure
+        if args.start_date:
+            kwargs["min_date"] = args.start_date
+        if args.end_date:
+            kwargs["max_date"] = args.end_date
+        if args.start_date is None and args.end_date is None and args.days is not None:
+            kwargs["days"] = args.days
     if source == "sdg6" and args.countries:
         kwargs["country_codes"] = args.countries
     if source == "wqp":
@@ -364,6 +381,7 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
         "sdg6": ("UN SDG 6", "Global", "SDG 6 indicators (6.1.1 – 6.6.1)", "https://sdg6data.org"),
         "gemstat": ("GEMStat", "Global", "Freshwater quality (170+ countries)", "https://gemstat.org"),
         "aquastat": ("FAO AQUASTAT", "Global", "Country-level water withdrawal and irrigation", "https://www.fao.org/aquastat"),
+        "uk_ea": ("UK Environment Agency", "UK", "Hydrology readings and water quality from the UK EA Hydrology API", "https://environment.data.gov.uk/hydrology"),
         "wqp": ("Water Quality Portal", "USA", "Integrated WQ from USGS+EPA+400 agencies", "https://waterqualitydata.us"),
         "openmeteo": ("Open-Meteo", "Global", "ERA5 reanalysis, weather forecasts, GloFAS discharge", "https://open-meteo.com"),
         "copernicus": ("Copernicus CDS", "Global", "GloFAS river discharge forecasts", "https://cds.climate.copernicus.eu"),
@@ -914,7 +932,7 @@ def main() -> None:
         choices=[
             "taiwan_moenv", "taiwan_wra_level", "taiwan_wra_reservoir",
             "taiwan_wra_fhy", "taiwan_wra_iot", "taiwan_datagov",
-            "usgs", "sdg6", "gemstat", "aquastat", "taiwan_civil_iot", "wqp",
+            "usgs", "uk_ea", "sdg6", "gemstat", "aquastat", "taiwan_civil_iot", "wqp",
             "openmeteo", "copernicus", "wapor", "eu_wfd", "hubeau_hydrometrie"
         ],
         help="Data source to collect from",
@@ -924,14 +942,18 @@ def main() -> None:
     p_collect.add_argument("--country", default="all", help="ISO3 country code or 'all' (AQUASTAT)")
     p_collect.add_argument("--countries", default=None, help="ISO3 country codes, comma-separated (SDG6)")
     p_collect.add_argument("--state", default=None, help="US state code e.g. US:06 (WQP)")
+    p_collect.add_argument("--station", default=None, help="Station GUID for UK EA")
+    p_collect.add_argument("--station-wiski-id", default=None, help="Station Wiski ID for UK EA")
+    p_collect.add_argument("--observed-property", default=None, help="Observed property name for UK EA (e.g. waterFlow, dissolved-oxygen)")
+    p_collect.add_argument("--measure", default=None, help="Measure identifier for UK EA")
     p_collect.add_argument("--variables", default=None, help="Comma-separated variable IDs (AQUASTAT)")
     p_collect.add_argument("--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood)")
     p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR)")
     p_collect.add_argument("--variable", default=None, help="Variable code for the selected collector (WaPOR)")
     p_collect.add_argument("--lat", type=float, default=None, help="Latitude (openmeteo/copernicus)")
     p_collect.add_argument("--lon", type=float, default=None, help="Longitude (openmeteo/copernicus)")
-    p_collect.add_argument("--start-date", default=None, help="Start date YYYY-MM-DD (openmeteo/copernicus)")
-    p_collect.add_argument("--end-date", default=None, help="End date YYYY-MM-DD (openmeteo/copernicus)")
+    p_collect.add_argument("--start-date", default=None, help="Start date YYYY-MM-DD (openmeteo/copernicus/uk_ea)")
+    p_collect.add_argument("--end-date", default=None, help="End date YYYY-MM-DD (openmeteo/copernicus/uk_ea)")
     p_collect.add_argument("--start-year", type=int, default=2000, help="Start year (AQUASTAT)")
     p_collect.add_argument("--end-year", type=int, default=2023, help="End year (AQUASTAT)")
     p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")

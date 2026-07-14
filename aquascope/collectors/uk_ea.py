@@ -82,8 +82,8 @@ class UKEACollector(BaseCollector):
         min_date: str | None = None,
         max_date: str | None = None,
         days: int | None = None,
-        limit: int = 1000,
-        max_items: int | None = 100_000,
+        limit: int = 10_000,
+        max_items: int | None = 2_000,
         **kwargs,
     ) -> list[dict]:
         """Fetch readings from the UK EA Hydrology API."""
@@ -135,7 +135,7 @@ class UKEACollector(BaseCollector):
 
         station_meta = None
         if station or station_wiski_id or measure:
-            station_id = station or self._extract_station_guid_from_measure_id(measure)
+            station_id = station or self._extract_station_suid_from_measure_id(measure)
             if station_id:
                 station_meta = self._fetch_station_metadata(
                     station=station_id if station else None,
@@ -180,7 +180,7 @@ class UKEACollector(BaseCollector):
                 measure = item.get("measure", {}) or {}
                 measure_id = measure.get("@id", "") or ""
                 measure_name = measure_id.rsplit("/", 1)[-1] if measure_id else ""
-                station_guid = self._extract_station_id_from_measure_name(measure_name)
+                station_suid = self._extract_station_suid_from_measure_name(measure_name)
 
                 raw_parameter_key = measure.get("parameter") or self._parameter_from_measure_name(measure_name)
                 parameter_key = raw_parameter_key.lower() if raw_parameter_key else ""
@@ -222,7 +222,7 @@ class UKEACollector(BaseCollector):
                 samples.append(
                     WaterQualitySample(
                         source=DataSource.UK_EA,
-                        station_id=station_meta.get("stationGuid", station_guid or "unknown"),
+                        station_id=station_meta.get("stationSuid", station_suid or "unknown"),
                         station_name=station_name,
                         location=location,
                         sample_datetime=sample_datetime,
@@ -248,7 +248,7 @@ class UKEACollector(BaseCollector):
 
         params: dict[str, Any] = {}
         if station:
-            params["stationGuid"] = station
+            params["stationSuid"] = station
         if station_wiski_id:
             params["wiskiID"] = station_wiski_id
 
@@ -262,7 +262,7 @@ class UKEACollector(BaseCollector):
         return items[0] if items else None
 
     @staticmethod
-    def _extract_station_guid_from_measure_id(measure: str | None) -> str | None:
+    def _extract_station_suid_from_measure_id(measure: str | None) -> str | None:
         if not measure:
             return None
         name = measure.rsplit("/", 1)[-1]

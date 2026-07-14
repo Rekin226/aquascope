@@ -82,11 +82,10 @@ def cmd_collect(args: argparse.Namespace) -> None:
         TaiwanWRAIoTCollector,
         TaiwanWRAReservoirCollector,
         TaiwanWRAWaterLevelCollector,
-        UKEACollector,
         USGSCollector,
         WaPORCollector,
         WQPCollector,
-        UKEnvironmentAgencyCollector,
+        UKEACollector,
     )
     from aquascope.utils.storage import save_records
 
@@ -113,7 +112,6 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "korea_wamis": lambda: KoreaWAMISCollector(),
         "india_wris": lambda: IndiaWRISCollector(),
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
-        "uk_ea": lambda: UKEnvironmentAgencyCollector(),
     }
 
     if source not in collector_map:
@@ -935,14 +933,8 @@ def main() -> None:
         choices=[
             "taiwan_moenv", "taiwan_wra_level", "taiwan_wra_reservoir",
             "taiwan_wra_fhy", "taiwan_wra_iot", "taiwan_datagov",
-<<<<<<< HEAD
-            "usgs", "sdg6", "gemstat", "aquastat", "taiwan_civil_iot", "wqp",
-            "openmeteo", "copernicus", "wapor", "eu_wfd", "hubeau_hydrometrie",
-            "uk_ea"
-=======
             "usgs", "uk_ea", "sdg6", "gemstat", "aquastat", "taiwan_civil_iot", "wqp",
             "openmeteo", "copernicus", "wapor", "eu_wfd", "hubeau_hydrometrie"
->>>>>>> agents/uk-ea-data-collector-functionality
         ],
         help="Data source to collect from",
     )

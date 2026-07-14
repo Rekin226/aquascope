@@ -20,7 +20,6 @@ class DataSource(str, Enum):
     TAIWAN_WRA = "taiwan_wra"
     TAIWAN_CIVIL_IOT = "taiwan_civil_iot"
     USGS = "usgs"
-    UK_EA = "uk_ea"
     SDG6 = "sdg6"
     GEMSTAT = "gemstat"
     WQP = "wqp"

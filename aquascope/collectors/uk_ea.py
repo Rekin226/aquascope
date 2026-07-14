@@ -245,9 +245,7 @@ class UKEACollector(BaseCollector):
         if not measure:
             return None
 
-        if len(name) >= 36 and name[36] == "-":
-            return name[:36]
-        return None
+        return measure[:36]
 
     @staticmethod
     def _parameter_from_measure_name(measure_name: str) -> str:

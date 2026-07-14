@@ -22,36 +22,15 @@ UKEA_BASE = "https://environment.data.gov.uk/hydrology"
 
 _PARAMETER_LABELS: dict[str, str] = {
     "flow": "Flow",
-    "waterlevel": "Level",
+    "level": "Level",
     "rainfall": "Rainfall",
-    "groundwaterlevel": "Groundwater Level",
-    "dissolved-oxygen": "Dissolved Oxygen",
-    "fdom": "Fluorescent Dissolved Organic Matter",
-    "bga": "Blue-Green Algae",
-    "turbidity": "Turbidity",
-    "chlorophyll": "Chlorophyll",
-    "conductivity": "Conductivity",
-    "temperature": "Temperature",
-    "ammonium": "Ammonium",
-    "nitrate": "Nitrate",
-    "ph": "PH",
 }
 
 _PARAMETER_UNITS: dict[str, str] = {
     "flow": "m3/s",
-    "waterlevel": "m",
     "rainfall": "mm",
+    "waterlevel": "m",
     "groundwaterlevel": "mAOD",
-    "dissolved-oxygen": "%",
-    "fdom": "RFU",
-    "bga": "RFU",
-    "turbidity": "NTU",
-    "chlorophyll": "µg/L",
-    "conductivity": "µS/cm",
-    "temperature": "oC",
-    "ammonium": "mg/L",
-    "nitrate": "mg/L",
-    "ph": "",
 }
 
 

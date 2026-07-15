@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from aquascope.collectors.base import BaseCollector
-from aquascope.schemas.water_data import DataSource, GeoLocation, WaterQualitySample
+from aquascope.schemas.water_data import DataSource, GeoLocation, WaterLevelReading, WaterQualitySample
 from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -66,6 +66,12 @@ class UKEACollector(BaseCollector):
         **kwargs,
     ) -> list[dict]:
         """Fetch readings from the UK EA Hydrology API."""
+        if not observed_property or observed_property not in _PARAMETER_UNITS.keys() and not measure:
+            raise ValueError(
+                "One of the following observedProperty values must be passed: "
+                f"{', '.join(_PARAMETER_UNITS.keys())}."
+            )
+
         if not any([measure, station, station_wiski_id, observed_property]):
             raise ValueError(
                 "At least one of measure, station, station_wiski_id or observed_property must be provided."
@@ -107,9 +113,9 @@ class UKEACollector(BaseCollector):
         if observed_property:
             params["observedProperty"] = observed_property
         if min_date:
-            params["min-date"] = min_date
+            params["mineq-date"] = min_date
         if max_date:
-            params["max-date"] = max_date
+            params["maxeq-date"] = max_date
         params.update(kwargs)
 
         station_meta = None
@@ -122,7 +128,9 @@ class UKEACollector(BaseCollector):
                 )
 
         all_items: list[dict] = []
+        all_items.append(params) # Metadata for use in normalise()
         offset = 0
+
         while True:
             params["_offset"] = offset
             try:
@@ -131,28 +139,36 @@ class UKEACollector(BaseCollector):
                 logger.error("UK EA fetch failed: %s", exc)
                 return []
 
-            page_items = data.get("items", []) or []
+            page_items = data.get("items", [])
             if not page_items:
                 break
 
-            if station_meta is not None:
-                for item in page_items:
+            for item in page_items:
+                if station_meta:
                     item["_station"] = station_meta
 
             all_items.extend(page_items)
 
             if max_items is not None and len(all_items) >= max_items:
                 all_items = all_items[:max_items]
-                break
-
-            if len(page_items) < limit:
+                logger.debug("UKEA max_items=%d reached — stopping pagination.", max_items)
                 break
 
             offset += limit
 
         return all_items
 
-    def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample]:
+    def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample] | Sequence[WaterLevelReading]:
+        if not raw:
+            return []
+
+        raw_request_metadata = raw[0]
+        if raw_request_metadata.get("observedProperty") in ["flow", "rainfall"]:
+            return self._normalise_water_quality_samples(raw[1:])
+        elif raw_request_metadata.get("observedProperty") in ["level", "groundwaterlevel"]:
+            return self._normalise_water_level_readings(raw[1:])
+
+    def _normalise_water_quality_samples(self, raw: list[dict]) -> Sequence[WaterQualitySample]:
         samples: list[WaterQualitySample] = []
         for item in raw:
             try:
@@ -161,11 +177,10 @@ class UKEACollector(BaseCollector):
                 measure_name = measure_id.rsplit("/", 1)[-1] if measure_id else ""
                 station_suid = self._extract_station_suid_from_measure_name(measure_name)
 
-                raw_parameter_key = measure.get("parameter") or self._parameter_from_measure_name(measure_name)
+                raw_parameter_key = measure.get("parameter")
                 parameter_key = raw_parameter_key.lower() if raw_parameter_key else ""
                 parameter = _PARAMETER_LABELS.get(parameter_key, parameter_key.replace("-", " ").title())
-                if parameter.lower() == "ph":
-                    parameter = "PH"
+
                 if not parameter:
                     parameter = "unknown"
 
@@ -181,11 +196,9 @@ class UKEACollector(BaseCollector):
                 station_meta = item.get("_station") or {}
                 location = None
                 station_name = None
-                basin = None
                 river = None
                 if station_meta:
                     station_name = station_meta.get("label")
-                    basin = station_meta.get("riverName")
                     river = station_meta.get("riverName")
                     lat = station_meta.get("lat")
                     lon = station_meta.get("long")
@@ -196,7 +209,9 @@ class UKEACollector(BaseCollector):
                             location = None
 
                 unit = _PARAMETER_UNITS.get(parameter_key, "")
-                remark = item.get("quality") or item.get("qualifier")
+                data_quality_explanation = item.get("dataQualityMessage") or item.get("explanation") or "No Explanation Available"
+                remark = (f"Data Quality: {item.get('category', 'N/A')};{data_quality_explanation}, "
+                          f"Qualifier: {item.get('qualifier', 'N/A')}")
 
                 samples.append(
                     WaterQualitySample(
@@ -208,7 +223,6 @@ class UKEACollector(BaseCollector):
                         parameter=parameter,
                         value=float(value),
                         unit=unit,
-                        basin=basin,
                         river=river,
                         remark=remark,
                     )
@@ -216,6 +230,11 @@ class UKEACollector(BaseCollector):
             except (ValueError, KeyError, TypeError) as exc:
                 logger.debug("Skipping UK EA item: %s", exc)
         return samples
+    
+    
+    def _normalise_water_level_readings(self, raw: list[dict]) -> Sequence[WaterLevelReading]:
+        ...
+
 
     def _fetch_station_metadata(
         self,
@@ -238,19 +257,20 @@ class UKEACollector(BaseCollector):
             return None
 
         items = data.get("items", []) or []
+        if len(items) > 1:
+            logger.warning(
+                "Multiple UK EA stations found for station=%s, station_wiski_id=%s. First result used.",
+                station,
+                station_wiski_id,
+            )
         return items[0] if items else None
 
     @staticmethod
-    def _extract_station_suid_from_measure_id(measure: str | None) -> str | None:
+    def _extract_station_suid_from_measure_id(
+        measure: str | None
+    ) -> str | None:
         if not measure:
             return None
 
+        # Since the SUID is based on GUID style identifiers, the SUID is always the first 36 characters of the measure ID.
         return measure[:36]
-
-    @staticmethod
-    def _parameter_from_measure_name(measure_name: str) -> str:
-        if not measure_name or len(measure_name) <= 36:
-            return ""
-        remainder = measure_name[36:].lstrip("-")
-        parts = remainder.split("-")
-        return parts[0] if parts else ""

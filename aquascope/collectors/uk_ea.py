@@ -74,7 +74,7 @@ class UKEACollector(BaseCollector):
             )
 
         if bbox:
-            bounding_box_limits = _parse_bbox(bbox)
+            bounding_box_limits = UKEACollector._parse_bbox(bbox)
             if not bounding_box_limits:
                 raise ValueError(
                     'Invalid bbox string. Must be a string of 4 comma-separated floats '
@@ -131,7 +131,7 @@ class UKEACollector(BaseCollector):
 
         station_meta = None
         if station or station_wiski_id or measure:
-            station_id = station or self._extract_station_suid_from_measure_id(measure)
+            station_id = station or UKEACollector._extract_station_suid_from_measure_id(measure)
             if station_id:
                 station_meta = self._fetch_station_metadata(
                     station=station_id if station else None,
@@ -186,7 +186,7 @@ class UKEACollector(BaseCollector):
                 measure = item.get("measure", {}) or {}
                 measure_id = measure.get("@id", "") or ""
                 measure_name = measure_id.rsplit("/", 1)[-1] if measure_id else ""
-                station_suid = self._extract_station_suid_from_measure_name(measure_name)
+                station_suid = UKEACollector._extract_station_suid_from_measure_name(measure_name)
 
                 raw_parameter_key = measure.get("parameter")
                 parameter_key = raw_parameter_key.lower() if raw_parameter_key else ""

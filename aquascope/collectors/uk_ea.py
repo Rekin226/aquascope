@@ -288,21 +288,16 @@ class UKEACollector(BaseCollector):
     @staticmethod
     def _parse_bbox(value: str) -> tuple[float, float, float, float] | None:
         """Convert a bbox string or sequence into a 4-float tuple."""
-        if value in (None, ""):
+        if not isinstance(value, str):
             return None
 
-        if isinstance(value, str):
-            parts = [part.strip() for part in value.split(",") if part.strip()]
-        elif isinstance(value, Sequence):
-            parts = list(value)
-        else:
-            return None
-
+        parts = [part.strip() for part in value.split(",") if part.strip()]
         if len(parts) != 4:
             return None
 
         try:
-            west, south, east, north = (float(part) for part in parts)
+            min_lon, min_lat, max_lon, max_lat = (float(part) for part in parts)
         except (TypeError, ValueError):
             return None
-        return west, south, east, north
+
+        return min_lon, min_lat, max_lon, max_lat

@@ -54,10 +54,11 @@ class UKEACollector(BaseCollector):
 
     def fetch_raw(
         self,
+        observed_property: str | None = None,
         measure: str | None = None,
         station: str | None = None,
         station_wiski_id: str | None = None,
-        observed_property: str | None = None,
+        bbox: str | None = None,
         min_date: str | None = None,
         max_date: str | None = None,
         days: int | None = None,
@@ -72,10 +73,14 @@ class UKEACollector(BaseCollector):
                 f"{', '.join(_PARAMETER_UNITS.keys())}."
             )
 
-        if not any([measure, station, station_wiski_id, observed_property]):
-            raise ValueError(
-                "At least one of measure, station, station_wiski_id or observed_property must be provided."
-            )
+        if bbox:
+            bounding_box_limits = _parse_bbox(bbox)
+            if not bounding_box_limits:
+                raise ValueError(
+                    'Invalid bbox string. Must be a string of 4 comma-separated floats '
+                    'in the form "min-lon,min-lat,max-lon,max-lat)". '
+                    'For example, "2.0,51.1,3.3,52.7"',
+                )
 
         # If min_date and max_date not provided, set date range to the last `days` days (default 30)
         if not min_date and not max_date:
@@ -104,14 +109,20 @@ class UKEACollector(BaseCollector):
         params: dict[str, Any] = {
             "_limit": limit,
         }
+        if observed_property:
+            params["observedProperty"] = observed_property
         if measure:
             params["measure"] = measure
         if station:
             params["station"] = station
         if station_wiski_id:
             params["station.wiskiID"] = station_wiski_id
-        if observed_property:
-            params["observedProperty"] = observed_property
+        if bounding_box_limits:
+            min_lon, min_lat, max_lon, max_lat = bounding_box_limits
+            params["mineq-lon"] = min_lon
+            params["mineq-lat"] = min_lat
+            params["maxeq-lon"] = max_lon
+            params["maxeq-lat"] = max_lat
         if min_date:
             params["mineq-date"] = min_date
         if max_date:
@@ -235,7 +246,6 @@ class UKEACollector(BaseCollector):
     def _normalise_water_level_readings(self, raw: list[dict]) -> Sequence[WaterLevelReading]:
         ...
 
-
     def _fetch_station_metadata(
         self,
         station: str | None = None,
@@ -274,3 +284,25 @@ class UKEACollector(BaseCollector):
 
         # Since the SUID is based on GUID style identifiers, the SUID is always the first 36 characters of the measure ID.
         return measure[:36]
+
+    @staticmethod
+    def _parse_bbox(value: str) -> tuple[float, float, float, float] | None:
+        """Convert a bbox string or sequence into a 4-float tuple."""
+        if value in (None, ""):
+            return None
+
+        if isinstance(value, str):
+            parts = [part.strip() for part in value.split(",") if part.strip()]
+        elif isinstance(value, Sequence):
+            parts = list(value)
+        else:
+            return None
+
+        if len(parts) != 4:
+            return None
+
+        try:
+            west, south, east, north = (float(part) for part in parts)
+        except (TypeError, ValueError):
+            return None
+        return west, south, east, north

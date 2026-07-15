@@ -381,13 +381,12 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
         "sdg6": ("UN SDG 6", "Global", "SDG 6 indicators (6.1.1 – 6.6.1)", "https://sdg6data.org"),
         "gemstat": ("GEMStat", "Global", "Freshwater quality (170+ countries)", "https://gemstat.org"),
         "aquastat": ("FAO AQUASTAT", "Global", "Country-level water withdrawal and irrigation", "https://www.fao.org/aquastat"),
-        "uk_ea": ("UK Environment Agency", "UK", "Hydrology readings and water quality from the UK EA Hydrology API", "https://environment.data.gov.uk/hydrology"),
+        "uk_ea": ("UK Environment Agency", "UK", "Water Quality and Water Level readings", "https://environment.data.gov.uk/hydrology"),
         "wqp": ("Water Quality Portal", "USA", "Integrated WQ from USGS+EPA+400 agencies", "https://waterqualitydata.us"),
         "openmeteo": ("Open-Meteo", "Global", "ERA5 reanalysis, weather forecasts, GloFAS discharge", "https://open-meteo.com"),
         "copernicus": ("Copernicus CDS", "Global", "GloFAS river discharge forecasts", "https://cds.climate.copernicus.eu"),
         "wapor": ("FAO WaPOR", "Global", "Satellite ET, biomass, and water productivity", "https://www.fao.org/in-action/remote-sensing-for-water-productivity"),
         "hubeau_hydrometrie": ("Hub'Eau", "France", "Hydrometrie", "https://hubeau.eaufrance.fr/api/v2/hydrometrie"),
-        "uk_ea": ("UK Environment Agency", "UK", "?", "https://environment.data.gov.uk/hydrology/doc/reference"),
     }
 
     for src in DataSource:
@@ -939,22 +938,22 @@ def main() -> None:
         help="Data source to collect from",
     )
     p_collect.add_argument("--api-key", default=None, help="API key (if required)")
-    p_collect.add_argument("--days", type=int, default=30, help="Number of days (USGS)")
+    p_collect.add_argument("--days", type=int, default=30, help="Number of days (USGS/UKEA)")
     p_collect.add_argument("--country", default="all", help="ISO3 country code or 'all' (AQUASTAT)")
     p_collect.add_argument("--countries", default=None, help="ISO3 country codes, comma-separated (SDG6)")
     p_collect.add_argument("--state", default=None, help="US state code e.g. US:06 (WQP)")
-    p_collect.add_argument("--station", default=None, help="Station GUID for UK EA")
-    p_collect.add_argument("--station-wiski-id", default=None, help="Station Wiski ID for UK EA")
-    p_collect.add_argument("--observed-property", default=None, help="Observed property name for UK EA (e.g. waterFlow, dissolved-oxygen)")
-    p_collect.add_argument("--measure", default=None, help="Measure identifier for UK EA")
+    p_collect.add_argument("--station", default=None, help="Station SUID for UKEA data")
+    p_collect.add_argument("--station-wiski-id", default=None, help="Station Wiski ID for UKEA data")
+    p_collect.add_argument("--observed-property", default=None, help="Observed property for UKEA data")
+    p_collect.add_argument("--measure", default=None, help="Measure identifier for UKEA")
     p_collect.add_argument("--variables", default=None, help="Comma-separated variable IDs (AQUASTAT)")
     p_collect.add_argument("--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood)")
-    p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR)")
+    p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR), or min_lon, min_lat, max_lon, max_lat (USGS/UKEA)")
     p_collect.add_argument("--variable", default=None, help="Variable code for the selected collector (WaPOR)")
     p_collect.add_argument("--lat", type=float, default=None, help="Latitude (openmeteo/copernicus)")
     p_collect.add_argument("--lon", type=float, default=None, help="Longitude (openmeteo/copernicus)")
-    p_collect.add_argument("--start-date", default=None, help="Start date YYYY-MM-DD (openmeteo/copernicus/uk_ea)")
-    p_collect.add_argument("--end-date", default=None, help="End date YYYY-MM-DD (openmeteo/copernicus/uk_ea)")
+    p_collect.add_argument("--start-date", default=None, help="Start date YYYY-MM-DD (openmeteo/copernicus/UKEA)")
+    p_collect.add_argument("--end-date", default=None, help="End date YYYY-MM-DD (openmeteo/copernicus/UKEA)")
     p_collect.add_argument("--start-year", type=int, default=2000, help="Start year (AQUASTAT)")
     p_collect.add_argument("--end-year", type=int, default=2023, help="End year (AQUASTAT)")
     p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")

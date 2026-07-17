@@ -10,6 +10,55 @@ All notable changes to AquaScope are documented here.
 
 ### Fixed
 
+## [0.8.1] - 2026-07-17
+
+Two new river-discharge sources, France (Hub'Eau) and GRDC, and a repair to how
+the CLI advertises and reaches its collectors.
+
+### Added
+- **France (Hub'Eau)** (`collectors/france_hubeau.py`): `HubeauHydrometrieCollector`
+  collects real-time river water level and discharge from Hub'Eau's Hydrométrie
+  API, France's national open hydrometry service. No API key required. Available
+  as `aquascope collect --source hubeau_hydrometrie`. Readings are emitted as
+  `WaterQualitySample`, following the pattern already established in `usgs.py`.
+- **GRDC river discharge** (`collectors/grdc.py`): `GRDCCollector` reaches global
+  river discharge without the classic GRDC portal's email request-form gate. Two
+  modes: `in_situ` (the curated gauge-station subset published on Zenodo) and
+  `satellite` (the RSEG remote-sensing discharge extension published on DaRUS).
+  Each reading is tagged with `source_type`, so downstream work such as
+  Prediction in Ungauged Basins can filter gauge from satellite. Note that the
+  in-situ subset is licensed CC BY-NC 4.0: non-commercial use only, attribution
+  required. Available as `aquascope collect --source grdc`, with `--mode`
+  selecting `in_situ` (default) or `satellite`.
+- **`StreamflowReading` schema** (`schemas/water_data.py`): the canonical record
+  for river discharge, carrying `discharge_cms`, `source_type`, and an optional
+  `uncertainty_cms` for satellite products. `records_to_xarray()` converts it to
+  a `discharge` data variable alongside the existing sample and water-level
+  record types.
+
+### Fixed
+- **`aquascope list-sources` rendered 8 of 22 sources as blank placeholders.**
+  The info table is keyed by `DataSource` value, but the Hub'Eau entry was keyed
+  `hubeau_hydrometrie` while its enum value is `france_hubeau`, so the lookup
+  never matched. GRDC, EU WFD, Japan MLIT, Korea WAMIS, and India WRIS had no
+  entry at all. All now render their region, data types, and endpoint.
+- **`GRDCCollector` was unreachable from the CLI.** It was registered in
+  `collectors/__init__.py` and documented, but had no `collect` entry, leaving it
+  importable from Python only.
+- **`japan_mlit` and `korea_wamis` were unreachable from the CLI.** Both were
+  already in the collector map but missing from the `--source` choices, so
+  argparse rejected them as invalid.
+
+### Notes
+- River discharge is currently emitted under two schemas: GRDC uses the new
+  `StreamflowReading`, while Hub'Eau and USGS use `WaterQualitySample`.
+  Consolidating on `StreamflowReading` is planned and will be a breaking change
+  for those collectors when it lands.
+- `GRACE` and `USGS_GW` are declared in `DataSource` but have no collector yet,
+  and still list without metadata.
+- India WRIS is not exposed through `aquascope collect`: its collector requires
+  arguments the command does not pass. It remains available from Python.
+
 ## [0.8.0] - 2026-07-10
 
 Groundwater drought: daily Taiwan groundwater data, SGI and SPI drought

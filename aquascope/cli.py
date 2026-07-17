@@ -70,6 +70,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         CopernicusCollector,
         EUWFDCollector,
         GEMStatCollector,
+        GRDCCollector,
         HubeauHydrometrieCollector,
         JapanMLITCollector,
         KoreaWAMISCollector,
@@ -110,6 +111,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "korea_wamis": lambda: KoreaWAMISCollector(),
         "india_wris": lambda: IndiaWRISCollector(),
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
+        "grdc": lambda: GRDCCollector(),
     }
 
     if source not in collector_map:
@@ -165,6 +167,11 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["year"] = args.year
         if args.water_body_type:
             kwargs["water_body_type"] = args.water_body_type
+    if source == "grdc" and args.mode:
+        if args.mode not in ("in_situ", "satellite"):
+            logger.error("GRDC --mode must be 'in_situ' or 'satellite'; got '%s'.", args.mode)
+            sys.exit(1)
+        kwargs["source_type"] = args.mode
 
     records = collector.collect(**kwargs)
     if not records:
@@ -368,7 +375,12 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
         "openmeteo": ("Open-Meteo", "Global", "ERA5 reanalysis, weather forecasts, GloFAS discharge", "https://open-meteo.com"),
         "copernicus": ("Copernicus CDS", "Global", "GloFAS river discharge forecasts", "https://cds.climate.copernicus.eu"),
         "wapor": ("FAO WaPOR", "Global", "Satellite ET, biomass, and water productivity", "https://www.fao.org/in-action/remote-sensing-for-water-productivity"),
-        "hubeau_hydrometrie": ("Hub'Eau", "France", "Hydrometrie", "https://hubeau.eaufrance.fr/api/v2/hydrometrie"),
+        "eu_wfd": ("EU WFD", "Europe", "Water Framework Directive status", "https://www.eea.europa.eu"),
+        "france_hubeau": ("Hub'Eau", "France", "River water level and discharge (hydrométrie)", "https://hubeau.eaufrance.fr/api/v2/hydrometrie"),
+        "grdc": ("GRDC", "Global", "River discharge: in-situ gauges + RSEG satellite estimates", "https://zenodo.org/records/19126732"),
+        "japan_mlit": ("Japan MLIT", "Japan", "Hydrometeorology, river observations", "https://www.mlit.go.jp"),
+        "korea_wamis": ("Korea WAMIS", "Korea", "Hydrology, dam operations", "https://www.wamis.go.kr"),
+        "india_wris": ("India WRIS", "India", "River water level", "https://indiawris.gov.in"),
     }
 
     for src in DataSource:
@@ -915,7 +927,8 @@ def main() -> None:
             "taiwan_moenv", "taiwan_wra_level", "taiwan_wra_reservoir",
             "taiwan_wra_fhy", "taiwan_wra_iot", "taiwan_datagov",
             "usgs", "sdg6", "gemstat", "aquastat", "taiwan_civil_iot", "wqp",
-            "openmeteo", "copernicus", "wapor", "eu_wfd", "hubeau_hydrometrie"
+            "openmeteo", "copernicus", "wapor", "eu_wfd", "hubeau_hydrometrie",
+            "japan_mlit", "korea_wamis", "grdc",
         ],
         help="Data source to collect from",
     )
@@ -925,7 +938,7 @@ def main() -> None:
     p_collect.add_argument("--countries", default=None, help="ISO3 country codes, comma-separated (SDG6)")
     p_collect.add_argument("--state", default=None, help="US state code e.g. US:06 (WQP)")
     p_collect.add_argument("--variables", default=None, help="Comma-separated variable IDs (AQUASTAT)")
-    p_collect.add_argument("--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood)")
+    p_collect.add_argument("--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood; grdc: in_situ/satellite)")
     p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR)")
     p_collect.add_argument("--variable", default=None, help="Variable code for the selected collector (WaPOR)")
     p_collect.add_argument("--lat", type=float, default=None, help="Latitude (openmeteo/copernicus)")

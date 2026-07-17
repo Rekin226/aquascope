@@ -93,7 +93,7 @@ def records_to_xarray(records: Sequence[Any]) -> xarray.Dataset:
             if units.get(str(param)):
                 ds[param].attrs["units"] = units[str(param)]
 
-   elif hasattr(first, "discharge_cms"):
+    elif hasattr(first, "discharge_cms"):
         loc_map = {}
         unit: str | None = None
         has_area = any(r.catchment_area_km2 is not None for r in records)

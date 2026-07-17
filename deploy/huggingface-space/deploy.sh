@@ -8,8 +8,11 @@ set -euo pipefail
 SPACE="${1:-Rekin226/aquascope-dashboard}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
+# NOTE: as of 2026, hosting Docker/Gradio Spaces on free cpu-basic requires a
+# Hugging Face PRO subscription — this script will 402 on a free account.
+# The free hosting path is Streamlit Community Cloud (share.streamlit.io).
 echo "→ Creating Space $SPACE (no-op if it already exists)…"
-hf repo create "$SPACE" --repo-type space --space-sdk streamlit --exist-ok || true
+hf repo create "$SPACE" --repo-type space --space-sdk docker --exist-ok || true
 
 echo "→ Uploading dashboard entry point, requirements, and Space card…"
 hf upload "$SPACE" "$HERE" . --repo-type space --exclude "deploy.sh"

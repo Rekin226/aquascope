@@ -3,9 +3,8 @@ title: AquaScope Dashboard
 emoji: 🌊
 colorFrom: blue
 colorTo: green
-sdk: streamlit
-sdk_version: "1.57.0"
-app_file: app.py
+sdk: docker
+app_port: 8501
 pinned: false
 license: mit
 short_description: Open-source water data aggregation & analysis toolkit

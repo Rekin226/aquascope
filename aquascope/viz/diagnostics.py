@@ -143,7 +143,8 @@ def double_mass_plot(features: list[str],
                      save_path: str | None = None,
                      title: str | None = None) -> Figure:
     """ Plot cummulative comparisons of a cummulative measure of'
-     a feature across that of a different feature
+     a feature across that of a different feature.
+     # TODO: add params description
     """
    
     # Ensure observations is a numpy array before doing array operations
@@ -155,15 +156,9 @@ def double_mass_plot(features: list[str],
     
     idx_A = 0
     idx_B = 1
-    print ("shape of observations", observations.shape)
     numeric_feats = observations[:, [idx_A, idx_B]]
-    print(numeric_feats)
     cumm_sum = np.cumsum(numeric_feats, axis = 0)
     dist_cumm = np.mean (cumm_sum, axis=1)
-    print("cumm_sum shape", cumm_sum.shape)
-    print("sample cum sum", cumm_sum[:2])
-    print("dist_cumm shape", dist_cumm.shape)
-    print("sample dist cumm", dist_cumm[:2])   
     apply_aqua_style()
     if ax is None:
         fig, ax = plt.subplots(figsize=SQUARE_FIGSIZE)
@@ -179,7 +174,7 @@ def double_mass_plot(features: list[str],
     ax.grid(True)
     ax.legend()
     _save_or_show(fig, save_path)
-    
+    # TODO: add tests
     return fig
 
 

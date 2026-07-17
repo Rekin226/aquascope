@@ -251,7 +251,8 @@ aquascope agri plan --crop maize --planting-date 2026-04-01 --lat 30.0 --lon 31.
 aquascope recommend --parameters DO,BOD5,COD --goal "pollution trend detection"
 aquascope solve --problem "Assess flood risk for a 100-year return period"
 
-# Interactive Streamlit dashboard
+# Interactive Streamlit dashboard — multipage workspace with 21 live sources,
+# smart auto-insights, and fully interactive Plotly charts
 aquascope dashboard
 ```
 

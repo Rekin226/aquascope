@@ -298,28 +298,30 @@ class UKEACollector(BaseCollector):
     @staticmethod
     def _compute_date_range(min_date: str | None, max_date: str | None, days: int | None) -> tuple[str, str]:
         # If min_date and max_date not provided, set date range to the last `days` days (default 30)
-        if not min_date and not max_date:
+        if min_date is None and max_date is None:
             end = date.today()
-            start = end - timedelta(days=days if days else 30)
+            start = end - timedelta(days=days if days is not None else 30)
             min_date = start.isoformat()
             max_date = end.isoformat()
 
         # If only min_date is provided, set max_date to `days` days (default 30) after min_date (or, if that exceeds today, set max_date to today)
-        elif min_date and not max_date:
+        elif min_date is not None and max_date is None:
             end = date.fromisoformat(min_date) + timedelta(days=days if days else 30)
             if end > date.today():
                 end = date.today()
             max_date = end.isoformat()
 
         # If only max_date is provided, set min_date to `days` days (default 30) before max_date
-        elif not min_date and max_date:
+        elif min_date is None and max_date is not None:
             start = date.fromisoformat(max_date) - timedelta(days=days if days else 30)
             min_date = start.isoformat()
 
-        elif min_date and max_date and days:
+        elif min_date is not None and max_date is not None and days is not None:
             logger.warning(
                 "Both min_date/max_date and days were provided. Ignoring days and using min_date/max_date range."
             )
+        
+        logger.info(f"{min_date}, {max_date}")
         
         return min_date, max_date
     

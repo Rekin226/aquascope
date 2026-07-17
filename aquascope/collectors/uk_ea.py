@@ -20,6 +20,16 @@ logger = logging.getLogger(__name__)
 
 UKEA_BASE = "https://environment.data.gov.uk/hydrology"
 MAPPED_OBSERVED_PROPERTIES = {"waterFlow", "waterLevel", "rainfall", "groundwaterLevel"}
+MAPPED_OBSERVED_PROPERTY_UNITS = {
+    "waterFlow": "m3/s",
+    "waterLevel": "m",
+    "rainfall": "mm",
+    "groundwaterLevel": "mAOD (metres Above Ordnance Datum)"
+}
+COLLECTION_PERIOD_VALUES = {
+    "15min": 900,
+    "daily": 86400
+}
 
 class UKEACollector(BaseCollector):
     """Collect readings from the UK Environment Agency hydrology API."""
@@ -41,6 +51,7 @@ class UKEACollector(BaseCollector):
 
     def fetch_raw(
         self,
+        collection: str | None = "15min",
         observed_property: str | None = None,
         measure: str | None = None,
         station: str | None = None,
@@ -57,8 +68,16 @@ class UKEACollector(BaseCollector):
         if not observed_property or observed_property not in MAPPED_OBSERVED_PROPERTIES and not measure:
             raise ValueError(
                 "One of the following observedProperty values must be passed: "
-                f"{', '.join(MAPPED_OBSERVED_PROPERTIES)}."
+                f"{', '.join(MAPPED_OBSERVED_PROPERTIES)}. "
+                f"Alternatively, you can pass an exact measure."
             )
+
+        if measure and collection:
+            logger.warning("Both measure and collection provided. Ignoring collection and using the exact measure provided")
+            collection = None
+        
+        if collection:
+            period = COLLECTION_PERIOD_VALUES.get(collection, None)
 
         if bbox:
             bounding_box_limits = UKEACollector._parse_bbox(bbox)
@@ -76,6 +95,8 @@ class UKEACollector(BaseCollector):
         params: dict[str, Any] = {
             "_limit": limit,
         }
+        if period:
+            params["period"] = period
         if observed_property:
             params["observedProperty"] = observed_property
         if measure:
@@ -141,19 +162,29 @@ class UKEACollector(BaseCollector):
             return []
 
         raw_request_metadata = raw[0]
-        if raw_request_metadata.get("observedProperty") in {"waterFlow", "rainfall"}:
-            return self._normalise_water_quality_samples(raw[1:])
-        elif raw_request_metadata.get("observedProperty") in {"waterLevel", "groundwaterLevel"}:
-            return self._normalise_water_level_readings(raw[1:])
+        observed_property = raw_request_metadata.get("observedProperty")
+        if observed_property in {"waterFlow", "rainfall"}:
+            return self._normalise_water_quality_samples(raw[1:], observed_property)
+        elif observed_property in {"waterLevel", "groundwaterLevel"}:
+            return self._normalise_water_level_readings(raw[1:], observed_property)
 
-    def _normalise_water_quality_samples(self, raw: list[dict]) -> Sequence[WaterQualitySample]:
+    def _normalise_water_quality_samples(self, raw: list[dict], observed_property: str) -> Sequence[WaterQualitySample]:
         samples: list[WaterQualitySample] = []
         for item in raw:
             try:
-                station_suid, parameter, value, sample_datetime, unit, remark = UKEACollector._extract_reading_data(item)
+                station_suid, value, sample_datetime, remark = UKEACollector._extract_reading_data(item)
+                unit = MAPPED_OBSERVED_PROPERTY_UNITS.get(observed_property, None)
+                if not unit:
+                    raise ValueError("Incomplete raw data reading")
+
                 station_meta = item.get("_station", None)
                 if station_meta:
                     station_name, river, location = UKEACollector._extract_water_quality_sample_metadata(station_meta)
+                else:
+                    station_name, river, location = None, None, None
+
+                if observed_property == "rainfall":
+                    river = "N/A"
 
                 samples.append(
                     WaterQualitySample(
@@ -162,7 +193,7 @@ class UKEACollector(BaseCollector):
                         station_name=station_name,
                         location=location,
                         sample_datetime=sample_datetime,
-                        parameter=parameter,
+                        parameter=observed_property,
                         value=float(value),
                         unit=unit,
                         river=river,
@@ -175,16 +206,22 @@ class UKEACollector(BaseCollector):
         return samples
     
     
-    def _normalise_water_level_readings(self, raw: list[dict]) -> Sequence[WaterLevelReading]:
+    def _normalise_water_level_readings(self, raw: list[dict], observed_property: str) -> Sequence[WaterLevelReading]:
         samples: list[WaterLevelReading] = []
         for item in raw:
             try:
-                station_suid, parameter, value, reading_datetime, unit, remark = UKEACollector._extract_reading_data(item)
-                remark += f" Parameter: {parameter}"
+                station_suid, value, reading_datetime, remark = UKEACollector._extract_reading_data(item)
+                unit = MAPPED_OBSERVED_PROPERTY_UNITS.get(observed_property, None)
+                if not unit:
+                    raise ValueError("Incomplete raw data reading")
+                remark += f" Parameter: {observed_property}."
+
                 station_meta = item.get("_station", None)
                 if station_meta:
                     station_name, location = UKEACollector._extract_water_level_reading_metadata(station_meta)
-
+                else:
+                    station_name, location = None, None
+                
                 samples.append(
                     WaterLevelReading(
                         source=DataSource.UK_EA,
@@ -198,7 +235,9 @@ class UKEACollector(BaseCollector):
                     )
                 )
             except (ValueError, KeyError, TypeError) as exc:
-                logger.debug("Skipping UKEA item: %s", exc)
+                logger.info("Skipping UKEA item: %s", exc)
+
+        return samples
 
     def _fetch_station_metadata(
         self,
@@ -210,7 +249,7 @@ class UKEACollector(BaseCollector):
 
         params: dict[str, Any] = {}
         if station:
-            params["stationSuid"] = station
+            params["stationGuid"] = station
         if station_wiski_id:
             params["wiskiID"] = station_wiski_id
 
@@ -292,23 +331,19 @@ class UKEACollector(BaseCollector):
         if measure_name:
             station_suid = UKEACollector._extract_station_suid_from_measure_id(measure_name)
 
-        parameter = measure.get("parameter", None)
         value = item.get("value", None)
-
 
         datetime_str = item.get("dateTime") or item.get("date")
         if datetime_str:
             sample_datetime = datetime.fromisoformat(datetime_str)
 
-        unit = measure.get("unitName", None)
         remark = (f"Data Completeness: {item.get('completeness', 'N/A')}; "
                     f"Data Quality: {item.get('category', 'N/A')}.")
 
-        
-        if not all((station_suid, parameter, value, sample_datetime)):
+        if not all(x is not None for x in (station_suid, value, sample_datetime)):
             raise ValueError("Incomplete raw data reading")
 
-        return station_suid, parameter, value, sample_datetime, unit, remark
+        return station_suid, value, sample_datetime, remark
 
     @staticmethod
     def _extract_water_quality_sample_metadata(station_meta: dict) -> tuple:
@@ -316,7 +351,7 @@ class UKEACollector(BaseCollector):
         river = station_meta.get("riverName", None)
         lat = station_meta.get("lat", None)
         lon = station_meta.get("long", None)
-        location = UKEACollector.__build_location_from_lat_lon(float(lat), float(lon)) if lat and lon else None
+        location = UKEACollector._build_location_from_lat_lon(float(lat), float(lon)) if lat and lon else None
         
         return station_name, river, location
 
@@ -325,7 +360,7 @@ class UKEACollector(BaseCollector):
         station_name = station_meta.get("label", None)
         lat = station_meta.get("lat", None)
         lon = station_meta.get("long", None)
-        location = UKEACollector.__build_location_from_lat_lon(float(lat), float(lon)) if lat and lon else None
+        location = UKEACollector._build_location_from_lat_lon(float(lat), float(lon)) if lat and lon else None
         
         return station_name, location
     

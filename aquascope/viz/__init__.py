@@ -23,6 +23,7 @@ from aquascope.viz.diagnostics import (
     pp_plot,
     qq_plot,
     return_level_plot,
+    double_mass_plot,
 )
 
 # Hydrology

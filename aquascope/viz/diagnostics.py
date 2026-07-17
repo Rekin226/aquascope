@@ -133,6 +133,55 @@ def qq_plot(
     _save_or_show(fig, save_path)
     return fig
 
+# ── Double-Mass plot ────────────────────────────────────────────────────────────
+
+def double_mass_plot(features: list[str], 
+                     observations: np.ndarray,
+                     collect_defaults: bool = True, 
+                     *, 
+                     ax: Axes | None = None, 
+                     save_path: str | None = None,
+                     title: str | None = None) -> Figure:
+    """ Plot cummulative comparisons of a cummulative measure of'
+     a feature across that of a different feature
+    """
+   
+    # Ensure observations is a numpy array before doing array operations
+    if not isinstance(observations, np.ndarray):
+        observations = observations.to_numpy()
+
+    
+    feat_A, feat_B = features
+    
+    idx_A = 0
+    idx_B = 1
+    print ("shape of observations", observations.shape)
+    numeric_feats = observations[:, [idx_A, idx_B]]
+    print(numeric_feats)
+    cumm_sum = np.cumsum(numeric_feats, axis = 0)
+    dist_cumm = np.mean (cumm_sum, axis=1)
+    print("cumm_sum shape", cumm_sum.shape)
+    print("sample cum sum", cumm_sum[:2])
+    print("dist_cumm shape", dist_cumm.shape)
+    print("sample dist cumm", dist_cumm[:2])   
+    apply_aqua_style()
+    if ax is None:
+        fig, ax = plt.subplots(figsize=SQUARE_FIGSIZE)
+    else:
+        fig = ax.get_figure()
+    ax.plot(dist_cumm, cumm_sum[:, idx_A], label=f"{feat_A}", color='red', linewidth=2)
+    ax.plot(dist_cumm, cumm_sum[:, idx_B], label=f"{feat_B}", color='green', linewidth=2)
+
+    # FIX: Use ax setter methods for title, labels, and grid
+    ax.set_title(title or f"Double Mass Plot of {feat_A} vs {feat_B}")
+    ax.set_xlabel("Cumulative across all distributions")
+    ax.set_ylabel("Cumulative per Feature")
+    ax.grid(True)
+    ax.legend()
+    _save_or_show(fig, save_path)
+    
+    return fig
+
 
 # ── P-P plot ────────────────────────────────────────────────────────────
 

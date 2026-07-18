@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <title>AquaScope Dashboard — Live Demo</title>
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.css"
+  />
+  <style>
+    #boot-note {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 0.6rem;
+      font-family: "Source Sans Pro", sans-serif; color: #31333f;
+      background: #ffffff; z-index: 10; transition: opacity 0.4s;
+    }
+    #boot-note .bar {
+      width: 260px; height: 6px; border-radius: 3px; background: #e6e9ef; overflow: hidden;
+    }
+    #boot-note .bar div {
+      width: 40%; height: 100%; border-radius: 3px; background: #1565c0;
+      animation: slide 1.2s ease-in-out infinite alternate;
+    }
+    @keyframes slide { from { margin-left: 0 } to { margin-left: 60% } }
+  </style>
+</head>
+<body>
+  <div id="boot-note">
+    <div style="font-size:2rem">🌊</div>
+    <div><strong>AquaScope Dashboard</strong> is starting…</div>
+    <div class="bar"><div></div></div>
+    <div style="font-size:0.85rem;color:#808495">
+      Runs entirely in your browser (WebAssembly) — first load downloads
+      Python + scientific stack, ~30–90 s.
+    </div>
+  </div>
+  <div id="root"></div>
+  <script type="module">
+    import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.8.1/build/stlite.js";
+
+    const wheel = new URL("./aquascope-0.8.1-py3-none-any.whl", window.location.href).href;
+
+    mount(
+      {
+        requirements: ["plotly", wheel],
+        entrypoint: "app.py",
+        files: {
+          "app.py": `
+import streamlit as st
+
+st.session_state.setdefault("_browser_demo_notice", True)
+
+from aquascope.dashboard.app import main
+
+main()
+`,
+        },
+      },
+      document.getElementById("root"),
+    );
+
+    // Hide the boot overlay once stlite has rendered Streamlit's UI.
+    const observer = new MutationObserver(() => {
+      const app = document.querySelector('[data-testid="stApp"], .stApp');
+      if (app) {
+        const note = document.getElementById("boot-note");
+        if (note) { note.style.opacity = "0"; setTimeout(() => note.remove(), 500); }
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.getElementById("root"), { childList: true, subtree: true });
+  </script>
+</body>
+</html>

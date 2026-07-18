@@ -42,6 +42,12 @@ All notable changes to AquaScope are documented here.
   and disables usage-stats gathering.
 
 ### Fixed
+- **Live collectors now work in the in-browser (WASM) demo.** `CachedHTTPClient`
+  detects Pyodide/Emscripten and routes requests through `urllib` (patched to
+  browser XHR by pyodide-http) instead of httpx's socket transport, which hangs
+  in WebAssembly. Verified in-browser: Open-Meteo, USGS, Hub'Eau, UN SDG 6,
+  AQUASTAT, Taiwan WRA. CORS-blocked sources fail fast with a clear hint, and
+  the Collect page shows a browser-demo banner listing what works.
 
 ## [0.8.1] - 2026-07-17
 

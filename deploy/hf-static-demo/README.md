@@ -20,8 +20,10 @@ everything is instant: demo datasets, smart insights, the hydrology lab,
 extreme-value analysis, FAO-56 irrigation scheduling, and the AI methodology
 recommender.
 
-Note: because this demo has no backend, live data collectors may be blocked by
-the source APIs' CORS policies. For full functionality install locally:
+Live data collection works right here in the browser for CORS-friendly APIs —
+verified: Open-Meteo, USGS, Hub'Eau, UN SDG 6, FAO AQUASTAT, Taiwan WRA.
+Sources that block cross-origin requests, and large-archive sources (GEMStat,
+GRDC in-situ), need a local install:
 
 ```bash
 pip install "aquascope[dashboard]"

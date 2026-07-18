@@ -77,6 +77,18 @@ def render() -> None:
 
 
 def _render_api_tab() -> None:
+    import sys
+
+    if sys.platform == "emscripten":
+        st.info(
+            "🧪 **In-browser demo** — requests go straight from your browser to each "
+            "data provider, so only CORS-friendly APIs respond. Verified working here: "
+            "**Open-Meteo, USGS, Hub'Eau, UN SDG 6, FAO AQUASTAT, Taiwan WRA**. "
+            "Sources that block cross-origin requests, and large-archive sources "
+            "(GEMStat, GRDC in-situ), need a local install: "
+            "`pip install \"aquascope[dashboard]\"`."
+        )
+
     c_region, c_source = st.columns([1, 2])
     regions = ["All regions"] + [r for r in _REGION_ORDER if any(v[1] == r for v in SOURCES.values())]
     region = c_region.selectbox("Region", regions)

@@ -5,8 +5,14 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
+- **Colorblind-safe palette** (`viz/styles.py`): `apply_aqua_style(palette="colorblind")`
+  switches the `axes.prop_cycle` to the Okabe-Ito / Color Universal Design
+  8-colour palette. The default behaviour is unchanged.
 
 ### Changed
+- `apply_aqua_style()` now explicitly sets `axes.prop_cycle` to `SERIES_COLOURS`
+  on every call (previously the cycle was not set, inheriting Matplotlib's
+  default). Visually identical for existing code.
 
 ### Fixed
 

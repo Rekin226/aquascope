@@ -45,6 +45,13 @@
       {
         requirements: ["plotly", "pyodide-http", wheel],
         entrypoint: "app.py",
+        streamlitConfig: {
+          "theme.primaryColor": "#1565C0",
+          "theme.backgroundColor": "#FFFFFF",
+          "theme.secondaryBackgroundColor": "#F0F2F6",
+          "theme.textColor": "#262730",
+          "theme.baseRadius": "0.5rem",
+        },
         files: {
           "app.py": `
 import streamlit as st

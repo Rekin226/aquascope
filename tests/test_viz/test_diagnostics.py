@@ -14,8 +14,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
-from scipy.stats import genextreme, pearson3  # noqa: E402
 
+from scipy.stats import genextreme, pearson3  # noqa: E402
+from string import alphabets # noqa: E402
+from tempfile import TemporaryFile
 from aquascope.hydrology.flood_frequency import FloodFreqResult, coverage_probability, leave_one_out_cv  # noqa: E402
 from aquascope.viz.diagnostics import diagnostic_panel, pp_plot, qq_plot, return_level_plot  # noqa: E402
 
@@ -90,6 +92,81 @@ class TestPPPlot:
             assert np.all(offsets <= 1.05), "P-P values should be ≤ 1"
         plt.close(fig)
 
+class TestDBMPlot:
+    """ Execute unit tests across features in the double_mass_plot function """
+    def __init__(self, n_rows:int, n_cols:int, val_min:int, val_max:int):
+        self.n_rows = n_rows
+        self.n_cols = n_cols
+        self.val_min = val_min
+        self.val_max = val_max
+        self.col_names = list(string.ascii_uppercase[:self.n_cols]) # label the columns of dataset
+        self.obs = {col: np.random.uniform(low=val_min, high=val_max, size=(self.n_rows, self.n_cols))} # use random dataset
+        self.pivot = random.sample(self.col_names, 2) # choose columns to plot
+    
+    # be sure that indexing through array isolates the columns 
+    def _test_feat_selection():
+        feat_A, feat_B = self.pivot
+        # Extract the specific slices
+        numeric_feats = [self.obs[feat_A], self.obs[feat_B]]
+        # Validate that we successfully isolated exactly two arrays matching our pivots
+        self.assertEqual(len(numeric_feats), 2)
+        self.assertEqual(feat_A, self.pivot[0])
+        self.assertEqual(feat_B, self.pivot[1])
+
+    # is the cummulation score greater than the parts
+    def test_cumm():
+        feat_A, feat_B = self.pivot
+        
+        cumm_featA = np.cumsum(self.obs[feat_A])
+        cumm_featB = np.cumsum(self.obs[feat_B])
+        
+        # Testing that cumulative values at the end are greater than early values (for positive data)
+        self.assertGreater(cumm_featA[-1], cumm_featA[0])
+        self.assertGreater(cumm_featB[-1], cumm_featB[0])
+
+    def test_plot_generation(N=2):
+        # assert N number of curves are displayed on the plot
+        try:
+            # Execute plot function passing the open file object apply_aqua_style()
+            if ax is None:
+                fig, ax = plt.subplots(figsize=SQUARE_FIGSIZE)
+            else:
+                fig = ax.get_figure()
+            ax.plot(dist_cumm, cumm_sum[:, idx_A], label=f"{feat_A}", color='red', linewidth=2)
+            ax.plot(dist_cumm, cumm_sum[:, idx_B], label=f"{feat_B}", color='green', linewidth=2)
+
+            ax.set_title(title or f"Double Mass Plot of {feat_A} vs {feat_B}")
+            ax.set_xlabel("Cumulative across all distributions")
+            ax.set_ylabel("Cumulative per Feature")
+            ax.grid(True)
+            ax.legend()
+    
+            # Assert 1 curve/line is displayed on the plot
+            self.assertEqual(len(ax.lines), 1)
+            
+            # Be sure file is written to specified location
+            tmp_file.seek(0, 2) # Move cursor to the end of the file
+            self.assertGreater(tmp_file.tell(), 0) # File size should be > 0 bytes
+            
+            plt.close(fig) # Clean up plot memory
+            
+        finally:
+            # Explicitly close the file to trigger automatic filesystem deletion
+            tmp_file.close()
+
+        fp = tempfile.TemporaryFile()
+        fp.write(b'Hello world!')
+        # read data from file
+        fp.seek(0)
+        fp.read()
+
+        # OUTPUT: 'b'Hello world!''
+
+        # close the file, it will be removed
+
+        fp.close()
+        # test the plot is save in a specified location
+        # test the plot is displayed if the 
 
 class TestReturnLevelPlot:
     """Tests for return_level_plot."""

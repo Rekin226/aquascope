@@ -131,11 +131,10 @@ def qq_plot(
 
 # ── Double-Mass plot ────────────────────────────────────────────────────────────
 
-def double_mass_plot(features: list[str], 
-                     observations: np.ndarray,
+def double_mass_plot(observations: np.ndarray,
                      pivots: list[int],
-                     *, 
-                     ax: Axes | None = None, 
+                     *,
+                     ax: Axes | None = None,
                      save_path: str | None = None,
                      title: str | None = None) -> Figure:
     """ Plot cummulative comparisons of a cummulative measure of'
@@ -144,15 +143,15 @@ def double_mass_plot(features: list[str],
     observations : np.ndarray
         The dataset array containing the numeric observations.
     pivots : list[int]]
-        A list of exactly two feature ids `[idx_A, idx_B]` to pivot 
+        A list of exactly two feature ids `[idx_A, idx_B]` to pivot
         and compare against each other.
     ax : Axes | None, optional
-        A specific Matplotlib Axes object to draw the plot on. If None is 
+        A specific Matplotlib Axes object to draw the plot on. If None is
         specified - define one with a constant dim.
     save_path : str | None, optional
-        The file path destination where the final figure should be saved. 
+        The file path destination where the final figure should be saved.
     title : str | None, optional
-        The title string for the plot. If None, a default title based on 
+        The title string for the plot. If None, a default title based on
         the pivots is automatically generated.
 
     Returns
@@ -188,7 +187,6 @@ def double_mass_plot(features: list[str],
     ax.grid(True)
     ax.legend()
     _save_or_show(fig, save_path)
-    # TODO: add tests
     return fig
 
 

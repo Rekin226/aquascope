@@ -19,7 +19,7 @@ from scipy.stats import genextreme, pearson3  # noqa: E402
 from string import alphabets # noqa: E402
 from tempfile import TemporaryFile
 from aquascope.hydrology.flood_frequency import FloodFreqResult, coverage_probability, leave_one_out_cv  # noqa: E402
-from aquascope.viz.diagnostics import diagnostic_panel, pp_plot, qq_plot, return_level_plot  # noqa: E402
+from aquascope.viz.diagnostics import diagnostic_panel, pp_plot, qq_plot, return_level_plot, double_mass_plot  # noqa: E402
 
 
 def _make_gev_data(size: int = 40, seed: int = 42) -> np.ndarray:
@@ -127,19 +127,11 @@ class TestDBMPlot:
     def test_plot_generation(N=2):
         # assert N number of curves are displayed on the plot
         try:
-            # Execute plot function passing the open file object apply_aqua_style()
-            if ax is None:
-                fig, ax = plt.subplots(figsize=SQUARE_FIGSIZE)
-            else:
-                fig = ax.get_figure()
-            ax.plot(dist_cumm, cumm_sum[:, idx_A], label=f"{feat_A}", color='red', linewidth=2)
-            ax.plot(dist_cumm, cumm_sum[:, idx_B], label=f"{feat_B}", color='green', linewidth=2)
-
-            ax.set_title(title or f"Double Mass Plot of {feat_A} vs {feat_B}")
-            ax.set_xlabel("Cumulative across all distributions")
-            ax.set_ylabel("Cumulative per Feature")
-            ax.grid(True)
-            ax.legend()
+            fp = tempfile.TemporaryFile()
+            _ = double_mass_plot(observations=self.obs, 
+                                pivots=self.pivot, 
+                                save_path=fp
+                                title = 'test double mass plot')
     
             # Assert 1 curve/line is displayed on the plot
             self.assertEqual(len(ax.lines), 1)

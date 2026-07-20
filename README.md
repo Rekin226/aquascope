@@ -12,10 +12,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Tests](https://img.shields.io/badge/tests-525%20passing-brightgreen.svg)](#)
+[![Live demo](https://img.shields.io/badge/%F0%9F%8C%8A%20Live%20demo-Hugging%20Face%20Space-blue)](https://huggingface.co/spaces/Rekin226/aquascope-dashboard)
 
 [![GitHub stars](https://img.shields.io/github/stars/Rekin226/aquascope?style=social)](https://github.com/Rekin226/aquascope/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/Rekin226/aquascope?style=social)](https://github.com/Rekin226/aquascope/network/members)
 
+[**🌊 Live Demo**](https://huggingface.co/spaces/Rekin226/aquascope-dashboard) ·
 [**Install**](#-install) ·
 [**Examples**](#-examples) ·
 [**CLI**](#-cli) ·
@@ -251,7 +253,8 @@ aquascope agri plan --crop maize --planting-date 2026-04-01 --lat 30.0 --lon 31.
 aquascope recommend --parameters DO,BOD5,COD --goal "pollution trend detection"
 aquascope solve --problem "Assess flood risk for a 100-year return period"
 
-# Interactive Streamlit dashboard
+# Interactive Streamlit dashboard — multipage workspace with 21 live sources,
+# smart auto-insights, and fully interactive Plotly charts
 aquascope dashboard
 ```
 
@@ -261,12 +264,12 @@ Run `aquascope --help` for the full command list.
 
 ## 🌍 Data sources at a glance
 
-15 unified data sources spanning four regions:
+17 unified data sources spanning four regions:
 
 - 🌎 **Americas** — USGS (streamflow + WQ), Water Quality Portal (400+ agencies)
 - 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / Civil IoT / DataGov, Japan MLIT, Korea WAMIS
-- 🌐 **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo, FAO AQUASTAT, FAO WaPOR
+- 🌐 **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo, FAO AQUASTAT, FAO WaPOR, GRDC (river discharge)
 
 Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/data_sources.md). Want to add your country's water service? See [adding a data source](docs/guides/adding_data_source.md).
 

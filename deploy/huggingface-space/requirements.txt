@@ -1,0 +1,1 @@
+aquascope[dashboard,viz] @ git+https://github.com/Rekin226/aquascope@main

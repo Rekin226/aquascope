@@ -11,15 +11,27 @@ import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 
+import random  # noqa: E402
+from string import ascii_uppercase
+from tempfile import TemporaryFile
+
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
-
 from scipy.stats import genextreme, pearson3  # noqa: E402
-from string import alphabets # noqa: E402
-from tempfile import TemporaryFile
-from aquascope.hydrology.flood_frequency import FloodFreqResult, coverage_probability, leave_one_out_cv  # noqa: E402
-from aquascope.viz.diagnostics import diagnostic_panel, pp_plot, qq_plot, return_level_plot, double_mass_plot  # noqa: E402
+
+from aquascope.hydrology.flood_frequency import (  # noqa: E402
+    FloodFreqResult,
+    coverage_probability,
+    leave_one_out_cv,
+)
+from aquascope.viz.diagnostics import (  # noqa: E402
+    diagnostic_panel,
+    double_mass_plot,
+    pp_plot,
+    qq_plot,
+    return_level_plot,
+)
 
 
 def _make_gev_data(size: int = 40, seed: int = 42) -> np.ndarray:
@@ -99,66 +111,48 @@ class TestDBMPlot:
         self.n_cols = n_cols
         self.val_min = val_min
         self.val_max = val_max
-        self.col_names = list(string.ascii_uppercase[:self.n_cols]) # label the columns of dataset
-        self.obs = {col: np.random.uniform(low=val_min, high=val_max, size=(self.n_rows, self.n_cols))} # use random dataset
+        self.col_names = list(ascii_uppercase[:self.n_cols]) # label the columns of dataset
+        self.obs = {col: np.random.uniform(low=val_min, high=val_max,
+                size=(self.n_rows, self.n_cols)) for col in self.col_names} # use random dataset
         self.pivot = random.sample(self.col_names, 2) # choose columns to plot
-    
-    # be sure that indexing through array isolates the columns 
-    def _test_feat_selection():
-        feat_A, feat_B = self.pivot
+
+    # be sure that indexing through array isolates the columns
+    def _test_feat_selection(self):
+        idx_a, idx_b = self.pivot
         # Extract the specific slices
-        numeric_feats = [self.obs[feat_A], self.obs[feat_B]]
+        numeric_feats = [self.obs[idx_a], self.obs[idx_b]]
         # Validate that we successfully isolated exactly two arrays matching our pivots
         self.assertEqual(len(numeric_feats), 2)
-        self.assertEqual(feat_A, self.pivot[0])
-        self.assertEqual(feat_B, self.pivot[1])
+        self.assertEqual(idx_a, self.pivot[0])
+        self.assertEqual(idx_b, self.pivot[1])
 
     # is the cummulation score greater than the parts
-    def test_cumm():
-        feat_A, feat_B = self.pivot
-        
-        cumm_featA = np.cumsum(self.obs[feat_A])
-        cumm_featB = np.cumsum(self.obs[feat_B])
-        
+    def test_cumm(self):
+        idx_a, idx_b = self.pivot
+        cumm_feat_a = np.cumsum(self.obs[idx_a])
+        cumm_feat_b = np.cumsum(self.obs[idx_b])
+
         # Testing that cumulative values at the end are greater than early values (for positive data)
-        self.assertGreater(cumm_featA[-1], cumm_featA[0])
-        self.assertGreater(cumm_featB[-1], cumm_featB[0])
+        assert cumm_feat_a[-1] > cumm_feat_a[0]
+        assert cumm_feat_b[-1] > cumm_feat_b[0]
 
-    def test_plot_generation(N=2):
-        # assert N number of curves are displayed on the plot
-        try:
-            fp = tempfile.TemporaryFile()
-            _ = double_mass_plot(observations=self.obs, 
-                                pivots=self.pivot, 
-                                save_path=fp
-                                title = 'test double mass plot')
-    
-            # Assert 1 curve/line is displayed on the plot
-            self.assertEqual(len(ax.lines), 1)
-            
-            # Be sure file is written to specified location
-            tmp_file.seek(0, 2) # Move cursor to the end of the file
-            self.assertGreater(tmp_file.tell(), 0) # File size should be > 0 bytes
-            
-            plt.close(fig) # Clean up plot memory
-            
-        finally:
-            # Explicitly close the file to trigger automatic filesystem deletion
-            tmp_file.close()
+    def test_plot_generation(self, n=2):
+        # assert n number of curves are displayed on the plot
+        fp = TemporaryFile()
+        fig, ax = double_mass_plot(observations=self.obs,
+                            pivots=self.pivot,
+                            save_path=fp,
+                            title='test double mass plot')
 
-        fp = tempfile.TemporaryFile()
-        fp.write(b'Hello world!')
-        # read data from file
-        fp.seek(0)
-        fp.read()
-
-        # OUTPUT: 'b'Hello world!''
-
-        # close the file, it will be removed
-
+        # Assert 1 curve/line is displayed on the plot
+        self.assertEqual(len(ax.lines), n)
+        # Be sure file is written to specified location
+        fp.seek(0, 2) # Move cursor to the end of the file
+        self.assertGreater(fp.tell(), 0) # File size should be > 0 bytes
+        plt.close(fig) # Clean up plot memory
+        # Explicitly close the file to trigger automatic filesystem deletion
         fp.close()
-        # test the plot is save in a specified location
-        # test the plot is displayed if the 
+
 
 class TestReturnLevelPlot:
     """Tests for return_level_plot."""

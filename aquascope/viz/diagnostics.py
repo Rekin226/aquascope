@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -95,7 +96,7 @@ def qq_plot(
     Figure
         The matplotlib ``Figure`` containing the Q-Q plot.
     """
-  
+
     dist = _get_scipy_dist(distribution)
     data, is_lp3 = _prepare_data(observed, distribution)
     n = len(data)
@@ -131,57 +132,63 @@ def qq_plot(
 
 # ── Double-Mass plot ────────────────────────────────────────────────────────────
 
-def double_mass_plot(observations: np.ndarray,
-                     pivots: list[int],
-                     *,
-                     ax: Axes | None = None,
-                     save_path: str | None = None,
-                     title: str | None = None) -> Figure:
-    """ Plot cummulative comparisons of a cummulative measure of'
-     a feature alongside that of a different feature.
-    Params:
-    observations : np.ndarray
-        The dataset array containing the numeric observations.
-    pivots : list[int]]
-        A list of exactly two feature ids `[idx_A, idx_B]` to pivot
-        and compare against each other.
+def double_mass_plot(
+    observations: np.ndarray | dict | list,
+    pivots: list[int],
+    *,
+    ax: Axes | None = None,
+    save_path: str | None = None,
+    title: str | None = None,
+) -> Figure:
+    """Plot cumulative comparisons of two features.
+
+    Parameters
+    ----------
+    observations : np.ndarray | dict | list
+        2D array-like of numeric observations (rows=samples, cols=features).
+        If a `dict` is passed, the values are stacked as columns.
+    pivots : list[int]
+        Two column indices `[idx_a, idx_b]` to compare.
     ax : Axes | None, optional
-        A specific Matplotlib Axes object to draw the plot on. If None is
-        specified - define one with a constant dim.
+        Matplotlib axes to draw on.
     save_path : str | None, optional
-        The file path destination where the final figure should be saved.
+        If given, save the figure to this path.
     title : str | None, optional
-        The title string for the plot. If None, a default title based on
-        the pivots is automatically generated.
+        Plot title.
 
     Returns
     -------
     Figure
         The Matplotlib Figure object containing the double-mass plot.
     """
-   
-    # Ensure observations is a numpy array before doing array operations
-    if not isinstance(observations, np.ndarray):
-        observations = observations.to_numpy()
+
+    # Normalize input to a 2D numpy array
+    if isinstance(observations, dict):
+        observations = np.column_stack(list(observations.values()))
+    elif not isinstance(observations, np.ndarray):
+        if hasattr(observations, "to_numpy"):
+            observations = observations.to_numpy()
+        else:
+            observations = np.asarray(observations)
 
     n_rows, n_cols = observations.shape
-    idx_A, idx_B = pivots
-    assert idx_A < n_rows, "index can't be greater than the num of samples"
-    assert idx_B < n_cols, "indexes can't be greater than the column size"
-    
- 
-    numeric_feats = observations[:, [idx_A, idx_B]] # select the slices to plot
-    cumm_sum = np.cumsum(numeric_feats, axis = 0)
-    dist_cumm = np.mean (cumm_sum, axis=1)
+    idx_a, idx_b = pivots
+    assert idx_a < n_cols and idx_b < n_cols, "pivot index out of range"
+
+    numeric_feats = observations[:, [idx_a, idx_b]]
+    cumm_sum = np.cumsum(numeric_feats, axis=0)
+    dist_cumm = np.mean(cumm_sum, axis=1)
+
     apply_aqua_style()
     if ax is None:
         fig, ax = plt.subplots(figsize=SQUARE_FIGSIZE)
     else:
         fig = ax.get_figure()
-    ax.plot(dist_cumm, cumm_sum[:, idx_A], label=f"variable_{idx_A}", color='red', linewidth=2)
-    ax.plot(dist_cumm, cumm_sum[:, idx_B], label=f"variable_{idx_B}", color='green', linewidth=2)
 
-    ax.set_title(title or f"Double Mass Plot of {idx_A} vs {idx_B}")
+    ax.plot(dist_cumm, cumm_sum[:, 0], label=f"variable_{idx_a}", color="red", linewidth=2)
+    ax.plot(dist_cumm, cumm_sum[:, 1], label=f"variable_{idx_b}", color="green", linewidth=2)
+
+    ax.set_title(title or f"Double Mass Plot of {idx_a} vs {idx_b}")
     ax.set_xlabel("Cumulative across all distributions")
     ax.set_ylabel("Cumulative per Feature")
     ax.grid(True)
@@ -225,7 +232,7 @@ def pp_plot(
     Figure
         The matplotlib ``Figure`` containing the P-P plot.
     """
-  
+
     dist = _get_scipy_dist(distribution)
     data, _ = _prepare_data(observed, distribution)
     n = len(data)
@@ -251,7 +258,7 @@ def pp_plot(
     ax.legend()
 
     _save_or_show(fig, save_path)
-    return fig
+    return fig, ax
 
 
 # ── Return level plot ───────────────────────────────────────────────────
@@ -284,7 +291,7 @@ def return_level_plot(
     Figure
         The matplotlib ``Figure`` containing the return level plot.
     """
- 
+    
     apply_aqua_style()
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))

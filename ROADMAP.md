@@ -28,7 +28,7 @@ The roadmap reflects what's shipped, what's in-flight, and what's planned. Open 
 
 ## In progress
 
-- [ ] Hosted Streamlit demo (try without installing)
+- [x] Hosted demo (try without installing) — [live on Hugging Face](https://huggingface.co/spaces/Rekin226/aquascope-dashboard), runs fully in-browser via stlite/WebAssembly
 - [ ] Tutorial notebooks on Binder / Colab
 
 ## Planned

@@ -39,6 +39,7 @@ class DataSource(str, Enum):
     HUBEAU = "france_hubeau"
     GRDC = "grdc"
 
+
 class GeoLocation(BaseModel):
     """Geographic coordinates for a monitoring station or sample point."""
 
@@ -123,6 +124,7 @@ class SDG6Indicator(BaseModel):
     unit: str | None = None
     series_code: str | None = None
 
+
 class StreamflowReading(BaseModel):
     """A single river discharge (streamflow) observation."""
 
@@ -132,12 +134,8 @@ class StreamflowReading(BaseModel):
     location: GeoLocation | None = None
     reading_datetime: datetime
     discharge_cms: float = Field(..., description="Discharge in cubic meters per second")
-    source_type: str = Field(
-        ..., description="'in_situ' (gauge) or 'satellite' (remote sensing estimate)"
-    )
-    uncertainty_cms: float | None = Field(
-        None, description="Estimated uncertainty, satellite products only"
-    )
+    source_type: str = Field(..., description="'in_situ' (gauge) or 'satellite' (remote sensing estimate)")
+    uncertainty_cms: float | None = Field(None, description="Estimated uncertainty, satellite products only")
     catchment_area_km2: float | None = Field(
         None, description="Upstream drainage area in km2, if known — enables mm/day normalization"
     )

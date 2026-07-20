@@ -1,6 +1,6 @@
 # Data Sources
 
-AquaScope ships **20 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
+AquaScope ships **21 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
 
 Most sources emit point observations and share the unified `water_data` schema (`WaterQualitySample`, `WaterLevelReading`, `ReservoirStatus`). Three aggregate/gridded sources use purpose-built record types that match their data shape: **FAO AQUASTAT** returns country-level `AquastatRecord`, **UN SDG 6** returns `SDG6Indicator`, and **FAO WaPOR** returns gridded `WaPORObservation`.
 
@@ -32,6 +32,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [Japan MLIT](https://www.mlit.go.jp) | Japan | Hydrometeorology, river observations | REST | ✅ |
 | [Korea WAMIS](https://www.wamis.go.kr) | Korea | Hydrology, dam operations | REST | ✅ |
 | [India WRIS](https://indiawris.gov.in) | India | River water level | REST | ✅ |
+| [GRDC](https://zenodo.org/records/19126732) | Global | River discharge (in-situ gauges + RSEG satellite) | Zenodo / Dataverse | ✅ |
 
 ---
 
@@ -87,4 +88,10 @@ from aquascope.collectors import GRDCCollector
 collector = GRDCCollector()
 in_situ = collector.collect(source_type="in_situ")
 satellite = collector.collect(source_type="satellite")
+```
+
+From the CLI:
+```bash
+aquascope collect --source grdc                    # in-situ gauges (default)
+aquascope collect --source grdc --mode satellite   # RSEG satellite estimates
 ```

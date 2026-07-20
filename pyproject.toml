@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aquascope"
-version = "0.8.0"
+version = "0.8.1"
 description = "Open-source water data aggregation toolkit with AI-powered research methodology recommendations"
 readme = "README.md"
 license = {text = "MIT"}
@@ -77,8 +77,9 @@ scientific = [
     "tables>=3.8",
 ]
 dashboard = [
-    "streamlit>=1.30",
+    "streamlit>=1.36",
     "streamlit-folium>=0.15",
+    "plotly>=5.18",
 ]
 spatial = [
     "rasterio>=1.3",

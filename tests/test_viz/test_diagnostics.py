@@ -138,20 +138,20 @@ class TestDBMPlot:
 
     def test_plot_generation(self, n=2):
         # assert n number of curves are displayed on the plot
-        fp = TemporaryFile()
-        fig, ax = double_mass_plot(observations=self.obs,
-                            pivots=self.pivot,
-                            save_path=fp,
-                            title='test double mass plot')
-
-        # Assert 1 curve/line is displayed on the plot
-        self.assertEqual(len(ax.lines), n)
-        # Be sure file is written to specified location
-        fp.seek(0, 2) # Move cursor to the end of the file
-        self.assertGreater(fp.tell(), 0) # File size should be > 0 bytes
-        plt.close(fig) # Clean up plot memory
-        # Explicitly close the file to trigger automatic filesystem deletion
-        fp.close()
+        with TemporaryFile() as fp:
+            fig = double_mass_plot(
+                observations=self.obs,
+                pivots=self.pivot,
+                save_path=fp,
+                title="test double mass plot",
+            )
+            ax = fig.axes[0]
+            # Assert n curves/lines are displayed on the plot
+            self.assertEqual(len(ax.lines), n)
+            # Be sure bytes were written to the file object
+            fp.seek(0, 2)
+            assert fp.tell() > 0
+            plt.close(fig)  # Clean up plot memory
 
 
 class TestReturnLevelPlot:

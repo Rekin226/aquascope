@@ -70,6 +70,7 @@ def _prepare_data(observed, distribution: str):
 
 def qq_plot(
     observed,
+    distribution: str,
     params: tuple,
     *,
     ax: Axes | None = None,
@@ -82,6 +83,8 @@ def qq_plot(
     ----------
     observed : array-like
         Observed data (e.g., annual maximum discharge).
+    distribution : str
+        Distribution name: ``"gev"``, ``"lp3"``, ``"gumbel"``, ``"weibull"``, ``"gpd"``.
     params : tuple
         Distribution parameters (shape, loc, scale) from ``scipy.stats`` fit.
     ax : Axes, optional
@@ -96,6 +99,7 @@ def qq_plot(
     Figure
         The matplotlib ``Figure`` containing the Q-Q plot.
     """
+    import matplotlib.pyplot as plt
 
     dist = _get_scipy_dist(distribution)
     data, is_lp3 = _prepare_data(observed, distribution)
@@ -129,6 +133,7 @@ def qq_plot(
 
     _save_or_show(fig, save_path)
     return fig
+
 
 # ── Double-Mass plot ────────────────────────────────────────────────────────────
 
@@ -177,6 +182,8 @@ def double_mass_plot(
 
     numeric_feats = observations[:, [idx_a, idx_b]]
     cumm_sum = np.cumsum(numeric_feats, axis=0)
+    cumm_a = cumm_sum[:, idx_a]
+    cumm_b = cumm_sum[:, idx_b]
     dist_cumm = np.mean(cumm_sum, axis=1)
 
     apply_aqua_style()
@@ -185,8 +192,8 @@ def double_mass_plot(
     else:
         fig = ax.get_figure()
 
-    ax.plot(dist_cumm, cumm_sum[:, 0], label=f"variable_{idx_a}", color="red", linewidth=2)
-    ax.plot(dist_cumm, cumm_sum[:, 1], label=f"variable_{idx_b}", color="green", linewidth=2)
+    ax.plot(dist_cumm, cumm_a, label=f"variable_{idx_a}", color="red", linewidth=2)
+    ax.plot(dist_cumm, cumm_b, label=f"variable_{idx_b}", color="green", linewidth=2)
 
     ax.set_title(title or f"Double Mass Plot of {idx_a} vs {idx_b}")
     ax.set_xlabel("Cumulative across all distributions")
@@ -194,7 +201,7 @@ def double_mass_plot(
     ax.grid(True)
     ax.legend()
     _save_or_show(fig, save_path)
-    return fig
+    return fig, ax
 
 
 # ── P-P plot ────────────────────────────────────────────────────────────

@@ -128,6 +128,30 @@ class TestCAMELSCLNormalise:
         records = self.collector.normalise([])
         assert records == []
 
+    def test_normalise_nan_attrs_record_survives(self):
+        # A gauge missing from catchment_attributes.csv comes out of the
+        # left merge with NaN in every attrs column; the discharge record
+        # itself must survive with the optional fields set to None.
+        nan = float("nan")
+        raw = [
+            {
+                "station_id": "7777777",
+                "date": "2000-01-01",
+                "discharge": 5.0,
+                "gauge_name": nan,
+                "gauge_lat": nan,
+                "gauge_lon": nan,
+                "area_km2": nan,
+            }
+        ]
+        records = self.collector.normalise(raw)
+        assert len(records) == 1
+        rec = records[0]
+        assert rec.discharge_cms == 5.0
+        assert rec.location is None
+        assert rec.station_name is None
+        assert rec.catchment_area_km2 is None
+
     def test_normalise_missing_location_is_none(self):
         raw = [
             {

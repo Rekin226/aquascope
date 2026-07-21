@@ -17,6 +17,7 @@ References
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
@@ -27,6 +28,17 @@ from aquascope.schemas.water_data import DataSource, GeoLocation, StreamflowRead
 logger = logging.getLogger(__name__)
 
 CAMELS_CL_DOWNLOAD_URL = "https://www.cr2.cl/download/camels-cl-v202201/?wpdmdl=35317"
+
+
+def _clean(value):
+    """Map NaN (a gauge missing from the catchment_attributes.csv join) to None.
+
+    NaN is truthy, so without this it reaches the pydantic validators and the
+    resulting ValidationError silently drops the whole record in normalise().
+    """
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    return value
 
 
 class CAMELSCLCollector(BaseCollector):
@@ -149,19 +161,23 @@ class CAMELSCLCollector(BaseCollector):
         records: list[StreamflowReading] = []
         for row in raw:
             try:
-                lat = row.get("gauge_lat")
-                lon = row.get("gauge_lon")
-                loc = GeoLocation(latitude=float(lat), longitude=float(lon)) if lat and lon else None
+                lat = _clean(row.get("gauge_lat"))
+                lon = _clean(row.get("gauge_lon"))
+                loc = (
+                    GeoLocation(latitude=float(lat), longitude=float(lon))
+                    if lat is not None and lon is not None
+                    else None
+                )
                 records.append(
                     StreamflowReading(
                         source=DataSource.CAMELS_CL,
                         station_id=str(row["station_id"]),
-                        station_name=row.get("gauge_name"),
+                        station_name=_clean(row.get("gauge_name")),
                         location=loc,
                         reading_datetime=datetime.fromisoformat(row["date"]),
                         discharge_cms=float(row["discharge"]),
                         source_type="in_situ",
-                        catchment_area_km2=row.get("area_km2"),
+                        catchment_area_km2=_clean(row.get("area_km2")),
                     )
                 )
             except (ValueError, KeyError, TypeError) as exc:

@@ -38,7 +38,7 @@ class DataSource(str, Enum):
     INDIA_WRIS = "india_wris"
     HUBEAU = "france_hubeau"
     GRDC = "grdc"
-
+    CAMELS_CL = "camels_cl"
 
 class GeoLocation(BaseModel):
     """Geographic coordinates for a monitoring station or sample point."""

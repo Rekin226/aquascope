@@ -118,8 +118,8 @@ Create `tests/test_collectors/test_your_source.py` with:
 
 ## Guidelines
 
-- **Use `CachedHTTPClient`** — It provides caching and rate limiting out of the box
+- **Use `CachedHTTPClient`** — It provides caching and rate limiting out of the box. Exception: one-time bulk-download sources (a single static archive rather than a paginated API, e.g. `grdc.py`, `camels_cl.py`) skip it and stream the file into `data/cache/` instead — see those collectors for the pattern
 - **Handle errors gracefully** — Skip invalid records with `logger.debug()`, don't crash
 - **Include geographic data** — Set `GeoLocation` when lat/lon are available
-- **Respect rate limits** — Configure `RateLimiter` based on the API's actual limits
+- **Respect rate limits** — Configure `RateLimiter` based on the API's actual limits (not applicable to bulk downloads)
 - **Document the API** — Include the API docs URL and any key requirements

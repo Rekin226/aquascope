@@ -12,10 +12,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Tests](https://img.shields.io/badge/tests-525%20passing-brightgreen.svg)](#)
+[![Live demo](https://img.shields.io/badge/%F0%9F%8C%8A%20Live%20demo-Hugging%20Face%20Space-blue)](https://huggingface.co/spaces/Rekin226/aquascope-dashboard)
 
 [![GitHub stars](https://img.shields.io/github/stars/Rekin226/aquascope?style=social)](https://github.com/Rekin226/aquascope/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/Rekin226/aquascope?style=social)](https://github.com/Rekin226/aquascope/network/members)
 
+[**🌊 Live Demo**](https://huggingface.co/spaces/Rekin226/aquascope-dashboard) ·
 [**Install**](#-install) ·
 [**Examples**](#-examples) ·
 [**CLI**](#-cli) ·
@@ -30,7 +32,7 @@
 
 ---
 
-AquaScope unifies **20 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top — from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements** — wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **7 analysis pipelines**. Validated against the CAMELS benchmark with 820+ tests.
+AquaScope unifies **22 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top — from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements** — wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **7 analysis pipelines**. Validated against the CAMELS benchmark with 820+ tests.
 
 ---
 
@@ -53,7 +55,7 @@ For the full capability list see [docs/features.md](docs/features.md).
 | Non-stationary GEV | ✅ | — | partial | — |
 | Baseflow separation (Lyne-Hollick, Eckhardt) | ✅ | — | — | — |
 | FAO-56 Penman-Monteith ET₀ + crop water | ✅ | — | — | — |
-| 15 unified data collectors | ✅ | — | — | per-source |
+| 22 unified data collectors | ✅ | — | — | per-source |
 | AI methodology recommender (OpenAI / Groq / HF / Ollama) | ✅ | — | — | — |
 | Interactive Streamlit dashboard | ✅ | — | — | — |
 | Free, MIT, Python-native | ✅ | partial | ✅ | varies |
@@ -121,7 +123,7 @@ print(sig["flashiness"])       # Richards-Baker flashiness index
 
 22 signatures across magnitude, variability, timing, recession, and flashiness — see [docs/features.md](docs/features.md#hydrological-analysis).
 
-### 3. Collect data from any of the 20 sources
+### 3. Collect data from any of the 22 sources
 
 ```python
 from aquascope.collectors import USGSCollector, AquastatCollector, WaporCollector
@@ -251,7 +253,8 @@ aquascope agri plan --crop maize --planting-date 2026-04-01 --lat 30.0 --lon 31.
 aquascope recommend --parameters DO,BOD5,COD --goal "pollution trend detection"
 aquascope solve --problem "Assess flood risk for a 100-year return period"
 
-# Interactive Streamlit dashboard
+# Interactive Streamlit dashboard — multipage workspace with 21 live sources,
+# smart auto-insights, and fully interactive Plotly charts
 aquascope dashboard
 ```
 
@@ -261,9 +264,9 @@ Run `aquascope --help` for the full command list.
 
 ## 🌍 Data sources at a glance
 
-17 unified data sources spanning four regions:
+22 data collectors spanning four regions (highlights below, full list in the [docs](docs/data_sources.md)):
 
-- 🌎 **Americas** — USGS (streamflow + WQ), Water Quality Portal (400+ agencies)
+- 🌎 **Americas** — USGS (streamflow + WQ), Water Quality Portal (400+ agencies), CAMELS-CL (Chile streamflow)
 - 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / Civil IoT / DataGov, Japan MLIT, Korea WAMIS
 - 🌐 **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo, FAO AQUASTAT, FAO WaPOR, GRDC (river discharge)
@@ -286,7 +289,7 @@ Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/d
 | Resource | What it covers |
 | :--- | :--- |
 | [Features](docs/features.md) | Full capability list — hydrology, agriculture, ML, spatial, I/O |
-| [Data sources](docs/data_sources.md) | All 20 sources, endpoints, API-key requirements |
+| [Data sources](docs/data_sources.md) | All 22 sources, endpoints, API-key requirements |
 | [Theory guide](docs/theory.md) | Equations, DOI citations, decision trees for every method |
 | [Methodology matrix](docs/methodology_matrix.md) | When to use which method |
 | [Architecture](docs/guides/architecture.md) | How AquaScope is structured internally |

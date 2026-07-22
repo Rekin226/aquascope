@@ -16,26 +16,28 @@ authors:
 affiliations:
   - name: National Central University, Taiwan
     index: 1
-date: 26 June 2026
+date: 21 July 2026
 bibliography: paper.bib
 ---
 
 # Summary
 
-AquaScope is an open-source Python toolkit (v0.7.0, MIT license) that unifies water
-data collection from 20 global sources, comprehensive hydrological and statistical
+AquaScope is an open-source Python toolkit (v0.8.1, MIT license) that unifies water
+data collection from 21 global sources, comprehensive hydrological and statistical
 analysis, agricultural water management, and AI-powered research methodology
 recommendations into a single, coherent package. It addresses a persistent challenge
 in water resources research: the fragmentation of data access, analytical methods, and
 tooling across disparate software ecosystems. AquaScope normalises heterogeneous data
 into unified Pydantic schemas, provides over 40 analytical methods spanning conceptual
 rainfall-runoff modelling (GR4J with NSE/KGE/log-NSE auto-calibration), flood
-frequency analysis, baseflow separation, extreme value theory, and FAO-56
-evapotranspiration, and includes a knowledge-base-driven AI engine that recommends
-appropriate research methodologies based on dataset characteristics. Unlike existing
-unified data clients, which focus on United States services, AquaScope's collectors
-span East and South Asia, Europe, and global FAO/UN sources. The toolkit is
-available at <https://github.com/Rekin226/aquascope>.
+frequency analysis, baseflow separation, extreme value theory, drought indices, and
+FAO-56 evapotranspiration, and includes a knowledge-base-driven AI engine that
+recommends appropriate research methodologies based on dataset characteristics. Unlike
+existing unified data clients, which focus on United States services, AquaScope's
+collectors span East and South Asia, Europe, and global FAO/UN sources. The toolkit is
+available at <https://github.com/Rekin226/aquascope>, with a zero-install live demo
+that runs entirely in the browser at
+<https://huggingface.co/spaces/Rekin226/aquascope-dashboard>.
 
 # Statement of Need
 
@@ -65,10 +67,11 @@ Second, no single toolkit couples multi-source data collection with a comprehens
 hydrological analysis suite, agricultural water management, advanced statistical and
 machine-learning methods, and intelligent methodology guidance.
 
-AquaScope addresses both. Its 20 collectors span East and South Asia (Taiwan MOENV and
+AquaScope addresses both. Its 21 collectors span East and South Asia (Taiwan MOENV and
 WRA networks, Japan MLIT, Korea WAMIS, India WRIS), Europe (EU Water Framework
-Directive), the United States (USGS, Water Quality Portal), and global providers
-(GEMStat, Open-Meteo, Copernicus, UN SDG 6, FAO AQUASTAT and WaPOR). On top of this it
+Directive, France Hub'Eau), the United States (USGS, Water Quality Portal), and global
+providers (GEMStat, GRDC river discharge, Open-Meteo, Copernicus, UN SDG 6, FAO
+AQUASTAT and WaPOR). On top of this it
 provides an end-to-end workflow, from raw data ingestion through analysis to methodology
 recommendation, in a single, well-tested Python package with a unified API. It targets
 hydrologists, environmental engineers, agricultural scientists, and water resources
@@ -78,14 +81,18 @@ patchwork of incompatible tools.
 
 # Key Features
 
-**Data aggregation.** AquaScope implements collectors for 19 water data sources, each
+**Data aggregation.** AquaScope implements collectors for 21 water data sources, each
 subclassing a common `BaseCollector` and normalising responses into shared Pydantic
-schemas. Coverage spans Asia (Taiwan MOENV and WRA networks, Taiwan Civil IoT via the
-OGC SensorThings API, Japan MLIT, Korea WAMIS, India WRIS), Europe (EU Water Framework
-Directive), the United States (USGS NWIS [@USGS_NWIS]; the Water Quality Portal,
-aggregating 400+ agencies), and global providers (GEMStat, UN SDG 6, Open-Meteo,
-Copernicus ERA5, FAO AQUASTAT and WaPOR). A shared `httpx`-based HTTP client
-[@HTTPX2024] provides caching, retries with exponential back-off, and rate limiting.
+schemas. Coverage spans Asia (Taiwan MOENV and WRA networks, including a daily
+groundwater-level series reachable only through the WRA HydroInfo portal, Taiwan Civil
+IoT via the OGC SensorThings API, Japan MLIT, Korea WAMIS, India WRIS), Europe (EU
+Water Framework Directive, France's Hub'Eau hydrometry), the United States (USGS NWIS
+[@USGS_NWIS]; the Water Quality Portal, aggregating 400+ agencies), and global
+providers (GEMStat, GRDC river discharge combining in-situ gauges with satellite RSEG
+estimates, UN SDG 6, Open-Meteo, Copernicus ERA5, FAO AQUASTAT and WaPOR). A shared
+`httpx`-based HTTP client [@HTTPX2024] provides caching, retries with exponential
+back-off, and rate limiting, and transparently switches to a browser-native transport
+when running under WebAssembly.
 
 **Analysis.** The hydrology module provides the GR4J conceptual rainfall-runoff model
 [@Perrin2003] with auto-calibration against Nash–Sutcliffe Efficiency [@Nash1970],
@@ -102,6 +109,9 @@ include Bayesian uncertainty quantification [@Gelman2013], copula dependence mod
 [@Nelsen2006], change-point detection (PELT [@Killick2012], Pettitt [@Pettitt1979]),
 Mann-Kendall trend testing [@Mann1945; @Kendall1975], and machine-learning forecasters
 (ARIMA, Prophet, Random Forest, XGBoost, LSTM) with ensembles and transfer learning.
+Drought analysis couples the Standardized Precipitation Index [@McKee1993] with the
+Standardised Groundwater Index [@Bloomfield2013] and drought-event extraction, so
+meteorological-to-groundwater drought propagation is a first-class workflow.
 A knowledge base of 26 methodologies drives a recommendation engine that scores methods
 against an automatically computed dataset profile, with optional LLM-based reasoning.
 
@@ -110,8 +120,11 @@ against an automatically computed dataset profile, with optional LLM-based reaso
 ecosystem rather than remaining a closed schema. The toolkit additionally reads and
 writes OGC WaterML 2.0 [@WaterML2012], HEC-DSS/HEC-RAS, EPA SWMM, NetCDF, HDF5, and
 GeoJSON. A spatial module delineates watersheds from digital elevation models, and an
-interactive Streamlit dashboard with dedicated hydrology, extreme-events, and
-agricultural-water labs supports code-free exploration.
+interactive multipage Streamlit dashboard supports code-free exploration: it
+auto-profiles whatever dataset is loaded, screens water-quality data against WHO
+guidelines, and suggests appropriate next analyses. The same dashboard compiles to
+WebAssembly and runs fully client-side in a browser, giving a zero-install live demo
+in which the data collectors themselves operate.
 
 # Design and Architecture
 
@@ -120,15 +133,15 @@ responses into Pydantic v2 [@Pydantic2024] schemas, which feed analysis modules 
 on pandas [@McKinney2010], NumPy [@Harris2020], and SciPy [@Virtanen2020], an AI
 recommender, and registered pipelines. Lazy imports let users install minimal subsets
 (e.g. `pip install aquascope[interop]`), and a command-line interface exposes the main
-workflows for scripting. The package ships over 820 tests, including validation against
-the CAMELS large-sample hydrology dataset [@Addor2017], with continuous integration on
-Python 3.10–3.12, linting (Ruff), and type checking (mypy).
+workflows for scripting. The package ships nearly 1,000 tests, including validation
+against the CAMELS large-sample hydrology dataset [@Addor2017], with continuous
+integration on Python 3.10–3.12, linting (Ruff), and type checking (mypy).
 
 # Comparison with Existing Tools
 
 | Feature                        | AquaScope | HyRiver | dataretrieval | hydrostats | pySTEPS |
 |--------------------------------|:---------:|:-------:|:-------------:|:----------:|:-------:|
-| Multi-source data collection   | 19        | U.S.    | U.S.          | —          | —       |
+| Multi-source data collection   | 21        | U.S.    | U.S.          | —          | —       |
 | Non-U.S. / global coverage     | ✓         | —       | —             | —          | —       |
 | Unified data schemas           | ✓         | ✓       | —             | —          | —       |
 | Conceptual rainfall-runoff (GR4J)| ✓       | —       | —             | —          | —       |
@@ -138,7 +151,7 @@ Python 3.10–3.12, linting (Ruff), and type checking (mypy).
 | ML/ensemble forecasting        | ✓         | —       | —             | —          | ✓       |
 | AI methodology recommendations | ✓         | —       | —             | —          | —       |
 | Scientific I/O (WaterML, HEC)  | ✓         | partial | —             | —          | —       |
-| Interactive dashboard          | ✓         | —       | —             | —          | —       |
+| Interactive dashboard (in-browser demo) | ✓ | —      | —             | —          | —       |
 
 The HyRiver suite is the closest comparator for data access and is more mature for
 United States services; AquaScope interoperates with the same `xarray`/`geopandas`

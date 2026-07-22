@@ -77,8 +77,9 @@ scientific = [
     "tables>=3.8",
 ]
 dashboard = [
-    "streamlit>=1.30",
+    "streamlit>=1.36",
     "streamlit-folium>=0.15",
+    "plotly>=5.18",
 ]
 spatial = [
     "rasterio>=1.3",

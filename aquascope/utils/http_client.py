@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,87 @@ import httpx
 logger = logging.getLogger(__name__)
 
 DEFAULT_CACHE_DIR = Path("data/cache")
+
+#: True when running under Pyodide/WebAssembly (e.g. the stlite browser demo).
+IS_EMSCRIPTEN = sys.platform == "emscripten"
+
+_dumps = json.dumps
+
+
+class _EmscriptenResponse:
+    """Just enough of the ``httpx.Response`` surface for CachedHTTPClient."""
+
+    def __init__(self, status_code: int, headers: dict, text: str, url: str):
+        self.status_code = status_code
+        self.headers = headers
+        self.text = text
+        self.url = url
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise httpx.TransportError(f"HTTP {self.status_code} for {self.url}")
+
+
+class _EmscriptenClient:
+    """Minimal ``httpx.Client`` stand-in for browser (Pyodide/WASM) runtimes.
+
+    httpx cannot open sockets inside WebAssembly, so under Emscripten requests
+    go through ``urllib.request``, which pyodide-http patches to use the
+    browser's XHR/fetch. Whether a source responds then depends on its CORS
+    policy — failures surface with a CORS hint rather than hanging.
+    """
+
+    def __init__(self, timeout: float = 30.0):
+        self.timeout = timeout
+        try:
+            import pyodide_http
+
+            pyodide_http.patch_all()
+        except ImportError:  # pragma: no cover - only present in Pyodide
+            logger.warning("pyodide_http not available; browser requests may fail")
+
+    def _request(self, method: str, url: str, params=None, headers=None, body=None):
+        import urllib.error
+        import urllib.parse
+        import urllib.request
+
+        if params:
+            clean = {k: v for k, v in params.items() if v is not None}
+            qs = urllib.parse.urlencode(clean, doseq=True)
+            if qs:
+                url = f"{url}{'&' if '?' in url else '?'}{qs}"
+
+        req = urllib.request.Request(url, data=body, method=method)
+        for k, v in (headers or {}).items():
+            req.add_header(k, v)
+        if body is not None and not any(k.lower() == "content-type" for k in (headers or {})):
+            req.add_header("Content-Type", "application/json")
+
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                text = resp.read().decode("utf-8", errors="replace")
+                hdrs = {k.lower(): v for k, v in resp.headers.items()}
+                return _EmscriptenResponse(resp.status, hdrs, text, url)
+        except urllib.error.HTTPError as exc:
+            text = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            hdrs = {k.lower(): v for k, v in (exc.headers or {}).items()}
+            return _EmscriptenResponse(exc.code, hdrs, text, url)
+        except (urllib.error.URLError, OSError) as exc:
+            raise httpx.TransportError(
+                f"Browser fetch failed for {url}. This source may not allow "
+                f"cross-origin (CORS) requests from web apps — install "
+                f"aquascope locally for full access. ({exc})"
+            ) from exc
+
+    def get(self, url: str, params=None, headers=None):
+        return self._request("GET", url, params=params, headers=headers)
+
+    def post(self, url: str, json=None, params=None, headers=None):
+        body = None if json is None else _dumps(json).encode("utf-8")
+        return self._request("POST", url, params=params, headers=headers, body=body)
+
+    def close(self) -> None:
+        pass
 
 
 class RateLimiter:
@@ -62,7 +144,7 @@ class CachedHTTPClient:
         self.cache_ttl = cache_ttl_seconds
         self.rate_limiter = rate_limiter
 
-        if not verify:
+        if not verify and not IS_EMSCRIPTEN:
             import warnings
 
             import urllib3
@@ -76,7 +158,14 @@ class CachedHTTPClient:
                 base_url,
             )
 
-        self._client = httpx.Client(timeout=timeout, follow_redirects=True, verify=verify)
+        if IS_EMSCRIPTEN:
+            # Browser XHR fails fast and deterministically (no flaky sockets),
+            # so retry loops just waste the visitor's time. TLS verification is
+            # the browser's call — `verify=False` cannot be honoured here.
+            self.retries = min(self.retries, 1)
+            self._client = _EmscriptenClient(timeout=timeout)
+        else:
+            self._client = httpx.Client(timeout=timeout, follow_redirects=True, verify=verify)
 
     # ── cache helpers ────────────────────────────────────────────────
     def _cache_key(self, url: str, params: dict | None) -> str:

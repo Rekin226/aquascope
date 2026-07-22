@@ -5,16 +5,55 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
+- **Dashboard 2.0** (`aquascope/dashboard/`): the Streamlit dashboard was rebuilt
+  from a 2,100-line monolith into a multipage workspace app (`st.navigation`)
+  with a shared dataset flowing through every page.
+  - **Smart insights layer** (`_insights.py`): whatever dataset lands in the
+    workspace is auto-profiled (datetime/discharge/parameter/coordinate columns
+    detected), quality-scored, quietly screened against WHO guidelines, and
+    answered with one-click "suggested next steps" that navigate to the right
+    analysis page.
+  - **All 21 collectors in the UI** (`views/collect.py`): the Collect page now
+    exposes every registered source (previously 15), including GRDC, Hub'Eau,
+    India WRIS, Taiwan data.gov.tw, Taiwan WRA IoT and FHY, with per-source
+    parameter forms, a region filter, CSV/JSON upload, and two demo datasets.
+    Nested `location` objects are flattened to `latitude`/`longitude` so maps
+    work out of the box.
+  - **Interactive Plotly charts everywhere** (`_charts.py`): time series, box
+    plots, correlation heatmaps, histograms, FDCs (with direct Q50/Q95 labels),
+    hydrographs with baseflow fill, SPI timelines, return-level curves with
+    bootstrap CI bands, WHO exceedance bars, MapLibre station maps, and the
+    FAO-56 demand/Kc/cumulative-irrigation suite, replacing static matplotlib
+    PNGs. One shared template: a fixed colorblind-validated categorical order,
+    a single-hue blue ramp for magnitude, a blue↔red diverging scale for
+    polarity, and reserved status colors for alerts.
+  - **Persistent workspace sidebar**: active dataset card with row/column
+    counts, one-click CSV download, clear, and demo loading from any page.
+  - `plotly>=5.18` added to the `dashboard` extra; `streamlit` floor raised
+    to 1.36 (first release with `st.navigation`).
+- **Hosted-demo deployment scaffolding**: root `streamlit_app.py` +
+  `requirements.txt` for Streamlit Community Cloud one-click deploys, and a
+  ready-to-push Hugging Face Space under `deploy/huggingface-space/`
+  (closes the "hosted Streamlit demo" roadmap gap, #34).
 - **Colorblind-safe palette** (`viz/styles.py`): `apply_aqua_style(palette="colorblind")`
   switches the `axes.prop_cycle` to the Okabe-Ito / Color Universal Design
   8-colour palette. The default behaviour is unchanged.
 
 ### Changed
+- `.streamlit/config.toml` now pins the dashboard's categorical chart colors
+  (`chartCategoricalColors`) so native Streamlit charts match the Plotly theme,
+  and disables usage-stats gathering.
 - `apply_aqua_style()` now explicitly sets `axes.prop_cycle` to `SERIES_COLOURS`
   on every call (previously the cycle was not set, inheriting Matplotlib's
   default). Visually identical for existing code.
 
 ### Fixed
+- **Live collectors now work in the in-browser (WASM) demo.** `CachedHTTPClient`
+  detects Pyodide/Emscripten and routes requests through `urllib` (patched to
+  browser XHR by pyodide-http) instead of httpx's socket transport, which hangs
+  in WebAssembly. Verified in-browser: Open-Meteo, USGS, Hub'Eau, UN SDG 6,
+  AQUASTAT, Taiwan WRA. CORS-blocked sources fail fast with a clear hint, and
+  the Collect page shows a browser-demo banner listing what works.
 
 ## [0.8.1] - 2026-07-17
 

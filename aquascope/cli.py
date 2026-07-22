@@ -67,6 +67,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
     """Run a data collector and save results."""
     from aquascope.collectors import (
         AquastatCollector,
+        CAMELSCLCollector,
         CopernicusCollector,
         EUWFDCollector,
         GEMStatCollector,
@@ -112,6 +113,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "india_wris": lambda: IndiaWRISCollector(),
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
         "grdc": lambda: GRDCCollector(),
+        "camels_cl": lambda: CAMELSCLCollector(),
     }
 
     if source not in collector_map:
@@ -172,7 +174,13 @@ def cmd_collect(args: argparse.Namespace) -> None:
             logger.error("GRDC --mode must be 'in_situ' or 'satellite'; got '%s'.", args.mode)
             sys.exit(1)
         kwargs["source_type"] = args.mode
-
+    if source == "camels_cl":
+        if args.station_ids:
+            kwargs["station_ids"] = [s.strip() for s in args.station_ids.split(",") if s.strip()]
+        if args.start_date:
+            kwargs["start"] = args.start_date
+        if args.end_date:
+            kwargs["end"] = args.end_date
     records = collector.collect(**kwargs)
     if not records:
         logger.warning("No records collected.")
@@ -928,7 +936,7 @@ def main() -> None:
             "taiwan_wra_fhy", "taiwan_wra_iot", "taiwan_datagov",
             "usgs", "sdg6", "gemstat", "aquastat", "taiwan_civil_iot", "wqp",
             "openmeteo", "copernicus", "wapor", "eu_wfd", "hubeau_hydrometrie",
-            "japan_mlit", "korea_wamis", "grdc",
+            "japan_mlit", "korea_wamis", "grdc", "camels_cl",
         ],
         help="Data source to collect from",
     )
@@ -949,6 +957,7 @@ def main() -> None:
     p_collect.add_argument("--end-year", type=int, default=2023, help="End year (AQUASTAT)")
     p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")
     p_collect.add_argument("--year", type=int, default=None, help="Year filter (EU WFD)")
+    p_collect.add_argument("--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl)")
     p_collect.add_argument(
         "--water-body-type", default=None,
         choices=["river", "lake", "groundwater"],

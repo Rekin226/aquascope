@@ -5,6 +5,11 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
+- **Germany PEGELONLINE collector** (`collectors/pegelonline.py`): recent water
+  level and discharge observations from federal waterway gauges, emitted as
+  `WaterLevelReading` and `StreamflowReading`. Supports station UUIDs, W/Q
+  selection, CLI collection, and the upstream 31-day history limit. No API key
+  required.
 - **Dashboard 2.0** (`aquascope/dashboard/`): the Streamlit dashboard was rebuilt
   from a 2,100-line monolith into a multipage workspace app (`st.navigation`)
   with a shared dataset flowing through every page.

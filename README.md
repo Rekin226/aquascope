@@ -99,14 +99,13 @@ pip install -e ".[all,dev]"
 from aquascope.api import flood_analysis
 
 result = flood_analysis(daily_discharge, method="gev", return_periods=[10, 50, 100])
-print(result.return_levels)
-#   return_period  return_level  lower_ci  upper_ci
-# 0           10        1840.2     1690.4    2010.6
-# 1           50        2530.7     2280.1    2820.9
-# 2          100        2870.4     2540.6    3260.5
+print(result.return_periods)
+# {10: 1840.2, 50: 2530.7, 100: 2870.4}
+print(result.confidence_intervals)
+# {10: (1690.4, 2010.6), 50: (2280.1, 2820.9), 100: (2540.6, 3260.5)}
 ```
 
-Switch `method` to `"lp3"`, `"gumbel"`, `"gpd"`, or `"ns_gev"` for non-stationary analysis. Pass `censored=True` for EMA on records with peak-over-threshold gaps.
+Switch `method` to `"lp3"`, `"gumbel"`, `"gev_lmoments"`, or `"gpd"`. Non-stationary GEV (`fit_nonstationary_gev`) and Bulletin 17C EMA for censored records (`expected_moments_algorithm`) are available in `aquascope.hydrology.flood_frequency`.
 
 ### 2. Baseflow separation + hydrological signatures
 
@@ -243,8 +242,8 @@ aquascope collect --source usgs --station 01646500 --days 365
 aquascope collect --source wapor --bbox 30.5,29.8,31.1,30.2 --variable RET --start-date 2026-04-01
 
 # Hydrological analysis
-aquascope hydro --method flood_frequency --file discharge.csv
-aquascope hydro --method baseflow --file discharge.csv
+aquascope hydro --analysis flood-freq --file discharge.csv
+aquascope hydro --analysis baseflow --file discharge.csv --method eckhardt
 
 # Agriculture planning
 aquascope agri plan --crop maize --planting-date 2026-04-01 --lat 30.0 --lon 31.25

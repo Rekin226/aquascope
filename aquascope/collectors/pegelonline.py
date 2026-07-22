@@ -73,7 +73,7 @@ class PegelonlineCollector(BaseCollector):
 
     def fetch_raw(
         self,
-        station_id: str,
+        station_id: str | None = None,
         timeseries: str | Sequence[str] | None = None,
         days: int = 30,
         start: str | None = None,
@@ -89,7 +89,7 @@ class PegelonlineCollector(BaseCollector):
             start: Optional API timestamp or ISO-8601 duration.
             end: Optional API timestamp.
         """
-        if not station_id.strip():
+        if not station_id or not station_id.strip():
             raise ValueError("PEGELONLINE station_id must not be empty.")
 
         codes = self._timeseries_codes(timeseries)
@@ -168,6 +168,8 @@ class PegelonlineCollector(BaseCollector):
                             reading_datetime=timestamp,
                             discharge_cms=value,
                             source_type="in_situ",
+                            uncertainty_cms=None,
+                            catchment_area_km2=None,
                             unit=unit,
                             remark=remark,
                         )

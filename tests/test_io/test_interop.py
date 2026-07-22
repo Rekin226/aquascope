@@ -119,6 +119,31 @@ class TestRecordsToXarray:
         assert float(ds["lat"].sel(station_id="6435060")) == 51.2
         assert float(ds["lon"].sel(station_id="6435060")) == 7.9
 
+    def test_streamflow_without_catchment_area_has_no_runoff_vars(self):
+        # Regression test: GRDC readings never set catchment_area_km2, so
+        # records_to_xarray must not emit all-NaN catchment_area/runoff
+        # variables for them.
+        ds = records_to_xarray([_sf("6435060", datetime(2026, 1, 1), 45.2)])
+        assert "catchment_area" not in ds.data_vars
+        assert "runoff" not in ds.data_vars
+
+    def test_streamflow_with_catchment_area_adds_runoff_var(self):
+        rec = StreamflowReading(
+            source=DataSource.GRDC,
+            station_id="6435060",
+            reading_datetime=datetime(2026, 1, 1),
+            discharge_cms=10.0,
+            source_type="in_situ",
+            catchment_area_km2=100.0,
+        )
+        ds = records_to_xarray([rec])
+        assert "catchment_area" in ds.data_vars
+        assert "runoff" in ds.data_vars
+        runoff_val = float(ds["runoff"].isel(time=0, station_id=0))
+        assert abs(runoff_val - 8.64) < 1e-6
+        assert ds["runoff"].attrs.get("units") == "mm/day"
+        assert ds["catchment_area"].attrs.get("units") == "km2"
+
     def test_empty_input(self):
         ds = records_to_xarray([])
         assert len(ds.data_vars) == 0

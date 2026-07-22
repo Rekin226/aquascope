@@ -352,6 +352,7 @@ Thanks to these wonderful people who make AquaScope possible ([emoji key](CONTRI
       <td align="center" valign="top" width="20%"><a href="https://github.com/adjenk"><img src="https://github.com/adjenk.png?size=100" width="100px;" alt="Adam Jenkins"/><br /><sub><b>Adam Jenkins</b></sub></a><br />🔌</td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/widjajs"><img src="https://github.com/widjajs.png?size=100" width="100px;" alt="Steven Widjaja"/><br /><sub><b>Steven Widjaja</b></sub></a><br />⚠️</td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/sairajkasam"><img src="https://github.com/sairajkasam.png?size=100" width="100px;" alt="Sai Raj Kasam"/><br /><sub><b>Sai Raj Kasam</b></sub></a><br />💻</td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/safiashaik04"><img src="https://github.com/safiashaik04.png?size=100" width="100px;" alt="safiashaik04"/><br /><sub><b>safiashaik04</b></sub></a><br />💻</td>
     </tr>
   </tbody>
 </table>

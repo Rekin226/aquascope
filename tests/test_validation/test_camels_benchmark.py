@@ -37,6 +37,7 @@ PEAK_MONTH_TOL = 2  # ±2 calendar months (circular)
 
 # ── helpers ───────────────────────────────────────────────────────────
 
+
 def _load_catchments() -> list[dict]:
     with open(CATCHMENTS_FILE) as f:
         return json.load(f)
@@ -78,13 +79,16 @@ def _ensure_computed() -> None:
         discharge, precipitation = _load_series(gid)
         _DISCHARGES[gid] = discharge
         _SIGNATURES[gid] = compute_signatures(
-            discharge, precipitation=precipitation, area_km2=c["area_km2"],
+            discharge,
+            precipitation=precipitation,
+            area_km2=c["area_km2"],
         )
         _BF_RESULTS[gid] = lyne_hollick(discharge)
         _FDC_SLOPES[gid] = _compute_fdc_slope(discharge)
 
 
 # ── fixtures ──────────────────────────────────────────────────────────
+
 
 @pytest.fixture(autouse=True)
 def _setup():
@@ -105,8 +109,7 @@ class TestMeanDischarge:
             published = c["published_q_mean"]
             err = abs(computed - published) / abs(published) if published else 0.0
             assert err <= REL_TOL, (
-                f"{gid}: mean_flow {computed:.2f} vs published {published:.2f} "
-                f"(err={err:.1%}, tol={REL_TOL:.0%})"
+                f"{gid}: mean_flow {computed:.2f} vs published {published:.2f} (err={err:.1%}, tol={REL_TOL:.0%})"
             )
 
 
@@ -120,8 +123,7 @@ class TestBaseflowIndex:
             published = c["published_baseflow_index"]
             diff = abs(computed - published)
             assert diff <= BFI_ABS_TOL, (
-                f"{gid}: BFI {computed:.3f} vs published {published:.3f} "
-                f"(diff={diff:.3f}, tol={BFI_ABS_TOL})"
+                f"{gid}: BFI {computed:.3f} vs published {published:.3f} (diff={diff:.3f}, tol={BFI_ABS_TOL})"
             )
 
 
@@ -144,8 +146,7 @@ class TestFlowPercentiles:
             gid = c["gauge_id"]
             sig = _SIGNATURES[gid]
             assert sig.q5 < sig.median_flow < sig.q95, (
-                f"{gid}: percentiles not ordered: "
-                f"q5={sig.q5:.3f}, median={sig.median_flow:.3f}, q95={sig.q95:.3f}"
+                f"{gid}: percentiles not ordered: q5={sig.q5:.3f}, median={sig.median_flow:.3f}, q95={sig.q95:.3f}"
             )
 
 
@@ -165,24 +166,34 @@ class TestSignaturesComplete:
 
     def test_signatures_complete(self) -> None:
         expected_fields = [
-            "mean_flow", "median_flow", "q5", "q95", "q5_q95_ratio",
-            "cv", "iqr",
-            "high_flow_frequency", "high_flow_duration", "q_peak_mean",
-            "low_flow_frequency", "low_flow_duration", "baseflow_index",
+            "mean_flow",
+            "median_flow",
+            "q5",
+            "q95",
+            "q5_q95_ratio",
+            "cv",
+            "iqr",
+            "high_flow_frequency",
+            "high_flow_duration",
+            "q_peak_mean",
+            "low_flow_frequency",
+            "low_flow_duration",
+            "baseflow_index",
             "zero_flow_fraction",
-            "peak_month", "seasonality_index",
-            "rising_limb_density", "flashiness_index",
+            "peak_month",
+            "seasonality_index",
+            "rising_limb_density",
+            "flashiness_index",
             "mean_recession_constant",
-            "runoff_ratio", "elasticity",
+            "runoff_ratio",
+            "elasticity",
         ]
         for c in _CATCHMENTS:
             gid = c["gauge_id"]
             sig = _SIGNATURES[gid]
             for field in expected_fields:
                 val = getattr(sig, field)
-                assert val is not None, (
-                    f"{gid}: signature field '{field}' is None"
-                )
+                assert val is not None, f"{gid}: signature field '{field}' is None"
 
 
 class TestSeasonalPattern:
@@ -196,8 +207,7 @@ class TestSeasonalPattern:
             diff = abs(computed - published)
             diff = min(diff, 12 - diff)  # circular distance
             assert diff <= PEAK_MONTH_TOL, (
-                f"{gid}: peak_month {computed} vs published {published} "
-                f"(diff={diff}, tol=±{PEAK_MONTH_TOL})"
+                f"{gid}: peak_month {computed} vs published {published} (diff={diff}, tol=±{PEAK_MONTH_TOL})"
             )
 
 
@@ -208,6 +218,4 @@ class TestRecessionConstant:
         for c in _CATCHMENTS:
             gid = c["gauge_id"]
             k = _SIGNATURES[gid].mean_recession_constant
-            assert k > 0, (
-                f"{gid}: mean_recession_constant {k:.4f} is not positive"
-            )
+            assert k > 0, f"{gid}: mean_recession_constant {k:.4f} is not positive"

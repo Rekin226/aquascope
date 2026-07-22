@@ -261,5 +261,4 @@ class TestPrecipitationConcentrationIndex:
     def test_more_concentrated_gives_higher_pci(self):
         uniform = pd.Series(np.full(12, 100.0))
         seasonal = pd.Series([0.0] * 11 + [1200.0])
-        assert precipitation_concentration_index(seasonal) > \
-               precipitation_concentration_index(uniform)
+        assert precipitation_concentration_index(seasonal) > precipitation_concentration_index(uniform)

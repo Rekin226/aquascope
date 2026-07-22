@@ -52,9 +52,7 @@ class TestLyneHollick:
 
         result = lyne_hollick(self.q)
         residual = result.df["total"] - result.df["baseflow"]
-        pd.testing.assert_series_equal(
-            result.df["quickflow"], residual, check_names=False
-        )
+        pd.testing.assert_series_equal(result.df["quickflow"], residual, check_names=False)
 
     def test_constant_flow_baseflow_equals_flow(self):
         """Constant discharge makes quickflow decay to zero, so baseflow approximates flow."""
@@ -63,9 +61,7 @@ class TestLyneHollick:
         idx = pd.date_range("2000-01-01", periods=40, freq="D")
         q = pd.Series(10.0, index=idx)
         result = lyne_hollick(q)
-        np.testing.assert_allclose(
-            result.df["baseflow"].values, q.values, rtol=1e-6
-        )
+        np.testing.assert_allclose(result.df["baseflow"].values, q.values, rtol=1e-6)
         assert result.bfi == pytest.approx(1.0, abs=1e-6)
 
     def test_alpha_near_zero(self):
@@ -142,9 +138,7 @@ class TestEckhardt:
 
         result = eckhardt(self.q)
         residual = result.df["total"] - result.df["baseflow"]
-        pd.testing.assert_series_equal(
-            result.df["quickflow"], residual, check_names=False
-        )
+        pd.testing.assert_series_equal(result.df["quickflow"], residual, check_names=False)
 
     def test_constant_flow_settles_at_bfi_max(self):
         """Eckhardt steady state is baseflow equal to bfi_max times q (default 0.80)."""
@@ -153,9 +147,7 @@ class TestEckhardt:
         idx = pd.date_range("2000-01-01", periods=40, freq="D")
         q = pd.Series(10.0, index=idx)
         result = eckhardt(q, bfi_max=0.80)
-        np.testing.assert_allclose(
-            result.df["baseflow"].values, 0.80 * q.values, rtol=1e-6
-        )
+        np.testing.assert_allclose(result.df["baseflow"].values, 0.80 * q.values, rtol=1e-6)
         assert result.bfi == pytest.approx(0.80, abs=1e-6)
 
     def test_constant_flow_bfi_max_one_equals_flow(self):
@@ -165,9 +157,7 @@ class TestEckhardt:
         idx = pd.date_range("2000-01-01", periods=40, freq="D")
         q = pd.Series(10.0, index=idx)
         result = eckhardt(q, bfi_max=1.0)
-        np.testing.assert_allclose(
-            result.df["baseflow"].values, q.values, rtol=1e-6
-        )
+        np.testing.assert_allclose(result.df["baseflow"].values, q.values, rtol=1e-6)
         assert result.bfi == pytest.approx(1.0, abs=1e-6)
 
     def test_bfi_max_near_zero(self):

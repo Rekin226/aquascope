@@ -143,9 +143,7 @@ class CMIP6Processor:
         if not models:
             raise ValueError("models dict must not be empty")
 
-        combined = pd.DataFrame(
-            {name: df.iloc[:, 0] for name, df in models.items()}
-        )
+        combined = pd.DataFrame({name: df.iloc[:, 0] for name, df in models.items()})
         return EnsembleStats(
             mean=combined.mean(axis=1),
             median=combined.median(axis=1),
@@ -185,8 +183,7 @@ class CMIP6Processor:
                 start, end = int(parts[0]), int(parts[1])
             except (ValueError, IndexError) as exc:
                 raise ValueError(
-                    f"Unrecognised period {period!r}. Use one of "
-                    f"{list(_PERIODS)} or 'YYYY-YYYY'."
+                    f"Unrecognised period {period!r}. Use one of {list(_PERIODS)} or 'YYYY-YYYY'."
                 ) from exc
 
         mask = (data.index.year >= start) & (data.index.year <= end)

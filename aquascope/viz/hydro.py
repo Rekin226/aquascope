@@ -151,13 +151,21 @@ def plot_hydrograph(
     # Baseflow
     if baseflow_col and baseflow_col in discharge.columns:
         ax1.fill_between(
-            discharge.index, 0, discharge[baseflow_col],
-            alpha=0.3, color=AQUA_PALETTE["secondary"], label="Baseflow",
+            discharge.index,
+            0,
+            discharge[baseflow_col],
+            alpha=0.3,
+            color=AQUA_PALETTE["secondary"],
+            label="Baseflow",
         )
         discharge[total_col] - discharge[baseflow_col]
         ax1.fill_between(
-            discharge.index, discharge[baseflow_col], discharge[total_col],
-            alpha=0.2, color=AQUA_PALETTE["warning"], label="Quickflow",
+            discharge.index,
+            discharge[baseflow_col],
+            discharge[total_col],
+            alpha=0.2,
+            color=AQUA_PALETTE["warning"],
+            label="Quickflow",
         )
 
     ax1.set_ylabel("Discharge (m³/s)")

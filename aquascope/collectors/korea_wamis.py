@@ -203,10 +203,7 @@ class KoreaWAMISCollector(BaseCollector):
             If *parameter* is not one of the supported types.
         """
         if parameter not in _PARAM_ENDPOINT:
-            raise ValueError(
-                f"Unsupported parameter '{parameter}'. "
-                f"Choose from: {list(_PARAM_ENDPOINT.keys())}"
-            )
+            raise ValueError(f"Unsupported parameter '{parameter}'. Choose from: {list(_PARAM_ENDPOINT.keys())}")
 
         endpoint = _PARAM_ENDPOINT[parameter]
         url = f"{self.BASE_URL}{endpoint}.do"

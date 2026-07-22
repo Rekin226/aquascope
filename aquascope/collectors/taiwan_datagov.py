@@ -112,11 +112,7 @@ class TaiwanDataGovCollector(BaseCollector):
                         pass
 
                 time_str = (
-                    rec.get("RecordTime")
-                    or rec.get("ObservationTime")
-                    or rec.get("DateTime")
-                    or rec.get("time")
-                    or ""
+                    rec.get("RecordTime") or rec.get("ObservationTime") or rec.get("DateTime") or rec.get("time") or ""
                 )
                 reading_dt = datetime.fromisoformat(time_str) if time_str else datetime.utcnow()
 
@@ -124,10 +120,7 @@ class TaiwanDataGovCollector(BaseCollector):
                     WaterLevelReading(
                         source=DataSource.TAIWAN_DATAGOV,
                         station_id=str(
-                            rec.get("StationIdentifier")
-                            or rec.get("StationNo")
-                            or rec.get("SiteId")
-                            or "unknown"
+                            rec.get("StationIdentifier") or rec.get("StationNo") or rec.get("SiteId") or "unknown"
                         ),
                         station_name=rec.get("StationName") or rec.get("SiteName"),
                         location=loc,

@@ -211,9 +211,7 @@ def drought_frequency(
     runs = _run_lengths(below)
 
     if not runs:
-        return DroughtStats(
-            n_events=0, mean_duration=0.0, max_duration=0, mean_severity=0.0, total_deficit=0.0
-        )
+        return DroughtStats(n_events=0, mean_duration=0.0, max_duration=0, mean_severity=0.0, total_deficit=0.0)
 
     durations = [r[1] for r in runs]
     severities: list[float] = []

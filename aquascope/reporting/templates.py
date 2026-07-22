@@ -316,10 +316,10 @@ def html_template(title: str, body: str, css: str) -> str:
     safe_title = _html.escape(title)
     return (
         "<!DOCTYPE html>\n"
-        "<html lang=\"en\">\n"
+        '<html lang="en">\n'
         "<head>\n"
-        "  <meta charset=\"UTF-8\">\n"
-        "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+        '  <meta charset="UTF-8">\n'
+        '  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
         f"  <title>{safe_title}</title>\n"
         f"  <style>{css}</style>\n"
         "</head>\n"

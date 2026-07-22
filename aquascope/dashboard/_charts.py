@@ -145,17 +145,20 @@ def fdc(series: pd.Series, title: str | None = None) -> go.Figure:
     q = np.sort(np.asarray(series.dropna(), dtype=float))[::-1]
     n = q.size
     prob = 100.0 * np.arange(1, n + 1) / (n + 1)
-    fig = go.Figure(
-        go.Scatter(x=prob, y=q, mode="lines", line=dict(color=CAT[0], width=2), name="Discharge")
-    )
+    fig = go.Figure(go.Scatter(x=prob, y=q, mode="lines", line=dict(color=CAT[0], width=2), name="Discharge"))
     for p, label in ((50, "Q50"), (95, "Q95")):
         val = float(np.interp(p, prob, q))
         fig.add_trace(
             go.Scatter(
-                x=[p], y=[val], mode="markers+text", text=[f"{label} = {val:.2f}"],
-                textposition="top right", textfont=dict(size=12, color=_MUTED),
+                x=[p],
+                y=[val],
+                mode="markers+text",
+                text=[f"{label} = {val:.2f}"],
+                textposition="top right",
+                textfont=dict(size=12, color=_MUTED),
                 marker=dict(size=9, color=CAT[0], line=dict(width=2, color="#ffffff")),
-                showlegend=False, hoverinfo="skip",
+                showlegend=False,
+                hoverinfo="skip",
             )
         )
     fig.update_yaxes(type="log")
@@ -170,14 +173,16 @@ def hydrograph(
     title: str | None = None,
 ) -> go.Figure:
     fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(x=dates, y=total, name="Total flow", mode="lines", line=dict(color=CAT[0], width=2))
-    )
+    fig.add_trace(go.Scatter(x=dates, y=total, name="Total flow", mode="lines", line=dict(color=CAT[0], width=2)))
     if baseflow is not None:
         fig.add_trace(
             go.Scatter(
-                x=dates, y=baseflow, name="Baseflow", mode="lines",
-                line=dict(color=CAT[4], width=2), fill="tozeroy",
+                x=dates,
+                y=baseflow,
+                name="Baseflow",
+                mode="lines",
+                line=dict(color=CAT[4], width=2),
+                fill="tozeroy",
                 fillcolor="rgba(27, 175, 122, 0.18)",
             )
         )
@@ -191,8 +196,9 @@ def spi_bars(dates, values: pd.Series, title: str | None = None) -> go.Figure:
     fig = go.Figure(go.Bar(x=dates, y=vals, marker_color=colors, name="SPI"))
     fig.add_hline(y=0, line_color=_GRID)
     for level, label in ((-1.0, "moderate"), (-1.5, "severe"), (-2.0, "extreme")):
-        fig.add_hline(y=level, line_dash="dot", line_color="rgba(176,50,48,0.45)",
-                      annotation_text=label, annotation_font_size=11)
+        fig.add_hline(
+            y=level, line_dash="dot", line_color="rgba(176,50,48,0.45)", annotation_text=label, annotation_font_size=11
+        )
     fig.update_layout(showlegend=False, bargap=0.0)
     return _finish(fig, title or "SPI Timeline", "SPI")
 
@@ -213,22 +219,30 @@ def return_curve(
             go.Scatter(
                 x=list(periods) + list(periods)[::-1],
                 y=list(upper) + list(lower)[::-1],
-                fill="toself", fillcolor="rgba(42, 120, 214, 0.15)",
-                line=dict(width=0), name=f"{int(conf * 100)}% CI", hoverinfo="skip",
+                fill="toself",
+                fillcolor="rgba(42, 120, 214, 0.15)",
+                line=dict(width=0),
+                name=f"{int(conf * 100)}% CI",
+                hoverinfo="skip",
             )
         )
     fig.add_trace(
         go.Scatter(
-            x=list(periods), y=list(levels), mode="lines+markers",
-            line=dict(color=CAT[0], width=2), marker=dict(size=8), name="Return level",
+            x=list(periods),
+            y=list(levels),
+            mode="lines+markers",
+            line=dict(color=CAT[0], width=2),
+            marker=dict(size=8),
+            name="Return level",
         )
     )
     if emp_periods is not None and emp_values is not None:
         fig.add_trace(
             go.Scatter(
-                x=list(emp_periods), y=list(emp_values), mode="markers",
-                marker=dict(size=8, color=CAT[5], symbol="diamond",
-                            line=dict(width=1, color="#ffffff")),
+                x=list(emp_periods),
+                y=list(emp_values),
+                mode="markers",
+                marker=dict(size=8, color=CAT[5], symbol="diamond", line=dict(width=1, color="#ffffff")),
                 name="Observed (Weibull)",
             )
         )
@@ -253,13 +267,22 @@ def exceedance_bar(rows: list[dict], title: str | None = None) -> go.Figure:
     colors = [status_color.get(r, STATUS["warning"]) for r in df["status_plain"]]
     fig = go.Figure(
         go.Bar(
-            x=df["pct"], y=df["parameter"], orientation="h",
-            marker_color=colors, text=[f"{p:.1f}%" for p in df["pct"]],
-            textposition="outside", cliponaxis=False,
+            x=df["pct"],
+            y=df["parameter"],
+            orientation="h",
+            marker_color=colors,
+            text=[f"{p:.1f}%" for p in df["pct"]],
+            textposition="outside",
+            cliponaxis=False,
         )
     )
-    fig.add_vline(x=10, line_dash="dot", line_color="rgba(208,59,59,0.5)",
-                  annotation_text="10% alert threshold", annotation_font_size=11)
+    fig.add_vline(
+        x=10,
+        line_dash="dot",
+        line_color="rgba(208,59,59,0.5)",
+        annotation_text="10% alert threshold",
+        annotation_font_size=11,
+    )
     fig.update_layout(showlegend=False, hovermode="closest")
     fig.update_xaxes(range=[0, max(100.0, float(df["pct"].max()) * 1.15)])
     return _finish(fig, title or "WHO guideline exceedances", None, "Samples exceeding guideline (%)")
@@ -294,16 +317,15 @@ def station_map(df: pd.DataFrame, lat: str, lon: str, hover: str | None = None, 
 def water_demand(dates, sched: pd.DataFrame, crop: str) -> go.Figure:
     fig = go.Figure()
     fig.add_trace(
-        go.Bar(x=dates, y=sched["effective_rain"], name="Effective rain",
-               marker_color="rgba(0, 131, 0, 0.45)")
+        go.Bar(x=dates, y=sched["effective_rain"], name="Effective rain", marker_color="rgba(0, 131, 0, 0.45)")
     )
     fig.add_trace(
-        go.Scatter(x=dates, y=sched["etc"], name="Crop ET (ETc)", mode="lines",
-                   line=dict(color=CAT[5], width=2))
+        go.Scatter(x=dates, y=sched["etc"], name="Crop ET (ETc)", mode="lines", line=dict(color=CAT[5], width=2))
     )
     fig.add_trace(
-        go.Scatter(x=dates, y=sched["eto"], name="Reference ET₀", mode="lines",
-                   line=dict(color=CAT[0], width=2, dash="dash"))
+        go.Scatter(
+            x=dates, y=sched["eto"], name="Reference ET₀", mode="lines", line=dict(color=CAT[0], width=2, dash="dash")
+        )
     )
     return _finish(fig, f"{crop} — daily water demand vs effective rainfall", "mm/day")
 
@@ -311,16 +333,14 @@ def water_demand(dates, sched: pd.DataFrame, crop: str) -> go.Figure:
 def kc_curves(dates, sched: pd.DataFrame, method: str, crop: str) -> go.Figure:
     fig = go.Figure()
     if method == "dual":
-        fig.add_trace(go.Scatter(x=dates, y=sched["kcb"], name="Kcb (transpiration)",
-                                 line=dict(color=CAT[1], width=2)))
-        fig.add_trace(go.Scatter(x=dates, y=sched["ke"], name="Ke (soil evaporation)",
-                                 line=dict(color=CAT[5], width=2)))
-        fig.add_trace(go.Scatter(x=dates, y=sched["kc_dual"], name="Kc = Kcb + Ke",
-                                 line=dict(color=CAT[0], width=2.5)))
+        fig.add_trace(go.Scatter(x=dates, y=sched["kcb"], name="Kcb (transpiration)", line=dict(color=CAT[1], width=2)))
+        fig.add_trace(
+            go.Scatter(x=dates, y=sched["ke"], name="Ke (soil evaporation)", line=dict(color=CAT[5], width=2))
+        )
+        fig.add_trace(go.Scatter(x=dates, y=sched["kc_dual"], name="Kc = Kcb + Ke", line=dict(color=CAT[0], width=2.5)))
         title = f"{crop} — dual crop coefficients"
     else:
-        fig.add_trace(go.Scatter(x=dates, y=sched["kc"], name="Kc (single)",
-                                 line=dict(color=CAT[0], width=2.5)))
+        fig.add_trace(go.Scatter(x=dates, y=sched["kc"], name="Kc (single)", line=dict(color=CAT[0], width=2.5)))
         title = f"{crop} — single crop coefficient"
     return _finish(fig, title, "Coefficient")
 
@@ -328,12 +348,16 @@ def kc_curves(dates, sched: pd.DataFrame, method: str, crop: str) -> go.Figure:
 def cumulative_irrigation(dates, sched: pd.DataFrame) -> go.Figure:
     fig = go.Figure()
     fig.add_trace(
-        go.Scatter(x=dates, y=sched["gross_irrigation"].cumsum(), name="Cumulative gross",
-                   fill="tozeroy", fillcolor="rgba(74, 58, 167, 0.15)",
-                   line=dict(color=CAT[6], width=2))
+        go.Scatter(
+            x=dates,
+            y=sched["gross_irrigation"].cumsum(),
+            name="Cumulative gross",
+            fill="tozeroy",
+            fillcolor="rgba(74, 58, 167, 0.15)",
+            line=dict(color=CAT[6], width=2),
+        )
     )
     fig.add_trace(
-        go.Scatter(x=dates, y=sched["net_irrigation"].cumsum(), name="Cumulative net",
-                   line=dict(color=CAT[0], width=2))
+        go.Scatter(x=dates, y=sched["net_irrigation"].cumsum(), name="Cumulative net", line=dict(color=CAT[0], width=2))
     )
     return _finish(fig, "Cumulative irrigation requirement", "mm")

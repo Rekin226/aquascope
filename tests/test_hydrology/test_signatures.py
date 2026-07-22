@@ -78,11 +78,23 @@ class TestComputeSignatures:
 
         assert isinstance(report, SignatureReport)
         for field_name in [
-            "mean_flow", "median_flow", "q5", "q95", "cv", "iqr",
-            "high_flow_frequency", "high_flow_duration", "q_peak_mean",
-            "low_flow_frequency", "baseflow_index", "zero_flow_fraction",
-            "peak_month", "seasonality_index", "rising_limb_density",
-            "flashiness_index", "mean_recession_constant",
+            "mean_flow",
+            "median_flow",
+            "q5",
+            "q95",
+            "cv",
+            "iqr",
+            "high_flow_frequency",
+            "high_flow_duration",
+            "q_peak_mean",
+            "low_flow_frequency",
+            "baseflow_index",
+            "zero_flow_fraction",
+            "peak_month",
+            "seasonality_index",
+            "rising_limb_density",
+            "flashiness_index",
+            "mean_recession_constant",
         ]:
             val = getattr(report, field_name)
             assert val is not None, f"{field_name} should not be None"

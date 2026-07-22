@@ -98,7 +98,8 @@ def _timeseries(df: pd.DataFrame, prof: _state.DataProfile) -> None:
             color = prof.param_col
         else:
             keep = st.multiselect(
-                "Parameters (max 8 shown)", sorted(df[prof.param_col].astype(str).unique()),
+                "Parameters (max 8 shown)",
+                sorted(df[prof.param_col].astype(str).unique()),
                 default=sorted(df[prof.param_col].astype(str).unique())[:4],
                 max_selections=8,
             )
@@ -134,12 +135,12 @@ def _map(df: pd.DataFrame, prof: _state.DataProfile) -> None:
     if not prof.has_geo:
         st.warning("No latitude/longitude columns detected.")
         return
-    st.plotly_chart(
-        _charts.station_map(df, prof.lat_col, prof.lon_col, hover=prof.station_col)
+    st.plotly_chart(_charts.station_map(df, prof.lat_col, prof.lon_col, hover=prof.station_col))
+    n = (
+        df.dropna(subset=[prof.lat_col, prof.lon_col])
+        .drop_duplicates(subset=[c for c in (prof.lat_col, prof.lon_col, prof.station_col) if c])
+        .shape[0]
     )
-    n = df.dropna(subset=[prof.lat_col, prof.lon_col]).drop_duplicates(
-        subset=[c for c in (prof.lat_col, prof.lon_col, prof.station_col) if c]
-    ).shape[0]
     st.caption(f"{n} unique station location(s). Scroll to zoom, drag to pan.")
 
 
@@ -171,7 +172,5 @@ def _return_periods(df: pd.DataFrame, prof: _state.DataProfile) -> None:
         result = fit_gev(series)
     periods = list(result.return_periods.keys())
     levels = list(result.return_periods.values())
-    st.plotly_chart(
-        _charts.return_curve(periods, levels, title=f"GEV return levels — {col}")
-    )
+    st.plotly_chart(_charts.return_curve(periods, levels, title=f"GEV return levels — {col}"))
     st.caption("For LP3/Gumbel fits and bootstrap confidence bounds, use the **Extreme Events** page.")

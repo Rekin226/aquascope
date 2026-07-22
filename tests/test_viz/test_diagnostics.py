@@ -172,6 +172,10 @@ class TestCrossValidation:
         # Use a small series, few splits, and few bootstraps to keep the test fast
         small_series = _make_annual_max_series(size=20, seed=42)
         cov = coverage_probability(
-            small_series, distribution="gev", ci_level=0.90, n_splits=4, n_boot=50,
+            small_series,
+            distribution="gev",
+            ci_level=0.90,
+            n_splits=4,
+            n_boot=50,
         )
         assert 0.0 <= cov <= 1.0

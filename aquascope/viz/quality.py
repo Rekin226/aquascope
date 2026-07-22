@@ -182,10 +182,7 @@ def plot_who_exceedances(
     fig, ax = plt.subplots(figsize=figsize)
 
     who_df = who_df.sort_values("pct_exceedances", ascending=True)
-    colours = [
-        AQUA_PALETTE["success"] if s == "PASS" else AQUA_PALETTE["danger"]
-        for s in who_df["status"]
-    ]
+    colours = [AQUA_PALETTE["success"] if s == "PASS" else AQUA_PALETTE["danger"] for s in who_df["status"]]
 
     ax.barh(who_df["variable"], who_df["pct_exceedances"], color=colours, height=0.6)
     ax.axvline(10, color=AQUA_PALETTE["warning"], linestyle="--", linewidth=1, label="10 % threshold")

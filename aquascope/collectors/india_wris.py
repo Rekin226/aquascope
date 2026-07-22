@@ -83,9 +83,7 @@ class IndiaWRISCollector(BaseCollector):
                             latitude=row["latitude"],
                             longitude=row["longitude"],
                         ),
-                        reading_datetime=datetime.fromisoformat(
-                            row["dataTime"]
-                        ),
+                        reading_datetime=datetime.fromisoformat(row["dataTime"]),
                         water_level=float(row["dataValue"]),
                         unit=row.get("unit", "m"),
                         remark=row.get("description"),

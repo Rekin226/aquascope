@@ -87,13 +87,15 @@ class ModelRecommender:
 
         results: list[ModelRecommendation] = []
         for i, model_id in enumerate(model_ids[:top_k]):
-            results.append(ModelRecommendation(
-                model_id=model_id,
-                rank=i + 1,
-                challenge_type=challenge_type,
-                task_type=task_type,
-                rationale=_rationale(model_id, challenge_type, task_type),
-            ))
+            results.append(
+                ModelRecommendation(
+                    model_id=model_id,
+                    rank=i + 1,
+                    challenge_type=challenge_type,
+                    task_type=task_type,
+                    rationale=_rationale(model_id, challenge_type, task_type),
+                )
+            )
         return results
 
 

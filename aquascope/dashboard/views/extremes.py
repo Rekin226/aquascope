@@ -68,10 +68,7 @@ def render() -> None:
         else:
             n_years = series.dropna().shape[0]
         if n_years < 3:
-            st.error(
-                f"Need at least 3 annual maxima — found {n_years}. "
-                "Use the demo streamflow or a longer record."
-            )
+            st.error(f"Need at least 3 annual maxima — found {n_years}. Use the demo streamflow or a longer record.")
             return
 
         with st.spinner("Fitting distribution and bootstrapping return levels…"):

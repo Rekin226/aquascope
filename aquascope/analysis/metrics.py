@@ -145,9 +145,7 @@ def r2(observed: np.ndarray, simulated: np.ndarray) -> float:
 # ── Probabilistic / uncertainty metrics ──────────────────────────────────
 
 
-def pinball_loss(
-    observed: np.ndarray, predicted: np.ndarray, quantile: float
-) -> float:
+def pinball_loss(observed: np.ndarray, predicted: np.ndarray, quantile: float) -> float:
     """Pinball (quantile) loss for a single quantile forecast.
 
     For quantile level ``q`` and error ``e = obs - pred``::
@@ -167,9 +165,7 @@ def pinball_loss(
     return float(np.mean(np.maximum(quantile * err, (quantile - 1.0) * err)))
 
 
-def picp(
-    observed: np.ndarray, lower: np.ndarray, upper: np.ndarray
-) -> float:
+def picp(observed: np.ndarray, lower: np.ndarray, upper: np.ndarray) -> float:
     """Prediction Interval Coverage Probability.
 
     Fraction of observations that fall within the ``[lower, upper]``
@@ -188,9 +184,7 @@ def picp(
     return float(np.mean(inside))
 
 
-def mpiw(
-    lower: np.ndarray, upper: np.ndarray, observed: np.ndarray | None = None
-) -> float:
+def mpiw(lower: np.ndarray, upper: np.ndarray, observed: np.ndarray | None = None) -> float:
     """Mean Prediction Interval Width.
 
     ``mean(upper - lower)``. Sharper (narrower) intervals are preferred,
@@ -232,9 +226,7 @@ def crps_ensemble(observed: np.ndarray, ensemble: np.ndarray) -> float:
     observed = np.asarray(observed, dtype=float)
     ensemble = np.asarray(ensemble, dtype=float)
     if ensemble.ndim != 2 or ensemble.shape[0] != observed.shape[0]:
-        raise ValueError(
-            "ensemble must have shape (n_obs, n_members) matching observed."
-        )
+        raise ValueError("ensemble must have shape (n_obs, n_members) matching observed.")
     row_mask = np.isfinite(observed)
     obs = observed[row_mask]
     ens = ensemble[row_mask]
@@ -249,9 +241,7 @@ def crps_ensemble(observed: np.ndarray, ensemble: np.ndarray) -> float:
     return float(np.mean(term1 - term2))
 
 
-def crps_from_quantiles(
-    observed: np.ndarray, quantile_preds: dict[float, np.ndarray]
-) -> float:
+def crps_from_quantiles(observed: np.ndarray, quantile_preds: dict[float, np.ndarray]) -> float:
     """Approximate CRPS from a set of predictive quantiles.
 
     Uses the quantile decomposition ``CRPS = 2 * integral_0^1 pinball_q dq``,
@@ -262,9 +252,7 @@ def crps_from_quantiles(
     """
     if not quantile_preds:
         return float("nan")
-    losses = [
-        pinball_loss(observed, pred, q) for q, pred in quantile_preds.items()
-    ]
+    losses = [pinball_loss(observed, pred, q) for q, pred in quantile_preds.items()]
     losses = [v for v in losses if np.isfinite(v)]
     if not losses:
         return float("nan")

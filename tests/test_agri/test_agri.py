@@ -169,8 +169,15 @@ class TestPenmanMonteith:
     def test_non_negative(self):
         """ET₀ should never be negative."""
         eto = penman_monteith_daily(
-            t_min=5.0, t_max=10.0, rh_min=80.0, rh_max=95.0,
-            u2=0.5, rs=5.0, latitude=50.0, elevation=100.0, doy=15,
+            t_min=5.0,
+            t_max=10.0,
+            rh_min=80.0,
+            rh_max=95.0,
+            u2=0.5,
+            rs=5.0,
+            latitude=50.0,
+            elevation=100.0,
+            doy=15,
         )
         assert eto >= 0.0
 
@@ -585,8 +592,11 @@ class TestAquastatCollector:
         collector = AquastatCollector()
         raw = [
             {
-                "Area": "Egypt", "Area Code": "EGY", "Year": "2020",
-                "Element": "Total water withdrawal", "Value": "77.5",
+                "Area": "Egypt",
+                "Area Code": "EGY",
+                "Year": "2020",
+                "Element": "Total water withdrawal",
+                "Value": "77.5",
                 "Unit": "10^9 m3/year",
             }
         ]

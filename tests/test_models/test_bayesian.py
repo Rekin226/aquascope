@@ -160,6 +160,7 @@ class TestMetropolisHastings:
 
     def test_metropolis_acceptance_rate(self) -> None:
         """Acceptance rate should be between 15 % and 60 %."""
+
         def log_post(theta: np.ndarray) -> float:
             return float(stats.norm.logpdf(theta[0], loc=0.0, scale=1.0))
 
@@ -172,6 +173,7 @@ class TestMetropolisHastings:
 
     def test_metropolis_burn_in_removed(self) -> None:
         """Chain length equals n_samples, not n_samples + burn_in."""
+
         def log_post(theta: np.ndarray) -> float:
             return float(-0.5 * theta[0] ** 2)
 

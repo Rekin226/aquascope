@@ -1,4 +1,5 @@
 """Tests for aquascope.utils.collect_many."""
+
 from __future__ import annotations
 
 import threading
@@ -13,6 +14,7 @@ from aquascope.utils.collect_many import (
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
+
 def _ok(key: str, value: object = None):
     """Return a CollectRequest that always succeeds."""
     return CollectRequest(key=key, fn=lambda: value if value is not None else key)
@@ -25,6 +27,7 @@ def _fail(key: str, exc: Exception | None = None):
 
 
 # ── Basic return types ────────────────────────────────────────────────────
+
 
 class TestCollectManyReturnTypes:
     def test_returns_collect_result(self):
@@ -48,6 +51,7 @@ class TestCollectManyReturnTypes:
 
 
 # ── All success ───────────────────────────────────────────────────────────
+
 
 class TestCollectManyAllSuccess:
     def test_all_keys_present(self):
@@ -73,6 +77,7 @@ class TestCollectManyAllSuccess:
 
 
 # ── Partial failure ───────────────────────────────────────────────────────
+
 
 class TestCollectManyPartialFailure:
     def test_one_failure_does_not_abort_batch(self):
@@ -117,16 +122,14 @@ class TestCollectManyPartialFailure:
 
 # ── Concurrency ───────────────────────────────────────────────────────────
 
+
 class TestCollectManyConcurrency:
     def test_runs_concurrently(self):
         """Prove concurrency: N slow tasks finish faster than N × sleep_time."""
         n = 6
         sleep_time = 0.2
 
-        reqs = [
-            CollectRequest(key=str(i), fn=lambda: time.sleep(sleep_time) or True)
-            for i in range(n)
-        ]
+        reqs = [CollectRequest(key=str(i), fn=lambda: time.sleep(sleep_time) or True) for i in range(n)]
 
         start = time.monotonic()
         result = collect_many(reqs, max_workers=n)
@@ -165,6 +168,7 @@ class TestCollectManyConcurrency:
 
 # ── Progress callback ─────────────────────────────────────────────────────
 
+
 class TestCollectManyProgressCallback:
     def test_callback_called_for_each_request(self):
         calls = []
@@ -188,6 +192,7 @@ class TestCollectManyProgressCallback:
 
 
 # ── Edge cases ────────────────────────────────────────────────────────────
+
 
 class TestCollectManyEdgeCases:
     def test_single_request_success(self):

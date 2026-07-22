@@ -151,9 +151,7 @@ class TestRecordsToXarray:
     def test_unsupported_type_raises(self):
         from aquascope.schemas.water_data import ReservoirStatus
 
-        rec = ReservoirStatus(
-            source=DataSource.TAIWAN_WRA, reservoir_name="R1", date=datetime(2026, 1, 1)
-        )
+        rec = ReservoirStatus(source=DataSource.TAIWAN_WRA, reservoir_name="R1", date=datetime(2026, 1, 1))
         with pytest.raises(TypeError):
             records_to_xarray([rec])
 

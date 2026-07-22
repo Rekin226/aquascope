@@ -163,5 +163,5 @@ def compute_slope(dem: DEMData) -> np.ndarray:
     cellsize_y = abs(dem.transform[4]) if dem.transform is not None else 1.0
 
     dz_dy, dz_dx = np.gradient(elev, cellsize_y, cellsize_x)
-    slope_rad = np.arctan(np.sqrt(dz_dx ** 2 + dz_dy ** 2))
+    slope_rad = np.arctan(np.sqrt(dz_dx**2 + dz_dy**2))
     return np.degrees(slope_rad)

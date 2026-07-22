@@ -1,6 +1,5 @@
 """Tests for the AI methodology recommender."""
 
-
 from aquascope.ai_engine.recommender import DatasetProfile, Recommendation, recommend
 
 

@@ -20,14 +20,16 @@ def _make_df(n_rows: int = 100) -> pd.DataFrame:
     params = ["DO", "BOD5", "COD", "NH3-N", "SS"]
     rows = []
     for i in range(n_rows):
-        rows.append({
-            "source": "taiwan_moenv",
-            "station_id": stations[i % 5],
-            "parameter": params[i % 5],
-            "value": round(rng.normal(5.0, 2.0), 2),
-            "unit": "mg/L",
-            "sample_datetime": f"2024-{(i % 12) + 1:02d}-15T10:00:00",
-        })
+        rows.append(
+            {
+                "source": "taiwan_moenv",
+                "station_id": stations[i % 5],
+                "parameter": params[i % 5],
+                "value": round(rng.normal(5.0, 2.0), 2),
+                "unit": "mg/L",
+                "sample_datetime": f"2024-{(i % 12) + 1:02d}-15T10:00:00",
+            }
+        )
     return pd.DataFrame(rows)
 
 

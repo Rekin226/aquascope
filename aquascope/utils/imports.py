@@ -1,4 +1,5 @@
 """Lazy import helpers with informative error messages."""
+
 from __future__ import annotations
 
 _INSTALL_MAP = {
@@ -42,8 +43,5 @@ def require(module_name: str, *, feature: str = "", group: str | None = None) ->
     except ImportError:
         group = group or _INSTALL_MAP.get(module_name, module_name)
         feat = f" ({feature})" if feature else ""
-        msg = (
-            f"Missing optional dependency '{module_name}'{feat}. "
-            f"Install with: pip install 'aquascope[{group}]'"
-        )
+        msg = f"Missing optional dependency '{module_name}'{feat}. Install with: pip install 'aquascope[{group}]'"
         raise ImportError(msg) from None

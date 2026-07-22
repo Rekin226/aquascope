@@ -137,7 +137,9 @@ class TestBenchmarkAquastat:
 
 
 class TestAgriBenchmarkCli:
-    def test_cli_benchmark_writes_json(self, tmp_path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_cli_benchmark_writes_json(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         aquastat_path = tmp_path / "aquastat.json"
         output_path = tmp_path / "benchmark.json"
         _sample_aquastat_df().to_json(aquastat_path, orient="records", indent=2)

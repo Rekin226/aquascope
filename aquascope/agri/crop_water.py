@@ -394,9 +394,7 @@ def crop_water_requirement(
 
     lengths = stage_lengths or DEFAULT_STAGE_LENGTHS.get(crop)
     if lengths is None:
-        raise ValueError(
-            f"No default stage lengths for '{crop}'. Provide stage_lengths explicitly."
-        )
+        raise ValueError(f"No default stage lengths for '{crop}'. Provide stage_lengths explicitly.")
 
     if method == "dual":
         kcb_values = get_kcb(crop)
@@ -418,33 +416,41 @@ def crop_water_requirement(
 
         if method == "single":
             etc_val = crop_et(eto_val, kc)
-            rows.append({
-                "date": current_date,
-                "stage": stage,
-                "kc": round(kc, 3),
-                "eto": round(eto_val, 2),
-                "etc": round(etc_val, 2),
-            })
+            rows.append(
+                {
+                    "date": current_date,
+                    "stage": stage,
+                    "kc": round(kc, 3),
+                    "eto": round(eto_val, 2),
+                    "etc": round(etc_val, 2),
+                }
+            )
         else:
             # Dual method: ETc = (Kcb + Ke) × ET₀
             _, kcb = _interpolate_kc(day_offset, lengths, kcb_values)
             ke = compute_ke(kcb, kc_max=kc_max, few=few, kr=kr)
             kc_dual = kcb + ke
             etc_val = crop_et(eto_val, kc_dual)
-            rows.append({
-                "date": current_date,
-                "stage": stage,
-                "kc": round(kc, 3),
-                "kcb": round(kcb, 3),
-                "ke": round(ke, 3),
-                "kc_dual": round(kc_dual, 3),
-                "eto": round(eto_val, 2),
-                "etc": round(etc_val, 2),
-            })
+            rows.append(
+                {
+                    "date": current_date,
+                    "stage": stage,
+                    "kc": round(kc, 3),
+                    "kcb": round(kcb, 3),
+                    "ke": round(ke, 3),
+                    "kc_dual": round(kc_dual, 3),
+                    "eto": round(eto_val, 2),
+                    "etc": round(etc_val, 2),
+                }
+            )
 
         logger.debug(
             "crop_water_requirement: day=%d crop=%s stage=%s method=%s etc=%.2f",
-            day_offset, crop, stage, method, etc_val,
+            day_offset,
+            crop,
+            stage,
+            method,
+            etc_val,
         )
 
     return pd.DataFrame(rows)

@@ -131,7 +131,10 @@ def chloride_mass_balance(
 
     logger.info(
         "CMB recharge: %.1f mm/year (Cl_p=%.2f, Cl_gw=%.2f, P=%.0f mm)",
-        recharge_mm, precip_cl, gw_cl, precip_mm,
+        recharge_mm,
+        precip_cl,
+        gw_cl,
+        precip_mm,
     )
     return RechargeResult(
         method="chloride_mass_balance",
@@ -253,7 +256,9 @@ def soil_water_balance_recharge(
 
     logger.info(
         "SWB recharge: %.1f mm/year (total=%.1f mm over %.1f years)",
-        recharge_mm_per_year, total_recharge_mm, period_years,
+        recharge_mm_per_year,
+        total_recharge_mm,
+        period_years,
     )
     return RechargeResult(
         method="soil_water_balance",

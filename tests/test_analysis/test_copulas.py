@@ -108,8 +108,13 @@ class TestJointExceedance:
     def test_joint_exceedance(self):
         """P(both) + P(neither) = 1 - P(only one)."""
         copula = CopulaResult(
-            family="gaussian", parameter=0.5, kendall_tau=0.3,
-            spearman_rho=0.4, aic=10.0, log_likelihood=-5.0, n_samples=100,
+            family="gaussian",
+            parameter=0.5,
+            kendall_tau=0.3,
+            spearman_rho=0.4,
+            aic=10.0,
+            log_likelihood=-5.0,
+            n_samples=100,
         )
         jp = joint_exceedance_probability(copula, 0.8, 0.8)
         assert isinstance(jp, JointProbability)
@@ -120,8 +125,13 @@ class TestJointExceedance:
 
     def test_joint_return_period(self):
         copula = CopulaResult(
-            family="clayton", parameter=2.0, kendall_tau=0.5,
-            spearman_rho=0.6, aic=10.0, log_likelihood=-5.0, n_samples=100,
+            family="clayton",
+            parameter=2.0,
+            kendall_tau=0.5,
+            spearman_rho=0.6,
+            aic=10.0,
+            log_likelihood=-5.0,
+            n_samples=100,
         )
         jp = joint_exceedance_probability(copula, 0.9, 0.9)
         if jp.prob_both_exceed > 0:
@@ -129,8 +139,13 @@ class TestJointExceedance:
 
     def test_conditional_probability(self):
         copula = CopulaResult(
-            family="gumbel", parameter=2.0, kendall_tau=0.5,
-            spearman_rho=0.6, aic=10.0, log_likelihood=-5.0, n_samples=100,
+            family="gumbel",
+            parameter=2.0,
+            kendall_tau=0.5,
+            spearman_rho=0.6,
+            aic=10.0,
+            log_likelihood=-5.0,
+            n_samples=100,
         )
         jp = joint_exceedance_probability(copula, 0.7, 0.7)
         assert 0 <= jp.prob_x_exceed_given_y <= 1
@@ -139,8 +154,13 @@ class TestJointExceedance:
 class TestSampling:
     def test_generate_copula_samples_shape(self):
         copula = CopulaResult(
-            family="gaussian", parameter=0.5, kendall_tau=0.3,
-            spearman_rho=0.4, aic=10.0, log_likelihood=-5.0, n_samples=100,
+            family="gaussian",
+            parameter=0.5,
+            kendall_tau=0.3,
+            spearman_rho=0.4,
+            aic=10.0,
+            log_likelihood=-5.0,
+            n_samples=100,
         )
         u, v = generate_copula_samples(copula, n=500, seed=42)
         assert u.shape == (500,)
@@ -149,8 +169,13 @@ class TestSampling:
     def test_generate_copula_samples_range(self):
         for fam, theta in [("gaussian", 0.5), ("clayton", 2.0), ("gumbel", 2.0), ("frank", 5.0)]:
             copula = CopulaResult(
-                family=fam, parameter=theta, kendall_tau=0.3,
-                spearman_rho=0.4, aic=10.0, log_likelihood=-5.0, n_samples=100,
+                family=fam,
+                parameter=theta,
+                kendall_tau=0.3,
+                spearman_rho=0.4,
+                aic=10.0,
+                log_likelihood=-5.0,
+                n_samples=100,
             )
             u, v = generate_copula_samples(copula, n=500, seed=42)
             assert np.all(u > 0) and np.all(u < 1), f"{fam}: u out of (0,1)"
@@ -158,8 +183,13 @@ class TestSampling:
 
     def test_generate_synthetic_data(self):
         copula = CopulaResult(
-            family="gaussian", parameter=0.5, kendall_tau=0.3,
-            spearman_rho=0.4, aic=10.0, log_likelihood=-5.0, n_samples=100,
+            family="gaussian",
+            parameter=0.5,
+            kendall_tau=0.3,
+            spearman_rho=0.4,
+            aic=10.0,
+            log_likelihood=-5.0,
+            n_samples=100,
         )
         x, y = generate_synthetic_data(
             copula,
@@ -177,8 +207,13 @@ class TestSampling:
 class TestTailDependence:
     def test_tail_dependence_clayton(self):
         copula = CopulaResult(
-            family="clayton", parameter=2.0, kendall_tau=0.5,
-            spearman_rho=0.6, aic=10.0, log_likelihood=-5.0, n_samples=100,
+            family="clayton",
+            parameter=2.0,
+            kendall_tau=0.5,
+            spearman_rho=0.6,
+            aic=10.0,
+            log_likelihood=-5.0,
+            n_samples=100,
         )
         td = tail_dependence(copula)
         assert td["lower"] > 0
@@ -186,8 +221,13 @@ class TestTailDependence:
 
     def test_tail_dependence_gumbel(self):
         copula = CopulaResult(
-            family="gumbel", parameter=2.0, kendall_tau=0.5,
-            spearman_rho=0.6, aic=10.0, log_likelihood=-5.0, n_samples=100,
+            family="gumbel",
+            parameter=2.0,
+            kendall_tau=0.5,
+            spearman_rho=0.6,
+            aic=10.0,
+            log_likelihood=-5.0,
+            n_samples=100,
         )
         td = tail_dependence(copula)
         assert td["lower"] == 0.0

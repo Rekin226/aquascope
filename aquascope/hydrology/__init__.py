@@ -91,7 +91,7 @@ __all__ = [
     "FDCResult",
     "flow_duration_curve",
     "low_flow_stat",
-   # baseflow
+    # baseflow
     "BaseflowResult",
     "lyne_hollick",
     "eckhardt",

@@ -15,6 +15,7 @@ from aquascope.utils.storage import export_geojson, save_records
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class _GeoLoc(BaseModel):
     latitude: float
     longitude: float
@@ -35,6 +36,7 @@ class _RecordNoLocation(BaseModel):
 # NetCDF
 # ---------------------------------------------------------------------------
 
+
 class TestExportNetCDF:
     def setup_method(self) -> None:
         self.df = pd.DataFrame(
@@ -54,6 +56,7 @@ class TestExportNetCDF:
 # ---------------------------------------------------------------------------
 # GeoJSON
 # ---------------------------------------------------------------------------
+
 
 class TestExportGeoJSON:
     def setup_method(self) -> None:
@@ -95,10 +98,10 @@ class TestExportGeoJSON:
         assert data["features"][0]["geometry"]["type"] == "Point"
 
 
-
 # ---------------------------------------------------------------------------
 # HDF5
 # ---------------------------------------------------------------------------
+
 
 class TestExportHDF5:
     def setup_method(self) -> None:

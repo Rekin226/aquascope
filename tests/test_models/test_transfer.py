@@ -100,13 +100,19 @@ class TestDonorSelector:
     def setup_method(self) -> None:
         # Three donors with increasingly different signatures from the target
         self.donor_close = _make_donor(
-            "close", seed=1, sig_overrides={"baseflow_index": 0.50, "flashiness_index": 0.30},
+            "close",
+            seed=1,
+            sig_overrides={"baseflow_index": 0.50, "flashiness_index": 0.30},
         )
         self.donor_mid = _make_donor(
-            "mid", seed=2, sig_overrides={"baseflow_index": 0.70, "flashiness_index": 0.50},
+            "mid",
+            seed=2,
+            sig_overrides={"baseflow_index": 0.70, "flashiness_index": 0.50},
         )
         self.donor_far = _make_donor(
-            "far", seed=3, sig_overrides={"baseflow_index": 0.90, "flashiness_index": 0.80},
+            "far",
+            seed=3,
+            sig_overrides={"baseflow_index": 0.90, "flashiness_index": 0.80},
         )
         self.selector = DonorSelector([self.donor_close, self.donor_mid, self.donor_far])
         self.target_sig = _make_signature(baseflow_index=0.50, flashiness_index=0.30)
@@ -329,8 +335,8 @@ class TestSpatialProximityWeight:
         """Closer donor should receive higher weight."""
         target = (51.5, -0.1)  # London
         donors = [
-            (48.9, 2.35),   # Paris  (~340 km)
-            (40.4, -3.7),   # Madrid (~1260 km)
+            (48.9, 2.35),  # Paris  (~340 km)
+            (40.4, -3.7),  # Madrid (~1260 km)
         ]
         weights = spatial_proximity_weight(donors, target)
 

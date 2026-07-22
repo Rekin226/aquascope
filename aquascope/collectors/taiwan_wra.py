@@ -56,6 +56,7 @@ def _parse_gw_value(raw: object) -> float | None:
         return None
     return val
 
+
 # Coordinate field names seen across WRA dataset variants (TWD97 / WGS84).
 _LAT_KEYS = ("Latitude", "latitude", "TWD97Lat", "lat", "LAT", "Y")
 _LON_KEYS = ("Longitude", "longitude", "TWD97Lon", "lon", "LON", "X")
@@ -76,6 +77,7 @@ def _extract_location(rec: dict) -> GeoLocation | None:
         return GeoLocation(latitude=float(lat), longitude=float(lon))
     except (ValueError, TypeError):
         return None
+
 
 WRA_BASE = "https://opendata.wra.gov.tw/api/v2"
 
@@ -123,9 +125,7 @@ def _twd97_to_location(twd97: str | None) -> GeoLocation | None:
                 "(install aquascope[spatial]). Aquifer and depth still populate."
             )
             return None
-        _TWD97_TRANSFORMER = pyproj.Transformer.from_crs(
-            "EPSG:3826", "EPSG:4326", always_xy=True
-        )
+        _TWD97_TRANSFORMER = pyproj.Transformer.from_crs("EPSG:3826", "EPSG:4326", always_xy=True)
     lon, lat = _TWD97_TRANSFORMER.transform(x, y)
     # QA: a few well records carry corrupt coordinates that convert to points
     # far outside Taiwan. Reject anything beyond a generous national bounding
@@ -184,11 +184,7 @@ class TaiwanWRAWaterLevelCollector(BaseCollector):
         readings: list[WaterLevelReading] = []
         for rec in raw:
             try:
-                level_str = (
-                    rec.get("WaterLevel")
-                    or rec.get("waterLevel")
-                    or rec.get("waterlevel")
-                )
+                level_str = rec.get("WaterLevel") or rec.get("waterLevel") or rec.get("waterlevel")
                 if not level_str or str(level_str).strip() in ("", "-", "--"):
                     continue
 
@@ -236,6 +232,7 @@ class TaiwanWRAReservoirCollector(BaseCollector):
         records: list[ReservoirStatus] = []
         for rec in raw:
             try:
+
                 def _float(key: str):
                     v = rec.get(key)
                     return float(v) if v and str(v).strip() not in ("", "-", "--") else None
@@ -305,9 +302,7 @@ class TaiwanWRAGroundwaterCollector(BaseCollector):
         client: CachedHTTPClient | None = None,
     ):
         if statistic not in _GW_STATISTIC_FIELDS:
-            raise ValueError(
-                f"statistic must be one of {list(_GW_STATISTIC_FIELDS)}; got {statistic!r}."
-            )
+            raise ValueError(f"statistic must be one of {list(_GW_STATISTIC_FIELDS)}; got {statistic!r}.")
         super().__init__(
             client
             or CachedHTTPClient(
@@ -386,17 +381,36 @@ _GWEB_SENTINEL = -9990.0
 
 # English aliases for the 11 groundwater zones (accepted in `zones=`).
 _GWEB_ZONE_ALIASES = {
-    "taipei basin": "010", "taipei": "010", "臺北盆地": "010",
-    "taoyuan": "020", "taoyuan-zhongli": "020", "桃園中壢臺地": "020",
-    "xinmiao": "030", "新苗地區": "030",
-    "taichung": "040", "臺中地區": "040",
-    "zhuoshui fan": "050", "zhuoshui": "050", "choushui": "050", "濁水溪沖積扇": "050",
-    "chianan": "060", "chianan plain": "060", "嘉南平原": "060",
-    "pingtung": "070", "pingtung plain": "070", "屏東平原": "070",
-    "lanyang": "080", "lanyang plain": "080", "蘭陽平原": "080",
-    "hualien-taitung": "090", "huadong": "090", "花東縱谷": "090",
-    "penghu": "100", "澎湖地區": "100",
-    "kinmen": "110", "金門地區": "110",
+    "taipei basin": "010",
+    "taipei": "010",
+    "臺北盆地": "010",
+    "taoyuan": "020",
+    "taoyuan-zhongli": "020",
+    "桃園中壢臺地": "020",
+    "xinmiao": "030",
+    "新苗地區": "030",
+    "taichung": "040",
+    "臺中地區": "040",
+    "zhuoshui fan": "050",
+    "zhuoshui": "050",
+    "choushui": "050",
+    "濁水溪沖積扇": "050",
+    "chianan": "060",
+    "chianan plain": "060",
+    "嘉南平原": "060",
+    "pingtung": "070",
+    "pingtung plain": "070",
+    "屏東平原": "070",
+    "lanyang": "080",
+    "lanyang plain": "080",
+    "蘭陽平原": "080",
+    "hualien-taitung": "090",
+    "huadong": "090",
+    "花東縱谷": "090",
+    "penghu": "100",
+    "澎湖地區": "100",
+    "kinmen": "110",
+    "金門地區": "110",
 }
 
 
@@ -566,9 +580,7 @@ class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
         """Return [(code, name)] for the requested zones (all if None)."""
         areas = self._post(_GWEB_AREA_LIST, {})
         all_zones = [
-            (str(a.get("Value")).strip(), str(a.get("Text") or "").strip())
-            for a in (areas or [])
-            if a.get("Value")
+            (str(a.get("Value")).strip(), str(a.get("Text") or "").strip()) for a in (areas or []) if a.get("Value")
         ]
         if not self.zones:
             return all_zones
@@ -581,11 +593,7 @@ class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
 
     def _stations_for_zone(self, code: str) -> list[tuple[str, str]]:
         rows = self._post(_GWEB_STATION_LIST, {"region": code})
-        return [
-            (str(r.get("Value")).strip(), str(r.get("Text") or "").strip())
-            for r in (rows or [])
-            if r.get("Value")
-        ]
+        return [(str(r.get("Value")).strip(), str(r.get("Text") or "").strip()) for r in (rows or []) if r.get("Value")]
 
     def _span(self, station_no: str) -> tuple[date | None, date | None]:
         h = self._post(_GWEB_HISTORY, {"stationNo": station_no})
@@ -603,12 +611,10 @@ class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
         series: dict[date, float] = {}
         w_start = lo
         while w_start <= hi:
-            w_end = min(date(w_start.year + self.window_years, w_start.month, 1)
-                        - timedelta(days=1), hi)
+            w_end = min(date(w_start.year + self.window_years, w_start.month, 1) - timedelta(days=1), hi)
             data = self._post(
                 _GWEB_CHART,
-                {"stationNo": station_no,
-                 "startDate": w_start.isoformat(), "endDate": w_end.isoformat()},
+                {"stationNo": station_no, "startDate": w_start.isoformat(), "endDate": w_end.isoformat()},
             )
             arr = data.get("WaterLevelData") if isinstance(data, dict) else None
             for i, v in enumerate(arr or []):
@@ -650,12 +656,14 @@ class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
             if lo > hi:
                 continue
             series = self._daily_series(station_no, lo, hi)
-            raw.append({
-                "station_no": station_no,
-                "station_name": station_name or None,
-                "zone": zone_name or None,
-                "series": [(d.isoformat(), v) for d, v in series],
-            })
+            raw.append(
+                {
+                    "station_no": station_no,
+                    "station_name": station_name or None,
+                    "zone": zone_name or None,
+                    "series": [(d.isoformat(), v) for d, v in series],
+                }
+            )
         return raw
 
     def normalise(self, raw: list[dict]) -> Sequence[GroundwaterLevel]:
@@ -672,10 +680,7 @@ class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
                 buckets: dict[tuple[int, int], list[float]] = {}
                 for d, v in series:
                     buckets.setdefault((d.year, d.month), []).append(v)
-                points = [
-                    (datetime(y, m, 15), sum(vs) / len(vs))
-                    for (y, m), vs in sorted(buckets.items())
-                ]
+                points = [(datetime(y, m, 15), sum(vs) / len(vs)) for (y, m), vs in sorted(buckets.items())]
             meta = self._meta_for(rec["station_no"], rec.get("station_name"))
             for dt, value in points:
                 readings.append(

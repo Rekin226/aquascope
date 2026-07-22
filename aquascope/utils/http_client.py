@@ -149,9 +149,7 @@ class CachedHTTPClient:
 
             import urllib3
 
-            warnings.filterwarnings(
-                "ignore", category=urllib3.exceptions.InsecureRequestWarning
-            )
+            warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
             logger.warning(
                 "TLS verification DISABLED for base_url=%s — only use this for "
                 "open-data hosts known to ship broken cert chains.",
@@ -213,8 +211,7 @@ class CachedHTTPClient:
         if "text/xml" in content_type or "application/xml" in content_type:
             preview = resp.text[:500]
             raise ValueError(
-                f"Expected JSON but received XML (Content-Type: {content_type!r}). "
-                f"Response preview: {preview!r}"
+                f"Expected JSON but received XML (Content-Type: {content_type!r}). Response preview: {preview!r}"
             )
 
         # Strip BOM (\ufeff) and surrounding whitespace before parsing.
@@ -224,10 +221,7 @@ class CachedHTTPClient:
             return json.loads(text)
         except json.JSONDecodeError as exc:
             preview = text[:200]
-            raise ValueError(
-                f"JSON decode failed ({exc}). "
-                f"First 200 chars of response: {preview!r}"
-            ) from exc
+            raise ValueError(f"JSON decode failed ({exc}). First 200 chars of response: {preview!r}") from exc
 
     def get_json(
         self,
@@ -282,7 +276,6 @@ class CachedHTTPClient:
                 time.sleep(wait)
 
         raise RuntimeError(f"All {self.retries} attempts failed for {url}") from last_exc
-
 
     def get_text(
         self,
@@ -379,9 +372,7 @@ class CachedHTTPClient:
             if self.rate_limiter:
                 self.rate_limiter.wait_if_needed()
             try:
-                resp = self._client.post(
-                    url, json=json_body, params=params, headers=headers
-                )
+                resp = self._client.post(url, json=json_body, params=params, headers=headers)
                 resp.raise_for_status()
                 data = self._parse_response_json(resp)
                 if use_cache:
@@ -410,5 +401,3 @@ class CachedHTTPClient:
 
     def __exit__(self, *args):
         self.close()
-
-

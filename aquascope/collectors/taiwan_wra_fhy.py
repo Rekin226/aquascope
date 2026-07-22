@@ -74,9 +74,7 @@ class TaiwanWRAFhyCollector(BaseCollector):
             )
         )
         if data_type not in _REALTIME_PATHS:
-            raise ValueError(
-                f"data_type must be one of {list(_REALTIME_PATHS)}, got {data_type!r}"
-            )
+            raise ValueError(f"data_type must be one of {list(_REALTIME_PATHS)}, got {data_type!r}")
         self.data_type = data_type
 
     def fetch_raw(self, **kwargs) -> list[dict]:
@@ -94,12 +92,7 @@ class TaiwanWRAFhyCollector(BaseCollector):
 
         for rec in raw:
             try:
-                value_str = (
-                    rec.get(param_name)
-                    or rec.get(param_name.lower())
-                    or rec.get("Value")
-                    or rec.get("value")
-                )
+                value_str = rec.get(param_name) or rec.get(param_name.lower()) or rec.get("Value") or rec.get("value")
                 if value_str is None or str(value_str).strip() in ("", "-", "--", "ND"):
                     continue
 
@@ -110,11 +103,7 @@ class TaiwanWRAFhyCollector(BaseCollector):
                     loc = GeoLocation(latitude=float(lat), longitude=float(lon))
 
                 time_str = (
-                    rec.get("RecordTime")
-                    or rec.get("ObservationTime")
-                    or rec.get("DateTime")
-                    or rec.get("time")
-                    or ""
+                    rec.get("RecordTime") or rec.get("ObservationTime") or rec.get("DateTime") or rec.get("time") or ""
                 )
                 sample_dt = datetime.fromisoformat(time_str) if time_str else datetime.utcnow()
 
@@ -122,10 +111,7 @@ class TaiwanWRAFhyCollector(BaseCollector):
                     WaterQualitySample(
                         source=DataSource.TAIWAN_WRA_FHY,
                         station_id=str(
-                            rec.get("StationIdentifier")
-                            or rec.get("StationNo")
-                            or rec.get("ID")
-                            or "unknown"
+                            rec.get("StationIdentifier") or rec.get("StationNo") or rec.get("ID") or "unknown"
                         ),
                         station_name=rec.get("StationName") or rec.get("stationName"),
                         location=loc,

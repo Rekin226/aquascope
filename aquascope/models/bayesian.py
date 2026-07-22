@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # Result container
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PosteriorResult:
     """Result of Bayesian inference.
@@ -57,6 +58,7 @@ class PosteriorResult:
 # ---------------------------------------------------------------------------
 # Bayesian Linear Regression (conjugate normal-inverse-gamma)
 # ---------------------------------------------------------------------------
+
 
 class BayesianLinearRegression:
     """Bayesian linear regression with conjugate normal-inverse-gamma prior.
@@ -134,10 +136,7 @@ class BayesianLinearRegression:
         self._V_n = np.linalg.inv(V_n_inv)
         self._mu_n = self._V_n @ (V_0_inv @ mu_0 + Xty)
         self._a_n = self._a0 + n / 2.0
-        self._b_n = (
-            self._b0
-            + 0.5 * (y @ y + mu_0 @ V_0_inv @ mu_0 - self._mu_n @ V_n_inv @ self._mu_n)
-        )
+        self._b_n = self._b0 + 0.5 * (y @ y + mu_0 @ V_0_inv @ mu_0 - self._mu_n @ V_n_inv @ self._mu_n)
         # Ensure b_n stays positive (numerical safety)
         self._b_n = max(self._b_n, 1e-12)
 
@@ -159,7 +158,10 @@ class BayesianLinearRegression:
         # Summaries
         post_mean = {name: float(np.mean(chains[name])) for name in all_names}
         post_std = {name: float(np.std(chains[name])) for name in all_names}
-        cred = {name: (float(np.percentile(chains[name], 2.5)), float(np.percentile(chains[name], 97.5))) for name in all_names}
+        cred = {
+            name: (float(np.percentile(chains[name], 2.5)), float(np.percentile(chains[name], 97.5)))
+            for name in all_names
+        }
 
         # Predictions on training set
         predictions = X @ self._mu_n
@@ -253,6 +255,7 @@ class BayesianLinearRegression:
 # Bayesian Polynomial Regression
 # ---------------------------------------------------------------------------
 
+
 class BayesianPolynomialRegression:
     """Bayesian polynomial regression — wraps :class:`BayesianLinearRegression` with feature expansion.
 
@@ -302,6 +305,7 @@ class BayesianPolynomialRegression:
 # ---------------------------------------------------------------------------
 # Metropolis-Hastings MCMC sampler
 # ---------------------------------------------------------------------------
+
 
 class MetropolisHastings:
     """Metropolis-Hastings MCMC sampler for arbitrary log-posterior functions.
@@ -412,6 +416,7 @@ class MetropolisHastings:
 # ---------------------------------------------------------------------------
 # Diagnostics
 # ---------------------------------------------------------------------------
+
 
 def gelman_rubin(chains: list[np.ndarray]) -> float:
     """Gelman–Rubin *R-hat* convergence diagnostic.
@@ -529,6 +534,7 @@ def bayesian_model_comparison(results: list[tuple[str, PosteriorResult]]) -> pd.
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _compute_waic(
     X: np.ndarray,

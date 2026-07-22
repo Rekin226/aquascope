@@ -272,7 +272,9 @@ class StackingEnsemble:
             self._fitted_base_models.append((name, full_model))
 
         self._fitted = True
-        logger.info("StackingEnsemble fitted with %d base models and '%s' meta-learner", n_models, self.meta_learner_type)
+        logger.info(
+            "StackingEnsemble fitted with %d base models and '%s' meta-learner", n_models, self.meta_learner_type
+        )
 
     def predict(self, X: pd.DataFrame) -> EnsembleResult:
         """Generate stacking prediction.
@@ -340,6 +342,7 @@ class StackingEnsemble:
             return LinearRegression()
         elif self.meta_learner_type == "rf":
             from sklearn.ensemble import RandomForestRegressor
+
             return RandomForestRegressor(n_estimators=50, random_state=42, n_jobs=-1)
         else:
             raise ValueError(f"Unknown meta-learner type: {self.meta_learner_type}")
@@ -446,7 +449,7 @@ class AdaptiveEnsemble:
         """Recompute model weights from recent error history with exponential decay."""
         inv_wrmses: dict[str, float] = {}
         for name, _ in self.models:
-            errors = self._error_history[name][-self.lookback:]
+            errors = self._error_history[name][-self.lookback :]
             if not errors:
                 inv_wrmses[name] = 1.0
                 continue

@@ -106,11 +106,13 @@ class TestQualityPlots:
     def setup_method(self):
         rng = np.random.default_rng(42)
         n = 200
-        self.df = pd.DataFrame({
-            "value": rng.normal(7, 1, n),
-            "station_name": rng.choice(["Station A", "Station B", "Station C"], n),
-            "parameter": rng.choice(["pH", "DO", "BOD5"], n),
-        })
+        self.df = pd.DataFrame(
+            {
+                "value": rng.normal(7, 1, n),
+                "station_name": rng.choice(["Station A", "Station B", "Station C"], n),
+                "parameter": rng.choice(["pH", "DO", "BOD5"], n),
+            }
+        )
 
     def test_plot_boxplot(self):
         from aquascope.viz import plot_boxplot
@@ -130,11 +132,13 @@ class TestQualityPlots:
     def test_plot_who_exceedances(self):
         from aquascope.viz import plot_who_exceedances
 
-        who_df = pd.DataFrame({
-            "variable": ["pH", "DO", "turbidity", "nitrate"],
-            "pct_exceedances": [5.0, 12.0, 3.0, 25.0],
-            "status": ["PASS", "FAIL", "PASS", "FAIL"],
-        })
+        who_df = pd.DataFrame(
+            {
+                "variable": ["pH", "DO", "turbidity", "nitrate"],
+                "pct_exceedances": [5.0, 12.0, 3.0, 25.0],
+                "status": ["PASS", "FAIL", "PASS", "FAIL"],
+            }
+        )
         fig = plot_who_exceedances(who_df)
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
@@ -162,10 +166,12 @@ class TestQualityPlots:
         class MockReport:
             parameters: list = field(default_factory=list)
 
-        report = MockReport(parameters=[
-            MockParam("pH", 100, 5, 7.2, 0.5, 5.0, 6.8, 7.2, 7.5, 9.0, 3),
-            MockParam("DO", 90, 10, 8.5, 1.2, 3.0, 7.5, 8.5, 9.5, 12.0, 5),
-        ])
+        report = MockReport(
+            parameters=[
+                MockParam("pH", 100, 5, 7.2, 0.5, 5.0, 6.8, 7.2, 7.5, 9.0, 3),
+                MockParam("DO", 90, 10, 8.5, 1.2, 3.0, 7.5, 8.5, 9.5, 12.0, 5),
+            ]
+        )
         fig = plot_eda_summary(report)
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
@@ -182,12 +188,14 @@ class TestSpatialPlots:
     """Tests for aquascope.viz.spatial functions."""
 
     def setup_method(self):
-        self.stations = pd.DataFrame({
-            "station_name": ["Taipei", "Taichung", "Kaohsiung"],
-            "latitude": [25.03, 24.15, 22.63],
-            "longitude": [121.57, 120.68, 120.30],
-            "value": [7.2, 6.8, 7.5],
-        })
+        self.stations = pd.DataFrame(
+            {
+                "station_name": ["Taipei", "Taichung", "Kaohsiung"],
+                "latitude": [25.03, 24.15, 22.63],
+                "longitude": [121.57, 120.68, 120.30],
+                "value": [7.2, 6.8, 7.5],
+            }
+        )
 
     def test_plot_station_scatter(self):
         from aquascope.viz import plot_station_scatter
@@ -241,7 +249,9 @@ class TestHydroPlots:
         dates = pd.date_range("2015-01-01", periods=3650, freq="D")
         rng = np.random.default_rng(42)
         self.discharge = pd.Series(
-            rng.exponential(20, 3650) + 5, index=dates, name="discharge",
+            rng.exponential(20, 3650) + 5,
+            index=dates,
+            name="discharge",
         )
 
     def test_plot_fdc(self):
@@ -254,10 +264,13 @@ class TestHydroPlots:
     def test_plot_hydrograph(self):
         from aquascope.viz.hydro import plot_hydrograph
 
-        df = pd.DataFrame({
-            "discharge": self.discharge.values[:365],
-            "baseflow": self.discharge.values[:365] * 0.6,
-        }, index=self.discharge.index[:365])
+        df = pd.DataFrame(
+            {
+                "discharge": self.discharge.values[:365],
+                "baseflow": self.discharge.values[:365] * 0.6,
+            },
+            index=self.discharge.index[:365],
+        )
         fig = plot_hydrograph(df)
         assert isinstance(fig, plt.Figure)
         plt.close(fig)

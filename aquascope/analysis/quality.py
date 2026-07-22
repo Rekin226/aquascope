@@ -85,11 +85,13 @@ def assess_quality(df: pd.DataFrame) -> QualityReport:
             big_gaps = diffs[diffs > median_interval * 3]
             for gap in big_gaps.head(3):  # report top 3 gaps per station
                 idx = diffs[diffs == gap].index[0]
-                temporal_gaps.append({
-                    "station": str(station),
-                    "gap_start": str(dates.loc[dates.index[dates.index.get_loc(idx) - 1]].date()),
-                    "gap_days": int(gap.days),
-                })
+                temporal_gaps.append(
+                    {
+                        "station": str(station),
+                        "gap_start": str(dates.loc[dates.index[dates.index.get_loc(idx) - 1]].date()),
+                        "gap_days": int(gap.days),
+                    }
+                )
         temporal_gaps = sorted(temporal_gaps, key=lambda x: x["gap_days"], reverse=True)[:10]
 
     # Unit consistency check
@@ -194,13 +196,7 @@ def preprocess(df: pd.DataFrame, steps: list[str] | None = None) -> pd.DataFrame
                 result[dt_col] = pd.to_datetime(result[dt_col], errors="coerce")
                 group_cols = [c for c in ["station_id", "parameter"] if c in result.columns]
                 if group_cols:
-                    result = (
-                        result.set_index(dt_col)
-                        .groupby(group_cols)
-                        .resample("D")["value"]
-                        .mean()
-                        .reset_index()
-                    )
+                    result = result.set_index(dt_col).groupby(group_cols).resample("D")["value"].mean().reset_index()
                 logger.info("resample_daily: resampled to daily mean")
 
         else:

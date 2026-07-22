@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ReportSection:
     """A section in the report.
@@ -70,6 +71,7 @@ class ReportMetadata:
 # ---------------------------------------------------------------------------
 # Internal element types
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class _Heading:
@@ -124,6 +126,7 @@ _Element = _Heading | _Paragraph | _Table | _Figure | _Metric | _Separator | _TO
 # ---------------------------------------------------------------------------
 # ReportBuilder
 # ---------------------------------------------------------------------------
+
 
 class ReportBuilder:
     """Build structured analysis reports in Markdown and HTML.
@@ -390,15 +393,17 @@ class ReportBuilder:
         if parameters:
             rows: list[dict[str, object]] = []
             for p in parameters:
-                rows.append({
-                    "Parameter": getattr(p, "name", ""),
-                    "Count": getattr(p, "count", 0),
-                    "Missing": getattr(p, "missing", 0),
-                    "Mean": f"{getattr(p, 'mean', 0):.4f}",
-                    "Std": f"{getattr(p, 'std', 0):.4f}",
-                    "Min": f"{getattr(p, 'min', 0):.4f}",
-                    "Max": f"{getattr(p, 'max', 0):.4f}",
-                })
+                rows.append(
+                    {
+                        "Parameter": getattr(p, "name", ""),
+                        "Count": getattr(p, "count", 0),
+                        "Missing": getattr(p, "missing", 0),
+                        "Mean": f"{getattr(p, 'mean', 0):.4f}",
+                        "Std": f"{getattr(p, 'std', 0):.4f}",
+                        "Min": f"{getattr(p, 'min', 0):.4f}",
+                        "Max": f"{getattr(p, 'max', 0):.4f}",
+                    }
+                )
             df = pd.DataFrame(rows)
             self.add_heading("Parameter Statistics", level=3)
             self.add_dataframe(df, caption="Parameter Statistics")
@@ -510,8 +515,13 @@ class ReportBuilder:
         """Read an image and return ``(mime_type, base64_data)``."""
         p = Path(path)
         suffix = p.suffix.lower()
-        mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml",
-                    ".gif": "image/gif"}
+        mime_map = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".svg": "image/svg+xml",
+            ".gif": "image/gif",
+        }
         mime = mime_map.get(suffix, "image/png")
         data = base64.b64encode(p.read_bytes()).decode("ascii")
         return mime, data

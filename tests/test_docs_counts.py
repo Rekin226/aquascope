@@ -40,6 +40,5 @@ def test_readme_counts_match_table():
         match = re.search(pattern, text)
         assert match is not None, f"README no longer contains the phrase for {pattern!r}"
         assert int(match.group(1)) == expected, (
-            f"README says {match.group(1)} for {pattern!r} but the "
-            f"docs/data_sources.md table has {expected} rows"
+            f"README says {match.group(1)} for {pattern!r} but the docs/data_sources.md table has {expected} rows"
         )

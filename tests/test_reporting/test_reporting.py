@@ -15,6 +15,7 @@ from aquascope.reporting.templates import DEFAULT_CSS, get_css, html_template
 # Mock objects for AlertReport / EDAReport integration
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class _MockAlert:
     sample_id: str = "S1"
@@ -70,6 +71,7 @@ class _MockEDAReport:
 # Helper
 # ---------------------------------------------------------------------------
 
+
 def _sample_df() -> pd.DataFrame:
     return pd.DataFrame({"Station": ["A", "B", "C"], "pH": [7.1, 6.8, 7.5], "DO": [8.2, 7.9, 8.5]})
 
@@ -112,6 +114,7 @@ class TestReportBuilder:
     def test_add_figure_from_matplotlib(self) -> None:
         """Matplotlib figure is saved and referenced in Markdown."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -194,6 +197,7 @@ class TestReportBuilder:
     def test_to_html_embeds_images(self, tmp_path: Path) -> None:
         """Base64 image data appears in HTML img src."""
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 

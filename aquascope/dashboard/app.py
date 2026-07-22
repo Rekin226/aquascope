@@ -59,10 +59,7 @@ def _require_streamlit():
 
         return st
     except ImportError as exc:
-        msg = (
-            "Streamlit is required for the dashboard. "
-            "Install it with:  pip install aquascope[dashboard]"
-        )
+        msg = "Streamlit is required for the dashboard. Install it with:  pip install aquascope[dashboard]"
         raise ImportError(msg) from exc
 
 

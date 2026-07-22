@@ -116,18 +116,20 @@ class WaterQualityChallenge:
             n_exceed = int(((values < low) | (values > high)).sum())
             pct_exceed = 100 * n_exceed / len(values) if len(values) > 0 else 0
 
-            rows.append({
-                "variable": var,
-                "n_measurements": len(values),
-                "mean": round(float(values.mean()), 4),
-                "min": round(float(values.min()), 4),
-                "max": round(float(values.max()), 4),
-                "guideline_low": low,
-                "guideline_high": high if high != float("inf") else "N/A",
-                "n_exceedances": n_exceed,
-                "pct_exceedances": round(pct_exceed, 1),
-                "status": "EXCEEDANCE" if n_exceed > 0 else "OK",
-            })
+            rows.append(
+                {
+                    "variable": var,
+                    "n_measurements": len(values),
+                    "mean": round(float(values.mean()), 4),
+                    "min": round(float(values.min()), 4),
+                    "max": round(float(values.max()), 4),
+                    "guideline_low": low,
+                    "guideline_high": high if high != float("inf") else "N/A",
+                    "n_exceedances": n_exceed,
+                    "pct_exceedances": round(pct_exceed, 1),
+                    "status": "EXCEEDANCE" if n_exceed > 0 else "OK",
+                }
+            )
         return pd.DataFrame(rows)
 
     def trend_analysis(self, variable: str) -> dict:
@@ -185,18 +187,20 @@ class WaterQualityChallenge:
             if df.empty:
                 continue
             v = df["value"].dropna()
-            rows.append({
-                "variable": var,
-                "n_records": len(v),
-                "mean": round(float(v.mean()), 4),
-                "std": round(float(v.std()), 4),
-                "min": round(float(v.min()), 4),
-                "p25": round(float(v.quantile(0.25)), 4),
-                "median": round(float(v.median()), 4),
-                "p75": round(float(v.quantile(0.75)), 4),
-                "max": round(float(v.max()), 4),
-                "unit": df["unit"].iloc[0] if "unit" in df.columns else "unknown",
-            })
+            rows.append(
+                {
+                    "variable": var,
+                    "n_records": len(v),
+                    "mean": round(float(v.mean()), 4),
+                    "std": round(float(v.std()), 4),
+                    "min": round(float(v.min()), 4),
+                    "p25": round(float(v.quantile(0.25)), 4),
+                    "median": round(float(v.median()), 4),
+                    "p75": round(float(v.quantile(0.75)), 4),
+                    "max": round(float(v.max()), 4),
+                    "unit": df["unit"].iloc[0] if "unit" in df.columns else "unknown",
+                }
+            )
         return pd.DataFrame(rows)
 
     @property

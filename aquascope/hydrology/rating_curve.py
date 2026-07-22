@@ -539,11 +539,13 @@ def detect_rating_shift(
                 shift_magnitude = abs(var_curr - var_prev) / max(var_prev, 1e-12)
 
                 if p_value < 0.05:
-                    shifts.append({
-                        "timestamp": centre,
-                        "shift_magnitude": float(shift_magnitude),
-                        "p_value": float(p_value),
-                    })
+                    shifts.append(
+                        {
+                            "timestamp": centre,
+                            "shift_magnitude": float(shift_magnitude),
+                            "p_value": float(p_value),
+                        }
+                    )
 
         prev_residuals = residuals
 

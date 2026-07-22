@@ -63,25 +63,49 @@ def render() -> None:
     st.subheader("What's inside")
 
     cards = [
-        ("📡 Collect", "collect",
-         "21 live sources across Taiwan, the US, Europe, Japan, Korea, India, France, "
-         "and global archives, plus CSV/JSON upload."),
-        ("🔬 Analyze & clean", "analysis",
-         "Automated EDA, data-quality scoring, and one-click preprocessing (dedupe, fill, outliers, resampling)."),
-        ("📈 Visualize", "visualize",
-         "Interactive time series, box plots, correlation heatmaps, station maps, FDCs, hydrographs, and more."),
-        ("🌊 Hydrology lab", "hydrology",
-         "Flow-duration curves, baseflow separation (Lyne-Hollick / Eckhardt / UKIH), "
-         "recession analysis, and 20+ flow signatures."),
-        ("🌀 Extreme events", "extremes",
-         "GEV / Log-Pearson III / Gumbel fits on annual maxima with bootstrap "
-         "confidence bounds and design return levels."),
-        ("🌾 Agricultural water", "agri",
-         "FAO-56 Penman-Monteith ET₀, single & dual (Kcb + Ke) crop coefficients, and full irrigation scheduling."),
-        ("🤖 AI recommender", "ai",
-         "Rule-based + optional LLM-enhanced research-methodology recommendations from your dataset's profile."),
-        ("⚠️ Quality alerts", "alerts",
-         "WHO / EPA / EU guideline screening with per-parameter exceedance rates and status flags."),
+        (
+            "📡 Collect",
+            "collect",
+            "21 live sources across Taiwan, the US, Europe, Japan, Korea, India, France, "
+            "and global archives, plus CSV/JSON upload.",
+        ),
+        (
+            "🔬 Analyze & clean",
+            "analysis",
+            "Automated EDA, data-quality scoring, and one-click preprocessing (dedupe, fill, outliers, resampling).",
+        ),
+        (
+            "📈 Visualize",
+            "visualize",
+            "Interactive time series, box plots, correlation heatmaps, station maps, FDCs, hydrographs, and more.",
+        ),
+        (
+            "🌊 Hydrology lab",
+            "hydrology",
+            "Flow-duration curves, baseflow separation (Lyne-Hollick / Eckhardt / UKIH), "
+            "recession analysis, and 20+ flow signatures.",
+        ),
+        (
+            "🌀 Extreme events",
+            "extremes",
+            "GEV / Log-Pearson III / Gumbel fits on annual maxima with bootstrap "
+            "confidence bounds and design return levels.",
+        ),
+        (
+            "🌾 Agricultural water",
+            "agri",
+            "FAO-56 Penman-Monteith ET₀, single & dual (Kcb + Ke) crop coefficients, and full irrigation scheduling.",
+        ),
+        (
+            "🤖 AI recommender",
+            "ai",
+            "Rule-based + optional LLM-enhanced research-methodology recommendations from your dataset's profile.",
+        ),
+        (
+            "⚠️ Quality alerts",
+            "alerts",
+            "WHO / EPA / EU guideline screening with per-parameter exceedance rates and status flags.",
+        ),
     ]
 
     for row_start in range(0, len(cards), 4):

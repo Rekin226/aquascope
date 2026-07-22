@@ -191,9 +191,21 @@ class WaPORCollector(BaseCollector):
                     WaPORObservation(
                         cube_code=cube_code,
                         cube_label=rec.get("cube_label") or rec.get("_cube_label") or WAPOR_VARIABLES.get(cube_code),
-                        date=_parse_date(rec.get("date") or rec.get("time") or rec.get("time_start") or rec.get("startDate")),
-                        start_date=_parse_date(rec.get("start_date") or rec.get("startDate") or rec.get("time_start") or rec.get("_requested_start_date")),
-                        end_date=_parse_date(rec.get("end_date") or rec.get("endDate") or rec.get("time_end") or rec.get("_requested_end_date")),
+                        date=_parse_date(
+                            rec.get("date") or rec.get("time") or rec.get("time_start") or rec.get("startDate")
+                        ),
+                        start_date=_parse_date(
+                            rec.get("start_date")
+                            or rec.get("startDate")
+                            or rec.get("time_start")
+                            or rec.get("_requested_start_date")
+                        ),
+                        end_date=_parse_date(
+                            rec.get("end_date")
+                            or rec.get("endDate")
+                            or rec.get("time_end")
+                            or rec.get("_requested_end_date")
+                        ),
                         bbox=_parse_bbox(rec.get("bbox") or rec.get("_bbox")),
                         value=value,
                         unit=rec.get("unit") or rec.get("units") or rec.get("measureUnit"),

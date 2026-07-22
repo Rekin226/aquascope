@@ -1,6 +1,5 @@
 """Tests for Taiwan MOENV collector normalisation."""
 
-
 from aquascope.collectors.taiwan_moenv import TaiwanMOENVCollector
 from aquascope.schemas.water_data import DataSource
 

@@ -38,15 +38,17 @@ def _lazy_load() -> None:
     from aquascope.models.ml import IsolationForestModel, RandomForestModel, XGBoostModel
     from aquascope.models.statistical import ARIMAModel, ProphetModel, SPIModel
 
-    MODEL_MAP.update({
-        "prophet": ProphetModel,
-        "arima": ARIMAModel,
-        "spi_drought_index": SPIModel,
-        "random_forest": RandomForestModel,
-        "xgboost": XGBoostModel,
-        "isolation_forest": IsolationForestModel,
-        "lstm": LSTMModel,
-    })
+    MODEL_MAP.update(
+        {
+            "prophet": ProphetModel,
+            "arima": ARIMAModel,
+            "spi_drought_index": SPIModel,
+            "random_forest": RandomForestModel,
+            "xgboost": XGBoostModel,
+            "isolation_forest": IsolationForestModel,
+            "lstm": LSTMModel,
+        }
+    )
 
 
 def get_model_map() -> dict[str, type[BaseHydroModel]]:

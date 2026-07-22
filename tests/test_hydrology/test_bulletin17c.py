@@ -117,8 +117,7 @@ class TestEMA:
         for rp in [10, 100]:
             ratio = ema_result.return_periods[rp] / lp3_result.return_periods[rp]
             assert 0.5 < ratio < 2.0, (
-                f"RP {rp}: EMA={ema_result.return_periods[rp]:.1f}, "
-                f"LP3={lp3_result.return_periods[rp]:.1f}"
+                f"RP {rp}: EMA={ema_result.return_periods[rp]:.1f}, LP3={lp3_result.return_periods[rp]:.1f}"
             )
 
     def test_ema_with_zeros(self):

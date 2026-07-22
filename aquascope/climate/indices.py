@@ -171,8 +171,8 @@ def palmer_drought_severity_index(
     s_u = su  # current underlying storage
 
     et = np.zeros(n)
-    r = np.zeros(n)    # recharge
-    ro = np.zeros(n)   # runoff
+    r = np.zeros(n)  # recharge
+    ro = np.zeros(n)  # runoff
     loss = np.zeros(n)  # loss
 
     for i in range(n):
@@ -320,9 +320,7 @@ def heat_wave_index(
             i += 1
 
     if not events:
-        return HeatWaveResult(
-            n_events=0, max_duration=0, mean_duration=0.0, mean_intensity=0.0, events=[]
-        )
+        return HeatWaveResult(n_events=0, max_duration=0, mean_duration=0.0, mean_intensity=0.0, events=[])
 
     durations = [e.duration for e in events]
     intensities = [e.peak_intensity for e in events]
@@ -488,14 +486,13 @@ def standardized_precipitation_index(
         raise ValueError("Series too short for the requested accumulation scale.")
 
     spi = pd.Series(np.nan, index=acc.index, dtype=float, name="spi")
-    groups = (range(1, 13) if per_month else [None])
+    groups = range(1, 13) if per_month else [None]
     for g in groups:
         idx = acc.index if g is None else acc.index[acc.index.month == g]
         vals = acc.loc[idx]
         pos = vals[vals > 0]
         if len(pos) < min_per_group:
-            logger.debug("SPI group %s has %d positive obs (< %d); left NaN.",
-                         g, len(pos), min_per_group)
+            logger.debug("SPI group %s has %d positive obs (< %d); left NaN.", g, len(pos), min_per_group)
             continue
         # Mixed distribution: point mass at zero (prob q) + gamma on positives.
         q = float((vals == 0).mean())

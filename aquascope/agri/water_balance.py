@@ -203,16 +203,22 @@ class SoilWaterBalance:
         for idx in etc_series.index:
             etc_val = float(etc_series.loc[idx])
             precip_val = float(precip_series.loc[idx]) if idx in precip_series.index else 0.0
-            irr_val = float(irrigation_series.loc[idx]) if irrigation_series is not None and idx in irrigation_series.index else 0.0
+            irr_val = (
+                float(irrigation_series.loc[idx])
+                if irrigation_series is not None and idx in irrigation_series.index
+                else 0.0
+            )
 
             status = self.step(etc_val, precipitation=precip_val, irrigation=irr_val)
-            rows.append({
-                "date": idx,
-                "soil_moisture_mm": status.soil_moisture_mm,
-                "depletion_mm": status.depletion_mm,
-                "deep_percolation_mm": status.deep_percolation_mm,
-                "irrigation_trigger": status.irrigation_trigger,
-            })
+            rows.append(
+                {
+                    "date": idx,
+                    "soil_moisture_mm": status.soil_moisture_mm,
+                    "depletion_mm": status.depletion_mm,
+                    "deep_percolation_mm": status.deep_percolation_mm,
+                    "irrigation_trigger": status.irrigation_trigger,
+                }
+            )
 
         return pd.DataFrame(rows)
 
@@ -266,13 +272,15 @@ class SoilWaterBalance:
                 net_applied = net_needed
 
             status = self.step(etc_val, precipitation=precip_val, irrigation=net_applied)
-            rows.append({
-                "date": idx,
-                "soil_moisture_mm": status.soil_moisture_mm,
-                "depletion_mm": status.depletion_mm,
-                "deep_percolation_mm": status.deep_percolation_mm,
-                "irrigation_mm": round(gross_applied, 2),
-                "irrigation_trigger": status.irrigation_trigger,
-            })
+            rows.append(
+                {
+                    "date": idx,
+                    "soil_moisture_mm": status.soil_moisture_mm,
+                    "depletion_mm": status.depletion_mm,
+                    "deep_percolation_mm": status.deep_percolation_mm,
+                    "irrigation_mm": round(gross_applied, 2),
+                    "irrigation_trigger": status.irrigation_trigger,
+                }
+            )
 
         return pd.DataFrame(rows)

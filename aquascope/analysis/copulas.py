@@ -180,26 +180,19 @@ def copula_density(u: float, v: float, family: str, theta: float) -> float:
         rho = theta
         x = stats.norm.ppf(u)
         y = stats.norm.ppf(v)
-        det = 1 - rho ** 2
-        return float(
-            (1.0 / np.sqrt(det))
-            * np.exp(-(rho ** 2 * (x ** 2 + y ** 2) - 2 * rho * x * y) / (2 * det))
-        )
+        det = 1 - rho**2
+        return float((1.0 / np.sqrt(det)) * np.exp(-(rho**2 * (x**2 + y**2) - 2 * rho * x * y) / (2 * det)))
     if family == "clayton":
         if theta <= 0:
             raise ValueError("Clayton parameter must be > 0.")
         c_uv = copula_function(u, v, "clayton", theta)
-        return float(
-            (1 + theta)
-            * (u * v) ** (-(1 + theta))
-            * c_uv ** (1 + 2 * theta)
-        )
+        return float((1 + theta) * (u * v) ** (-(1 + theta)) * c_uv ** (1 + 2 * theta))
     if family == "gumbel":
         if theta < 1:
             raise ValueError("Gumbel parameter must be >= 1.")
         lu = -np.log(u)
         lv = -np.log(v)
-        a = lu ** theta + lv ** theta
+        a = lu**theta + lv**theta
         a_inv = a ** (1.0 / theta)
         c_uv = np.exp(-a_inv)
         # Density formula for Gumbel copula
@@ -480,8 +473,8 @@ def generate_copula_samples(
         s = np.abs(s)  # ensure positive
         e1 = rng.exponential(size=n)
         e2 = rng.exponential(size=n)
-        u = np.exp(-(e1 / s) ** alpha)
-        v = np.exp(-(e2 / s) ** alpha)
+        u = np.exp(-((e1 / s) ** alpha))
+        v = np.exp(-((e2 / s) ** alpha))
         # Clip to strict (0, 1) — numerical edge cases
         u = np.clip(u, 1e-12, 1 - 1e-12)
         v = np.clip(v, 1e-12, 1 - 1e-12)

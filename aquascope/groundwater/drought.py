@@ -42,9 +42,7 @@ class DroughtEvent:
     peak: float
 
 
-def standardised_groundwater_index(
-    levels: pd.Series, min_per_month: int = 5
-) -> pd.Series:
+def standardised_groundwater_index(levels: pd.Series, min_per_month: int = 5) -> pd.Series:
     """Standardised Groundwater Index (SGI), Bloomfield & Marchant (2013).
 
     For each calendar month the groundwater levels (across all years) are
@@ -73,9 +71,7 @@ def standardised_groundwater_index(
         raise ValueError("levels must have a DatetimeIndex.")
     s = levels.dropna().sort_index()
     if len(s) < min_per_month:
-        raise ValueError(
-            f"Need at least {min_per_month} observations; got {len(s)}."
-        )
+        raise ValueError(f"Need at least {min_per_month} observations; got {len(s)}.")
 
     sgi = pd.Series(np.nan, index=s.index, dtype=float, name="sgi")
     month = s.index.month
@@ -110,12 +106,10 @@ def drought_events(index: pd.Series, threshold: float = -1.0) -> list[DroughtEve
             run_start = ts
         elif not flag and run_start is not None:
             seg = s.loc[run_start:prev]
-            events.append(DroughtEvent(run_start, prev, len(seg),
-                                       float(seg.sum()), float(seg.min())))
+            events.append(DroughtEvent(run_start, prev, len(seg), float(seg.sum()), float(seg.min())))
             run_start = None
         prev = ts
     if run_start is not None:
         seg = s.loc[run_start:prev]
-        events.append(DroughtEvent(run_start, prev, len(seg),
-                                   float(seg.sum()), float(seg.min())))
+        events.append(DroughtEvent(run_start, prev, len(seg), float(seg.sum()), float(seg.min())))
     return events

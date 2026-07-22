@@ -95,13 +95,16 @@ class TestLoadDEM:
 
 class TestFillSinks:
     def test_fill_raises_depressed_cell(self):
-        elev = np.array([
-            [9, 9, 9, 9, 9],
-            [9, 8, 8, 8, 9],
-            [9, 8, 2, 8, 9],
-            [9, 8, 8, 8, 9],
-            [9, 9, 9, 9, 5],
-        ], dtype=np.float64)
+        elev = np.array(
+            [
+                [9, 9, 9, 9, 9],
+                [9, 8, 8, 8, 9],
+                [9, 8, 2, 8, 9],
+                [9, 8, 8, 8, 9],
+                [9, 9, 9, 9, 5],
+            ],
+            dtype=np.float64,
+        )
         dem = _make_dem(elev)
         filled = fill_sinks(dem)
         # The sink at (2,2)=2 should be raised to at least its lowest exit
@@ -174,11 +177,14 @@ class TestFlowAccumulation:
 
 class TestExtractStreams:
     def test_threshold_filtering(self):
-        accum = np.array([
-            [1, 1, 1],
-            [1, 50, 1],
-            [1, 100, 200],
-        ], dtype=np.int64)
+        accum = np.array(
+            [
+                [1, 1, 1],
+                [1, 50, 1],
+                [1, 100, 200],
+            ],
+            dtype=np.int64,
+        )
         streams = extract_streams(accum, threshold=100)
         assert streams[2, 1] is np.True_
         assert streams[2, 2] is np.True_
@@ -249,23 +255,23 @@ class TestStrahlerOrder:
 
         # Left tributary: (0,0) → (1,1) → (2,2)
         streams[0, 0] = True
-        fdir[0, 0] = 2   # SE
+        fdir[0, 0] = 2  # SE
         streams[1, 1] = True
-        fdir[1, 1] = 2   # SE
+        fdir[1, 1] = 2  # SE
 
         # Right tributary: (0,4) → (1,3) → (2,2)
         streams[0, 4] = True
-        fdir[0, 4] = 8   # SW
+        fdir[0, 4] = 8  # SW
         streams[1, 3] = True
-        fdir[1, 3] = 8   # SW
+        fdir[1, 3] = 8  # SW
 
         # Main stem: (2,2) → (3,2) → (4,2)
         streams[2, 2] = True
-        fdir[2, 2] = 4   # S
+        fdir[2, 2] = 4  # S
         streams[3, 2] = True
-        fdir[3, 2] = 4   # S
+        fdir[3, 2] = 4  # S
         streams[4, 2] = True
-        fdir[4, 2] = 0   # outlet
+        fdir[4, 2] = 0  # outlet
 
         order = strahler_order(fdir, streams)
 

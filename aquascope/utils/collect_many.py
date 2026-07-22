@@ -137,10 +137,7 @@ def collect_many(
     logger.info("collect_many: starting %d requests with max_workers=%d", n, max_workers)
 
     with ThreadPoolExecutor(max_workers=min(max_workers, n)) as executor:
-        future_to_key = {
-            executor.submit(req.fn): req.key
-            for req in requests
-        }
+        future_to_key = {executor.submit(req.fn): req.key for req in requests}
 
         for future in as_completed(future_to_key):
             key = future_to_key[future]

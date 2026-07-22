@@ -99,8 +99,6 @@ def qq_plot(
     Figure
         The matplotlib ``Figure`` containing the Q-Q plot.
     """
-    import matplotlib.pyplot as plt
-
     dist = _get_scipy_dist(distribution)
     data, is_lp3 = _prepare_data(observed, distribution)
     n = len(data)
@@ -139,7 +137,7 @@ def qq_plot(
 
 def double_mass_plot(
     observations: np.ndarray | dict | list,
-    pivots: list[int],
+    pivot: int,
     *,
     ax: Axes | None = None,
     save_path: str | None = None,
@@ -152,8 +150,8 @@ def double_mass_plot(
     observations : np.ndarray | dict | list
         2D array-like of numeric observations (rows=samples, cols=features).
         If a `dict` is passed, the values are stacked as columns.
-    pivots : list[int]
-        Two column indices `[idx_a, idx_b]` to compare.
+    pivot : int
+        Index of the column of interest.
     ax : Axes | None, optional
         Matplotlib axes to draw on.
     save_path : str | None, optional
@@ -175,33 +173,39 @@ def double_mass_plot(
             observations = observations.to_numpy()
         else:
             observations = np.asarray(observations)
+    # Validate pivot index
+    _, n_cols = observations.shape
+    assert 0 <= pivot < n_cols, "pivot index out of range"
+    # Compute cumulative sum and target mean
+    cumm_sum = np.cumsum(observations, axis=0)
+    # Average across features (axis=1) and squeeze to 1D shape (n_rows,)
+    dist_cumm = np.mean(cumm_sum, axis=1).squeeze()
 
-    n_rows, n_cols = observations.shape
-    idx_a, idx_b = pivots
-    assert idx_a < n_cols and idx_b < n_cols, "pivot index out of range"
-
-    numeric_feats = observations[:, [idx_a, idx_b]]
-    cumm_sum = np.cumsum(numeric_feats, axis=0)
-    cumm_a = cumm_sum[:, idx_a]
-    cumm_b = cumm_sum[:, idx_b]
-    dist_cumm = np.mean(cumm_sum, axis=1)
-
-    apply_aqua_style()
+    # 4. Setup figure and axes
     if ax is None:
         fig, ax = plt.subplots(figsize=SQUARE_FIGSIZE)
     else:
         fig = ax.get_figure()
 
-    ax.plot(dist_cumm, cumm_a, label=f"variable_{idx_a}", color="red", linewidth=2)
-    ax.plot(dist_cumm, cumm_b, label=f"variable_{idx_b}", color="green", linewidth=2)
+    # 5. Plot
+    ax.plot(
+        cumm_sum[:, pivot],
+        dist_cumm,
+        label=f"variable_{pivot}",
+        color="red",
+        linewidth=2,
+    )
 
-    ax.set_title(title or f"Double Mass Plot of {idx_a} vs {idx_b}")
-    ax.set_xlabel("Cumulative across all distributions")
-    ax.set_ylabel("Cumulative per Feature")
+    ax.set_title(title or f"Double Mass Plot of Feature {pivot}")
+    ax.set_xlabel(f"Cumulative Sum of Feature {pivot}")
+    ax.set_ylabel("Cumulative Mean Across Features")
     ax.grid(True)
     ax.legend()
+
+    # 6. Save or show figure
     _save_or_show(fig, save_path)
-    return fig, ax
+
+    return fig
 
 
 # ── P-P plot ────────────────────────────────────────────────────────────
@@ -298,7 +302,6 @@ def return_level_plot(
     Figure
         The matplotlib ``Figure`` containing the return level plot.
     """
-    
     apply_aqua_style()
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))

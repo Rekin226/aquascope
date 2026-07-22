@@ -302,6 +302,7 @@ def return_level_plot(
     Figure
         The matplotlib ``Figure`` containing the return level plot.
     """
+
     apply_aqua_style()
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))

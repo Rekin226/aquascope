@@ -1,0 +1,100 @@
+{
+  "projectName": "aquascope",
+  "projectOwner": "Rekin226",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "commitConvention": "angular",
+  "contributorsPerLine": 5,
+  "linkToUsage": false,
+  "contributors": [
+    {
+      "login": "Rekin226",
+      "name": "Abdoul Rachid Ouedraogo",
+      "avatar_url": "https://github.com/Rekin226.png",
+      "profile": "https://github.com/Rekin226",
+      "contributions": [
+        "code",
+        "doc",
+        "maintenance"
+      ]
+    },
+    {
+      "login": "vaishnavidesai09",
+      "name": "Vaishnavi Desai",
+      "avatar_url": "https://github.com/vaishnavidesai09.png",
+      "profile": "https://github.com/vaishnavidesai09",
+      "contributions": [
+        "plugin"
+      ]
+    },
+    {
+      "login": "Karthick03219",
+      "name": "Karthick",
+      "avatar_url": "https://github.com/Karthick03219.png",
+      "profile": "https://github.com/Karthick03219",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "sagiB74",
+      "name": "sagiB74",
+      "avatar_url": "https://github.com/sagiB74.png",
+      "profile": "https://github.com/sagiB74",
+      "contributions": [
+        "test"
+      ]
+    },
+    {
+      "login": "laishettikarthik-tech",
+      "name": "Karthik Laishetti",
+      "avatar_url": "https://github.com/laishettikarthik-tech.png",
+      "profile": "https://github.com/laishettikarthik-tech",
+      "contributions": [
+        "code",
+        "bug"
+      ]
+    },
+    {
+      "login": "adjenk",
+      "name": "Adam Jenkins",
+      "avatar_url": "https://github.com/adjenk.png",
+      "profile": "https://github.com/adjenk",
+      "contributions": [
+        "plugin"
+      ]
+    },
+    {
+      "login": "widjajs",
+      "name": "Steven Widjaja",
+      "avatar_url": "https://github.com/widjajs.png",
+      "profile": "https://github.com/widjajs",
+      "contributions": [
+        "test"
+      ]
+    },
+    {
+      "login": "sairajkasam",
+      "name": "Sai Raj Kasam",
+      "avatar_url": "https://github.com/sairajkasam.png",
+      "profile": "https://github.com/sairajkasam",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "safiashaik04",
+      "name": "safiashaik04",
+      "avatar_url": "https://github.com/safiashaik04.png",
+      "profile": "https://github.com/safiashaik04",
+      "contributions": [
+        "code"
+      ]
+    }
+  ]
+}

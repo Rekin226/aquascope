@@ -339,23 +339,29 @@ We want contributors to grow, not vanish after one PR. There's a clear path: sta
 Thanks to these wonderful people who make AquaScope possible ([emoji key](CONTRIBUTORS.md#contribution-key)):
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="20%"><a href="https://github.com/Rekin226"><img src="https://github.com/Rekin226.png?size=100" width="100px;" alt="Abdoul Rachid Ouedraogo"/><br /><sub><b>Abdoul Rachid Ouedraogo</b></sub></a><br />💻 📖 🚧</td>
-      <td align="center" valign="top" width="20%"><a href="https://github.com/vaishnavidesai09"><img src="https://github.com/vaishnavidesai09.png?size=100" width="100px;" alt="Vaishnavi Desai"/><br /><sub><b>Vaishnavi Desai</b></sub></a><br />🔌</td>
-      <td align="center" valign="top" width="20%"><a href="https://github.com/Karthick03219"><img src="https://github.com/Karthick03219.png?size=100" width="100px;" alt="Karthick"/><br /><sub><b>Karthick</b></sub></a><br />💻</td>
-      <td align="center" valign="top" width="20%"><a href="https://github.com/sagiB74"><img src="https://github.com/sagiB74.png?size=100" width="100px;" alt="sagiB74"/><br /><sub><b>sagiB74</b></sub></a><br />⚠️</td>
-      <td align="center" valign="top" width="20%"><a href="https://github.com/laishettikarthik-tech"><img src="https://github.com/laishettikarthik-tech.png?size=100" width="100px;" alt="Karthik Laishetti"/><br /><sub><b>Karthik Laishetti</b></sub></a><br />💻 🐛</td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/Rekin226"><img src="https://github.com/Rekin226.png?s=100" width="100px;" alt="Abdoul Rachid Ouedraogo"/><br /><sub><b>Abdoul Rachid Ouedraogo</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Rekin226" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Rekin226" title="Documentation">📖</a> <a href="#maintenance-Rekin226" title="Maintenance">🚧</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/vaishnavidesai09"><img src="https://github.com/vaishnavidesai09.png?s=100" width="100px;" alt="Vaishnavi Desai"/><br /><sub><b>Vaishnavi Desai</b></sub></a><br /><a href="#plugin-vaishnavidesai09" title="Plugin/utility libraries">🔌</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/Karthick03219"><img src="https://github.com/Karthick03219.png?s=100" width="100px;" alt="Karthick"/><br /><sub><b>Karthick</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Karthick03219" title="Code">💻</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/sagiB74"><img src="https://github.com/sagiB74.png?s=100" width="100px;" alt="sagiB74"/><br /><sub><b>sagiB74</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=sagiB74" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/laishettikarthik-tech"><img src="https://github.com/laishettikarthik-tech.png?s=100" width="100px;" alt="Karthik Laishetti"/><br /><sub><b>Karthik Laishetti</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=laishettikarthik-tech" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/issues?q=author%3Alaishettikarthik-tech" title="Bug reports">🐛</a></td>
     </tr>
     <tr>
-      <td align="center" valign="top" width="20%"><a href="https://github.com/adjenk"><img src="https://github.com/adjenk.png?size=100" width="100px;" alt="Adam Jenkins"/><br /><sub><b>Adam Jenkins</b></sub></a><br />🔌</td>
-      <td align="center" valign="top" width="20%"><a href="https://github.com/widjajs"><img src="https://github.com/widjajs.png?size=100" width="100px;" alt="Steven Widjaja"/><br /><sub><b>Steven Widjaja</b></sub></a><br />⚠️</td>
-      <td align="center" valign="top" width="20%"><a href="https://github.com/sairajkasam"><img src="https://github.com/sairajkasam.png?size=100" width="100px;" alt="Sai Raj Kasam"/><br /><sub><b>Sai Raj Kasam</b></sub></a><br />💻</td>
-      <td align="center" valign="top" width="20%"><a href="https://github.com/safiashaik04"><img src="https://github.com/safiashaik04.png?size=100" width="100px;" alt="safiashaik04"/><br /><sub><b>safiashaik04</b></sub></a><br />💻</td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/adjenk"><img src="https://github.com/adjenk.png?s=100" width="100px;" alt="Adam Jenkins"/><br /><sub><b>Adam Jenkins</b></sub></a><br /><a href="#plugin-adjenk" title="Plugin/utility libraries">🔌</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/widjajs"><img src="https://github.com/widjajs.png?s=100" width="100px;" alt="Steven Widjaja"/><br /><sub><b>Steven Widjaja</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=widjajs" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/sairajkasam"><img src="https://github.com/sairajkasam.png?s=100" width="100px;" alt="Sai Raj Kasam"/><br /><sub><b>Sai Raj Kasam</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=sairajkasam" title="Code">💻</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/safiashaik04"><img src="https://github.com/safiashaik04.png?s=100" width="100px;" alt="safiashaik04"/><br /><sub><b>safiashaik04</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=safiashaik04" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 Your first merged PR puts you on this board, every kind of contribution counts. See [CONTRIBUTORS.md](CONTRIBUTORS.md).

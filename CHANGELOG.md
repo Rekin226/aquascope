@@ -35,11 +35,17 @@ All notable changes to AquaScope are documented here.
   `requirements.txt` for Streamlit Community Cloud one-click deploys, and a
   ready-to-push Hugging Face Space under `deploy/huggingface-space/`
   (closes the "hosted Streamlit demo" roadmap gap, #34).
+- **Colorblind-safe palette** (`viz/styles.py`): `apply_aqua_style(palette="colorblind")`
+  switches the `axes.prop_cycle` to the Okabe-Ito / Color Universal Design
+  8-colour palette. The default behaviour is unchanged.
 
 ### Changed
 - `.streamlit/config.toml` now pins the dashboard's categorical chart colors
   (`chartCategoricalColors`) so native Streamlit charts match the Plotly theme,
   and disables usage-stats gathering.
+- `apply_aqua_style()` now explicitly sets `axes.prop_cycle` to `SERIES_COLOURS`
+  on every call (previously the cycle was not set, inheriting Matplotlib's
+  default). Visually identical for existing code.
 
 ### Fixed
 - **Live collectors now work in the in-browser (WASM) demo.** `CachedHTTPClient`

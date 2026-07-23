@@ -9,6 +9,7 @@ from aquascope.collectors.france_hubeau import HubeauHydrometrieCollector
 from aquascope.collectors.gemstat import GEMStatCollector
 from aquascope.collectors.grdc import GRDCCollector
 from aquascope.collectors.india_wris import IndiaWRISCollector
+from aquascope.collectors.ireland_opw import IrelandOPWCollector
 from aquascope.collectors.japan_mlit import JapanMLITCollector
 from aquascope.collectors.korea_wamis import KoreaWAMISCollector
 from aquascope.collectors.openmeteo import OpenMeteoCollector
@@ -54,4 +55,5 @@ __all__ = [
     "USGSCollector",
     "WaPORCollector",
     "WQPCollector",
+    "IrelandOPWCollector",
 ]

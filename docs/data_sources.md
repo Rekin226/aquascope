@@ -1,6 +1,6 @@
 # Data Sources
 
-AquaScope ships **22 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
+AquaScope ships **23 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
 
 Most sources emit point observations and share the unified `water_data` schema (`WaterQualitySample`, `WaterLevelReading`, `ReservoirStatus`). Three aggregate/gridded sources use purpose-built record types that match their data shape: **FAO AQUASTAT** returns country-level `AquastatRecord`, **UN SDG 6** returns `SDG6Indicator`, and **FAO WaPOR** returns gridded `WaPORObservation`.
 
@@ -29,6 +29,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [FAO WaPOR](https://www.fao.org/in-action/remote-sensing-for-water-productivity) | Global | Satellite ET, biomass, water productivity | REST | ✅ |
 | [EU WFD](https://www.eea.europa.eu) | Europe | Water Framework Directive status | REST | ✅ |
 | [Hub'Eau](https://hubeau.eaufrance.fr/api/v2/hydrometrie) | France | River water level, discharge | REST | ✅ |
+| [PEGELONLINE](https://www.pegelonline.wsv.de/webservice/dokuRestapi) | Germany | River water level, discharge | REST | ✅ |
 | [Japan MLIT](https://www.mlit.go.jp) | Japan | Hydrometeorology, river observations | REST | ✅ |
 | [Korea WAMIS](https://www.wamis.go.kr) | Korea | Hydrology, dam operations | REST | ✅ |
 | [India WRIS](https://indiawris.gov.in) | India | River water level | REST | ✅ |
@@ -52,6 +53,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | FAO AQUASTAT / WaPOR | No | Open access |
 | EU WFD | No | Open access |
 | Hub'Eau | No | Open access |
+| PEGELONLINE | No | Open access |
 | Japan MLIT / Korea WAMIS | No | Open access |
 | CAMELS-CL | No | Open access |
 
@@ -60,6 +62,38 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 ## Adding a new source
 
 Want to add your country's water data? See the contributor guide: [adding a data source](guides/adding_data_source.md).
+
+## PEGELONLINE (Germany)
+
+- **Source type:** `pegelonline`
+- **Coverage:** German federal waterways — water level (`W`) and discharge (`Q`)
+- **Collector:** `aquascope.collectors.pegelonline.PegelonlineCollector`
+
+PEGELONLINE stations should be addressed by UUID. The upstream service keeps
+raw measurements for only the most recent **31 days**, so the collector rejects
+larger relative windows instead of returning a misleading partial result.
+
+**Usage:**
+```python
+from aquascope.collectors import PegelonlineCollector
+
+collector = PegelonlineCollector()
+readings = collector.collect(
+    station_id="593647aa-9fea-43ec-a7d6-6476a76ae868",  # Bonn
+    days=7,
+)
+```
+
+From the CLI:
+```bash
+# Both water level and discharge (when the station publishes both)
+aquascope collect --source pegelonline \
+  --station 593647aa-9fea-43ec-a7d6-6476a76ae868 --days 7
+
+# Discharge only
+aquascope collect --source pegelonline \
+  --station 593647aa-9fea-43ec-a7d6-6476a76ae868 --timeseries Q
+```
 
 ## GRDC (Global Runoff Data Centre)
 

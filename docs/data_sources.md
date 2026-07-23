@@ -34,6 +34,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [India WRIS](https://indiawris.gov.in) | India | River water level | REST | ✅ |
 | [GRDC](https://zenodo.org/records/19126732) | Global | River discharge (in-situ gauges + RSEG satellite) | Zenodo / Dataverse | ✅ |
 | [CAMELS-CL](https://www.cr2.cl/camels-cl/) | Chile | Daily observed streamflow, catchment attributes | ZIP / CSV | ✅ |
+| [Ireland OPW](https://waterlevel.ie) | Ireland | River / lake water level (15-min resolution) | GeoJSON / CSV | ✅ |
 
 ---
 

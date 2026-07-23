@@ -236,7 +236,7 @@ Switch to MCMC with `degree>1` for polynomial models, or pass `prior_precision` 
 
 ## 💻 CLI
 
-AquaScope ships a 14-command CLI for the most common workflows:
+AquaScope ships a 19-command CLI for the most common workflows:
 
 ```bash
 # Collect data

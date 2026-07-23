@@ -95,8 +95,8 @@ class UKEACollector(BaseCollector):
         params: dict[str, Any] = {
             "_limit": limit,
         }
-        if period:
-            params["period"] = period
+        if collection:
+            params["period"] = collection
         if observed_property:
             params["observedProperty"] = observed_property
         if measure:
@@ -332,15 +332,19 @@ class UKEACollector(BaseCollector):
         measure_name = measure_id.rsplit("/", 1)[-1] if measure_id else None
         if measure_name:
             station_suid = UKEACollector._extract_station_suid_from_measure_id(measure_name)
+        else:
+            station_suid = None
 
         value = item.get("value", None)
 
         datetime_str = item.get("dateTime") or item.get("date")
         if datetime_str:
             sample_datetime = datetime.fromisoformat(datetime_str)
+        else:
+            sample_datetime = None
 
         remark = (f"Data Completeness: {item.get('completeness', 'N/A')}; "
-                    f"Data Quality: {item.get('category', 'N/A')}.")
+                    f"Data Quality: {item.get('quality', 'N/A')}.")
 
         if not all(x is not None for x in (station_suid, value, sample_datetime)):
             raise ValueError("Incomplete raw data reading")

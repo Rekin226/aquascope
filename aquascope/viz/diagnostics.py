@@ -269,7 +269,7 @@ def pp_plot(
     ax.legend()
 
     _save_or_show(fig, save_path)
-    return fig, ax
+    return fig
 
 
 # ── Return level plot ───────────────────────────────────────────────────

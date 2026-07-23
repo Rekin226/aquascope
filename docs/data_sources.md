@@ -55,6 +55,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | Hub'Eau | No | Open access |
 | Japan MLIT / Korea WAMIS | No | Open access |
 | CAMELS-CL | No | Open access |
+| Ireland OPW | No | Open access via waterlevel.ie |
 
 ---
 

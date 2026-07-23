@@ -95,6 +95,16 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "navaneethsankar07",
+      "name": "Navaneeth Sankar",
+      "avatar_url": "https://github.com/navaneethsankar07.png",
+      "profile": "https://github.com/navaneethsankar07",
+      "contributions": [
+        "doc",
+        "test"
+      ]
     }
   ]
 }

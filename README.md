@@ -355,6 +355,7 @@ Thanks to these wonderful people who make AquaScope possible ([emoji key](CONTRI
       <td align="center" valign="top" width="20%"><a href="https://github.com/widjajs"><img src="https://github.com/widjajs.png?s=100" width="100px;" alt="Steven Widjaja"/><br /><sub><b>Steven Widjaja</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=widjajs" title="Tests">⚠️</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/sairajkasam"><img src="https://github.com/sairajkasam.png?s=100" width="100px;" alt="Sai Raj Kasam"/><br /><sub><b>Sai Raj Kasam</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=sairajkasam" title="Code">💻</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/safiashaik04"><img src="https://github.com/safiashaik04.png?s=100" width="100px;" alt="safiashaik04"/><br /><sub><b>safiashaik04</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=safiashaik04" title="Code">💻</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/navaneethsankar07"><img src="https://github.com/navaneethsankar07.png?s=100" width="100px;" alt="Navaneeth Sankar"/><br /><sub><b>Navaneeth Sankar</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=navaneethsankar07" title="Documentation">📖</a> <a href="https://github.com/Rekin226/aquascope/commits?author=navaneethsankar07" title="Tests">⚠️</a></td>
     </tr>
   </tbody>
 </table>

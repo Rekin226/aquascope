@@ -530,10 +530,10 @@ def drought_class(spi_value: float) -> str:
         return "very_wet"
     if spi_value >= 1.0:
         return "moderately_wet"
-    if spi_value >= -1.0:
+    if spi_value > -1.0:
         return "normal"
-    if spi_value >= -1.5:
+    if spi_value > -1.5:
         return "moderately_dry"
-    if spi_value >= -2.0:
+    if spi_value > -2.0:
         return "severely_dry"
     return "extremely_dry"

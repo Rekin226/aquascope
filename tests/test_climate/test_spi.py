@@ -61,10 +61,9 @@ class TestSPI:
         (2.0, "extremely_wet"),
         (1.5, "very_wet"),
         (1.0, "moderately_wet"),
-        (-1.0, "normal"),
-        (-1.5, "moderately_dry"),
-        (-2.0, "severely_dry"),
-        (-2.01, "extremely_dry"),
+        (-1.0, "moderately_dry"),
+        (-1.5, "severely_dry"),
+        (-2.0, "extremely_dry"),
     ],
 )
 def test_drought_class_boundaries(value, expected):

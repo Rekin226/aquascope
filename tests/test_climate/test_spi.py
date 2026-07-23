@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from aquascope.climate.indices import standardized_precipitation_index
+from aquascope.climate.indices import drought_class, standardized_precipitation_index
 
 
 def _monthly_precip(n_years: int = 30, seed: int = 0) -> pd.Series:
@@ -52,3 +52,19 @@ class TestSPI:
         precip.iloc[::5] = 0.0  # inject dry months
         spi = standardized_precipitation_index(precip, scale=1)
         assert np.isfinite(spi.dropna()).all()
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (np.nan, "unknown"),
+        (2.0, "extremely_wet"),
+        (1.5, "very_wet"),
+        (1.0, "moderately_wet"),
+        (-1.0, "moderately_dry"),
+        (-1.5, "severely_dry"),
+        (-2.0, "extremely_dry"),
+    ],
+)
+def test_drought_class_boundaries(value, expected):
+    assert drought_class(value) == expected

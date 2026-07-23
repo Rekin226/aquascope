@@ -20,7 +20,7 @@ See [docs/data_sources.md](data_sources.md) for the full list with endpoints and
 - **Flood frequency** — GEV, LP3 (Bulletin 17C compliant), Gumbel, GPD/POT, L-moments, non-stationary GEV, regional frequency analysis, EMA for censored data
 - **Baseflow separation** — Lyne-Hollick & Eckhardt digital filters
 - **Flow duration curves** — Weibull plotting, FDC slope
-- **22 hydrological signatures** — magnitude, variability, timing, recession, flashiness
+- **21 hydrological signatures** — magnitude, variability, timing, recession, flashiness
 - **Rating curves** — power-law fitting, segmented curves, shift detection, HEC-RAS export
 - **Q-Q/P-P diagnostics** — distribution fit validation with 4-panel diagnostic plots
 - **Cross-validation** — leave-one-out CV and coverage probability for flood frequency

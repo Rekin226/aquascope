@@ -12,20 +12,9 @@ from aquascope.dashboard import _charts, _demo
 logger = logging.getLogger(__name__)
 
 _AGRI_CROPS = [
-    "maize",
-    "wheat_winter",
-    "rice_paddy",
-    "soybean",
-    "potato",
-    "tomato",
-    "cotton",
-    "sugarcane",
-    "barley",
-    "onion",
-    "cabbage",
-    "sunflower",
-    "citrus",
-    "grape",
+    "maize", "wheat_winter", "rice_paddy", "soybean", "potato", "tomato",
+    "cotton", "sugarcane", "barley", "onion", "cabbage", "sunflower",
+    "citrus", "grape",
 ]
 
 
@@ -78,15 +67,9 @@ def render() -> None:
         with st.spinner("Computing ET₀ (Penman-Monteith) and scheduling…"):
             eto = penman_monteith_series(weather, latitude=latitude, elevation=elevation)
             sched = irrigation_schedule(
-                eto,
-                precip,
-                crop,
-                planting,
-                efficiency=efficiency,
-                method=method,
-                kc_max=kc_max,
-                few=few,
-                kr=kr,
+                eto, precip, crop, planting,
+                efficiency=efficiency, method=method,
+                kc_max=kc_max, few=few, kr=kr,
             )
     except Exception as exc:  # noqa: BLE001
         st.error(f"Agricultural water computation failed: {exc}")

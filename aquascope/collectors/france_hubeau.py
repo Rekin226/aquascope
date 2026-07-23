@@ -169,9 +169,7 @@ class HubeauHydrometrieCollector(BaseCollector):
                         station_id=row["code_station"],
                         station_name=row.get("libelle_station"),  # not present on this endpoint; stays None
                         location=loc,
-                        sample_datetime=datetime.fromisoformat(row["date_obs"].replace("Z", "+00:00")).replace(
-                            tzinfo=None
-                        ),
+                        sample_datetime=datetime.fromisoformat(row["date_obs"].replace("Z", "+00:00")).replace(tzinfo=None),
                         parameter=label,
                         value=float(val),
                         unit=unit,

@@ -99,10 +99,7 @@ class CAMELSCLCollector(BaseCollector):
         if not zip_path.exists():
             logger.info("CAMELS-CL: downloading CAMELS_CL_v202201.zip (~275MB) — one-time download…")
             with httpx.stream(
-                "GET",
-                CAMELS_CL_DOWNLOAD_URL,
-                follow_redirects=True,
-                timeout=600,
+                "GET", CAMELS_CL_DOWNLOAD_URL, follow_redirects=True, timeout=600,
                 headers={"User-Agent": "Mozilla/5.0"},
             ) as resp:
                 resp.raise_for_status()

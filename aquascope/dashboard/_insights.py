@@ -119,23 +119,23 @@ def build(df: pd.DataFrame, prof: _state.DataProfile) -> Insights:
     sugg: list[Suggestion] = []
     if ins.who_alerts:
         sugg.append(
-            Suggestion("⚠️ Review quality alerts", "alerts", f"{ins.who_alerts} parameter(s) exceed WHO guidelines")
+            Suggestion("⚠️ Review quality alerts", "alerts",
+                       f"{ins.who_alerts} parameter(s) exceed WHO guidelines")
         )
     if prof.discharge_col and prof.has_time:
         if prof.span_years >= 3:
             sugg.append(
-                Suggestion(
-                    "🌀 Flood frequency analysis",
-                    "extremes",
-                    f"{prof.span_years:.0f} years of discharge — enough for GEV/LP3 return levels",
-                )
+                Suggestion("🌀 Flood frequency analysis", "extremes",
+                           f"{prof.span_years:.0f} years of discharge — enough for GEV/LP3 return levels")
             )
         sugg.append(
-            Suggestion("🌊 Baseflow & flow signatures", "hydrology", f"daily `{prof.discharge_col}` series detected")
+            Suggestion("🌊 Baseflow & flow signatures", "hydrology",
+                       f"daily `{prof.discharge_col}` series detected")
         )
     if ins.quality_score < 85:
         sugg.append(
-            Suggestion("🔬 Clean & preprocess", "analysis", "; ".join(ins.quality_notes) or "quality score below 85")
+            Suggestion("🔬 Clean & preprocess", "analysis",
+                       "; ".join(ins.quality_notes) or "quality score below 85")
         )
     if prof.has_time and prof.value_col:
         sugg.append(Suggestion("📈 Plot time series", "visualize", "datetime + numeric columns detected"))

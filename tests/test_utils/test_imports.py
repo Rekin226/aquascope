@@ -1,5 +1,4 @@
 """Tests for aquascope.utils.imports.require()."""
-
 from __future__ import annotations
 
 import pytest

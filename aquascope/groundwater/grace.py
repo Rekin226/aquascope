@@ -252,14 +252,12 @@ class GRACEProcessor:
             z = (float(value) - mean) / std
             if abs(z) >= threshold_sigma:
                 anomaly_type = "depletion" if z < 0 else "surplus"
-                anomalies.append(
-                    GWSAnomaly(
-                        date=pd.Timestamp(date),
-                        value=float(value),
-                        z_score=z,
-                        anomaly_type=anomaly_type,
-                    )
-                )
+                anomalies.append(GWSAnomaly(
+                    date=pd.Timestamp(date),
+                    value=float(value),
+                    z_score=z,
+                    anomaly_type=anomaly_type,
+                ))
 
         logger.info("Detected %d anomalies (threshold=%.1fσ)", len(anomalies), threshold_sigma)
         return anomalies

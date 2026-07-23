@@ -120,13 +120,17 @@ class TestEstimateTransmissivity:
     def test_cooper_jacob_estimate(self):
         # Filter to late-time data where CJ is valid
         mask = self.time > 1.0
-        result = estimate_transmissivity(self.time[mask], self.drawdown[mask], self.Q, self.r, method="cooper_jacob")
+        result = estimate_transmissivity(
+            self.time[mask], self.drawdown[mask], self.Q, self.r, method="cooper_jacob"
+        )
         assert isinstance(result, AquiferParams)
         assert result.method == "cooper_jacob"
         np.testing.assert_allclose(result.transmissivity, self.T_true, rtol=0.15)
 
     def test_theis_estimate(self):
-        result = estimate_transmissivity(self.time, self.drawdown, self.Q, self.r, method="theis")
+        result = estimate_transmissivity(
+            self.time, self.drawdown, self.Q, self.r, method="theis"
+        )
         assert isinstance(result, AquiferParams)
         assert result.method == "theis"
         np.testing.assert_allclose(result.transmissivity, self.T_true, rtol=0.05)

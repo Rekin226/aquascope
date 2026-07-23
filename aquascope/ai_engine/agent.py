@@ -188,9 +188,7 @@ class HydroAgent:
         from aquascope.challenges.flood import FloodChallenge
 
         challenge = FloodChallenge(
-            lat=spec.latitude,
-            lon=spec.longitude,
-            name=spec.location_name,
+            lat=spec.latitude, lon=spec.longitude, name=spec.location_name,
         )
         challenge.load_dataframe(data)
         challenge.fit(model=model_id)
@@ -200,18 +198,13 @@ class HydroAgent:
         result.explanation = result.risk_assessment.get("description", "")
 
     def _run_drought(
-        self,
-        result: AgentResult,
-        spec: ChallengeSpec,
-        data: pd.DataFrame,
+        self, result: AgentResult, spec: ChallengeSpec, data: pd.DataFrame,
         extra: dict[str, pd.DataFrame] | None,
     ) -> None:
         from aquascope.challenges.drought import DroughtChallenge
 
         challenge = DroughtChallenge(
-            lat=spec.latitude or 0,
-            lon=spec.longitude or 0,
-            name=spec.location_name,
+            lat=spec.latitude or 0, lon=spec.longitude or 0, name=spec.location_name,
         )
         et_df = extra.get("et") if extra else None
         challenge.load_dataframe(data, et_df=et_df)
@@ -221,10 +214,7 @@ class HydroAgent:
         result.explanation = result.status.get("overall", "")
 
     def _run_quality(
-        self,
-        result: AgentResult,
-        spec: ChallengeSpec,
-        data: pd.DataFrame,
+        self, result: AgentResult, spec: ChallengeSpec, data: pd.DataFrame,
         extra: dict[str, pd.DataFrame] | None,
     ) -> None:
         from aquascope.challenges.quality import WaterQualityChallenge

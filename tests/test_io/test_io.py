@@ -99,14 +99,8 @@ class TestWaterMLRoundtrip:
         df = waterml_to_dataframe([ts])
 
         assert list(df.columns) == [
-            "timestamp",
-            "station_id",
-            "parameter",
-            "value",
-            "unit",
-            "quality_code",
-            "latitude",
-            "longitude",
+            "timestamp", "station_id", "parameter", "value",
+            "unit", "quality_code", "latitude", "longitude",
         ]
         assert len(df) == 3
         assert df["station_id"].iloc[0] == "ST001"
@@ -199,7 +193,9 @@ class TestHECFormat:
     def test_write_hec_ras_flow(self, tmp_path: Path):
         """Verify unsteady flow file has required header lines and data."""
         discharge = np.array([100.0, 120.0, 115.0])
-        timestamps = pd.DatetimeIndex([datetime(2024, 1, 1, h, tzinfo=timezone.utc) for h in range(3)])
+        timestamps = pd.DatetimeIndex(
+            [datetime(2024, 1, 1, h, tzinfo=timezone.utc) for h in range(3)]
+        )
         out = tmp_path / "flow.u01"
         write_hec_ras_flow(discharge, timestamps, "TestRiver", "Reach1", "100", out)
 

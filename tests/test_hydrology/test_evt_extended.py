@@ -13,7 +13,6 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
-
 def _gumbel_data(n: int = 100, loc: float = 50.0, scale: float = 10.0, seed: int = 42) -> np.ndarray:
     """Generate Gumbel-distributed data."""
     rng = np.random.default_rng(seed)
@@ -44,8 +43,8 @@ def _gpd_data(n: int = 200, shape: float = 0.2, scale: float = 5.0, seed: int = 
 # Gumbel
 # ---------------------------------------------------------------------------
 
-
 class TestFitGumbel:
+
     def test_fit_gumbel_basic(self):
         from aquascope.hydrology.flood_frequency import fit_gumbel
 
@@ -81,8 +80,8 @@ class TestFitGumbel:
 # Weibull minimum
 # ---------------------------------------------------------------------------
 
-
 class TestFitWeibullMin:
+
     def test_fit_weibull_min_basic(self):
         from aquascope.hydrology.flood_frequency import fit_weibull_min
 
@@ -98,8 +97,8 @@ class TestFitWeibullMin:
 # GPD
 # ---------------------------------------------------------------------------
 
-
 class TestFitGPD:
+
     def test_fit_gpd_basic(self):
         from aquascope.hydrology.flood_frequency import fit_gpd
 
@@ -130,8 +129,8 @@ class TestFitGPD:
 # POT threshold selection
 # ---------------------------------------------------------------------------
 
-
 class TestSelectPOTThreshold:
+
     def test_percentile(self):
         from aquascope.hydrology.flood_frequency import select_pot_threshold
 
@@ -169,8 +168,8 @@ class TestSelectPOTThreshold:
 # L-moments
 # ---------------------------------------------------------------------------
 
-
 class TestLmoments:
+
     def test_lmoments_known_values(self):
         """For a uniform(0,1) sample the theoretical L1=0.5, L2≈1/6."""
         from aquascope.hydrology.flood_frequency import lmoments_from_sample
@@ -217,8 +216,8 @@ class TestLmoments:
 # Non-stationary GEV
 # ---------------------------------------------------------------------------
 
-
 class TestNonStationaryGEV:
+
     def test_fit_nonstationary_gev_basic(self):
         from aquascope.hydrology.flood_frequency import fit_nonstationary_gev
 
@@ -266,8 +265,8 @@ class TestNonStationaryGEV:
 # Regional frequency analysis
 # ---------------------------------------------------------------------------
 
-
 class TestRegionalFrequency:
+
     def _make_sites(self, n_sites: int = 4, n_years: int = 40, seed: int = 42) -> dict[str, np.ndarray]:
         rng = np.random.default_rng(seed)
         sites = {}
@@ -310,8 +309,8 @@ class TestRegionalFrequency:
 # Goodness-of-fit tests
 # ---------------------------------------------------------------------------
 
-
 class TestGoodnessOfFit:
+
     def test_anderson_darling_good_fit(self):
         """GEV data tested against fitted GEV — should not reject."""
         from scipy.stats import genextreme

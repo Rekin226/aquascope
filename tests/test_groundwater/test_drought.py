@@ -21,7 +21,8 @@ class TestSGI:
         self.idx = _monthly(25)
         rng = np.random.default_rng(0)
         seasonal = 2.0 * np.sin(2 * np.pi * np.arange(len(self.idx)) / 12)
-        self.levels = pd.Series(10.0 + seasonal + rng.normal(0, 1, len(self.idx)), index=self.idx)
+        self.levels = pd.Series(10.0 + seasonal + rng.normal(0, 1, len(self.idx)),
+                                index=self.idx)
 
     def test_standard_normal_distribution(self):
         sgi = standardised_groundwater_index(self.levels)

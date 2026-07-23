@@ -130,7 +130,9 @@ class TestMetadataEnrichment:
     def test_corrupt_coords_rejected_metadata_kept(self):
         client = MagicMock()
         client.get_json.side_effect = [META_ROWS, SAMPLE]
-        col = TaiwanWRAGroundwaterCollector(statistic="minimum", with_metadata=True, client=client)
+        col = TaiwanWRAGroundwaterCollector(
+            statistic="minimum", with_metadata=True, client=client
+        )
         recs = {r.station_id: r for r in col.collect()}
         w3 = recs["W3"]
         assert w3.location is None  # out-of-Taiwan coords filtered

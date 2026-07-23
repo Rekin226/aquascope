@@ -51,7 +51,9 @@ class TestBaseHydroModel:
         assert metrics["nse"] > 0.95
 
 
-@pytest.mark.skipif(not _HAS_STATSMODELS, reason="statsmodels not installed (aquascope[ml])")
+@pytest.mark.skipif(
+    not _HAS_STATSMODELS, reason="statsmodels not installed (aquascope[ml])"
+)
 class TestARIMAModel:
     def test_fit_predict(self):
         from aquascope.models.statistical import ARIMAModel

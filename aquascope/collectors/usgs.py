@@ -126,7 +126,10 @@ class USGSCollector(BaseCollector):
             window_days = days if days is not None else 30
             end = datetime.now(timezone.utc)
             start = end - timedelta(days=window_days)
-            datetime_range = f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+            datetime_range = (
+                f"{start.strftime('%Y-%m-%dT%H:%M:%SZ')}/"
+                f"{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+            )
 
         all_features: list[dict] = []
         params: dict[str, Any] = {

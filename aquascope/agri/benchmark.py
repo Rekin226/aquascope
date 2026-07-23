@@ -154,7 +154,9 @@ def benchmark_aquastat(
 
     if countries:
         wanted = {country.strip().lower() for country in countries if country.strip()}
-        data = data[data["country"].str.lower().isin(wanted) | data["country_code"].str.lower().isin(wanted)].copy()
+        data = data[
+            data["country"].str.lower().isin(wanted) | data["country_code"].str.lower().isin(wanted)
+        ].copy()
 
     if year is not None:
         data = data[data["year"] == year].copy()
@@ -205,16 +207,15 @@ def benchmark_aquastat(
         latest = table.sort_values(["country_code", "year"]).groupby("country_code", dropna=False).tail(1)
         table = latest.copy()
 
-    table = table.sort_values(["metric_value", "year", "country"], ascending=[False, False, True]).reset_index(
-        drop=True
-    )
+    table = table.sort_values(["metric_value", "year", "country"], ascending=[False, False, True]).reset_index(drop=True)
     if top_n is not None:
         table = table.head(top_n).reset_index(drop=True)
 
-    scope = (
-        f"year {year}" if year is not None else ("latest year per country" if latest_only else "all available years")
+    scope = f"year {year}" if year is not None else ("latest year per country" if latest_only else "all available years")
+    summary = (
+        f"Computed {metric.name.lower()} for {len(table)} records using {scope}. "
+        f"Metric unit: {output_unit}."
     )
-    summary = f"Computed {metric.name.lower()} for {len(table)} records using {scope}. Metric unit: {output_unit}."
 
     return AgricultureBenchmarkResult(
         metric_id=metric.id,

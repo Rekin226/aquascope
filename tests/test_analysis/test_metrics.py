@@ -181,7 +181,9 @@ class TestPinballLoss:
             pinball_loss(np.array([1.0]), np.array([1.0]), 1.0)
 
     def test_nan_aware(self):
-        loss = pinball_loss(np.array([10.0, np.nan]), np.array([8.0, 5.0]), 0.5)
+        loss = pinball_loss(
+            np.array([10.0, np.nan]), np.array([8.0, 5.0]), 0.5
+        )
         assert loss == pytest.approx(1.0)
 
 

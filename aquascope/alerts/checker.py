@@ -148,18 +148,16 @@ def _check_value(
                         f"{thresh.standard} minimum of {thresh.limit} {thresh.unit} "
                         f"(ratio {ratio:.2f})"
                     )
-                    alerts.append(
-                        Alert(
-                            parameter=parameter,
-                            value=value,
-                            threshold=thresh,
-                            severity=sev,
-                            exceedance_ratio=ratio,
-                            timestamp=timestamp,
-                            station_id=station_id,
-                            message=msg,
-                        )
-                    )
+                    alerts.append(Alert(
+                        parameter=parameter,
+                        value=value,
+                        threshold=thresh,
+                        severity=sev,
+                        exceedance_ratio=ratio,
+                        timestamp=timestamp,
+                        station_id=station_id,
+                        message=msg,
+                    ))
             else:
                 if value > thresh.limit:
                     ratio = value / thresh.limit if thresh.limit != 0 else float("inf")
@@ -169,18 +167,16 @@ def _check_value(
                         f"{thresh.standard} limit of {thresh.limit} {thresh.unit} "
                         f"(ratio {ratio:.2f})"
                     )
-                    alerts.append(
-                        Alert(
-                            parameter=parameter,
-                            value=value,
-                            threshold=thresh,
-                            severity=sev,
-                            exceedance_ratio=ratio,
-                            timestamp=timestamp,
-                            station_id=station_id,
-                            message=msg,
-                        )
-                    )
+                    alerts.append(Alert(
+                        parameter=parameter,
+                        value=value,
+                        threshold=thresh,
+                        severity=sev,
+                        exceedance_ratio=ratio,
+                        timestamp=timestamp,
+                        station_id=station_id,
+                        message=msg,
+                    ))
     return alerts
 
 

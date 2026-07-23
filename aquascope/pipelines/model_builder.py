@@ -73,18 +73,16 @@ def run_mann_kendall(df: pd.DataFrame, config: dict | None = None) -> PipelineRe
                 continue
             try:
                 res = mk.original_test(vals.values, alpha=alpha)
-                results_rows.append(
-                    {
-                        "station": station,
-                        "parameter": param,
-                        "trend": res.trend,
-                        "p_value": round(res.p, 6),
-                        "z_score": round(res.z, 4),
-                        "tau": round(res.Tau, 4),
-                        "slope": round(res.slope, 6),
-                        "significant": res.p < alpha,
-                    }
-                )
+                results_rows.append({
+                    "station": station,
+                    "parameter": param,
+                    "trend": res.trend,
+                    "p_value": round(res.p, 6),
+                    "z_score": round(res.z, 4),
+                    "tau": round(res.Tau, 4),
+                    "slope": round(res.slope, 6),
+                    "significant": res.p < alpha,
+                })
             except Exception as e:
                 logger.debug("MK test failed for %s/%s: %s", station, param, e)
 
@@ -167,15 +165,13 @@ def run_wqi(df: pd.DataFrame, config: dict | None = None) -> PipelineResult:
                 else:
                     category = "Severely polluted"
 
-                results_rows.append(
-                    {
-                        "station": station,
-                        "date": str(date),
-                        "rpi": round(rpi, 2),
-                        "category": category,
-                        **{f"score_{k}": v for k, v in scores.items()},
-                    }
-                )
+                results_rows.append({
+                    "station": station,
+                    "date": str(date),
+                    "rpi": round(rpi, 2),
+                    "category": category,
+                    **{f"score_{k}": v for k, v in scores.items()},
+                })
 
     summary_df = pd.DataFrame(results_rows)
     category_counts = summary_df["category"].value_counts().to_dict() if len(summary_df) > 0 else {}
@@ -224,7 +220,7 @@ def run_pca_clustering(df: pd.DataFrame, config: dict | None = None) -> Pipeline
         method_id="pca_clustering",
         method_name="PCA + Cluster Analysis",
         summary=(
-            f"PCA with {n_comp} components explains {pca.explained_variance_ratio_.sum() * 100:.1f}% variance. "
+            f"PCA with {n_comp} components explains {pca.explained_variance_ratio_.sum()*100:.1f}% variance. "
             f"K-Means found {len(set(labels))} clusters across {len(pivot)} samples."
         ),
         metrics={
@@ -280,7 +276,7 @@ def run_random_forest(df: pd.DataFrame, config: dict | None = None) -> PipelineR
     return PipelineResult(
         method_id="random_forest_classification",
         method_name="Random Forest Classification",
-        summary=f"Random Forest accuracy: {accuracy * 100:.1f}% on test set ({len(X_test)} samples). Top feature: {max(importances, key=lambda k: importances[k])}",
+        summary=f"Random Forest accuracy: {accuracy*100:.1f}% on test set ({len(X_test)} samples). Top feature: {max(importances, key=lambda k: importances[k])}",
         metrics={"accuracy": accuracy, "feature_importances": importances, "classification_report": report},
     )
 
@@ -476,7 +472,9 @@ def run_svr_prediction(df: pd.DataFrame, config: dict | None = None) -> Pipeline
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_scaled, y, test_size=0.3, random_state=42
+    )
 
     kernel = config.get("kernel", "rbf")
     model = SVR(kernel=kernel, C=config.get("C", 1.0), epsilon=config.get("epsilon", 0.1))
@@ -490,13 +488,7 @@ def run_svr_prediction(df: pd.DataFrame, config: dict | None = None) -> Pipeline
         method_id="svr_prediction",
         method_name="Support Vector Regression",
         summary=f"SVR ({kernel} kernel) predicting {target}: R\u00b2 = {r2}, RMSE = {rmse} on {len(X_test)} test samples.",
-        metrics={
-            "R2": r2,
-            "RMSE": rmse,
-            "target": target,
-            "kernel": kernel,
-            "n_support_vectors": int(model.n_support_.sum()),
-        },
+        metrics={"R2": r2, "RMSE": rmse, "target": target, "kernel": kernel, "n_support_vectors": int(model.n_support_.sum())},
     )
 
 
@@ -525,7 +517,6 @@ def run_bayesian_network(df: pd.DataFrame, config: dict | None = None) -> Pipeli
             others = [p for k, p in enumerate(params) if k != i and k != j]
             if others:
                 from sklearn.linear_model import LinearRegression
-
                 X_others = pivot[others].values
                 lr1 = LinearRegression().fit(X_others, pivot[p1].values)
                 lr2 = LinearRegression().fit(X_others, pivot[p2].values)
@@ -536,14 +527,11 @@ def run_bayesian_network(df: pd.DataFrame, config: dict | None = None) -> Pipeli
                 r, p_val = sp_stats.pearsonr(pivot[p1], pivot[p2])
 
             if p_val < alpha:
-                edges.append(
-                    {
-                        "from": p1,
-                        "to": p2,
-                        "partial_corr": round(float(r), 4),
-                        "p_value": round(float(p_val), 6),
-                    }
-                )
+                edges.append({
+                    "from": p1, "to": p2,
+                    "partial_corr": round(float(r), 4),
+                    "p_value": round(float(p_val), 6),
+                })
 
     edges.sort(key=lambda e: abs(e["partial_corr"]), reverse=True)
 
@@ -584,16 +572,14 @@ def run_monte_carlo(df: pd.DataFrame, config: dict | None = None) -> PipelineRes
             else:
                 exceedance_prob = round(float((simulated > threshold).mean()), 4)
 
-        results.append(
-            {
-                "parameter": param,
-                "observed_mean": round(mean, 4),
-                "observed_std": round(std, 4),
-                "ci_95_lower": round(ci_lower, 4),
-                "ci_95_upper": round(ci_upper, 4),
-                "exceedance_probability": exceedance_prob,
-            }
-        )
+        results.append({
+            "parameter": param,
+            "observed_mean": round(mean, 4),
+            "observed_std": round(std, 4),
+            "ci_95_lower": round(ci_lower, 4),
+            "ci_95_upper": round(ci_upper, 4),
+            "exceedance_probability": exceedance_prob,
+        })
 
     return PipelineResult(
         method_id="monte_carlo_uncertainty",
@@ -683,16 +669,13 @@ def run_copula_analysis(df: pd.DataFrame, config: dict | None = None) -> Pipelin
             upper_tail = float(np.mean((u > 1 - q) & (v > 1 - q)) / q) if q > 0 else 0.0
             lower_tail = float(np.mean((u < q) & (v < q)) / q) if q > 0 else 0.0
 
-            pair_results.append(
-                {
-                    "param1": p1,
-                    "param2": p2,
-                    "kendall_tau": round(float(tau), 4),
-                    "p_value": round(float(p_val), 6),
-                    "upper_tail_dep": round(upper_tail, 4),
-                    "lower_tail_dep": round(lower_tail, 4),
-                }
-            )
+            pair_results.append({
+                "param1": p1, "param2": p2,
+                "kendall_tau": round(float(tau), 4),
+                "p_value": round(float(p_val), 6),
+                "upper_tail_dep": round(upper_tail, 4),
+                "lower_tail_dep": round(lower_tail, 4),
+            })
 
     pair_results.sort(key=lambda x: abs(x["kendall_tau"]), reverse=True)
 
@@ -728,11 +711,9 @@ def run_kriging(df: pd.DataFrame, config: dict | None = None) -> PipelineResult:
     geo["value"] = pd.to_numeric(geo["value"], errors="coerce")
     geo = geo.dropna(subset=["value"])
 
-    stations = (
-        geo.groupby("station_id")
-        .agg(lat=("latitude", "first"), lon=("longitude", "first"), value=("value", "mean"))
-        .dropna()
-    )
+    stations = geo.groupby("station_id").agg(
+        lat=("latitude", "first"), lon=("longitude", "first"), value=("value", "mean")
+    ).dropna()
 
     if len(stations) < 10:
         return PipelineResult(
@@ -828,7 +809,7 @@ def run_lstm_forecasting(df: pd.DataFrame, config: dict | None = None) -> Pipeli
 
     X, y = [], []
     for i in range(n_lags, len(scaled)):
-        X.append(scaled[i - n_lags : i])
+        X.append(scaled[i - n_lags:i])
         y.append(scaled[i])
     X_arr, y_arr = np.array(X), np.array(y)
 
@@ -837,11 +818,8 @@ def run_lstm_forecasting(df: pd.DataFrame, config: dict | None = None) -> Pipeli
     y_train, y_test = y_arr[:split], y_arr[split:]
 
     model = MLPRegressor(
-        hidden_layer_sizes=(64, 32),
-        max_iter=500,
-        random_state=42,
-        early_stopping=True,
-        validation_fraction=0.15,
+        hidden_layer_sizes=(64, 32), max_iter=500,
+        random_state=42, early_stopping=True, validation_fraction=0.15,
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
@@ -856,14 +834,7 @@ def run_lstm_forecasting(df: pd.DataFrame, config: dict | None = None) -> Pipeli
         method_id="lstm_forecasting",
         method_name="LSTM-Style Sequential Forecasting",
         summary=f"MLP sequential model for {target} ({n_lags} lags): R\u00b2 = {r2}, RMSE = {rmse} on {len(y_test)} test steps.",
-        metrics={
-            "R2": r2,
-            "RMSE": rmse,
-            "n_lags": n_lags,
-            "target": target,
-            "train_size": split,
-            "test_size": len(y_test),
-        },
+        metrics={"R2": r2, "RMSE": rmse, "n_lags": n_lags, "target": target, "train_size": split, "test_size": len(y_test)},
         details={"forecast_actual": y_test_orig.tolist(), "forecast_predicted": y_pred_orig.tolist()},
     )
 
@@ -904,13 +875,11 @@ def run_transformer_forecast(df: pd.DataFrame, config: dict | None = None) -> Pi
 
     X, y = [], []
     for i in range(n_lags, len(scaled)):
-        window = scaled[i - n_lags : i]
-        features = np.concatenate(
-            [
-                window,
-                [window.mean(), window.std(), window[-1] - window[0]],
-            ]
-        )
+        window = scaled[i - n_lags:i]
+        features = np.concatenate([
+            window,
+            [window.mean(), window.std(), window[-1] - window[0]],
+        ])
         X.append(features)
         y.append(scaled[i])
     X_arr, y_arr = np.array(X), np.array(y)
@@ -920,11 +889,8 @@ def run_transformer_forecast(df: pd.DataFrame, config: dict | None = None) -> Pi
     y_train, y_test = y_arr[:split], y_arr[split:]
 
     model = MLPRegressor(
-        hidden_layer_sizes=(128, 64, 32),
-        max_iter=500,
-        random_state=42,
-        early_stopping=True,
-        validation_fraction=0.15,
+        hidden_layer_sizes=(128, 64, 32), max_iter=500,
+        random_state=42, early_stopping=True, validation_fraction=0.15,
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
@@ -939,14 +905,7 @@ def run_transformer_forecast(df: pd.DataFrame, config: dict | None = None) -> Pi
         method_id="transformer_forecast",
         method_name="Transformer-Style Forecasting",
         summary=f"Multi-resolution MLP for {target} ({n_lags} lags): R\u00b2 = {r2}, RMSE = {rmse} on {len(y_test)} steps.",
-        metrics={
-            "R2": r2,
-            "RMSE": rmse,
-            "n_lags": n_lags,
-            "target": target,
-            "train_size": split,
-            "test_size": len(y_test),
-        },
+        metrics={"R2": r2, "RMSE": rmse, "n_lags": n_lags, "target": target, "train_size": split, "test_size": len(y_test)},
         details={"forecast_actual": y_test_orig.tolist(), "forecast_predicted": y_pred_orig.tolist()},
     )
 
@@ -997,7 +956,7 @@ def run_transfer_learning(df: pd.DataFrame, config: dict | None = None) -> Pipel
     combined_X = pd.concat([source_X, target_X])
     combined_y = pd.concat([source_y, target_y])
     weights = np.ones(len(combined_X))
-    weights[len(source_X) :] = 3.0
+    weights[len(source_X):] = 3.0
 
     fine_model = GradientBoostingRegressor(n_estimators=150, max_depth=4, random_state=42)
     fine_model.fit(combined_X, combined_y, sample_weight=weights)
@@ -1013,11 +972,8 @@ def run_transfer_learning(df: pd.DataFrame, config: dict | None = None) -> Pipel
             f"after transfer R\u00b2 = {fine_r2}, RMSE = {fine_rmse}."
         ),
         metrics={
-            "source_only_R2": base_r2,
-            "transfer_R2": fine_r2,
-            "transfer_RMSE": fine_rmse,
-            "source_samples": len(source_X),
-            "target_samples": len(target_X),
+            "source_only_R2": base_r2, "transfer_R2": fine_r2, "transfer_RMSE": fine_rmse,
+            "source_samples": len(source_X), "target_samples": len(target_X),
             "target_parameter": target_parameter,
         },
     )
@@ -1048,22 +1004,20 @@ def run_sdg6_benchmarking(df: pd.DataFrame, config: dict | None = None) -> Pipel
             metrics={},
         )
 
-    summary_stats = df.groupby([entity_col, indicator_col])[value_col].agg(["mean", "std", "count"]).reset_index()
+    summary_stats = df.groupby([entity_col, indicator_col])[value_col].agg(
+        ["mean", "std", "count"]
+    ).reset_index()
     summary_stats.columns = ["entity", "indicator", "mean", "std", "count"]
 
     rankings: list[dict] = []
     for indicator in summary_stats["indicator"].unique():
         ind_data = summary_stats[summary_stats["indicator"] == indicator].sort_values("mean", ascending=False)
         for rank, (_, row) in enumerate(ind_data.iterrows(), 1):
-            rankings.append(
-                {
-                    "entity": row["entity"],
-                    "indicator": indicator,
-                    "mean": round(float(row["mean"]), 4),
-                    "rank": rank,
-                    "n_observations": int(row["count"]),
-                }
-            )
+            rankings.append({
+                "entity": row["entity"], "indicator": indicator,
+                "mean": round(float(row["mean"]), 4),
+                "rank": rank, "n_observations": int(row["count"]),
+            })
 
     n_entities = summary_stats["entity"].nunique()
     n_indicators = summary_stats["indicator"].nunique()
@@ -1150,21 +1104,19 @@ def run_gis_watershed(df: pd.DataFrame, config: dict | None = None) -> PipelineR
         groups = [g["value"].values for _, g in pdata.groupby("station_id") if len(g) >= 3]
         if len(groups) >= 2:
             h_stat, p_val = sp_stats.kruskal(*groups)
-            spatial_cv = (
-                round(float(station_means.std() / station_means.mean()) * 100, 2) if station_means.mean() != 0 else 0.0
-            )
+            spatial_cv = round(
+                float(station_means.std() / station_means.mean()) * 100, 2
+            ) if station_means.mean() != 0 else 0.0
 
-            results.append(
-                {
-                    "parameter": param,
-                    "n_stations": int(station_means.shape[0]),
-                    "spatial_cv_pct": spatial_cv,
-                    "kruskal_h": round(float(h_stat), 4),
-                    "kruskal_p": round(float(p_val), 6),
-                    "significant_spatial_diff": p_val < 0.05,
-                    "station_range": [round(float(station_means.min()), 4), round(float(station_means.max()), 4)],
-                }
-            )
+            results.append({
+                "parameter": param,
+                "n_stations": int(station_means.shape[0]),
+                "spatial_cv_pct": spatial_cv,
+                "kruskal_h": round(float(h_stat), 4),
+                "kruskal_p": round(float(p_val), 6),
+                "significant_spatial_diff": p_val < 0.05,
+                "station_range": [round(float(station_means.min()), 4), round(float(station_means.max()), 4)],
+            })
 
     results.sort(key=lambda x: x.get("spatial_cv_pct", 0), reverse=True)
 
@@ -1172,10 +1124,7 @@ def run_gis_watershed(df: pd.DataFrame, config: dict | None = None) -> PipelineR
         method_id="gis_watershed_analysis",
         method_name="GIS Watershed Spatial Analysis",
         summary=f"Spatial analysis of {len(results)} parameters. Kruskal-Wallis tests for heterogeneity.",
-        metrics={
-            "n_parameters_tested": len(results),
-            "n_significant": sum(1 for r in results if r["significant_spatial_diff"]),
-        },
+        metrics={"n_parameters_tested": len(results), "n_significant": sum(1 for r in results if r["significant_spatial_diff"])},
         details={"results": results},
     )
 
@@ -1214,18 +1163,18 @@ def run_hec_ras(df: pd.DataFrame, config: dict | None = None) -> PipelineResult:
             idx = int(np.argmin(np.abs(exceedance - pct)))
             q_indices[f"Q{pct}"] = round(float(sorted_vals[idx]), 4)
 
-        flashiness = round(float(np.sum(np.abs(np.diff(vals))) / np.sum(vals)), 4) if np.sum(vals) > 0 else 0.0
+        flashiness = round(
+            float(np.sum(np.abs(np.diff(vals))) / np.sum(vals)), 4
+        ) if np.sum(vals) > 0 else 0.0
 
-        station_results.append(
-            {
-                "station": station,
-                "n_observations": len(vals),
-                "mean_flow": round(float(vals.mean()), 4),
-                "std_flow": round(float(vals.std()), 4),
-                "flashiness_index": flashiness,
-                **q_indices,
-            }
-        )
+        station_results.append({
+            "station": station,
+            "n_observations": len(vals),
+            "mean_flow": round(float(vals.mean()), 4),
+            "std_flow": round(float(vals.std()), 4),
+            "flashiness_index": flashiness,
+            **q_indices,
+        })
 
     return PipelineResult(
         method_id="hec_ras_modelling",
@@ -1291,8 +1240,7 @@ def run_qual2k(df: pd.DataFrame, config: dict | None = None) -> PipelineResult:
             "critical_deficit": round(float(dc), 2),
             "observed_do_mean": round(do_mean, 2),
             "observed_bod_mean": round(bod_mean, 2),
-            "kd": kd,
-            "ka": ka,
+            "kd": kd, "ka": ka,
         },
         details={"do_profile_time": t.tolist(), "do_profile_mg_L": do_profile.tolist()},
     )
@@ -1377,16 +1325,14 @@ def run_mbbr_pilot(df: pd.DataFrame, config: dict | None = None) -> PipelineResu
         if param in standards:
             compliance = round(float((vals <= standards[param]).mean()) * 100, 2)
 
-        results.append(
-            {
-                "parameter": param,
-                "mean": round(mean_val, 4),
-                "std": round(std_val, 4),
-                "n_samples": len(vals),
-                "estimated_removal_pct": removal_pct,
-                "compliance_pct": compliance,
-            }
-        )
+        results.append({
+            "parameter": param,
+            "mean": round(mean_val, 4),
+            "std": round(std_val, 4),
+            "n_samples": len(vals),
+            "estimated_removal_pct": removal_pct,
+            "compliance_pct": compliance,
+        })
 
     return PipelineResult(
         method_id="mbbr_pilot_study",
@@ -1419,15 +1365,13 @@ def run_mbr_optimisation(df: pd.DataFrame, config: dict | None = None) -> Pipeli
         vals = pd.to_numeric(df[df["parameter"] == param]["value"], errors="coerce").dropna()
         if len(vals) >= 3:
             param_mean = float(vals.mean())
-            param_stats.append(
-                {
-                    "parameter": param,
-                    "mean": round(param_mean, 4),
-                    "std": round(float(vals.std()), 4),
-                    "cv_pct": round(float(vals.std() / param_mean) * 100, 2) if param_mean != 0 else 0.0,
-                    "n": len(vals),
-                }
-            )
+            param_stats.append({
+                "parameter": param,
+                "mean": round(param_mean, 4),
+                "std": round(float(vals.std()), 4),
+                "cv_pct": round(float(vals.std() / param_mean) * 100, 2) if param_mean != 0 else 0.0,
+                "n": len(vals),
+            })
 
     fouling_analysis = None
     if "TMP" in available_params:
@@ -1437,16 +1381,14 @@ def run_mbr_optimisation(df: pd.DataFrame, config: dict | None = None) -> Pipeli
             slope, _, r_value, p_value, _ = sp_stats.linregress(x, tmp_vals.values)
             fouling_analysis = {
                 "tmp_trend_slope": round(float(slope), 6),
-                "tmp_trend_r2": round(float(r_value**2), 4),
+                "tmp_trend_r2": round(float(r_value ** 2), 4),
                 "tmp_trend_p_value": round(float(p_value), 6),
                 "fouling_detected": bool(slope > 0 and p_value < 0.05),
             }
 
     fouling_msg = ""
     if fouling_analysis:
-        fouling_msg = (
-            "Fouling trend detected." if fouling_analysis["fouling_detected"] else "No significant fouling trend."
-        )
+        fouling_msg = "Fouling trend detected." if fouling_analysis["fouling_detected"] else "No significant fouling trend."
 
     return PipelineResult(
         method_id="mbr_optimisation",
@@ -1483,28 +1425,18 @@ def run_a2o_nutrient(df: pd.DataFrame, config: dict | None = None) -> PipelineRe
         q4 = float(np.percentile(values_arr, 25))
         removal = round((q1 - q4) / q1 * 100, 2) if q1 > 0 else 0.0
 
-        results.append(
-            {
-                "parameter": param,
-                "high_quartile": round(q1, 4),
-                "low_quartile": round(q4, 4),
-                "estimated_removal_pct": removal,
-                "mean": round(float(values_arr.mean()), 4),
-                "std": round(float(values_arr.std()), 4),
-                "n": len(values_arr),
-            }
-        )
+        results.append({
+            "parameter": param,
+            "high_quartile": round(q1, 4),
+            "low_quartile": round(q4, 4),
+            "estimated_removal_pct": removal,
+            "mean": round(float(values_arr.mean()), 4),
+            "std": round(float(values_arr.std()), 4),
+            "n": len(values_arr),
+        })
 
-    tn_vals = (
-        pd.to_numeric(df[df["parameter"] == "TN"]["value"], errors="coerce").dropna()
-        if "TN" in available
-        else pd.Series(dtype=float)
-    )
-    tp_vals = (
-        pd.to_numeric(df[df["parameter"] == "TP"]["value"], errors="coerce").dropna()
-        if "TP" in available
-        else pd.Series(dtype=float)
-    )
+    tn_vals = pd.to_numeric(df[df["parameter"] == "TN"]["value"], errors="coerce").dropna() if "TN" in available else pd.Series(dtype=float)
+    tp_vals = pd.to_numeric(df[df["parameter"] == "TP"]["value"], errors="coerce").dropna() if "TP" in available else pd.Series(dtype=float)
     np_ratio = None
     if len(tn_vals) > 0 and len(tp_vals) > 0 and tp_vals.mean() > 0:
         np_ratio = round(float(tn_vals.mean() / tp_vals.mean()), 2)
@@ -1549,16 +1481,14 @@ def run_constructed_wetland(df: pd.DataFrame, config: dict | None = None) -> Pip
             k_est = 0.0
             removal = 0.0
 
-        results.append(
-            {
-                "parameter": param,
-                "influent_est": round(c_in, 4),
-                "effluent_est": round(c_out, 4),
-                "background_c_star": cs,
-                "k_rate_constant": round(float(k_est), 4),
-                "removal_pct": removal,
-            }
-        )
+        results.append({
+            "parameter": param,
+            "influent_est": round(c_in, 4),
+            "effluent_est": round(c_out, 4),
+            "background_c_star": cs,
+            "k_rate_constant": round(float(k_est), 4),
+            "removal_pct": removal,
+        })
 
     return PipelineResult(
         method_id="constructed_wetland_design",

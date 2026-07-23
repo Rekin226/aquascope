@@ -32,10 +32,10 @@ logger = logging.getLogger(__name__)
 # Standard GR4J parameter bounds from the literature (Perrin et al. 2003;
 # airGR package defaults). X1/X3 in mm, X2 in mm/day, X4 in days.
 GR4J_PARAM_BOUNDS: dict[str, tuple[float, float]] = {
-    "X1": (1.0, 1500.0),  # production store capacity (mm)
-    "X2": (-10.0, 5.0),  # groundwater exchange coefficient (mm/day)
-    "X3": (1.0, 500.0),  # routing store capacity (mm)
-    "X4": (0.5, 10.0),  # unit hydrograph time base (days)
+    "X1": (1.0, 1500.0),   # production store capacity (mm)
+    "X2": (-10.0, 5.0),    # groundwater exchange coefficient (mm/day)
+    "X3": (1.0, 500.0),    # routing store capacity (mm)
+    "X4": (0.5, 10.0),     # unit hydrograph time base (days)
 }
 
 
@@ -447,7 +447,10 @@ def residual_quantile_bands(
     # Enforce monotonicity across quantile levels per time step (clipping at 0
     # can otherwise tie or invert the lowest bands).
     stacked = np.sort(stacked, axis=0)
-    return {q: pd.Series(stacked[i], index=sim.index, name=f"q{q:g}") for i, q in enumerate(qs)}
+    return {
+        q: pd.Series(stacked[i], index=sim.index, name=f"q{q:g}")
+        for i, q in enumerate(qs)
+    }
 
 
 def _parameter_ensemble_bands(
@@ -530,9 +533,15 @@ def predict_quantiles(
 
     qs = sorted(quantiles)
     if method == "residual":
-        bands = residual_quantile_bands(sim, observed, qs, warmup_days=warmup_days, heteroscedastic=heteroscedastic)
+        bands = residual_quantile_bands(
+            sim, observed, qs, warmup_days=warmup_days, heteroscedastic=heteroscedastic
+        )
     else:
-        bands = _parameter_ensemble_bands(cal.params, precip, pet, qs, n_members, perturb, seed, warmup_days)
+        bands = _parameter_ensemble_bands(
+            cal.params, precip, pet, qs, n_members, perturb, seed, warmup_days
+        )
 
     median = bands.get(0.5, sim)
-    return GR4JProbabilisticResult(median=median, quantiles=bands, params=cal.params, method=method)
+    return GR4JProbabilisticResult(
+        median=median, quantiles=bands, params=cal.params, method=method
+    )

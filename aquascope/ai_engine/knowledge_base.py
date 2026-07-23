@@ -21,8 +21,8 @@ class ResearchMethodology:
     description: str
     applicable_parameters: list[str] = field(default_factory=list)
     data_requirements: list[str] = field(default_factory=list)
-    typical_scale: str = ""  # lab / pilot / field / regional / global
-    complexity: str = ""  # low / medium / high
+    typical_scale: str = ""           # lab / pilot / field / regional / global
+    complexity: str = ""              # low / medium / high
     references: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
 
@@ -83,6 +83,7 @@ METHODOLOGIES: list[ResearchMethodology] = [
         ],
         tags=["multivariate", "source apportionment", "spatial"],
     ),
+
     # ── Machine Learning ─────────────────────────────────────────────
     ResearchMethodology(
         id="lstm_forecasting",
@@ -135,6 +136,7 @@ METHODOLOGIES: list[ResearchMethodology] = [
         ],
         tags=["regression", "gradient-boosting", "prediction"],
     ),
+
     # ── Process-based / engineering ──────────────────────────────────
     ResearchMethodology(
         id="mbbr_pilot_study",
@@ -188,6 +190,7 @@ METHODOLOGIES: list[ResearchMethodology] = [
         ],
         tags=["A2O", "nutrient removal", "BNR", "wastewater"],
     ),
+
     # ── Remote sensing / GIS ─────────────────────────────────────────
     ResearchMethodology(
         id="satellite_eutrophication",
@@ -223,6 +226,7 @@ METHODOLOGIES: list[ResearchMethodology] = [
         ],
         tags=["GIS", "watershed", "land-use", "spatial"],
     ),
+
     # ── Hydrological modelling ───────────────────────────────────────
     ResearchMethodology(
         id="swat_modelling",
@@ -241,6 +245,7 @@ METHODOLOGIES: list[ResearchMethodology] = [
         ],
         tags=["SWAT", "watershed", "hydrology", "modelling", "simulation"],
     ),
+
     # ── SDG / policy ─────────────────────────────────────────────────
     ResearchMethodology(
         id="sdg6_benchmarking",
@@ -259,7 +264,9 @@ METHODOLOGIES: list[ResearchMethodology] = [
         ],
         tags=["SDG", "policy", "benchmarking", "global", "indicators"],
     ),
+
     # ── v0.2.0 additions ─────────────────────────────────────────────
+
     ResearchMethodology(
         id="arima_forecast",
         name="ARIMA / SARIMA Time-Series Forecasting",
@@ -447,11 +454,7 @@ METHODOLOGIES: list[ResearchMethodology] = [
             "data-scarce environments."
         ),
         applicable_parameters=["DO", "BOD5", "COD", "NH3-N", "pH", "Turbidity"],
-        data_requirements=[
-            "source domain dataset (large)",
-            "target domain dataset (small, ≥ 50)",
-            "similar parameters",
-        ],
+        data_requirements=["source domain dataset (large)", "target domain dataset (small, ≥ 50)", "similar parameters"],
         typical_scale="regional",
         complexity="high",
         references=[
@@ -522,8 +525,14 @@ def search_methodologies(
         results = [m for m in results if m.typical_scale == scale]
     if parameters:
         param_set = {p.lower() for p in parameters}
-        results = [m for m in results if param_set & {p.lower() for p in m.applicable_parameters}]
+        results = [
+            m
+            for m in results
+            if param_set & {p.lower() for p in m.applicable_parameters}
+        ]
     if tags:
         tag_set = {t.lower() for t in tags}
-        results = [m for m in results if tag_set & {t.lower() for t in m.tags}]
+        results = [
+            m for m in results if tag_set & {t.lower() for t in m.tags}
+        ]
     return results

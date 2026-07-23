@@ -146,23 +146,14 @@ def plot_station_scatter(
 
     if value_col and value_col in stations.columns:
         sc = ax.scatter(
-            stations[lon_col],
-            stations[lat_col],
-            c=stations[value_col],
-            cmap=cmap,
-            s=60,
-            edgecolors="white",
-            linewidths=0.5,
+            stations[lon_col], stations[lat_col],
+            c=stations[value_col], cmap=cmap, s=60, edgecolors="white", linewidths=0.5,
         )
         fig.colorbar(sc, ax=ax, shrink=0.8, label=value_col)
     else:
         ax.scatter(
-            stations[lon_col],
-            stations[lat_col],
-            color=AQUA_PALETTE["primary"],
-            s=60,
-            edgecolors="white",
-            linewidths=0.5,
+            stations[lon_col], stations[lat_col],
+            color=AQUA_PALETTE["primary"], s=60, edgecolors="white", linewidths=0.5,
         )
 
     for _, row in stations.iterrows():
@@ -170,9 +161,7 @@ def plot_station_scatter(
             ax.annotate(
                 str(row[label_col]),
                 (row[lon_col], row[lat_col]),
-                textcoords="offset points",
-                xytext=(5, 5),
-                fontsize=7,
+                textcoords="offset points", xytext=(5, 5), fontsize=7,
             )
 
     ax.set_xlabel("Longitude")

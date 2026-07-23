@@ -67,7 +67,6 @@ def _prepare_data(observed, distribution: str):
 
 # ── Q-Q plot ────────────────────────────────────────────────────────────
 
-
 def qq_plot(
     observed,
     distribution: str,
@@ -121,14 +120,8 @@ def qq_plot(
     lo = min(theoretical.min(), data.min())
     hi = max(theoretical.max(), data.max())
     margin = (hi - lo) * 0.05
-    ax.plot(
-        [lo - margin, hi + margin],
-        [lo - margin, hi + margin],
-        color=AQUA_PALETTE["danger"],
-        linestyle="--",
-        linewidth=1.5,
-        label="1:1 line",
-    )
+    ax.plot([lo - margin, hi + margin], [lo - margin, hi + margin],
+            color=AQUA_PALETTE["danger"], linestyle="--", linewidth=1.5, label="1:1 line")
 
     ylabel = "Observed (log₁₀)" if is_lp3 else "Observed"
     xlabel = f"Theoretical ({distribution.upper()})"
@@ -142,7 +135,6 @@ def qq_plot(
 
 
 # ── P-P plot ────────────────────────────────────────────────────────────
-
 
 def pp_plot(
     observed,
@@ -208,7 +200,6 @@ def pp_plot(
 
 
 # ── Return level plot ───────────────────────────────────────────────────
-
 
 def return_level_plot(
     result: FloodFreqResult,
@@ -276,7 +267,6 @@ def return_level_plot(
 
 # ── Diagnostic panel ────────────────────────────────────────────────────
 
-
 def diagnostic_panel(
     observed,
     distribution: str,
@@ -341,9 +331,8 @@ def _density_histogram(
     dist = _get_scipy_dist(distribution)
     data, is_lp3 = _prepare_data(observed, distribution)
 
-    ax.hist(
-        data, bins="auto", density=True, alpha=0.5, color=AQUA_PALETTE["accent"], edgecolor="white", label="Observed"
-    )
+    ax.hist(data, bins="auto", density=True, alpha=0.5, color=AQUA_PALETTE["accent"], edgecolor="white",
+            label="Observed")
 
     x = np.linspace(data.min(), data.max(), 200)
     pdf = dist.pdf(x, *params)

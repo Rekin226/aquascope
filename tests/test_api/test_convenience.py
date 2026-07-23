@@ -10,7 +10,6 @@ import pytest
 # Synthetic data helpers
 # ---------------------------------------------------------------------------
 
-
 def _daily_discharge(n: int = 2200, seed: int = 42) -> pd.Series:
     """Return a synthetic daily discharge series with DatetimeIndex."""
     rng = np.random.default_rng(seed)
@@ -32,7 +31,6 @@ def _regime_shift_series(n: int = 300, seed: int = 42) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Flood frequency
 # ---------------------------------------------------------------------------
-
 
 class TestFloodAnalysis:
     """Tests for :func:`aquascope.api.flood_analysis`."""
@@ -72,7 +70,6 @@ class TestFloodAnalysis:
 # Baseflow
 # ---------------------------------------------------------------------------
 
-
 class TestBaseflowAnalysis:
     """Tests for :func:`aquascope.api.baseflow_analysis`."""
 
@@ -103,7 +100,6 @@ class TestBaseflowAnalysis:
 # Flow duration
 # ---------------------------------------------------------------------------
 
-
 class TestFlowDuration:
     """Tests for :func:`aquascope.api.flow_duration`."""
 
@@ -123,7 +119,6 @@ class TestFlowDuration:
 # Signatures
 # ---------------------------------------------------------------------------
 
-
 class TestComputeAllSignatures:
     """Tests for :func:`aquascope.api.compute_all_signatures`."""
 
@@ -142,7 +137,6 @@ class TestComputeAllSignatures:
 # ---------------------------------------------------------------------------
 # Changepoint detection
 # ---------------------------------------------------------------------------
-
 
 class TestDetectChangepoints:
     """Tests for :func:`aquascope.api.detect_changepoints`."""
@@ -173,7 +167,6 @@ class TestDetectChangepoints:
 # ---------------------------------------------------------------------------
 # Copula
 # ---------------------------------------------------------------------------
-
 
 class TestFitCopula:
     """Tests for :func:`aquascope.api.fit_copula`."""
@@ -209,7 +202,6 @@ class TestFitCopula:
 # Bayesian regression
 # ---------------------------------------------------------------------------
 
-
 class TestBayesianRegression:
     """Tests for :func:`aquascope.api.bayesian_regression`."""
 
@@ -230,7 +222,6 @@ class TestBayesianRegression:
 # ---------------------------------------------------------------------------
 # Ensemble forecast
 # ---------------------------------------------------------------------------
-
 
 class TestEnsembleForecast:
     """Tests for :func:`aquascope.api.ensemble_forecast`."""
@@ -258,7 +249,6 @@ class TestEnsembleForecast:
 # Report
 # ---------------------------------------------------------------------------
 
-
 class TestGenerateReport:
     """Tests for :func:`aquascope.api.generate_report`."""
 
@@ -276,7 +266,6 @@ class TestGenerateReport:
 # ---------------------------------------------------------------------------
 # Import helper
 # ---------------------------------------------------------------------------
-
 
 class TestRequire:
     """Tests for :func:`aquascope.utils.imports.require`."""

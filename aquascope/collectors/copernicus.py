@@ -121,15 +121,13 @@ class CopernicusCollector(BaseCollector):
             for i, time_val in enumerate(da.time.values if "time" in da.dims else [da.time.values]):
                 val = float(da.values[i]) if "time" in da.dims else float(da.values)
                 dt = str(time_val)[:19]
-                records.append(
-                    {
-                        "datetime": dt,
-                        "variable": str(var_name),
-                        "value": val,
-                        "latitude": lat,
-                        "longitude": lon,
-                    }
-                )
+                records.append({
+                    "datetime": dt,
+                    "variable": str(var_name),
+                    "value": val,
+                    "latitude": lat,
+                    "longitude": lon,
+                })
         return records
 
     def normalise(self, raw: list[dict]) -> Sequence[BaseModel]:
@@ -137,18 +135,16 @@ class CopernicusCollector(BaseCollector):
         records: list[WaterQualitySample] = []
         for r in raw:
             try:
-                records.append(
-                    WaterQualitySample(
-                        source=DataSource.COPERNICUS,
-                        station_id=f"copernicus_{r['latitude']}_{r['longitude']}",
-                        station_name=f"Copernicus ({r['latitude']}, {r['longitude']})",
-                        location=GeoLocation(latitude=r["latitude"], longitude=r["longitude"]),
-                        sample_datetime=datetime.fromisoformat(r["datetime"]),
-                        parameter=r["variable"],
-                        value=r["value"],
-                        unit="m³/s",
-                    )
-                )
+                records.append(WaterQualitySample(
+                    source=DataSource.COPERNICUS,
+                    station_id=f"copernicus_{r['latitude']}_{r['longitude']}",
+                    station_name=f"Copernicus ({r['latitude']}, {r['longitude']})",
+                    location=GeoLocation(latitude=r["latitude"], longitude=r["longitude"]),
+                    sample_datetime=datetime.fromisoformat(r["datetime"]),
+                    parameter=r["variable"],
+                    value=r["value"],
+                    unit="m³/s",
+                ))
             except Exception as e:
                 logger.warning("Skipping Copernicus record: %s", e)
 

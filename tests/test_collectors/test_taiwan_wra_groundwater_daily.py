@@ -38,7 +38,8 @@ class _FakeClient:
     def post_json(self, path, json_body=None, headers=None, use_cache=True):
         self.calls.append(f"POST {path}")
         if path == _GWEB_AREA_LIST:
-            return [{"Text": "濁水溪沖積扇", "Value": "050"}, {"Text": "臺北盆地", "Value": "010"}]
+            return [{"Text": "濁水溪沖積扇", "Value": "050"},
+                    {"Text": "臺北盆地", "Value": "010"}]
         if path == _GWEB_STATION_LIST:
             assert json_body == {"region": "050"}  # zone filter resolved
             return [{"Text": "東芳(1)", "Value": "07010211"}]
@@ -55,7 +56,8 @@ class _FakeClient:
 
 
 def test_monthly_aggregation_one_well():
-    c = TaiwanWRAGroundwaterDailyCollector(zones=["zhuoshui fan"], with_metadata=False, client=_FakeClient())
+    c = TaiwanWRAGroundwaterDailyCollector(zones=["zhuoshui fan"], with_metadata=False,
+                                           client=_FakeClient())
     recs = c.collect()
     # 24 months across 2020-2021.
     assert len(recs) == 24
@@ -70,9 +72,8 @@ def test_monthly_aggregation_one_well():
 
 
 def test_daily_aggregation_drops_nulls():
-    c = TaiwanWRAGroundwaterDailyCollector(
-        zones=["zhuoshui fan"], aggregate="daily", with_metadata=False, client=_FakeClient()
-    )
+    c = TaiwanWRAGroundwaterDailyCollector(zones=["zhuoshui fan"], aggregate="daily",
+                                           with_metadata=False, client=_FakeClient())
     recs = c.collect()
     total_days = (_FakeClient.SPAN_HI - _FakeClient.SPAN_LO).days + 1
     assert len(recs) == total_days - 1  # one null day dropped
@@ -90,7 +91,8 @@ def test_zone_alias_and_session_bootstrap():
 
 def test_start_end_clip():
     c = TaiwanWRAGroundwaterDailyCollector(
-        zones=["zhuoshui fan"], start="2021-01-01", end="2021-12-31", with_metadata=False, client=_FakeClient()
+        zones=["zhuoshui fan"], start="2021-01-01", end="2021-12-31",
+        with_metadata=False, client=_FakeClient()
     )
     recs = c.collect()
     assert {r.measurement_datetime.year for r in recs} == {2021}
@@ -99,7 +101,8 @@ def test_start_end_clip():
 
 def test_explicit_stations_skip_zone_discovery():
     fake = _FakeClient()
-    c = TaiwanWRAGroundwaterDailyCollector(stations=["07010211"], with_metadata=False, client=fake)
+    c = TaiwanWRAGroundwaterDailyCollector(stations=["07010211"], with_metadata=False,
+                                           client=fake)
     c.collect()
     assert f"POST {_GWEB_AREA_LIST}" not in fake.calls
     assert f"POST {_GWEB_STATION_LIST}" not in fake.calls
@@ -124,7 +127,7 @@ class _SentinelOverrunFake:
             start = date.fromisoformat(json_body["startDate"])
             if start.year == 2020:  # window 1: overruns 14 days into 2021, value 10
                 data = [(-9998.0 if i == 5 else 10.0) for i in range(380)]
-            else:  # window 2: value 20 (should win on overlap)
+            else:                   # window 2: value 20 (should win on overlap)
                 data = [20.0 for _ in range(181)]
             return {"WaterLevelData": data}
         raise AssertionError(f"unexpected path {path}")
@@ -134,10 +137,7 @@ def test_sentinel_drop_and_window_dedup():
     from datetime import date as _date
 
     c = TaiwanWRAGroundwaterDailyCollector(
-        stations=["W1"],
-        aggregate="daily",
-        window_years=1,
-        with_metadata=False,
+        stations=["W1"], aggregate="daily", window_years=1, with_metadata=False,
         client=_SentinelOverrunFake(),
     )
     recs = c.collect()
@@ -152,14 +152,10 @@ def test_sentinel_drop_and_window_dedup():
 
 
 def test_well_metadata_builder_keys_by_gw_suffix_and_name():
-    rows = [
-        {
-            "wellidentifier": "3132014GW07010211",
-            "wellname": "東芳(1)",
-            "locationbytwd97": "200779.08 2662059.14",
-            "welldepth": "48.0",
-        }
-    ]
+    rows = [{
+        "wellidentifier": "3132014GW07010211", "wellname": "東芳(1)",
+        "locationbytwd97": "200779.08 2662059.14", "welldepth": "48.0",
+    }]
     meta = _build_gweb_well_metadata(rows)
     assert "code::07010211" in meta  # gweb id == suffix after GW
     assert "name::東芳(1)" in meta
@@ -173,7 +169,8 @@ def test_well_metadata_builder_keys_by_gw_suffix_and_name():
 def test_metadata_join_populates_location_and_depth():
     from aquascope.schemas.water_data import GeoLocation
 
-    c = TaiwanWRAGroundwaterDailyCollector(zones=["zhuoshui fan"], with_metadata=False, client=_FakeClient())
+    c = TaiwanWRAGroundwaterDailyCollector(zones=["zhuoshui fan"], with_metadata=False,
+                                           client=_FakeClient())
     # Inject a pre-built metadata index (skips the open-data fetch).
     c._well_meta = {
         "code::07010211": {

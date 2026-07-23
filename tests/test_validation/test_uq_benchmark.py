@@ -11,7 +11,11 @@ import importlib.util
 import math
 import pathlib
 
-EXAMPLE = pathlib.Path(__file__).resolve().parents[2] / "examples" / "12_uq_camels_benchmark.py"
+EXAMPLE = (
+    pathlib.Path(__file__).resolve().parents[2]
+    / "examples"
+    / "12_uq_camels_benchmark.py"
+)
 
 
 def _load_benchmark_module():

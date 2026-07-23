@@ -39,7 +39,6 @@ _ENSEMBLE_METHODS = {"weighted", "stacking", "adaptive"}
 
 # -- Hydrology convenience functions ----------------------------------------
 
-
 def flood_analysis(
     discharge: pd.Series,
     method: str = "gev",
@@ -191,7 +190,6 @@ def compute_all_signatures(discharge: pd.Series, **kwargs) -> SignatureReport:
 
 # -- Statistical-analysis convenience functions ------------------------------
 
-
 def detect_changepoints(
     series: np.ndarray | pd.Series,
     method: str = "pelt",
@@ -302,7 +300,6 @@ def fit_copula(
 
 # -- Model convenience functions ---------------------------------------------
 
-
 def bayesian_regression(
     X: np.ndarray | pd.DataFrame,  # noqa: N803
     y: np.ndarray | pd.Series,
@@ -397,7 +394,6 @@ def ensemble_forecast(
 
 # -- Reporting convenience function ------------------------------------------
 
-
 def generate_report(title: str, **kwargs) -> ReportBuilder:
     """Create a pre-configured :class:`~aquascope.reporting.builder.ReportBuilder`.
 
@@ -420,7 +416,6 @@ def generate_report(title: str, **kwargs) -> ReportBuilder:
 
 
 # -- Groundwater convenience functions ----------------------------------------
-
 
 def groundwater_analysis(
     levels: pd.Series,
@@ -458,24 +453,19 @@ def groundwater_analysis(
 
     if method == "trend":
         from aquascope.groundwater.wells import trend_detection
-
         return trend_detection(levels, **kwargs)
     if method == "recession":
         from aquascope.groundwater.wells import recession_analysis
-
         return recession_analysis(levels, **kwargs)
     if method == "seasonal":
         from aquascope.groundwater.wells import seasonal_decomposition
-
         return seasonal_decomposition(levels, **kwargs)
     # hydrograph
     from aquascope.groundwater.wells import well_hydrograph
-
     return well_hydrograph(levels, **kwargs)
 
 
 # -- Climate convenience functions -------------------------------------------
-
 
 def climate_downscale(
     obs: pd.Series,
@@ -517,15 +507,12 @@ def climate_downscale(
 
     if method == "delta":
         from aquascope.climate.downscaling import delta_method
-
         return delta_method(obs, gcm_hist, gcm_future, **kwargs)
     if method == "quantile_mapping":
         from aquascope.climate.downscaling import quantile_mapping
-
         return quantile_mapping(obs, gcm_hist, gcm_future, **kwargs)
     # qdm
     from aquascope.climate.downscaling import quantile_delta_mapping
-
     return quantile_delta_mapping(obs, gcm_hist, gcm_future, **kwargs)
 
 
@@ -571,37 +558,31 @@ def climate_indices(
 
     if index == "cdd":
         from aquascope.climate.indices import consecutive_dry_days
-
         if precip is None:
             raise ValueError("'precip' is required for CDD index.")
         return consecutive_dry_days(precip, **kwargs)
     if index == "cwd":
         from aquascope.climate.indices import consecutive_wet_days
-
         if precip is None:
             raise ValueError("'precip' is required for CWD index.")
         return consecutive_wet_days(precip, **kwargs)
     if index == "pci":
         from aquascope.climate.indices import precipitation_concentration_index
-
         if precip is None:
             raise ValueError("'precip' is required for PCI index.")
         return precipitation_concentration_index(precip, **kwargs)
     if index == "heat_wave":
         from aquascope.climate.indices import heat_wave_index
-
         if temperature is None:
             raise ValueError("'temperature' is required for heat_wave index.")
         return heat_wave_index(temperature, **kwargs)
     if index == "aridity":
         from aquascope.climate.indices import aridity_index
-
         if precip is None or pet is None:
             raise ValueError("'precip' and 'pet' are required for aridity index.")
         return aridity_index(float(precip.sum()), float(pet.sum()), **kwargs)
     # pdsi
     from aquascope.climate.indices import palmer_drought_severity_index
-
     if precip is None or pet is None:
         raise ValueError("'precip' and 'pet' are required for PDSI.")
     return palmer_drought_severity_index(precip, pet, **kwargs)

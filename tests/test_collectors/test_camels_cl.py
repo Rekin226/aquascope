@@ -13,7 +13,7 @@ SAMPLE_RAW = [
         "station_id": "1001001",
         "date": "1990-01-01",
         "discharge": 12.5,
-        "gauge_name": "Rio Test En Nacimiento",  # fake test river
+        "gauge_name": "Rio Test En Nacimiento", # fake test river
         "gauge_lat": -18.5,
         "gauge_lon": -69.5,
         "area_km2": 250.0,
@@ -22,7 +22,7 @@ SAMPLE_RAW = [
         "station_id": "12825002",
         "date": "2011-06-13",
         "discharge": 43.4,
-        "gauge_name": "Rio Azopardo En Desembocadura",  # Azopardo River at the Mouth
+        "gauge_name": "Rio Azopardo En Desembocadura", # Azopardo River at the Mouth
         "gauge_lat": -54.5028,
         "gauge_lon": -68.8244,
         "area_km2": 3524.5,
@@ -193,7 +193,9 @@ class TestCAMELSCLFetchRaw:
             def __exit__(self, *a):
                 return False
 
-        monkeypatch.setattr("httpx.stream", lambda *a, **kw: FakeStream(self.zip_bytes))
+        monkeypatch.setattr(
+            "httpx.stream", lambda *a, **kw: FakeStream(self.zip_bytes)
+        )
 
     def test_fetch_raw_returns_all_stations_by_default(self, monkeypatch, tmp_path):
         self._patch_httpx_and_cache(monkeypatch, tmp_path)

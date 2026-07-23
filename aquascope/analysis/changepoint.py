@@ -114,14 +114,12 @@ def _compute_segments(arr: np.ndarray, cp_indices: list[int], timestamps: pd.Dat
     for i in range(len(boundaries) - 1):
         s, e = boundaries[i], boundaries[i + 1]
         segment_data = arr[s:e]
-        segments.append(
-            {
-                "start": s,
-                "end": e,
-                "mean": float(np.mean(segment_data)),
-                "variance": float(np.var(segment_data, ddof=1)) if len(segment_data) > 1 else 0.0,
-            }
-        )
+        segments.append({
+            "start": s,
+            "end": e,
+            "mean": float(np.mean(segment_data)),
+            "variance": float(np.var(segment_data, ddof=1)) if len(segment_data) > 1 else 0.0,
+        })
     return segments
 
 
@@ -150,25 +148,22 @@ def _build_changepoints(
         after = arr[idx:] if idx < len(arr) else arr[-1:]
         stat = statistics[k] if statistics is not None else 0.0
         pval = p_values[k] if p_values is not None else None
-        cps.append(
-            ChangePoint(
-                index=idx,
-                timestamp=_get_timestamp(timestamps, idx),
-                statistic=float(stat),
-                p_value=pval,
-                mean_before=float(np.mean(before)),
-                mean_after=float(np.mean(after)),
-                variance_before=float(np.var(before, ddof=1)) if len(before) > 1 else 0.0,
-                variance_after=float(np.var(after, ddof=1)) if len(after) > 1 else 0.0,
-            )
-        )
+        cps.append(ChangePoint(
+            index=idx,
+            timestamp=_get_timestamp(timestamps, idx),
+            statistic=float(stat),
+            p_value=pval,
+            mean_before=float(np.mean(before)),
+            mean_after=float(np.mean(after)),
+            variance_before=float(np.var(before, ddof=1)) if len(before) > 1 else 0.0,
+            variance_after=float(np.var(after, ddof=1)) if len(after) > 1 else 0.0,
+        ))
     return cps
 
 
 # ---------------------------------------------------------------------------
 # Cost functions for PELT
 # ---------------------------------------------------------------------------
-
 
 def _cost_normal(data: np.ndarray) -> float:
     """Negative log-likelihood cost under a normal model (mean + variance change).
@@ -437,10 +432,7 @@ def binary_segmentation(
 
     logger.debug(
         "Binary segmentation: n=%d, max_cp=%d, min_seg=%d, sig=%.4f",
-        n,
-        max_changepoints,
-        min_segment_length,
-        significance,
+        n, max_changepoints, min_segment_length, significance,
     )
 
     cp_indices: list[int] = []
@@ -556,8 +548,8 @@ def pettitt_test(data: np.ndarray | pd.Series) -> ChangePoint | None:
     k_n = abs_u[t_star]
 
     # P-value approximation
-    denom = n**3 + n**2
-    p_value = 2.0 * np.exp(-6.0 * k_n**2 / denom) if denom > 0 else 1.0
+    denom = n ** 3 + n ** 2
+    p_value = 2.0 * np.exp(-6.0 * k_n ** 2 / denom) if denom > 0 else 1.0
     p_value = min(p_value, 1.0)
 
     logger.debug("Pettitt test: t*=%d, K_n=%.4f, p=%.6f", t_star, k_n, p_value)
@@ -617,7 +609,7 @@ def regime_shift_detector(
 
     i = window_size
     while i < n - window_size:
-        pre_window = arr[max(0, i - window_size) : i]
+        pre_window = arr[max(0, i - window_size):i]
         pre_mean = float(np.mean(pre_window))
         pre_std = float(np.std(pre_window, ddof=1))
 
@@ -627,7 +619,7 @@ def regime_shift_detector(
 
         if abs(arr[i] - pre_mean) > threshold * pre_std:
             # Potential shift — check if the next window confirms it
-            post_window = arr[i : min(i + window_size, n)]
+            post_window = arr[i:min(i + window_size, n)]
             post_mean = float(np.mean(post_window))
 
             if abs(post_mean - pre_mean) > threshold * pre_std:
@@ -679,7 +671,7 @@ def plot_changepoints(
 
     # Draw segment means
     for seg in result.segments:
-        seg_x = x[seg["start"] : seg["end"]]
+        seg_x = x[seg["start"]:seg["end"]]
         ax.hlines(seg["mean"], seg_x[0], seg_x[-1], colors="orange", linewidths=2, label="Segment mean")
 
     # Mark changepoints

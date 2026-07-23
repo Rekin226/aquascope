@@ -110,16 +110,8 @@ def render() -> None:
                         st.success("✅ All parameters within WHO guidelines")
                     st.dataframe(
                         exceedances[
-                            [
-                                "variable",
-                                "n_measurements",
-                                "mean",
-                                "n_exceedances",
-                                "pct_exceedances",
-                                "guideline_low",
-                                "guideline_high",
-                                "status",
-                            ]
+                            ["variable", "n_measurements", "mean", "n_exceedances",
+                             "pct_exceedances", "guideline_low", "guideline_high", "status"]
                         ],
                         width="stretch",
                     )

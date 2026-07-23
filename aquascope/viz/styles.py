@@ -38,16 +38,8 @@ SPI_COLOURS = {
 
 # Qualitative palette for multi-line plots
 SERIES_COLOURS = [
-    "#0077B6",
-    "#E63946",
-    "#2A9D8F",
-    "#F4A261",
-    "#6A4C93",
-    "#1982C4",
-    "#FF595E",
-    "#8AC926",
-    "#FFCA3A",
-    "#6A0572",
+    "#0077B6", "#E63946", "#2A9D8F", "#F4A261", "#6A4C93",
+    "#1982C4", "#FF595E", "#8AC926", "#FFCA3A", "#6A0572",
 ]
 
 # Okabe-Ito / Color Universal Design palette — colorblind-safe.
@@ -101,7 +93,9 @@ def apply_aqua_style(palette: str = "default") -> None:
         If *palette* is not one of the recognised names.
     """
     if palette not in _VALID_PALETTES:
-        raise ValueError(f"Unknown palette {palette!r}. Choose from {sorted(_VALID_PALETTES)}.")
+        raise ValueError(
+            f"Unknown palette {palette!r}. Choose from {sorted(_VALID_PALETTES)}."
+        )
 
     require("matplotlib", feature="plotting")
     import matplotlib.pyplot as plt
@@ -109,26 +103,24 @@ def apply_aqua_style(palette: str = "default") -> None:
 
     colours = OKABE_ITO_COLOURS if palette == "colorblind" else SERIES_COLOURS
 
-    plt.rcParams.update(
-        {
-            "figure.figsize": DEFAULT_FIGSIZE,
-            "figure.dpi": DEFAULT_DPI,
-            "figure.facecolor": "white",
-            "axes.facecolor": "white",
-            "axes.grid": True,
-            "axes.spines.top": False,
-            "axes.spines.right": False,
-            "axes.prop_cycle": cycler(color=colours),
-            "grid.alpha": 0.3,
-            "grid.linestyle": "--",
-            "font.size": FONT_SIZES["tick"],
-            "axes.titlesize": FONT_SIZES["title"],
-            "axes.labelsize": FONT_SIZES["label"],
-            "legend.fontsize": FONT_SIZES["legend"],
-            "xtick.labelsize": FONT_SIZES["tick"],
-            "ytick.labelsize": FONT_SIZES["tick"],
-        }
-    )
+    plt.rcParams.update({
+        "figure.figsize": DEFAULT_FIGSIZE,
+        "figure.dpi": DEFAULT_DPI,
+        "figure.facecolor": "white",
+        "axes.facecolor": "white",
+        "axes.grid": True,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "axes.prop_cycle": cycler(color=colours),
+        "grid.alpha": 0.3,
+        "grid.linestyle": "--",
+        "font.size": FONT_SIZES["tick"],
+        "axes.titlesize": FONT_SIZES["title"],
+        "axes.labelsize": FONT_SIZES["label"],
+        "legend.fontsize": FONT_SIZES["legend"],
+        "xtick.labelsize": FONT_SIZES["tick"],
+        "ytick.labelsize": FONT_SIZES["tick"],
+    })
 
 
 def _save_or_show(fig, save_path: str | None, tight: bool = True) -> None:

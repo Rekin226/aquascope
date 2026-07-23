@@ -271,7 +271,9 @@ class SPIModel(BaseHydroModel):
             try:
                 shape, loc, scale_param = stats.gamma.fit(vals[vals > 0], floc=0)
                 p_zero = (vals == 0).sum() / len(vals)
-                probs = p_zero + (1 - p_zero) * stats.gamma.cdf(rolling[mask].values, shape, loc=loc, scale=scale_param)
+                probs = p_zero + (1 - p_zero) * stats.gamma.cdf(
+                    rolling[mask].values, shape, loc=loc, scale=scale_param
+                )
                 probs = np.clip(probs, 0.001, 0.999)
                 spi[mask] = stats.norm.ppf(probs)
             except Exception:

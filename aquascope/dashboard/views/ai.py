@@ -70,8 +70,7 @@ def render() -> None:
 
                         if llm_config:
                             recs = recommend_with_llm(
-                                profile,
-                                top_k=top_k_auto,
+                                profile, top_k=top_k_auto,
                                 model=llm_config["model"],
                                 api_key=llm_config["api_key"],
                                 base_url=llm_config["base_url"],
@@ -114,8 +113,7 @@ def render() -> None:
 
                     if llm_config:
                         recs = recommend_with_llm(
-                            profile,
-                            top_k=top_k,
+                            profile, top_k=top_k,
                             model=llm_config["model"],
                             api_key=llm_config["api_key"],
                             base_url=llm_config["base_url"],

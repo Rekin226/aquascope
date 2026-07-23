@@ -90,9 +90,7 @@ class TestPlanIrrigation:
 
 
 class TestAgriCli:
-    def test_collect_help_lists_fao_sources(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_collect_help_lists_fao_sources(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
         monkeypatch.setattr(sys, "argv", ["aquascope", "collect", "--help"])
 
         with pytest.raises(SystemExit) as excinfo:
@@ -103,9 +101,7 @@ class TestAgriCli:
         assert "aquastat" in help_text
         assert "wapor" in help_text
 
-    def test_agri_plan_cli_from_files(
-        self, tmp_path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_agri_plan_cli_from_files(self, tmp_path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
         n_days = sum(DEFAULT_STAGE_LENGTHS["maize"].values()) + 10
         dates = pd.date_range("2024-04-01", periods=n_days, freq="D")
 

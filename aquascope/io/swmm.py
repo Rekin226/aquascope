@@ -102,7 +102,10 @@ def write_swmm_rainfall(
     for _, row in df.iterrows():
         ts = pd.Timestamp(row[time_col])
         value = float(row[value_col])
-        lines.append(f"{gauge_name} {ts.year:4d} {ts.month:2d} {ts.day:2d} {ts.hour:2d} {ts.minute:2d} {value:.4f}")
+        lines.append(
+            f"{gauge_name} {ts.year:4d} {ts.month:2d} {ts.day:2d} "
+            f"{ts.hour:2d} {ts.minute:2d} {value:.4f}"
+        )
 
     lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")

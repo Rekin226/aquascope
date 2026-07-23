@@ -27,7 +27,10 @@ class TestComputeEnsembleStats:
         np.random.seed(0)
         idx = _monthly_index("2015-01", 120)
         self.models = {
-            f"model_{i}": pd.DataFrame({"tas": np.random.normal(288 + i * 0.5, 2, 120)}, index=idx) for i in range(5)
+            f"model_{i}": pd.DataFrame(
+                {"tas": np.random.normal(288 + i * 0.5, 2, 120)}, index=idx
+            )
+            for i in range(5)
         }
         self.proc = CMIP6Processor("tas")
 

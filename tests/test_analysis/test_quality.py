@@ -19,16 +19,14 @@ def _make_df(n_rows: int = 100, add_dupes: bool = False, add_nulls: bool = False
     rows = []
     for i in range(n_rows):
         val = round(rng.normal(5.0, 2.0), 2)
-        rows.append(
-            {
-                "source": "taiwan_moenv",
-                "station_id": stations[i % 5],
-                "parameter": params[i % 5],
-                "value": val if not add_nulls or i % 10 != 0 else None,
-                "unit": "mg/L",
-                "sample_datetime": f"2024-{(i % 12) + 1:02d}-{(i % 28) + 1:02d}T10:00:00",
-            }
-        )
+        rows.append({
+            "source": "taiwan_moenv",
+            "station_id": stations[i % 5],
+            "parameter": params[i % 5],
+            "value": val if not add_nulls or i % 10 != 0 else None,
+            "unit": "mg/L",
+            "sample_datetime": f"2024-{(i % 12) + 1:02d}-{(i % 28) + 1:02d}T10:00:00",
+        })
     df = pd.DataFrame(rows)
     if add_dupes:
         df = pd.concat([df, df.head(5)], ignore_index=True)

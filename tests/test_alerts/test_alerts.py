@@ -206,22 +206,14 @@ class TestCheckDataFrame:
     """Test check_dataframe with mixed data."""
 
     def setup_method(self):
-        self.df = pd.DataFrame(
-            {
-                "parameter": ["nitrate", "nitrate", "lead", "dissolved_oxygen", "pH"],
-                "value": [5.0, 75.0, 0.05, 2.0, 7.0],
-                "station_id": ["S1", "S2", "S3", "S4", "S5"],
-                "sample_datetime": pd.to_datetime(
-                    [
-                        "2025-01-01",
-                        "2025-01-02",
-                        "2025-01-03",
-                        "2025-01-04",
-                        "2025-01-05",
-                    ]
-                ),
-            }
-        )
+        self.df = pd.DataFrame({
+            "parameter": ["nitrate", "nitrate", "lead", "dissolved_oxygen", "pH"],
+            "value": [5.0, 75.0, 0.05, 2.0, 7.0],
+            "station_id": ["S1", "S2", "S3", "S4", "S5"],
+            "sample_datetime": pd.to_datetime([
+                "2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04", "2025-01-05",
+            ]),
+        })
 
     def test_report_type(self):
         report = check_dataframe(self.df)
@@ -260,12 +252,10 @@ class TestCheckDataFrame:
         assert report.alerts == []
 
     def test_all_compliant(self):
-        clean = pd.DataFrame(
-            {
-                "parameter": ["nitrate", "nitrate"],
-                "value": [1.0, 2.0],
-            }
-        )
+        clean = pd.DataFrame({
+            "parameter": ["nitrate", "nitrate"],
+            "value": [1.0, 2.0],
+        })
         report = check_dataframe(clean, standards=["WHO"])
         assert report.alerts == []
         assert report.samples_with_alerts == 0

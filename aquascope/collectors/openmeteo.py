@@ -124,18 +124,16 @@ class OpenMeteoCollector(BaseCollector):
             for ts, val in zip(time_col, values):
                 if val is None:
                     continue
-                records.append(
-                    WaterQualitySample(
-                        source=DataSource.OPENMETEO,
-                        station_id=f"openmeteo_{lat}_{lon}",
-                        station_name=f"Open-Meteo ({lat}, {lon})",
-                        location=location,
-                        sample_datetime=datetime.fromisoformat(ts),
-                        parameter=key,
-                        value=float(val),
-                        unit=unit,
-                    )
-                )
+                records.append(WaterQualitySample(
+                    source=DataSource.OPENMETEO,
+                    station_id=f"openmeteo_{lat}_{lon}",
+                    station_name=f"Open-Meteo ({lat}, {lon})",
+                    location=location,
+                    sample_datetime=datetime.fromisoformat(ts),
+                    parameter=key,
+                    value=float(val),
+                    unit=unit,
+                ))
 
         hourly_data = raw.get("hourly", {})
         hourly_time = hourly_data.get("time", [])
@@ -148,18 +146,16 @@ class OpenMeteoCollector(BaseCollector):
             for ts, val in zip(hourly_time, values):
                 if val is None:
                     continue
-                records.append(
-                    WaterQualitySample(
-                        source=DataSource.OPENMETEO,
-                        station_id=f"openmeteo_{lat}_{lon}",
-                        station_name=f"Open-Meteo ({lat}, {lon})",
-                        location=location,
-                        sample_datetime=datetime.fromisoformat(ts),
-                        parameter=key,
-                        value=float(val),
-                        unit=unit,
-                    )
-                )
+                records.append(WaterQualitySample(
+                    source=DataSource.OPENMETEO,
+                    station_id=f"openmeteo_{lat}_{lon}",
+                    station_name=f"Open-Meteo ({lat}, {lon})",
+                    location=location,
+                    sample_datetime=datetime.fromisoformat(ts),
+                    parameter=key,
+                    value=float(val),
+                    unit=unit,
+                ))
 
         logger.info("Normalised %d records from Open-Meteo", len(records))
         return records

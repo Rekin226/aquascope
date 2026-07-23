@@ -158,7 +158,9 @@ class TestBaseflow:
 
         result = ukih(self.q)
         residual = result.df["total"] - result.df["baseflow"]
-        pd.testing.assert_series_equal(result.df["quickflow"], residual, check_names=False)
+        pd.testing.assert_series_equal(
+            result.df["quickflow"], residual, check_names=False
+        )
 
     def test_ukih_constant_flow(self):
         """Constant discharge → baseflow ≈ total flow (BFI near 1.0)."""
@@ -167,7 +169,9 @@ class TestBaseflow:
         idx = pd.date_range("2000-01-01", periods=30, freq="D")
         q = pd.Series(10.0, index=idx)
         result = ukih(q)
-        np.testing.assert_allclose(result.df["baseflow"].values, q.values, rtol=1e-6)
+        np.testing.assert_allclose(
+            result.df["baseflow"].values, q.values, rtol=1e-6
+        )
         assert result.bfi == pytest.approx(1.0, abs=1e-6)
 
     def test_ukih_empty_series(self):
@@ -217,11 +221,15 @@ class TestBaseflow:
         from aquascope.hydrology import ukih
 
         idx = pd.date_range("2020-01-01", periods=10, freq="D")
-        q = pd.Series([4.0, 2.0, 3.0, 5.0, 6.0, 8.0, 7.0, 9.0, 10.0, 8.0], index=idx)
+        q = pd.Series(
+            [4.0, 2.0, 3.0, 5.0, 6.0, 8.0, 7.0, 9.0, 10.0, 8.0], index=idx
+        )
         result = ukih(q, block_size=5)
 
         expected_bf = np.full(10, 2.0)
-        np.testing.assert_allclose(result.df["baseflow"].values, expected_bf, rtol=1e-6)
+        np.testing.assert_allclose(
+            result.df["baseflow"].values, expected_bf, rtol=1e-6
+        )
         assert result.bfi == pytest.approx(20.0 / 62.0, rel=1e-4)
 
 

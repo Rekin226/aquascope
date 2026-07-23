@@ -255,7 +255,10 @@ def trend_detection(
     if method in _MODIFIED_MK_METHODS:
         return _modified_mann_kendall(levels.dropna().values.astype(float), method)
     if method != "mann_kendall":
-        raise ValueError(f"Unknown method: {method!r}. Supported: 'mann_kendall', 'modified_mann_kendall', 'tfpw'.")
+        raise ValueError(
+            f"Unknown method: {method!r}. Supported: 'mann_kendall', "
+            f"'modified_mann_kendall', 'tfpw'."
+        )
 
     y = levels.dropna().values.astype(float)
     n = len(y)

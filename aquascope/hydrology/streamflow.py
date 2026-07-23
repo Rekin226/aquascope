@@ -53,7 +53,9 @@ def stage_to_runoff(
 
     discharge_cms = predict_discharge(rating, stage)
 
-    runoff = np.array([discharge_cms_to_runoff_mm_day(float(q), catchment_area_km2) for q in discharge_cms])
+    runoff = np.array(
+        [discharge_cms_to_runoff_mm_day(float(q), catchment_area_km2) for q in discharge_cms]
+    )
 
     if isinstance(stage, pd.Series):
         return pd.Series(runoff, index=stage.index, name="runoff_mm_day")

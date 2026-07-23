@@ -71,7 +71,10 @@ class TestWQPRoutesThroughClient:
     def test_fetch_raw_uses_get_text(self):
         from aquascope.collectors.wqp import WQPCollector
 
-        csv_body = "MonitoringLocationIdentifier,ResultMeasureValue\nUSGS-01010000,8.5\n"
+        csv_body = (
+            "MonitoringLocationIdentifier,ResultMeasureValue\n"
+            "USGS-01010000,8.5\n"
+        )
         mock_client = MagicMock()
         mock_client.get_text.return_value = csv_body
         collector = WQPCollector(client=mock_client)

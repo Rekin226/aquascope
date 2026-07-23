@@ -175,7 +175,10 @@ def check_wfd_compliance(samples: list[WaterQualitySample], parameter: str) -> W
         ValueError: If *parameter* is not in the EQS threshold table.
     """
     if parameter not in _EQS_THRESHOLDS:
-        raise ValueError(f"Unknown EQS parameter '{parameter}'. Supported: {list(_EQS_THRESHOLDS.keys())}")
+        raise ValueError(
+            f"Unknown EQS parameter '{parameter}'. "
+            f"Supported: {list(_EQS_THRESHOLDS.keys())}"
+        )
 
     spec = _EQS_THRESHOLDS[parameter]
 

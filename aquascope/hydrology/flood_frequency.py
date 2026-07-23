@@ -240,7 +240,6 @@ _DEFAULT_RETURN_PERIODS: list[float] = [2, 5, 10, 25, 50, 100, 200, 500]
 # Gumbel (Type I extreme value)
 # ---------------------------------------------------------------------------
 
-
 def fit_gumbel(
     annual_maxima: np.ndarray | pd.Series,
     return_periods: list[float] | None = None,
@@ -291,7 +290,6 @@ def fit_gumbel(
 # Weibull minimum (low-flow frequency)
 # ---------------------------------------------------------------------------
 
-
 def fit_weibull_min(
     annual_minima: np.ndarray | pd.Series,
     return_periods: list[float] | None = None,
@@ -341,7 +339,6 @@ def fit_weibull_min(
 # ---------------------------------------------------------------------------
 # Generalised Pareto Distribution (Peaks-Over-Threshold)
 # ---------------------------------------------------------------------------
-
 
 def fit_gpd(
     exceedances: np.ndarray | pd.Series,
@@ -464,7 +461,6 @@ def select_pot_threshold(
 # L-moments
 # ---------------------------------------------------------------------------
 
-
 def lmoments_from_sample(data: np.ndarray) -> dict[str, float]:
     """Compute L-moments (L1–L4) and L-moment ratios (t3, t4) from a sample.
 
@@ -548,7 +544,7 @@ def fit_gev_lmoments(
 
     # GEV parameterisation: scale (alpha) and location (xi)
     gamma_val = _gamma_func(1 + shape)
-    alpha = l2 * shape / (gamma_val * (1 - 2 ** (-shape))) if abs(shape) > 1e-10 else l2 / np.log(2)
+    alpha = l2 * shape / (gamma_val * (1 - 2**(-shape))) if abs(shape) > 1e-10 else l2 / np.log(2)
     xi = l1 - alpha * (gamma_val - 1) / shape if abs(shape) > 1e-10 else l1 - alpha * 0.5772156649
 
     # scipy GEV uses *negative* shape convention
@@ -580,7 +576,6 @@ def _gamma_func(x: float) -> float:
 # ---------------------------------------------------------------------------
 # Non-stationary GEV
 # ---------------------------------------------------------------------------
-
 
 @dataclass
 class NonStationaryGEVResult:
@@ -692,20 +687,10 @@ def fit_nonstationary_gev(
     x0_ns = np.array([loc0, 0.0, np.log(scale0), shape0])
     x0_st = np.array([loc0, np.log(scale0), shape0])
 
-    res_ns = minimize(
-        _gev_neg_loglik,
-        x0_ns,
-        args=(data, years_c),
-        method="Nelder-Mead",
-        options={"maxiter": 10000, "xatol": 1e-8, "fatol": 1e-8},
-    )
-    res_st = minimize(
-        _gev_neg_loglik_stationary,
-        x0_st,
-        args=(data,),
-        method="Nelder-Mead",
-        options={"maxiter": 10000, "xatol": 1e-8, "fatol": 1e-8},
-    )
+    res_ns = minimize(_gev_neg_loglik, x0_ns, args=(data, years_c), method="Nelder-Mead",
+                      options={"maxiter": 10000, "xatol": 1e-8, "fatol": 1e-8})
+    res_st = minimize(_gev_neg_loglik_stationary, x0_st, args=(data,), method="Nelder-Mead",
+                      options={"maxiter": 10000, "xatol": 1e-8, "fatol": 1e-8})
 
     mu0, mu1, log_scale, shape = res_ns.x
     scale = float(np.exp(log_scale))
@@ -727,16 +712,15 @@ def fit_nonstationary_gev(
     rl: dict[float, np.ndarray] = {}
     for rp in return_periods:
         prob = 1 - 1.0 / rp
-        levels = np.array([float(genextreme.ppf(prob, shape, loc=mu0 + mu1 * yc, scale=scale)) for yc in years_c])
+        levels = np.array([
+            float(genextreme.ppf(prob, shape, loc=mu0 + mu1 * yc, scale=scale))
+            for yc in years_c
+        ])
         rl[rp] = levels
 
     logger.info(
         "Non-stationary GEV: mu0=%.3f, mu1=%.5f, scale=%.3f, shape=%.3f, trend_sig=%s",
-        mu0,
-        mu1,
-        scale,
-        shape,
-        trend_significant,
+        mu0, mu1, scale, shape, trend_significant,
     )
     return NonStationaryGEVResult(
         loc_intercept=float(mu0),
@@ -754,7 +738,6 @@ def fit_nonstationary_gev(
 # ---------------------------------------------------------------------------
 # Regional frequency analysis (Hosking & Wallis)
 # ---------------------------------------------------------------------------
-
 
 @dataclass
 class RegionalResult:
@@ -847,7 +830,7 @@ def regional_frequency_analysis(
     c = 2.0 / (3.0 + reg_t3) - np.log(2.0) / np.log(3.0)
     shape = 7.8590 * c + 2.9554 * c * c
     gamma_val = _gamma_func(1 + shape)
-    alpha = reg_l2 * shape / (gamma_val * (1 - 2 ** (-shape))) if abs(shape) > 1e-10 else reg_l2 / np.log(2)
+    alpha = reg_l2 * shape / (gamma_val * (1 - 2**(-shape))) if abs(shape) > 1e-10 else reg_l2 / np.log(2)
     xi = reg_l1 - alpha * (gamma_val - 1) / shape if abs(shape) > 1e-10 else reg_l1 - alpha * 0.5772156649
     scipy_shape = -shape
 
@@ -874,7 +857,6 @@ def regional_frequency_analysis(
 # ---------------------------------------------------------------------------
 # Goodness-of-fit tests
 # ---------------------------------------------------------------------------
-
 
 @dataclass
 class GoodnessOfFitResult:
@@ -1285,7 +1267,9 @@ def expected_moments_algorithm(
     # ------------------------------------------------------------------
     if perception_thresholds is not None:
         # Use explicit perception intervals
-        observed_mask = np.array([lo == up for (lo, up) in perception_thresholds], dtype=bool)
+        observed_mask = np.array(
+            [lo == up for (lo, up) in perception_thresholds], dtype=bool
+        )
         # "Observed" means the interval is a point; censored otherwise
         # For simplicity, treat the point-interval values as observed
         observed_vals = arr[observed_mask]

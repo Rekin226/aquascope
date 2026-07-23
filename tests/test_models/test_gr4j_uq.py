@@ -76,14 +76,8 @@ class TestPredictQuantiles:
     def test_residual_structure_and_coverage(self):
         precip, pet, obs = _synthetic_inputs()
         res = predict_quantiles(
-            precip,
-            pet,
-            obs,
-            quantiles=QUANTILES,
-            method="residual",
-            warmup_days=120,
-            maxiter=4,
-            seed=0,
+            precip, pet, obs, quantiles=QUANTILES,
+            method="residual", warmup_days=120, maxiter=4, seed=0,
         )
         assert isinstance(res, GR4JProbabilisticResult)
         assert res.method == "residual"
@@ -95,21 +89,16 @@ class TestPredictQuantiles:
         assert np.all(res.quantiles[0.05].values <= res.quantiles[0.95].values + 1e-9)
         # in-sample coverage of the central 90% band should be near nominal
         ev = slice(120, None)
-        cov = picp(obs.values[ev], res.quantiles[0.05].values[ev], res.quantiles[0.95].values[ev])
+        cov = picp(
+            obs.values[ev], res.quantiles[0.05].values[ev], res.quantiles[0.95].values[ev]
+        )
         assert cov >= 0.8
 
     def test_ensemble_method_runs(self):
         precip, pet, obs = _synthetic_inputs(n=400)
         res = predict_quantiles(
-            precip,
-            pet,
-            obs,
-            quantiles=(0.1, 0.5, 0.9),
-            method="ensemble",
-            warmup_days=90,
-            maxiter=3,
-            n_members=8,
-            seed=1,
+            precip, pet, obs, quantiles=(0.1, 0.5, 0.9),
+            method="ensemble", warmup_days=90, maxiter=3, n_members=8, seed=1,
         )
         assert res.method == "ensemble"
         assert np.all(res.quantiles[0.1].values <= res.quantiles[0.9].values + 1e-9)

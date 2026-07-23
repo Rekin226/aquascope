@@ -79,9 +79,7 @@ def lyne_hollick(
             rng = range(n - 2, -1, -1)  # backward
 
         for i in rng:
-            qf[i] = alpha * qf[i - 1 if pass_num % 2 == 0 else i + 1] + ((1 + alpha) / 2) * (
-                q[i] - q[i - 1 if pass_num % 2 == 0 else i + 1]
-            )
+            qf[i] = alpha * qf[i - 1 if pass_num % 2 == 0 else i + 1] + ((1 + alpha) / 2) * (q[i] - q[i - 1 if pass_num % 2 == 0 else i + 1])
             qf[i] = max(0.0, qf[i])
             qf[i] = min(qf[i], q[i])
 
@@ -150,7 +148,6 @@ def eckhardt(
     bfi = float(bf.sum() / q.sum()) if q.sum() > 0 else 0.0
     logger.info("Eckhardt: BFI=%.3f, alpha=%.3f, BFI_max=%.2f", bfi, alpha, bfi_max)
     return BaseflowResult(df=result_df, bfi=bfi, method="eckhardt")
-
 
 def ukih(
     discharge: pd.Series,
@@ -241,8 +238,6 @@ def ukih(
     bfi = float(baseflow.sum() / q.sum()) if q.sum() > 0 else 0.0
     logger.info(
         "UKIH: BFI=%.3f, block_size=%d, %d turning points",
-        bfi,
-        block_size,
-        len(turning_positions),
+        bfi, block_size, len(turning_positions),
     )
     return BaseflowResult(df=result_df, bfi=bfi, method="ukih")

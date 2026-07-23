@@ -1,5 +1,6 @@
 """Tests for the new v0.2.0 collectors: GEMStat, WQP, Taiwan Civil IoT."""
 
+
 from aquascope.collectors.gemstat import GEMStatCollector
 from aquascope.collectors.taiwan_civil_iot import TaiwanCivilIoTCollector
 from aquascope.collectors.wqp import WQPCollector
@@ -112,7 +113,9 @@ class TestTaiwanCivilIoTCollector:
                 "Thing": {
                     "@iot.id": 1,
                     "name": "Station Alpha",
-                    "Locations": [{"location": {"coordinates": [121.5, 25.0]}}],
+                    "Locations": [
+                        {"location": {"coordinates": [121.5, 25.0]}}
+                    ],
                 },
                 "Observations": [
                     {

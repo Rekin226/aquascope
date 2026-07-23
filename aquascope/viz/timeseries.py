@@ -280,15 +280,8 @@ def plot_observed_vs_predicted(
 
     if metrics:
         text = "\n".join(f"{k}: {v:.3f}" if isinstance(v, float) else f"{k}: {v}" for k, v in metrics.items())
-        ax.text(
-            0.05,
-            0.95,
-            text,
-            transform=ax.transAxes,
-            va="top",
-            fontsize=10,
-            bbox={"boxstyle": "round,pad=0.4", "facecolor": AQUA_PALETTE["light"], "alpha": 0.8},
-        )
+        ax.text(0.05, 0.95, text, transform=ax.transAxes, va="top", fontsize=10,
+                bbox={"boxstyle": "round,pad=0.4", "facecolor": AQUA_PALETTE["light"], "alpha": 0.8})
 
     ax.set_xlabel("Observed")
     ax.set_ylabel("Predicted")

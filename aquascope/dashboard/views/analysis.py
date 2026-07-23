@@ -115,9 +115,8 @@ def _render_preprocess(df: pd.DataFrame) -> None:
 
             with st.spinner("Preprocessing…"):
                 cleaned = preprocess(df, steps=selected)
-            _state.set_data(
-                cleaned, st.session_state.get(_state.SOURCE_KEY, "session"), f"{_state.source_label()} (cleaned)"
-            )
+            _state.set_data(cleaned, st.session_state.get(_state.SOURCE_KEY, "session"),
+                            f"{_state.source_label()} (cleaned)")
             st.success(f"✅ Preprocessed: {len(cleaned):,} records (was {len(df):,}). Workspace updated.")
             st.dataframe(cleaned.head(20), width="stretch")
         except Exception as exc:  # noqa: BLE001

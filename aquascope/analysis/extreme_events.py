@@ -45,7 +45,9 @@ def _annual_maxima(series: pd.Series) -> np.ndarray:
         s = s.resample("YE").max().dropna()
     data: np.ndarray = np.asarray(s, dtype=float)
     if data.size < 3:
-        raise ValueError(f"need at least 3 block maxima for frequency analysis, got {data.size}")
+        raise ValueError(
+            f"need at least 3 block maxima for frequency analysis, got {data.size}"
+        )
     return data
 
 
@@ -58,7 +60,9 @@ def _fit_params(data: np.ndarray, distribution: str) -> tuple[float, ...]:
     elif distribution == "lp3":
         raw = stats.pearson3.fit(np.log10(data))
     else:
-        raise ValueError(f"unknown distribution {distribution!r}; expected one of {_SUPPORTED}")
+        raise ValueError(
+            f"unknown distribution {distribution!r}; expected one of {_SUPPORTED}"
+        )
     return tuple(float(p) for p in raw)
 
 

@@ -34,7 +34,9 @@ def water_quality() -> pd.DataFrame:
                 "turbidity": 3.5 + 2.0 * np.abs(np.sin(t[i])),
                 "nitrate": 30.0 + 20.0 * np.sin(t[i] + 1),
             }[param]
-            noise = rng.normal(0, {"ph": 0.3, "dissolved_oxygen": 0.8, "turbidity": 0.5, "nitrate": 5.0}[param])
+            noise = rng.normal(
+                0, {"ph": 0.3, "dissolved_oxygen": 0.8, "turbidity": 0.5, "nitrate": 5.0}[param]
+            )
             rows.append(
                 {
                     "sample_datetime": date,

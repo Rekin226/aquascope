@@ -116,7 +116,9 @@ class TestEUWFDFetchRaw:
         """API unavailability returns empty list with no exception."""
         import httpx
 
-        with patch.object(self.collector.client, "get_json", side_effect=httpx.ConnectError("offline")):
+        with patch.object(
+            self.collector.client, "get_json", side_effect=httpx.ConnectError("offline")
+        ):
             result = self.collector.fetch_raw(country="DE")
         assert result == []
 

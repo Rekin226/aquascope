@@ -126,9 +126,9 @@ class RandomForestModel(BaseHydroModel):
         self._last_known = series
         self._is_fitted = True
 
-        self.feature_importances_ = pd.Series(self._model.feature_importances_, index=self._feature_cols).sort_values(
-            ascending=False
-        )
+        self.feature_importances_ = pd.Series(
+            self._model.feature_importances_, index=self._feature_cols
+        ).sort_values(ascending=False)
         logger.info("RandomForestModel fitted: %d samples, %d features", len(y), len(self._feature_cols))
         return self
 

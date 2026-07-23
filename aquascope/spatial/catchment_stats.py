@@ -184,6 +184,6 @@ def _elongation_ratio(mask: np.ndarray, cell_res_m: float) -> float:
     # Max length: furthest pair of catchment cells (approximate via bbox diagonal)
     row_range = (coords[:, 0].max() - coords[:, 0].min()) * cell_res_m
     col_range = (coords[:, 1].max() - coords[:, 1].min()) * cell_res_m
-    max_length = math.sqrt(row_range**2 + col_range**2)
+    max_length = math.sqrt(row_range ** 2 + col_range ** 2)
 
     return diameter / max_length if max_length > 0 else 1.0

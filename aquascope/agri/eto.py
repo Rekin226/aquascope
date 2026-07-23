@@ -271,7 +271,12 @@ def net_longwave_radiation(
     t_max_k = t_max + 273.16
     # Avoid division by zero when Rso is 0
     rs_rso_ratio = min(rs / rso, 1.0) if rso > 0 else 0.5
-    rnl = sigma * ((t_max_k**4 + t_min_k**4) / 2.0) * (0.34 - 0.14 * math.sqrt(ea)) * (1.35 * rs_rso_ratio - 0.35)
+    rnl = (
+        sigma
+        * ((t_max_k**4 + t_min_k**4) / 2.0)
+        * (0.34 - 0.14 * math.sqrt(ea))
+        * (1.35 * rs_rso_ratio - 0.35)
+    )
     return rnl
 
 

@@ -112,13 +112,11 @@ def identify_recessions(
             segment_vals = values[start_idx:j]
             decline = (segment_vals[0] - segment_vals[-1]) / segment_vals[0] if segment_vals[0] > 0 else 0
             if decline >= min_decline_pct:
-                segments.append(
-                    RecessionSegment(
-                        start=dates[start_idx],
-                        end=dates[j - 1],
-                        discharge=segment_vals,
-                    )
-                )
+                segments.append(RecessionSegment(
+                    start=dates[start_idx],
+                    end=dates[j - 1],
+                    discharge=segment_vals,
+                ))
 
         i = j
 

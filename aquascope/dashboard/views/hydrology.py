@@ -107,9 +107,8 @@ def _baseflow(df: pd.DataFrame, prof: _state.DataProfile) -> None:
 
     dates = _state.datetime_indexed(df, col, prof).index if prof.has_time else result.df.index
     st.plotly_chart(
-        _charts.hydrograph(
-            dates[: len(result.df)], result.df["total"], result.df["baseflow"], title=f"Baseflow separation — {method}"
-        )
+        _charts.hydrograph(dates[: len(result.df)], result.df["total"], result.df["baseflow"],
+                           title=f"Baseflow separation — {method}")
     )
 
 
@@ -222,6 +221,8 @@ def _signatures(df: pd.DataFrame, prof: _state.DataProfile) -> None:
         ("Rising-limb density", report.rising_limb_density),
         ("Mean recession constant", report.mean_recession_constant),
     ]
-    sig_df = pd.DataFrame([{"Signature": n, "Value": round(v, 4) if v is not None else None} for n, v in sig_rows])
+    sig_df = pd.DataFrame(
+        [{"Signature": n, "Value": round(v, 4) if v is not None else None} for n, v in sig_rows]
+    )
     with st.expander("All signatures", expanded=True):
         st.dataframe(sig_df, width="stretch")

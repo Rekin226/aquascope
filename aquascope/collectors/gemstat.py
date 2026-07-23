@@ -50,14 +50,8 @@ class GEMStatCollector(BaseCollector):
 
     # Core parameters included by default — covers the most common water quality metrics
     DEFAULT_PARAMETERS = [
-        "pH",
-        "Temperature",
-        "Dissolved_Gas",
-        "Oxygen_Demand",
-        "Other_Nitrogen",
-        "Phosphorus",
-        "Optical",
-        "Electrical_Conductance",
+        "pH", "Temperature", "Dissolved_Gas", "Oxygen_Demand",
+        "Other_Nitrogen", "Phosphorus", "Optical", "Electrical_Conductance",
     ]
 
     def fetch_raw(
@@ -150,10 +144,15 @@ class GEMStatCollector(BaseCollector):
             # 4. Determine valid station IDs for the requested country
             valid_ids: set[str] | None = None
             if country_lower:
-                valid_ids = {sid for sid, m in station_meta.items() if country_lower in m["country"].lower()}
+                valid_ids = {
+                    sid for sid, m in station_meta.items()
+                    if country_lower in m["country"].lower()
+                }
                 if not valid_ids:
                     known = sorted({m["country"] for m in station_meta.values() if m["country"]})
-                    logger.warning("GEMStat: no stations for country=%r. Available: %s", country, known)
+                    logger.warning(
+                        "GEMStat: no stations for country=%r. Available: %s", country, known
+                    )
                     return []
                 logger.info("GEMStat: %d stations match country=%r", len(valid_ids), country)
 

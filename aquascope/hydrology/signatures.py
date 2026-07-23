@@ -390,10 +390,7 @@ def compute_signatures(
 
     logger.info(
         "Computed signatures: mean=%.2f, BFI=%.3f, FI=%.4f, SI=%.3f",
-        mean_q,
-        bfi,
-        fi,
-        si,
+        mean_q, bfi, fi, si,
     )
 
     return SignatureReport(

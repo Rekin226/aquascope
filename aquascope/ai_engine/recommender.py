@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 
 # ── Data profile helper ──────────────────────────────────────────────
 
-
 @dataclass
 class DatasetProfile:
     """Summary of a collected dataset, used as input to the recommender."""
@@ -34,9 +33,9 @@ class DatasetProfile:
     n_records: int = 0
     n_stations: int = 0
     time_span_years: float = 0.0
-    geographic_scope: str = ""  # e.g. "Taiwan", "Global", "Tamsui River basin"
+    geographic_scope: str = ""       # e.g. "Taiwan", "Global", "Tamsui River basin"
     data_sources: list[str] = field(default_factory=list)
-    research_goal: str = ""  # free-text from the user
+    research_goal: str = ""          # free-text from the user
     keywords: list[str] = field(default_factory=list)
 
 
@@ -45,12 +44,11 @@ class Recommendation:
     """A single methodology recommendation with a relevance score."""
 
     methodology: ResearchMethodology
-    score: float  # 0-100
+    score: float           # 0-100
     rationale: str = ""
 
 
 # ── Rule-based scorer ────────────────────────────────────────────────
-
 
 def _score_methodology(method: ResearchMethodology, profile: DatasetProfile) -> float:
     """
@@ -88,11 +86,7 @@ def _score_methodology(method: ResearchMethodology, profile: DatasetProfile) -> 
 
     # 3. scale match
     scale_map = {
-        "lab": 1,
-        "pilot": 2,
-        "field": 3,
-        "regional": 4,
-        "global": 5,
+        "lab": 1, "pilot": 2, "field": 3, "regional": 4, "global": 5,
     }
     scope_lower = profile.geographic_scope.lower()
     if "global" in scope_lower:
@@ -118,7 +112,12 @@ def _score_methodology(method: ResearchMethodology, profile: DatasetProfile) -> 
     else:
         tag_score = 30
 
-    total = param_score * 0.40 + data_score * 0.25 + scale_score * 0.15 + tag_score * 0.20
+    total = (
+        param_score * 0.40
+        + data_score * 0.25
+        + scale_score * 0.15
+        + tag_score * 0.20
+    )
     return round(total, 1)
 
 
@@ -133,13 +132,12 @@ def _generate_rationale(method: ResearchMethodology, profile: DatasetProfile, sc
     if profile.n_stations >= 5 and "multi-site" in " ".join(method.data_requirements).lower():
         parts.append(f"Your {profile.n_stations} stations satisfy the multi-site requirement.")
     if not parts:
-        cat = method.category.replace("_", " ")
+        cat = method.category.replace('_', ' ')
         parts.append(f"This methodology is generally applicable to {cat} studies in the water domain.")
     return " ".join(parts)
 
 
 # ── Public API ───────────────────────────────────────────────────────
-
 
 def recommend(
     profile: DatasetProfile,
@@ -224,9 +222,12 @@ def _build_prompts(profile: DatasetProfile, top_k: int) -> tuple[str, str]:
         "Output ONLY a JSON array — no markdown, no explanation, no code fences. "
         f"Pick the top {top_k} methodologies from the catalogue that best fit the dataset. "
         "Each element must have exactly: "
-        '"id" (string), "score" (integer 0-100), "rationale" (one sentence).'
+        "\"id\" (string), \"score\" (integer 0-100), \"rationale\" (one sentence)."
     )
-    user_prompt = f"Dataset: {profile_json}\n\nCatalogue: {kb_json}"
+    user_prompt = (
+        f"Dataset: {profile_json}\n\n"
+        f"Catalogue: {kb_json}"
+    )
     return system_prompt, user_prompt
 
 
@@ -282,7 +283,7 @@ def _call_ollama_native(
             {"role": "user", "content": user_prompt},
         ],
         "stream": False,
-        "think": False,  # disable qwen3 / deepseek thinking mode
+        "think": False,          # disable qwen3 / deepseek thinking mode
         "options": {
             "temperature": 0.3,
             "num_predict": 1024,  # cap output tokens for local models
@@ -327,11 +328,7 @@ def recommend_with_llm(
     try:
         if provider == "ollama":
             raw_text = _call_ollama_native(
-                base_url,
-                model,
-                system_prompt,
-                user_prompt,
-                timeout,  # type: ignore[arg-type]
+                base_url, model, system_prompt, user_prompt, timeout  # type: ignore[arg-type]
             )
         else:
             try:

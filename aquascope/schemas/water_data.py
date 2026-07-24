@@ -38,7 +38,7 @@ class DataSource(str, Enum):
     INDIA_WRIS = "india_wris"
     HUBEAU = "france_hubeau"
     GRDC = "grdc"
-
+    CAMELS_CL = "camels_cl"
 
 class GeoLocation(BaseModel):
     """Geographic coordinates for a monitoring station or sample point."""
@@ -136,5 +136,37 @@ class StreamflowReading(BaseModel):
     discharge_cms: float = Field(..., description="Discharge in cubic meters per second")
     source_type: str = Field(..., description="'in_situ' (gauge) or 'satellite' (remote sensing estimate)")
     uncertainty_cms: float | None = Field(None, description="Estimated uncertainty, satellite products only")
+    catchment_area_km2: float | None = Field(
+        None, description="Upstream drainage area in km2, if known — enables mm/day normalization"
+    )
     unit: str = "m3/s"
     remark: str | None = None
+
+    @property
+    def runoff_mm_day(self) -> float | None:
+        """Area-normalized daily streamflow in mm/day.
+
+        ``None`` when ``catchment_area_km2`` is not set — this is a derived
+        convenience, not a persisted field, so callers must handle absence
+        rather than getting a misleading zero.
+        """
+        if self.catchment_area_km2 is None or self.catchment_area_km2 <= 0:
+            return None
+        return discharge_cms_to_runoff_mm_day(self.discharge_cms, self.catchment_area_km2)
+
+
+def discharge_cms_to_runoff_mm_day(discharge_cms: float, catchment_area_km2: float) -> float:
+    """Convert discharge (m3/s) to area-normalized daily runoff (mm/day).
+
+    runoff [mm/day] = discharge [m3/s] * 86400 [s/day] / area [km2] / 1000 [km2->m2 in millions]
+
+    Equivalently: (discharge_cms * 86400) / (catchment_area_km2 * 1_000_000) * 1000
+    """
+    if catchment_area_km2 <= 0:
+        raise ValueError(f"catchment_area_km2 must be positive, got {catchment_area_km2}")
+    seconds_per_day = 86_400
+    km2_to_m2 = 1_000_000
+    volume_m3_per_day = discharge_cms * seconds_per_day
+    area_m2 = catchment_area_km2 * km2_to_m2
+    depth_m_per_day = volume_m3_per_day / area_m2
+    return depth_m_per_day * 1000  # m -> mm

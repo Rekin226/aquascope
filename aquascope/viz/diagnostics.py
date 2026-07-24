@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from aquascope.viz.styles import (
@@ -98,8 +99,6 @@ def qq_plot(
     Figure
         The matplotlib ``Figure`` containing the Q-Q plot.
     """
-    import matplotlib.pyplot as plt
-
     dist = _get_scipy_dist(distribution)
     data, is_lp3 = _prepare_data(observed, distribution)
     n = len(data)
@@ -131,6 +130,81 @@ def qq_plot(
     ax.legend()
 
     _save_or_show(fig, save_path)
+    return fig
+
+
+# ── Double-Mass plot ────────────────────────────────────────────────────────────
+
+def double_mass_plot(
+    observations: np.ndarray | dict | list,
+    pivot: int,
+    *,
+    ax: Axes | None = None,
+    save_path: str | None = None,
+    title: str | None = None,
+) -> Figure:
+    """Plot cumulative comparisons of two features.
+
+    Parameters
+    ----------
+    observations : np.ndarray | dict | list
+        2D array-like of numeric observations (rows=samples, cols=features).
+        If a `dict` is passed, the values are stacked as columns.
+    pivot : int
+        Index of the column of interest.
+    ax : Axes | None, optional
+        Matplotlib axes to draw on.
+    save_path : str | None, optional
+        If given, save the figure to this path.
+    title : str | None, optional
+        Plot title.
+
+    Returns
+    -------
+    Figure
+        The Matplotlib Figure object containing the double-mass plot.
+    """
+
+    # Normalize input to a 2D numpy array
+    if isinstance(observations, dict):
+        observations = np.column_stack(list(observations.values()))
+    elif not isinstance(observations, np.ndarray):
+        if hasattr(observations, "to_numpy"):
+            observations = observations.to_numpy()
+        else:
+            observations = np.asarray(observations)
+    # Validate pivot index
+    _, n_cols = observations.shape
+    assert 0 <= pivot < n_cols, "pivot index out of range"
+    # Compute cumulative sum and target mean
+    cumm_sum = np.cumsum(observations, axis=0)
+    # Average across features (axis=1) and squeeze to 1D shape (n_rows,)
+    dist_cumm = np.mean(cumm_sum, axis=1).squeeze()
+
+    # 4. Setup figure and axes
+    if ax is None:
+        fig, ax = plt.subplots(figsize=SQUARE_FIGSIZE)
+    else:
+        fig = ax.get_figure()
+
+    # 5. Plot
+    ax.plot(
+        cumm_sum[:, pivot],
+        dist_cumm,
+        label=f"variable_{pivot}",
+        color="red",
+        linewidth=2,
+    )
+
+    ax.set_title(title or f"Double Mass Plot of Feature {pivot}")
+    ax.set_xlabel(f"Cumulative Sum of Feature {pivot}")
+    ax.set_ylabel("Cumulative Mean Across Features")
+    ax.grid(True)
+    ax.legend()
+
+    # 6. Save or show figure
+    _save_or_show(fig, save_path)
+
     return fig
 
 
@@ -169,7 +243,6 @@ def pp_plot(
     Figure
         The matplotlib ``Figure`` containing the P-P plot.
     """
-    import matplotlib.pyplot as plt
 
     dist = _get_scipy_dist(distribution)
     data, _ = _prepare_data(observed, distribution)
@@ -229,7 +302,6 @@ def return_level_plot(
     Figure
         The matplotlib ``Figure`` containing the return level plot.
     """
-    import matplotlib.pyplot as plt
 
     apply_aqua_style()
     if ax is None:
@@ -296,7 +368,6 @@ def diagnostic_panel(
     Figure
         The matplotlib ``Figure`` with four subplots.
     """
-    import matplotlib.pyplot as plt
 
     apply_aqua_style()
     fig, axes = plt.subplots(2, 2, figsize=MULTI_FIGSIZE)

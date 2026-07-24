@@ -11,13 +11,34 @@ import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 
+import random  # noqa: E402
+import sys
+from pathlib import Path
+from string import ascii_uppercase
+from tempfile import TemporaryFile
+
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from scipy.stats import genextreme, pearson3  # noqa: E402
 
-from aquascope.hydrology.flood_frequency import FloodFreqResult, coverage_probability, leave_one_out_cv  # noqa: E402
-from aquascope.viz.diagnostics import diagnostic_panel, pp_plot, qq_plot, return_level_plot  # noqa: E402
+# Ensure tests import aquascope from this repository, not an installed wheel.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from aquascope.hydrology.flood_frequency import (  # noqa: E402
+    FloodFreqResult,
+    coverage_probability,
+    leave_one_out_cv,
+)
+from aquascope.viz.diagnostics import (  # noqa: E402
+    diagnostic_panel,
+    double_mass_plot,
+    pp_plot,
+    qq_plot,
+    return_level_plot,
+)
 
 
 def _make_gev_data(size: int = 40, seed: int = 42) -> np.ndarray:
@@ -89,6 +110,46 @@ class TestPPPlot:
             assert np.all(offsets >= -0.05), "P-P values should be ≥ 0"
             assert np.all(offsets <= 1.05), "P-P values should be ≤ 1"
         plt.close(fig)
+
+class TestDBMPlot:
+    """ Execute unit tests across features in the double_mass_plot function """
+    def setup_method(self):
+        n_rows, n_cols, val_min, val_max = 40, 5, 0, 100
+        pivot = random.randint(0, n_cols - 1)
+        col_names = list(ascii_uppercase[:n_cols])
+        # Build one numeric feature per key so dict values stack into (n_rows, n_cols).
+        self.obs = {
+            col: np.random.uniform(low=val_min, high=val_max, size=n_rows)
+            for col in col_names
+        }
+        self.params = {
+            'n_rows': n_rows,
+            'n_cols': n_cols,
+            'val_min': val_min,
+            'val_max': val_max,
+            'pivot': pivot
+        }
+    # is the cummulation score greater than the parts
+    def test_cumm(self):
+        idx = self.params['pivot']
+        observations = np.column_stack(list(self.obs.values()))
+        cumm_pivot = np.cumsum(observations[:, idx])
+        # Values are non-negative, so cumulative sums are monotonic and final >= last value.
+        assert np.all(np.diff(cumm_pivot) >= 0)
+        assert cumm_pivot[-1] >= observations[:, idx][-1]
+
+    def test_plot_generation(self, n=2):
+        # assert n number of curves are displayed on the plot
+        with TemporaryFile() as fp:
+            fig = double_mass_plot(
+                observations=self.obs,
+                pivot=self.params['pivot'],
+                save_path=fp,
+                title="test double mass plot",
+            )
+            ax = fig.axes[0]
+            # Assert n curves/lines are displayed on the plot
+            assert len(ax.lines) == 1
 
 
 class TestReturnLevelPlot:

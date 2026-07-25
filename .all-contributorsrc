@@ -66,7 +66,9 @@
       "avatar_url": "https://github.com/adjenk.png",
       "profile": "https://github.com/adjenk",
       "contributions": [
-        "plugin"
+        "plugin",
+        "code",
+        "test"
       ]
     },
     {
@@ -103,6 +105,16 @@
       "profile": "https://github.com/navaneethsankar07",
       "contributions": [
         "doc",
+        "test"
+      ]
+    },
+    {
+      "login": "taran-dev4u",
+      "name": "Taran",
+      "avatar_url": "https://avatars.githubusercontent.com/u/78680216?v=4",
+      "profile": "https://github.com/taran-dev4u",
+      "contributions": [
+        "code",
         "test"
       ]
     }

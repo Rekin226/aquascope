@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from aquascope.collectors.base import BaseCollector
@@ -146,17 +146,26 @@ class PegelonlineCollector(BaseCollector):
             for row in series.get("measurements", []):
                 total += 1
                 try:
-                    timestamp = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
+                    # PEGELONLINE serves aware timestamps with a local offset (e.g. +02:00).
+                    # Convert to UTC and drop tzinfo so records stay naive like every other
+                    # collector; mixing aware and naive datetimes breaks cross-source sorting.
+                    timestamp = (
+                        datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))
+                        .astimezone(timezone.utc)
+                        .replace(tzinfo=None)
+                    )
                     value = float(row["value"])
                     if code == "W":
+                        # W is served in cm; store metres so water_level is one variable
+                        # across sources (interop and the dashboard assume metres).
                         reading: WaterLevelReading | StreamflowReading = WaterLevelReading(
                             source=DataSource.PEGELONLINE,
                             station_id=station_id,
                             station_name=station_name,
                             location=location,
                             reading_datetime=timestamp,
-                            water_level=value,
-                            unit=unit,
+                            water_level=value / 100.0,
+                            unit="m",
                             remark=remark,
                         )
                     elif code == "Q":

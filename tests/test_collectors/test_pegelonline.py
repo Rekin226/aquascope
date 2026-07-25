@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from unittest.mock import Mock
 
 import pytest
@@ -102,9 +103,11 @@ def test_normalises_level_and_discharge_records():
     assert level.station_name == "BONN"
     assert level.location is not None
     assert level.location.latitude == 50.736398
-    assert level.water_level == 213.0
-    assert level.unit == "cm"
-    assert level.reading_datetime.utcoffset().total_seconds() == 7200
+    assert level.water_level == 2.13
+    assert level.unit == "m"
+    # 08:30 at +02:00 is stored as naive 06:30 UTC.
+    assert level.reading_datetime == datetime(2026, 7, 21, 6, 30)
+    assert level.reading_datetime.tzinfo is None
 
     assert isinstance(discharge, StreamflowReading)
     assert discharge.source == DataSource.PEGELONLINE

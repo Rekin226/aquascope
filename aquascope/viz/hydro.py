@@ -136,10 +136,15 @@ def plot_hydrograph(
         Figure size.
     save_path:
         Optional save path.
+    backend:
+        ``"matplotlib"`` (default) returns a static matplotlib Figure;
+        ``"plotly"`` returns an interactive ``plotly.graph_objects.Figure``
+        (requires the ``viz`` extra). Any other value raises ``ValueError``.
 
     Returns
     -------
-    The matplotlib Figure.
+    The hydrograph figure: a matplotlib Figure by default, or a Plotly
+    Figure when ``backend="plotly"``.
     """
 
     if backend == "plotly":

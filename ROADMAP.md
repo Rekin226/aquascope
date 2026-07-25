@@ -4,7 +4,7 @@ The roadmap reflects what's shipped, what's in-flight, and what's planned. Open 
 
 ## Shipped
 
-- [x] 19 data source collectors (Taiwan ×7, USA ×2, Global ×4, FAO ×2, EU, Japan, Korea, India)
+- [x] 22 data source collectors (Taiwan ×7, USA ×2, Global ×5, FAO ×2, EU, France, Japan, Korea, India, Chile)
 - [x] Rule-based + LLM methodology recommender (26 methods, OpenAI / Groq / HuggingFace / Ollama)
 - [x] 7 auto-executable analysis pipelines
 - [x] GR4J conceptual rainfall-runoff model + auto-calibration (NSE / KGE / log-NSE)
@@ -52,10 +52,15 @@ Ambitious, high-impact work that takes AquaScope to the next level. These are [`
 Newcomers welcome. Just comment to claim one, then follow the [contributor ladder](CONTRIBUTING.md) (`good first issue` → `good second issue` → area owner).
 
 - [ ] Edge-case tests for the FAO-56 ETo functions ([#40](https://github.com/Rekin226/aquascope/issues/40))
-- [ ] Colorblind-safe plot palette in `viz/styles.py` ([#41](https://github.com/Rekin226/aquascope/issues/41))
-- [ ] Edge-case tests for baseflow separation ([#42](https://github.com/Rekin226/aquascope/issues/42))
+- [ ] New collector: Germany PEGELONLINE ([#122](https://github.com/Rekin226/aquascope/issues/122))
+- [ ] New collector: Ireland OPW waterlevel.ie ([#123](https://github.com/Rekin226/aquascope/issues/123))
+- [ ] Type annotations for `climate/indices.py` ([#32](https://github.com/Rekin226/aquascope/issues/32))
 
-**Ready for more?** The [`good second issue`](https://github.com/Rekin226/aquascope/labels/good%20second%20issue) tier: Mann-Kendall trend test + Sen's slope ([#44](https://github.com/Rekin226/aquascope/issues/44)) and flow-duration-curve slope + runoff ratio ([#45](https://github.com/Rekin226/aquascope/issues/45)). _(UKIH baseflow #43 — ✅ shipped in #48.)_
+_(#41 colorblind palette and #42 baseflow edge-case tests — ✅ shipped.)_
+
+**Ready for more?** The [`good second issue`](https://github.com/Rekin226/aquascope/labels/good%20second%20issue) tier: Mann-Kendall trend test + Sen's slope ([#44](https://github.com/Rekin226/aquascope/issues/44)), flow-duration-curve slope + runoff ratio ([#45](https://github.com/Rekin226/aquascope/issues/45)), Dashboard Groundwater page ([#125](https://github.com/Rekin226/aquascope/issues/125)), SPI unification ([#127](https://github.com/Rekin226/aquascope/issues/127)), and the CAMELS-BR collector ([#124](https://github.com/Rekin226/aquascope/issues/124)).
+
+**Prefer hunting bugs?** Two real, reproducible ones are open: GEV flood-frequency confidence intervals blow up on typical record lengths ([#119](https://github.com/Rekin226/aquascope/issues/119)) and the keyless USGS quickstart path fails ([#120](https://github.com/Rekin226/aquascope/issues/120)).
 
 ## How to influence the roadmap
 

@@ -143,7 +143,14 @@ def plot_hydrograph(
     """
 
     if backend == "plotly":
-        return _plotly_hydrograph(discharge, total_col=total_col, baseflow_col=baseflow_col, precip_col=precip_col, title=title, save_path=save_path)
+        return _plotly_hydrograph(
+            discharge,
+            total_col=total_col,
+            baseflow_col=baseflow_col,
+            precip_col=precip_col,
+            title=title,
+            save_path=save_path,
+        )
     elif backend != "matplotlib":
         raise ValueError(f"Unknown backend {backend!r}; expected 'matplotlib' or 'plotly'.")
 
@@ -200,7 +207,7 @@ def _plotly_hydrograph(discharge, *, total_col, baseflow_col, precip_col, title,
 
     has_precip = precip_col and precip_col in discharge.columns
     fig = make_subplots(specs=[[{"secondary_y": has_precip}]])
-   
+
     if baseflow_col and baseflow_col in discharge.columns:
         fig.add_trace(
             go.Scatter(
@@ -272,7 +279,7 @@ def _plotly_hydrograph(discharge, *, total_col, baseflow_col, precip_col, title,
         fig.write_html(save_path)
 
     return fig
- 
+
 # ── SPI Drought Timeline ──────────────────────────────────────────────
 
 

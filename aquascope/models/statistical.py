@@ -11,10 +11,9 @@ from __future__ import annotations
 import logging
 import warnings
 
-import numpy as np
 import pandas as pd
-from scipy import stats
 
+from aquascope.climate.indices import drought_class, standardized_precipitation_index
 from aquascope.models.base import BaseHydroModel
 from aquascope.utils.imports import require
 
@@ -257,49 +256,14 @@ class SPIModel(BaseHydroModel):
 
     @staticmethod
     def _compute_spi(series: pd.Series, scale: int) -> pd.Series:
-        """Compute SPI at a given timescale using gamma-distribution fitting."""
-        rolling = series.rolling(window=scale, min_periods=scale).sum()
-        spi = pd.Series(index=rolling.index, dtype=float)
-
-        for month in range(1, 13):
-            mask = rolling.index.month == month
-            vals = rolling[mask].dropna().values
-
-            if len(vals) < 4:
-                continue
-
-            try:
-                shape, loc, scale_param = stats.gamma.fit(vals[vals > 0], floc=0)
-                p_zero = (vals == 0).sum() / len(vals)
-                probs = p_zero + (1 - p_zero) * stats.gamma.cdf(
-                    rolling[mask].values, shape, loc=loc, scale=scale_param
-                )
-                probs = np.clip(probs, 0.001, 0.999)
-                spi[mask] = stats.norm.ppf(probs)
-            except Exception:
-                pass
-
-        return spi.round(3)
+        """Compute SPI through the canonical climate-index implementation."""
+        spi = standardized_precipitation_index(series, scale=scale)
+        return spi.reindex(series.index).round(3)
 
     @staticmethod
     def _categorise(spi_val: float) -> str:
         """Map an SPI value to a WMO drought category label."""
-        if pd.isna(spi_val):
-            return "unknown"
-        if spi_val >= 2.0:
-            return "extremely_wet"
-        elif spi_val >= 1.5:
-            return "very_wet"
-        elif spi_val >= 1.0:
-            return "moderately_wet"
-        elif spi_val >= -1.0:
-            return "normal"
-        elif spi_val >= -1.5:
-            return "moderately_dry"
-        elif spi_val >= -2.0:
-            return "severely_dry"
-        else:
-            return "extremely_dry"
+        return drought_class(spi_val)
 
     def current_status(self) -> dict:
         """Return the latest drought status across all timescales."""

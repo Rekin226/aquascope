@@ -25,6 +25,7 @@ CLI_SOURCES = (
     "hubeau_hydrometrie",
     "japan_mlit",
     "korea_wamis",
+    "pegelonline",
 )
 
 
@@ -38,17 +39,19 @@ def test_source_is_a_valid_collect_choice(source, capsys, monkeypatch):
     assert source in err, f"'{source}' is not an `aquascope collect --source` choice"
 
 
-def test_list_sources_renders_metadata_for_grdc_and_hubeau(capsys):
-    """The two sources added in 0.8.x render real metadata, not placeholders."""
+def test_list_sources_renders_metadata_for_recent_sources(capsys):
+    """Recently added sources render real metadata, not placeholders."""
     cmd_list_sources(argparse.Namespace())
     out = capsys.readouterr().out
 
     assert "GRDC" in out
     assert "Hub'Eau" in out
+    assert "PEGELONLINE" in out
     # The info table is keyed by DataSource.value; a mismatched key falls back
     # to printing the raw enum value alongside em-dash placeholders.
     assert DataSource.HUBEAU.value not in out
     assert DataSource.GRDC.value not in out
+    assert "Germany" in out
 
 
 def test_grdc_rejects_an_unknown_mode(monkeypatch):
@@ -57,3 +60,12 @@ def test_grdc_rejects_an_unknown_mode(monkeypatch):
     with pytest.raises(SystemExit) as exc:
         main()
     assert exc.value.code == 1
+
+
+def test_pegelonline_requires_station_uuid(monkeypatch, caplog):
+    """PEGELONLINE fails clearly before collection when no station is supplied."""
+    monkeypatch.setattr(sys, "argv", ["aquascope", "collect", "--source", "pegelonline"])
+    with caplog.at_level("ERROR"), pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 1
+    assert any("requires --station" in record.message for record in caplog.records)

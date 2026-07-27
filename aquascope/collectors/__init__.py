@@ -11,6 +11,7 @@ from aquascope.collectors.grdc import GRDCCollector
 from aquascope.collectors.india_wris import IndiaWRISCollector
 from aquascope.collectors.japan_mlit import JapanMLITCollector
 from aquascope.collectors.korea_wamis import KoreaWAMISCollector
+from aquascope.collectors.noaa_nwps import NOAANWPSCollector
 from aquascope.collectors.openmeteo import OpenMeteoCollector
 from aquascope.collectors.pegelonline import PegelonlineCollector
 from aquascope.collectors.sdg6 import SDG6Collector
@@ -41,6 +42,7 @@ __all__ = [
     "IndiaWRISCollector",
     "JapanMLITCollector",
     "KoreaWAMISCollector",
+    "NOAANWPSCollector",
     "OpenMeteoCollector",
     "PegelonlineCollector",
     "SDG6Collector",

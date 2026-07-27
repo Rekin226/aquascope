@@ -75,6 +75,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         HubeauHydrometrieCollector,
         JapanMLITCollector,
         KoreaWAMISCollector,
+        NOAANWPSCollector,
         OpenMeteoCollector,
         PegelonlineCollector,
         SDG6Collector,
@@ -115,6 +116,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
         "grdc": lambda: GRDCCollector(),
         "camels_cl": lambda: CAMELSCLCollector(),
+        "noaa_nwps": lambda: NOAANWPSCollector(),
         "pegelonline": lambda: PegelonlineCollector(),
     }
 
@@ -183,6 +185,18 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["start"] = args.start_date
         if args.end_date:
             kwargs["end"] = args.end_date
+    if source == "noaa_nwps":
+        if args.bbox and args.lid:
+            logger.error("NOAA NWPS requires exactly one of --bbox or --lid.")
+            sys.exit(1)
+        if args.bbox:
+            try:
+                kwargs["bbox"] = _parse_bbox(args.bbox)
+            except ValueError as exc:
+                logger.error("%s", exc)
+                sys.exit(1)
+        if args.lid:
+            kwargs["lid"] = args.lid
     if source == "pegelonline":
         if not args.station:
             logger.error("PEGELONLINE requires --station with a station UUID.")
@@ -403,6 +417,7 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
         "japan_mlit": ("Japan MLIT", "Japan", "Hydrometeorology, river observations", "https://www.mlit.go.jp"),
         "korea_wamis": ("Korea WAMIS", "Korea", "Hydrology, dam operations", "https://www.wamis.go.kr"),
         "india_wris": ("India WRIS", "India", "River water level", "https://indiawris.gov.in"),
+        "noaa_nwps": ("NOAA NWPS", "USA", " Streamflow forecasts, stream observations, streamflow output, crest history, flood impacts, low water history, flood category levels, and location metadata.", "https://www.water.noaa.gov"),
         "pegelonline": ("PEGELONLINE", "Germany", "River water level and discharge", "https://www.pegelonline.wsv.de"),
     }
 
@@ -951,7 +966,7 @@ def main() -> None:
             "taiwan_wra_fhy", "taiwan_wra_iot", "taiwan_datagov",
             "usgs", "sdg6", "gemstat", "aquastat", "taiwan_civil_iot", "wqp",
             "openmeteo", "copernicus", "wapor", "eu_wfd", "hubeau_hydrometrie",
-            "japan_mlit", "korea_wamis", "grdc", "camels_cl", "pegelonline",
+            "japan_mlit", "korea_wamis", "grdc", "camels_cl", "noaa_nwps" "pegelonline",
         ],
         help="Data source to collect from",
     )
@@ -962,8 +977,9 @@ def main() -> None:
     p_collect.add_argument("--state", default=None, help="US state code e.g. US:06 (WQP)")
     p_collect.add_argument("--variables", default=None, help="Comma-separated variable IDs (AQUASTAT)")
     p_collect.add_argument("--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood; grdc: in_situ/satellite)")
-    p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR)")
+    p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR / NOAA_NWPS)")
     p_collect.add_argument("--variable", default=None, help="Variable code for the selected collector (WaPOR)")
+    p_collect.add_argument("--lid", default=None, help="A unique 5-character alphanumeric code e.g. ANAW1 (NOAA_NWPS)")
     p_collect.add_argument("--lat", type=float, default=None, help="Latitude (openmeteo/copernicus)")
     p_collect.add_argument("--lon", type=float, default=None, help="Longitude (openmeteo/copernicus)")
     p_collect.add_argument("--start-date", default=None, help="Start date YYYY-MM-DD (openmeteo/copernicus)")

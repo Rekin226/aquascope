@@ -20,6 +20,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [Taiwan data.gov.tw](https://data.gov.tw) | Taiwan | Real-time river + groundwater level | REST | ✅ |
 | [Taiwan WRA Groundwater](https://opendata.wra.gov.tw) | Taiwan | Annual groundwater levels + well metadata (992 wells, 1992–) | REST | ✅ |
 | [USGS](https://api.waterdata.usgs.gov) | USA | Streamflow, water quality, gage height | OGC | ✅ |
+| [NOAA NWPS](https://api.water.noaa.gov/nwps/v1/) | USA | Streamflow observations, location metadata | REST | ✅ |
 | [Water Quality Portal](https://waterqualitydata.us) | USA | Integrated WQ from 400+ agencies | REST / CSV | ✅ |
 | [GEMStat](https://gemstat.org) | Global | Freshwater quality (170+ countries) | Zenodo | ✅ |
 | [UN SDG 6](https://sdg6data.org) | Global | SDG 6 indicators (6.1.1 – 6.6.1) | REST | ✅ |
@@ -45,6 +46,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | Taiwan MOENV | Recommended | [Register](https://data.moenv.gov.tw/en/apikey) — free |
 | Taiwan WRA / Civil IoT | No | Open access |
 | USGS | Optional | [Request](https://api.waterdata.usgs.gov/docs/ogcapi/#api-keys) — free |
+| NOAA NWPS | No | Open access |
 | Water Quality Portal | No | Open access |
 | GEMStat | No | Open access via Zenodo |
 | UN SDG 6 | No | Open access |

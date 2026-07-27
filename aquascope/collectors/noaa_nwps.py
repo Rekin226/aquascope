@@ -169,7 +169,7 @@ class NOAANWPSCollector(BaseCollector):
         source
         station_id
         location
-        data [ This will be used to popinstanceulate measurements, dates and times, and flow rates]
+        data [ This will be used to populate measurements, dates and times, and flow rates]
         """
         data_dictionary: dict[str, Any] = {}
 

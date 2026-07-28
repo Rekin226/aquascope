@@ -124,9 +124,9 @@ class NOAANWPSCollector(BaseCollector):
             url = f"{url}?{'&'.join(params)}"
         return url
 
-    def _extract_name_lid(self, discovery_raw: Any) -> list[tuple[str, str]]:
+    def _extract_lid(self, discovery_raw: Any) -> list[str]:
         """
-        Extract the name and LID from the discovery raw data.
+        Extract the LID from the discovery raw data.
         Parameters
         ----------
         discovery_raw: Any  |  Required
@@ -141,14 +141,13 @@ class NOAANWPSCollector(BaseCollector):
             logger.warning("NOAA-NWPS: 'gauges' key is not a list in discovery raw data.")
             return []
 
-        results: list[tuple[str, str]] = []
+        results: list[str] = []
         for gauge in gauges:
             if not isinstance(gauge, dict):
                 continue
             lid = gauge.get("lid")
-            name = gauge.get("name")
-            if isinstance(lid, str) and lid and isinstance(name, str) and name:
-                results.append((lid, name))
+            if isinstance(lid, str) and lid:
+                results.append(lid)
         return results
 
     def _build_gauge_url(self, lid: str) -> str:
@@ -191,14 +190,13 @@ class NOAANWPSCollector(BaseCollector):
             GeoLocation(latitude=float(latitude), longitude=float(longitude))
         )
 
-
         data_dictionary["source"] = DataSource.NOAA_NWPS
         data_dictionary["station_id"] = gauge_data["lid"]
         data_dictionary["station_name"] = gauge_data["name"]
         data_dictionary["location"] = location
         data_dictionary["data_container"] = observed_data.get("data", [])
         data_dictionary["source_type"] = "in_situ"
-        data_dictionary["unit"] = "m3/s"
+        data_dictionary["unit"] = observed_data.get("secondaryUnits")
 
         return data_dictionary
 
@@ -215,17 +213,15 @@ class NOAANWPSCollector(BaseCollector):
         if unit is None:
             return None
 
-        unit_key = unit.lower()
-        if unit_key == "kcfs":
+        if unit == "kcfs":
             return numeric * 28.316846592
-        if unit_key == "cfs":
+        if unit == "cfs":
             return numeric * 0.028316846592
-        if unit_key in {"m3/s", "cms"}:
+        if unit == "m3/s" or unit == "cms":
             return numeric
-        if unit_key == "ft":
-            return numeric * 0.3048
-        logger.warning("Unknown NWPS unit '%s'; skipping value %r", unit, value)
-        return None
+        else:
+            logger.warning("Unknown NWPS unit '%s'; skipping value %r", unit, value)
+            return None
 
     @staticmethod
     def _parse_nwps_datetime(value: Any) -> datetime | None:
@@ -238,7 +234,7 @@ class NOAANWPSCollector(BaseCollector):
 
         text = value.replace("Z", "+00:00")
         try:
-            return datetime.fromisoformat(text)
+            return datetime.fromisoformat(text).replace(tzinfo=None)
         except ValueError:
             return None
 
@@ -251,7 +247,10 @@ class NOAANWPSCollector(BaseCollector):
         catfim: bool = False,
         **_: Any,
     ) -> Any:
-        """Fetch NWPS payload for one lid or enumerate a list of lids discovered by bbox."""
+        """
+        Fetch NWPS payload for one lid or enumerate a list of lids discovered by bbox.
+        The first 5 LIDs will be iterated through _build_combined_data_dictionary
+        """
         if lid and bbox:
             raise ValueError("NOAA-NWPS: Provide only one of 'lid' or 'bbox'.")
         if not lid and not bbox:
@@ -262,16 +261,17 @@ class NOAANWPSCollector(BaseCollector):
         if bbox:
             discovery_url = self._build_discovery_url(bbox=bbox, srid=srid, catfim=catfim)
             discovery_raw = self.client.get_json(discovery_url)
-            lid_name_pairs = self._extract_name_lid(discovery_raw)
-            if not lid_name_pairs:
+            lids_list = self._extract_lid(discovery_raw)
+
+            if not lids_list:
                 logger.warning("NOAA-NWPS: No stations found in discovery for bbox %r", bbox)
                 return []
-            for station_lid, station_name in lid_name_pairs:
-                print(f"{station_lid}\t{station_name}")
 
-            return []
+            lids_list = lids_list[:5]  # Limit to 5 LIDs, 2 calls per LID @ 10 requests per minute
+            for lid in lids_list:
+                print(f"Fetching data for LID: {lid}")
 
-        return []
+            return [self._build_combined_dictionary(lid) for lid in lids_list]
 
     def _normalise_single(self, data_dictionary: dict[str, Any]) -> list[StreamflowReading]:
         """Convert one station dictionary into StreamflowReading records."""
@@ -280,10 +280,12 @@ class NOAANWPSCollector(BaseCollector):
         station_name = data_dictionary.get("station_name")
         location = data_dictionary.get("location")
         source_type = data_dictionary.get("source_type", "in_situ")
+        unit = data_dictionary.get("unit")
 
         records: list[StreamflowReading] = []
 
         data_container = data_dictionary.get("data_container", [])
+
         if not isinstance(data_container, list):
             return records
 
@@ -292,15 +294,14 @@ class NOAANWPSCollector(BaseCollector):
                 continue
 
             if entry.get("secondary") in (-999, None):
-                logging.warning(f"NOAA-NWPS: Skipping {entry.get('station_id')} due to missing secondary measurement.")
+                logger.warning("NOAA-NWPS: Entry in data_container missing secondary measurement, skipping entry.")
                 continue
 
-            reading_datetime = self._parse_nwps_datetime(entry.get("generatedTime"))
+            reading_datetime = self._parse_nwps_datetime(entry.get("validTime"))
             if reading_datetime is None:
                 continue
 
-            source_unit = entry.get("secondaryUnit") or entry.get("unit") or "kcfs"
-            discharge_cms = self._to_discharge_cms(entry.get("secondary"), source_unit)
+            discharge_cms = self._to_discharge_cms(entry.get("secondary"), unit)
             if discharge_cms is None:
                 continue
 
@@ -330,7 +331,7 @@ class NOAANWPSCollector(BaseCollector):
                     records.extend(self._normalise_single(station))
             return records
 
-        if not isinstance(data_dictionary, dict):   # Should this be dict?
+        if not isinstance(data_dictionary, dict):
             return []
 
         return self._normalise_single(data_dictionary)

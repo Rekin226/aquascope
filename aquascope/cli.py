@@ -966,7 +966,7 @@ def main() -> None:
             "taiwan_wra_fhy", "taiwan_wra_iot", "taiwan_datagov",
             "usgs", "sdg6", "gemstat", "aquastat", "taiwan_civil_iot", "wqp",
             "openmeteo", "copernicus", "wapor", "eu_wfd", "hubeau_hydrometrie",
-            "japan_mlit", "korea_wamis", "grdc", "camels_cl", "noaa_nwps" "pegelonline",
+            "japan_mlit", "korea_wamis", "grdc", "camels_cl", "noaa_nwps", "pegelonline",
         ],
         help="Data source to collect from",
     )

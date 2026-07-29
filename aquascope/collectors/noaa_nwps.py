@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
+from collections import Counter
 from aquascope.collectors.base import BaseCollector
 from aquascope.schemas.water_data import DataSource, GeoLocation, StreamflowReading
 from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
@@ -18,6 +19,19 @@ from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
 logger = logging.getLogger(__name__)
 
 NWPS_BASE = "https://api.water.noaa.gov/nwps/v1"
+
+class TallyLogger:
+    def __init__(self):
+        self.logger = logger
+        self.counter = Counter()
+
+    def add(self, key):
+        self.counter[key] += 1
+    
+    def flush(self):
+        for key, total in self.counter.items():
+            self.logger.warning("[Repetitive Warning] '%s' occured %d times.", key, total)
+        self.counter.clear()
 
 class NOAANWPSCollector(BaseCollector):
     name = "noaa_nwps"
@@ -170,6 +184,8 @@ class NOAANWPSCollector(BaseCollector):
         location
         data [ This will be used to populate measurements, dates and times, and flow rates]
         """
+        tally = TallyLogger()
+
         data_dictionary: dict[str, Any] = {}
 
         gauge_url = self._build_gauge_url(lid)
@@ -184,7 +200,7 @@ class NOAANWPSCollector(BaseCollector):
         if latitude is None or longitude is None:
             latitude = 0.00
             longitude = 0.00
-            logger.warning("NOAA-NWPS: Missing latitude or longitude in gauge data.")
+            tally.add("Missing latitude or longitude in gauge data.")
 
         location = (
             GeoLocation(latitude=float(latitude), longitude=float(longitude))
@@ -198,12 +214,15 @@ class NOAANWPSCollector(BaseCollector):
         data_dictionary["source_type"] = "in_situ"
         data_dictionary["unit"] = observed_data.get("secondaryUnits")
 
+        tally.flush()
         return data_dictionary
 
     def _to_discharge_cms(self, value: Any, unit: str | None) -> float | None:
         """
         Convert NWPS flow values to cubic meters per second.
         """
+        tally = TallyLogger()
+
         if value is None:
             return None
         try:
@@ -220,7 +239,8 @@ class NOAANWPSCollector(BaseCollector):
         if unit == "m3/s" or unit == "cms":
             return numeric
         else:
-            logger.warning("Unknown NWPS unit '%s'; skipping value %r", unit, value)
+            tally.add("Unknown NWPS unit, skipping entry.")
+            tally.flush()
             return None
 
     @staticmethod
@@ -251,11 +271,6 @@ class NOAANWPSCollector(BaseCollector):
         Fetch NWPS payload for one lid or enumerate a list of lids discovered by bbox.
         The first 5 LIDs will be iterated through _build_combined_data_dictionary
         """
-        if lid and bbox:
-            raise ValueError("NOAA-NWPS: Provide only one of 'lid' or 'bbox'.")
-        if not lid and not bbox:
-            raise ValueError("NOAA-NWPS: One of 'lid' or 'bbox' is required.")
-
         if lid:
             return self._build_combined_dictionary(lid)
         if bbox:
@@ -269,7 +284,7 @@ class NOAANWPSCollector(BaseCollector):
 
             lids_list = lids_list[:5]  # Limit to 5 LIDs, 2 calls per LID @ 10 requests per minute
             for lid in lids_list:
-                print(f"Fetching data for LID: {lid}")
+                logger.info(f"Fetching data for LID: {lid}")
 
             return [self._build_combined_dictionary(lid) for lid in lids_list]
 
@@ -286,6 +301,8 @@ class NOAANWPSCollector(BaseCollector):
 
         data_container = data_dictionary.get("data_container", [])
 
+        tally = TallyLogger()
+
         if not isinstance(data_container, list):
             return records
 
@@ -294,7 +311,7 @@ class NOAANWPSCollector(BaseCollector):
                 continue
 
             if entry.get("secondary") in (-999, None):
-                logger.warning("NOAA-NWPS: Entry in data_container missing secondary measurement, skipping entry.")
+                tally.add("Entry in data_container missing secondary measurement, skipping entry.")
                 continue
 
             reading_datetime = self._parse_nwps_datetime(entry.get("validTime"))
@@ -318,6 +335,7 @@ class NOAANWPSCollector(BaseCollector):
                 )
             )
 
+        tally.flush()
         return records
 
     def normalise(self, data_dictionary: dict[str, Any]) -> Sequence[StreamflowReading]:

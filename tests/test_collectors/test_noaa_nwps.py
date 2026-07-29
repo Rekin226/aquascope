@@ -188,7 +188,7 @@ class TestNOAANWPSCollectorHelpers:
             (1, "kcfs", 28.316846592),
             (1, "cfs", 0.028316846592),
             (1, "m3/s", 1.0),
-            (1, "cms", None),
+            (1, "cms", 1.0),
             (1, "ft", None),
         ],
     )
@@ -233,7 +233,7 @@ class TestNOAANWPSCollectorNormalise:
             "data_container": [{"validTime": "2026-06-28T14:45:00Z", "generatedTime": "2026-06-28T15:40:05Z",
                                 "primary": 5.03, "secondary": 20.6}],
             "source_type": "in_situ",
-            "secondaryUnits": "kcfs",
+            "unit": "kcfs",
         }
 
         records = collector.normalise(combined)
@@ -255,7 +255,7 @@ class TestNOAANWPSCollectorNormalise:
             "station_id": "ANAW1",
             "data_container": [
                 {
-                    "generatedTime": "invalid",
+                    "validTimeKey": "invalid",
                     "secondary": 20.6,
                     "secondaryUnits": "kcfs",
                 }
@@ -285,14 +285,15 @@ class TestNOAANWPSCollectorNormalise:
         collector = NOAANWPSCollector()
         combined = {
             "station_id": "ANAW1",
+            "unit": "kcfs",
             "data_container": [
                 "bad-entry",
-                {"generatedTime": "2026-06-28T15:40:05Z", "secondary": 20.6, "secondaryUnits": "kcfs"},
+                {"validTime": "2026-06-28T15:40:05Z", "secondary": 20.6},
             ],
         }
 
         records = collector.normalise(combined)
-        assert len(records) == 0
+        assert len(records) == 1
 
 
 class TestNOAANWPSCollectorEdgeCases:

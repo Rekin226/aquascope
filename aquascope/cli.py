@@ -186,6 +186,9 @@ def cmd_collect(args: argparse.Namespace) -> None:
         if args.end_date:
             kwargs["end"] = args.end_date
     if source == "noaa_nwps":
+        if not args.bbox and not args.lid:
+            logger.error("NOAA NWPS requires either the --bbox or --lid argument.")
+            sys.exit(1)
         if args.bbox and args.lid:
             logger.error("NOAA NWPS requires exactly one of --bbox or --lid.")
             sys.exit(1)

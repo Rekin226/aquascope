@@ -255,7 +255,7 @@ class TestNOAANWPSCollectorNormalise:
             "station_id": "ANAW1",
             "data_container": [
                 {
-                    "validTimeKey": "invalid",
+                    "validTime": "invalid",
                     "secondary": 20.6,
                     "secondaryUnits": "kcfs",
                 }

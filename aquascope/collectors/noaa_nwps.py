@@ -30,7 +30,7 @@ class TallyLogger:
 
     def flush(self):
         for key, total in self.counter.items():
-            self.logger.warning("[Repetitive Warning] '%s' occured %d times.", key, total)
+            self.logger.warning("[Repetitive Warning] '%s' occurred %d times.", key, total)
         self.counter.clear()
 
 class NOAANWPSCollector(BaseCollector):
@@ -184,7 +184,6 @@ class NOAANWPSCollector(BaseCollector):
         location
         data [ This will be used to populate measurements, dates and times, and flow rates]
         """
-        tally = TallyLogger()
 
         data_dictionary: dict[str, Any] = {}
 
@@ -200,8 +199,7 @@ class NOAANWPSCollector(BaseCollector):
         if latitude is None or longitude is None:
             latitude = 0.00
             longitude = 0.00
-            tally.add("Missing latitude or longitude in gauge data.")
-
+            logger.warning("NOAA-NWPS: Missing latitude or longitude in gauge data, defaulting to 0.00.")
         location = (
             GeoLocation(latitude=float(latitude), longitude=float(longitude))
         )
@@ -214,15 +212,12 @@ class NOAANWPSCollector(BaseCollector):
         data_dictionary["source_type"] = "in_situ"
         data_dictionary["unit"] = observed_data.get("secondaryUnits")
 
-        tally.flush()
         return data_dictionary
 
     def _to_discharge_cms(self, value: Any, unit: str | None) -> float | None:
         """
         Convert NWPS flow values to cubic meters per second.
         """
-        tally = TallyLogger()
-
         if value is None:
             return None
         try:
@@ -239,8 +234,7 @@ class NOAANWPSCollector(BaseCollector):
         if unit == "m3/s" or unit == "cms":
             return numeric
         else:
-            tally.add("Unknown NWPS unit, skipping entry.")
-            tally.flush()
+            logger.warning("NOAA-NWPS: Unknown NWPS unit, skipping entry.")
             return None
 
     @staticmethod
@@ -271,6 +265,11 @@ class NOAANWPSCollector(BaseCollector):
         Fetch NWPS payload for one lid or enumerate a list of lids discovered by bbox.
         The first 5 LIDs will be iterated through _build_combined_data_dictionary
         """
+        if lid and bbox:
+            raise ValueError("NOAA-NWPS: Provide only one of 'lid' or 'bbox'.")
+        if not lid and not bbox:
+            raise ValueError("NOAA-NWPS: One of 'lid' or 'bbox' is required.")
+
         if lid:
             return self._build_combined_dictionary(lid)
         if bbox:

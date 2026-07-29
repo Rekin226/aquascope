@@ -7,11 +7,11 @@ API docs: https://api.water.noaa.gov/nwps/v1/docs/
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from collections import Counter
 from aquascope.collectors.base import BaseCollector
 from aquascope.schemas.water_data import DataSource, GeoLocation, StreamflowReading
 from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
@@ -27,7 +27,7 @@ class TallyLogger:
 
     def add(self, key):
         self.counter[key] += 1
-    
+
     def flush(self):
         for key, total in self.counter.items():
             self.logger.warning("[Repetitive Warning] '%s' occured %d times.", key, total)

@@ -85,10 +85,10 @@ def cmd_collect(args: argparse.Namespace) -> None:
         TaiwanWRAIoTCollector,
         TaiwanWRAReservoirCollector,
         TaiwanWRAWaterLevelCollector,
+        UKEACollector,
         USGSCollector,
         WaPORCollector,
         WQPCollector,
-        UKEACollector,
     )
     from aquascope.utils.storage import save_records
 

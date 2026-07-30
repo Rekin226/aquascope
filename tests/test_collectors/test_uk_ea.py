@@ -5,10 +5,10 @@ from datetime import date, datetime, timedelta
 import pytest
 
 from aquascope.collectors.uk_ea import (
-    UKEACollector,
     MAPPED_OBSERVED_PROPERTY_UNITS,
+    UKEACollector,
 )
-from aquascope.schemas.water_data import GeoLocation, WaterQualitySample, WaterLevelReading, DataSource
+from aquascope.schemas.water_data import DataSource, GeoLocation, WaterLevelReading, WaterQualitySample
 
 
 class DummyClient:
@@ -210,8 +210,16 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
 
     # pagination and station metadata injection
     suid = "".join(["g" for _ in range(40)])
-    item1 = {"measure": {"@id": f"http://measures/{suid}-measure-info"}, "value": "1.1", "dateTime": "2025-01-01T01:00:00"}
-    item2 = {"measure": {"@id": f"http://measures/{suid}-measure-info"}, "value": "2.2", "dateTime": "2025-01-02T01:00:00"}
+    item1 = {
+        "measure": {"@id": f"http://measures/{suid}-measure-info"},
+        "value": "1.1",
+        "dateTime": "2025-01-01T01:00:00"
+    }
+    item2 = {
+        "measure":{"@id": f"http://measures/{suid}-measure-info"},
+        "value": "2.2",
+        "dateTime": "2025-01-02T01:00:00"
+    }
 
     def behaviour(path, params):
         if path == "id/stations.json":
@@ -236,7 +244,11 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
 
     cli = DummyClient(behaviour=behaviour2)
     coll3 = UKEACollector(client=cli)
-    out = coll3.fetch_raw(observed_property="waterLevel", measure="M-SUID-123456789012345678901234567890123456", collection="15min")
+    out = coll3.fetch_raw(
+        observed_property="waterLevel",
+        measure="M-SUID-123456789012345678901234567890123456",
+        collection="15min"
+    )
     # first entry contains params, should NOT include 'period' because collection ignored when measure present
     assert "period" not in out[0]
     assert "measure" in out[0]

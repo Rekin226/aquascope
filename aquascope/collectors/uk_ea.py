@@ -75,7 +75,7 @@ class UKEACollector(BaseCollector):
         if measure and collection:
             logger.warning("Both measure and collection provided. Ignoring collection and using the exact measure provided")
             collection = None
-        
+
         if collection:
             period = COLLECTION_PERIOD_VALUES.get(collection, None)
 
@@ -89,7 +89,7 @@ class UKEACollector(BaseCollector):
                 )
         else:
             bounding_box_limits = None
-        
+
         min_date, max_date = UKEACollector._compute_date_range(min_date, max_date, days)
 
         params: dict[str, Any] = {
@@ -204,10 +204,10 @@ class UKEACollector(BaseCollector):
                 )
             except (ValueError, KeyError, TypeError) as exc:
                 logger.debug("Skipping UKEA item: %s", exc)
-    
+
         return samples
-    
-    
+
+
     def _normalise_water_level_readings(self, raw: list[dict], observed_property: str) -> Sequence[WaterLevelReading]:
         samples: list[WaterLevelReading] = []
         for item in raw:
@@ -223,7 +223,7 @@ class UKEACollector(BaseCollector):
                     station_name, location = UKEACollector._extract_water_level_reading_metadata(station_meta)
                 else:
                     station_name, location = None, None
-                
+
                 samples.append(
                     WaterLevelReading(
                         source=DataSource.UK_EA,
@@ -296,7 +296,7 @@ class UKEACollector(BaseCollector):
             return None
 
         return min_lon, min_lat, max_lon, max_lat
-    
+
     @staticmethod
     def _compute_date_range(min_date: str | None, max_date: str | None, days: int | None) -> tuple[str, str]:
         # If min_date and max_date not provided, set date range to the last `days` days (default 30)
@@ -322,11 +322,11 @@ class UKEACollector(BaseCollector):
             logger.warning(
                 "Both min_date/max_date and days were provided. Ignoring days and using min_date/max_date range."
             )
-        
+
         logger.info(f"{min_date}, {max_date}")
-        
+
         return min_date, max_date
-    
+
     @staticmethod
     def _extract_reading_data(item: dict) -> tuple:
         measure = item.get("measure", {})
@@ -360,7 +360,7 @@ class UKEACollector(BaseCollector):
         lat = station_meta.get("lat", None)
         lon = station_meta.get("long", None)
         location = UKEACollector._build_location_from_lat_lon(float(lat), float(lon)) if lat and lon else None
-        
+
         return station_name, river, location
 
     @staticmethod
@@ -369,9 +369,9 @@ class UKEACollector(BaseCollector):
         lat = station_meta.get("lat", None)
         lon = station_meta.get("long", None)
         location = UKEACollector._build_location_from_lat_lon(float(lat), float(lon)) if lat and lon else None
-        
+
         return station_name, location
-    
+
     @staticmethod
     def _build_location_from_lat_lon(lat: float, lon: float) -> tuple | None:
         if lat is not None and lon is not None:
@@ -380,4 +380,3 @@ class UKEACollector(BaseCollector):
             except (ValueError, TypeError):
                 return None
 
-        

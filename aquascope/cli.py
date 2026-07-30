@@ -984,7 +984,6 @@ def main() -> None:
     p_collect.add_argument("--countries", default=None, help="ISO3 country codes, comma-separated (SDG6)")
     p_collect.add_argument("--state", default=None, help="US state code e.g. US:06 (WQP)")
     p_collect.add_argument("--collection", default=None, choices=["15min", "daily"], help="Collection period (UKEA)")
-    p_collect.add_argument("--station", default=None, help="Station SUID (UKEA)")
     p_collect.add_argument("--station-wiski-id", default=None, help="Station Wiski ID (UKEA)")
     p_collect.add_argument("--observed-property", default=None, help="Observed property (UKEA)")
     p_collect.add_argument("--measure", default=None, help="Measure identifier (UKEA)")
@@ -1001,7 +1000,7 @@ def main() -> None:
     p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")
     p_collect.add_argument("--year", type=int, default=None, help="Year filter (EU WFD)")
     p_collect.add_argument("--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl)")
-    p_collect.add_argument("--station", default=None, help="Station UUID (PEGELONLINE)")
+    p_collect.add_argument("--station", default=None, help="Station UUID/SUID (PEGELONLINE/UKEA)")
     p_collect.add_argument(
         "--timeseries", default=None, choices=["W", "Q"],
         help="PEGELONLINE timeseries: W for water level or Q for discharge (default: both)",

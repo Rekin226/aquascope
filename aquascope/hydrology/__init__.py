@@ -84,6 +84,7 @@ from aquascope.hydrology.signatures import (
     seasonality_index,
     similarity_score,
 )
+from aquascope.hydrology.streamflow import stage_to_runoff
 
 __all__ = [
     # flow duration
@@ -153,4 +154,6 @@ __all__ = [
     "recession_constant",
     "compare_signatures",
     "similarity_score",
+    # streamflow
+    "stage_to_runoff",
 ]

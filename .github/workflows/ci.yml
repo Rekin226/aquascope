@@ -45,3 +45,22 @@ jobs:
         with:
           name: coverage-report
           path: coverage.xml
+
+  contributors-board:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check the README board lists every commit author
+        env:
+          PRIVATE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          out=$(npx --yes all-contributors-cli check)
+          echo "$out"
+          if echo "$out" | grep -q "Missing contributors"; then
+            echo "::error::The contributors board is missing the people listed above. Comment '@all-contributors please add @<username> for <contribution>' on their merged PR (needs the all-contributors GitHub App), or run 'npx all-contributors-cli add <username> <contribution>' locally."
+            exit 1
+          fi

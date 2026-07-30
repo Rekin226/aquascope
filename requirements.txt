@@ -1,0 +1,3 @@
+# Streamlit Community Cloud installs the dashboard from this file.
+# For library use, install from PyPI instead: pip install "aquascope[dashboard]"
+.[dashboard,viz]

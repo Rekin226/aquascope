@@ -7,7 +7,7 @@ The canonical, visible list lives in the [Contributors section of the README](RE
 ## How you get added
 
 1. Open a PR (see [CONTRIBUTING.md](CONTRIBUTING.md)).
-2. When it merges, a maintainer adds you to the Contributors table in the README, with an emoji for the kind of contribution.
+2. When it merges, a maintainer comments `@all-contributors please add @your-username for code` (or `doc`, `test`, `plugin`, ...) and the [all-contributors bot](https://allcontributors.org/docs/en/bot/usage) opens a PR that adds you to the README table. The board is backed by `.all-contributorsrc`, and CI fails if a commit author is ever missing from it.
 3. That's it. There is no minimum, your first merged PR puts you on the board.
 
 We follow the [all-contributors](https://allcontributors.org/) spec, which recognizes **every** kind of contribution, not just code.

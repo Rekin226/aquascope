@@ -20,6 +20,7 @@ from __future__ import annotations
 # Diagnostics
 from aquascope.viz.diagnostics import (
     diagnostic_panel,
+    double_mass_plot,
     pp_plot,
     qq_plot,
     return_level_plot,
@@ -61,6 +62,7 @@ __all__ = [
     # diagnostics
     "qq_plot",
     "pp_plot",
+    "double_mass_plot",
     "return_level_plot",
     "diagnostic_panel",
     # timeseries

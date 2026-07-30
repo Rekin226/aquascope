@@ -42,6 +42,19 @@ SERIES_COLOURS = [
     "#1982C4", "#FF595E", "#8AC926", "#FFCA3A", "#6A0572",
 ]
 
+# Okabe-Ito / Color Universal Design palette — colorblind-safe.
+# Source: Okabe & Ito (2008), https://jfly.uni-koeln.de/color/
+OKABE_ITO_COLOURS = [
+    "#E69F00",  # orange
+    "#56B4E9",  # sky blue
+    "#009E73",  # bluish green
+    "#F0E442",  # yellow
+    "#0072B2",  # blue
+    "#D55E00",  # vermillion
+    "#CC79A7",  # reddish purple
+    "#000000",  # black
+]
+
 # ── Figure defaults ─────────────────────────────────────────────────────
 DEFAULT_FIGSIZE = (12, 5)
 WIDE_FIGSIZE = (14, 6)
@@ -58,14 +71,37 @@ FONT_SIZES = {
 }
 
 
-def apply_aqua_style() -> None:
+_VALID_PALETTES = {"default", "colorblind"}
+
+
+def apply_aqua_style(palette: str = "default") -> None:
     """Apply the AquaScope matplotlib style globally.
 
     Sets a clean, publication-friendly style with the AquaScope colour
     palette.  Safe to call multiple times.
+
+    Parameters
+    ----------
+    palette : str, optional
+        Colour palette to use for the *axes.prop_cycle*.  ``"default"``
+        keeps the existing AquaScope series colours; ``"colorblind"``
+        switches to the Okabe-Ito / Color Universal Design palette.
+
+    Raises
+    ------
+    ValueError
+        If *palette* is not one of the recognised names.
     """
+    if palette not in _VALID_PALETTES:
+        raise ValueError(
+            f"Unknown palette {palette!r}. Choose from {sorted(_VALID_PALETTES)}."
+        )
+
     require("matplotlib", feature="plotting")
     import matplotlib.pyplot as plt
+    from cycler import cycler
+
+    colours = OKABE_ITO_COLOURS if palette == "colorblind" else SERIES_COLOURS
 
     plt.rcParams.update({
         "figure.figsize": DEFAULT_FIGSIZE,
@@ -75,6 +111,7 @@ def apply_aqua_style() -> None:
         "axes.grid": True,
         "axes.spines.top": False,
         "axes.spines.right": False,
+        "axes.prop_cycle": cycler(color=colours),
         "grid.alpha": 0.3,
         "grid.linestyle": "--",
         "font.size": FONT_SIZES["tick"],

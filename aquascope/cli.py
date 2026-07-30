@@ -67,13 +67,16 @@ def cmd_collect(args: argparse.Namespace) -> None:
     """Run a data collector and save results."""
     from aquascope.collectors import (
         AquastatCollector,
+        CAMELSCLCollector,
         CopernicusCollector,
         EUWFDCollector,
         GEMStatCollector,
+        GRDCCollector,
         HubeauHydrometrieCollector,
         JapanMLITCollector,
         KoreaWAMISCollector,
         OpenMeteoCollector,
+        PegelonlineCollector,
         SDG6Collector,
         TaiwanCivilIoTCollector,
         TaiwanDataGovCollector,
@@ -112,6 +115,9 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "korea_wamis": lambda: KoreaWAMISCollector(),
         "india_wris": lambda: IndiaWRISCollector(),
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
+        "grdc": lambda: GRDCCollector(),
+        "camels_cl": lambda: CAMELSCLCollector(),
+        "pegelonline": lambda: PegelonlineCollector(),
     }
 
     if source not in collector_map:
@@ -182,7 +188,30 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["year"] = args.year
         if args.water_body_type:
             kwargs["water_body_type"] = args.water_body_type
-
+    if source == "grdc" and args.mode:
+        if args.mode not in ("in_situ", "satellite"):
+            logger.error("GRDC --mode must be 'in_situ' or 'satellite'; got '%s'.", args.mode)
+            sys.exit(1)
+        kwargs["source_type"] = args.mode
+    if source == "camels_cl":
+        if args.station_ids:
+            kwargs["station_ids"] = [s.strip() for s in args.station_ids.split(",") if s.strip()]
+        if args.start_date:
+            kwargs["start"] = args.start_date
+        if args.end_date:
+            kwargs["end"] = args.end_date
+    if source == "pegelonline":
+        if not args.station:
+            logger.error("PEGELONLINE requires --station with a station UUID.")
+            sys.exit(1)
+        kwargs["station_id"] = args.station
+        kwargs["days"] = args.days
+        if args.timeseries:
+            kwargs["timeseries"] = args.timeseries
+        if args.start_date:
+            kwargs["start"] = args.start_date
+        if args.end_date:
+            kwargs["end"] = args.end_date
     records = collector.collect(**kwargs)
     if not records:
         logger.warning("No records collected.")
@@ -386,7 +415,13 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
         "openmeteo": ("Open-Meteo", "Global", "ERA5 reanalysis, weather forecasts, GloFAS discharge", "https://open-meteo.com"),
         "copernicus": ("Copernicus CDS", "Global", "GloFAS river discharge forecasts", "https://cds.climate.copernicus.eu"),
         "wapor": ("FAO WaPOR", "Global", "Satellite ET, biomass, and water productivity", "https://www.fao.org/in-action/remote-sensing-for-water-productivity"),
-        "hubeau_hydrometrie": ("Hub'Eau", "France", "Hydrometrie", "https://hubeau.eaufrance.fr/api/v2/hydrometrie"),
+        "eu_wfd": ("EU WFD", "Europe", "Water Framework Directive status", "https://www.eea.europa.eu"),
+        "france_hubeau": ("Hub'Eau", "France", "River water level and discharge (hydrométrie)", "https://hubeau.eaufrance.fr/api/v2/hydrometrie"),
+        "grdc": ("GRDC", "Global", "River discharge: in-situ gauges + RSEG satellite estimates", "https://zenodo.org/records/19126732"),
+        "japan_mlit": ("Japan MLIT", "Japan", "Hydrometeorology, river observations", "https://www.mlit.go.jp"),
+        "korea_wamis": ("Korea WAMIS", "Korea", "Hydrology, dam operations", "https://www.wamis.go.kr"),
+        "india_wris": ("India WRIS", "India", "River water level", "https://indiawris.gov.in"),
+        "pegelonline": ("PEGELONLINE", "Germany", "River water level and discharge", "https://www.pegelonline.wsv.de"),
     }
 
     for src in DataSource:
@@ -932,13 +967,15 @@ def main() -> None:
         choices=[
             "taiwan_moenv", "taiwan_wra_level", "taiwan_wra_reservoir",
             "taiwan_wra_fhy", "taiwan_wra_iot", "taiwan_datagov",
-            "usgs", "uk_ea", "sdg6", "gemstat", "aquastat", "taiwan_civil_iot", "wqp",
-            "openmeteo", "copernicus", "wapor", "eu_wfd", "hubeau_hydrometrie"
+            "usgs", "sdg6", "gemstat", "aquastat", "taiwan_civil_iot", "wqp",
+            "openmeteo", "copernicus", "wapor", "eu_wfd", "hubeau_hydrometrie",
+            "japan_mlit", "korea_wamis", "grdc", "camels_cl", "pegelonline",
+            "uk_ea"
         ],
         help="Data source to collect from",
     )
     p_collect.add_argument("--api-key", default=None, help="API key (if required)")
-    p_collect.add_argument("--days", type=int, default=30, help="Number of days (USGS/UKEA)")
+    p_collect.add_argument("--days", type=int, default=30, help="Number of days (USGS/UKEA/PEGELONLINE; PEGELONLINE max: 31)")
     p_collect.add_argument("--country", default="all", help="ISO3 country code or 'all' (AQUASTAT)")
     p_collect.add_argument("--countries", default=None, help="ISO3 country codes, comma-separated (SDG6)")
     p_collect.add_argument("--state", default=None, help="US state code e.g. US:06 (WQP)")
@@ -950,6 +987,8 @@ def main() -> None:
     p_collect.add_argument("--variables", default=None, help="Comma-separated variable IDs (AQUASTAT)")
     p_collect.add_argument("--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood)")
     p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR), or min_lon, min_lat, max_lon, max_lat (USGS/UKEA)")
+    p_collect.add_argument("--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood; grdc: in_situ/satellite)")
+    p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR)")
     p_collect.add_argument("--variable", default=None, help="Variable code for the selected collector (WaPOR)")
     p_collect.add_argument("--lat", type=float, default=None, help="Latitude (openmeteo/copernicus)")
     p_collect.add_argument("--lon", type=float, default=None, help="Longitude (openmeteo/copernicus)")
@@ -959,6 +998,12 @@ def main() -> None:
     p_collect.add_argument("--end-year", type=int, default=2023, help="End year (AQUASTAT)")
     p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")
     p_collect.add_argument("--year", type=int, default=None, help="Year filter (EU WFD)")
+    p_collect.add_argument("--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl)")
+    p_collect.add_argument("--station", default=None, help="Station UUID (PEGELONLINE)")
+    p_collect.add_argument(
+        "--timeseries", default=None, choices=["W", "Q"],
+        help="PEGELONLINE timeseries: W for water level or Q for discharge (default: both)",
+    )
     p_collect.add_argument(
         "--water-body-type", default=None,
         choices=["river", "lake", "groundwater"],

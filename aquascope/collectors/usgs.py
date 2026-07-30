@@ -131,6 +131,108 @@ class USGSCollector(BaseCollector):
                 f"{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
             )
 
+        if self.api_key == "DEMO_KEY" or not self.api_key:
+            if collection not in ("daily", "sta"):
+                raise ValueError(
+                    f"Collection '{collection}' is not supported on the keyless legacy USGS API path. "
+                    "Only 'daily' and 'sta' collections are supported without an API key. "
+                    "Please provide a valid USGS_API_KEY to use the OGC API path. "
+                    "For a reliable keyless demo source, use OpenMeteoCollector."
+                )
+
+            sites = kwargs.get("station_id") or kwargs.get("sites") or kwargs.get("monitoring_location_id")
+            parameter_cd = kwargs.get("parameter") or kwargs.get("parameterCd") or kwargs.get("parameter_code")
+            bbox_val = bbox or kwargs.get("bBox")
+            state_cd = kwargs.get("stateCd")
+            county_cd = kwargs.get("countyCd")
+            huc_val = kwargs.get("huc")
+
+            if not any([sites, bbox_val, state_cd, county_cd, huc_val]):
+                raise ValueError(
+                    "USGS keyless path requires a filter parameter (station_id, bbox, stateCd, countyCd, or huc). "
+                    "To request unfiltered data, you must provide a valid USGS_API_KEY via api_key or the "
+                    "USGS_API_KEY environment variable. For a reliable keyless demo source, use OpenMeteoCollector."
+                )
+
+            parts = datetime_range.split("/")
+            start_date = parts[0].split("T")[0] if len(parts) == 2 else None
+            end_date = parts[1].split("T")[0] if len(parts) == 2 else None
+
+            endpoint = "dv" if collection == "daily" else "iv"
+            url = f"https://waterservices.usgs.gov/nwis/{endpoint}/"
+
+            params = {
+                "format": "json",
+            }
+            if sites:
+                params["sites"] = sites
+            if parameter_cd:
+                params["parameterCd"] = parameter_cd
+            if bbox_val:
+                params["bBox"] = bbox_val
+            if state_cd:
+                params["stateCd"] = state_cd
+            if county_cd:
+                params["countyCd"] = county_cd
+            if huc_val:
+                params["huc"] = huc_val
+
+            if start_date:
+                params["startDT"] = start_date
+            if end_date:
+                params["endDT"] = end_date
+
+            response = self.client.get_json(url, params=params)
+            time_series_list = response.get("value", {}).get("timeSeries", [])
+
+            all_features = []
+            for ts in time_series_list:
+                source_info = ts.get("sourceInfo", {})
+                site_codes = source_info.get("siteCode", [])
+                site_id = site_codes[0].get("value", "unknown") if site_codes else "unknown"
+
+                geo_loc = source_info.get("geoLocation", {}).get("geogLocation", {})
+                latitude = geo_loc.get("latitude")
+                longitude = geo_loc.get("longitude")
+
+                var_info = ts.get("variable", {})
+                var_codes = var_info.get("variableCode", [])
+                param_code = var_codes[0].get("value", "") if var_codes else ""
+                unit = var_info.get("unit", {}).get("unitCode", "")
+                no_data_val = var_info.get("noDataValue")
+
+                for values_block in ts.get("values", []):
+                    for value in values_block.get("value", []):
+                        val = value.get("value")
+                        dt = value.get("dateTime")
+                        if val is None or dt is None:
+                            continue
+
+                        try:
+                            float_val = float(val)
+                            if no_data_val is not None and abs(float_val - no_data_val) < 1e-3:
+                                continue
+                        except (ValueError, TypeError):
+                            continue
+
+                        all_features.append({
+                            "geometry": {
+                                "coordinates": [longitude, latitude]
+                            },
+                            "properties": {
+                                "monitoring_location_id": site_id,
+                                "parameter_code": param_code,
+                                "value": val,
+                                "time": dt,
+                                "unit_of_measure": unit
+                            }
+                        })
+
+            if max_items is not None and len(all_features) >= max_items:
+                all_features = all_features[:max_items]
+
+            return all_features
+
         all_features: list[dict] = []
         params: dict[str, Any] = {
             "f": "json",

@@ -262,6 +262,29 @@ class TestHydroPlots:
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
 
+    def test_plot_hydrograph_plotly_backend(self):
+        pytest.importorskip("plotly")
+        import plotly.graph_objects as go
+
+        from aquascope.viz.hydro import plot_hydrograph
+
+        df = pd.DataFrame({
+            "discharge": self.discharge.values[:365],
+            "baseflow": self.discharge.values[:365] * 0.6,
+        }, index=self.discharge.index[:365])
+        fig = plot_hydrograph(df, backend="plotly")
+        assert isinstance(fig, go.Figure)
+
+    def test_plot_hydrograph_bad_backend(self):
+        from aquascope.viz.hydro import plot_hydrograph
+
+        df = pd.DataFrame({
+            "discharge": self.discharge.values[:365],
+            "baseflow": self.discharge.values[:365] * 0.6,
+        }, index=self.discharge.index[:365])
+        with pytest.raises(ValueError):
+            plot_hydrograph(df, backend="bogus")
+
     def test_plot_spi_timeline(self):
         from aquascope.viz import plot_spi_timeline
 

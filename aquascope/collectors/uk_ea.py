@@ -96,7 +96,7 @@ class UKEACollector(BaseCollector):
             "_limit": limit,
         }
         if collection:
-            params["period"] = collection
+            params["period"] = period
         if observed_property:
             params["observedProperty"] = observed_property
         if measure:

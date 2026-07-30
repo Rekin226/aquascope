@@ -78,6 +78,12 @@ class UKEACollector(BaseCollector):
 
         if collection:
             period = COLLECTION_PERIOD_VALUES.get(collection, None)
+            if period == None:
+                raise ValueError(
+                    "Invalid collection period."
+                    "One of the following collection values must be passed: "
+                    f"{', '.join(COLLECTION_PERIOD_VALUES.keys())}. "
+                )
 
         if bbox:
             bounding_box_limits = UKEACollector._parse_bbox(bbox)
@@ -128,6 +134,7 @@ class UKEACollector(BaseCollector):
 
         all_items: list[dict] = []
         all_items.append(params) # Metadata for use in normalise()
+        max_items += 1 # Increment max_items to account for prepended metadata
         offset = 0
 
         while True:
@@ -359,7 +366,12 @@ class UKEACollector(BaseCollector):
         river = station_meta.get("riverName", None)
         lat = station_meta.get("lat", None)
         lon = station_meta.get("long", None)
-        location = UKEACollector._build_location_from_lat_lon(float(lat), float(lon)) if lat and lon else None
+        if lat is not None and lon is not None:
+            location = UKEACollector._build_location_from_lat_lon(
+                float(lat), float(lon)
+            )
+        else:
+            location = None
 
         return station_name, river, location
 

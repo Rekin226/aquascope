@@ -130,14 +130,18 @@ def cmd_collect(args: argparse.Namespace) -> None:
     if source == "usgs" and args.days:
         kwargs["datetime_range"] = f"P{args.days}D"
     if source == "uk_ea":
-        if args.station:
-            kwargs["station"] = args.station
-        if args.station_wiski_id:
-            kwargs["station_wiski_id"] = args.station_wiski_id
+        if args.collection:
+            kwargs["collection"] = args.collection
         if args.observed_property:
             kwargs["observed_property"] = args.observed_property
         if args.measure:
             kwargs["measure"] = args.measure
+        if args.station:
+            kwargs["station"] = args.station
+        if args.station_wiski_id:
+            kwargs["station_wiski_id"] = args.station_wiski_id
+        if args.bbox:
+            kwargs["bbox"] = args.bbox
         if args.start_date:
             kwargs["min_date"] = args.start_date
         if args.end_date:
@@ -985,10 +989,8 @@ def main() -> None:
     p_collect.add_argument("--observed-property", default=None, help="Observed property (UKEA)")
     p_collect.add_argument("--measure", default=None, help="Measure identifier (UKEA)")
     p_collect.add_argument("--variables", default=None, help="Comma-separated variable IDs (AQUASTAT)")
-    p_collect.add_argument("--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood)")
     p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR), or min_lon, min_lat, max_lon, max_lat (USGS/UKEA)")
     p_collect.add_argument("--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood; grdc: in_situ/satellite)")
-    p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR)")
     p_collect.add_argument("--variable", default=None, help="Variable code for the selected collector (WaPOR)")
     p_collect.add_argument("--lat", type=float, default=None, help="Latitude (openmeteo/copernicus)")
     p_collect.add_argument("--lon", type=float, default=None, help="Longitude (openmeteo/copernicus)")

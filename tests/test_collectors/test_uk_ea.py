@@ -6,9 +6,7 @@ import pytest
 
 from aquascope.collectors.uk_ea import (
     UKEACollector,
-    MAPPED_OBSERVED_PROPERTIES,
     MAPPED_OBSERVED_PROPERTY_UNITS,
-    COLLECTION_PERIOD_VALUES,
 )
 from aquascope.schemas.water_data import GeoLocation, WaterQualitySample, WaterLevelReading, DataSource
 

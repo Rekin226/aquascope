@@ -19,7 +19,6 @@ from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
 logger = logging.getLogger(__name__)
 
 UKEA_BASE = "https://environment.data.gov.uk/hydrology"
-MAPPED_OBSERVED_PROPERTIES = {"waterFlow", "waterLevel", "rainfall", "groundwaterLevel"}
 MAPPED_OBSERVED_PROPERTY_UNITS = {
     "waterFlow": "m3/s",
     "waterLevel": "m",
@@ -65,10 +64,11 @@ class UKEACollector(BaseCollector):
         **kwargs,
     ) -> list[dict]:
         """Fetch readings from the UK Environment Agency Hydrology API."""
-        if not observed_property or observed_property not in MAPPED_OBSERVED_PROPERTIES and not measure:
+        valid_observed_property = observed_property in MAPPED_OBSERVED_PROPERTY_UNITS.keys()
+        if not valid_observed_property and not measure:
             raise ValueError(
                 "One of the following observedProperty values must be passed: "
-                f"{', '.join(MAPPED_OBSERVED_PROPERTIES)}. "
+                f"{', '.join(MAPPED_OBSERVED_PROPERTY_UNITS.keys())}. "
                 f"Alternatively, you can pass an exact measure."
             )
 
@@ -167,6 +167,8 @@ class UKEACollector(BaseCollector):
             return self._normalise_water_quality_samples(raw[1:], observed_property)
         elif observed_property in {"waterLevel", "groundwaterLevel"}:
             return self._normalise_water_level_readings(raw[1:], observed_property)
+        else:
+            return []
 
     def _normalise_water_quality_samples(self, raw: list[dict], observed_property: str) -> Sequence[WaterQualitySample]:
         samples: list[WaterQualitySample] = []

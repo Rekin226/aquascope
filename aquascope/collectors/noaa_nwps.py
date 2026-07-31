@@ -305,6 +305,9 @@ class NOAANWPSCollector(BaseCollector):
         if not isinstance(data_container, list):
             return records
 
+        if unit is None or unit == "":
+            tally.add("Unknown unit of measurement.")
+
         for entry in data_container:
             if not isinstance(entry, dict):
                 continue

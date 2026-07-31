@@ -1,8 +1,13 @@
 """
 Collector for the UK Environment Agency hydrology data service.
 
-Uses the public Hydrology API:
+Uses the publical Hydrology API:
     https://environment.data.gov.uk/hydrology
+
+For further information on the data collected, view the UKEA Hydrology API's Documentation:
+    https://environment.data.gov.uk/hydrology/doc/reference
+
+No API key required (open data, unauthenticated).
 """
 
 from __future__ import annotations
@@ -37,7 +42,13 @@ COLLECTION_PERIOD_VALUES = {
 }
 
 class UKEACollector(BaseCollector):
-    """Collect readings from the UK Environment Agency hydrology API."""
+    """Collect readings from the UK Environment Agency hydrology API.
+
+    Parameters
+    ----------
+    client : CachedHTTPClient | None
+        Optional preconfigured HTTP client used for API requests. If not passed, a default client is used.
+    """
 
     name = "uk_ea"
 
@@ -45,6 +56,7 @@ class UKEACollector(BaseCollector):
         self,
         client: CachedHTTPClient | None = None,
     ):
+        """Initialise the collector."""
         super().__init__(
             client
             or CachedHTTPClient(
@@ -69,7 +81,54 @@ class UKEACollector(BaseCollector):
         max_items: int | None = 2_000,
         **kwargs,
     ) -> list[dict]:
-        """Fetch readings from the UK Environment Agency Hydrology API."""
+        """Fetch readings from the UK Environment Agency Hydrology API.
+
+        Parameters
+        ----------
+        collection : str | None
+            Frequency of data collection. Supported values are ``"15min"`` and
+            ``"daily"``.
+        observed_property : str | None
+            Normalised observed property name. Supported values: 
+            ``"waterFlow"``, ``"waterLevel"``,
+            ``"rainfall"``, ``"groundwaterLevel"``.
+        measure : str | None
+            Exact measure identifier. When supplied, the collector uses the
+            measure directly and ignores station and collection filters.
+        station : str | None
+            Station SUID, used to collect data from a specific station.
+            A 36-character GUID-style identifier.
+        station_wiski_id : str | None
+            WISKI station identifier, primarily used to differentiate
+            between co-located stations that share the same station SUID.
+        bbox : str | None
+            Bounding box for location-based queries.
+            Expressed as ``"min-lon,min-lat,max-lon,max-lat"``.
+        min_date : str | None
+            Inclusive lower bound for the requested date range.
+            If not accompanied by a max_date,
+            data from the next ``days`` days are collected (until today).
+        max_date : str | None
+            Inclusive upper bound for the requested date range.
+            If the max_date is in the future, the value defaults to today's date.
+            If not accompanied by a min_date,
+            data from the previous ``days`` days are collected.
+        days : int | None
+            Relative lookback window in days used when explicit date range
+            is not used absent. If there is no date range and no days value passed,
+            data from the last 30 days are passed.
+        limit : int
+            Number of records requested per page from the API.
+        max_items : int | None
+            Maximum number of records to return after the metadata row is prepended.
+            ``None`` means no hard cap.
+
+        Returns
+        -------
+        list[dict]
+            Raw API items with a prepended metadata dictionary used by
+            :meth:`normalise`.
+        """
         valid_observed_property = observed_property in MAPPED_OBSERVED_PROPERTY_UNITS.keys()
         if not valid_observed_property and not measure:
             raise ValueError(
@@ -196,6 +255,21 @@ class UKEACollector(BaseCollector):
         return all_items
 
     def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample] | Sequence[WaterLevelReading]:
+        """Convert raw UK EA readings into AquaScope schema objects.
+
+        Parameters
+        ----------
+        raw : list[dict]
+            Raw payload returned by :meth:`fetch_raw`, including a prepended
+            request-metadata dictionary.
+
+        Returns
+        -------
+        Sequence[WaterQualitySample] | Sequence[WaterLevelReading]
+            Normalised Water Quality or Water Level records. 
+            If the observed property requested does not map to a schema object,
+            or there is no raw data available, an empty list is returned.
+        """
         if not raw:
             return []
 
@@ -209,6 +283,21 @@ class UKEACollector(BaseCollector):
             return []
 
     def _normalise_water_quality_samples(self, raw: list[dict], observed_property: str) -> Sequence[WaterQualitySample]:
+        """Normalise raw items into Water Quality samples.
+
+        Parameters
+        ----------
+        raw : list[dict]
+            Raw payload returned by :meth:`fetch_raw`, including a prepended
+            request-metadata dictionary.
+        observed_property: str
+            The observed property collected within the raw data.
+
+        Returns
+        -------
+        Sequence[WaterQualitySample]
+            Normalised Water Quality samples.
+        """
         samples: list[WaterQualitySample] = []
         for item in raw:
             try:
@@ -247,6 +336,21 @@ class UKEACollector(BaseCollector):
 
 
     def _normalise_water_level_readings(self, raw: list[dict], observed_property: str) -> Sequence[WaterLevelReading]:
+        """Normalise raw items into Water Level samples.
+
+        Parameters
+        ----------
+        raw : list[dict]
+            Raw payload returned by :meth:`fetch_raw`, including a prepended
+            request-metadata dictionary.
+        observed_property: str
+            The observed property collected within the raw data.
+
+        Returns
+        -------
+        Sequence[WaterLevelReading]
+            Normalised Water Level readings.
+        """
         samples: list[WaterLevelReading] = []
         for item in raw:
             try:
@@ -284,6 +388,20 @@ class UKEACollector(BaseCollector):
         station: str | None = None,
         station_wiski_id: str | None = None,
     ) -> dict | None:
+        """Fetch station metadata for a given set of station identifiers.
+
+        Parameters
+        ----------
+        station : str | None
+            Station GUID to look up.
+        station_wiski_id : str | None
+            WISKI station identifier to look up.
+
+        Returns
+        -------
+        dict | None
+            The first matching station metadata item, if available.
+        """
         if not station and not station_wiski_id:
             return None
 
@@ -312,6 +430,18 @@ class UKEACollector(BaseCollector):
     def _extract_station_suid_from_measure_id(
         measure: str | None
     ) -> str | None:
+        """Extract the station SUID from a measure identifier.
+
+        Parameters
+        ----------
+        measure : str | None
+            Measure identifier from the UKEA API.
+
+        Returns
+        -------
+        str | None
+            The station SUID, which is the first 36 characters of any valid measure ID, if present.
+        """
         if not measure:
             return None
 
@@ -322,6 +452,18 @@ class UKEACollector(BaseCollector):
     def _extract_observed_property_from_measure_id(
         measure: str | None
     ) -> str | None:
+        """Extract the observed property from a measure identifier.
+
+        Parameters
+        ----------
+        measure : str | None
+            Measure identifier from the UK EA API.
+
+        Returns
+        -------
+        str | None
+            The observed-property token found after the station SUID, if present.
+        """
         if not measure:
             return None
 
@@ -332,7 +474,19 @@ class UKEACollector(BaseCollector):
 
     @staticmethod
     def _parse_bbox(value: str) -> tuple[float, float, float, float] | None:
-        """Convert a bbox string or sequence into a 4-float tuple."""
+        """Convert a bbox string into a 4-float tuple.
+
+        Parameters
+        ----------
+        value : str
+            Bounding box expressed as a comma-separated string in the form
+            ``"min-lon,min-lat,max-lon,max-lat"``.
+
+        Returns
+        -------
+        tuple[float, float, float, float] | None
+            Parsed bounds as a 4-tuple when valid, otherwise ``None``.
+        """
         if not isinstance(value, str):
             return None
 
@@ -349,6 +503,22 @@ class UKEACollector(BaseCollector):
 
     @staticmethod
     def _compute_date_range(min_date: str | None, max_date: str | None, days: int | None) -> tuple[str, str]:
+        """Compute a default or user-specified date range for the request.
+
+        Parameters
+        ----------
+        min_date : str | None
+            Inclusive lower bound for the requested date range.
+        max_date : str | None
+            Inclusive upper bound for the requested date range.
+        days : int | None
+            Relative lookback window in days when explicit dates are not supplied.
+
+        Returns
+        -------
+        tuple[str, str]
+            The computed start and end dates as ISO date strings.
+        """
         if days is not None and days < 0:
             raise ValueError("Provided days must be a positive number")
 
@@ -376,12 +546,23 @@ class UKEACollector(BaseCollector):
                 "Both min_date/max_date and days were provided. Ignoring days and using min_date/max_date range."
             )
 
-        logger.info(f"{min_date}, {max_date}")
-
         return min_date, max_date
 
     @staticmethod
     def _extract_reading_data(item: dict) -> tuple:
+        """Extract common reading fields from a raw UK EA item.
+
+        Parameters
+        ----------
+        item : dict
+            Raw reading item returned by the UK EA API.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the station SUID, value, sample datetime, and remark.
+            Raises ValueError if a station SUID, value or datetime is not provided.
+        """
         measure = item.get("measure", {})
         measure_id = measure.get("@id", None)
         measure_name = measure_id.rsplit("/", 1)[-1] if measure_id else None
@@ -408,6 +589,18 @@ class UKEACollector(BaseCollector):
 
     @staticmethod
     def _extract_water_quality_sample_metadata(station_meta: dict) -> tuple:
+        """Extract station metadata suitable for a water-quality sample.
+
+        Parameters
+        ----------
+        station_meta : dict
+            Station metadata from the UKEA API.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the station name, river name, and geolocation.
+        """
         station_name = station_meta.get("label", None)
         river = station_meta.get("riverName", None)
         lat = station_meta.get("lat", None)
@@ -423,6 +616,18 @@ class UKEACollector(BaseCollector):
 
     @staticmethod
     def _extract_water_level_reading_metadata(station_meta: dict) -> tuple:
+        """Extract station metadata suitable for a water-level reading.
+
+        Parameters
+        ----------
+        station_meta : dict
+            Station metadata from the UKEA API.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the station name and geolocation.
+        """
         station_name = station_meta.get("label", None)
         lat = station_meta.get("lat", None)
         lon = station_meta.get("long", None)
@@ -432,6 +637,20 @@ class UKEACollector(BaseCollector):
 
     @staticmethod
     def _build_location_from_lat_lon(lat: float, lon: float) -> tuple | None:
+        """Build a GeoLocation from latitude and longitude values.
+
+        Parameters
+        ----------
+        lat : float
+            Latitude value.
+        lon : float
+            Longitude value.
+
+        Returns
+        -------
+        tuple | None
+            A ``GeoLocation`` object when the coordinates are valid, otherwise ``None``.
+        """
         if lat is not None and lon is not None:
             try:
                 return GeoLocation(latitude=float(lat), longitude=float(lon))

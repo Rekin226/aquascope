@@ -103,7 +103,7 @@ class UKEACollector(BaseCollector):
             between co-located stations that share the same station SUID.
         bbox : str | None
             Bounding box for location-based queries.
-            Expressed as ``"min-lon,min-lat,max-lon,max-lat"``.
+            Expressed as ``"min-long,min-lat,max-long,max-lat"``.
         min_date : str | None
             Inclusive lower bound for the requested date range.
             If not accompanied by a max_date,
@@ -179,7 +179,7 @@ class UKEACollector(BaseCollector):
             if not bounding_box_limits:
                 raise ValueError(
                     'Invalid bbox string. Must be a string of 4 comma-separated floats '
-                    'in the form "min-lon,min-lat,max-lon,max-lat)". '
+                    'in the form "min-long,min-lat,max-long,max-lat)". '
                     'For example, "2.0,51.1,3.3,52.7"',
                 )
         else:
@@ -201,10 +201,10 @@ class UKEACollector(BaseCollector):
         if station_wiski_id:
             params["station.wiskiID"] = station_wiski_id
         if bounding_box_limits:
-            min_lon, min_lat, max_lon, max_lat = bounding_box_limits
-            params["mineq-lon"] = min_lon
+            min_long, min_lat, max_long, max_lat = bounding_box_limits
+            params["mineq-long"] = min_long
             params["mineq-lat"] = min_lat
-            params["maxeq-lon"] = max_lon
+            params["maxeq-long"] = max_long
             params["maxeq-lat"] = max_lat
         if min_date:
             params["mineq-date"] = min_date
@@ -480,7 +480,7 @@ class UKEACollector(BaseCollector):
         ----------
         value : str
             Bounding box expressed as a comma-separated string in the form
-            ``"min-lon,min-lat,max-lon,max-lat"``.
+            ``"min-long,min-lat,max-long,max-lat"``.
 
         Returns
         -------
@@ -495,11 +495,11 @@ class UKEACollector(BaseCollector):
             return None
 
         try:
-            min_lon, min_lat, max_lon, max_lat = (float(part) for part in parts)
+            min_long, min_lat, max_long, max_lat = (float(part) for part in parts)
         except (TypeError, ValueError):
             return None
 
-        return min_lon, min_lat, max_lon, max_lat
+        return min_long, min_lat, max_long, max_lat
 
     @staticmethod
     def _compute_date_range(min_date: str | None, max_date: str | None, days: int | None) -> tuple[str, str]:
@@ -604,10 +604,10 @@ class UKEACollector(BaseCollector):
         station_name = station_meta.get("label", None)
         river = station_meta.get("riverName", None)
         lat = station_meta.get("lat", None)
-        lon = station_meta.get("long", None)
-        if lat is not None and lon is not None:
-            location = UKEACollector._build_location_from_lat_lon(
-                float(lat), float(lon)
+        long = station_meta.get("long", None)
+        if lat is not None and long is not None:
+            location = UKEACollector._build_location_from_lat_long(
+                float(lat), float(long)
             )
         else:
             location = None
@@ -630,23 +630,23 @@ class UKEACollector(BaseCollector):
         """
         station_name = station_meta.get("label", None)
         lat = station_meta.get("lat", None)
-        lon = station_meta.get("long", None)
-        if lat is not None and lon is not None:
-            location = UKEACollector._build_location_from_lat_lon(float(lat), float(lon))
+        long = station_meta.get("long", None)
+        if lat is not None and long is not None:
+            location = UKEACollector._build_location_from_lat_long(float(lat), float(long))
         else:
             location = None
 
         return station_name, location
 
     @staticmethod
-    def _build_location_from_lat_lon(lat: float, lon: float) -> tuple | None:
+    def _build_location_from_lat_long(lat: float, long: float) -> tuple | None:
         """Build a GeoLocation from latitude and longitude values.
 
         Parameters
         ----------
         lat : float
             Latitude value.
-        lon : float
+        long : float
             Longitude value.
 
         Returns
@@ -654,9 +654,9 @@ class UKEACollector(BaseCollector):
         tuple | None
             A ``GeoLocation`` object when the coordinates are valid, otherwise ``None``.
         """
-        if lat is not None and lon is not None:
+        if lat is not None and long is not None:
             try:
-                return GeoLocation(latitude=float(lat), longitude=float(lon))
+                return GeoLocation(latitude=float(lat), longitude=float(long))
             except (ValueError, TypeError):
                 return None
 

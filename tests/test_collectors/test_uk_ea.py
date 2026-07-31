@@ -110,15 +110,15 @@ def test_fetch_raw_with_max_items_none():
     assert len(raw) >= 2
 
 
-def test_build_location_from_lat_lon_and_invalid():
-    loc = UKEACollector._build_location_from_lat_lon(51.5, -0.12)
+def test_build_location_from_lat_long_and_invalid():
+    loc = UKEACollector._build_location_from_lat_long(51.5, -0.12)
     assert isinstance(loc, GeoLocation)
     assert loc.latitude == pytest.approx(51.5)
     assert loc.longitude == pytest.approx(-0.12)
 
     # Non-numeric values produce None
-    assert UKEACollector._build_location_from_lat_lon("not-a-number", "x") is None
-    assert UKEACollector._build_location_from_lat_lon("not-a-number", 1) is None
+    assert UKEACollector._build_location_from_lat_long("not-a-number", "x") is None
+    assert UKEACollector._build_location_from_lat_long("not-a-number", 1) is None
 
 
 def test_extract_water_quality_and_water_level_metadata():

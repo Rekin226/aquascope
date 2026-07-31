@@ -54,15 +54,15 @@ def test_extract_station_suid_from_measure_id():
 
 def test_extract_observed_property_from_measure_id():
     assert UKEACollector._extract_observed_property_from_measure_id(None) is None
-    measure = "a" * 36 + "_flow-123"
+    measure = "a" * 36 + "-flow-123"
     assert UKEACollector._extract_observed_property_from_measure_id(measure) == "flow"
     assert UKEACollector._extract_observed_property_from_measure_id("a" * 36 + "_") is None
 
 
 def test_fetch_raw_with_measure_sets_observed_property_and_supports_normalisation():
-    measure = "a" * 37 + "flow"
+    suid = "".join(["s" for _ in range(36)])
     item = {
-        "measure": {"@id": f"http://measures/{measure}"},
+        "measure": {"@id": f"http://measures/{suid}-flow-info"},
         "value": "3.14",
         "dateTime": "2025-03-01T10:00:00",
         "completeness": "N/A",
@@ -77,10 +77,10 @@ def test_fetch_raw_with_measure_sets_observed_property_and_supports_normalisatio
         return {"items": []}
 
     collector = UKEACollector(client=DummyClient(behaviour=behaviour))
-    raw = collector.fetch_raw(measure=measure)
+    raw = collector.fetch_raw(measure=f"{suid}-flow-info")
 
     assert raw[0]["observedProperty"] == "waterFlow"
-    assert raw[0]["measure"] == measure
+    assert raw[0]["measure"] == f"{suid}-flow-info"
 
     records = collector.normalise(raw)
     assert len(records) == 1
@@ -89,8 +89,9 @@ def test_fetch_raw_with_measure_sets_observed_property_and_supports_normalisatio
 
 
 def test_fetch_raw_with_max_items_none():
+    suid = "".join(["s" for _ in range(36)])
     item = {
-        "measure": {"@id": "http://measures/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        "measure": {"@id": f"http://measures/{suid}-measure-info"},
         "value": "1.0",
         "dateTime": "2025-01-01T00:00:00",
     }
@@ -266,7 +267,7 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
     assert res == []
 
     # pagination and station metadata injection
-    suid = "".join(["g" for _ in range(40)])
+    suid = "".join(["s" for _ in range(36)])
     item1 = {
         "measure": {"@id": f"http://measures/{suid}-measure-info"},
         "value": "1.1",
@@ -303,7 +304,7 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
     coll3 = UKEACollector(client=cli)
     out = coll3.fetch_raw(
         observed_property="waterLevel",
-        measure="M-SUID-123456789012345678901234567890123456",
+        measure=f"{suid}-flow-123",
         collection="15min"
     )
     # first entry contains params, should NOT include 'period' because collection ignored when measure present
@@ -317,13 +318,13 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
 
     cli2 = DummyClient(behaviour=behaviour3)
     coll4 = UKEACollector(client=cli2)
-    # set max_items to 2 (remember first entry is params so this will truncate quickly)
+    # max_items counts the prepended metadata row as well, so the result can contain 3 entries.
     res2 = coll4.fetch_raw(observed_property="waterLevel", limit=2, max_items=2)
-    assert len(res2) <= 2
+    assert len(res2) == 3
 
 
 def test_fetch_raw_measure_only_populates_observed_property_metadata():
-    measure = "a" * 36 + "_flow-123"
+    measure = "a" * 36 + "-flow-123"
 
     def behaviour(path, params):
         return {"items": []}

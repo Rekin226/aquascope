@@ -328,7 +328,7 @@ class UKEACollector(BaseCollector):
         # The observedProperty can be extracted from the measure's id. It appears after the station SUID.
         measure_without_suid = measure[37:]
         observed_property = measure_without_suid.split("-", 1)[0]
-        return observed_property or None 
+        return observed_property or None
 
     @staticmethod
     def _parse_bbox(value: str) -> tuple[float, float, float, float] | None:

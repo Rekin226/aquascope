@@ -631,7 +631,10 @@ class UKEACollector(BaseCollector):
         station_name = station_meta.get("label", None)
         lat = station_meta.get("lat", None)
         lon = station_meta.get("long", None)
-        location = UKEACollector._build_location_from_lat_lon(float(lat), float(lon)) if lat and lon else None
+        if lat is not None and lon is not None:
+            location = UKEACollector._build_location_from_lat_lon(float(lat), float(lon))
+        else:
+            location = None
 
         return station_name, location
 

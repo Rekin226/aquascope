@@ -135,6 +135,14 @@ def test_extract_water_quality_and_water_level_metadata():
     assert stn_name2 == "Stn B"
     assert isinstance(location2, GeoLocation)
 
+    # Zero-valued coordinates should still build a location.
+    zero_coords_metadata = {"label": "Zero", "lat": 0, "long": 0}
+    stn_name3, location3 = UKEACollector._extract_water_level_reading_metadata(zero_coords_metadata)
+    assert stn_name3 == "Zero"
+    assert isinstance(location3, GeoLocation)
+    assert location3.latitude == pytest.approx(0.0)
+    assert location3.longitude == pytest.approx(0.0)
+
     # Empty metadata
     empty_metadata = {}
     stn_name3, river3, loc3 = UKEACollector._extract_water_quality_sample_metadata(empty_metadata)

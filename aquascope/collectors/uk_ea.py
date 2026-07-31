@@ -25,6 +25,12 @@ MAPPED_OBSERVED_PROPERTY_UNITS = {
     "rainfall": "mm",
     "groundwaterLevel": "mAOD (metres Above Ordnance Datum)"
 }
+MAPPED_OBSERVED_PROPERTY_MEASURE_CODE = {
+    "flow": "waterFlow",
+    "level": "waterLevel",
+    "rainfall": "rainfall",
+    "gw": "groundwaterLevel"
+}
 COLLECTION_PERIOD_VALUES = {
     "15min": 900,
     "daily": 86400
@@ -72,13 +78,37 @@ class UKEACollector(BaseCollector):
                 f"Alternatively, you can pass an exact measure."
             )
 
+        if measure:
+            if observed_property:
+                logger.warning(
+                    "Both measure and observedProperty provided. "
+                    "Ignoring observedProperty and using the exact measure provided."
+                )
+            observed_property_code = UKEACollector._extract_observed_property_from_measure_id(measure)
+            observed_property = MAPPED_OBSERVED_PROPERTY_MEASURE_CODE.get(observed_property_code, None)
+            if observed_property is None:
+                    raise ValueError(
+                        f"Invalid measure: {measure}. "
+                        "Could not determine a valid observedProperty."
+                    )
+
+        if measure and (station or station_wiski_id):
+            logger.warning(
+                "Both measure and station id provided. "
+                "Ignoring station id and using the exact measure provided.")
+            station = None
+            station_wiski_id = None
+
         if measure and collection:
-            logger.warning("Both measure and collection provided. Ignoring collection and using the exact measure provided")
+            logger.warning(
+                "Both measure and collection provided. "
+                "Ignoring collection and using the exact measure provided"
+            )
             collection = None
 
         if collection:
             period = COLLECTION_PERIOD_VALUES.get(collection, None)
-            if period == None:
+            if period is None:
                 raise ValueError(
                     "Invalid collection period."
                     "One of the following collection values must be passed: "
@@ -128,13 +158,14 @@ class UKEACollector(BaseCollector):
             station_id = station or UKEACollector._extract_station_suid_from_measure_id(measure)
             if station_id:
                 station_meta = self._fetch_station_metadata(
-                    station=station_id if station else None,
+                    station=station_id,
                     station_wiski_id=station_wiski_id,
                 )
 
         all_items: list[dict] = []
         all_items.append(params) # Metadata for use in normalise()
-        max_items += 1 # Increment max_items to account for prepended metadata
+        if max_items:
+            max_items += 1 # Increment max_items to account for prepended metadata
         offset = 0
 
         while True:
@@ -288,6 +319,18 @@ class UKEACollector(BaseCollector):
         return measure[:36]
 
     @staticmethod
+    def _extract_observed_property_from_measure_id(
+        measure: str | None
+    ) -> str | None:
+        if not measure:
+            return None
+
+        # The observedProperty can be extracted from the measure's id. It appears after the station SUID.
+        measure_without_suid = measure[37:]
+        observed_property = measure_without_suid.split("-", 1)[0]
+        return observed_property or None 
+
+    @staticmethod
     def _parse_bbox(value: str) -> tuple[float, float, float, float] | None:
         """Convert a bbox string or sequence into a 4-float tuple."""
         if not isinstance(value, str):
@@ -306,6 +349,9 @@ class UKEACollector(BaseCollector):
 
     @staticmethod
     def _compute_date_range(min_date: str | None, max_date: str | None, days: int | None) -> tuple[str, str]:
+        if days is not None and days < 0:
+            raise ValueError("Provided days must be a positive number")
+
         # If min_date and max_date not provided, set date range to the last `days` days (default 30)
         if min_date is None and max_date is None:
             end = date.today()

@@ -95,6 +95,19 @@ class TestSPIModel:
         assert SPIModel._categorise(0.5) == "normal"
         assert SPIModel._categorise(2.5) == "extremely_wet"
 
+    def test_compute_spi_delegates_to_canonical_implementation(self):
+        from aquascope.climate.indices import standardized_precipitation_index
+        from aquascope.models.statistical import SPIModel
+
+        idx = pd.date_range("1990-01-01", periods=30 * 12, freq="MS")
+        rng = np.random.default_rng(42)
+        precipitation = pd.Series(rng.gamma(shape=2.0, scale=40.0, size=len(idx)), index=idx)
+
+        expected = standardized_precipitation_index(precipitation, scale=3).reindex(idx).round(3)
+        actual = SPIModel._compute_spi(precipitation, scale=3)
+
+        pd.testing.assert_series_equal(actual, expected)
+
 
 class TestRandomForestModel:
     def test_fit_predict(self):

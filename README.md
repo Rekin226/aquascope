@@ -32,7 +32,7 @@
 
 ---
 
-AquaScope unifies **23 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top — from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements** — wrapped in an AI engine that recommends and auto-executes research methodologies.
+AquaScope unifies **24 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top — from **Bulletin 17C flood frequency** to **FAO-56 crop water requirements** — wrapped in an AI engine that scores **26 research methodologies** against your dataset and auto-executes **26 analysis pipelines**. Validated against the CAMELS benchmark with 1,000+ tests.
 
 ---
 
@@ -268,7 +268,7 @@ Run `aquascope --help` for the full command list.
 23 data collectors spanning four regions (highlights below, full list in the [docs](docs/data_sources.md)):
 
 - 🌎 **Americas** — USGS (streamflow + WQ), Water Quality Portal (400+ agencies), CAMELS-CL (Chile streamflow)
-- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau
+- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau, Germany PEGELONLINE
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / Civil IoT / DataGov, Japan MLIT, Korea WAMIS, India WRIS
 - 🌐 **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo, FAO AQUASTAT, FAO WaPOR, GRDC (river discharge)
 
@@ -351,11 +351,15 @@ Thanks to these wonderful people who make AquaScope possible ([emoji key](CONTRI
       <td align="center" valign="top" width="20%"><a href="https://github.com/laishettikarthik-tech"><img src="https://github.com/laishettikarthik-tech.png?s=100" width="100px;" alt="Karthik Laishetti"/><br /><sub><b>Karthik Laishetti</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=laishettikarthik-tech" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/issues?q=author%3Alaishettikarthik-tech" title="Bug reports">🐛</a></td>
     </tr>
     <tr>
-      <td align="center" valign="top" width="20%"><a href="https://github.com/adjenk"><img src="https://github.com/adjenk.png?s=100" width="100px;" alt="Adam Jenkins"/><br /><sub><b>Adam Jenkins</b></sub></a><br /><a href="#plugin-adjenk" title="Plugin/utility libraries">🔌</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/adjenk"><img src="https://github.com/adjenk.png?s=100" width="100px;" alt="Adam Jenkins"/><br /><sub><b>Adam Jenkins</b></sub></a><br /><a href="#plugin-adjenk" title="Plugin/utility libraries">🔌</a> <a href="https://github.com/Rekin226/aquascope/commits?author=adjenk" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=adjenk" title="Tests">⚠️</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/widjajs"><img src="https://github.com/widjajs.png?s=100" width="100px;" alt="Steven Widjaja"/><br /><sub><b>Steven Widjaja</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=widjajs" title="Tests">⚠️</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/sairajkasam"><img src="https://github.com/sairajkasam.png?s=100" width="100px;" alt="Sai Raj Kasam"/><br /><sub><b>Sai Raj Kasam</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=sairajkasam" title="Code">💻</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/safiashaik04"><img src="https://github.com/safiashaik04.png?s=100" width="100px;" alt="safiashaik04"/><br /><sub><b>safiashaik04</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=safiashaik04" title="Code">💻</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/navaneethsankar07"><img src="https://github.com/navaneethsankar07.png?s=100" width="100px;" alt="Navaneeth Sankar"/><br /><sub><b>Navaneeth Sankar</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=navaneethsankar07" title="Documentation">📖</a> <a href="https://github.com/Rekin226/aquascope/commits?author=navaneethsankar07" title="Tests">⚠️</a></td>
+    </tr>
+    <tr>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/taran-dev4u"><img src="https://avatars.githubusercontent.com/u/78680216?v=4?s=100" width="100px;" alt="Taran"/><br /><sub><b>Taran</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=taran-dev4u" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=taran-dev4u" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/aobaruwa"><img src="https://avatars.githubusercontent.com/u/28014016?v=4?s=100" width="100px;" alt="Ahmed Baruwa"/><br /><sub><b>Ahmed Baruwa</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=aobaruwa" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=aobaruwa" title="Tests">⚠️</a></td>
     </tr>
   </tbody>
 </table>

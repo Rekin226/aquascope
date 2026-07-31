@@ -41,6 +41,7 @@ class DataSource(str, Enum):
     CAMELS_CL = "camels_cl"
     IRELAND_OPW = "ireland_opw"
 
+    PEGELONLINE = "pegelonline"
 
 class GeoLocation(BaseModel):
     """Geographic coordinates for a monitoring station or sample point."""

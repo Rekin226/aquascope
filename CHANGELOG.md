@@ -5,6 +5,15 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
+- **Germany PEGELONLINE collector** (`collectors/pegelonline.py`): recent water
+  level and discharge observations from federal waterway gauges, emitted as
+  `WaterLevelReading` and `StreamflowReading`. Supports station UUIDs, W/Q
+  selection, CLI collection, and the upstream 31-day history limit. No API key
+  required.
+- **Canonical SPI drought classification** (`climate.indices.drought_class`):
+  McKee et al. category labels with explicit boundary and missing-value
+  handling. `SPIModel` now delegates SPI calculation and classification to the
+  climate-index implementation instead of maintaining a divergent gamma fit.
 - **Dashboard 2.0** (`aquascope/dashboard/`): the Streamlit dashboard was rebuilt
   from a 2,100-line monolith into a multipage workspace app (`st.navigation`)
   with a shared dataset flowing through every page.

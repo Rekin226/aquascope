@@ -76,6 +76,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         JapanMLITCollector,
         KoreaWAMISCollector,
         OpenMeteoCollector,
+        PegelonlineCollector,
         SDG6Collector,
         TaiwanCivilIoTCollector,
         TaiwanDataGovCollector,
@@ -114,6 +115,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
         "grdc": lambda: GRDCCollector(),
         "camels_cl": lambda: CAMELSCLCollector(),
+        "pegelonline": lambda: PegelonlineCollector(),
     }
 
     if source not in collector_map:
@@ -177,6 +179,18 @@ def cmd_collect(args: argparse.Namespace) -> None:
     if source == "camels_cl":
         if args.station_ids:
             kwargs["station_ids"] = [s.strip() for s in args.station_ids.split(",") if s.strip()]
+        if args.start_date:
+            kwargs["start"] = args.start_date
+        if args.end_date:
+            kwargs["end"] = args.end_date
+    if source == "pegelonline":
+        if not args.station:
+            logger.error("PEGELONLINE requires --station with a station UUID.")
+            sys.exit(1)
+        kwargs["station_id"] = args.station
+        kwargs["days"] = args.days
+        if args.timeseries:
+            kwargs["timeseries"] = args.timeseries
         if args.start_date:
             kwargs["start"] = args.start_date
         if args.end_date:
@@ -456,6 +470,7 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
             "Water levels from waterlevel.ie",
             "[https://waterlevel.ie](https://waterlevel.ie)",
         ),
+        "pegelonline": ("PEGELONLINE", "Germany", "River water level and discharge", "https://www.pegelonline.wsv.de"),
     }
 
     for src in DataSource:
@@ -1009,33 +1024,37 @@ def main() -> None:
         "--source",
         required=True,
         choices=[
-            "taiwan_moenv",
-            "taiwan_wra_level",
-            "taiwan_wra_reservoir",
-            "taiwan_wra_fhy",
-            "taiwan_wra_iot",
-            "taiwan_datagov",
-            "usgs",
-            "sdg6",
-            "gemstat",
-            "aquastat",
-            "taiwan_civil_iot",
-            "wqp",
-            "openmeteo",
-            "copernicus",
-            "wapor",
-            "eu_wfd",
-            "hubeau_hydrometrie",
-            "japan_mlit",
-            "korea_wamis",
-            "grdc",
-            "camels_cl",
-            "ireland_opw",
-        ],
-        help="Data source to collect from",
+
+choices=[
+        "taiwan_moenv",
+        "taiwan_wra_level",
+        "taiwan_wra_reservoir",
+        "taiwan_wra_fhy",
+        "taiwan_wra_iot",
+        "taiwan_datagov",
+        "usgs",
+        "sdg6",
+        "gemstat",
+        "aquastat",
+        "taiwan_civil_iot",
+        "wqp",
+        "openmeteo",
+        "copernicus",
+        "wapor",
+        "eu_wfd",
+        "hubeau_hydrometrie",
+        "japan_mlit",
+        "korea_wamis",
+        "grdc",
+        "camels_cl",
+        "ireland_opw",
+        "pegelonline",
+    ],
+    help="Data source to collect from",
+
     )
     p_collect.add_argument("--api-key", default=None, help="API key (if required)")
-    p_collect.add_argument("--days", type=int, default=30, help="Number of days (USGS)")
+    p_collect.add_argument("--days", type=int, default=30, help="Number of days (USGS/PEGELONLINE; PEGELONLINE max: 31)")
     p_collect.add_argument("--country", default="all", help="ISO3 country code or 'all' (AQUASTAT)")
     p_collect.add_argument("--countries", default=None, help="ISO3 country codes, comma-separated (SDG6)")
     p_collect.add_argument("--state", default=None, help="US state code e.g. US:06 (WQP)")
@@ -1054,6 +1073,11 @@ def main() -> None:
     p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")
     p_collect.add_argument("--year", type=int, default=None, help="Year filter (EU WFD)")
     p_collect.add_argument("--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl)")
+    p_collect.add_argument("--station", default=None, help="Station UUID (PEGELONLINE)")
+    p_collect.add_argument(
+        "--timeseries", default=None, choices=["W", "Q"],
+        help="PEGELONLINE timeseries: W for water level or Q for discharge (default: both)",
+    )
     p_collect.add_argument(
         "--water-body-type",
         default=None,

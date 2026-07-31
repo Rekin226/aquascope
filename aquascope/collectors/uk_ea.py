@@ -89,7 +89,7 @@ class UKEACollector(BaseCollector):
             Frequency of data collection. Supported values are ``"15min"`` and
             ``"daily"``.
         observed_property : str | None
-            Normalised observed property name. Supported values: 
+            Normalised observed property name. Supported values:
             ``"waterFlow"``, ``"waterLevel"``,
             ``"rainfall"``, ``"groundwaterLevel"``.
         measure : str | None
@@ -266,7 +266,7 @@ class UKEACollector(BaseCollector):
         Returns
         -------
         Sequence[WaterQualitySample] | Sequence[WaterLevelReading]
-            Normalised Water Quality or Water Level records. 
+            Normalised Water Quality or Water Level records.
             If the observed property requested does not map to a schema object,
             or there is no raw data available, an empty list is returned.
         """

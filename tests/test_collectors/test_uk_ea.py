@@ -98,7 +98,9 @@ def test_fetch_raw_with_max_items_none():
     def behaviour(path, params):
         if path == "id/stations.json":
             return {"items": []}
-        return {"items": [item]}
+        if params.get("_offset", 0) == 0:
+            return {"items": [item]}
+        return {"items": []}
 
     collector = UKEACollector(client=DummyClient(behaviour=behaviour))
     raw = collector.fetch_raw(observed_property="waterLevel", max_items=None, limit=1)

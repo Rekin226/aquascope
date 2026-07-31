@@ -52,6 +52,61 @@ def test_extract_station_suid_from_measure_id():
     assert UKEACollector._extract_station_suid_from_measure_id(measure) == measure[:36]
 
 
+def test_extract_observed_property_from_measure_id():
+    assert UKEACollector._extract_observed_property_from_measure_id(None) is None
+    measure = "a" * 36 + "_flow-123"
+    assert UKEACollector._extract_observed_property_from_measure_id(measure) == "flow"
+    assert UKEACollector._extract_observed_property_from_measure_id("a" * 36 + "_") is None
+
+
+def test_fetch_raw_with_measure_sets_observed_property_and_supports_normalisation():
+    measure = "a" * 37 + "flow"
+    item = {
+        "measure": {"@id": f"http://measures/{measure}"},
+        "value": "3.14",
+        "dateTime": "2025-03-01T10:00:00",
+        "completeness": "N/A",
+        "quality": "Good",
+    }
+
+    def behaviour(path, params):
+        if path == "id/stations.json":
+            return {"items": []}
+        if params.get("_offset", 0) == 0:
+            return {"items": [item]}
+        return {"items": []}
+
+    collector = UKEACollector(client=DummyClient(behaviour=behaviour))
+    raw = collector.fetch_raw(measure=measure)
+
+    assert raw[0]["observedProperty"] == "waterFlow"
+    assert raw[0]["measure"] == measure
+
+    records = collector.normalise(raw)
+    assert len(records) == 1
+    assert isinstance(records[0], WaterQualitySample)
+    assert records[0].parameter == "waterFlow"
+
+
+def test_fetch_raw_with_max_items_none():
+    item = {
+        "measure": {"@id": "http://measures/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        "value": "1.0",
+        "dateTime": "2025-01-01T00:00:00",
+    }
+
+    def behaviour(path, params):
+        if path == "id/stations.json":
+            return {"items": []}
+        return {"items": [item]}
+
+    collector = UKEACollector(client=DummyClient(behaviour=behaviour))
+    raw = collector.fetch_raw(observed_property="waterLevel", max_items=None, limit=1)
+
+    assert raw[0]["observedProperty"] == "waterLevel"
+    assert len(raw) >= 2
+
+
 def test_build_location_from_lat_lon_and_invalid():
     loc = UKEACollector._build_location_from_lat_lon(51.5, -0.12)
     assert isinstance(loc, GeoLocation)
@@ -263,6 +318,49 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
     # set max_items to 2 (remember first entry is params so this will truncate quickly)
     res2 = coll4.fetch_raw(observed_property="waterLevel", limit=2, max_items=2)
     assert len(res2) <= 2
+
+
+def test_fetch_raw_measure_only_populates_observed_property_metadata():
+    measure = "a" * 36 + "_flow-123"
+
+    def behaviour(path, params):
+        return {"items": []}
+
+    client = DummyClient(behaviour=behaviour)
+    coll = UKEACollector(client=client)
+    out = coll.fetch_raw(measure=measure)
+
+    assert len(out) == 1
+    assert out[0]["measure"] == measure
+    assert out[0]["observedProperty"] == "waterFlow"
+
+
+def test_fetch_raw_max_items_none_returns_all_items():
+    suid = "".join(["g" for _ in range(40)])
+    item1 = {
+        "measure": {"@id": f"http://measures/{suid}-measure-info"},
+        "value": "1.1",
+        "dateTime": "2025-01-01T01:00:00"
+    }
+    item2 = {
+        "measure": {"@id": f"http://measures/{suid}-measure-info"},
+        "value": "2.2",
+        "dateTime": "2025-01-02T01:00:00"
+    }
+
+    def behaviour(path, params):
+        if params.get("_offset", 0) == 0:
+            return {"items": [item1, item2]}
+        return {"items": []}
+
+    client = DummyClient(behaviour=behaviour)
+    coll = UKEACollector(client=client)
+    out = coll.fetch_raw(observed_property="waterLevel", limit=2, max_items=None)
+
+    assert len(out) == 3
+    assert out[0]["_limit"] == 2
+    assert out[1] == item1
+    assert out[2] == item2
 
 
 def test_normalise_water_quality_and_level_and_skipping():

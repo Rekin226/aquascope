@@ -4,7 +4,7 @@ The roadmap reflects what's shipped, what's in-flight, and what's planned. Open 
 
 ## Shipped
 
-- [x] 22 data source collectors (Taiwan ×7, USA ×2, Global ×5, FAO ×2, EU, France, Japan, Korea, India, Chile)
+- [x] 24 data source collectors (Taiwan ×7, USA ×2, Global ×5, FAO ×2, EU, France, Japan, Korea, India, Chile, UK)
 - [x] Rule-based + LLM methodology recommender (26 methods, OpenAI / Groq / HuggingFace / Ollama)
 - [x] 7 auto-executable analysis pipelines
 - [x] GR4J conceptual rainfall-runoff model + auto-calibration (NSE / KGE / log-NSE)

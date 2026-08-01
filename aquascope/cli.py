@@ -73,6 +73,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         GEMStatCollector,
         GRDCCollector,
         HubeauHydrometrieCollector,
+        IrelandOPWCollector,
         JapanMLITCollector,
         KoreaWAMISCollector,
         OpenMeteoCollector,
@@ -112,6 +113,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "japan_mlit": lambda: JapanMLITCollector(),
         "korea_wamis": lambda: KoreaWAMISCollector(),
         "india_wris": lambda: IndiaWRISCollector(),
+        "ireland_opw": lambda: IrelandOPWCollector(),
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
         "grdc": lambda: GRDCCollector(),
         "camels_cl": lambda: CAMELSCLCollector(),
@@ -195,6 +197,8 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["start"] = args.start_date
         if args.end_date:
             kwargs["end"] = args.end_date
+    if source == "ireland_opw" and args.max_stations:
+        kwargs["max_stations"] = args.max_stations
     records = collector.collect(**kwargs)
     if not records:
         logger.warning("No records collected.")
@@ -1051,6 +1055,7 @@ def main() -> None:
         help="Data source to collect from",
     )
     p_collect.add_argument("--api-key", default=None, help="API key (if required)")
+    p_collect.add_argument("--max-stations", type=int, default=None, help="Cap stations to fetch (Ireland OPW)")
     p_collect.add_argument("--days", type=int, default=30, help="Number of days (USGS/PEGELONLINE; PEGELONLINE max: 31)")
     p_collect.add_argument("--country", default="all", help="ISO3 country code or 'all' (AQUASTAT)")
     p_collect.add_argument("--countries", default=None, help="ISO3 country codes, comma-separated (SDG6)")

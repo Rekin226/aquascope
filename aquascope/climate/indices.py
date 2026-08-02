@@ -505,3 +505,35 @@ def standardized_precipitation_index(
         cdf = np.clip(cdf, 1e-6, 1 - 1e-6)
         spi.loc[idx] = stats.norm.ppf(cdf)
     return spi
+
+
+def drought_class(spi_value: float) -> str:
+    """Classify an SPI value using the McKee et al. (1993) categories.
+
+    Parameters
+    ----------
+    spi_value:
+        Standardized Precipitation Index value.
+
+    Returns
+    -------
+    str
+        One of ``extremely_wet``, ``very_wet``, ``moderately_wet``,
+        ``normal``, ``moderately_dry``, ``severely_dry``,
+        ``extremely_dry``, or ``unknown`` for a missing value.
+    """
+    if pd.isna(spi_value):
+        return "unknown"
+    if spi_value >= 2.0:
+        return "extremely_wet"
+    if spi_value >= 1.5:
+        return "very_wet"
+    if spi_value >= 1.0:
+        return "moderately_wet"
+    if spi_value > -1.0:
+        return "normal"
+    if spi_value > -1.5:
+        return "moderately_dry"
+    if spi_value > -2.0:
+        return "severely_dry"
+    return "extremely_dry"

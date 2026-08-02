@@ -116,6 +116,7 @@ def plot_hydrograph(
     title: str = "Hydrograph",
     figsize: tuple[float, float] = WIDE_FIGSIZE,
     save_path: str | None = None,
+    backend: str = "matplotlib",
 ) -> Figure:
     """Plot a hydrograph with optional baseflow and precipitation overlay.
 
@@ -135,11 +136,29 @@ def plot_hydrograph(
         Figure size.
     save_path:
         Optional save path.
+    backend:
+        ``"matplotlib"`` (default) returns a static matplotlib Figure;
+        ``"plotly"`` returns an interactive ``plotly.graph_objects.Figure``
+        (requires the ``viz`` extra). Any other value raises ``ValueError``.
 
     Returns
     -------
-    The matplotlib Figure.
+    The hydrograph figure: a matplotlib Figure by default, or a Plotly
+    Figure when ``backend="plotly"``.
     """
+
+    if backend == "plotly":
+        return _plotly_hydrograph(
+            discharge,
+            total_col=total_col,
+            baseflow_col=baseflow_col,
+            precip_col=precip_col,
+            title=title,
+            save_path=save_path,
+        )
+    elif backend != "matplotlib":
+        raise ValueError(f"Unknown backend {backend!r}; expected 'matplotlib' or 'plotly'.")
+
     import matplotlib.pyplot as plt
 
     apply_aqua_style()
@@ -179,6 +198,92 @@ def plot_hydrograph(
     _save_or_show(fig, save_path)
     return fig
 
+
+def _plotly_hydrograph(discharge, *, total_col, baseflow_col, precip_col, title, save_path):
+    try:
+        import plotly.graph_objects as go
+    except ImportError as exc:
+        raise ImportError(
+            "The 'plotly' backend requires the plotly package. "
+            "Install it with: pip install aquascope[viz]"
+        ) from exc
+
+    from plotly.subplots import make_subplots
+
+    has_precip = precip_col and precip_col in discharge.columns
+    fig = make_subplots(specs=[[{"secondary_y": has_precip}]])
+
+    if baseflow_col and baseflow_col in discharge.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=discharge.index,
+                y=discharge[baseflow_col],
+                name="Baseflow",
+                mode="lines",
+                line=dict(width=0.5, color=AQUA_PALETTE["secondary"]),
+                fill="tozeroy",
+                fillcolor=AQUA_PALETTE["secondary"],
+                opacity=0.3,
+            ),
+            secondary_y=False,
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=discharge.index,
+                y=discharge[total_col],
+                name="Quickflow",
+                mode="lines",
+                line=dict(width=0.5, color=AQUA_PALETTE["warning"]),
+                fill="tonexty",
+                fillcolor=AQUA_PALETTE["warning"],
+                opacity=0.2,
+            ),
+            secondary_y=False,
+        )
+
+    fig.add_trace(
+        go.Scatter(
+            x=discharge.index,
+            y=discharge[total_col],
+            name="Total Q",
+            mode="lines",
+            line=dict(width=1.5, color=AQUA_PALETTE["primary"]),
+        ),
+        secondary_y=False,
+    )
+
+    if has_precip:
+        fig.add_trace(
+            go.Bar(
+                x=discharge.index,
+                y=discharge[precip_col],
+                name="Precip",
+                marker_color=AQUA_PALETTE["accent"],
+                opacity=0.5,
+            ),
+            secondary_y=True,
+        )
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Date",
+        template="plotly_white",
+    )
+
+    fig.update_yaxes(title_text="Discharge (m³/s)", secondary_y=False)
+
+    if has_precip:
+        fig.update_yaxes(
+            title_text="Precipitation (mm)",
+            autorange="reversed",
+            secondary_y=True,
+        )
+
+    if save_path:
+        fig.write_html(save_path)
+
+    return fig
 
 # ── SPI Drought Timeline ──────────────────────────────────────────────
 

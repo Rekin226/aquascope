@@ -16,6 +16,8 @@ Generated plots:
 9. SPI drought timeline
 10. Return period plot
 11. Station scatter map
+12. Residuals
+13. Interactive hydrograph (plotly)
 """
 
 import os
@@ -146,5 +148,13 @@ print("  ✓ 11_station_scatter.png")
 
 plot_residuals(obs, pred, save_path=str(OUT / "12_residuals.png"))
 print("  ✓ 12_residuals.png")
+
+# ── 13. Interactive Hydrograph (Plotly) ─────────────────────────────────
+
+try:
+    plot_hydrograph(hydro_df, backend="plotly", save_path=str(OUT / "13_hydrograph_interactive.html"))
+    print("  ✓ 13_hydrograph_interactive.html")
+except ImportError:
+    print("  ⊘ 13_hydrograph_interactive.html (skipped — install aquascope[viz] for plotly)")
 
 print(f"\n✓ Gallery complete!  {len(os.listdir(OUT))} plots saved to {OUT}/")

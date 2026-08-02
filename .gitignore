@@ -20,6 +20,7 @@ env/
 
 # Data cache (local only)
 data/cache/
+data/gallery/
 data/raw/
 data/processed/
 aquascope/collectors/data/

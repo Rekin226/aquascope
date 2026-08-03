@@ -40,6 +40,8 @@ class DataSource(str, Enum):
     HUBEAU = "france_hubeau"
     GRDC = "grdc"
     CAMELS_CL = "camels_cl"
+    IRELAND_OPW = "ireland_opw"
+
     PEGELONLINE = "pegelonline"
 
 class GeoLocation(BaseModel):

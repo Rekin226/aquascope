@@ -115,7 +115,6 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "korea_wamis": lambda: KoreaWAMISCollector(),
         "india_wris": lambda: IndiaWRISCollector(),
         "ireland_opw": lambda: IrelandOPWCollector(),
-        "ireland_opw": lambda: IrelandOPWCollector(),
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
         "grdc": lambda: GRDCCollector(),
         "camels_cl": lambda: CAMELSCLCollector(),
@@ -1047,45 +1046,27 @@ def main() -> None:
         "--source",
         required=True,
         choices=[
-            "taiwan_moenv",
-           
-            "taiwan_wra_level",
-           
+            "taiwan_moenv", 
+            "taiwan_wra_level",  
             "taiwan_wra_reservoir",
-            "taiwan_wra_fhy",
-           
-            "taiwan_wra_iot",
-           
+            "taiwan_wra_fhy",        
+            "taiwan_wra_iot",         
             "taiwan_datagov",
-            "usgs",
-           
-            "sdg6",
-           
-            "gemstat",
-           
-            "aquastat",
-           
-            "taiwan_civil_iot",
-           
+            "usgs",        
+            "sdg6",          
+            "gemstat",        
+            "aquastat",        
+            "taiwan_civil_iot",         
             "wqp",
-            "openmeteo",
-           
-            "copernicus",
-           
-            "wapor",
-           
-            "eu_wfd",
-           
+            "openmeteo",         
+            "copernicus",        
+            "wapor",        
+            "eu_wfd",         
             "hubeau_hydrometrie",
-            "japan_mlit",
-           
-            "korea_wamis",
-           
-            "grdc",
-           
+            "japan_mlit",         
+            "korea_wamis",         
+            "grdc",       
             "camels_cl",
-            "ireland_opw",
-           
             "noaa_nwps"
             "ireland_opw",
             "pegelonline",

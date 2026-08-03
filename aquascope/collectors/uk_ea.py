@@ -531,14 +531,14 @@ class UKEACollector(BaseCollector):
 
         # If only min_date is provided, set max_date to `days` days (default 30) after min_date (or, if that exceeds today, set max_date to today)
         elif min_date is not None and max_date is None:
-            end = date.fromisoformat(min_date) + timedelta(days=days if days else 30)
+            end = date.fromisoformat(min_date) + timedelta(days=days if days is not None else 30)
             if end > date.today():
                 end = date.today()
             max_date = end.isoformat()
 
         # If only max_date is provided, set min_date to `days` days (default 30) before max_date
         elif min_date is None and max_date is not None:
-            start = date.fromisoformat(max_date) - timedelta(days=days if days else 30)
+            start = date.fromisoformat(max_date) - timedelta(days=days if days is not None else 30)
             min_date = start.isoformat()
 
         elif min_date is not None and max_date is not None and days is not None:

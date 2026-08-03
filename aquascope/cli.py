@@ -146,7 +146,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["min_date"] = args.start_date
         if args.end_date:
             kwargs["max_date"] = args.end_date
-        if args.days:
+        if args.days is not None:
             kwargs["days"] = args.days
     if source == "sdg6" and args.countries:
         kwargs["country_codes"] = args.countries

@@ -39,6 +39,7 @@ class DataSource(str, Enum):
     HUBEAU = "france_hubeau"
     GRDC = "grdc"
     CAMELS_CL = "camels_cl"
+    CAMELS_BR = "camels_br"
     IRELAND_OPW = "ireland_opw"
 
     PEGELONLINE = "pegelonline"

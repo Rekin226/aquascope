@@ -115,6 +115,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "korea_wamis": lambda: KoreaWAMISCollector(),
         "india_wris": lambda: IndiaWRISCollector(),
         "ireland_opw": lambda: IrelandOPWCollector(),
+        "ireland_opw": lambda: IrelandOPWCollector(),
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
         "grdc": lambda: GRDCCollector(),
         "camels_cl": lambda: CAMELSCLCollector(),
@@ -1047,26 +1048,44 @@ def main() -> None:
         required=True,
         choices=[
             "taiwan_moenv",
+           
             "taiwan_wra_level",
+           
             "taiwan_wra_reservoir",
             "taiwan_wra_fhy",
+           
             "taiwan_wra_iot",
+           
             "taiwan_datagov",
             "usgs",
+           
             "sdg6",
+           
             "gemstat",
+           
             "aquastat",
+           
             "taiwan_civil_iot",
+           
             "wqp",
             "openmeteo",
+           
             "copernicus",
+           
             "wapor",
+           
             "eu_wfd",
+           
             "hubeau_hydrometrie",
             "japan_mlit",
+           
             "korea_wamis",
+           
             "grdc",
+           
             "camels_cl",
+            "ireland_opw",
+           
             "noaa_nwps"
             "ireland_opw",
             "pegelonline",
@@ -1083,7 +1102,7 @@ def main() -> None:
     p_collect.add_argument(
         "--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood; grdc: in_situ/satellite)"
     )
-    p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR / NOAA_NWPS)")
+    p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR)")
     p_collect.add_argument("--variable", default=None, help="Variable code for the selected collector (WaPOR)")
     p_collect.add_argument("--lid", default=None, help="A unique 5-character alphanumeric code e.g. ANAW1 (NOAA_NWPS)")
     p_collect.add_argument("--lat", type=float, default=None, help="Latitude (openmeteo/copernicus)")

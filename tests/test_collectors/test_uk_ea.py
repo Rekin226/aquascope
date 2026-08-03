@@ -331,6 +331,27 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
     assert len(res2) == 3
 
 
+def test_fetch_raw_fetches_station_metadata_for_wiski_id_only():
+    suid = "".join(["s" for _ in range(36)])
+    item = {
+        "measure": {"@id": f"http://measures/{suid}-measure-info"},
+        "value": "1.1",
+        "dateTime": "2025-01-01T01:00:00",
+    }
+
+    def behaviour(path, params):
+        if path == "id/stations.json":
+            return {"items": [{"label": "Station A", "lat": "51.5", "long": "-0.1"}]}
+        return {"items": [item]}
+
+    client = DummyClient(behaviour=behaviour)
+    coll = UKEACollector(client=client)
+    raw = coll.fetch_raw(observed_property="waterLevel", station_wiski_id="wiski-123")
+
+    assert any(path == "id/stations.json" for path, _ in client.calls)
+    assert raw[1]["_station"]["label"] == "Station A"
+
+
 def test_fetch_raw_measure_only_populates_observed_property_metadata():
     measure = "a" * 36 + "-flow-123"
 
@@ -347,7 +368,7 @@ def test_fetch_raw_measure_only_populates_observed_property_metadata():
 
 
 def test_fetch_raw_max_items_none_returns_all_items():
-    suid = "".join(["g" for _ in range(40)])
+    suid = "".join(["s" for _ in range(36)])
     item1 = {
         "measure": {"@id": f"http://measures/{suid}-measure-info"},
         "value": "1.1",
@@ -375,7 +396,7 @@ def test_fetch_raw_max_items_none_returns_all_items():
 
 
 def test_normalise_water_quality_and_level_and_skipping():
-    suid = "".join(["g" for _ in range(40)])
+    suid = "".join(["s" for _ in range(36)])
     # water quality (waterFlow)
     request_meta = {"observedProperty": "waterFlow"}
     item = {

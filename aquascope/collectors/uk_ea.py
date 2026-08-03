@@ -215,7 +215,7 @@ class UKEACollector(BaseCollector):
         station_meta = None
         if station or station_wiski_id or measure:
             station_id = station or UKEACollector._extract_station_suid_from_measure_id(measure)
-            if station_id:
+            if station_id or station_wiski_id:
                 station_meta = self._fetch_station_metadata(
                     station=station_id,
                     station_wiski_id=station_wiski_id,

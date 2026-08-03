@@ -8,7 +8,7 @@ from aquascope.collectors.uk_ea import (
     MAPPED_OBSERVED_PROPERTY_UNITS,
     UKEACollector,
 )
-from aquascope.schemas.water_data import DataSource, GeoLocation, WaterLevelReading, WaterQualitySample
+from aquascope.schemas.water_data import DataSource, GeoLocation, StreamflowReading, WaterLevelReading, WaterQualitySample
 
 
 class DummyClient:
@@ -84,8 +84,9 @@ def test_fetch_raw_with_measure_sets_observed_property_and_supports_normalisatio
 
     records = collector.normalise(raw)
     assert len(records) == 1
-    assert isinstance(records[0], WaterQualitySample)
-    assert records[0].parameter == "waterFlow"
+    assert isinstance(records[0], StreamflowReading)
+    assert records[0].discharge_cms == pytest.approx(3.14)
+    assert records[0].source_type == "in_situ"
 
 
 def test_fetch_raw_with_max_items_none():
@@ -134,6 +135,14 @@ def test_extract_water_quality_and_water_level_metadata():
     stn_name2, location2 = UKEACollector._extract_water_level_reading_metadata(water_level_metadata)
     assert stn_name2 == "Stn B"
     assert isinstance(location2, GeoLocation)
+
+    # Typical metadata for a streamflow reading, including catchment area
+    streamflow_metadata = {"label": "Stn C", "riverName": "River C", "lat": "51.7", "long": "-0.14", "catchmentArea": "123.4"}
+    stn_name3, river3, location3, catchment_area = UKEACollector._extract_streamflow_reading_metadata(streamflow_metadata)
+    assert stn_name3 == "Stn C"
+    assert river3 == "River C"
+    assert isinstance(location3, GeoLocation)
+    assert catchment_area == pytest.approx(123.4)
 
     # Zero-valued coordinates should still build a location.
     zero_coords_metadata = {"label": "Zero", "lat": 0, "long": 0}
@@ -353,7 +362,7 @@ def test_fetch_raw_fetches_station_metadata_for_wiski_id_only():
 
 
 def test_fetch_raw_measure_only_populates_observed_property_metadata():
-    measure = "a" * 36 + "-flow-123"
+    measure = "s" * 36 + "-flow-123"
 
     def behaviour(path, params):
         return {"items": []}
@@ -395,9 +404,9 @@ def test_fetch_raw_max_items_none_returns_all_items():
     assert out[2] == item2
 
 
-def test_normalise_water_quality_and_level_and_skipping():
+def test_normalise_streamflow_and_water_quality_and_level_and_skipping():
     suid = "".join(["s" for _ in range(36)])
-    # water quality (waterFlow)
+    # waterFlow (StreamflowReading)
     request_meta = {"observedProperty": "waterFlow"}
     item = {
         "measure": {"@id": f"http://measures/{suid}-measure-info"},
@@ -405,29 +414,31 @@ def test_normalise_water_quality_and_level_and_skipping():
         "dateTime": "2025-03-01T10:00:00",
         "completeness": "N/A",
         "category": "Good",
-        "_station": {"label": "QStn", "riverName": "BigRiver", "lat": "51.0", "long": "-0.1"},
+        "_station": {"label": "QStn", "riverName": "BigRiver", "lat": "51.0", "long": "-0.1", "catchmentArea": "123.4"},
     }
     coll = UKEACollector(client=DummyClient())
     samples = coll.normalise([request_meta, item])
     assert len(samples) == 1
     sample = samples[0]
-    assert isinstance(sample, WaterQualitySample)
+    assert isinstance(sample, StreamflowReading)
     assert sample.source == DataSource.UK_EA
     assert sample.station_id == suid[:36]
-    assert sample.value == pytest.approx(3.14)
+    assert sample.discharge_cms == pytest.approx(3.14)
     assert sample.unit == MAPPED_OBSERVED_PROPERTY_UNITS["waterFlow"]
     assert sample.station_name == "QStn"
     assert isinstance(sample.location, GeoLocation)
+    assert sample.source_type == "in_situ"
+    assert sample.catchment_area_km2 == pytest.approx(123.4)
 
-    # rainfall sets river to N/A
+    # rainfall (WaterQualitySample)
     request_meta_rain = {"observedProperty": "rainfall"}
     item_rain = dict(item)
     item_rain.update({"value": "0.5"})
-    item_rain["_station"] = {"label": "RStn", "riverName": "ShouldBeIgnored", "lat": "51.1", "long": "-0.11"}
+    item_rain["_station"] = {"label": "RStn", "lat": "51.1", "long": "-0.11"}
     rain_samples = coll.normalise([request_meta_rain, item_rain])
-    assert rain_samples[0].river == "N/A"
+    assert isinstance(rain_samples[0], WaterQualitySample)
 
-    # water level reading
+    # waterLevel (WaterLevelReading)
     request_meta_lvl = {"observedProperty": "waterLevel"}
     item_lvl = {
         "measure": {"@id": f"http://measures/{suid}-measure-info"},
@@ -444,7 +455,29 @@ def test_normalise_water_quality_and_level_and_skipping():
     assert lvl.water_level == pytest.approx(1.23)
     assert "Parameter: waterLevel" in lvl.remark
 
+    # groundwaterLevel (WaterLevelReading)
+    request_meta_gw = {"observedProperty": "groundwaterLevel"}
+    item_gw = {
+        "measure": {"@id": f"http://measures/{suid}-measure-info"},
+        "value": "2.34",
+        "dateTime": "2025-03-03T12:00:00",
+        "completeness": "Complete",
+        "category": "Good",
+        "_station": {"label": "GWStn", "lat": "51.3", "long": "-0.13"},
+    }
+    gw_samples = coll.normalise([request_meta_gw, item_gw])
+    assert len(gw_samples) == 1
+    gw = gw_samples[0]
+    assert isinstance(gw, WaterLevelReading)
+    assert gw.water_level == pytest.approx(2.34)
+
     # ensure bad items are skipped (e.g., missing value)
     bad_item = {"measure": {"@id": f"http://measures/{suid}-measure-info"}, "dateTime": "2025-03-01T10:00:00"}
     skipped = coll.normalise([request_meta, bad_item])
     assert skipped == []
+
+    request_meta_rain = {"observedProperty": "rainfall"}
+    item_rain = dict(item)
+    item_rain.update({"value": "0.5"})
+    item_rain["_station"] = {"label": "RStn", "lat": "51.1", "long": "-0.11"}
+    rain_samples = coll.normalise([request_meta_rain, item_rain])

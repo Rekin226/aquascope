@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from aquascope.collectors.base import BaseCollector
-from aquascope.schemas.water_data import DataSource, GeoLocation, WaterLevelReading, WaterQualitySample
+from aquascope.schemas.water_data import DataSource, GeoLocation, StreamflowReading, WaterLevelReading, WaterQualitySample
 from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -254,7 +254,7 @@ class UKEACollector(BaseCollector):
 
         return all_items
 
-    def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample] | Sequence[WaterLevelReading]:
+    def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample] | Sequence[WaterLevelReading] | Sequence[StreamflowReading]:
         """Convert raw UK EA readings into AquaScope schema objects.
 
         Parameters
@@ -265,8 +265,8 @@ class UKEACollector(BaseCollector):
 
         Returns
         -------
-        Sequence[WaterQualitySample] | Sequence[WaterLevelReading]
-            Normalised Water Quality or Water Level records.
+        Sequence[WaterQualitySample] | Sequence[WaterLevelReading] | Sequence[StreamflowReading]
+            Normalised water-quality, water-level, or streamflow records.
             If the observed property requested does not map to a schema object,
             or there is no raw data available, an empty list is returned.
         """
@@ -275,12 +275,67 @@ class UKEACollector(BaseCollector):
 
         raw_request_metadata = raw[0]
         observed_property = raw_request_metadata.get("observedProperty")
-        if observed_property in {"waterFlow", "rainfall"}:
+        if observed_property == "waterFlow":
+            return self._normalise_streamflow_readings(raw[1:], observed_property)
+        elif observed_property == "rainfall":
             return self._normalise_water_quality_samples(raw[1:], observed_property)
         elif observed_property in {"waterLevel", "groundwaterLevel"}:
             return self._normalise_water_level_readings(raw[1:], observed_property)
         else:
             return []
+
+    def _normalise_streamflow_readings(self, raw: list[dict], observed_property: str) -> Sequence[StreamflowReading]:
+        """Normalise raw items into streamflow records.
+
+        Parameters
+        ----------
+        raw : list[dict]
+            Raw payload returned by :meth:`fetch_raw`, including a prepended
+            request-metadata dictionary.
+        observed_property: str
+            The observed property collected within the raw data.
+
+        Returns
+        -------
+        Sequence[StreamflowReading]
+            Normalised Streamflow records.
+        """
+        readings: list[StreamflowReading] = []
+        for item in raw:
+            try:
+                station_suid, value, reading_datetime, remark = UKEACollector._extract_reading_data(item)
+                unit = MAPPED_OBSERVED_PROPERTY_UNITS.get(observed_property, None)
+                if not unit:
+                    raise ValueError("Incomplete raw data reading")
+
+                station_meta = item.get("_station", None)
+                if station_meta:
+                    station_name, river, location, catchment_area_km2 = UKEACollector._extract_streamflow_reading_metadata(station_meta)
+                else:
+                    station_name, river, location, catchment_area_km2 = None, None, None, None
+
+                if river:
+                    remark = f"River: {river}; " + remark
+
+                readings.append(
+                    StreamflowReading(
+                        source=DataSource.UK_EA,
+                        station_id=station_suid,
+                        station_name=station_name,
+                        location=location,
+                        reading_datetime=reading_datetime,
+                        discharge_cms=float(value),
+                        source_type="in_situ",
+                        uncertainty_cms=None,
+                        catchment_area_km2=catchment_area_km2,
+                        unit=unit,
+                        remark=remark,
+                    )
+                )
+            except (ValueError, KeyError, TypeError) as exc:
+                logger.debug("Skipping UKEA item: %s", exc)
+
+        return readings
 
     def _normalise_water_quality_samples(self, raw: list[dict], observed_property: str) -> Sequence[WaterQualitySample]:
         """Normalise raw items into Water Quality samples.
@@ -613,6 +668,38 @@ class UKEACollector(BaseCollector):
             location = None
 
         return station_name, river, location
+
+    @staticmethod
+    def _extract_streamflow_reading_metadata(station_meta: dict) -> tuple:
+        """Extract station metadata suitable for a streamflow reading.
+
+        Parameters
+        ----------
+        station_meta : dict
+            Station metadata from the UKEA API.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the station name, river name, geolocation, and catchment area.
+        """
+        station_name = station_meta.get("label", None)
+        river = station_meta.get("riverName", None)
+        lat = station_meta.get("lat", None)
+        long = station_meta.get("long", None)
+        if lat is not None and long is not None:
+            location = UKEACollector._build_location_from_lat_long(float(lat), float(long))
+        else:
+            location = None
+
+        catchment_area = station_meta.get("catchmentArea", None)
+        if catchment_area is not None:
+            try:
+                catchment_area = float(catchment_area)
+            except (TypeError, ValueError):
+                catchment_area = None
+
+        return station_name, river, location, catchment_area
 
     @staticmethod
     def _extract_water_level_reading_metadata(station_meta: dict) -> tuple:

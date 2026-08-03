@@ -44,6 +44,7 @@ class DataSource(str, Enum):
 
     PEGELONLINE = "pegelonline"
 
+
 class GeoLocation(BaseModel):
     """Geographic coordinates for a monitoring station or sample point."""
 

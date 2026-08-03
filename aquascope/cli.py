@@ -67,8 +67,8 @@ def cmd_collect(args: argparse.Namespace) -> None:
     """Run a data collector and save results."""
     from aquascope.collectors import (
         AquastatCollector,
-        CAMELSCLCollector,
         CAMELSBRCollector,
+        CAMELSCLCollector,
         CopernicusCollector,
         EUWFDCollector,
         GEMStatCollector,
@@ -1071,7 +1071,9 @@ def main() -> None:
     )
     p_collect.add_argument("--api-key", default=None, help="API key (if required)")
     p_collect.add_argument("--max-stations", type=int, default=None, help="Cap stations to fetch (Ireland OPW)")
-    p_collect.add_argument("--days", type=int, default=30, help="Number of days (USGS/PEGELONLINE; PEGELONLINE max: 31)")
+    p_collect.add_argument(
+        "--days", type=int, default=30, help="Number of days (USGS/PEGELONLINE; PEGELONLINE max: 31)"
+    )
     p_collect.add_argument("--country", default="all", help="ISO3 country code or 'all' (AQUASTAT)")
     p_collect.add_argument("--countries", default=None, help="ISO3 country codes, comma-separated (SDG6)")
     p_collect.add_argument("--state", default=None, help="US state code e.g. US:06 (WQP)")
@@ -1089,10 +1091,14 @@ def main() -> None:
     p_collect.add_argument("--end-year", type=int, default=2023, help="End year (AQUASTAT)")
     p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")
     p_collect.add_argument("--year", type=int, default=None, help="Year filter (EU WFD)")
-    p_collect.add_argument("--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl, camels_br)")
+    p_collect.add_argument(
+        "--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl, camels_br)"
+    )
     p_collect.add_argument("--station", default=None, help="Station UUID (PEGELONLINE)")
     p_collect.add_argument(
-        "--timeseries", default=None, choices=["W", "Q"],
+        "--timeseries",
+        default=None,
+        choices=["W", "Q"],
         help="PEGELONLINE timeseries: W for water level or Q for discharge (default: both)",
     )
     p_collect.add_argument(

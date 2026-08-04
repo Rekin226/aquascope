@@ -1095,7 +1095,7 @@ def main() -> None:
             "korea_wamis",
             "grdc",
             "camels_cl",
-            "noaa_nwps"
+            "noaa_nwps",
             "ireland_opw",
             "pegelonline",
             "uk_ea"

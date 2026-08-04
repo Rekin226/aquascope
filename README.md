@@ -267,12 +267,8 @@ Run `aquascope --help` for the full command list.
 
 26 data collectors spanning four regions (highlights below, full list in the [docs](docs/data_sources.md)):
 
-- 🌎 **Americas** — USGS (streamflow + WQ), Water Quality Portal (400+ agencies), CAMELS-CL (Chile streamflow)
-- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau, Germany PEGELONLINE, UK Environment Agency
-26 data collectors spanning four regions (highlights below, full list in the [docs](docs/data_sources.md)):
-
 - 🌎 **Americas** — USGS (streamflow + WQ), NOAA NWPS (US streamflow), Water Quality Portal (400+ agencies), CAMELS-CL (Chile streamflow)
-- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau, Germany PEGELONLINE
+- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau, Germany PEGELONLINE, UK Environment Agency
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / Civil IoT / DataGov, Japan MLIT, Korea WAMIS, India WRIS
 - 🌐 **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo, FAO AQUASTAT, FAO WaPOR, GRDC (river discharge)
 

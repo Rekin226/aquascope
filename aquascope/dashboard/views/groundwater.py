@@ -87,7 +87,10 @@ def _sgi_drought(df: pd.DataFrame, prof: _state.DataProfile) -> None:
     c2.metric("Drought events", str(len(events)))
     c3.metric("Worst SGI on record", f"{sgi.min():.2f}" if not sgi.dropna().empty else "N/A")
 
-    st.plotly_chart(_charts.spi_bars(sgi.index, sgi, title="SGI Timeline — Groundwater Drought"))
+    sgi_fig = _charts.spi_bars(sgi.index, sgi, title="SGI Timeline — Groundwater Drought")
+    for e in events:
+        sgi_fig.add_vrect(x0=e.start, x1=e.end, fillcolor="#b53230", opacity=0.15, line_width=0)
+    st.plotly_chart(sgi_fig)
 
     if events:
         event_rows = [
@@ -162,5 +165,5 @@ def _aquifer_test() -> None:
         st.warning(f"Couldn't compute drawdown: {exc}")
         return
 
-    st.metric("Drawdown", f"{float(s):.4f} m")
+    st.metric("Drawdown", f"{s[0]:.4f} m")
     st.caption("Theis solution assumes a confined, homogeneous, isotropic aquifer of infinite extent.")

@@ -18,7 +18,13 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from aquascope.collectors.base import BaseCollector
-from aquascope.schemas.water_data import DataSource, GeoLocation, StreamflowReading, WaterLevelReading, WaterQualitySample
+from aquascope.schemas.water_data import (
+    DataSource,
+    GeoLocation,
+    StreamflowReading,
+    WaterLevelReading,
+    WaterQualitySample,
+)
 from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -214,6 +220,52 @@ class UKEACollector(BaseCollector):
         params.update(kwargs)
 
         station_meta = None
+        all_items: list[dict] = [params]  # Request metadata for use in normalise()
+
+        # If we query based on a bounding box, we must collect all stations, then query each station individually
+        # The UKEA API enables location queries on the stations endpoint, but not on the readings endpoint
+        if bounding_box_limits:
+            station_meta_params = params.copy()
+            min_long, min_lat, max_long, max_lat = bounding_box_limits
+            station_meta_params["mineq-long"] = min_long
+            station_meta_params["mineq-lat"] = min_lat
+            station_meta_params["maxeq-long"] = max_long
+            station_meta_params["maxeq-lat"] = max_lat
+
+            # id/stations.json row limit is capped at 100 per request
+            station_meta = UKEACollector._fetch_paginated_items(
+                client=self.client,
+                path="id/stations.json",
+                params=station_meta_params,
+                station_meta=None,
+                limit=max(limit, 100),
+                max_items=max_items,
+            )
+            if station_meta is None:
+                return []
+
+            for station in station_meta:
+                station_id = station.get("stationGuid", None)
+                if not station_id:
+                    logger.warning("Station metadata missing stationGuid: %s", station)
+                    continue
+                params["station"] = station_id
+                paginated_items = UKEACollector._fetch_paginated_items(
+                    client=self.client,
+                    path="data/readings.json",
+                    params=params,
+                    station_meta=station,
+                    limit=limit,
+                    max_items=max_items,
+                )
+                if paginated_items is None:
+                    return []
+
+                all_items.extend(paginated_items)
+
+            return all_items
+
+        # Assign metadata to queries that relate to a single station.
         if station or station_wiski_id or measure:
             station_id = station or UKEACollector._extract_station_suid_from_measure_id(measure)
             if station_id or station_wiski_id:
@@ -222,27 +274,49 @@ class UKEACollector(BaseCollector):
                     station_wiski_id=station_wiski_id,
                 )
 
+        # Collect readings for single-source queries and queries without specified stations.
+        paginated_items = UKEACollector._fetch_paginated_items(
+            client=self.client,
+            path="data/readings.json",
+            params=params,
+            station_meta=station_meta,
+            limit=limit,
+            max_items=max_items,
+        )
+        if paginated_items is None:
+            return []
+
+        all_items.extend(paginated_items)
+
+        return all_items
+
+    @staticmethod
+    def _fetch_paginated_items(
+        client: CachedHTTPClient,
+        path: str,
+        params: dict[str, Any],
+        station_meta: dict | None,
+        limit: int,
+        max_items: int | None = None,
+    ) -> list[dict] | None:
+        """Fetch and normalise paginated reading items for the requested query."""
         all_items: list[dict] = []
-        all_items.append(params) # Metadata for use in normalise()
-        if max_items:
-            max_items += 1 # Increment max_items to account for prepended metadata
         offset = 0
-        path = "data/readings.json"
 
         while True:
             params["_offset"] = offset
             try:
-                data = self.client.get_json(path, params=params)
+                data = client.get_json(path, params=params)
             except Exception as exc:
                 logger.error("UKEA fetch failed: %s", exc)
-                return []
+                return None
 
             page_items = data.get("items", [])
             if not page_items:
                 break
 
-            for item in page_items:
-                if station_meta:
+            if station_meta:
+                for item in page_items:
                     item["_station"] = station_meta
 
             all_items.extend(page_items)

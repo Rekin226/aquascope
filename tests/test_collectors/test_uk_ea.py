@@ -8,7 +8,13 @@ from aquascope.collectors.uk_ea import (
     MAPPED_OBSERVED_PROPERTY_UNITS,
     UKEACollector,
 )
-from aquascope.schemas.water_data import DataSource, GeoLocation, StreamflowReading, WaterLevelReading, WaterQualitySample
+from aquascope.schemas.water_data import (
+    DataSource,
+    GeoLocation,
+    StreamflowReading,
+    WaterLevelReading,
+    WaterQualitySample,
+)
 
 
 class DummyClient:
@@ -137,8 +143,16 @@ def test_extract_water_quality_and_water_level_metadata():
     assert isinstance(location2, GeoLocation)
 
     # Typical metadata for a streamflow reading, including catchment area
-    streamflow_metadata = {"label": "Stn C", "riverName": "River C", "lat": "51.7", "long": "-0.14", "catchmentArea": "123.4"}
-    stn_name3, river3, location3, catchment_area = UKEACollector._extract_streamflow_reading_metadata(streamflow_metadata)
+    streamflow_metadata = {
+        "label": "Stn C",
+        "riverName": "River C",
+        "lat": "51.7",
+        "long": "-0.14",
+        "catchmentArea": "123.4"
+    }
+    stn_name3, river3, location3, catchment_area = UKEACollector._extract_streamflow_reading_metadata(
+        streamflow_metadata
+    )
     assert stn_name3 == "Stn C"
     assert river3 == "River C"
     assert isinstance(location3, GeoLocation)

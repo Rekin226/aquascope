@@ -228,7 +228,8 @@ def cmd_collect(args: argparse.Namespace) -> None:
             logger.error("PEGELONLINE requires --station with a station UUID.")
             sys.exit(1)
         kwargs["station_id"] = args.station
-        kwargs["days"] = args.days
+        if args.days is not None:
+            kwargs["days"] = args.days
         if args.timeseries:
             kwargs["timeseries"] = args.timeseries
         if args.start_date:

@@ -36,6 +36,12 @@ from aquascope.analysis.quality import (
     preprocess,
     print_quality_report,
 )
+from aquascope.analysis.trends import (
+    MannKendallResult,
+    SensSlopeResult,
+    mann_kendall,
+    sens_slope,
+)
 
 __all__ = [
     "ChangePoint",
@@ -43,7 +49,9 @@ __all__ = [
     "CopulaResult",
     "EDAReport",
     "JointProbability",
+    "MannKendallResult",
     "QualityReport",
+    "SensSlopeResult",
     "assess_quality",
     "binary_segmentation",
     "compare_copulas",
@@ -55,6 +63,7 @@ __all__ = [
     "generate_eda_report",
     "generate_synthetic_data",
     "joint_exceedance_probability",
+    "mann_kendall",
     "mann_whitney_test",
     "pelt",
     "pettitt_test",
@@ -64,6 +73,7 @@ __all__ = [
     "print_quality_report",
     "profile_dataset",
     "regime_shift_detector",
+    "sens_slope",
     "tail_dependence",
     "to_pseudo_observations",
 ]

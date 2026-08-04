@@ -236,7 +236,7 @@ Switch to MCMC with `degree>1` for polynomial models, or pass `prior_precision` 
 
 ## 💻 CLI
 
-AquaScope ships a 19-command CLI for the most common workflows:
+AquaScope ships a 20-command CLI for the most common workflows:
 
 ```bash
 # Collect data
@@ -257,6 +257,9 @@ aquascope solve --problem "Assess flood risk for a 100-year return period"
 # Interactive Streamlit dashboard — multipage workspace with 21 live sources,
 # smart auto-insights, and fully interactive Plotly charts
 aquascope dashboard
+
+# Shell tab-completion
+eval "$(aquascope completion bash)"   # add this to ~/.bashrc (or .zshrc / config.fish)
 ```
 
 Run `aquascope --help` for the full command list.

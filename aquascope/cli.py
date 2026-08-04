@@ -22,7 +22,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-#----------------------------------------------------------
+# ----------------------------------------------------------
 from aquascope.collectors.india_wris import IndiaWRISCollector
 
 logging.basicConfig(
@@ -73,8 +73,10 @@ def cmd_collect(args: argparse.Namespace) -> None:
         GEMStatCollector,
         GRDCCollector,
         HubeauHydrometrieCollector,
+        IrelandOPWCollector,
         JapanMLITCollector,
         KoreaWAMISCollector,
+        NOAANWPSCollector,
         OpenMeteoCollector,
         PegelonlineCollector,
         SDG6Collector,
@@ -112,9 +114,11 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "japan_mlit": lambda: JapanMLITCollector(),
         "korea_wamis": lambda: KoreaWAMISCollector(),
         "india_wris": lambda: IndiaWRISCollector(),
+        "ireland_opw": lambda: IrelandOPWCollector(),
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
         "grdc": lambda: GRDCCollector(),
         "camels_cl": lambda: CAMELSCLCollector(),
+        "noaa_nwps": lambda: NOAANWPSCollector(),
         "pegelonline": lambda: PegelonlineCollector(),
     }
 
@@ -183,6 +187,21 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["start"] = args.start_date
         if args.end_date:
             kwargs["end"] = args.end_date
+    if source == "noaa_nwps":
+        if not args.bbox and not args.lid:
+            logger.error("NOAA NWPS requires either the --bbox or --lid argument.")
+            sys.exit(1)
+        if args.bbox and args.lid:
+            logger.error("NOAA NWPS requires exactly one of --bbox or --lid.")
+            sys.exit(1)
+        if args.bbox:
+            try:
+                kwargs["bbox"] = _parse_bbox(args.bbox)
+            except ValueError as exc:
+                logger.error("%s", exc)
+                sys.exit(1)
+        if args.lid:
+            kwargs["lid"] = args.lid
     if source == "pegelonline":
         if not args.station:
             logger.error("PEGELONLINE requires --station with a station UUID.")
@@ -195,6 +214,8 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["start"] = args.start_date
         if args.end_date:
             kwargs["end"] = args.end_date
+    if source == "ireland_opw" and args.max_stations:
+        kwargs["max_stations"] = args.max_stations
     records = collector.collect(**kwargs)
     if not records:
         logger.warning("No records collected.")
@@ -249,9 +270,9 @@ def cmd_recommend(args: argparse.Namespace) -> None:
         print("No matching methodologies found. Try broader parameters or keywords.")
         return
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"  AquaScope — Top {len(recs)} Research Methodology Recommendations")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
     for i, rec in enumerate(recs, 1):
         m = rec.methodology
         print(f"  {i}. {m.name}  (score: {rec.score})")
@@ -278,9 +299,9 @@ def cmd_eda(args: argparse.Namespace) -> None:
 
         profile = profile_dataset(df)
         recs = recommend(profile, top_k=args.top_k)
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print("  AI-Recommended Methodologies Based on EDA Profile")
-        print(f"{'='*70}\n")
+        print(f"{'=' * 70}\n")
         for i, rec in enumerate(recs, 1):
             print(f"  {i}. {rec.methodology.name}  (score: {rec.score})")
             print(f"     {rec.rationale}\n")
@@ -320,9 +341,9 @@ def cmd_run_pipeline(args: argparse.Namespace) -> None:
 
     result = run_pipeline(args.method, df, config=config)
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"  AquaScope — Pipeline Result: {result.method_name}")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
     print(f"  {result.summary}\n")
 
     if result.metrics:
@@ -337,13 +358,19 @@ def cmd_run_pipeline(args: argparse.Namespace) -> None:
 
     if args.output:
         out_path = Path(args.output)
-        out_path.write_text(json.dumps({
-            "method_id": result.method_id,
-            "method_name": result.method_name,
-            "summary": result.summary,
-            "metrics": result.metrics,
-            "details": result.details,
-        }, indent=2, default=str))
+        out_path.write_text(
+            json.dumps(
+                {
+                    "method_id": result.method_id,
+                    "method_name": result.method_name,
+                    "summary": result.summary,
+                    "metrics": result.metrics,
+                    "details": result.details,
+                },
+                indent=2,
+                default=str,
+            )
+        )
         print(f"\n  ✓ Full results saved → {out_path}")
 
 
@@ -355,9 +382,9 @@ def cmd_list_methods(args: argparse.Namespace) -> None:
     pipelines = set(list_available_pipelines())
     methods = get_all_methodologies()
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"  AquaScope — {len(methods)} Research Methodologies")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     by_category: dict[str, list] = {}
     for m in methods:
@@ -378,31 +405,93 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
     """List all available data sources."""
     from aquascope.schemas.water_data import DataSource
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"  AquaScope — {len(DataSource)} Data Sources")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
 
     source_info = {
         "taiwan_moenv": ("Taiwan MOENV", "Taiwan", "River/tap water quality, RPI", "https://data.moenv.gov.tw"),
         "taiwan_wra": ("Taiwan WRA", "Taiwan", "Water levels, reservoir status", "https://opendata.wra.gov.tw"),
-        "taiwan_civil_iot": ("Taiwan Civil IoT", "Taiwan", "Real-time sensor data (water level, flow, rain)", "https://sta.ci.taiwan.gov.tw"),
-        "taiwan_wra_fhy": ("Taiwan WRA Fhy", "Taiwan", "Real-time water level, rainfall, flow (防災資訊網)", "https://fhy.wra.gov.tw/WraApi"),
-        "taiwan_wra_iot": ("Taiwan WRA IoT", "Taiwan", "Real-time groundwater level, rainfall accumulation", "https://iot.wra.gov.tw"),
-        "taiwan_datagov": ("Taiwan Data.gov.tw", "Taiwan", "Real-time river & groundwater level (open gov data)", "https://data.gov.tw"),
+        "taiwan_civil_iot": (
+            "Taiwan Civil IoT",
+            "Taiwan",
+            "Real-time sensor data (water level, flow, rain)",
+            "https://sta.ci.taiwan.gov.tw",
+        ),
+        "taiwan_wra_fhy": (
+            "Taiwan WRA Fhy",
+            "Taiwan",
+            "Real-time water level, rainfall, flow (防災資訊網)",
+            "https://fhy.wra.gov.tw/WraApi",
+        ),
+        "taiwan_wra_iot": (
+            "Taiwan WRA IoT",
+            "Taiwan",
+            "Real-time groundwater level, rainfall accumulation",
+            "https://iot.wra.gov.tw",
+        ),
+        "taiwan_datagov": (
+            "Taiwan Data.gov.tw",
+            "Taiwan",
+            "Real-time river & groundwater level (open gov data)",
+            "https://data.gov.tw",
+        ),
         "usgs": ("USGS", "USA", "Streamflow, water quality, gage height", "https://api.waterdata.usgs.gov"),
         "sdg6": ("UN SDG 6", "Global", "SDG 6 indicators (6.1.1 – 6.6.1)", "https://sdg6data.org"),
         "gemstat": ("GEMStat", "Global", "Freshwater quality (170+ countries)", "https://gemstat.org"),
-        "aquastat": ("FAO AQUASTAT", "Global", "Country-level water withdrawal and irrigation", "https://www.fao.org/aquastat"),
-        "wqp": ("Water Quality Portal", "USA", "Integrated WQ from USGS+EPA+400 agencies", "https://waterqualitydata.us"),
-        "openmeteo": ("Open-Meteo", "Global", "ERA5 reanalysis, weather forecasts, GloFAS discharge", "https://open-meteo.com"),
-        "copernicus": ("Copernicus CDS", "Global", "GloFAS river discharge forecasts", "https://cds.climate.copernicus.eu"),
-        "wapor": ("FAO WaPOR", "Global", "Satellite ET, biomass, and water productivity", "https://www.fao.org/in-action/remote-sensing-for-water-productivity"),
+        "aquastat": (
+            "FAO AQUASTAT",
+            "Global",
+            "Country-level water withdrawal and irrigation",
+            "https://www.fao.org/aquastat",
+        ),
+        "wqp": (
+            "Water Quality Portal",
+            "USA",
+            "Integrated WQ from USGS+EPA+400 agencies",
+            "https://waterqualitydata.us",
+        ),
+        "openmeteo": (
+            "Open-Meteo",
+            "Global",
+            "ERA5 reanalysis, weather forecasts, GloFAS discharge",
+            "https://open-meteo.com",
+        ),
+        "copernicus": (
+            "Copernicus CDS",
+            "Global",
+            "GloFAS river discharge forecasts",
+            "https://cds.climate.copernicus.eu",
+        ),
+        "wapor": (
+            "FAO WaPOR",
+            "Global",
+            "Satellite ET, biomass, and water productivity",
+            "https://www.fao.org/in-action/remote-sensing-for-water-productivity",
+        ),
         "eu_wfd": ("EU WFD", "Europe", "Water Framework Directive status", "https://www.eea.europa.eu"),
-        "france_hubeau": ("Hub'Eau", "France", "River water level and discharge (hydrométrie)", "https://hubeau.eaufrance.fr/api/v2/hydrometrie"),
-        "grdc": ("GRDC", "Global", "River discharge: in-situ gauges + RSEG satellite estimates", "https://zenodo.org/records/19126732"),
+        "france_hubeau": (
+            "Hub'Eau",
+            "France",
+            "River water level and discharge (hydrométrie)",
+            "https://hubeau.eaufrance.fr/api/v2/hydrometrie",
+        ),
+        "grdc": (
+            "GRDC",
+            "Global",
+            "River discharge: in-situ gauges + RSEG satellite estimates",
+            "https://zenodo.org/records/19126732",
+        ),
         "japan_mlit": ("Japan MLIT", "Japan", "Hydrometeorology, river observations", "https://www.mlit.go.jp"),
         "korea_wamis": ("Korea WAMIS", "Korea", "Hydrology, dam operations", "https://www.wamis.go.kr"),
         "india_wris": ("India WRIS", "India", "River water level", "https://indiawris.gov.in"),
+        "ireland_opw": (
+            "Ireland OPW",
+            "Ireland",
+            "Water levels from waterlevel.ie",
+            "[https://waterlevel.ie](https://waterlevel.ie)",
+        ),
+        "noaa_nwps": ("NOAA NWPS", "USA", " Streamflow forecasts, stream observations, streamflow output, crest history, flood impacts, low water history, flood category levels, and location metadata.", "https://www.water.noaa.gov"),
         "pegelonline": ("PEGELONLINE", "Germany", "River water level and discharge", "https://www.pegelonline.wsv.de"),
     }
 
@@ -466,9 +555,9 @@ def cmd_forecast(args: argparse.Namespace) -> None:
     forecast = model.predict(horizon=args.days)
     metrics = model.evaluate(df)
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"  AquaScope — Forecast ({args.model}, {args.days} days)")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
     print(forecast.to_string())
     print("\n  Metrics on training data:")
     for k, v in metrics.items():
@@ -523,9 +612,9 @@ def cmd_alerts(args: argparse.Namespace) -> None:
         standards=standards,
     )
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("  AquaScope — Threshold Alert Report")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
     print(f"  Total samples checked : {report.total_samples}")
     print(f"  Samples with alerts   : {report.samples_with_alerts}")
     print(f"  Standards used        : {', '.join(report.standards_used)}")
@@ -658,6 +747,7 @@ def cmd_groundwater(args: argparse.Namespace) -> None:
 
     if analysis == "theis":
         from aquascope.groundwater.aquifer import theis_drawdown
+
         T = args.transmissivity or 500.0  # noqa: N806
         S = args.storativity or 0.001  # noqa: N806
         Q = args.pumping_rate or 1000.0  # noqa: N806
@@ -672,6 +762,7 @@ def cmd_groundwater(args: argparse.Namespace) -> None:
 
     if analysis == "recharge-wtf":
         from aquascope.groundwater.recharge import water_table_fluctuation
+
         df = _load_dataframe(args.file)
         col = df.columns[0] if len(df.columns) == 1 else "water_level"
         levels = pd.Series(df[col].values, index=pd.to_datetime(df.index))
@@ -687,6 +778,7 @@ def cmd_groundwater(args: argparse.Namespace) -> None:
 
     if analysis == "trend":
         from aquascope.groundwater.wells import trend_detection
+
         result = trend_detection(levels)
         print("\nWell Trend Analysis (Mann-Kendall)")
         print(f"  Trend: {result.trend}")
@@ -694,6 +786,7 @@ def cmd_groundwater(args: argparse.Namespace) -> None:
         print(f"  p-value: {result.p_value:.4f}")
     elif analysis == "recession":
         from aquascope.groundwater.wells import recession_analysis
+
         result = recession_analysis(levels)
         print("\nRecession Analysis")
         print(f"  Events found: {result.n_events}")
@@ -701,12 +794,14 @@ def cmd_groundwater(args: argparse.Namespace) -> None:
             print(f"  Mean time constant: {result.time_constant:.2f} days")
     elif analysis == "seasonal":
         from aquascope.groundwater.wells import seasonal_decomposition
+
         result = seasonal_decomposition(levels)
         print("\nSeasonal Decomposition")
         print(f"  Period: {result.period}")
         print(f"  Trend range: {result.trend.min():.3f} to {result.trend.max():.3f}")
     elif analysis == "hydrograph":
         from aquascope.groundwater.wells import well_hydrograph
+
         result = well_hydrograph(levels)
         print("\nWell Hydrograph Summary")
         print(f"  Mean level: {result.mean:.3f}")
@@ -731,6 +826,7 @@ def cmd_climate(args: argparse.Namespace) -> None:
         hist = pd.Series(hist_df.iloc[:, 0].values, index=pd.to_datetime(hist_df.index))
         fut = pd.Series(fut_df.iloc[:, 0].values, index=pd.to_datetime(fut_df.index))
         from aquascope.api import climate_downscale
+
         result = climate_downscale(obs, hist, fut, method=args.method)
         print(f"\nDownscaled ({args.method}): mean={result.mean():.2f}, std={result.std():.2f}")
         if args.output:
@@ -744,6 +840,7 @@ def cmd_climate(args: argparse.Namespace) -> None:
         df = _load_dataframe(args.file)
         series = pd.Series(df.iloc[:, 0].values, index=pd.to_datetime(df.index))
         from aquascope.api import climate_indices
+
         result = climate_indices(precip=series, index=args.index)
         print(f"\nClimate Index: {args.index}")
         print(f"  Result: {result}")
@@ -755,6 +852,7 @@ def cmd_climate(args: argparse.Namespace) -> None:
         df = _load_dataframe(args.file)
         series = pd.Series(df.iloc[:, 0].values, index=pd.to_datetime(df.index))
         from aquascope.climate.scenarios import drought_frequency
+
         result = drought_frequency(series)
         print("\nDrought Frequency Analysis")
         print(f"  Events: {result.n_events}")
@@ -829,9 +927,9 @@ def cmd_agri_plan(args: argparse.Namespace) -> None:
         initial_depletion=args.initial_depletion,
     )
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("  AquaScope — Irrigation Plan")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
     print(f"  Crop                     : {plan.crop}")
     print(f"  Planting date            : {plan.planting_date.isoformat()}")
     print(f"  Season end               : {plan.season_end_date.isoformat()}")
@@ -868,9 +966,9 @@ def cmd_agri_benchmark(args: argparse.Namespace) -> None:
         top_n=args.top,
     )
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("  AquaScope — Agriculture Benchmark")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
     print(f"  Metric      : {result.metric_name}")
     print(f"  Unit        : {result.output_unit}")
     print(f"  Summary     : {result.summary}")
@@ -907,9 +1005,9 @@ def cmd_agri_productivity(args: argparse.Namespace) -> None:
         aquastat_top_n=args.aquastat_top,
     )
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("  AquaScope — WaPOR Productivity")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")
     print(f"  Metric          : {result.metric_name}")
     print(f"  Unit            : {result.output_unit}")
     print(f"  Aggregate value : {result.aggregate_value:.4f}")
@@ -918,9 +1016,9 @@ def cmd_agri_productivity(args: argparse.Namespace) -> None:
     print(result.table.to_string(index=False))
 
     if result.aquastat_context:
-        print(f"\n{'-'*70}")
+        print(f"\n{'-' * 70}")
         print("  AQUASTAT Context")
-        print(f"{'-'*70}\n")
+        print(f"{'-' * 70}\n")
         for context in result.aquastat_context:
             print(f"  Metric  : {context.metric_name}")
             print(f"  Unit    : {context.output_unit}")
@@ -945,25 +1043,49 @@ def main() -> None:
     # ── collect ──────────────────────────────────────────────────────
     p_collect = sub.add_parser("collect", help="Collect water data from an API source")
     p_collect.add_argument(
-        "--source", required=True,
+        "--source",
+        required=True,
         choices=[
-            "taiwan_moenv", "taiwan_wra_level", "taiwan_wra_reservoir",
-            "taiwan_wra_fhy", "taiwan_wra_iot", "taiwan_datagov",
-            "usgs", "sdg6", "gemstat", "aquastat", "taiwan_civil_iot", "wqp",
-            "openmeteo", "copernicus", "wapor", "eu_wfd", "hubeau_hydrometrie",
-            "japan_mlit", "korea_wamis", "grdc", "camels_cl", "pegelonline",
+            "taiwan_moenv",
+            "taiwan_wra_level",
+            "taiwan_wra_reservoir",
+            "taiwan_wra_fhy",
+            "taiwan_wra_iot",
+            "taiwan_datagov",
+            "usgs",
+            "sdg6",
+            "gemstat",
+            "aquastat",
+            "taiwan_civil_iot",
+            "wqp",
+            "openmeteo",
+            "copernicus",
+            "wapor",
+            "eu_wfd",
+            "hubeau_hydrometrie",
+            "japan_mlit",
+            "korea_wamis",
+            "grdc",
+            "camels_cl",
+            "noaa_nwps"
+            "ireland_opw",
+            "pegelonline",
         ],
         help="Data source to collect from",
     )
     p_collect.add_argument("--api-key", default=None, help="API key (if required)")
+    p_collect.add_argument("--max-stations", type=int, default=None, help="Cap stations to fetch (Ireland OPW)")
     p_collect.add_argument("--days", type=int, default=30, help="Number of days (USGS/PEGELONLINE; PEGELONLINE max: 31)")
     p_collect.add_argument("--country", default="all", help="ISO3 country code or 'all' (AQUASTAT)")
     p_collect.add_argument("--countries", default=None, help="ISO3 country codes, comma-separated (SDG6)")
     p_collect.add_argument("--state", default=None, help="US state code e.g. US:06 (WQP)")
     p_collect.add_argument("--variables", default=None, help="Comma-separated variable IDs (AQUASTAT)")
-    p_collect.add_argument("--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood; grdc: in_situ/satellite)")
+    p_collect.add_argument(
+        "--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood; grdc: in_situ/satellite)"
+    )
     p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR)")
     p_collect.add_argument("--variable", default=None, help="Variable code for the selected collector (WaPOR)")
+    p_collect.add_argument("--lid", default=None, help="A unique 5-character alphanumeric code e.g. ANAW1 (NOAA_NWPS)")
     p_collect.add_argument("--lat", type=float, default=None, help="Latitude (openmeteo/copernicus)")
     p_collect.add_argument("--lon", type=float, default=None, help="Longitude (openmeteo/copernicus)")
     p_collect.add_argument("--start-date", default=None, help="Start date YYYY-MM-DD (openmeteo/copernicus)")
@@ -979,7 +1101,8 @@ def main() -> None:
         help="PEGELONLINE timeseries: W for water level or Q for discharge (default: both)",
     )
     p_collect.add_argument(
-        "--water-body-type", default=None,
+        "--water-body-type",
+        default=None,
         choices=["river", "lake", "groundwater"],
         help="Water body type (EU WFD)",
     )
@@ -1041,8 +1164,9 @@ def main() -> None:
 
     # ── plot ──────────────────────────────────────────────────────────
     p_plot = sub.add_parser("plot", help="Visualise data or analysis results")
-    p_plot.add_argument("--type", required=True, choices=["timeseries", "forecast", "boxplot", "heatmap", "fdc"],
-                        help="Plot type")
+    p_plot.add_argument(
+        "--type", required=True, choices=["timeseries", "forecast", "boxplot", "heatmap", "fdc"], help="Plot type"
+    )
     p_plot.add_argument("--file", required=True, help="Path to data file (CSV with DatetimeIndex)")
     p_plot.add_argument("--output", default=None, help="Save plot to file (PNG/SVG/PDF)")
     p_plot.add_argument("--title", default=None, help="Custom plot title")
@@ -1074,7 +1198,9 @@ def main() -> None:
     )
     p_agri_plan.add_argument("--lat", type=float, default=None, help="Latitude for Open-Meteo fallback inputs")
     p_agri_plan.add_argument("--lon", type=float, default=None, help="Longitude for Open-Meteo fallback inputs")
-    p_agri_plan.add_argument("--start-date", default=None, help="Input start date YYYY-MM-DD (defaults to planting date)")
+    p_agri_plan.add_argument(
+        "--start-date", default=None, help="Input start date YYYY-MM-DD (defaults to planting date)"
+    )
     p_agri_plan.add_argument("--end-date", default=None, help="Input end date YYYY-MM-DD")
     p_agri_plan.add_argument("--soil-fc", type=float, default=0.30, help="Soil field capacity as m3/m3")
     p_agri_plan.add_argument("--soil-wp", type=float, default=0.15, help="Soil wilting point as m3/m3")
@@ -1098,7 +1224,11 @@ def main() -> None:
     )
     p_agri_benchmark.add_argument("--year", type=int, default=None, help="Specific year to benchmark")
     p_agri_benchmark.add_argument("--countries", default=None, help="Comma-separated country names or ISO3 codes")
-    p_agri_benchmark.add_argument("--all-years", action="store_true", help="Keep all country-year rows instead of using the latest year per country")
+    p_agri_benchmark.add_argument(
+        "--all-years",
+        action="store_true",
+        help="Keep all country-year rows instead of using the latest year per country",
+    )
     p_agri_benchmark.add_argument("--top", type=int, default=20, help="Maximum number of rows to print or save")
     p_agri_benchmark.add_argument("--output", default=None, help="Path to save benchmark results as JSON")
 
@@ -1116,15 +1246,25 @@ def main() -> None:
     p_agri_productivity.add_argument("--aeti-file", default=None, help="Path to WaPOR AETI CSV or JSON data")
     p_agri_productivity.add_argument("--npp-file", default=None, help="Path to WaPOR NPP CSV or JSON data")
     p_agri_productivity.add_argument("--ret-file", default=None, help="Path to WaPOR RET CSV or JSON data")
-    p_agri_productivity.add_argument("--aquastat-file", default=None, help="Optional AQUASTAT CSV or JSON data for country benchmark context")
-    p_agri_productivity.add_argument("--aquastat-year", type=int, default=None, help="Optional year filter for AQUASTAT context")
-    p_agri_productivity.add_argument("--aquastat-countries", default=None, help="Optional comma-separated country names or ISO3 codes for AQUASTAT context")
+    p_agri_productivity.add_argument(
+        "--aquastat-file", default=None, help="Optional AQUASTAT CSV or JSON data for country benchmark context"
+    )
+    p_agri_productivity.add_argument(
+        "--aquastat-year", type=int, default=None, help="Optional year filter for AQUASTAT context"
+    )
+    p_agri_productivity.add_argument(
+        "--aquastat-countries",
+        default=None,
+        help="Optional comma-separated country names or ISO3 codes for AQUASTAT context",
+    )
     p_agri_productivity.add_argument(
         "--aquastat-metrics",
         default=None,
         help="Optional comma-separated AQUASTAT benchmark IDs for context; defaults to withdrawal share and withdrawal per irrigated area when available",
     )
-    p_agri_productivity.add_argument("--aquastat-top", type=int, default=10, help="Maximum number of rows per AQUASTAT context table")
+    p_agri_productivity.add_argument(
+        "--aquastat-top", type=int, default=10, help="Maximum number of rows per AQUASTAT context table"
+    )
     p_agri_productivity.add_argument("--output", default=None, help="Path to save productivity results as JSON")
 
     # ── alerts ─────────────────────────────────────────────────────────
@@ -1137,11 +1277,16 @@ def main() -> None:
 
     # ── groundwater ──────────────────────────────────────────────────
     p_gw = sub.add_parser("groundwater", help="Run groundwater analysis (trend, recession, recharge, Theis)")
-    p_gw.add_argument("--analysis", required=True,
-                       choices=["trend", "recession", "seasonal", "hydrograph", "recharge-wtf", "theis"],
-                       help="Analysis type")
+    p_gw.add_argument(
+        "--analysis",
+        required=True,
+        choices=["trend", "recession", "seasonal", "hydrograph", "recharge-wtf", "theis"],
+        help="Analysis type",
+    )
     p_gw.add_argument("--file", required=True, help="Path to well level data (CSV with DatetimeIndex)")
-    p_gw.add_argument("--specific-yield", type=float, default=0.15, help="Specific yield for WTF recharge (default: 0.15)")
+    p_gw.add_argument(
+        "--specific-yield", type=float, default=0.15, help="Specific yield for WTF recharge (default: 0.15)"
+    )
     p_gw.add_argument("--transmissivity", type=float, default=None, help="Transmissivity m²/day (Theis)")
     p_gw.add_argument("--storativity", type=float, default=None, help="Storativity (Theis)")
     p_gw.add_argument("--pumping-rate", type=float, default=None, help="Pumping rate m³/day (Theis)")
@@ -1150,24 +1295,27 @@ def main() -> None:
 
     # ── climate ──────────────────────────────────────────────────────
     p_climate = sub.add_parser("climate", help="Climate projections and indices")
-    p_climate.add_argument("--analysis", required=True,
-                           choices=["downscale", "indices", "drought", "scenario"],
-                           help="Analysis type")
+    p_climate.add_argument(
+        "--analysis", required=True, choices=["downscale", "indices", "drought", "scenario"], help="Analysis type"
+    )
     p_climate.add_argument("--obs-file", default=None, help="Path to observed data (CSV)")
     p_climate.add_argument("--gcm-hist-file", default=None, help="Path to GCM historical data (CSV)")
     p_climate.add_argument("--gcm-future-file", default=None, help="Path to GCM future data (CSV)")
-    p_climate.add_argument("--method", default="quantile_mapping",
-                           help="Downscaling method (delta, quantile_mapping, qdm)")
-    p_climate.add_argument("--index", default="cdd",
-                           help="Climate index (cdd, cwd, pci, heat_wave, aridity)")
+    p_climate.add_argument(
+        "--method", default="quantile_mapping", help="Downscaling method (delta, quantile_mapping, qdm)"
+    )
+    p_climate.add_argument("--index", default="cdd", help="Climate index (cdd, cwd, pci, heat_wave, aridity)")
     p_climate.add_argument("--file", default=None, help="Path to data file (CSV)")
     p_climate.add_argument("--output", default=None, help="Save results to JSON")
 
     # ── hydro ─────────────────────────────────────────────────────────
     p_hydro = sub.add_parser("hydro", help="Run hydrological analysis (FDC, baseflow, recession, flood-freq)")
-    p_hydro.add_argument("--analysis", required=True,
-                         choices=["fdc", "baseflow", "recession", "flood-freq", "low-flow"],
-                         help="Analysis type")
+    p_hydro.add_argument(
+        "--analysis",
+        required=True,
+        choices=["fdc", "baseflow", "recession", "flood-freq", "low-flow"],
+        help="Analysis type",
+    )
     p_hydro.add_argument("--file", required=True, help="Path to discharge data (CSV with DatetimeIndex)")
     p_hydro.add_argument("--method", default=None, help="Sub-method (e.g. lyne_hollick, eckhardt for baseflow)")
     p_hydro.add_argument("--output", default=None, help="Save results to CSV")

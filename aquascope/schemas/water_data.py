@@ -32,6 +32,7 @@ class DataSource(str, Enum):
     EU_WFD = "eu_wfd"
     JAPAN_MLIT = "japan_mlit"
     KOREA_WAMIS = "korea_wamis"
+    NOAA_NWPS = "noaa_nwps"
     TAIWAN_WRA_FHY = "taiwan_wra_fhy"
     TAIWAN_WRA_IOT = "taiwan_wra_iot"
     TAIWAN_DATAGOV = "taiwan_datagov"
@@ -39,6 +40,8 @@ class DataSource(str, Enum):
     HUBEAU = "france_hubeau"
     GRDC = "grdc"
     CAMELS_CL = "camels_cl"
+    IRELAND_OPW = "ireland_opw"
+
     PEGELONLINE = "pegelonline"
 
 class GeoLocation(BaseModel):

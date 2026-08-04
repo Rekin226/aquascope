@@ -67,7 +67,7 @@ class UKEACollector(BaseCollector):
             client
             or CachedHTTPClient(
                 base_url=UKEA_BASE,
-                rate_limiter=RateLimiter(max_calls=5, period_seconds=60),
+                rate_limiter=RateLimiter(max_calls=30, period_seconds=60),
                 cache_ttl_seconds=3600,
             )
         )

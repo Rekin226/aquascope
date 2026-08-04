@@ -87,7 +87,8 @@ class UKEACollector(BaseCollector):
         ----------
         collection : str | None
             Frequency of data collection. Supported values are ``"15min"`` and
-            ``"daily"``.
+            ``"daily"``. Note that the available collection periods may vary by
+            station and observed property.
         observed_property : str | None
             Normalised observed property name. Supported values:
             ``"waterFlow"``, ``"waterLevel"``,
@@ -226,11 +227,12 @@ class UKEACollector(BaseCollector):
         if max_items:
             max_items += 1 # Increment max_items to account for prepended metadata
         offset = 0
+        path = "data/readings.json"
 
         while True:
             params["_offset"] = offset
             try:
-                data = self.client.get_json("data/readings.json", params=params)
+                data = self.client.get_json(path, params=params)
             except Exception as exc:
                 logger.error("UKEA fetch failed: %s", exc)
                 return []

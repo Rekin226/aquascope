@@ -219,6 +219,7 @@ class UKEACollector(BaseCollector):
             station_meta_params["mineq-lat"] = min_lat
             station_meta_params["maxeq-long"] = max_long
             station_meta_params["maxeq-lat"] = max_lat
+            station_meta_params["_limit"] = min(limit, 100)
 
             # id/stations.json row limit is capped at 100 per request
             station_meta = UKEACollector._fetch_paginated_items(
@@ -226,12 +227,13 @@ class UKEACollector(BaseCollector):
                 path="id/stations.json",
                 params=station_meta_params,
                 station_meta=None,
-                limit=max(limit, 100),
+                limit=min(limit, 100),
                 max_items=max_items,
             )
             if station_meta is None:
                 return []
 
+            params["_limit"] = limit
             if collection:
                 params["period"] = period
             if min_date:

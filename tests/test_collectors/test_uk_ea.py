@@ -354,6 +354,74 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
     assert len(res2) == 3
 
 
+def test_fetch_raw_with_bbox_queries_two_stations():
+    station1 = {
+        "stationGuid": "s" * 36,
+        "label": "Station 1",
+        "lat": "51.1",
+        "long": "0.1",
+    }
+    station2 = {
+        "stationGuid": "t" * 36,
+        "label": "Station 2",
+        "lat": "51.2",
+        "long": "0.2",
+    }
+    item1 = {
+        "measure": {"@id": "http://measures/ssssssssssssssssssssssssssssssssssss-measure-info"},
+        "value": "1.1",
+        "dateTime": "2025-01-01T01:00:00",
+    }
+    item2 = {
+        "measure": {"@id": "http://measures/tttttttttttttttttttttttttttttttttttt-measure-info"},
+        "value": "2.2",
+        "dateTime": "2025-01-02T01:00:00",
+    }
+
+    def behaviour(path, params):
+        if path == "id/stations.json":
+            assert params["_limit"] == 100
+            assert params["observedProperty"] == "waterLevel"
+            assert params["mineq-long"] == 0.0
+            assert params["mineq-lat"] == 51.0
+            assert params["maxeq-long"] == 1.0
+            assert params["maxeq-lat"] == 51.1
+            if params.get("_offset", 0) == 0:
+                return {"items": [station1]}
+            return {"items": []}
+
+        if path == "data/readings.json":
+            assert params["_limit"] == 10000
+            assert params["observedProperty"] == "waterLevel"
+            assert params["station"] == station1["stationGuid"]
+            assert "mineq-long" not in params
+            assert "mineq-lat" not in params
+            assert "maxeq-long" not in params
+            assert "maxeq-lat" not in params
+            if params.get("_offset", 0) == 0:
+                return {"items": [item1] if params["station"] == station1["stationGuid"] else [item2]}
+            return {"items": []}
+
+        return {"items": []}
+
+    client = DummyClient(behaviour=behaviour)
+    collector = UKEACollector(client=client)
+    raw = collector.fetch_raw(observed_property="waterLevel", bbox="0.0,51.0,1.0,51.1", limit=10000)
+
+    assert len(raw) == 2
+    assert raw[1]["_station"]["stationGuid"] == station1["stationGuid"]
+
+    station_calls = [call for call in client.calls if call[0] == "id/stations.json"]
+    assert len(station_calls) == 2
+    assert station_calls[0][1]["_offset"] == 0
+    assert station_calls[1][1]["_offset"] == 100
+
+    data_calls = [call for call in client.calls if call[0] == "data/readings.json"]
+    assert len(data_calls) == 2
+    assert {call[1]["station"] for call in data_calls} == {station1["stationGuid"]}
+    assert [call[1]["_offset"] for call in data_calls] == [0, 10000]
+
+
 def test_fetch_raw_fetches_station_metadata_for_wiski_id_only():
     suid = "".join(["s" for _ in range(36)])
     item = {

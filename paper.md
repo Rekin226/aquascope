@@ -16,14 +16,14 @@ authors:
 affiliations:
   - name: National Central University, Taiwan
     index: 1
-date: 21 July 2026
+date: 4 August 2026
 bibliography: paper.bib
 ---
 
 # Summary
 
-AquaScope is an open-source Python toolkit (v0.8.1, MIT license) that unifies water
-data collection from 21 global sources, comprehensive hydrological and statistical
+AquaScope is an open-source Python toolkit (v0.9.0, MIT license) that unifies water
+data collection from 25 global sources, comprehensive hydrological and statistical
 analysis, agricultural water management, and AI-powered research methodology
 recommendations into a single, coherent package. It addresses a persistent challenge
 in water resources research: the fragmentation of data access, analytical methods, and
@@ -34,7 +34,8 @@ frequency analysis, baseflow separation, extreme value theory, drought indices, 
 FAO-56 evapotranspiration, and includes a knowledge-base-driven AI engine that
 recommends appropriate research methodologies based on dataset characteristics. Unlike
 existing unified data clients, which focus on United States services, AquaScope's
-collectors span East and South Asia, Europe, and global FAO/UN sources. The toolkit is
+collectors span East and South Asia, Europe, South America, and global FAO/UN sources.
+The toolkit is
 available at <https://github.com/Rekin226/aquascope>, with a zero-install live demo
 that runs entirely in the browser at
 <https://huggingface.co/spaces/Rekin226/aquascope-dashboard>.
@@ -67,10 +68,11 @@ Second, no single toolkit couples multi-source data collection with a comprehens
 hydrological analysis suite, agricultural water management, advanced statistical and
 machine-learning methods, and intelligent methodology guidance.
 
-AquaScope addresses both. Its 21 collectors span East and South Asia (Taiwan MOENV and
+AquaScope addresses both. Its 25 collectors span East and South Asia (Taiwan MOENV and
 WRA networks, Japan MLIT, Korea WAMIS, India WRIS), Europe (EU Water Framework
-Directive, France Hub'Eau), the United States (USGS, Water Quality Portal), and global
-providers (GEMStat, GRDC river discharge, Open-Meteo, Copernicus, UN SDG 6, FAO
+Directive, France Hub'Eau, Germany PEGELONLINE, Ireland OPW), the Americas (USGS, Water
+Quality Portal, NOAA National Water Prediction Service, and CAMELS-CL for Chile), and
+global providers (GEMStat, GRDC river discharge, Open-Meteo, Copernicus, UN SDG 6, FAO
 AQUASTAT and WaPOR). On top of this it
 provides an end-to-end workflow, from raw data ingestion through analysis to methodology
 recommendation, in a single, well-tested Python package with a unified API. It targets
@@ -81,15 +83,18 @@ patchwork of incompatible tools.
 
 # Key Features
 
-**Data aggregation.** AquaScope implements collectors for 21 water data sources, each
+**Data aggregation.** AquaScope implements collectors for 25 water data sources, each
 subclassing a common `BaseCollector` and normalising responses into shared Pydantic
 schemas. Coverage spans Asia (Taiwan MOENV and WRA networks, including a daily
 groundwater-level series reachable only through the WRA HydroInfo portal, Taiwan Civil
 IoT via the OGC SensorThings API, Japan MLIT, Korea WAMIS, India WRIS), Europe (EU
-Water Framework Directive, France's Hub'Eau hydrometry), the United States (USGS NWIS
-[@USGS_NWIS]; the Water Quality Portal, aggregating 400+ agencies), and global
-providers (GEMStat, GRDC river discharge combining in-situ gauges with satellite RSEG
-estimates, UN SDG 6, Open-Meteo, Copernicus ERA5, FAO AQUASTAT and WaPOR). A shared
+Water Framework Directive, France's Hub'Eau hydrometry, Germany's PEGELONLINE waterway
+gauges, Ireland's OPW hydrometric network), the Americas (USGS NWIS [@USGS_NWIS]; the
+Water Quality Portal, aggregating 400+ agencies; the NOAA National Water Prediction
+Service for forecasts and flood-category levels; and CAMELS-CL [@AlvarezGarreton2018],
+daily streamflow for 516 Chilean catchments), and global providers (GEMStat, GRDC river
+discharge combining in-situ gauges with satellite RSEG estimates, UN SDG 6, Open-Meteo,
+Copernicus ERA5, FAO AQUASTAT and WaPOR). A shared
 `httpx`-based HTTP client [@HTTPX2024] provides caching, retries with exponential
 back-off, and rate limiting, and transparently switches to a browser-native transport
 when running under WebAssembly.
@@ -141,7 +146,7 @@ integration on Python 3.10–3.12, linting (Ruff), and type checking (mypy).
 
 | Feature                        | AquaScope | HyRiver | dataretrieval | hydrostats | pySTEPS |
 |--------------------------------|:---------:|:-------:|:-------------:|:----------:|:-------:|
-| Multi-source data collection   | 21        | U.S.    | U.S.          | —          | —       |
+| Multi-source data collection   | 25        | U.S.    | U.S.          | —          | —       |
 | Non-U.S. / global coverage     | ✓         | —       | —             | —          | —       |
 | Unified data schemas           | ✓         | ✓       | —             | —          | —       |
 | Conceptual rainfall-runoff (GR4J)| ✓       | —       | —             | —          | —       |

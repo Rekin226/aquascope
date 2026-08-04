@@ -4,16 +4,56 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-04
+
+Four new countries, a rebuilt dashboard, and a live in-browser demo. AquaScope
+now reaches 25 data sources, and the Streamlit app went from a single-file
+monolith to a multipage workspace that runs client-side in a browser with the
+collectors still working.
+
+Most of this release came from the community: seven external contributors wrote
+all four new collectors and most of the new analysis and plotting features.
+Thank you.
+
 ### Added
+- **NOAA NWPS collector** (`collectors/noaa_nwps.py`): the US National Water
+  Prediction Service, covering streamflow forecasts, stream observations, crest
+  history, flood impacts, low-water history, flood-category levels, and gauge
+  metadata. No API key required. Available as
+  `aquascope collect --source noaa_nwps`. Thanks @AB1775 (#138).
+- **Ireland OPW collector** (`collectors/ireland_opw.py`): real-time river and
+  lake water level from waterlevel.ie at 15-minute resolution, across hundreds
+  of Office of Public Works stations. Station geometry comes from the OPW
+  GeoJSON index and series from the per-station CSV exports, with column names
+  resolved defensively since the endpoint serves more than one CSV shape.
+  Station refs outside the 1-41000 republication range are filtered out per
+  OPW's terms. No API key required. Thanks @laishettikarthik-tech
+  (#130, closes #123).
 - **Germany PEGELONLINE collector** (`collectors/pegelonline.py`): recent water
   level and discharge observations from federal waterway gauges, emitted as
   `WaterLevelReading` and `StreamflowReading`. Supports station UUIDs, W/Q
   selection, CLI collection, and the upstream 31-day history limit. No API key
-  required.
+  required. Thanks @taran-dev4u (#131).
+- **CAMELS-CL collector** (`collectors/camels_cl.py`): daily observed streamflow
+  for 516 Chilean catchments from the CR2 large-sample dataset, joined with
+  catchment attributes (area, coordinates). AquaScope's first South American
+  source. Thanks @adjenk (#116).
+- **Area-normalized streamflow** (`hydrology.streamflow`): `stage_to_runoff`
+  chains a rating curve straight through to mm/day, and
+  `discharge_cms_to_runoff_mm_day` converts a single discharge value given a
+  catchment area. `StreamflowReading` gained `catchment_area_km2`, and both
+  catchment area and runoff now route into the xarray export. Thanks
+  @laishettikarthik-tech (#103, closes #98).
+- **Double-mass plot** (`viz.diagnostics.double_mass_plot`): the classic
+  cumulative-versus-cumulative consistency check for spotting station shifts or
+  instrument changes in paired records. Thanks @aobaruwa (#107).
+- **Optional Plotly backend for `plot_hydrograph`** (`viz/hydro.py`): pass
+  `backend="plotly"` for an interactive figure instead of matplotlib. The
+  default stays matplotlib, so existing code is unaffected. Thanks @adjenk
+  (#134, closes #25).
 - **Canonical SPI drought classification** (`climate.indices.drought_class`):
   McKee et al. category labels with explicit boundary and missing-value
-  handling. `SPIModel` now delegates SPI calculation and classification to the
-  climate-index implementation instead of maintaining a divergent gamma fit.
+  handling. Thanks @taran-dev4u (#132).
 - **Dashboard 2.0** (`aquascope/dashboard/`): the Streamlit dashboard was rebuilt
   from a 2,100-line monolith into a multipage workspace app (`st.navigation`)
   with a shared dataset flowing through every page.
@@ -22,12 +62,14 @@ All notable changes to AquaScope are documented here.
     detected), quality-scored, quietly screened against WHO guidelines, and
     answered with one-click "suggested next steps" that navigate to the right
     analysis page.
-  - **All 21 collectors in the UI** (`views/collect.py`): the Collect page now
-    exposes every registered source (previously 15), including GRDC, Hub'Eau,
-    India WRIS, Taiwan data.gov.tw, Taiwan WRA IoT and FHY, with per-source
-    parameter forms, a region filter, CSV/JSON upload, and two demo datasets.
-    Nested `location` objects are flattened to `latitude`/`longitude` so maps
-    work out of the box.
+  - **21 collectors in the UI** (`views/collect.py`): the Collect page went from
+    15 sources to 21, adding GRDC, Hub'Eau, India WRIS, Taiwan data.gov.tw, and
+    Taiwan WRA IoT and FHY, with per-source parameter forms, a region filter,
+    CSV/JSON upload, and two demo datasets. Nested `location` objects are
+    flattened to `latitude`/`longitude` so maps work out of the box. The four
+    sources added later in this release (NOAA NWPS, Ireland OPW, PEGELONLINE,
+    CAMELS-CL) are reachable from the Python API and the CLI but are not wired
+    into the Collect page yet.
   - **Interactive Plotly charts everywhere** (`_charts.py`): time series, box
     plots, correlation heatmaps, histograms, FDCs (with direct Q50/Q95 labels),
     hydrographs with baseflow fill, SPI timelines, return-level curves with
@@ -46,17 +88,39 @@ All notable changes to AquaScope are documented here.
   (closes the "hosted Streamlit demo" roadmap gap, #34).
 - **Colorblind-safe palette** (`viz/styles.py`): `apply_aqua_style(palette="colorblind")`
   switches the `axes.prop_cycle` to the Okabe-Ito / Color Universal Design
-  8-colour palette. The default behaviour is unchanged.
+  8-colour palette. The default behaviour is unchanged. Thanks @sairajkasam
+  (#110).
+- **Baseflow edge-case tests**: Lyne-Hollick and Eckhardt are now pinned on
+  their invariants (baseflow bounded by total flow, BFI in [0, 1], steady-state
+  behaviour, filter-parameter boundaries, index preservation with NaNs, and the
+  empty-series case). Thanks @widjajs (#112).
 
 ### Changed
+- `SPIModel` now delegates SPI calculation and classification to
+  `climate.indices` instead of maintaining its own divergent gamma fit. SPI
+  values and drought classes are consistent across the two entry points; if you
+  compared them before, expect small numerical differences from `SPIModel`.
+  Thanks @taran-dev4u (#132).
 - `.streamlit/config.toml` now pins the dashboard's categorical chart colors
   (`chartCategoricalColors`) so native Streamlit charts match the Plotly theme,
   and disables usage-stats gathering.
 - `apply_aqua_style()` now explicitly sets `axes.prop_cycle` to `SERIES_COLOURS`
   on every call (previously the cycle was not set, inheriting Matplotlib's
   default). Visually identical for existing code.
+- Documentation: README examples, source counts, and ROADMAP issue links were
+  audited and corrected against the actual code, with CI drift guards so the
+  counts cannot silently go stale again (#128; CLI command count by
+  @navaneethsankar07 in #129). The contributors board is now maintained by the
+  all-contributors bot.
 
 ### Fixed
+- **USGS keyless queries work again.** The collector falls back to the legacy
+  REST API when a query runs without an API key, instead of failing. Thanks
+  @taran-dev4u (#137).
+- **CAMELS-CL records are no longer silently dropped** when catchment attributes
+  are missing. NaN from a missed `catchment_attributes.csv` join is truthy, so
+  it reached Pydantic validation and the resulting error discarded the whole
+  record. NaN now maps to `None` for gauge name, coordinates, and area (#118).
 - **Live collectors now work in the in-browser (WASM) demo.** `CachedHTTPClient`
   detects Pyodide/Emscripten and routes requests through `urllib` (patched to
   browser XHR by pyodide-http) instead of httpx's socket transport, which hangs

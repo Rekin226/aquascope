@@ -1104,7 +1104,6 @@ def main() -> None:
     p_collect.add_argument("--api-key", default=None, help="API key (if required)")
     p_collect.add_argument("--days", type=int, default=None, help="Number of days (USGS/UKEA/PEGELONLINE; PEGELONLINE max: 31)")
     p_collect.add_argument("--max-stations", type=int, default=None, help="Cap stations to fetch (Ireland OPW)")
-    p_collect.add_argument("--days", type=int, default=30, help="Number of days (USGS/PEGELONLINE; PEGELONLINE max: 31)")
     p_collect.add_argument("--country", default="all", help="ISO3 country code or 'all' (AQUASTAT)")
     p_collect.add_argument("--countries", default=None, help="ISO3 country codes, comma-separated (SDG6)")
     p_collect.add_argument("--state", default=None, help="US state code e.g. US:06 (WQP)")

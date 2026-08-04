@@ -197,8 +197,6 @@ class UKEACollector(BaseCollector):
         params: dict[str, Any] = {
             "_limit": limit,
         }
-        if collection:
-            params["period"] = period
         if observed_property:
             params["observedProperty"] = observed_property
         if measure:
@@ -207,16 +205,6 @@ class UKEACollector(BaseCollector):
             params["station"] = station
         if station_wiski_id:
             params["station.wiskiID"] = station_wiski_id
-        if bounding_box_limits:
-            min_long, min_lat, max_long, max_lat = bounding_box_limits
-            params["mineq-long"] = min_long
-            params["mineq-lat"] = min_lat
-            params["maxeq-long"] = max_long
-            params["maxeq-lat"] = max_lat
-        if min_date:
-            params["mineq-date"] = min_date
-        if max_date:
-            params["maxeq-date"] = max_date
         params.update(kwargs)
 
         station_meta = None
@@ -243,6 +231,13 @@ class UKEACollector(BaseCollector):
             )
             if station_meta is None:
                 return []
+
+            if collection:
+                params["period"] = period
+            if min_date:
+                params["mineq-date"] = min_date
+            if max_date:
+                params["maxeq-date"] = max_date
 
             for station in station_meta:
                 station_id = station.get("stationGuid", None)
@@ -273,6 +268,13 @@ class UKEACollector(BaseCollector):
                     station=station_id,
                     station_wiski_id=station_wiski_id,
                 )
+
+        if collection:
+            params["period"] = period
+        if min_date:
+            params["mineq-date"] = min_date
+        if max_date:
+            params["maxeq-date"] = max_date
 
         # Collect readings for single-source queries and queries without specified stations.
         paginated_items = UKEACollector._fetch_paginated_items(

@@ -399,7 +399,10 @@ def test_fetch_raw_with_bbox_queries_two_stations():
             assert "maxeq-long" not in params
             assert "maxeq-lat" not in params
             if params.get("_offset", 0) == 0:
-                return {"items": [item1] if params["station"] == station1["stationGuid"] else [item2]}
+                if params["station"] == station1["stationGuid"]:
+                    return {"items": [item1]}
+                elif params["station"] == station2["stationGuid"]:
+                    return {"items": [item2]}
             return {"items": []}
 
         return {"items": []}

@@ -64,9 +64,10 @@ class SignatureReport:
     peak_month: int  # month with highest mean flow (1-12)
     seasonality_index: float  # 0=uniform, 1=all flow in one month (Markham)
 
-    # Rate of change
+    # Rate of change / FDC
     rising_limb_density: float  # positive dQ/dt days / total days
     flashiness_index: float  # Richards-Baker flashiness index
+    fdc_slope: float  # slope of the FDC in log space (Sawicz et al. 2011)
 
     # Recession
     mean_recession_constant: float  # average -dQ/dt during recession
@@ -187,6 +188,84 @@ def flow_elasticity(discharge: pd.Series, precipitation: pd.Series) -> float:
 
     ratios = (dq[valid] / q_mean) / (dp[valid] / p_mean)
     return float(ratios.median())
+
+
+def fdc_slope(
+    discharge: pd.Series,
+    lower: float = 0.33,
+    upper: float = 0.66,
+) -> float:
+    """Slope of the flow duration curve between lower and upper exceedance percentiles.
+
+    Calculates the FDC slope in log space per Sawicz et al. (2011):
+
+    .. math:: S_{\\text{FDC}} = \\frac{\\ln(Q_{p_1}) - \\ln(Q_{p_2})}{p_2 - p_1}
+
+    where :math:`p_1` (*lower*, default 0.33) and :math:`p_2` (*upper*, default 0.66)
+    are exceedance probabilities. A steep FDC slope indicates a flashy, rain-dominated
+    catchment, while a flat slope indicates strong storage or groundwater contribution.
+
+    Parameters:
+        discharge: Daily discharge time series with DatetimeIndex.
+        lower: Lower exceedance probability (default 0.33).
+        upper: Upper exceedance probability (default 0.66).
+
+    Returns:
+        FDC slope (dimensionless, ≥ 0).
+    """
+    clean = discharge.dropna().values.astype(float)
+    clean = clean[clean > 0]
+    if len(clean) < 2 or upper <= lower:
+        return 0.0
+
+    sorted_q = np.sort(clean)[::-1]
+    n = len(sorted_q)
+
+    idx_lower = min(max(0, int(round(lower * (n - 1)))), n - 1)
+    idx_upper = min(max(0, int(round(upper * (n - 1)))), n - 1)
+
+    q_lower = sorted_q[idx_lower]
+    q_upper = sorted_q[idx_upper]
+
+    if q_lower <= 0 or q_upper <= 0 or q_lower < q_upper:
+        return 0.0
+
+    ln_q_lower = np.log(q_lower)
+    ln_q_upper = np.log(q_upper)
+
+    delta_p = upper - lower
+    if delta_p <= 0:
+        return 0.0
+
+    return float((ln_q_lower - ln_q_upper) / delta_p)
+
+
+def runoff_ratio(discharge: pd.Series, precipitation: pd.Series) -> float:
+    """Runoff ratio (total runoff / total precipitation).
+
+    Measures the fraction of precipitation that leaves the catchment as streamflow
+    over a shared observation period (Sawicz et al. 2011).
+
+    Parameters:
+        discharge: Daily discharge time series with DatetimeIndex.
+        precipitation: Daily precipitation time series with DatetimeIndex.
+
+    Returns:
+        Runoff ratio (dimensionless, ≥ 0).
+    """
+    q = discharge.dropna()
+    p = precipitation.dropna()
+    common_idx = q.index.intersection(p.index)
+    if len(common_idx) == 0:
+        return 0.0
+
+    total_p = float(p.loc[common_idx].sum())
+    total_q = float(q.loc[common_idx].sum())
+
+    if total_p <= 0:
+        return 0.0
+
+    return float(total_q / total_p)
 
 
 def baseflow_index_simple(discharge: pd.Series) -> float:
@@ -364,26 +443,23 @@ def compute_signatures(
     # -- timing --
     si, peak_m = seasonality_index(q)
 
-    # -- rate of change --
+    # -- rate of change / FDC --
     diffs = np.diff(q_vals)
     rising_density = float((diffs > 0).sum() / len(q_vals))
     fi = flashiness_index(q)
+    fdc_s = fdc_slope(q)
 
     # -- recession --
     rec_k = recession_constant(q)
 
     # -- precipitation-dependent --
-    runoff_ratio: float | None = None
+    r_ratio: float | None = None
     elast: float | None = None
 
     if precipitation is not None:
-        p = precipitation.dropna()
-        total_p = p.sum()
-        total_q = q.sum()
-        if total_p > 0:
-            runoff_ratio = float(total_q / total_p)
+        r_ratio = runoff_ratio(q, precipitation)
         try:
-            elast = flow_elasticity(q, p)
+            elast = flow_elasticity(q, precipitation)
         except ValueError:
             logger.warning("Could not compute elasticity — insufficient overlapping years.")
             elast = None
@@ -412,8 +488,9 @@ def compute_signatures(
         seasonality_index=si,
         rising_limb_density=rising_density,
         flashiness_index=fi,
+        fdc_slope=fdc_s,
         mean_recession_constant=rec_k,
-        runoff_ratio=runoff_ratio,
+        runoff_ratio=r_ratio,
         elasticity=elast,
     )
 

@@ -78,9 +78,11 @@ from aquascope.hydrology.signatures import (
     baseflow_index_simple,
     compare_signatures,
     compute_signatures,
+    fdc_slope,
     flashiness_index,
     flow_elasticity,
     recession_constant,
+    runoff_ratio,
     seasonality_index,
     similarity_score,
 )
@@ -147,9 +149,11 @@ __all__ = [
     # signatures
     "SignatureReport",
     "compute_signatures",
+    "fdc_slope",
     "flashiness_index",
     "seasonality_index",
     "flow_elasticity",
+    "runoff_ratio",
     "baseflow_index_simple",
     "recession_constant",
     "compare_signatures",

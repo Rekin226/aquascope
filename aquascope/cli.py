@@ -77,6 +77,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         IrelandOPWCollector,
         JapanMLITCollector,
         KoreaWAMISCollector,
+        NOAANWPSCollector,
         OpenMeteoCollector,
         PegelonlineCollector,
         SDG6Collector,
@@ -119,6 +120,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "grdc": lambda: GRDCCollector(),
         "camels_cl": lambda: CAMELSCLCollector(),
         "camels_br": lambda: CAMELSBRCollector(),
+        "noaa_nwps": lambda: NOAANWPSCollector(),
         "pegelonline": lambda: PegelonlineCollector(),
     }
 
@@ -187,6 +189,21 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["start"] = args.start_date
         if args.end_date:
             kwargs["end"] = args.end_date
+    if source == "noaa_nwps":
+        if not args.bbox and not args.lid:
+            logger.error("NOAA NWPS requires either the --bbox or --lid argument.")
+            sys.exit(1)
+        if args.bbox and args.lid:
+            logger.error("NOAA NWPS requires exactly one of --bbox or --lid.")
+            sys.exit(1)
+        if args.bbox:
+            try:
+                kwargs["bbox"] = _parse_bbox(args.bbox)
+            except ValueError as exc:
+                logger.error("%s", exc)
+                sys.exit(1)
+        if args.lid:
+            kwargs["lid"] = args.lid
     if source == "pegelonline":
         if not args.station:
             logger.error("PEGELONLINE requires --station with a station UUID.")
@@ -476,6 +493,7 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
             "Water levels from waterlevel.ie",
             "[https://waterlevel.ie](https://waterlevel.ie)",
         ),
+        "noaa_nwps": ("NOAA NWPS", "USA", " Streamflow forecasts, stream observations, streamflow output, crest history, flood impacts, low water history, flood category levels, and location metadata.", "https://www.water.noaa.gov"),
         "pegelonline": ("PEGELONLINE", "Germany", "River water level and discharge", "https://www.pegelonline.wsv.de"),
         "camels_cl": (
             "CAMELS-CL",
@@ -1064,6 +1082,7 @@ def main() -> None:
             "grdc",
             "camels_cl",
             "camels_br",
+            "noaa_nwps",
             "ireland_opw",
             "pegelonline",
         ],
@@ -1083,6 +1102,7 @@ def main() -> None:
     )
     p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR)")
     p_collect.add_argument("--variable", default=None, help="Variable code for the selected collector (WaPOR)")
+    p_collect.add_argument("--lid", default=None, help="A unique 5-character alphanumeric code e.g. ANAW1 (NOAA_NWPS)")
     p_collect.add_argument("--lat", type=float, default=None, help="Latitude (openmeteo/copernicus)")
     p_collect.add_argument("--lon", type=float, default=None, help="Longitude (openmeteo/copernicus)")
     p_collect.add_argument("--start-date", default=None, help="Start date YYYY-MM-DD (openmeteo/copernicus)")

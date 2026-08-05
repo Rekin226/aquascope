@@ -67,14 +67,14 @@ class SignatureReport:
     # Rate of change / FDC
     rising_limb_density: float  # positive dQ/dt days / total days
     flashiness_index: float  # Richards-Baker flashiness index
-    fdc_slope: float  # slope of the FDC in log space (Sawicz et al. 2011)
 
     # Recession
     mean_recession_constant: float  # average -dQ/dt during recession
 
-    # Overall (require precipitation)
-    runoff_ratio: float | None  # total_Q / total_P if precip provided
-    elasticity: float | None  # Sankarasubramanian elasticity if precip provided
+    # Overall (FDC / precipitation)
+    fdc_slope: float = 0.0  # slope of the FDC in log space (Sawicz et al. 2011)
+    runoff_ratio: float | None = None  # total_Q / total_P if precip provided
+    elasticity: float | None = None  # Sankarasubramanian elasticity if precip provided
 
 
 # ---------------------------------------------------------------------------

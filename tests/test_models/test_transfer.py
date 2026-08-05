@@ -43,6 +43,7 @@ def _make_signature(**overrides: float) -> SignatureReport:
         rising_limb_density=0.45,
         flashiness_index=0.3,
         mean_recession_constant=0.05,
+        fdc_slope=0.5,
         runoff_ratio=0.4,
         elasticity=1.2,
     )

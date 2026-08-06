@@ -354,6 +354,13 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
     assert len(res2) == 3
 
 
+def test_fetch_raw_bbox_requires_observed_property():
+    collector = UKEACollector(client=DummyClient())
+
+    with pytest.raises(ValueError, match="observedProperty"):
+        collector.fetch_raw(bbox="0.0,51.0,1.0,51.1")
+
+
 def test_fetch_raw_with_bbox_queries_two_stations():
     station1 = {
         "stationGuid": "s" * 36,

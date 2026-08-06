@@ -144,15 +144,34 @@ class UKEACollector(BaseCollector):
                 f"Alternatively, you can pass an exact measure."
             )
 
+        if bbox:
+            bounding_box_limits = UKEACollector._parse_bbox(bbox)
+            if not bounding_box_limits:
+                raise ValueError(
+                    'Invalid bbox string. Must be a string of 4 comma-separated floats '
+                    'in the form "min-long,min-lat,max-long,max-lat)". '
+                    'For example, "2.0,51.1,3.3,52.7"',
+                )
+            if not observed_property:
+                raise ValueError(
+                    "When using a bounding box, you must provide an observedProperty."
+                )
+            measure = None
+            station = None
+            station_wiski_id = None
+        else:
+            bounding_box_limits = None
+
         if measure:
             if observed_property:
                 logger.warning(
                     "Both measure and observedProperty provided. "
                     "Ignoring observedProperty and using the exact measure provided."
                 )
+            observed_property = None
             observed_property_code = UKEACollector._extract_observed_property_from_measure_id(measure)
-            observed_property = MAPPED_OBSERVED_PROPERTY_MEASURE_CODE.get(observed_property_code, None)
-            if observed_property is None:
+            observed_property_metadata = MAPPED_OBSERVED_PROPERTY_MEASURE_CODE.get(observed_property_code, None)
+            if observed_property_metadata is None:
                     raise ValueError(
                         f"Invalid measure: {measure}. "
                         "Could not determine a valid observedProperty."
@@ -180,17 +199,6 @@ class UKEACollector(BaseCollector):
                     "One of the following collection values must be passed: "
                     f"{', '.join(COLLECTION_PERIOD_VALUES.keys())}. "
                 )
-
-        if bbox:
-            bounding_box_limits = UKEACollector._parse_bbox(bbox)
-            if not bounding_box_limits:
-                raise ValueError(
-                    'Invalid bbox string. Must be a string of 4 comma-separated floats '
-                    'in the form "min-long,min-lat,max-long,max-lat)". '
-                    'For example, "2.0,51.1,3.3,52.7"',
-                )
-        else:
-            bounding_box_limits = None
 
         min_date, max_date = UKEACollector._compute_date_range(min_date, max_date, days)
 
@@ -288,6 +296,8 @@ class UKEACollector(BaseCollector):
             return []
 
         all_items.extend(paginated_items)
+        if measure:
+            all_items[0]["observedProperty"] = observed_property_metadata
 
         return all_items
 

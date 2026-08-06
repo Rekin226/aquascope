@@ -45,6 +45,16 @@ class TestMannKendall:
         assert res.slope == pytest.approx(-1.0)
         assert res.n_samples == 10
 
+    def test_hand_computed_tied_series(self):
+        # Validates exact S, var_s, Z, p-value, and Sen's slope on tied series
+        data = [3, 3, 5, 4, 4, 7, 6, 9, 9, 12, 11, 15]
+        res = mann_kendall(data)
+        assert res.s_stat == 55
+        assert res.var_s == pytest.approx(209.667, abs=1e-3)
+        assert res.z_stat == pytest.approx(3.729315, abs=1e-5)
+        assert res.p_value == pytest.approx(0.000192, abs=1e-5)
+        assert res.slope == pytest.approx(1.0)
+
     def test_no_trend(self):
         # Constant data has no trend
         data = [5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0]

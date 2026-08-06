@@ -107,8 +107,9 @@ def mann_kendall(
 ) -> MannKendallResult:
     """Perform a Mann-Kendall trend test on a time series.
 
-    Delegates to :mod:`pymannkendall` with automatic boundary handling for
-    missing values (NaNs), input validation, and standardized return structure.
+    The default ``"original"`` method uses pure NumPy/SciPy without external
+    dependencies. Autocorrelation-aware modified variants delegate to
+    :mod:`pymannkendall`.
 
     Parameters
     ----------
@@ -118,7 +119,7 @@ def mann_kendall(
         Significance level for the hypothesis test (default: ``0.05``).
     method:
         Mann-Kendall test variant. Supported values:
-        - ``"original"``: Standard Mann-Kendall test (default).
+        - ``"original"``: Standard Mann-Kendall test (default, pure SciPy).
         - ``"hamed_rao"``: Modified MK correcting for autocorrelation (Hamed & Rao 1998).
         - ``"yue_wang"``: Modified MK for autocorrelation (Yue & Wang 2004).
         - ``"pre_whitening"``: Pre-whitening modified MK (von Storch 1995).
@@ -132,18 +133,17 @@ def mann_kendall(
     Raises
     ------
     ImportError
-        If ``pymannkendall`` is not installed.
+        If a modified variant is requested but ``pymannkendall`` is not installed.
     ValueError
         If *method* is invalid or if fewer than 3 non-NaN values exist.
     """
-    mk = require("pymannkendall", feature="Mann-Kendall trend analysis", group="ml")
-
     if method not in _MK_METHODS:
         msg = f"Unknown Mann-Kendall method {method!r}. Choose from {sorted(_MK_METHODS)}."
         raise ValueError(msg)
 
     import numpy as np
     import pandas as pd
+    from scipy import stats
 
     if isinstance(series, pd.Series):
         arr = series.to_numpy(dtype=float)
@@ -165,26 +165,81 @@ def mann_kendall(
         raise ValueError(msg)
 
     if method == "original":
-        res = mk.original_test(clean, alpha=alpha)
-    elif method == "hamed_rao":
-        res = mk.hamed_rao_modification_test(clean, alpha=alpha)
-    elif method == "yue_wang":
-        res = mk.yue_wang_modification_test(clean, alpha=alpha)
-    elif method == "pre_whitening":
-        res = mk.pre_whitening_modification_test(clean, alpha=alpha)
-    else:  # tfpw
-        res = mk.trend_free_pre_whitening_modification_test(clean, alpha=alpha)
+        n = len(clean)
+        s = 0
+        for i in range(n - 1):
+            for j in range(i + 1, n):
+                diff = clean[j] - clean[i]
+                if diff > 0:
+                    s += 1
+                elif diff < 0:
+                    s -= 1
+
+        unique, counts = np.unique(clean, return_counts=True)
+        tie_sum = sum(t * (t - 1) * (2 * t + 5) for t in counts if t > 1)
+        var_s = (n * (n - 1) * (2 * n + 5) - tie_sum) / 18.0
+
+        if var_s == 0:
+            z = 0.0
+        elif s > 0:
+            z = (s - 1) / np.sqrt(var_s)
+        elif s < 0:
+            z = (s + 1) / np.sqrt(var_s)
+        else:
+            z = 0.0
+
+        p_val = float(2.0 * stats.norm.sf(abs(z)))
+
+        if p_val < alpha:
+            if z > 0:
+                trend_str = "increasing"
+            elif z < 0:
+                trend_str = "decreasing"
+            else:
+                trend_str = "no trend"
+        else:
+            trend_str = "no trend"
+
+        denom = 0.5 * n * (n - 1)
+        tau = float(s / denom) if denom > 0 else 0.0
+
+        slopes: list[float] = []
+        for i in range(n - 1):
+            for j in range(i + 1, n):
+                slopes.append((clean[j] - clean[i]) / (j - i))
+
+        slope_val = float(np.median(slopes)) if slopes else 0.0
+        intercept_val = float(np.median(clean - slope_val * np.arange(n)))
+    else:
+        mk = require("pymannkendall", feature="Mann-Kendall trend analysis", group="ml")
+        if method == "hamed_rao":
+            res = mk.hamed_rao_modification_test(clean, alpha=alpha)
+        elif method == "yue_wang":
+            res = mk.yue_wang_modification_test(clean, alpha=alpha)
+        elif method == "pre_whitening":
+            res = mk.pre_whitening_modification_test(clean, alpha=alpha)
+        else:  # tfpw
+            res = mk.trend_free_pre_whitening_modification_test(clean, alpha=alpha)
+
+        trend_str = str(res.trend)
+        p_val = float(res.p)
+        z = float(res.z)
+        tau = float(res.Tau)
+        s = float(res.s)
+        var_s = float(res.var_s)
+        slope_val = float(res.slope)
+        intercept_val = float(res.intercept)
 
     return MannKendallResult(
-        trend=str(res.trend),
-        h=bool(res.h),
-        p_value=float(res.p),
-        z_stat=float(res.z),
-        tau=float(res.Tau),
-        s_stat=float(res.s),
-        var_s=float(res.var_s),
-        slope=float(res.slope),
-        intercept=float(res.intercept),
+        trend=trend_str,  # type: ignore[arg-type]
+        h=bool(p_val < alpha),
+        p_value=p_val,
+        z_stat=z,
+        tau=tau,
+        s_stat=float(s),
+        var_s=float(var_s),
+        slope=slope_val,
+        intercept=intercept_val,
         alpha=float(alpha),
         method=str(method),
         n_samples=len(clean),
@@ -196,6 +251,8 @@ def sens_slope(
     series: pd.Series | np.ndarray | list[float],
 ) -> SensSlopeResult:
     """Estimate Sen's slope (median of pairwise slopes) for a time series.
+
+    Uses pure NumPy/SciPy without external dependencies.
 
     Parameters
     ----------
@@ -209,13 +266,9 @@ def sens_slope(
 
     Raises
     ------
-    ImportError
-        If ``pymannkendall`` is not installed.
     ValueError
         If fewer than 2 non-NaN values exist.
     """
-    mk = require("pymannkendall", feature="Sen's slope estimation", group="ml")
-
     import numpy as np
     import pandas as pd
 
@@ -238,11 +291,18 @@ def sens_slope(
         msg = f"Insufficient valid data points for Sen's slope (got {len(clean)}, need >= 2)."
         raise ValueError(msg)
 
-    res = mk.sens_slope(clean)
+    n = len(clean)
+    slopes: list[float] = []
+    for i in range(n - 1):
+        for j in range(i + 1, n):
+            slopes.append((clean[j] - clean[i]) / (j - i))
+
+    slope_val = float(np.median(slopes)) if slopes else 0.0
+    intercept_val = float(np.median(clean - slope_val * np.arange(n)))
 
     return SensSlopeResult(
-        slope=float(res.slope),
-        intercept=float(res.intercept),
+        slope=slope_val,
+        intercept=intercept_val,
         n_samples=len(clean),
         n_dropped_nans=n_dropped_nans,
     )

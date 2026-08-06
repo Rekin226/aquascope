@@ -189,34 +189,6 @@ def well_hydrograph(
     return HydrographResult(series=clean, stats=desc, correlation=corr, lag_days=lag)
 
 
-_MODIFIED_MK_METHODS = {
-    "modified_mann_kendall": "hamed_rao_modification_test",
-    "tfpw": "trend_free_pre_whitening_modification_test",
-}
-
-
-def _modified_mann_kendall(y: np.ndarray, method: str) -> WellTrendResult:
-    """Run an autocorrelation-aware Mann-Kendall variant via pymannkendall.
-
-    ``modified_mann_kendall`` applies the Hamed & Rao (1998) variance
-    correction for serial correlation; ``tfpw`` applies Yue et al. (2002)
-    trend-free pre-whitening. Both guard against the inflated significance
-    that plain MK gives on autocorrelated series (e.g. annual groundwater
-    levels with multi-year persistence).
-    """
-    from aquascope.utils.imports import require
-
-    mk = require("pymannkendall", feature="modified Mann-Kendall", group="ml")
-    result = getattr(mk, _MODIFIED_MK_METHODS[method])(y)
-    return WellTrendResult(
-        trend=result.trend,
-        p_value=float(result.p),
-        slope=float(result.slope),
-        intercept=float(result.intercept),
-        z_statistic=float(result.z),
-        method=method,
-    )
-
 
 def trend_detection(
     levels: pd.Series,
@@ -249,70 +221,27 @@ def trend_detection(
     ValueError
         If series has fewer than 3 observations or method is unknown.
     """
-    if len(levels) < 3:
-        raise ValueError("Need at least 3 data points for trend detection.")
-
-    if method in _MODIFIED_MK_METHODS:
-        return _modified_mann_kendall(levels.dropna().values.astype(float), method)
-    if method != "mann_kendall":
+    method_map = {
+        "mann_kendall": "original",
+        "modified_mann_kendall": "hamed_rao",
+        "tfpw": "tfpw",
+    }
+    if method not in method_map:
         raise ValueError(
             f"Unknown method: {method!r}. Supported: 'mann_kendall', "
             f"'modified_mann_kendall', 'tfpw'."
         )
 
-    y = levels.dropna().values.astype(float)
-    n = len(y)
+    from aquascope.analysis.trends import mann_kendall
 
-    # Mann-Kendall S statistic
-    s = 0
-    for i in range(n - 1):
-        for j in range(i + 1, n):
-            diff = y[j] - y[i]
-            if diff > 0:
-                s += 1
-            elif diff < 0:
-                s -= 1
-
-    # Variance of S (accounting for ties)
-    unique, counts = np.unique(y, return_counts=True)
-    tie_sum = sum(t * (t - 1) * (2 * t + 5) for t in counts if t > 1)
-    var_s = (n * (n - 1) * (2 * n + 5) - tie_sum) / 18.0
-
-    # Z statistic
-    if var_s == 0:
-        z = 0.0
-    elif s > 0:
-        z = (s - 1) / np.sqrt(var_s)
-    elif s < 0:
-        z = (s + 1) / np.sqrt(var_s)
-    else:
-        z = 0.0
-
-    p_value = 2.0 * stats.norm.sf(abs(z))
-
-    # Sen's slope
-    slopes: list[float] = []
-    for i in range(n - 1):
-        for j in range(i + 1, n):
-            if j != i:
-                slopes.append((y[j] - y[i]) / (j - i))
-    sen_slope = float(np.median(slopes)) if slopes else 0.0
-
-    # Sen's intercept
-    sen_intercept = float(np.median(y - sen_slope * np.arange(n)))
-
-    if p_value < 0.05:
-        trend = "increasing" if sen_slope > 0 else "decreasing"
-    else:
-        trend = "no trend"
-
-    logger.info("Trend: %s (slope=%.4f, p=%.4e)", trend, sen_slope, p_value)
+    res = mann_kendall(levels, method=method_map[method])
+    logger.info("Trend: %s (slope=%.4f, p=%.4e)", res.trend, res.slope, res.p_value)
     return WellTrendResult(
-        trend=trend,
-        p_value=float(p_value),
-        slope=sen_slope,
-        intercept=sen_intercept,
-        z_statistic=float(z),
+        trend=res.trend,
+        p_value=res.p_value,
+        slope=res.slope,
+        intercept=res.intercept,
+        z_statistic=res.z_stat,
         method=method,
     )
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from aquascope.dashboard.views.collect import SOURCES, _FACTORIES
+from aquascope.dashboard.views.collect import _FACTORIES, SOURCES
 from aquascope.schemas.water_data import DataSource
 
 # DataSources that are enum placeholders or not yet standalone collector classes

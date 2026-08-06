@@ -359,13 +359,19 @@ def test_fetch_raw_with_bbox_queries_two_stations():
         "stationGuid": "s" * 36,
         "label": "Station 1",
         "lat": "51.1",
-        "long": "0.1",
+        "long": "0.0",
     }
     station2 = {
         "stationGuid": "t" * 36,
         "label": "Station 2",
         "lat": "51.2",
         "long": "0.2",
+    }
+    station3 = {
+        "stationGuid": "u" * 36,
+        "label": "Station 3",
+        "lat": "51.0",
+        "long": "1.0",
     }
     item1 = {
         "measure": {"@id": "http://measures/ssssssssssssssssssssssssssssssssssss-measure-info"},
@@ -377,23 +383,28 @@ def test_fetch_raw_with_bbox_queries_two_stations():
         "value": "2.2",
         "dateTime": "2025-01-02T01:00:00",
     }
+    item3 = {
+        "measure": {"@id": "http://measures/uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu-measure-info"},
+        "value": "3.3",
+        "dateTime": "2025-01-03T01:00:00",
+    }
 
     def behaviour(path, params):
         if path == "id/stations.json":
-            assert params["_limit"] == 100
+            assert params["_limit"] == 10000
             assert params["observedProperty"] == "waterLevel"
             assert params["mineq-long"] == 0.0
             assert params["mineq-lat"] == 51.0
             assert params["maxeq-long"] == 1.0
             assert params["maxeq-lat"] == 51.1
             if params.get("_offset", 0) == 0:
-                return {"items": [station1]}
+                return {"items": [station1, station3]}
             return {"items": []}
 
         if path == "data/readings.json":
             assert params["_limit"] == 10000
             assert params["observedProperty"] == "waterLevel"
-            assert params["station"] == station1["stationGuid"]
+            assert params["station"] in {station1["stationGuid"], station3["stationGuid"]}
             assert "mineq-long" not in params
             assert "mineq-lat" not in params
             assert "maxeq-long" not in params
@@ -403,6 +414,8 @@ def test_fetch_raw_with_bbox_queries_two_stations():
                     return {"items": [item1]}
                 elif params["station"] == station2["stationGuid"]:
                     return {"items": [item2]}
+                elif params["station"] == station3["stationGuid"]:
+                    return {"items": [item3]}
             return {"items": []}
 
         return {"items": []}
@@ -411,18 +424,18 @@ def test_fetch_raw_with_bbox_queries_two_stations():
     collector = UKEACollector(client=client)
     raw = collector.fetch_raw(observed_property="waterLevel", bbox="0.0,51.0,1.0,51.1", limit=10000)
 
-    assert len(raw) == 2
+    assert len(raw) == 3
     assert raw[1]["_station"]["stationGuid"] == station1["stationGuid"]
 
     station_calls = [call for call in client.calls if call[0] == "id/stations.json"]
     assert len(station_calls) == 2
     assert station_calls[0][1]["_offset"] == 0
-    assert station_calls[1][1]["_offset"] == 100
+    assert station_calls[1][1]["_offset"] == 10000
 
     data_calls = [call for call in client.calls if call[0] == "data/readings.json"]
-    assert len(data_calls) == 2
-    assert {call[1]["station"] for call in data_calls} == {station1["stationGuid"]}
-    assert [call[1]["_offset"] for call in data_calls] == [0, 10000]
+    assert len(data_calls) == 4
+    assert {call[1]["station"] for call in data_calls} == {station1["stationGuid"], station3["stationGuid"]}
+    assert [call[1]["_offset"] for call in data_calls] == [0, 10000, 0, 10000]
 
 
 def test_fetch_raw_fetches_station_metadata_for_wiski_id_only():

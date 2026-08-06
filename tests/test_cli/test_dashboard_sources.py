@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from aquascope.dashboard.views.collect import SOURCES
+from aquascope.dashboard.views.collect import SOURCES, _FACTORIES
 from aquascope.schemas.water_data import DataSource
 
 # DataSources that are enum placeholders or not yet standalone collector classes
@@ -30,11 +30,12 @@ def test_dashboard_collect_page_covers_all_registered_sources():
 
 
 def test_dashboard_run_collector_supports_all_sources():
-    """Every key in SOURCES must have a factory entry in _run_collector."""
-    for source_key in SOURCES:
-        # Verify that source_key doesn't raise KeyError when setting up factory
-        # (we check factory existence without executing network calls)
-        assert source_key in SOURCES, f"Source '{source_key}' missing from SOURCES map"
+    """Every key in SOURCES must have a factory entry in _FACTORIES."""
+    assert set(_FACTORIES) == set(SOURCES), (
+        f"Mismatch between SOURCES and _FACTORIES keys. "
+        f"Missing in _FACTORIES: {set(SOURCES) - set(_FACTORIES)}. "
+        f"Extra in _FACTORIES: {set(_FACTORIES) - set(SOURCES)}."
+    )
 
 
 @pytest.mark.parametrize("source_key", sorted(SOURCES.keys()))

@@ -555,7 +555,7 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
             format_func=lambda v: {"lid": "Station LID", "bbox": "Bounding box"}[v],
         )
         if mode == "lid":
-            lid = st.text_input("Station LID (e.g. BRLM1)", value="BRLM1")
+            lid = st.text_input("Station LID (e.g. ANAW1)", value="ANAW1")
             if lid.strip():
                 fetch["lid"] = lid.strip()
         else:
@@ -574,7 +574,7 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
         st.caption("PEGELONLINE — recent 31-day water level and discharge readings from German federal waterways.")
         station = st.text_input("Station UUID", placeholder="d3301a25-2401-44cd-9f79-aa66c61f22e0")
         if station.strip():
-            fetch["station"] = station.strip()
+            fetch["station_id"] = station.strip()
         ts = st.selectbox(
             "Timeseries",
             ["both", "W", "Q"],
@@ -623,38 +623,40 @@ def _records_to_df(records: list) -> pd.DataFrame:
     return df
 
 
+_FACTORIES = {
+    "usgs": lambda api_key, ctor, c: c.USGSCollector(api_key=api_key or "DEMO_KEY"),
+    "grdc": lambda api_key, ctor, c: c.GRDCCollector(),
+    "openmeteo": lambda api_key, ctor, c: c.OpenMeteoCollector(mode=ctor.get("mode", "weather")),
+    "sdg6": lambda api_key, ctor, c: c.SDG6Collector(),
+    "gemstat": lambda api_key, ctor, c: c.GEMStatCollector(),
+    "aquastat": lambda api_key, ctor, c: c.AquastatCollector(),
+    "wapor": lambda api_key, ctor, c: c.WaPORCollector(),
+    "copernicus": lambda api_key, ctor, c: c.CopernicusCollector(),
+    "wqp": lambda api_key, ctor, c: c.WQPCollector(),
+    "hubeau_hydrometrie": lambda api_key, ctor, c: c.HubeauHydrometrieCollector(),
+    "eu_wfd": lambda api_key, ctor, c: c.EUWFDCollector(),
+    "taiwan_moenv": lambda api_key, ctor, c: c.TaiwanMOENVCollector(api_key=api_key or ""),
+    "taiwan_wra_level": lambda api_key, ctor, c: c.TaiwanWRAWaterLevelCollector(),
+    "taiwan_wra_reservoir": lambda api_key, ctor, c: c.TaiwanWRAReservoirCollector(),
+    "taiwan_wra_fhy": lambda api_key, ctor, c: c.TaiwanWRAFhyCollector(data_type=ctor.get("data_type", "water")),
+    "taiwan_wra_iot": lambda api_key, ctor, c: c.TaiwanWRAIoTCollector(data_type=ctor.get("data_type", "groundwater")),
+    "taiwan_datagov": lambda api_key, ctor, c: c.TaiwanDataGovCollector(dataset_id=ctor.get("dataset_id", "25768")),
+    "taiwan_civil_iot": lambda api_key, ctor, c: c.TaiwanCivilIoTCollector(),
+    "japan_mlit": lambda api_key, ctor, c: c.JapanMLITCollector(),
+    "korea_wamis": lambda api_key, ctor, c: c.KoreaWAMISCollector(),
+    "india_wris": lambda api_key, ctor, c: c.IndiaWRISCollector(),
+    "noaa_nwps": lambda api_key, ctor, c: c.NOAANWPSCollector(),
+    "ireland_opw": lambda api_key, ctor, c: c.IrelandOPWCollector(),
+    "pegelonline": lambda api_key, ctor, c: c.PegelonlineCollector(),
+    "camels_cl": lambda api_key, ctor, c: c.CAMELSCLCollector(),
+}
+
+
 def _run_collector(source_key: str, api_key: str, ctor: dict, fetch: dict):
     """Instantiate the right collector and fetch — covers all 25 sources."""
     from aquascope import collectors as c
 
-    factories = {
-        "usgs": lambda: c.USGSCollector(api_key=api_key or "DEMO_KEY"),
-        "grdc": lambda: c.GRDCCollector(),
-        "openmeteo": lambda: c.OpenMeteoCollector(mode=ctor.get("mode", "weather")),
-        "sdg6": lambda: c.SDG6Collector(),
-        "gemstat": lambda: c.GEMStatCollector(),
-        "aquastat": lambda: c.AquastatCollector(),
-        "wapor": lambda: c.WaPORCollector(),
-        "copernicus": lambda: c.CopernicusCollector(),
-        "wqp": lambda: c.WQPCollector(),
-        "hubeau_hydrometrie": lambda: c.HubeauHydrometrieCollector(),
-        "eu_wfd": lambda: c.EUWFDCollector(),
-        "taiwan_moenv": lambda: c.TaiwanMOENVCollector(api_key=api_key or ""),
-        "taiwan_wra_level": lambda: c.TaiwanWRAWaterLevelCollector(),
-        "taiwan_wra_reservoir": lambda: c.TaiwanWRAReservoirCollector(),
-        "taiwan_wra_fhy": lambda: c.TaiwanWRAFhyCollector(data_type=ctor.get("data_type", "water")),
-        "taiwan_wra_iot": lambda: c.TaiwanWRAIoTCollector(data_type=ctor.get("data_type", "groundwater")),
-        "taiwan_datagov": lambda: c.TaiwanDataGovCollector(dataset_id=ctor.get("dataset_id", "25768")),
-        "taiwan_civil_iot": lambda: c.TaiwanCivilIoTCollector(),
-        "japan_mlit": lambda: c.JapanMLITCollector(),
-        "korea_wamis": lambda: c.KoreaWAMISCollector(),
-        "india_wris": lambda: c.IndiaWRISCollector(),
-        "noaa_nwps": lambda: c.NOAANWPSCollector(),
-        "ireland_opw": lambda: c.IrelandOPWCollector(),
-        "pegelonline": lambda: c.PegelonlineCollector(),
-        "camels_cl": lambda: c.CAMELSCLCollector(),
-    }
-    collector = factories[source_key]()
+    collector = _FACTORIES[source_key](api_key, ctor, c)
     kwargs = dict(fetch)
     if api_key and source_key == "copernicus":
         kwargs["api_key"] = api_key

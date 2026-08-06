@@ -4,6 +4,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Added
+- **CI CHANGELOG enforcement** (`.github/workflows/ci.yml` and `.github/scripts/check_changelog.py`): added a CI workflow check that enforces a `CHANGELOG.md` entry on pull requests unless the `no-changelog` opt-out label is present (#144).
+
 ## [0.9.0] - 2026-08-04
 
 Four new countries, a rebuilt dashboard, and a live in-browser demo. AquaScope

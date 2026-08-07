@@ -28,6 +28,7 @@ from aquascope.collectors.taiwan_wra import (
 )
 from aquascope.collectors.taiwan_wra_fhy import TaiwanWRAFhyCollector
 from aquascope.collectors.taiwan_wra_iot import TaiwanWRAIoTCollector
+from aquascope.collectors.uk_ea import UKEACollector
 from aquascope.collectors.usgs import USGSCollector
 from aquascope.collectors.wapor import WaPORCollector
 from aquascope.collectors.wqp import WQPCollector
@@ -58,6 +59,7 @@ __all__ = [
     "TaiwanWRAIoTCollector",
     "TaiwanWRAReservoirCollector",
     "TaiwanWRAWaterLevelCollector",
+    "UKEACollector",
     "USGSCollector",
     "WaPORCollector",
     "WQPCollector",

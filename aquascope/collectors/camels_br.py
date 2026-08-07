@@ -95,7 +95,6 @@ class CAMELSBRCollector(BaseCollector):
                 CAMELS_BR_ATTRS_URL,
                 follow_redirects=True,
                 timeout=600,
-                headers={"User-Agent": "Mozilla/5.0"},
             ) as resp:
                 resp.raise_for_status()
                 with attrs_zip_path.open("wb") as fh:
@@ -114,7 +113,6 @@ class CAMELSBRCollector(BaseCollector):
                 CAMELS_BR_FLOW_URL,
                 follow_redirects=True,
                 timeout=600,
-                headers={"User-Agent": "Mozilla/5.0"},
             ) as resp:
                 resp.raise_for_status()
                 with flow_zip_path.open("wb") as fh:

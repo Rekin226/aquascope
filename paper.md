@@ -23,7 +23,7 @@ bibliography: paper.bib
 # Summary
 
 AquaScope is an open-source Python toolkit (v0.9.0, MIT license) that unifies water
-data collection from 25 global sources, comprehensive hydrological and statistical
+data collection from 26 global sources, comprehensive hydrological and statistical
 analysis, agricultural water management, and AI-powered research methodology
 recommendations into a single, coherent package. It addresses a persistent challenge
 in water resources research: the fragmentation of data access, analytical methods, and
@@ -68,12 +68,12 @@ Second, no single toolkit couples multi-source data collection with a comprehens
 hydrological analysis suite, agricultural water management, advanced statistical and
 machine-learning methods, and intelligent methodology guidance.
 
-AquaScope addresses both. Its 25 collectors span East and South Asia (Taiwan MOENV and
+AquaScope addresses both. Its 26 collectors span East and South Asia (Taiwan MOENV and
 WRA networks, Japan MLIT, Korea WAMIS, India WRIS), Europe (EU Water Framework
-Directive, France Hub'Eau, Germany PEGELONLINE, Ireland OPW), the Americas (USGS, Water
-Quality Portal, NOAA National Water Prediction Service, and CAMELS-CL for Chile), and
-global providers (GEMStat, GRDC river discharge, Open-Meteo, Copernicus, UN SDG 6, FAO
-AQUASTAT and WaPOR). On top of this it
+Directive, France Hub'Eau, Germany PEGELONLINE, Ireland OPW, UK Environment Agency),
+the Americas (USGS, Water Quality Portal, NOAA National Water Prediction Service,
+and CAMELS-CL for Chile), and global providers (GEMStat, GRDC river discharge,
+Open-Meteo, Copernicus, UN SDG 6, FAO AQUASTAT and WaPOR). On top of this it
 provides an end-to-end workflow, from raw data ingestion through analysis to methodology
 recommendation, in a single, well-tested Python package with a unified API. It targets
 hydrologists, environmental engineers, agricultural scientists, and water resources
@@ -83,7 +83,7 @@ patchwork of incompatible tools.
 
 # Key Features
 
-**Data aggregation.** AquaScope implements collectors for 25 water data sources, each
+**Data aggregation.** AquaScope implements collectors for 26 water data sources, each
 subclassing a common `BaseCollector` and normalising responses into shared Pydantic
 schemas. Coverage spans Asia (Taiwan MOENV and WRA networks, including a daily
 groundwater-level series reachable only through the WRA HydroInfo portal, Taiwan Civil
@@ -146,7 +146,7 @@ integration on Python 3.10–3.12, linting (Ruff), and type checking (mypy).
 
 | Feature                        | AquaScope | HyRiver | dataretrieval | hydrostats | pySTEPS |
 |--------------------------------|:---------:|:-------:|:-------------:|:----------:|:-------:|
-| Multi-source data collection   | 25        | U.S.    | U.S.          | —          | —       |
+| Multi-source data collection   | 26        | U.S.    | U.S.          | —          | —       |
 | Non-U.S. / global coverage     | ✓         | —       | —             | —          | —       |
 | Unified data schemas           | ✓         | ✓       | —             | —          | —       |
 | Conceptual rainfall-runoff (GR4J)| ✓       | —       | —             | —          | —       |

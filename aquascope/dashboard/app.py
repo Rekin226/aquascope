@@ -90,6 +90,7 @@ def main() -> None:
         analysis,
         collect,
         extremes,
+        groundwater,
         home,
         hydrology,
         visualize,
@@ -104,6 +105,7 @@ def main() -> None:
         "analysis": st.Page(analysis.render, title="Analyze & Clean", icon=":material/science:", url_path="analysis"),
         "visualize": st.Page(visualize.render, title="Visualize", icon=":material/monitoring:", url_path="visualize"),
         "hydrology": st.Page(hydrology.render, title="Hydrology Lab", icon=":material/water:", url_path="hydrology"),
+        "groundwater": st.Page(groundwater.render, title="Groundwater", icon=":material/water_drop:", url_path="groundwater"),
         "extremes": st.Page(extremes.render, title="Extreme Events", icon=":material/cyclone:", url_path="extremes"),
         "agri": st.Page(agri.render, title="Agricultural Water", icon=":material/agriculture:", url_path="agri"),
         "ai": st.Page(ai.render, title="AI Recommender", icon=":material/smart_toy:", url_path="ai"),
@@ -116,7 +118,7 @@ def main() -> None:
             "": [pages["home"]],
             "Data": [pages["collect"], pages["analysis"]],
             "Explore": [pages["visualize"]],
-            "Water science": [pages["hydrology"], pages["extremes"], pages["agri"]],
+            "Water science": [pages["hydrology"], pages["extremes"], pages["agri"], pages["groundwater"]],
             "Intelligence": [pages["ai"], pages["alerts"]],
         }
     )

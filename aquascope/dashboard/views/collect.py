@@ -63,6 +63,11 @@ SOURCES: dict[str, tuple[str, str, str]] = {
         "Real-time river stage and discharge from German federal waterways (WSV)",
     ),
     "camels_cl": ("CAMELS-CL", "Chile", "Daily observed streamflow & catchment attributes for 516 Chilean catchments"),
+    "uk_ea": (
+        "UK Environment Agency",
+        "United Kingdom",
+        "Real-time river level, flow, rainfall, and groundwater observations from UK EA telemetry",
+    ),
 }
 
 _API_KEY_SOURCES: dict[str, tuple[str, str]] = {
@@ -73,6 +78,7 @@ _API_KEY_SOURCES: dict[str, tuple[str, str]] = {
 _REGION_ORDER = [
     "Global",
     "United States",
+    "United Kingdom",
     "Europe",
     "France",
     "Germany",
@@ -603,6 +609,35 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
         if ed:
             fetch["end"] = str(ed)
 
+    elif source_key == "uk_ea":
+        st.caption("UK Environment Agency — real-time river level, flow, rainfall, and groundwater telemetry.")
+        fetch["observed_property"] = st.selectbox(
+            "Observed property",
+            ["waterFlow", "waterLevel", "rainfall", "groundwaterLevel"],
+            format_func=lambda v: {
+                "waterFlow": "waterFlow (m³/s)",
+                "waterLevel": "waterLevel (m)",
+                "rainfall": "rainfall (mm)",
+                "groundwaterLevel": "groundwaterLevel (mAOD)",
+            }[v],
+        )
+        fetch["collection"] = st.selectbox(
+            "Collection frequency",
+            ["15min", "daily"],
+            format_func=lambda v: {"15min": "15-minute readings", "daily": "Daily summaries"}[v],
+        )
+        c1, c2 = st.columns(2)
+        st_id = c1.text_input("Station SUID (optional)", placeholder="e.g. 054005")
+        if st_id.strip():
+            fetch["station"] = st_id.strip()
+        st_wiski = c2.text_input("WISKI ID (optional)", placeholder="e.g. 054005_GW")
+        if st_wiski.strip():
+            fetch["station_wiski_id"] = st_wiski.strip()
+        bbox_str = st.text_input("Bounding box (min-lon,min-lat,max-lon,max-lat)", placeholder="-2.5,51.0,-1.5,52.0")
+        if bbox_str.strip():
+            fetch["bbox"] = bbox_str.strip()
+        fetch["days"] = st.slider("Days of history", 1, 30, 7)
+
 
 def _records_to_df(records: list) -> pd.DataFrame:
     """Convert schema objects to a DataFrame, flattening nested locations.
@@ -649,6 +684,7 @@ _FACTORIES = {
     "ireland_opw": lambda api_key, ctor, c: c.IrelandOPWCollector(),
     "pegelonline": lambda api_key, ctor, c: c.PegelonlineCollector(),
     "camels_cl": lambda api_key, ctor, c: c.CAMELSCLCollector(),
+    "uk_ea": lambda api_key, ctor, c: c.UKEACollector(),
 }
 
 

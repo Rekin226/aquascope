@@ -54,6 +54,7 @@ class TestMannKendall:
         assert res.z_stat == pytest.approx(3.729315, abs=1e-5)
         assert res.p_value == pytest.approx(0.000192, abs=1e-5)
         assert res.slope == pytest.approx(1.0)
+        assert res.intercept == pytest.approx(1.0)
 
     def test_no_trend(self):
         # Constant data has no trend

@@ -167,13 +167,11 @@ def mann_kendall(
     if method == "original":
         n = len(clean)
         s = 0
+        slopes_list: list[np.ndarray] = []
         for i in range(n - 1):
-            for j in range(i + 1, n):
-                diff = clean[j] - clean[i]
-                if diff > 0:
-                    s += 1
-                elif diff < 0:
-                    s -= 1
+            d = clean[i + 1 :] - clean[i]
+            s += int(np.sign(d).sum())
+            slopes_list.append(d / np.arange(1, n - i))
 
         unique, counts = np.unique(clean, return_counts=True)
         tie_sum = sum(t * (t - 1) * (2 * t + 5) for t in counts if t > 1)
@@ -203,13 +201,13 @@ def mann_kendall(
         denom = 0.5 * n * (n - 1)
         tau = float(s / denom) if denom > 0 else 0.0
 
-        slopes: list[float] = []
-        for i in range(n - 1):
-            for j in range(i + 1, n):
-                slopes.append((clean[j] - clean[i]) / (j - i))
+        if slopes_list:
+            all_slopes = np.concatenate(slopes_list)
+            slope_val = float(np.median(all_slopes))
+        else:
+            slope_val = 0.0
 
-        slope_val = float(np.median(slopes)) if slopes else 0.0
-        intercept_val = float(np.median(clean - slope_val * np.arange(n)))
+        intercept_val = float(np.median(clean) - np.median(np.arange(n)) * slope_val)
     else:
         mk = require("pymannkendall", feature="Mann-Kendall trend analysis", group="ml")
         if method == "hamed_rao":
@@ -292,13 +290,18 @@ def sens_slope(
         raise ValueError(msg)
 
     n = len(clean)
-    slopes: list[float] = []
+    slopes_list: list[np.ndarray] = []
     for i in range(n - 1):
-        for j in range(i + 1, n):
-            slopes.append((clean[j] - clean[i]) / (j - i))
+        d = clean[i + 1 :] - clean[i]
+        slopes_list.append(d / np.arange(1, n - i))
 
-    slope_val = float(np.median(slopes)) if slopes else 0.0
-    intercept_val = float(np.median(clean - slope_val * np.arange(n)))
+    if slopes_list:
+        all_slopes = np.concatenate(slopes_list)
+        slope_val = float(np.median(all_slopes))
+    else:
+        slope_val = 0.0
+
+    intercept_val = float(np.median(clean) - np.median(np.arange(n)) * slope_val)
 
     return SensSlopeResult(
         slope=slope_val,

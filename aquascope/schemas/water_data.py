@@ -38,6 +38,7 @@ class DataSource(str, Enum):
     TAIWAN_DATAGOV = "taiwan_datagov"
     INDIA_WRIS = "india_wris"
     HUBEAU = "france_hubeau"
+    UK_EA = "uk_ea"
     GRDC = "grdc"
     CAMELS_CL = "camels_cl"
     IRELAND_OPW = "ireland_opw"

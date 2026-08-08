@@ -279,8 +279,14 @@ class TestSimilarityScore:
 class TestFDCSlope:
     """Tests for fdc_slope."""
 
-    def test_fdc_slope_monotone(self):
-        """Monotonic decreasing flow duration curve should yield a positive log slope."""
+    def test_fdc_slope_analytic_exponential(self):
+        """Analytical exponential series exp(-2.0 * p) has an exact FDC slope of 2.0."""
+        p = np.arange(365) / 364
+        q = pd.Series(np.exp(-2.0 * p), index=_daily_index(365))
+        assert fdc_slope(q) == pytest.approx(2.0, rel=1e-2)
+
+    def test_fdc_slope_seasonal_series(self):
+        """Synthetic seasonal discharge series should yield a finite, positive log slope."""
         q = _seasonal_series(730)
         slope = fdc_slope(q, lower=0.33, upper=0.66)
         assert np.isfinite(slope)

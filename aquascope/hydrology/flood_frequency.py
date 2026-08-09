@@ -62,18 +62,26 @@ def fit_gev(
     *,
     return_periods: list[int] | None = None,
     ci_level: float = 0.90,
+    max_abs_shape: float = 0.5,
 ) -> FloodFreqResult:
-    """Fit a GEV distribution to the annual maximum series.
+    """Fit a Generalized Extreme Value (GEV) distribution via MLE with L-moments seeding.
+
+    Uses L-moments parameter estimates to seed maximum likelihood estimation
+    and constrains the shape parameter to *max_abs_shape* (default 0.5) to prevent
+    unstable tail estimates on short or moderate records (n < 50). If the MLE fit
+    produces degenerate or unplausible shape parameters, it falls back to the
+    robust L-moments fit.
 
     Parameters
     ----------
     discharge:
-        Daily discharge series with a DatetimeIndex.
+        Daily discharge time series or annual maxima series.
     return_periods:
-        Return periods in years to estimate.  Defaults to
-        ``[2, 5, 10, 25, 50, 100, 200, 500]``.
+        Return periods in years (default: [2, 5, 10, 25, 50, 100, 200, 500]).
     ci_level:
         Confidence level for bootstrap CIs (default 0.90).
+    max_abs_shape:
+        Maximum allowed absolute value for GEV shape parameter |c| (default 0.5).
 
     Returns
     -------
@@ -86,15 +94,42 @@ def fit_gev(
     """
     from scipy.stats import genextreme
 
-    annual_max = _extract_annual_max(discharge)
-    if len(annual_max) < 5:
-        msg = f"Need ≥5 years of data; got {len(annual_max)}"
+    annual_max = _extract_annual_max(discharge) if isinstance(discharge, pd.Series) else pd.Series(discharge)
+    data = annual_max.values.astype(np.float64)
+    if len(data) < 5:
+        msg = f"Need ≥5 years of data; got {len(data)}"
         raise ValueError(msg)
 
     if return_periods is None:
         return_periods = [2, 5, 10, 25, 50, 100, 200, 500]
 
-    shape, loc, scale = genextreme.fit(annual_max.values)
+    # Step 1: L-moments initial estimates to seed MLE
+    lmom_shape, lmom_loc, lmom_scale = _fit_gev_lmoments_params(data)
+
+    shape, loc, scale = lmom_shape, lmom_loc, lmom_scale
+    mle_failed = False
+
+    try:
+        s_mle, loc_mle, sc_mle = genextreme.fit(data, lmom_shape, loc=lmom_loc, scale=lmom_scale)
+        if (
+            np.isfinite(s_mle)
+            and np.isfinite(loc_mle)
+            and np.isfinite(sc_mle)
+            and sc_mle > 0
+            and abs(s_mle) <= max_abs_shape
+        ):
+            shape, loc, scale = float(s_mle), float(loc_mle), float(sc_mle)
+        else:
+            mle_failed = True
+    except Exception:  # noqa: BLE001
+        mle_failed = True
+
+    if mle_failed:
+        logger.warning(
+            "GEV MLE fit unconstrained shape outside plausible bound (|c| <= %.2f); falling back to L-moments estimate (shape=%.3f)",
+            max_abs_shape,
+            lmom_shape,
+        )
 
     rp_map: dict[int, float] = {}
     ci_map: dict[int, tuple[float, float]] = {}
@@ -107,16 +142,59 @@ def fit_gev(
     n_boot = 1000
     rng = np.random.default_rng(42)
     boot_estimates: dict[int, list[float]] = {rp: [] for rp in return_periods}
+    n_discarded = 0
 
     for _ in range(n_boot):
-        sample = rng.choice(annual_max.values, size=len(annual_max), replace=True)
+        sample = rng.choice(data, size=len(data), replace=True)
         try:
-            s, loc_b, sc = genextreme.fit(sample)
-            for rp in return_periods:
-                prob = 1 - 1.0 / rp
-                boot_estimates[rp].append(float(genextreme.ppf(prob, s, loc=loc_b, scale=sc)))
+            l_s, l_loc, l_sc = _fit_gev_lmoments_params(sample)
         except Exception:  # noqa: BLE001
+            n_discarded += 1
             continue
+
+        s_fit, loc_fit, sc_fit = None, None, None
+        try:
+            s_mle, loc_b, sc_b = genextreme.fit(sample, l_s, loc=l_loc, scale=l_sc)
+            if (
+                np.isfinite(s_mle)
+                and np.isfinite(loc_b)
+                and np.isfinite(sc_b)
+                and sc_b > 0
+                and abs(s_mle) <= max_abs_shape
+            ):
+                s_fit, loc_fit, sc_fit = float(s_mle), float(loc_b), float(sc_b)
+        except Exception:  # noqa: BLE001
+            pass
+
+        if s_fit is None:
+            if (
+                np.isfinite(l_s)
+                and np.isfinite(l_loc)
+                and np.isfinite(l_sc)
+                and l_sc > 0
+                and abs(l_s) <= max_abs_shape
+            ):
+                s_fit, loc_fit, sc_fit = l_s, l_loc, l_sc
+
+        if s_fit is None:
+            n_discarded += 1
+            continue
+
+        for rp in return_periods:
+            prob = 1 - 1.0 / rp
+            val = float(genextreme.ppf(prob, s_fit, loc=loc_fit, scale=sc_fit))
+            if np.isfinite(val) and val > 0:
+                boot_estimates[rp].append(val)
+
+    if n_discarded > 0:
+        pct_discarded = (n_discarded / n_boot) * 100
+        logger.warning(
+            "GEV bootstrap: discarded %d of %d resample fits (%.1f%%) due to shape bounds (|c| <= %.2f)",
+            n_discarded,
+            n_boot,
+            pct_discarded,
+            max_abs_shape,
+        )
 
     alpha = (1 - ci_level) / 2
     for rp in return_periods:
@@ -505,6 +583,22 @@ def lmoments_from_sample(data: np.ndarray) -> dict[str, float]:
     return {"L1": float(l1), "L2": float(l2), "L3": float(l3), "L4": float(l4), "t3": float(t3), "t4": float(t4)}
 
 
+def _fit_gev_lmoments_params(data: np.ndarray) -> tuple[float, float, float]:
+    """Estimate GEV parameters (scipy_shape, loc, scale) using L-moments."""
+    lmom = lmoments_from_sample(data)
+    l1, l2, t3 = lmom["L1"], lmom["L2"], lmom["t3"]
+
+    c = 2.0 / (3.0 + t3) - np.log(2.0) / np.log(3.0)
+    shape = 7.8590 * c + 2.9554 * c * c
+
+    gamma_val = _gamma_func(1 + shape)
+    alpha = l2 * shape / (gamma_val * (1 - 2 ** (-shape))) if abs(shape) > 1e-10 else l2 / np.log(2)
+    xi = l1 - alpha * (gamma_val - 1) / shape if abs(shape) > 1e-10 else l1 - alpha * 0.5772156649
+
+    scipy_shape = -shape
+    return float(scipy_shape), float(xi), float(alpha)
+
+
 def fit_gev_lmoments(
     annual_maxima: np.ndarray | pd.Series,
     return_periods: list[float] | None = None,
@@ -535,20 +629,7 @@ def fit_gev_lmoments(
     if return_periods is None:
         return_periods = _DEFAULT_RETURN_PERIODS
 
-    lmom = lmoments_from_sample(data)
-    l1, l2, t3 = lmom["L1"], lmom["L2"], lmom["t3"]
-
-    # Hosking approximation for GEV shape from L-skewness
-    c = 2.0 / (3.0 + t3) - np.log(2.0) / np.log(3.0)
-    shape = 7.8590 * c + 2.9554 * c * c
-
-    # GEV parameterisation: scale (alpha) and location (xi)
-    gamma_val = _gamma_func(1 + shape)
-    alpha = l2 * shape / (gamma_val * (1 - 2**(-shape))) if abs(shape) > 1e-10 else l2 / np.log(2)
-    xi = l1 - alpha * (gamma_val - 1) / shape if abs(shape) > 1e-10 else l1 - alpha * 0.5772156649
-
-    # scipy GEV uses *negative* shape convention
-    scipy_shape = -shape
+    scipy_shape, xi, alpha = _fit_gev_lmoments_params(data)
 
     from scipy.stats import genextreme
 

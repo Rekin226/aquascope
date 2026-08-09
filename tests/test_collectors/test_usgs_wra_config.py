@@ -95,7 +95,64 @@ class TestUSGSCollectorKeyless:
         with pytest.raises(ValueError, match="USGS keyless path requires a filter parameter"):
             collector.fetch_raw(collection="daily")
 
-    def test_keyless_daily_fetch_and_normalise(self, monkeypatch):
+    def test_keyless_daily_fetch_and_normalise_water_quality_sample(self, monkeypatch):
+        monkeypatch.delenv("USGS_API_KEY", raising=False)
+        collector = USGSCollector()
+
+        mock_response = {
+            "value": {
+                "timeSeries": [
+                    {
+                        "sourceInfo": {
+                            "siteName": "Test Site",
+                            "siteCode": [{"value": "01646500"}],
+                            "geoLocation": {
+                                "geogLocation": {
+                                    "latitude": 38.9,
+                                    "longitude": -77.1
+                                }
+                            }
+                        },
+                        "variable": {
+                            "variableCode": [{"value": "00095"}],
+                            "unit": {"unitCode": "uS/cm"},
+                            "noDataValue": -999999.0
+                        },
+                        "values": [
+                            {
+                                "value": [
+                                    {"value": "2960", "dateTime": "2026-07-20T00:00:00.000"},
+                                    {"value": "-999999", "dateTime": "2026-07-21T00:00:00.000"},
+                                    {"value": "2430", "dateTime": "2026-07-22T00:00:00.000"}
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+
+        mock_get_json = Mock(return_value=mock_response)
+        collector.client.get_json = mock_get_json
+
+        raw = collector.fetch_raw(collection="daily", station_id="01646500", days=5)
+
+        assert len(raw) == 2
+        assert raw[0]["properties"]["parameter_code"] == "00095"
+        assert raw[0]["properties"]["value"] == "2960"
+        assert raw[0]["properties"]["monitoring_location_id"] == "01646500"
+        assert raw[1]["properties"]["value"] == "2430"
+
+        samples = collector.normalise(raw)
+        assert len(samples) == 2
+        assert samples[0].parameter == "Conductivity"
+        assert samples[0].value == 2960.0
+        assert samples[0].unit == "uS/cm"
+        assert samples[0].location.latitude == 38.9
+        assert samples[0].location.longitude == -77.1
+        assert samples[1].value == 2430.0
+
+    def test_keyless_daily_fetch_and_normalise_streamflow_reading(self, monkeypatch):
         monkeypatch.delenv("USGS_API_KEY", raising=False)
         collector = USGSCollector()
 
@@ -149,10 +206,10 @@ class TestUSGSCollectorKeyless:
 
         samples = collector.normalise(raw)
         assert len(samples) == 2
-        assert samples[0].value == 2960.0
+        assert samples[0].discharge_cms == 83.8
         assert samples[0].location.latitude == 38.9
         assert samples[0].location.longitude == -77.1
-        assert samples[1].value == 2430.0
+        assert samples[1].discharge_cms == 68.8
 
     def test_keyless_sta_fetch_and_normalise(self, monkeypatch):
         monkeypatch.delenv("USGS_API_KEY", raising=False)
@@ -200,6 +257,52 @@ class TestUSGSCollectorKeyless:
         args, kwargs = mock_get_json.call_args
         assert args[0].startswith("https://waterservices.usgs.gov/nwis/iv/")
         assert kwargs["params"]["bBox"] == "-77.2,38.8,-77.0,39.0"
+
+
+class TestUSGSMonitoringLocationCatchmentArea:
+    def test_returns_none_for_empty_location_id(self):
+        collector = USGSCollector(api_key="valid-key")
+
+        assert collector._get_monitoring_location_catchment_area("") is None
+
+    def test_converts_and_rounds_drainage_area(self):
+        collector = USGSCollector(api_key="valid-key")
+        collector.client.get_json = Mock(
+            return_value={"properties": {"drainage_area": "12.5"}}
+        )
+
+        area = collector._get_monitoring_location_catchment_area("01646500")
+
+        assert area == pytest.approx(32.4)
+        collector.client.get_json.assert_called_once_with(
+            "collections/monitoring-locations/items/USGS-01646500",
+            params={"f": "json"},
+        )
+
+    def test_returns_none_when_feature_has_no_drainage_area(self):
+        collector = USGSCollector(api_key="valid-key")
+        collector.client.get_json = Mock(return_value={"properties": {}})
+
+        assert collector._get_monitoring_location_catchment_area("01646500") is None
+
+
+class TestUSGSSignificantFiguresHelpers:
+    def test_count_sig_figs_handles_common_formats(self):
+        collector = USGSCollector(api_key="valid-key")
+
+        assert collector._count_sig_figs("12.50") == 4
+        assert collector._count_sig_figs("0.001230") == 4
+        assert collector._count_sig_figs("1000") == 1
+        assert collector._count_sig_figs("1000.0") == 5
+        assert collector._count_sig_figs("0") == 1
+        assert collector._count_sig_figs("100.") == 3
+
+    def test_round_to_sig_figs_rounds_correctly(self):
+        assert USGSCollector._round_to_sig_figs(1234.567, 4) == pytest.approx(1235.0)
+        assert USGSCollector._round_to_sig_figs(0.0012345, 3) == pytest.approx(0.00123)
+        assert USGSCollector._round_to_sig_figs(0.0012365, 3) == pytest.approx(0.00124)
+        assert USGSCollector._round_to_sig_figs(0, 5) == 0
+        assert USGSCollector._round_to_sig_figs(5, 0) == 5
 
 
 class TestUSGSCollectorKeyed:

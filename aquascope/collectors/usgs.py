@@ -14,6 +14,7 @@ Collections
 from __future__ import annotations
 
 import logging
+import math
 import os
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
@@ -23,6 +24,7 @@ from aquascope.collectors.base import BaseCollector
 from aquascope.schemas.water_data import (
     DataSource,
     GeoLocation,
+    StreamflowReading,
     WaterQualitySample,
 )
 from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
@@ -49,6 +51,8 @@ PARAM_LABELS: dict[str, str] = {
     "80154": "SS",
 }
 
+MILES2_TO_KM2 = 2.589988110336
+FT3S_TO_M3S = 0.028316846592
 
 class USGSCollector(BaseCollector):
     """
@@ -215,6 +219,19 @@ class USGSCollector(BaseCollector):
                         except (ValueError, TypeError):
                             continue
 
+                        drainage_area = source_info.get("drainageArea", None)
+                        if drainage_area is not None:
+                            try:
+                                drainage_area = float(drainage_area)
+                            except (TypeError, ValueError):
+                                drainage_area = None
+
+                        catchment_area_km2 = (
+                            drainage_area * MILES2_TO_KM2
+                            if drainage_area is not None
+                            else None
+                        )
+
                         all_features.append({
                             "geometry": {
                                 "coordinates": [longitude, latitude]
@@ -224,7 +241,8 @@ class USGSCollector(BaseCollector):
                                 "parameter_code": param_code,
                                 "value": val,
                                 "time": dt,
-                                "unit_of_measure": unit
+                                "unit_of_measure": unit,
+                                "catchment_area_km2": catchment_area_km2
                             }
                         })
 
@@ -267,8 +285,8 @@ class USGSCollector(BaseCollector):
 
         return all_features
 
-    def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample]:
-        samples: list[WaterQualitySample] = []
+    def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample] | Sequence[StreamflowReading]:
+        samples: list[WaterQualitySample] | Sequence[StreamflowReading] = []
         for feat in raw:
             try:
                 props = feat.get("properties", {})
@@ -286,17 +304,97 @@ class USGSCollector(BaseCollector):
                 if coords[0] is not None:
                     loc = GeoLocation(latitude=coords[1], longitude=coords[0])
 
-                samples.append(
-                    WaterQualitySample(
-                        source=DataSource.USGS,
-                        station_id=props.get("monitoring_location_id", "unknown"),
-                        location=loc,
-                        sample_datetime=datetime.fromisoformat(props["time"]),
-                        parameter=param_label,
-                        value=float(val),
-                        unit=props.get("unit_of_measure", ""),
+                if param_code == "00060":  # Discharge
+                    discharge_sig_figs = self._count_sig_figs(val)
+                    if not discharge_sig_figs:
+                        discharge_sig_figs = 3  # default to 3 significant figures if unable to determine
+                    discharge_cms = float(val) * FT3S_TO_M3S
+                    rounded_discharge_cms = USGSCollector._round_to_sig_figs(discharge_cms, discharge_sig_figs)
+
+                    catchment_area_km2 = props.get("catchment_area_km2", None)
+                    if catchment_area_km2 is None:
+                        catchment_area_km2 = self._get_monitoring_location_catchment_area(props.get("monitoring_location_id", ""))
+
+                    samples.append(
+                        StreamflowReading(
+                            source=DataSource.USGS,
+                            station_id=props.get("monitoring_location_id", "unknown"),
+                            station_name=props.get("station_name", "unknown"),
+                            location=loc,
+                            reading_datetime=datetime.fromisoformat(props["time"]),
+                            discharge_cms=rounded_discharge_cms,
+                            source_type="in_situ",
+                            uncertainty_cms=None,
+                            catchment_area_km2=catchment_area_km2,
+                            unit="m3/s",
+                            remark="N/A",
+                        )
                     )
-                )
+
+                else:
+                    samples.append(
+                        WaterQualitySample(
+                            source=DataSource.USGS,
+                            station_id=props.get("monitoring_location_id", "unknown"),
+                            location=loc,
+                            sample_datetime=datetime.fromisoformat(props["time"]),
+                            parameter=param_label,
+                            value=float(val),
+                            unit=props.get("unit_of_measure", ""),
+                        )
+                    )
+
             except (ValueError, KeyError, TypeError) as exc:
                 logger.debug("Skipping USGS feature: %s", exc)
+
         return samples
+
+    def _get_monitoring_location_catchment_area(self, location_id: str) -> float | None:
+        if not location_id:
+            return None
+
+        if not location_id.startswith("USGS-"):
+            location_id = f"USGS-{location_id}"
+
+        feature = self.client.get_json(
+            f"collections/monitoring-locations/items/{location_id}",
+            params={"f": "json"},
+        )
+        area = feature.get("properties", {}).get("drainage_area", None)
+        if area is None:
+            return None
+
+        sig_figs = USGSCollector._count_sig_figs(area)
+        if not sig_figs:
+            sig_figs = 3  # default to 3 significant figures if unable to determine
+        area_km2 = float(area) * MILES2_TO_KM2
+        rounded_catchment_area = USGSCollector._round_to_sig_figs(area_km2, sig_figs)
+
+        return rounded_catchment_area
+
+    @staticmethod
+    def _count_sig_figs(value: str | float) -> int:
+        text = str(value).strip()
+
+        if not text or text.lower() in {"nan", "+inf", "inf", "-inf"}:
+            return 0
+
+        if "." in text:
+            if text[-1] == ".":
+                return len(text.rstrip("."))
+            text = text.replace(".", "")
+        else:
+            text = text.rstrip("0")
+
+        text = text.lstrip("0")
+        if not text:
+            return 1
+
+        return len(text)
+
+    @staticmethod
+    def _round_to_sig_figs(value: float, sigfigs: int) -> float:
+        if value == 0 or sigfigs <= 0:
+            return value
+        digits = sigfigs - int(math.floor(math.log10(abs(value)))) - 1
+        return round(value, digits)

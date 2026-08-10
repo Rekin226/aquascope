@@ -1,3 +1,7 @@
+# AquaScope, démarrage rapide
+
+[English](../../README.md)
+
 ## ⚡ Installation
 ```bash
 pip install aquascope              # noyau — collecteurs + hydrologie
@@ -8,7 +12,7 @@ Extras par groupe de fonctionnalités :
 pip install "aquascope[ml]"           # sklearn, xgboost, statsmodels
 pip install "aquascope[viz]"          # matplotlib, seaborn, folium
 pip install "aquascope[scientific]"   # xarray, netcdf4, h5py
-pip install "aquascope[interop]"      # xarray + geopandas (collect as_xarray / as_geodataframe)
+pip install "aquascope[interop]"      # xarray + geopandas (collecter en as_xarray / as_geodataframe)
 pip install "aquascope[spatial]"      # rasterio, geopandas, shapely
 pip install "aquascope[dashboard]"    # streamlit
 pip install "aquascope[forecast]"     # prophet, torch (pour LSTM)
@@ -40,7 +44,7 @@ print(bf.bfi)                  # indice d'écoulement de base, ex. 0.42
 print(sig.q5, sig.q95)         # dépassements de hautes eaux / basses eaux
 print(sig.flashiness_index)    # indice de flashiness de Richards-Baker
 ```
-21 signatures couvrant l'ampleur, la variabilité, le timing, la récession et la flashiness — voir [docs/features.md](../../docs/features.md#hydrological-analysis).
+21 signatures couvrant l'amplitude, la variabilité, la temporalité, la récession et la flashiness — voir [docs/features.md](../../docs/features.md#hydrological-analysis).
 
 ## 💻 CLI
 AquaScope propose une CLI de 19 commandes pour les workflows les plus courants :

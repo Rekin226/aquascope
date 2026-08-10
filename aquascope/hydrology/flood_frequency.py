@@ -106,8 +106,10 @@ def fit_gev(
     # Step 1: L-moments initial estimates to seed MLE
     lmom_shape, lmom_loc, lmom_scale = _fit_gev_lmoments_params(data)
 
-    shape, loc, scale = lmom_shape, lmom_loc, lmom_scale
+    clamped_lmom_shape = float(np.clip(lmom_shape, -max_abs_shape, max_abs_shape))
+    shape, loc, scale = clamped_lmom_shape, lmom_loc, lmom_scale
     mle_failed = False
+    mle_exc = False
 
     try:
         s_mle, loc_mle, sc_mle = genextreme.fit(data, lmom_shape, loc=lmom_loc, scale=lmom_scale)
@@ -123,13 +125,20 @@ def fit_gev(
             mle_failed = True
     except Exception:  # noqa: BLE001
         mle_failed = True
+        mle_exc = True
 
     if mle_failed:
-        logger.warning(
-            "GEV MLE fit unconstrained shape outside plausible bound (|c| <= %.2f); falling back to L-moments estimate (shape=%.3f)",
-            max_abs_shape,
-            lmom_shape,
-        )
+        if mle_exc:
+            logger.warning(
+                "GEV MLE fit optimization raised an exception; falling back to L-moments estimate (shape=%.3f)",
+                clamped_lmom_shape,
+            )
+        else:
+            logger.warning(
+                "GEV MLE fit unconstrained shape outside plausible bound (|c| <= %.2f); falling back to L-moments estimate (shape=%.3f)",
+                max_abs_shape,
+                clamped_lmom_shape,
+            )
 
     rp_map: dict[int, float] = {}
     ci_map: dict[int, tuple[float, float]] = {}
@@ -593,9 +602,9 @@ def _fit_gev_lmoments_params(data: np.ndarray) -> tuple[float, float, float]:
 
     gamma_val = _gamma_func(1 + shape)
     alpha = l2 * shape / (gamma_val * (1 - 2 ** (-shape))) if abs(shape) > 1e-10 else l2 / np.log(2)
-    xi = l1 - alpha * (gamma_val - 1) / shape if abs(shape) > 1e-10 else l1 - alpha * 0.5772156649
+    xi = l1 - alpha * (1 - gamma_val) / shape if abs(shape) > 1e-10 else l1 - alpha * 0.5772156649
 
-    scipy_shape = -shape
+    scipy_shape = shape
     return float(scipy_shape), float(xi), float(alpha)
 
 

@@ -76,16 +76,15 @@ def check_changelog(
     if changed_files is None:
         changed_files = get_changed_files(base_ref)
 
-    changed_basenames = {Path(f).name for f in changed_files}
-    if CHANGELOG_FILENAME in changed_basenames or any(
-        f.endswith(CHANGELOG_FILENAME) for f in changed_files
-    ):
+    # Tighten to exact root CHANGELOG.md match
+    normalized_paths = {Path(f).as_posix().lstrip("./") for f in changed_files}
+    if CHANGELOG_FILENAME in normalized_paths:
         return True, "CHANGELOG.md was updated in this pull request."
 
     err_msg = (
         "::error::CHANGELOG.md entry required!\n"
         "This pull request does not modify CHANGELOG.md and does not have the 'no-changelog' label.\n\n"
-        "Please add a concise note describing your changes under the '## [Unreleased]' section in CHANGELOG.md.\n"
+        "Please update CHANGELOG.md to describe your changes.\n"
         "If this PR is a CI-only, refactor, or dependency update that does not require release notes, "
         "add the 'no-changelog' label to the PR to opt out."
     )

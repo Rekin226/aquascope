@@ -65,6 +65,18 @@ class TestCheckChangelog:
         assert "::error::CHANGELOG.md entry required!" in msg
         assert "no-changelog" in msg
 
+    def test_subpath_changelog_does_not_pass(self, tmp_path):
+        payload = {"pull_request": {"labels": [{"name": "enhancement"}]}}
+        event_path = tmp_path / "event.json"
+        event_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        success, _ = check_changelog(
+            event_name="pull_request",
+            event_path=event_path,
+            changed_files=["docs/API_CHANGELOG.md", "OLD_CHANGELOG.md"],
+        )
+        assert success is False
+
     def test_get_pr_labels_missing_file_returns_empty(self):
         labels = get_pr_labels(Path("/nonexistent/event.json"))
         assert labels == []

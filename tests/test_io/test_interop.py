@@ -150,7 +150,7 @@ class TestRecordsToXarray:
         dt = datetime(2026, 1, 1)
 
         quality = _wq("S1", dt, "DO", 8.5)
-        # Ensure catchment area set in order to generate runoff variable. 
+        # Ensure catchment area set in order to generate runoff variable.
         streamflow = _sf("S2", dt, 45.2, catchment_area_km2=100.0)
 
         # Start with streamflow to exercise the branch that previously tried
@@ -161,14 +161,14 @@ class TestRecordsToXarray:
         assert {"discharge", "catchment_area", "runoff", "DO"} <= set(ds.data_vars)
 
         assert ds["DO"].sel(time=dt, station_id="S1").item() == 8.5
-        assert ds["discharge"].sel(time=dt, station_id="S1").isnull() == True
-        assert ds["catchment_area"].sel(time=dt, station_id="S1").isnull() == True
-        assert ds["runoff"].sel(time=dt, station_id="S1").isnull() == True
+        assert ds["discharge"].sel(time=dt, station_id="S1").isnull()
+        assert ds["catchment_area"].sel(time=dt, station_id="S1").isnull()
+        assert ds["runoff"].sel(time=dt, station_id="S1").isnull()
 
         assert ds["discharge"].sel(time=dt, station_id="S2").item() == 45.2
         assert ds["catchment_area"].sel(time=dt, station_id="S2").item() == 100.0
         assert ds["runoff"].sel(time=dt, station_id="S2").item() == 39.052800000000005
-        assert ds["DO"].sel(time=dt, station_id="S2").isnull() == True
+        assert ds["DO"].sel(time=dt, station_id="S2").isnull()
 
 
     def test_empty_input(self):

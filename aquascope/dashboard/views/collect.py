@@ -63,6 +63,7 @@ SOURCES: dict[str, tuple[str, str, str]] = {
         "Real-time river stage and discharge from German federal waterways (WSV)",
     ),
     "camels_cl": ("CAMELS-CL", "Chile", "Daily observed streamflow & catchment attributes for 516 Chilean catchments"),
+    "camels_br": ("CAMELS-BR", "Brazil", "Daily observed streamflow & catchment attributes for Brazilian catchments"),
     "uk_ea": (
         "UK Environment Agency",
         "United Kingdom",
@@ -84,6 +85,7 @@ _REGION_ORDER = [
     "Germany",
     "Ireland",
     "Chile",
+    "Brazil",
     "Taiwan",
     "Japan",
     "South Korea",
@@ -609,6 +611,22 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
         if ed:
             fetch["end"] = str(ed)
 
+    elif source_key == "camels_br":
+        st.info(
+            "📦 CAMELS-BR streamflow is a ~62 MB archive of Brazilian catchments. "
+            "The first run downloads and caches it locally."
+        )
+        sids = st.text_input("Gauge codes (comma-separated, optional)", placeholder="10500000")
+        if sids.strip():
+            fetch["station_ids"] = [s.strip() for s in sids.split(",") if s.strip()]
+        c1, c2 = st.columns(2)
+        sd = c1.date_input("Start date (optional)", value=None, key="cbr_start")
+        ed = c2.date_input("End date (optional)", value=None, key="cbr_end")
+        if sd:
+            fetch["start"] = str(sd)
+        if ed:
+            fetch["end"] = str(ed)
+
     elif source_key == "uk_ea":
         st.caption("UK Environment Agency — real-time river level, flow, rainfall, and groundwater telemetry.")
         fetch["observed_property"] = st.selectbox(
@@ -684,12 +702,13 @@ _FACTORIES = {
     "ireland_opw": lambda api_key, ctor, c: c.IrelandOPWCollector(),
     "pegelonline": lambda api_key, ctor, c: c.PegelonlineCollector(),
     "camels_cl": lambda api_key, ctor, c: c.CAMELSCLCollector(),
+    "camels_br": lambda api_key, ctor, c: c.CAMELSBRCollector(),
     "uk_ea": lambda api_key, ctor, c: c.UKEACollector(),
 }
 
 
 def _run_collector(source_key: str, api_key: str, ctor: dict, fetch: dict):
-    """Instantiate the right collector and fetch — covers all 25 sources."""
+    """Instantiate the right collector and fetch — covers every source in ``SOURCES``."""
     from aquascope import collectors as c
 
     collector = _FACTORIES[source_key](api_key, ctor, c)

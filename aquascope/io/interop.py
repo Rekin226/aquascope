@@ -11,6 +11,7 @@ Both helpers lazily import their backends and are available via the optional
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -60,6 +61,25 @@ def records_to_xarray(records: Sequence[Any]) -> xarray.Dataset:
     if not records:
         return xr.Dataset()
 
+    # A collector can return complementary record schemas in one payload (for
+    # example, streamflow and water-quality observations).  Convert each
+    # schema independently so the single-schema branches below never assume
+    # fields from a different record type, then combine their variables.
+    by_type = defaultdict(list)
+    for record in records:
+        by_type[type(record)].append(record)
+
+    # If there are multiple record types, recursively call this function on each
+    # type and merge the resulting datasets.
+    if len(by_type) > 1:
+        return xr.merge(
+            [records_to_xarray(group) for group in by_type.values()],
+            combine_attrs="drop_conflicts",
+            compat="no_conflicts",
+            join="outer",
+        )
+
+    # When only one record type is present, the first record is representative of the schema.
     first = records[0]
 
     # Discriminate on the timestamp/value field. StreamflowReading and

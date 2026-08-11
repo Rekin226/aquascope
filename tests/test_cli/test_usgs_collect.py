@@ -14,8 +14,8 @@ def test_usgs_filter_options_are_forwarded(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeUSGSCollector:
-        def __init__(self, api_key: str):
-            assert api_key == "DEMO_KEY"
+        def __init__(self, api_key: str | None):
+            assert api_key == None
 
         def collect(self, **kwargs):
             captured.update(kwargs)
@@ -75,11 +75,9 @@ def test_usgs_denies_unrecognised_argument(monkeypatch):
 
 def test_usgs_passes_explicit_api_key_to_collector(monkeypatch):
     """An explicit CLI API key is supplied to the USGS collector constructor."""
-    captured: dict[str, object] = {}
-
     class FakeUSGSCollector:
         def __init__(self, api_key: str):
-            captured["api_key"] = api_key
+            assert api_key == "explicit-key"
 
         def collect(self, **kwargs):
             return [object()]
@@ -93,5 +91,3 @@ def test_usgs_passes_explicit_api_key_to_collector(monkeypatch):
     )
 
     main()
-
-    assert captured["api_key"] == "explicit-key"

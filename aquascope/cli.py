@@ -103,7 +103,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "taiwan_moenv": lambda: TaiwanMOENVCollector(api_key=args.api_key or ""),
         "taiwan_wra_level": lambda: TaiwanWRAWaterLevelCollector(),
         "taiwan_wra_reservoir": lambda: TaiwanWRAReservoirCollector(),
-        "usgs": lambda: USGSCollector(api_key=args.api_key or "DEMO_KEY"),
+        "usgs": lambda: USGSCollector(api_key=args.api_key),
         "sdg6": lambda: SDG6Collector(),
         "gemstat": lambda: GEMStatCollector(),
         "aquastat": lambda: AquastatCollector(),

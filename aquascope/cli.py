@@ -67,6 +67,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
     """Run a data collector and save results."""
     from aquascope.collectors import (
         AquastatCollector,
+        CAMELSBRCollector,
         CAMELSCLCollector,
         CopernicusCollector,
         EUWFDCollector,
@@ -120,6 +121,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
         "grdc": lambda: GRDCCollector(),
         "camels_cl": lambda: CAMELSCLCollector(),
+        "camels_br": lambda: CAMELSBRCollector(),
         "noaa_nwps": lambda: NOAANWPSCollector(),
         "pegelonline": lambda: PegelonlineCollector(),
     }
@@ -201,7 +203,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
             logger.error("GRDC --mode must be 'in_situ' or 'satellite'; got '%s'.", args.mode)
             sys.exit(1)
         kwargs["source_type"] = args.mode
-    if source == "camels_cl":
+    if source in ("camels_cl", "camels_br"):
         if args.station_ids:
             kwargs["station_ids"] = [s.strip() for s in args.station_ids.split(",") if s.strip()]
         if args.start_date:
@@ -521,6 +523,18 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
         ),
         "noaa_nwps": ("NOAA NWPS", "USA", " Streamflow forecasts, stream observations, streamflow output, crest history, flood impacts, low water history, flood category levels, and location metadata.", "https://www.water.noaa.gov"),
         "pegelonline": ("PEGELONLINE", "Germany", "River water level and discharge", "https://www.pegelonline.wsv.de"),
+        "camels_cl": (
+            "CAMELS-CL",
+            "Chile",
+            "Observed streamflow, meteorological forcing, attributes",
+            "https://www.cr2.cl/camels-cl",
+        ),
+        "camels_br": (
+            "CAMELS-BR",
+            "Brazil",
+            "Observed streamflow, meteorological forcing, attributes",
+            "https://doi.org/10.5281/zenodo.3709337",
+        ),
     }
 
     for src in DataSource:
@@ -1095,10 +1109,11 @@ def main() -> None:
             "korea_wamis",
             "grdc",
             "camels_cl",
+            "camels_br",
             "noaa_nwps",
             "ireland_opw",
             "pegelonline",
-            "uk_ea"
+            "uk_ea",
         ],
         help="Data source to collect from",
     )
@@ -1131,10 +1146,14 @@ def main() -> None:
     p_collect.add_argument("--end-year", type=int, default=2023, help="End year (AQUASTAT)")
     p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")
     p_collect.add_argument("--year", type=int, default=None, help="Year filter (EU WFD)")
-    p_collect.add_argument("--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl)")
+    p_collect.add_argument(
+        "--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl, camels_br)"
+    )
     p_collect.add_argument("--station", default=None, help="Station UUID/SUID (PEGELONLINE/UKEA)")
     p_collect.add_argument(
-        "--timeseries", default=None, choices=["W", "Q"],
+        "--timeseries",
+        default=None,
+        choices=["W", "Q"],
         help="PEGELONLINE timeseries: W for water level or Q for discharge (default: both)",
     )
     p_collect.add_argument(

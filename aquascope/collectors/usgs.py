@@ -356,12 +356,22 @@ class USGSCollector(BaseCollector):
         if not location_id.startswith("USGS-"):
             location_id = f"USGS-{location_id}"
 
-        feature = self.client.get_json(
-            f"collections/monitoring-locations/items/{location_id}",
-            params={"f": "json"},
-        )
+        try:
+            feature = self.client.get_json(
+                f"collections/monitoring-locations/items/{location_id}",
+                params={"f": "json"},
+            )
+        except RuntimeError:
+            logger.warning(
+                f"Cannot obtain metadata for station {location_id} - catchment area data is unavailable."
+            )
+            return None
+
         area = feature.get("properties", {}).get("drainage_area", None)
         if area is None:
+            logger.warning(
+                f"Metadata for station {location_id} does not contain catchment area data."
+            )
             return None
 
         sig_figs = USGSCollector._count_sig_figs(area)

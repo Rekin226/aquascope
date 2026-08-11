@@ -28,6 +28,8 @@
 
 [![Support on Ko-fi](https://img.shields.io/badge/Support%20AquaScope-Ko--fi-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/getaquascope) if AquaScope helps your research.
 
+🌐 Read this in: [Français](docs/i18n/README.fr.md)
+
 </div>
 
 ---

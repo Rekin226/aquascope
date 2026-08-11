@@ -4,6 +4,12 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Flow Duration Curve (FDC) slope signature** (`aquascope.hydrology.fdc_slope`): added log-space percentile slope signature function and `fdc_slope` field on `SignatureReport` (#45).
+
+### Fixed
+- **Runoff ratio date index alignment** (`aquascope.hydrology.runoff_ratio`): extracted standalone `runoff_ratio` function that strictly aligns precipitation and discharge dates via inner index intersection prior to computing total volume ratios (#45).
+
 ## [0.9.0] - 2026-08-04
 
 Four new countries, a rebuilt dashboard, and a live in-browser demo. AquaScope

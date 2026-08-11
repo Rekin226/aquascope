@@ -136,8 +136,21 @@ def cmd_collect(args: argparse.Namespace) -> None:
     collector = collector_map[source]()
 
     kwargs = {}
-    if source == "usgs" and args.days:
-        kwargs["datetime_range"] = f"P{args.days}D"
+    if source == "usgs":
+        if args.days is not None:
+            kwargs["days"] = args.days
+        if args.station_id:
+            kwargs["station_id"] = args.station_id
+        if args.parameter:
+            kwargs["parameter"] = args.parameter
+        if args.bbox:
+            kwargs["bbox"] = args.bbox
+        if args.state_code:
+            kwargs["stateCd"] = args.state_code
+        if args.county_code:
+            kwargs["countyCd"] = args.county_code
+        if args.huc:
+            kwargs["huc"] = args.huc
     if source == "uk_ea":
         if args.collection:
             kwargs["collection"] = args.collection
@@ -1159,6 +1172,11 @@ def main() -> None:
         "--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl, camels_br)"
     )
     p_collect.add_argument("--station", default=None, help="Station UUID/SUID (PEGELONLINE/UKEA)")
+    p_collect.add_argument("--station-id", default=None, help="USGS monitoring station identifier")
+    p_collect.add_argument("--parameter", default=None, help="USGS parameter code, e.g. 00060 for discharge")
+    p_collect.add_argument("--state-code", default=None, help="USGS state code filter, e.g. MD")
+    p_collect.add_argument("--county-code", default=None, help="USGS county code filter")
+    p_collect.add_argument("--huc", default=None, help="USGS hydrologic unit code filter")
     p_collect.add_argument(
         "--timeseries",
         default=None,

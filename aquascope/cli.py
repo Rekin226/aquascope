@@ -17,12 +17,13 @@ Usage
 from __future__ import annotations
 
 import argparse
-import argcomplete
 import json
 import logging
 import sys
 from datetime import date
 from pathlib import Path
+
+import argcomplete
 
 # ----------------------------------------------------------
 from aquascope.collectors.india_wris import IndiaWRISCollector
@@ -1370,7 +1371,7 @@ def main() -> None:
     p_hydro.add_argument("--output", default=None, help="Save results to CSV")
     p_hydro.add_argument("--n-day", type=int, default=None, help="N-day window for low-flow (default: 7)")
     p_hydro.add_argument("--return-period", type=int, default=None, help="Return period for low-flow (default: 10)")
-    
+
     argcomplete.autocomplete(parser)
     args = parser.parse_args()
     commands = {

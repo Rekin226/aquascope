@@ -26,6 +26,8 @@ CLI_SOURCES = (
     "japan_mlit",
     "korea_wamis",
     "pegelonline",
+    "camels_cl",
+    "camels_br",
 )
 
 

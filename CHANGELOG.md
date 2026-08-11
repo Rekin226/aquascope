@@ -5,7 +5,9 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
-- **Shell completion** (`aquascope completion bash|zsh|fish`): emits an argcomplete script for the chosen shell, bringing the CLI to 20 commands (#28).
+- **Shell completion** (`aquascope completion bash|zsh|fish`): emits an argcomplete script for the chosen shell, bringing the CLI to 20 commands. Thanks @adjenk (#157, closes #28).
+- **Every collector reachable from the dashboard** (`dashboard/views/collect.py`): the Collect page went from 21 sources to all 27, adding NOAA NWPS, Ireland OPW, PEGELONLINE, CAMELS-CL, UK EA, and CAMELS-BR with per-source parameter forms and region entries. Home-page counts now derive from `len(SOURCES)` instead of a hardcoded number, and a drift guard (`tests/test_cli/test_dashboard_sources.py`) fails CI if a registered collector is missing from the page, so a new source cannot merge without wiring the UI. Thanks @taran-dev4u (#145, closes #143).
+- **CAMELS-BR collector** (`collectors/camels_br.py`): daily observed streamflow for Brazilian catchments from the CAMELS-BR large-sample dataset on Zenodo, joined with catchment attributes (gauge name, coordinates, area). Emitted as `StreamflowReading` with `catchment_area_km2` set, so `runoff_mm_day` comes for free. AquaScope's 27th source. Thanks @taran-dev4u (#140, closes #124).
 - **Flow Duration Curve (FDC) slope signature** (`aquascope.hydrology.fdc_slope`): added log-space percentile slope signature function and `fdc_slope` field on `SignatureReport` (#45).
 
 ### Fixed

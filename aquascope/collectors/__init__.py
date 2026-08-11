@@ -2,6 +2,7 @@
 
 from aquascope.collectors.aquastat import AquastatCollector
 from aquascope.collectors.base import BaseCollector
+from aquascope.collectors.camels_br import CAMELSBRCollector
 from aquascope.collectors.camels_cl import CAMELSCLCollector
 from aquascope.collectors.copernicus import CopernicusCollector
 from aquascope.collectors.eu_wfd import EUWFDCollector
@@ -36,6 +37,7 @@ __all__ = [
     "AquastatCollector",
     "BaseCollector",
     "CAMELSCLCollector",
+    "CAMELSBRCollector",
     "CopernicusCollector",
     "EUWFDCollector",
     "GEMStatCollector",

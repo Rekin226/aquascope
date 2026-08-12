@@ -676,42 +676,11 @@ def _records_to_df(records: list) -> pd.DataFrame:
     return df
 
 
-_FACTORIES = {
-    "usgs": lambda api_key, ctor, c: c.USGSCollector(api_key=api_key or "DEMO_KEY"),
-    "grdc": lambda api_key, ctor, c: c.GRDCCollector(),
-    "openmeteo": lambda api_key, ctor, c: c.OpenMeteoCollector(mode=ctor.get("mode", "weather")),
-    "sdg6": lambda api_key, ctor, c: c.SDG6Collector(),
-    "gemstat": lambda api_key, ctor, c: c.GEMStatCollector(),
-    "aquastat": lambda api_key, ctor, c: c.AquastatCollector(),
-    "wapor": lambda api_key, ctor, c: c.WaPORCollector(),
-    "copernicus": lambda api_key, ctor, c: c.CopernicusCollector(),
-    "wqp": lambda api_key, ctor, c: c.WQPCollector(),
-    "hubeau_hydrometrie": lambda api_key, ctor, c: c.HubeauHydrometrieCollector(),
-    "eu_wfd": lambda api_key, ctor, c: c.EUWFDCollector(),
-    "taiwan_moenv": lambda api_key, ctor, c: c.TaiwanMOENVCollector(api_key=api_key or ""),
-    "taiwan_wra_level": lambda api_key, ctor, c: c.TaiwanWRAWaterLevelCollector(),
-    "taiwan_wra_reservoir": lambda api_key, ctor, c: c.TaiwanWRAReservoirCollector(),
-    "taiwan_wra_fhy": lambda api_key, ctor, c: c.TaiwanWRAFhyCollector(data_type=ctor.get("data_type", "water")),
-    "taiwan_wra_iot": lambda api_key, ctor, c: c.TaiwanWRAIoTCollector(data_type=ctor.get("data_type", "groundwater")),
-    "taiwan_datagov": lambda api_key, ctor, c: c.TaiwanDataGovCollector(dataset_id=ctor.get("dataset_id", "25768")),
-    "taiwan_civil_iot": lambda api_key, ctor, c: c.TaiwanCivilIoTCollector(),
-    "japan_mlit": lambda api_key, ctor, c: c.JapanMLITCollector(),
-    "korea_wamis": lambda api_key, ctor, c: c.KoreaWAMISCollector(),
-    "india_wris": lambda api_key, ctor, c: c.IndiaWRISCollector(),
-    "noaa_nwps": lambda api_key, ctor, c: c.NOAANWPSCollector(),
-    "ireland_opw": lambda api_key, ctor, c: c.IrelandOPWCollector(),
-    "pegelonline": lambda api_key, ctor, c: c.PegelonlineCollector(),
-    "camels_cl": lambda api_key, ctor, c: c.CAMELSCLCollector(),
-    "camels_br": lambda api_key, ctor, c: c.CAMELSBRCollector(),
-    "uk_ea": lambda api_key, ctor, c: c.UKEACollector(),
-}
-
-
 def _run_collector(source_key: str, api_key: str, ctor: dict, fetch: dict):
-    """Instantiate the right collector and fetch — covers every source in ``SOURCES``."""
-    from aquascope import collectors as c
+    """Instantiate the right collector (via the shared registry) and fetch."""
+    from aquascope.registry import build_collector
 
-    collector = _FACTORIES[source_key](api_key, ctor, c)
+    collector = build_collector(source_key, api_key=api_key, **ctor)
     kwargs = dict(fetch)
     if api_key and source_key == "copernicus":
         kwargs["api_key"] = api_key

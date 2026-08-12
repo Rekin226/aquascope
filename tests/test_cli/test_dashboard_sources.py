@@ -1,10 +1,10 @@
 """Drift guard ensuring the dashboard Collect page stays in sync with all registered collectors."""
 
 from __future__ import annotations
-
 import pytest
 
-from aquascope.dashboard.views.collect import _FACTORIES, SOURCES
+from aquascope.dashboard.views.collect import SOURCES
+from aquascope.registry import source_keys
 from aquascope.schemas.water_data import DataSource
 
 # DataSources that are enum placeholders or not yet standalone collector classes
@@ -30,11 +30,18 @@ def test_dashboard_collect_page_covers_all_registered_sources():
 
 
 def test_dashboard_run_collector_supports_all_sources():
-    """Every key in SOURCES must have a factory entry in _FACTORIES."""
-    assert set(_FACTORIES) == set(SOURCES), (
-        f"Mismatch between SOURCES and _FACTORIES keys. "
-        f"Missing in _FACTORIES: {set(SOURCES) - set(_FACTORIES)}. "
-        f"Extra in _FACTORIES: {set(_FACTORIES) - set(SOURCES)}."
+    """Every key in SOURCES must be buildable via the shared collector registry.
+
+    _FACTORIES was removed when the dashboard, cli.py, and (eventually) the
+    REST API were unified onto aquascope.registry.build_collector (#58) — this
+    test now guards the same invariant against the new single source of truth
+    instead of the old dashboard-local dict.
+    """
+    registered = set(source_keys())
+    assert registered == set(SOURCES), (
+        f"Mismatch between SOURCES and the shared registry (aquascope.registry). "
+        f"Missing in registry: {set(SOURCES) - registered}. "
+        f"Extra in registry: {registered - set(SOURCES)}."
     )
 
 

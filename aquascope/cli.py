@@ -26,7 +26,6 @@ from pathlib import Path
 import argcomplete
 
 # ----------------------------------------------------------
-from aquascope.collectors.india_wris import IndiaWRISCollector
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,72 +67,18 @@ def _parse_bbox(value: str | None) -> tuple[float, float, float, float] | None:
 
 def cmd_collect(args: argparse.Namespace) -> None:
     """Run a data collector and save results."""
-    from aquascope.collectors import (
-        AquastatCollector,
-        CAMELSBRCollector,
-        CAMELSCLCollector,
-        CopernicusCollector,
-        EUWFDCollector,
-        GEMStatCollector,
-        GRDCCollector,
-        HubeauHydrometrieCollector,
-        IrelandOPWCollector,
-        JapanMLITCollector,
-        KoreaWAMISCollector,
-        NOAANWPSCollector,
-        OpenMeteoCollector,
-        PegelonlineCollector,
-        SDG6Collector,
-        TaiwanCivilIoTCollector,
-        TaiwanDataGovCollector,
-        TaiwanMOENVCollector,
-        TaiwanWRAFhyCollector,
-        TaiwanWRAIoTCollector,
-        TaiwanWRAReservoirCollector,
-        TaiwanWRAWaterLevelCollector,
-        UKEACollector,
-        USGSCollector,
-        WaPORCollector,
-        WQPCollector,
-    )
+    from aquascope.registry import build_collector, source_keys
     from aquascope.utils.storage import save_records
 
     source = args.source.lower()
-    collector_map = {
-        "taiwan_moenv": lambda: TaiwanMOENVCollector(api_key=args.api_key or ""),
-        "taiwan_wra_level": lambda: TaiwanWRAWaterLevelCollector(),
-        "taiwan_wra_reservoir": lambda: TaiwanWRAReservoirCollector(),
-        "usgs": lambda: USGSCollector(api_key=args.api_key or "DEMO_KEY"),
-        "sdg6": lambda: SDG6Collector(),
-        "gemstat": lambda: GEMStatCollector(),
-        "aquastat": lambda: AquastatCollector(),
-        "taiwan_civil_iot": lambda: TaiwanCivilIoTCollector(),
-        "taiwan_wra_fhy": lambda: TaiwanWRAFhyCollector(),
-        "taiwan_wra_iot": lambda: TaiwanWRAIoTCollector(),
-        "taiwan_datagov": lambda: TaiwanDataGovCollector(),
-        "uk_ea": lambda: UKEACollector(),
-        "wqp": lambda: WQPCollector(),
-        "openmeteo": lambda: OpenMeteoCollector(mode=args.mode or "weather"),
-        "copernicus": lambda: CopernicusCollector(),
-        "wapor": lambda: WaPORCollector(),
-        "eu_wfd": lambda: EUWFDCollector(),
-        "japan_mlit": lambda: JapanMLITCollector(),
-        "korea_wamis": lambda: KoreaWAMISCollector(),
-        "india_wris": lambda: IndiaWRISCollector(),
-        "ireland_opw": lambda: IrelandOPWCollector(),
-        "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
-        "grdc": lambda: GRDCCollector(),
-        "camels_cl": lambda: CAMELSCLCollector(),
-        "camels_br": lambda: CAMELSBRCollector(),
-        "noaa_nwps": lambda: NOAANWPSCollector(),
-        "pegelonline": lambda: PegelonlineCollector(),
-    }
-
-    if source not in collector_map:
-        logger.error("Unknown source '%s'. Available: %s", source, list(collector_map.keys()))
+    if source not in source_keys():
+        logger.error("Unknown source '%s'. Available: %s", source, source_keys())
         sys.exit(1)
 
-    collector = collector_map[source]()
+    ctor_kwargs = {}
+    if source == "openmeteo" and args.mode:
+        ctor_kwargs["mode"] = args.mode
+    collector = build_collector(source, api_key=args.api_key, **ctor_kwargs)
 
     kwargs = {}
     if source == "usgs" and args.days:
@@ -1085,45 +1030,19 @@ def cmd_agri_productivity(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    from aquascope.registry import source_keys
+
     parser = argparse.ArgumentParser(
-        prog="aquascope",
-        description="AquaScope — Water data collection, analysis & AI research recommender",
+        description="AquaScope — Water data collection, analysis & AI research recomm..."
     )
     sub = parser.add_subparsers(dest="command")
 
-    # ── collect ──────────────────────────────────────────────────────
+    # — collect ——————————————————————————————
     p_collect = sub.add_parser("collect", help="Collect water data from an API source")
     p_collect.add_argument(
         "--source",
         required=True,
-        choices=[
-            "taiwan_moenv",
-            "taiwan_wra_level",
-            "taiwan_wra_reservoir",
-            "taiwan_wra_fhy",
-            "taiwan_wra_iot",
-            "taiwan_datagov",
-            "usgs",
-            "sdg6",
-            "gemstat",
-            "aquastat",
-            "taiwan_civil_iot",
-            "wqp",
-            "openmeteo",
-            "copernicus",
-            "wapor",
-            "eu_wfd",
-            "hubeau_hydrometrie",
-            "japan_mlit",
-            "korea_wamis",
-            "grdc",
-            "camels_cl",
-            "camels_br",
-            "noaa_nwps",
-            "ireland_opw",
-            "pegelonline",
-            "uk_ea",
-        ],
+        choices=source_keys(),
         help="Data source to collect from",
     )
     p_collect.add_argument("--api-key", default=None, help="API key (if required)")

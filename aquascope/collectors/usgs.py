@@ -285,8 +285,8 @@ class USGSCollector(BaseCollector):
 
         return all_features
 
-    def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample] | Sequence[StreamflowReading]:
-        samples: list[WaterQualitySample] | Sequence[StreamflowReading] = []
+    def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample | StreamflowReading]:
+        samples: Sequence[WaterQualitySample | StreamflowReading] = []
         for feat in raw:
             try:
                 props = feat.get("properties", {})

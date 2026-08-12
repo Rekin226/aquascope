@@ -23,10 +23,16 @@ if TYPE_CHECKING:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
-
+# For each record in the list, derive all unique data sources and form a concatenated label
 def _source_label(records: list[Any]) -> str:
-    src = getattr(records[0], "source", None)
-    return getattr(src, "value", str(src)) if src is not None else "unknown"
+    sources: list[str] = []
+    for r in records:
+        src = getattr(r, "source", None)
+        if src is not None:
+            label = getattr(src, "value", str(src))
+            if label not in sources:
+                sources.append(label)
+    return "+".join(sources) if sources else "unknown"
 
 
 def _attach_station_coords(ds: xarray.Dataset, loc_map: dict[str, Any]) -> xarray.Dataset:
@@ -72,12 +78,14 @@ def records_to_xarray(records: Sequence[Any]) -> xarray.Dataset:
     # If there are multiple record types, recursively call this function on each
     # type and merge the resulting datasets.
     if len(by_type) > 1:
-        return xr.merge(
+        merged = xr.merge(
             [records_to_xarray(group) for group in by_type.values()],
             combine_attrs="drop_conflicts",
             compat="no_conflicts",
             join="outer",
         )
+        merged.attrs.setdefault("source", _source_label(records))
+        return merged
 
     # When only one record type is present, the first record is representative of the schema.
     first = records[0]

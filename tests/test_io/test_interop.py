@@ -170,6 +170,9 @@ class TestRecordsToXarray:
         assert ds["runoff"].sel(time=dt, station_id="S2").item() == 39.052800000000005
         assert ds["DO"].sel(time=dt, station_id="S2").isnull()
 
+        assert "source" in ds.attrs
+        assert ds.attrs["source"] == "grdc+wqp"
+
 
     def test_empty_input(self):
         ds = records_to_xarray([])

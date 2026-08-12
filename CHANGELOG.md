@@ -4,6 +4,21 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-12
+
+A correctness release first and a feature release second.
+
+Two sign errors in the GEV L-moment estimator had been shipping since v0.4.0,
+quietly returning flood quantiles off by up to a factor of two. They are fixed,
+and the Potomac worked example that had been publishing a 500-year estimate 54%
+below the FEMA reference is regenerated and now validated against that reference
+on both estimators. If you have used `flood_analysis(method="gev_lmoments")` or
+`regional_frequency_analysis`, please recheck your numbers.
+
+Alongside that: Brazil joins the collector list as source 27, every registered
+collector is now reachable from the dashboard with a CI guard to keep it that
+way, and the CLI gained shell completion.
+
 ### Added
 - **Shell completion** (`aquascope completion bash|zsh|fish`): emits an argcomplete script for the chosen shell, bringing the CLI to 20 commands. Thanks @adjenk (#157, closes #28).
 - **Every collector reachable from the dashboard** (`dashboard/views/collect.py`): the Collect page went from 21 sources to all 27, adding NOAA NWPS, Ireland OPW, PEGELONLINE, CAMELS-CL, UK EA, and CAMELS-BR with per-source parameter forms and region entries. Home-page counts now derive from `len(SOURCES)` instead of a hardcoded number, and a drift guard (`tests/test_cli/test_dashboard_sources.py`) fails CI if a registered collector is missing from the page, so a new source cannot merge without wiring the UI. Thanks @taran-dev4u (#145, closes #143).

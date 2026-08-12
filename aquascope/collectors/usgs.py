@@ -318,7 +318,7 @@ class USGSCollector(BaseCollector):
                     samples.append(
                         StreamflowReading(
                             source=DataSource.USGS,
-                            station_id=props.get("monitoring_location_id", "unknown"),
+                            station_id=props.get("monitoring_location_id"),
                             station_name=props.get("station_name", "unknown"),
                             location=loc,
                             reading_datetime=datetime.fromisoformat(props["time"]),
@@ -327,7 +327,6 @@ class USGSCollector(BaseCollector):
                             uncertainty_cms=None,
                             catchment_area_km2=catchment_area_km2,
                             unit="m3/s",
-                            remark="N/A",
                         )
                     )
 

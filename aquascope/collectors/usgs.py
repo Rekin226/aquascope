@@ -389,6 +389,7 @@ class USGSCollector(BaseCollector):
         if not text or text.lower() in {"nan", "+inf", "inf", "-inf"}:
             return 0
 
+        text = text.lstrip("+-")
         if "." in text:
             if text[-1] == ".":
                 return len(text.rstrip("."))

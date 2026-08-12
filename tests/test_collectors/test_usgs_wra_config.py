@@ -291,6 +291,8 @@ class TestUSGSSignificantFiguresHelpers:
         collector = USGSCollector(api_key="valid-key")
 
         assert collector._count_sig_figs("12.50") == 4
+        assert collector._count_sig_figs("-12.50") == 4
+        assert collector._count_sig_figs("+12.50") == 4
         assert collector._count_sig_figs("0.001230") == 4
         assert collector._count_sig_figs("1000") == 1
         assert collector._count_sig_figs("1000.0") == 5

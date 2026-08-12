@@ -15,21 +15,27 @@ below the FEMA reference is regenerated and now validated against that reference
 on both estimators. If you have used `flood_analysis(method="gev_lmoments")` or
 `regional_frequency_analysis`, please recheck your numbers.
 
-Alongside that: Brazil joins the collector list as source 27, every registered
-collector is now reachable from the dashboard with a CI guard to keep it that
-way, and the CLI gained shell completion.
+Alongside that: Brazil and the UK join the collector list, bringing it to 27,
+every registered collector is now reachable from the dashboard with a CI guard
+to keep it that way, groundwater analysis gets its own dashboard page, and the
+CLI gained shell completion.
+
+Most of this release came from the community again. Thanks to @taran-dev4u,
+@JamesBoardman27, @laishettikarthik-tech, and @adjenk.
 
 ### Added
 - **Shell completion** (`aquascope completion bash|zsh|fish`): emits an argcomplete script for the chosen shell, bringing the CLI to 20 commands. Thanks @adjenk (#157, closes #28).
 - **Every collector reachable from the dashboard** (`dashboard/views/collect.py`): the Collect page went from 21 sources to all 27, adding NOAA NWPS, Ireland OPW, PEGELONLINE, CAMELS-CL, UK EA, and CAMELS-BR with per-source parameter forms and region entries. Home-page counts now derive from `len(SOURCES)` instead of a hardcoded number, and a drift guard (`tests/test_cli/test_dashboard_sources.py`) fails CI if a registered collector is missing from the page, so a new source cannot merge without wiring the UI. Thanks @taran-dev4u (#145, closes #143).
+- **UK Environment Agency collector** (`collectors/uk_ea.py`): real-time river level, flow, rainfall, and groundwater telemetry from the EA Hydrology API, at 15-minute or daily resolution across the England station network. Emitted as `StreamflowReading` and `WaterLevelReading`, with station, WISKI ID, bounding-box and observed-property filters. No API key required. Thanks @JamesBoardman27 (#133).
+- **Groundwater dashboard page** (`dashboard/views/groundwater.py`): SGI standardised groundwater index, drought event detection, recharge estimation, and aquifer tools as a workspace page. Thanks @laishettikarthik-tech (#139, closes #125).
 - **CAMELS-BR collector** (`collectors/camels_br.py`): daily observed streamflow for Brazilian catchments from the CAMELS-BR large-sample dataset on Zenodo, joined with catchment attributes (gauge name, coordinates, area). Emitted as `StreamflowReading` with `catchment_area_km2` set, so `runoff_mm_day` comes for free. AquaScope's 27th source. Thanks @taran-dev4u (#140, closes #124).
-- **Flow Duration Curve (FDC) slope signature** (`aquascope.hydrology.fdc_slope`): added log-space percentile slope signature function and `fdc_slope` field on `SignatureReport` (#45).
+- **Flow Duration Curve (FDC) slope signature** (`aquascope.hydrology.fdc_slope`): added log-space percentile slope signature function and `fdc_slope` field on `SignatureReport`. Thanks @taran-dev4u (#148, closes #45).
 
 ### Fixed
 - **`flood_analysis(method="gev_lmoments")` returned incorrect return levels** in every release from v0.4.0 through v0.9.0. Two sign errors in the GEV L-moment estimator (the shape passed to scipy, and the location term) made fitted quantiles off by roughly 0.5x to 2x depending on the tail, always understating heavy-tailed floods. Parameter recovery is now within 0.5% of truth on large synthetic samples. `fit_gev` also seeds its ML fit from L-moments and constrains the shape to a plausible range, so 40-year records no longer produce absurd return levels (previously a shape of -6.2 and a 100-year flood of 3.3e11). **If you used `gev_lmoments`, recheck your results.** Thanks @taran-dev4u (#154, closes #119).
 - **`regional_frequency_analysis` growth curve carried the same two sign errors**, so regional return levels were low and got worse at longer return periods (on a homogeneous synthetic region the 100-year growth factor was 41% below the analytical value). Corrected alongside the estimator above. A residual uniform bias remains under investigation in #156.
 - **Potomac flood-frequency example corrected** (`docs/examples/potomac_flood_frequency.md`): the published GEV column came from the buggy estimator and read 54% below the FEMA reference at the 500-year level. Regenerated against the live USGS record, the GEV estimates now sit within 10% of the FEMA Flood Insurance Study at every return period. The sample size label and a stale `bootstrap_ci` argument in the reproduction snippet were fixed too.
-- **Runoff ratio date index alignment** (`aquascope.hydrology.runoff_ratio`): extracted standalone `runoff_ratio` function that strictly aligns precipitation and discharge dates via inner index intersection prior to computing total volume ratios (#45).
+- **Runoff ratio date index alignment** (`aquascope.hydrology.runoff_ratio`): extracted standalone `runoff_ratio` function that strictly aligns precipitation and discharge dates via inner index intersection prior to computing total volume ratios. Thanks @taran-dev4u (#148).
 
 ## [0.9.0] - 2026-08-04
 

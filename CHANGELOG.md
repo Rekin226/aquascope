@@ -11,6 +11,7 @@ All notable changes to AquaScope are documented here.
 - **Flow Duration Curve (FDC) slope signature** (`aquascope.hydrology.fdc_slope`): added log-space percentile slope signature function and `fdc_slope` field on `SignatureReport` (#45).
 
 ### Fixed
+- **`flood_analysis(method="gev_lmoments")` returned incorrect return levels** in every release from v0.4.0 through v0.9.0. Two sign errors in the GEV L-moment estimator (the shape passed to scipy, and the location term) made fitted quantiles off by roughly 0.5x to 2x depending on the tail, always understating heavy-tailed floods. Parameter recovery is now within 0.5% of truth on large synthetic samples. `fit_gev` also seeds its ML fit from L-moments and constrains the shape to a plausible range, so 40-year records no longer produce absurd return levels (previously a shape of -6.2 and a 100-year flood of 3.3e11). **If you used `gev_lmoments`, recheck your results.** Thanks @taran-dev4u (#154, closes #119).
 - **Runoff ratio date index alignment** (`aquascope.hydrology.runoff_ratio`): extracted standalone `runoff_ratio` function that strictly aligns precipitation and discharge dates via inner index intersection prior to computing total volume ratios (#45).
 
 ## [0.9.0] - 2026-08-04

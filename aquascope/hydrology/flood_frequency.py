@@ -921,8 +921,8 @@ def regional_frequency_analysis(
     shape = 7.8590 * c + 2.9554 * c * c
     gamma_val = _gamma_func(1 + shape)
     alpha = reg_l2 * shape / (gamma_val * (1 - 2**(-shape))) if abs(shape) > 1e-10 else reg_l2 / np.log(2)
-    xi = reg_l1 - alpha * (gamma_val - 1) / shape if abs(shape) > 1e-10 else reg_l1 - alpha * 0.5772156649
-    scipy_shape = -shape
+    xi = reg_l1 - alpha * (1 - gamma_val) / shape if abs(shape) > 1e-10 else reg_l1 - alpha * 0.5772156649
+    scipy_shape = shape
 
     growth_curve: dict[float, float] = {}
     for rp in return_periods:

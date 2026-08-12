@@ -5,17 +5,19 @@ from __future__ import annotations
 import streamlit as st
 
 from aquascope.dashboard import _insights, _state
+from aquascope.dashboard.views.collect import SOURCES
 
 
 def render() -> None:
     from aquascope import __version__
 
+    n_sources = len(SOURCES)
     st.markdown(
         f"""
         <div class="aq-hero">
           <div class="aq-hero-title">🌊 AquaScope</div>
           <div class="aq-hero-sub">
-            Open-source water intelligence — 21 live data sources, a full hydrology &amp;
+            Open-source water intelligence — {n_sources} live data sources, a full hydrology &amp;
             agricultural-water toolkit, and AI-assisted research methodology, in one workspace.
           </div>
           <div class="aq-hero-badge">v{__version__} · MIT
@@ -36,7 +38,7 @@ def render() -> None:
             st.markdown("##### 🚀 Start in one click")
             st.caption(
                 "Load a demo dataset to explore every page instantly, or pull real data "
-                "from 21 live sources — USGS, GRDC, Open-Meteo, Taiwan WRA, and more."
+                f"from {n_sources} live sources — USGS, GRDC, Open-Meteo, Taiwan WRA, and more."
             )
             c1, c2, c3 = st.columns(3)
             with c1:
@@ -54,7 +56,7 @@ def render() -> None:
     st.markdown("")
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Live data sources", "21")
+    m1.metric("Live data sources", str(n_sources))
     m2.metric("Interactive chart types", "12+")
     m3.metric("Hydrology & agri models", "20+")
     m4.metric("AI methodologies", "26")
@@ -63,25 +65,49 @@ def render() -> None:
     st.subheader("What's inside")
 
     cards = [
-        ("📡 Collect", "collect",
-         "21 live sources across Taiwan, the US, Europe, Japan, Korea, India, France, "
-         "and global archives, plus CSV/JSON upload."),
-        ("🔬 Analyze & clean", "analysis",
-         "Automated EDA, data-quality scoring, and one-click preprocessing (dedupe, fill, outliers, resampling)."),
-        ("📈 Visualize", "visualize",
-         "Interactive time series, box plots, correlation heatmaps, station maps, FDCs, hydrographs, and more."),
-        ("🌊 Hydrology lab", "hydrology",
-         "Flow-duration curves, baseflow separation (Lyne-Hollick / Eckhardt / UKIH), "
-         "recession analysis, and 20+ flow signatures."),
-        ("🌀 Extreme events", "extremes",
-         "GEV / Log-Pearson III / Gumbel fits on annual maxima with bootstrap "
-         "confidence bounds and design return levels."),
-        ("🌾 Agricultural water", "agri",
-         "FAO-56 Penman-Monteith ET₀, single & dual (Kcb + Ke) crop coefficients, and full irrigation scheduling."),
-        ("🤖 AI recommender", "ai",
-         "Rule-based + optional LLM-enhanced research-methodology recommendations from your dataset's profile."),
-        ("⚠️ Quality alerts", "alerts",
-         "WHO / EPA / EU guideline screening with per-parameter exceedance rates and status flags."),
+        (
+            "📡 Collect",
+            "collect",
+            f"{n_sources} live sources across Taiwan, the US, Europe, Japan, Korea, India, France, "
+            "and global archives, plus CSV/JSON upload.",
+        ),
+        (
+            "🔬 Analyze & clean",
+            "analysis",
+            "Automated EDA, data-quality scoring, and one-click preprocessing (dedupe, fill, outliers, resampling).",
+        ),
+        (
+            "📈 Visualize",
+            "visualize",
+            "Interactive time series, box plots, correlation heatmaps, station maps, FDCs, hydrographs, and more.",
+        ),
+        (
+            "🌊 Hydrology lab",
+            "hydrology",
+            "Flow-duration curves, baseflow separation (Lyne-Hollick / Eckhardt / UKIH), "
+            "recession analysis, and 20+ flow signatures.",
+        ),
+        (
+            "🌀 Extreme events",
+            "extremes",
+            "GEV / Log-Pearson III / Gumbel fits on annual maxima with bootstrap "
+            "confidence bounds and design return levels.",
+        ),
+        (
+            "🌾 Agricultural water",
+            "agri",
+            "FAO-56 Penman-Monteith ET₀, single & dual (Kcb + Ke) crop coefficients, and full irrigation scheduling.",
+        ),
+        (
+            "🤖 AI recommender",
+            "ai",
+            "Rule-based + optional LLM-enhanced research-methodology recommendations from your dataset's profile.",
+        ),
+        (
+            "⚠️ Quality alerts",
+            "alerts",
+            "WHO / EPA / EU guideline screening with per-parameter exceedance rates and status flags.",
+        ),
     ]
 
     for row_start in range(0, len(cards), 4):

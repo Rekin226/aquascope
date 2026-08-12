@@ -11,8 +11,9 @@ Usage
     aquascope agri plan --crop maize --planting-date 2026-04-01 --eto-file eto.csv --precip-file precip.csv
     aquascope list-methods
     aquascope list-sources
+    aquascope completion bash
 """
-
+# PYTHON_ARGCOMPLETE_OK
 from __future__ import annotations
 
 import argparse
@@ -21,6 +22,8 @@ import logging
 import sys
 from datetime import date
 from pathlib import Path
+
+import argcomplete
 
 # ----------------------------------------------------------
 from aquascope.collectors.india_wris import IndiaWRISCollector
@@ -67,6 +70,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
     """Run a data collector and save results."""
     from aquascope.collectors import (
         AquastatCollector,
+        CAMELSBRCollector,
         CAMELSCLCollector,
         CopernicusCollector,
         EUWFDCollector,
@@ -87,6 +91,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         TaiwanWRAIoTCollector,
         TaiwanWRAReservoirCollector,
         TaiwanWRAWaterLevelCollector,
+        UKEACollector,
         USGSCollector,
         WaPORCollector,
         WQPCollector,
@@ -106,6 +111,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "taiwan_wra_fhy": lambda: TaiwanWRAFhyCollector(),
         "taiwan_wra_iot": lambda: TaiwanWRAIoTCollector(),
         "taiwan_datagov": lambda: TaiwanDataGovCollector(),
+        "uk_ea": lambda: UKEACollector(),
         "wqp": lambda: WQPCollector(),
         "openmeteo": lambda: OpenMeteoCollector(mode=args.mode or "weather"),
         "copernicus": lambda: CopernicusCollector(),
@@ -118,6 +124,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
         "grdc": lambda: GRDCCollector(),
         "camels_cl": lambda: CAMELSCLCollector(),
+        "camels_br": lambda: CAMELSBRCollector(),
         "noaa_nwps": lambda: NOAANWPSCollector(),
         "pegelonline": lambda: PegelonlineCollector(),
     }
@@ -131,6 +138,25 @@ def cmd_collect(args: argparse.Namespace) -> None:
     kwargs = {}
     if source == "usgs" and args.days:
         kwargs["datetime_range"] = f"P{args.days}D"
+    if source == "uk_ea":
+        if args.collection:
+            kwargs["collection"] = args.collection
+        if args.observed_property:
+            kwargs["observed_property"] = args.observed_property
+        if args.measure:
+            kwargs["measure"] = args.measure
+        if args.station:
+            kwargs["station"] = args.station
+        if args.station_wiski_id:
+            kwargs["station_wiski_id"] = args.station_wiski_id
+        if args.bbox:
+            kwargs["bbox"] = args.bbox
+        if args.start_date:
+            kwargs["min_date"] = args.start_date
+        if args.end_date:
+            kwargs["max_date"] = args.end_date
+        if args.days is not None:
+            kwargs["days"] = args.days
     if source == "sdg6" and args.countries:
         kwargs["country_codes"] = args.countries
     if source == "wqp":
@@ -180,7 +206,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
             logger.error("GRDC --mode must be 'in_situ' or 'satellite'; got '%s'.", args.mode)
             sys.exit(1)
         kwargs["source_type"] = args.mode
-    if source == "camels_cl":
+    if source in ("camels_cl", "camels_br"):
         if args.station_ids:
             kwargs["station_ids"] = [s.strip() for s in args.station_ids.split(",") if s.strip()]
         if args.start_date:
@@ -207,7 +233,8 @@ def cmd_collect(args: argparse.Namespace) -> None:
             logger.error("PEGELONLINE requires --station with a station UUID.")
             sys.exit(1)
         kwargs["station_id"] = args.station
-        kwargs["days"] = args.days
+        if args.days is not None:
+            kwargs["days"] = args.days
         if args.timeseries:
             kwargs["timeseries"] = args.timeseries
         if args.start_date:
@@ -439,6 +466,12 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
         "usgs": ("USGS", "USA", "Streamflow, water quality, gage height", "https://api.waterdata.usgs.gov"),
         "sdg6": ("UN SDG 6", "Global", "SDG 6 indicators (6.1.1 – 6.6.1)", "https://sdg6data.org"),
         "gemstat": ("GEMStat", "Global", "Freshwater quality (170+ countries)", "https://gemstat.org"),
+        "uk_ea": (
+          "UK Environment Agency",
+          "UK",
+          "Water Quality and Water Level readings",
+          "https://environment.data.gov.uk/hydrology"
+        ),
         "aquastat": (
             "FAO AQUASTAT",
             "Global",
@@ -493,6 +526,18 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
         ),
         "noaa_nwps": ("NOAA NWPS", "USA", " Streamflow forecasts, stream observations, streamflow output, crest history, flood impacts, low water history, flood category levels, and location metadata.", "https://www.water.noaa.gov"),
         "pegelonline": ("PEGELONLINE", "Germany", "River water level and discharge", "https://www.pegelonline.wsv.de"),
+        "camels_cl": (
+            "CAMELS-CL",
+            "Chile",
+            "Observed streamflow, meteorological forcing, attributes",
+            "https://www.cr2.cl/camels-cl",
+        ),
+        "camels_br": (
+            "CAMELS-BR",
+            "Brazil",
+            "Observed streamflow, meteorological forcing, attributes",
+            "https://doi.org/10.5281/zenodo.3709337",
+        ),
     }
 
     for src in DataSource:
@@ -502,6 +547,12 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
         print(f"    Data   : {info[2]}")
         print(f"    URL    : {info[3]}")
         print()
+
+
+def cmd_completion(args: argparse.Namespace) -> None:
+    """Print the shell activation line for tab-completion."""
+    from argcomplete.shell_integration import shellcode
+    print(shellcode(["aquascope"], shell=args.shell))
 
 
 def cmd_solve(args: argparse.Namespace) -> None:
@@ -1067,37 +1118,51 @@ def main() -> None:
             "korea_wamis",
             "grdc",
             "camels_cl",
-            "noaa_nwps"
+            "camels_br",
+            "noaa_nwps",
             "ireland_opw",
             "pegelonline",
+            "uk_ea",
         ],
         help="Data source to collect from",
     )
     p_collect.add_argument("--api-key", default=None, help="API key (if required)")
+    p_collect.add_argument("--days", type=int, default=None, help="Number of days (USGS/UKEA/PEGELONLINE; PEGELONLINE max: 31)")
     p_collect.add_argument("--max-stations", type=int, default=None, help="Cap stations to fetch (Ireland OPW)")
-    p_collect.add_argument("--days", type=int, default=30, help="Number of days (USGS/PEGELONLINE; PEGELONLINE max: 31)")
     p_collect.add_argument("--country", default="all", help="ISO3 country code or 'all' (AQUASTAT)")
     p_collect.add_argument("--countries", default=None, help="ISO3 country codes, comma-separated (SDG6)")
     p_collect.add_argument("--state", default=None, help="US state code e.g. US:06 (WQP)")
+    p_collect.add_argument("--collection", default=None, choices=["15min", "daily"], help="Collection period (UKEA)")
+    p_collect.add_argument("--station-wiski-id", default=None, help="Station Wiski ID (UKEA)")
+    p_collect.add_argument("--observed-property", default=None, help="Observed property (UKEA)")
+    p_collect.add_argument("--measure", default=None, help="Measure identifier (UKEA)")
     p_collect.add_argument("--variables", default=None, help="Comma-separated variable IDs (AQUASTAT)")
+    p_collect.add_argument(
+      "--bbox",
+      default=None,
+      help="Bounding box west,south,east,north (WaPOR), or min_lon, min_lat, max_lon, max_lat (USGS/UKEA)"
+    )
     p_collect.add_argument(
         "--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood; grdc: in_situ/satellite)"
     )
-    p_collect.add_argument("--bbox", default=None, help="Bounding box west,south,east,north (WaPOR)")
     p_collect.add_argument("--variable", default=None, help="Variable code for the selected collector (WaPOR)")
     p_collect.add_argument("--lid", default=None, help="A unique 5-character alphanumeric code e.g. ANAW1 (NOAA_NWPS)")
     p_collect.add_argument("--lat", type=float, default=None, help="Latitude (openmeteo/copernicus)")
     p_collect.add_argument("--lon", type=float, default=None, help="Longitude (openmeteo/copernicus)")
-    p_collect.add_argument("--start-date", default=None, help="Start date YYYY-MM-DD (openmeteo/copernicus)")
-    p_collect.add_argument("--end-date", default=None, help="End date YYYY-MM-DD (openmeteo/copernicus)")
+    p_collect.add_argument("--start-date", default=None, help="Start date YYYY-MM-DD (openmeteo/copernicus/UKEA)")
+    p_collect.add_argument("--end-date", default=None, help="End date YYYY-MM-DD (openmeteo/copernicus/UKEA)")
     p_collect.add_argument("--start-year", type=int, default=2000, help="Start year (AQUASTAT)")
     p_collect.add_argument("--end-year", type=int, default=2023, help="End year (AQUASTAT)")
     p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")
     p_collect.add_argument("--year", type=int, default=None, help="Year filter (EU WFD)")
-    p_collect.add_argument("--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl)")
-    p_collect.add_argument("--station", default=None, help="Station UUID (PEGELONLINE)")
     p_collect.add_argument(
-        "--timeseries", default=None, choices=["W", "Q"],
+        "--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl, camels_br)"
+    )
+    p_collect.add_argument("--station", default=None, help="Station UUID/SUID (PEGELONLINE/UKEA)")
+    p_collect.add_argument(
+        "--timeseries",
+        default=None,
+        choices=["W", "Q"],
         help="PEGELONLINE timeseries: W for water level or Q for discharge (default: both)",
     )
     p_collect.add_argument(
@@ -1140,6 +1205,10 @@ def main() -> None:
     p_run.add_argument("--file", required=True, help="Path to JSON or CSV data file")
     p_run.add_argument("--config", default=None, help="Pipeline config as JSON string")
     p_run.add_argument("--output", default=None, help="Path to save results JSON")
+
+    # ── completion  ────────────────────────────────────────────────────
+    p_completion = sub.add_parser("completion", help="Print shell tab-completion activation script")
+    p_completion.add_argument("shell", choices=["bash", "zsh", "fish"], help="Shell to generate completion for")
 
     # ── list-methods ─────────────────────────────────────────────────
     sub.add_parser("list-methods", help="List all available research methodologies and pipelines")
@@ -1322,6 +1391,7 @@ def main() -> None:
     p_hydro.add_argument("--n-day", type=int, default=None, help="N-day window for low-flow (default: 7)")
     p_hydro.add_argument("--return-period", type=int, default=None, help="Return period for low-flow (default: 10)")
 
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
     commands = {
         "collect": cmd_collect,
@@ -1340,6 +1410,7 @@ def main() -> None:
         "agri": cmd_agri,
         "groundwater": cmd_groundwater,
         "climate": cmd_climate,
+        "completion": cmd_completion,
     }
 
     handler = commands.get(args.command)

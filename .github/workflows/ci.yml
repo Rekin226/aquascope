@@ -60,7 +60,11 @@ jobs:
         run: |
           out=$(npx --yes all-contributors-cli check)
           echo "$out"
-          if echo "$out" | grep -q "Missing contributors"; then
-            echo "::error::The contributors board is missing the people listed above. Comment '@all-contributors please add @<username> for <contribution>' on their merged PR (needs the all-contributors GitHub App), or run 'npx all-contributors-cli add <username> <contribution>' locally."
+          # Bot authors (e.g. allcontributors[bot], which authors the board PRs
+          # themselves) are never credited on the board, so ignore them.
+          missing=$(echo "$out" | sed -n '/Missing contributors/,$p' | tail -n +2 \
+            | sed 's/^[[:space:]]*//' | grep -v '\[bot\]$' | grep -v '^$' || true)
+          if [ -n "$missing" ]; then
+            echo "::error::The contributors board is missing: $missing. Comment '@all-contributors please add @<username> for <contribution>' on their merged PR (needs the all-contributors GitHub App), or run 'npx all-contributors-cli add <username> <contribution>' locally."
             exit 1
           fi

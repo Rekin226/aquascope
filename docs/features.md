@@ -8,7 +8,7 @@ Complete capability reference for AquaScope. For installation and a quick exampl
 
 - **Taiwan** — MOENV water quality, WRA levels/reservoirs, Civil IoT sensors
 - **USA** — USGS streamflow, Water Quality Portal (400+ agencies)
-- **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo weather, Copernicus climate
+- **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo weather, Copernicus climate, UKEA hydrology
 - **FAO** — AQUASTAT country-level water use, WaPOR satellite evapotranspiration
 
 See [docs/data_sources.md](data_sources.md) for the full list with endpoints and API-key requirements.

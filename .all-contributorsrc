@@ -137,6 +137,18 @@
         "code",
         "test"
       ]
+    },
+    {
+      "login": "JamesBoardman27",
+      "name": "James Boardman",
+      "avatar_url": "https://avatars.githubusercontent.com/u/77696811?v=4",
+      "profile": "https://github.com/JamesBoardman27",
+      "contributions": [
+        "code",
+        "test",
+        "doc"
+      ]
     }
-  ]
+  ],
+  "commitType": "docs"
 }

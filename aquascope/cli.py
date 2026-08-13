@@ -153,8 +153,6 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["countyCd"] = args.county_code
         if args.huc:
             kwargs["huc"] = args.huc
-    if source == "usgs" and args.days:
-        kwargs["datetime_range"] = f"P{args.days}D"
     if source == "taiwan_cwa":
         if args.station_ids:
             kwargs["station_ids"] = [s.strip() for s in args.station_ids.split(",") if s.strip()]

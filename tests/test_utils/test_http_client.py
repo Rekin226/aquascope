@@ -110,9 +110,16 @@ class TestRelaxStrictTLS:
 
     def test_default_client_keeps_strict_profile(self):
         import ssl
+        import sys
 
         from aquascope.utils.http_client import CachedHTTPClient
 
+        if sys.version_info < (3, 13):
+            # VERIFY_X509_STRICT only became a default in Python 3.13, which is
+            # also why the TW-host failures this flag fixes only bite 3.13+.
+            import pytest
+
+            pytest.skip("strict profile is not a default before Python 3.13")
         client = CachedHTTPClient(base_url="https://example.com")
         ctx = client._client._transport._pool._ssl_context
         assert ctx.verify_flags & ssl.VERIFY_X509_STRICT

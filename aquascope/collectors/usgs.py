@@ -319,7 +319,7 @@ class USGSCollector(BaseCollector):
                         StreamflowReading(
                             source=DataSource.USGS,
                             station_id=props.get("monitoring_location_id"),
-                            station_name=props.get("station_name", "unknown"),
+                            station_name=props.get("station_name"),
                             location=loc,
                             reading_datetime=datetime.fromisoformat(props["time"]),
                             discharge_cms=rounded_discharge_cms,

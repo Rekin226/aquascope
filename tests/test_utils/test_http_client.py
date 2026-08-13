@@ -92,3 +92,27 @@ class TestWQPRoutesThroughClient:
         collector = WQPCollector(client=mock_client)
 
         assert collector.fetch_raw(state_code="US:06") == []
+
+
+class TestRelaxStrictTLS:
+    """relax_strict_tls keeps verification on but drops VERIFY_X509_STRICT (#169, #177)."""
+
+    def test_relaxed_context_disables_only_strict_flag(self):
+        import ssl
+
+        from aquascope.utils.http_client import CachedHTTPClient
+
+        client = CachedHTTPClient(base_url="https://codis.cwa.gov.tw/api", relax_strict_tls=True)
+        ctx = client._client._transport._pool._ssl_context
+        assert not ctx.verify_flags & ssl.VERIFY_X509_STRICT
+        assert ctx.verify_mode == ssl.CERT_REQUIRED  # verification itself stays on
+        assert ctx.check_hostname is True
+
+    def test_default_client_keeps_strict_profile(self):
+        import ssl
+
+        from aquascope.utils.http_client import CachedHTTPClient
+
+        client = CachedHTTPClient(base_url="https://example.com")
+        ctx = client._client._transport._pool._ssl_context
+        assert ctx.verify_flags & ssl.VERIFY_X509_STRICT

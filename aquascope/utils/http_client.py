@@ -136,6 +136,7 @@ class CachedHTTPClient:
         cache_ttl_seconds: int = 3600,
         rate_limiter: RateLimiter | None = None,
         verify: bool = True,
+        relax_strict_tls: bool = False,
     ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -165,7 +166,20 @@ class CachedHTTPClient:
             self.retries = min(self.retries, 1)
             self._client = _EmscriptenClient(timeout=timeout)
         else:
-            self._client = httpx.Client(timeout=timeout, follow_redirects=True, verify=verify)
+            verify_arg: Any = verify
+            if relax_strict_tls and verify:
+                # Python 3.13+ enables ssl.VERIFY_X509_STRICT by default, which
+                # rejects certificates missing the Subject Key Identifier
+                # extension — including Taiwan Government CA chains
+                # (codis.cwa.gov.tw, iot.wra.gov.tw). Relax ONLY the strict
+                # profile check; full chain and hostname verification stay on.
+                # This is the sanctioned alternative to verify=False.
+                import ssl
+
+                ctx = ssl.create_default_context()
+                ctx.verify_flags &= ~ssl.VERIFY_X509_STRICT
+                verify_arg = ctx
+            self._client = httpx.Client(timeout=timeout, follow_redirects=True, verify=verify_arg)
 
     # ── cache helpers ────────────────────────────────────────────────
     def _cache_key(self, url: str, params: dict | None) -> str:
@@ -348,6 +362,7 @@ class CachedHTTPClient:
         params: dict | None = None,
         headers: dict | None = None,
         use_cache: bool = True,
+        form: dict | None = None,
     ) -> Any:
         """POST *path* (optionally with a JSON body) and return parsed JSON.
 
@@ -367,6 +382,8 @@ class CachedHTTPClient:
         cache_params = dict(params or {})
         if json_body is not None:
             cache_params["__body__"] = json_body
+        if form is not None:
+            cache_params["__form__"] = form
         if use_cache:
             key = f"{self._cache_key(url, cache_params)}-post"
             cached = self._read_cache(key)
@@ -380,7 +397,7 @@ class CachedHTTPClient:
                 self.rate_limiter.wait_if_needed()
             try:
                 resp = self._client.post(
-                    url, json=json_body, params=params, headers=headers
+                    url, json=json_body, data=form, params=params, headers=headers
                 )
                 resp.raise_for_status()
                 data = self._parse_response_json(resp)

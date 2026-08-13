@@ -85,6 +85,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         PegelonlineCollector,
         SDG6Collector,
         TaiwanCivilIoTCollector,
+        TaiwanCWACollector,
         TaiwanDataGovCollector,
         TaiwanMOENVCollector,
         TaiwanWRAFhyCollector,
@@ -101,6 +102,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
     source = args.source.lower()
     collector_map = {
         "taiwan_moenv": lambda: TaiwanMOENVCollector(api_key=args.api_key or ""),
+        "taiwan_cwa": lambda: TaiwanCWACollector(),
         "taiwan_wra_level": lambda: TaiwanWRAWaterLevelCollector(),
         "taiwan_wra_reservoir": lambda: TaiwanWRAReservoirCollector(),
         "usgs": lambda: USGSCollector(api_key=args.api_key),
@@ -151,6 +153,15 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["countyCd"] = args.county_code
         if args.huc:
             kwargs["huc"] = args.huc
+    if source == "usgs" and args.days:
+        kwargs["datetime_range"] = f"P{args.days}D"
+    if source == "taiwan_cwa":
+        if args.station_ids:
+            kwargs["station_ids"] = [s.strip() for s in args.station_ids.split(",") if s.strip()]
+        if args.start_date:
+            kwargs["start"] = args.start_date
+        if args.end_date:
+            kwargs["end"] = args.end_date
     if source == "uk_ea":
         if args.collection:
             kwargs["collection"] = args.collection
@@ -451,6 +462,7 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
 
     source_info = {
         "taiwan_moenv": ("Taiwan MOENV", "Taiwan", "River/tap water quality, RPI", "https://data.moenv.gov.tw"),
+        "taiwan_cwa": ("Taiwan CWA climate", "Taiwan", "Daily station climate: rain, temp, RH, radiation, wind", "https://codis.cwa.gov.tw"),
         "taiwan_wra": ("Taiwan WRA", "Taiwan", "Water levels, reservoir status", "https://opendata.wra.gov.tw"),
         "taiwan_civil_iot": (
             "Taiwan Civil IoT",
@@ -1111,6 +1123,7 @@ def main() -> None:
         required=True,
         choices=[
             "taiwan_moenv",
+            "taiwan_cwa",
             "taiwan_wra_level",
             "taiwan_wra_reservoir",
             "taiwan_wra_fhy",

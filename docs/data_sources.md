@@ -1,6 +1,6 @@
 # Data Sources
 
-AquaScope ships **27 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
+AquaScope ships **28 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
 
 Most sources emit point observations and share the unified `water_data` schema (`WaterQualitySample`, `WaterLevelReading`, `ReservoirStatus`). Three aggregate/gridded sources use purpose-built record types that match their data shape: **FAO AQUASTAT** returns country-level `AquastatRecord`, **UN SDG 6** returns `SDG6Indicator`, and **FAO WaPOR** returns gridded `WaPORObservation`.
 
@@ -12,6 +12,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 
 | Source | Region | Data Types | API | Status |
 | :--- | :--- | :--- | :--- | :---: |
+| [Taiwan CWA CODIS](https://codis.cwa.gov.tw) | Taiwan | Daily climate: rainfall, temperature, humidity, radiation, wind | REST | ✅ |
 | [Taiwan MOENV](https://data.moenv.gov.tw) | Taiwan | River / tap water quality, RPI | REST | ✅ |
 | [Taiwan WRA](https://opendata.wra.gov.tw) | Taiwan | Water levels, reservoir status | REST | ✅ |
 | [Taiwan Civil IoT](https://sta.ci.taiwan.gov.tw) | Taiwan | Real-time sensors (level, flow, rain) | SensorThings | ✅ |

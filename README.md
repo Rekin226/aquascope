@@ -176,6 +176,8 @@ print(balance["irrigation_mm"].sum())             # total irrigation applied (mm
 print(int(balance["irrigation_trigger"].sum()))   # number of deficit days
 ```
 
+Notebook tutorial: [agricultural water demand and irrigation scheduling](notebooks/07_agricultural_water_demand.ipynb).
+
 ### 5. AI methodology recommender
 
 ```python

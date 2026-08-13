@@ -11,6 +11,7 @@ Both helpers lazily import their backends and are available via the optional
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -22,10 +23,16 @@ if TYPE_CHECKING:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
-
+# For each record in the list, derive all unique data sources and form a concatenated label
 def _source_label(records: list[Any]) -> str:
-    src = getattr(records[0], "source", None)
-    return getattr(src, "value", str(src)) if src is not None else "unknown"
+    sources: list[str] = []
+    for r in records:
+        src = getattr(r, "source", None)
+        if src is not None:
+            label = getattr(src, "value", str(src))
+            if label not in sources:
+                sources.append(label)
+    return "+".join(sources) if sources else "unknown"
 
 
 def _attach_station_coords(ds: xarray.Dataset, loc_map: dict[str, Any]) -> xarray.Dataset:
@@ -60,6 +67,27 @@ def records_to_xarray(records: Sequence[Any]) -> xarray.Dataset:
     if not records:
         return xr.Dataset()
 
+    # A collector can return complementary record schemas in one payload (for
+    # example, streamflow and water-quality observations).  Convert each
+    # schema independently so the single-schema branches below never assume
+    # fields from a different record type, then combine their variables.
+    by_type = defaultdict(list)
+    for record in records:
+        by_type[type(record)].append(record)
+
+    # If there are multiple record types, recursively call this function on each
+    # type and merge the resulting datasets.
+    if len(by_type) > 1:
+        merged = xr.merge(
+            [records_to_xarray(group) for group in by_type.values()],
+            combine_attrs="drop_conflicts",
+            compat="no_conflicts",
+            join="outer",
+        )
+        merged.attrs.setdefault("source", _source_label(records))
+        return merged
+
+    # When only one record type is present, the first record is representative of the schema.
     first = records[0]
 
     # Discriminate on the timestamp/value field. StreamflowReading and

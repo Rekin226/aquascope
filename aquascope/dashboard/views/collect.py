@@ -41,6 +41,11 @@ SOURCES: dict[str, tuple[str, str, str]] = {
         "Europe",
         "EEA DiscoData ecological/chemical status of European water bodies",
     ),
+    "taiwan_cwa": (
+        "Taiwan CWA climate",
+        "Taiwan",
+        "Daily station climate: rainfall, temperature, humidity, radiation, wind (CODIS archive, decades deep)",
+    ),
     "taiwan_moenv": ("Taiwan MOENV", "Taiwan", "River water-quality monitoring (requires free MOENV key)"),
     "taiwan_wra_level": ("Taiwan WRA water level", "Taiwan", "Real-time river stage snapshot across all WRA stations"),
     "taiwan_wra_reservoir": ("Taiwan WRA reservoirs", "Taiwan", "Daily reservoir storage and operations"),
@@ -215,6 +220,19 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
             ],
         )
         fetch["limit"] = st.slider("Max records", 100, 5_000, 1_000, step=100)
+
+    elif source_key == "taiwan_cwa":
+        st.caption("CWA climate stations via the CODIS archive. No API key needed; history reaches back decades.")
+        sids = st.text_input("Station IDs (comma-separated)", value="466920", help="466920 = Taipei")
+        if sids.strip():
+            fetch["station_ids"] = [s.strip() for s in sids.split(",") if s.strip()]
+        c1, c2 = st.columns(2)
+        sd = c1.date_input("Start date (optional)", value=None, key="cwa_start")
+        ed = c2.date_input("End date (optional)", value=None, key="cwa_end")
+        if sd:
+            fetch["start"] = str(sd)
+        if ed:
+            fetch["end"] = str(ed)
 
     elif source_key == "taiwan_moenv":
         fetch["limit"] = st.slider("Records to fetch (most recent first)", 100, 5_000, 500, step=100)
@@ -689,6 +707,7 @@ _FACTORIES = {
     "hubeau_hydrometrie": lambda api_key, ctor, c: c.HubeauHydrometrieCollector(),
     "eu_wfd": lambda api_key, ctor, c: c.EUWFDCollector(),
     "taiwan_moenv": lambda api_key, ctor, c: c.TaiwanMOENVCollector(api_key=api_key or ""),
+    "taiwan_cwa": lambda api_key, ctor, c: c.TaiwanCWACollector(),
     "taiwan_wra_level": lambda api_key, ctor, c: c.TaiwanWRAWaterLevelCollector(),
     "taiwan_wra_reservoir": lambda api_key, ctor, c: c.TaiwanWRAReservoirCollector(),
     "taiwan_wra_fhy": lambda api_key, ctor, c: c.TaiwanWRAFhyCollector(data_type=ctor.get("data_type", "water")),

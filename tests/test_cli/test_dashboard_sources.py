@@ -1,6 +1,7 @@
 """Drift guard ensuring the dashboard Collect page stays in sync with all registered collectors."""
 
 from __future__ import annotations
+
 import pytest
 
 from aquascope.dashboard.views.collect import SOURCES

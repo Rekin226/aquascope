@@ -14,34 +14,66 @@ logger = logging.getLogger(__name__)
 
 # key -> (label, region, one-line description)
 SOURCES: dict[str, tuple[str, str, str]] = {
-    "usgs": ("USGS Water Services", "United States",
-             "Real-time discharge, gauge height, temperature from thousands of US gauges"),
+    "usgs": (
+        "USGS Water Services",
+        "United States",
+        "Real-time discharge, gauge height, temperature from thousands of US gauges",
+    ),
     "grdc": ("GRDC river discharge", "Global", "In-situ gauges (Zenodo subset) + RSEG satellite discharge estimates"),
     "openmeteo": ("Open-Meteo", "Global", "Weather history, forecasts and GloFAS flood discharge for any coordinate"),
     "sdg6": ("UN SDG 6 indicators", "Global", "Country-level water & sanitation indicators (water stress, IWRM, …)"),
-    "gemstat": ("GEMStat water quality", "Global",
-                "UNEP global surface & groundwater quality archive (~200 MB, cached locally)"),
+    "gemstat": (
+        "GEMStat water quality",
+        "Global",
+        "UNEP global surface & groundwater quality archive (~200 MB, cached locally)",
+    ),
     "aquastat": ("FAO AQUASTAT", "Global", "National water resources and agricultural water-use statistics"),
     "wapor": ("FAO WaPOR", "Africa & Near East", "Remote-sensing evapotranspiration and biomass productivity rasters"),
     "copernicus": ("Copernicus CDS", "Global", "ERA5 / GloFAS climate reanalysis (requires free CDS key)"),
     "wqp": ("Water Quality Portal", "United States", "EPA/USGS harmonised water-quality samples by state"),
-    "hubeau_hydrometrie": ("Hub'Eau hydrométrie", "France",
-                           "Real-time water level & discharge from French national gauges"),
-    "eu_wfd": ("EU Water Framework Directive", "Europe",
-               "EEA DiscoData ecological/chemical status of European water bodies"),
-    "taiwan_moenv": ("Taiwan MOENV", "Taiwan",
-                     "River water-quality monitoring (requires free MOENV key)"),
-    "taiwan_wra_level": ("Taiwan WRA water level", "Taiwan",
-                         "Real-time river stage snapshot across all WRA stations"),
+    "hubeau_hydrometrie": (
+        "Hub'Eau hydrométrie",
+        "France",
+        "Real-time water level & discharge from French national gauges",
+    ),
+    "eu_wfd": (
+        "EU Water Framework Directive",
+        "Europe",
+        "EEA DiscoData ecological/chemical status of European water bodies",
+    ),
+    "taiwan_cwa": (
+        "Taiwan CWA climate",
+        "Taiwan",
+        "Daily station climate: rainfall, temperature, humidity, radiation, wind (CODIS archive, decades deep)",
+    ),
+    "taiwan_moenv": ("Taiwan MOENV", "Taiwan", "River water-quality monitoring (requires free MOENV key)"),
+    "taiwan_wra_level": ("Taiwan WRA water level", "Taiwan", "Real-time river stage snapshot across all WRA stations"),
     "taiwan_wra_reservoir": ("Taiwan WRA reservoirs", "Taiwan", "Daily reservoir storage and operations"),
-    "taiwan_wra_fhy": ("Taiwan WRA FHY real-time", "Taiwan",
-                       "Real-time water level / rainfall / discharge (FHY portal)"),
+    "taiwan_wra_fhy": (
+        "Taiwan WRA FHY real-time",
+        "Taiwan",
+        "Real-time water level / rainfall / discharge (FHY portal)",
+    ),
     "taiwan_wra_iot": ("Taiwan WRA IoT", "Taiwan", "Real-time groundwater level and rainfall accumulation"),
     "taiwan_datagov": ("Taiwan data.gov.tw", "Taiwan", "Open-government real-time river & groundwater levels"),
     "taiwan_civil_iot": ("Taiwan Civil IoT", "Taiwan", "SensorThings water observations (flood sensors etc.)"),
     "japan_mlit": ("Japan MLIT", "Japan", "Water level, discharge, quality and rainfall by prefecture"),
     "korea_wamis": ("Korea WAMIS", "South Korea", "Water level, discharge, quality and dam storage by basin"),
     "india_wris": ("India WRIS", "India", "River water level by state / district / agency"),
+    "noaa_nwps": ("NOAA NWPS", "United States", "River stage and discharge forecasts across US stream gauges"),
+    "ireland_opw": ("Ireland OPW", "Ireland", "Real-time river & lake water levels from waterlevel.ie"),
+    "pegelonline": (
+        "PEGELONLINE",
+        "Germany",
+        "Real-time river stage and discharge from German federal waterways (WSV)",
+    ),
+    "camels_cl": ("CAMELS-CL", "Chile", "Daily observed streamflow & catchment attributes for 516 Chilean catchments"),
+    "camels_br": ("CAMELS-BR", "Brazil", "Daily observed streamflow & catchment attributes for Brazilian catchments"),
+    "uk_ea": (
+        "UK Environment Agency",
+        "United Kingdom",
+        "Real-time river level, flow, rainfall, and groundwater observations from UK EA telemetry",
+    ),
 }
 
 _API_KEY_SOURCES: dict[str, tuple[str, str]] = {
@@ -49,8 +81,22 @@ _API_KEY_SOURCES: dict[str, tuple[str, str]] = {
     "copernicus": ("Copernicus CDS", "https://cds.climate.copernicus.eu/how-to-api"),
 }
 
-_REGION_ORDER = ["Global", "United States", "Europe", "France", "Taiwan", "Japan",
-                 "South Korea", "India", "Africa & Near East"]
+_REGION_ORDER = [
+    "Global",
+    "United States",
+    "United Kingdom",
+    "Europe",
+    "France",
+    "Germany",
+    "Ireland",
+    "Chile",
+    "Brazil",
+    "Taiwan",
+    "Japan",
+    "South Korea",
+    "India",
+    "Africa & Near East",
+]
 
 
 def render() -> None:
@@ -86,7 +132,7 @@ def _render_api_tab() -> None:
             "**Open-Meteo, USGS, Hub'Eau, UN SDG 6, FAO AQUASTAT, Taiwan WRA**. "
             "Sources that block cross-origin requests, and large-archive sources "
             "(GEMStat, GRDC in-situ), need a local install: "
-            "`pip install \"aquascope[dashboard]\"`."
+            '`pip install "aquascope[dashboard]"`.'
         )
 
     c_region, c_source = st.columns([1, 2])
@@ -106,8 +152,7 @@ def _render_api_tab() -> None:
     if source_key in _API_KEY_SOURCES:
         provider, signup_url = _API_KEY_SOURCES[source_key]
         st.info(
-            f"🔑 **{provider} requires a free API key.** Get one at "
-            f"[{signup_url}]({signup_url}) and paste it below."
+            f"🔑 **{provider} requires a free API key.** Get one at [{signup_url}]({signup_url}) and paste it below."
         )
         api_key = st.text_input("API key", type="password", key=f"key_{source_key}")
     else:
@@ -154,23 +199,40 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
 
     elif source_key == "taiwan_wra_fhy":
         ctor["data_type"] = st.selectbox(
-            "Data type", ["water", "rainfall", "flow"],
+            "Data type",
+            ["water", "rainfall", "flow"],
             format_func=lambda v: {"water": "Water level", "rainfall": "Rainfall", "flow": "River discharge"}[v],
         )
 
     elif source_key == "taiwan_wra_iot":
         ctor["data_type"] = st.selectbox(
-            "Data type", ["groundwater", "rainfall"],
+            "Data type",
+            ["groundwater", "rainfall"],
             format_func=lambda v: {"groundwater": "Groundwater level", "rainfall": "Rainfall accumulation"}[v],
         )
 
     elif source_key == "taiwan_datagov":
         ctor["dataset_id"] = st.selectbox(
-            "Dataset", ["25768", "161082"],
-            format_func=lambda v: {"25768": "River water level (real-time)",
-                                   "161082": "Groundwater level (real-time)"}[v],
+            "Dataset",
+            ["25768", "161082"],
+            format_func=lambda v: {"25768": "River water level (real-time)", "161082": "Groundwater level (real-time)"}[
+                v
+            ],
         )
         fetch["limit"] = st.slider("Max records", 100, 5_000, 1_000, step=100)
+
+    elif source_key == "taiwan_cwa":
+        st.caption("CWA climate stations via the CODIS archive. No API key needed; history reaches back decades.")
+        sids = st.text_input("Station IDs (comma-separated)", value="466920", help="466920 = Taipei")
+        if sids.strip():
+            fetch["station_ids"] = [s.strip() for s in sids.split(",") if s.strip()]
+        c1, c2 = st.columns(2)
+        sd = c1.date_input("Start date (optional)", value=None, key="cwa_start")
+        ed = c2.date_input("End date (optional)", value=None, key="cwa_end")
+        if sd:
+            fetch["start"] = str(sd)
+        if ed:
+            fetch["end"] = str(ed)
 
     elif source_key == "taiwan_moenv":
         fetch["limit"] = st.slider("Records to fetch (most recent first)", 100, 5_000, 500, step=100)
@@ -187,7 +249,9 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
 
     elif source_key == "grdc":
         mode = st.radio(
-            "Source type", ["in_situ", "satellite"], horizontal=True,
+            "Source type",
+            ["in_situ", "satellite"],
+            horizontal=True,
             format_func=lambda v: {"in_situ": "In-situ gauges (Zenodo)", "satellite": "Satellite RSEG (DaRUS)"}[v],
         )
         fetch["source_type"] = mode
@@ -196,7 +260,8 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
     elif source_key == "hubeau_hydrometrie":
         c1, c2 = st.columns(2)
         grandeur = c1.selectbox(
-            "Quantity", ["both", "Q", "H"],
+            "Quantity",
+            ["both", "Q", "H"],
             format_func=lambda v: {"both": "Discharge + water level", "Q": "Discharge (Q)", "H": "Water level (H)"}[v],
         )
         if grandeur != "both":
@@ -224,9 +289,13 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
         fetch["end_date"] = str(c4.date_input("End date"))
         if source_key == "openmeteo":
             ctor["mode"] = st.selectbox(
-                "Mode", ["weather", "forecast", "flood"],
-                format_func=lambda v: {"weather": "Weather history", "forecast": "Forecast",
-                                       "flood": "GloFAS flood discharge"}[v],
+                "Mode",
+                ["weather", "forecast", "flood"],
+                format_func=lambda v: {
+                    "weather": "Weather history",
+                    "forecast": "Forecast",
+                    "flood": "GloFAS flood discharge",
+                }[v],
             )
 
     elif source_key == "usgs":
@@ -251,25 +320,53 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
 
     elif source_key == "sdg6":
         countries = {
-            "Germany": "DEU", "United States": "USA", "India": "IND", "Japan": "JPN",
-            "France": "FRA", "United Kingdom": "GBR", "Brazil": "BRA", "China": "CHN",
-            "Australia": "AUS", "South Korea": "KOR", "Indonesia": "IDN", "Philippines": "PHL",
-            "Vietnam": "VNM", "Thailand": "THA", "Mexico": "MEX", "Spain": "ESP",
-            "Italy": "ITA", "Netherlands": "NLD", "Sweden": "SWE", "Turkey": "TUR",
-            "Egypt": "EGY", "Nigeria": "NGA", "Kenya": "KEN", "South Africa": "ZAF",
-            "Saudi Arabia": "SAU", "Israel": "ISR", "Iran": "IRN", "Pakistan": "PAK",
-            "Bangladesh": "BGD", "Singapore": "SGP",
+            "Germany": "DEU",
+            "United States": "USA",
+            "India": "IND",
+            "Japan": "JPN",
+            "France": "FRA",
+            "United Kingdom": "GBR",
+            "Brazil": "BRA",
+            "China": "CHN",
+            "Australia": "AUS",
+            "South Korea": "KOR",
+            "Indonesia": "IDN",
+            "Philippines": "PHL",
+            "Vietnam": "VNM",
+            "Thailand": "THA",
+            "Mexico": "MEX",
+            "Spain": "ESP",
+            "Italy": "ITA",
+            "Netherlands": "NLD",
+            "Sweden": "SWE",
+            "Turkey": "TUR",
+            "Egypt": "EGY",
+            "Nigeria": "NGA",
+            "Kenya": "KEN",
+            "South Africa": "ZAF",
+            "Saudi Arabia": "SAU",
+            "Israel": "ISR",
+            "Iran": "IRN",
+            "Pakistan": "PAK",
+            "Bangladesh": "BGD",
+            "Singapore": "SGP",
         }
         selected = st.multiselect(
-            "Countries", list(countries.keys()), default=["Germany"],
+            "Countries",
+            list(countries.keys()),
+            default=["Germany"],
             help="Taiwan is not included in UN SDG data.",
         )
         fetch["country_codes"] = ",".join(countries[n] for n in selected) if selected else None
         labels = {
-            "6.1.1": "Safely managed drinking water", "6.2.1": "Safely managed sanitation",
-            "6.3.1": "Safely treated wastewater", "6.3.2": "Good ambient water quality",
-            "6.4.1": "Water-use efficiency", "6.4.2": "Water stress",
-            "6.5.1": "IWRM implementation", "6.5.2": "Transboundary cooperation",
+            "6.1.1": "Safely managed drinking water",
+            "6.2.1": "Safely managed sanitation",
+            "6.3.1": "Safely treated wastewater",
+            "6.3.2": "Good ambient water quality",
+            "6.4.1": "Water-use efficiency",
+            "6.4.2": "Water stress",
+            "6.5.1": "IWRM implementation",
+            "6.5.2": "Transboundary cooperation",
             "6.6.1": "Water-related ecosystems",
         }
         fetch["indicator_codes"] = [
@@ -282,14 +379,48 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
             "caches it locally (1–3 min); later runs are instant."
         )
         countries = [
-            "Argentina", "Austria", "Belgium", "Bosnia and Herzegovina", "Bulgaria",
-            "Canada", "Croatia", "Cyprus", "Czechia", "Denmark", "Estonia", "Finland",
-            "France", "Germany", "Greece", "Hungary", "Iceland", "India", "Ireland",
-            "Italy", "Latvia", "Liechtenstein", "Lithuania", "Luxembourg",
-            "Macedonia (the former Yugoslav Republic of)", "Malta", "Mexico",
-            "Montenegro", "Netherlands (-the )", "Norway", "Poland", "Portugal",
-            "Romania", "Serbia", "Slovakia", "Slovenia", "Spain", "Sweden",
-            "Switzerland", "Turkey", "United States of America (the)", "Uruguay",
+            "Argentina",
+            "Austria",
+            "Belgium",
+            "Bosnia and Herzegovina",
+            "Bulgaria",
+            "Canada",
+            "Croatia",
+            "Cyprus",
+            "Czechia",
+            "Denmark",
+            "Estonia",
+            "Finland",
+            "France",
+            "Germany",
+            "Greece",
+            "Hungary",
+            "Iceland",
+            "India",
+            "Ireland",
+            "Italy",
+            "Latvia",
+            "Liechtenstein",
+            "Lithuania",
+            "Luxembourg",
+            "Macedonia (the former Yugoslav Republic of)",
+            "Malta",
+            "Mexico",
+            "Montenegro",
+            "Netherlands (-the )",
+            "Norway",
+            "Poland",
+            "Portugal",
+            "Romania",
+            "Serbia",
+            "Slovakia",
+            "Slovenia",
+            "Spain",
+            "Sweden",
+            "Switzerland",
+            "Turkey",
+            "United States of America (the)",
+            "Uruguay",
         ]
         fetch["country"] = st.selectbox("Country", countries, index=countries.index("Germany"))
         c1, c2 = st.columns(2)
@@ -303,28 +434,74 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
 
     elif source_key == "wqp":
         states = {
-            "Alabama": "US:01", "Alaska": "US:02", "Arizona": "US:04", "Arkansas": "US:05",
-            "California": "US:06", "Colorado": "US:08", "Connecticut": "US:09", "Delaware": "US:10",
-            "Florida": "US:12", "Georgia": "US:13", "Hawaii": "US:15", "Idaho": "US:16",
-            "Illinois": "US:17", "Indiana": "US:18", "Iowa": "US:19", "Kansas": "US:20",
-            "Kentucky": "US:21", "Louisiana": "US:22", "Maine": "US:23", "Maryland": "US:24",
-            "Massachusetts": "US:25", "Michigan": "US:26", "Minnesota": "US:27", "Mississippi": "US:28",
-            "Missouri": "US:29", "Montana": "US:30", "Nebraska": "US:31", "Nevada": "US:32",
-            "New Hampshire": "US:33", "New Jersey": "US:34", "New Mexico": "US:35", "New York": "US:36",
-            "North Carolina": "US:37", "North Dakota": "US:38", "Ohio": "US:39", "Oklahoma": "US:40",
-            "Oregon": "US:41", "Pennsylvania": "US:42", "Rhode Island": "US:44", "South Carolina": "US:45",
-            "South Dakota": "US:46", "Tennessee": "US:47", "Texas": "US:48", "Utah": "US:49",
-            "Vermont": "US:50", "Virginia": "US:51", "Washington": "US:53", "West Virginia": "US:54",
-            "Wisconsin": "US:55", "Wyoming": "US:56",
+            "Alabama": "US:01",
+            "Alaska": "US:02",
+            "Arizona": "US:04",
+            "Arkansas": "US:05",
+            "California": "US:06",
+            "Colorado": "US:08",
+            "Connecticut": "US:09",
+            "Delaware": "US:10",
+            "Florida": "US:12",
+            "Georgia": "US:13",
+            "Hawaii": "US:15",
+            "Idaho": "US:16",
+            "Illinois": "US:17",
+            "Indiana": "US:18",
+            "Iowa": "US:19",
+            "Kansas": "US:20",
+            "Kentucky": "US:21",
+            "Louisiana": "US:22",
+            "Maine": "US:23",
+            "Maryland": "US:24",
+            "Massachusetts": "US:25",
+            "Michigan": "US:26",
+            "Minnesota": "US:27",
+            "Mississippi": "US:28",
+            "Missouri": "US:29",
+            "Montana": "US:30",
+            "Nebraska": "US:31",
+            "Nevada": "US:32",
+            "New Hampshire": "US:33",
+            "New Jersey": "US:34",
+            "New Mexico": "US:35",
+            "New York": "US:36",
+            "North Carolina": "US:37",
+            "North Dakota": "US:38",
+            "Ohio": "US:39",
+            "Oklahoma": "US:40",
+            "Oregon": "US:41",
+            "Pennsylvania": "US:42",
+            "Rhode Island": "US:44",
+            "South Carolina": "US:45",
+            "South Dakota": "US:46",
+            "Tennessee": "US:47",
+            "Texas": "US:48",
+            "Utah": "US:49",
+            "Vermont": "US:50",
+            "Virginia": "US:51",
+            "Washington": "US:53",
+            "West Virginia": "US:54",
+            "Wisconsin": "US:55",
+            "Wyoming": "US:56",
         }
         name = st.selectbox("State", list(states.keys()), index=list(states.keys()).index("California"))
         fetch["state_code"] = states[name]
 
     elif source_key == "aquastat":
         countries = {
-            "Global (all countries)": "all", "Egypt": "EGY", "India": "IND", "United States": "USA",
-            "Brazil": "BRA", "China": "CHN", "France": "FRA", "Germany": "DEU",
-            "Nigeria": "NGA", "Australia": "AUS", "Mexico": "MEX", "Spain": "ESP",
+            "Global (all countries)": "all",
+            "Egypt": "EGY",
+            "India": "IND",
+            "United States": "USA",
+            "Brazil": "BRA",
+            "China": "CHN",
+            "France": "FRA",
+            "Germany": "DEU",
+            "Nigeria": "NGA",
+            "Australia": "AUS",
+            "Mexico": "MEX",
+            "Spain": "ESP",
         }
         c = st.selectbox("Country", list(countries.keys()))
         fetch["country_code"] = countries[c]
@@ -334,8 +511,16 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
 
     elif source_key == "eu_wfd":
         countries = {
-            "Germany": "DE", "France": "FR", "Spain": "ES", "Italy": "IT", "Netherlands": "NL",
-            "Poland": "PL", "Austria": "AT", "Belgium": "BE", "Sweden": "SE", "Finland": "FI",
+            "Germany": "DE",
+            "France": "FR",
+            "Spain": "ES",
+            "Italy": "IT",
+            "Netherlands": "NL",
+            "Poland": "PL",
+            "Austria": "AT",
+            "Belgium": "BE",
+            "Sweden": "SE",
+            "Finland": "FI",
         }
         c = st.selectbox("Country", list(countries.keys()))
         fetch["country"] = countries[c]
@@ -369,7 +554,8 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
 
     elif source_key == "wapor":
         fetch["variable"] = st.selectbox(
-            "Variable", ["RET", "AETI", "NPP"],
+            "Variable",
+            ["RET", "AETI", "NPP"],
             format_func=lambda v: {
                 "RET": "RET — reference evapotranspiration",
                 "AETI": "AETI — actual ET & interception",
@@ -385,6 +571,108 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
                 fetch["bbox"] = tuple(float(x) for x in bbox_str.split(","))
             except ValueError:
                 st.warning("Bounding box must be four comma-separated numbers.")
+
+    elif source_key == "noaa_nwps":
+        st.caption("NOAA National Water Prediction Service — fetch by 5-char station LID or bounding box.")
+        mode = st.radio(
+            "Query mode",
+            ["lid", "bbox"],
+            horizontal=True,
+            format_func=lambda v: {"lid": "Station LID", "bbox": "Bounding box"}[v],
+        )
+        if mode == "lid":
+            lid = st.text_input("Station LID (e.g. ANAW1)", value="ANAW1")
+            if lid.strip():
+                fetch["lid"] = lid.strip()
+        else:
+            bbox_str = st.text_input("Bounding box (xmin,ymin,xmax,ymax)", value="-80,37,-66,48")
+            if bbox_str.strip():
+                try:
+                    fetch["bbox"] = tuple(float(x) for x in bbox_str.split(","))
+                except ValueError:
+                    st.warning("Bounding box must be four comma-separated numbers.")
+
+    elif source_key == "ireland_opw":
+        st.caption("Office of Public Works waterlevel.ie — real-time 15-min river and lake levels across Ireland.")
+        fetch["max_stations"] = st.slider("Max stations to fetch", 1, 100, 10, step=1)
+
+    elif source_key == "pegelonline":
+        st.caption("PEGELONLINE — recent 31-day water level and discharge readings from German federal waterways.")
+        station = st.text_input("Station UUID", placeholder="d3301a25-2401-44cd-9f79-aa66c61f22e0")
+        if station.strip():
+            fetch["station_id"] = station.strip()
+        ts = st.selectbox(
+            "Timeseries",
+            ["both", "W", "Q"],
+            format_func=lambda v: {
+                "both": "Water level + Discharge",
+                "W": "Water level (W)",
+                "Q": "Discharge (Q)",
+            }[v],
+        )
+        if ts != "both":
+            fetch["timeseries"] = ts
+        fetch["days"] = st.slider("Days of history (max 31)", 1, 31, 7)
+
+    elif source_key == "camels_cl":
+        st.info(
+            "📦 CAMELS-CL is a ~275 MB archive (516 Chilean catchments). The first run downloads and caches it locally."
+        )
+        sids = st.text_input("Station IDs (comma-separated, optional)", placeholder="1001001")
+        if sids.strip():
+            fetch["station_ids"] = [s.strip() for s in sids.split(",") if s.strip()]
+        c1, c2 = st.columns(2)
+        sd = c1.date_input("Start date (optional)", value=None, key="ccl_start")
+        ed = c2.date_input("End date (optional)", value=None, key="ccl_end")
+        if sd:
+            fetch["start"] = str(sd)
+        if ed:
+            fetch["end"] = str(ed)
+
+    elif source_key == "camels_br":
+        st.info(
+            "📦 CAMELS-BR streamflow is a ~62 MB archive of Brazilian catchments. "
+            "The first run downloads and caches it locally."
+        )
+        sids = st.text_input("Gauge codes (comma-separated, optional)", placeholder="10500000")
+        if sids.strip():
+            fetch["station_ids"] = [s.strip() for s in sids.split(",") if s.strip()]
+        c1, c2 = st.columns(2)
+        sd = c1.date_input("Start date (optional)", value=None, key="cbr_start")
+        ed = c2.date_input("End date (optional)", value=None, key="cbr_end")
+        if sd:
+            fetch["start"] = str(sd)
+        if ed:
+            fetch["end"] = str(ed)
+
+    elif source_key == "uk_ea":
+        st.caption("UK Environment Agency — real-time river level, flow, rainfall, and groundwater telemetry.")
+        fetch["observed_property"] = st.selectbox(
+            "Observed property",
+            ["waterFlow", "waterLevel", "rainfall", "groundwaterLevel"],
+            format_func=lambda v: {
+                "waterFlow": "waterFlow (m³/s)",
+                "waterLevel": "waterLevel (m)",
+                "rainfall": "rainfall (mm)",
+                "groundwaterLevel": "groundwaterLevel (mAOD)",
+            }[v],
+        )
+        fetch["collection"] = st.selectbox(
+            "Collection frequency",
+            ["15min", "daily"],
+            format_func=lambda v: {"15min": "15-minute readings", "daily": "Daily summaries"}[v],
+        )
+        c1, c2 = st.columns(2)
+        st_id = c1.text_input("Station SUID (optional)", placeholder="e.g. 054005")
+        if st_id.strip():
+            fetch["station"] = st_id.strip()
+        st_wiski = c2.text_input("WISKI ID (optional)", placeholder="e.g. 054005_GW")
+        if st_wiski.strip():
+            fetch["station_wiski_id"] = st_wiski.strip()
+        bbox_str = st.text_input("Bounding box (min-lon,min-lat,max-lon,max-lat)", placeholder="-2.5,51.0,-1.5,52.0")
+        if bbox_str.strip():
+            fetch["bbox"] = bbox_str.strip()
+        fetch["days"] = st.slider("Days of history", 1, 30, 7)
 
 
 def _records_to_df(records: list) -> pd.DataFrame:
@@ -406,34 +694,43 @@ def _records_to_df(records: list) -> pd.DataFrame:
     return df
 
 
+_FACTORIES = {
+    "usgs": lambda api_key, ctor, c: c.USGSCollector(api_key=api_key or "DEMO_KEY"),
+    "grdc": lambda api_key, ctor, c: c.GRDCCollector(),
+    "openmeteo": lambda api_key, ctor, c: c.OpenMeteoCollector(mode=ctor.get("mode", "weather")),
+    "sdg6": lambda api_key, ctor, c: c.SDG6Collector(),
+    "gemstat": lambda api_key, ctor, c: c.GEMStatCollector(),
+    "aquastat": lambda api_key, ctor, c: c.AquastatCollector(),
+    "wapor": lambda api_key, ctor, c: c.WaPORCollector(),
+    "copernicus": lambda api_key, ctor, c: c.CopernicusCollector(),
+    "wqp": lambda api_key, ctor, c: c.WQPCollector(),
+    "hubeau_hydrometrie": lambda api_key, ctor, c: c.HubeauHydrometrieCollector(),
+    "eu_wfd": lambda api_key, ctor, c: c.EUWFDCollector(),
+    "taiwan_moenv": lambda api_key, ctor, c: c.TaiwanMOENVCollector(api_key=api_key or ""),
+    "taiwan_cwa": lambda api_key, ctor, c: c.TaiwanCWACollector(),
+    "taiwan_wra_level": lambda api_key, ctor, c: c.TaiwanWRAWaterLevelCollector(),
+    "taiwan_wra_reservoir": lambda api_key, ctor, c: c.TaiwanWRAReservoirCollector(),
+    "taiwan_wra_fhy": lambda api_key, ctor, c: c.TaiwanWRAFhyCollector(data_type=ctor.get("data_type", "water")),
+    "taiwan_wra_iot": lambda api_key, ctor, c: c.TaiwanWRAIoTCollector(data_type=ctor.get("data_type", "groundwater")),
+    "taiwan_datagov": lambda api_key, ctor, c: c.TaiwanDataGovCollector(dataset_id=ctor.get("dataset_id", "25768")),
+    "taiwan_civil_iot": lambda api_key, ctor, c: c.TaiwanCivilIoTCollector(),
+    "japan_mlit": lambda api_key, ctor, c: c.JapanMLITCollector(),
+    "korea_wamis": lambda api_key, ctor, c: c.KoreaWAMISCollector(),
+    "india_wris": lambda api_key, ctor, c: c.IndiaWRISCollector(),
+    "noaa_nwps": lambda api_key, ctor, c: c.NOAANWPSCollector(),
+    "ireland_opw": lambda api_key, ctor, c: c.IrelandOPWCollector(),
+    "pegelonline": lambda api_key, ctor, c: c.PegelonlineCollector(),
+    "camels_cl": lambda api_key, ctor, c: c.CAMELSCLCollector(),
+    "camels_br": lambda api_key, ctor, c: c.CAMELSBRCollector(),
+    "uk_ea": lambda api_key, ctor, c: c.UKEACollector(),
+}
+
+
 def _run_collector(source_key: str, api_key: str, ctor: dict, fetch: dict):
-    """Instantiate the right collector and fetch — covers all 21 sources."""
+    """Instantiate the right collector and fetch — covers every source in ``SOURCES``."""
     from aquascope import collectors as c
 
-    factories = {
-        "usgs": lambda: c.USGSCollector(api_key=api_key or "DEMO_KEY"),
-        "grdc": lambda: c.GRDCCollector(),
-        "openmeteo": lambda: c.OpenMeteoCollector(mode=ctor.get("mode", "weather")),
-        "sdg6": lambda: c.SDG6Collector(),
-        "gemstat": lambda: c.GEMStatCollector(),
-        "aquastat": lambda: c.AquastatCollector(),
-        "wapor": lambda: c.WaPORCollector(),
-        "copernicus": lambda: c.CopernicusCollector(),
-        "wqp": lambda: c.WQPCollector(),
-        "hubeau_hydrometrie": lambda: c.HubeauHydrometrieCollector(),
-        "eu_wfd": lambda: c.EUWFDCollector(),
-        "taiwan_moenv": lambda: c.TaiwanMOENVCollector(api_key=api_key or ""),
-        "taiwan_wra_level": lambda: c.TaiwanWRAWaterLevelCollector(),
-        "taiwan_wra_reservoir": lambda: c.TaiwanWRAReservoirCollector(),
-        "taiwan_wra_fhy": lambda: c.TaiwanWRAFhyCollector(data_type=ctor.get("data_type", "water")),
-        "taiwan_wra_iot": lambda: c.TaiwanWRAIoTCollector(data_type=ctor.get("data_type", "groundwater")),
-        "taiwan_datagov": lambda: c.TaiwanDataGovCollector(dataset_id=ctor.get("dataset_id", "25768")),
-        "taiwan_civil_iot": lambda: c.TaiwanCivilIoTCollector(),
-        "japan_mlit": lambda: c.JapanMLITCollector(),
-        "korea_wamis": lambda: c.KoreaWAMISCollector(),
-        "india_wris": lambda: c.IndiaWRISCollector(),
-    }
-    collector = factories[source_key]()
+    collector = _FACTORIES[source_key](api_key, ctor, c)
     kwargs = dict(fetch)
     if api_key and source_key == "copernicus":
         kwargs["api_key"] = api_key

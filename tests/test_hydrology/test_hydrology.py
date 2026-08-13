@@ -309,3 +309,29 @@ class TestFloodFrequency:
 
         result = fit_gev(self.q, return_periods=[10, 50])
         assert set(result.return_periods.keys()) == {10, 50}
+
+    def test_fit_gev_constrained_bounds_issue_119(self):
+        """Verify GEV fit shape parameter constraint and finite ordered CIs on 40-year records."""
+        from scipy import stats
+
+        from aquascope.hydrology import fit_gev
+
+        idx = pd.date_range("1985-01-01", "2024-12-31", freq="D")
+        rng = np.random.default_rng(7)
+        s = pd.Series(rng.gamma(2.0, 50.0, len(idx)), index=idx)
+        amax = stats.genextreme.rvs(c=-0.25, loc=800, scale=250, size=40, random_state=11)
+        for yr, peak in zip(range(1985, 2025), amax):
+            s.loc[pd.Timestamp(f"{yr}-07-15")] = peak
+
+        res = fit_gev(s, return_periods=[2, 10, 50, 100, 500])
+        # Shape parameter should be constrained to plausible range |c| <= 0.5
+        assert abs(res.params[0]) <= 0.5
+        # 100-year return period value should be finite and physically plausible
+        q100 = res.return_periods[100]
+        assert np.isfinite(q100) and q100 < 50000.0
+        # Confidence interval at RP=100 should be finite, ordered, and contain point estimate
+        ci_lo, ci_hi = res.confidence_intervals[100]
+        assert np.isfinite(ci_lo) and np.isfinite(ci_hi)
+        assert ci_lo < ci_hi
+        assert ci_lo <= q100 <= ci_hi
+

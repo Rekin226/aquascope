@@ -2,6 +2,7 @@
 
 from aquascope.collectors.aquastat import AquastatCollector
 from aquascope.collectors.base import BaseCollector
+from aquascope.collectors.camels_br import CAMELSBRCollector
 from aquascope.collectors.camels_cl import CAMELSCLCollector
 from aquascope.collectors.copernicus import CopernicusCollector
 from aquascope.collectors.eu_wfd import EUWFDCollector
@@ -17,6 +18,7 @@ from aquascope.collectors.openmeteo import OpenMeteoCollector
 from aquascope.collectors.pegelonline import PegelonlineCollector
 from aquascope.collectors.sdg6 import SDG6Collector
 from aquascope.collectors.taiwan_civil_iot import TaiwanCivilIoTCollector
+from aquascope.collectors.taiwan_cwa import TaiwanCWACollector
 from aquascope.collectors.taiwan_datagov import TaiwanDataGovCollector
 from aquascope.collectors.taiwan_moenv import TaiwanMOENVCollector
 from aquascope.collectors.taiwan_wra import (
@@ -36,6 +38,7 @@ __all__ = [
     "AquastatCollector",
     "BaseCollector",
     "CAMELSCLCollector",
+    "CAMELSBRCollector",
     "CopernicusCollector",
     "EUWFDCollector",
     "GEMStatCollector",
@@ -50,6 +53,7 @@ __all__ = [
     "SDG6Collector",
     "TaiwanCivilIoTCollector",
     "TaiwanDataGovCollector",
+    "TaiwanCWACollector",
     "TaiwanMOENVCollector",
     "TaiwanWRAFhyCollector",
     "TaiwanWRAGroundwaterCollector",

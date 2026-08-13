@@ -11,8 +11,9 @@ Usage
     aquascope agri plan --crop maize --planting-date 2026-04-01 --eto-file eto.csv --precip-file precip.csv
     aquascope list-methods
     aquascope list-sources
+    aquascope completion bash
 """
-
+# PYTHON_ARGCOMPLETE_OK
 from __future__ import annotations
 
 import argparse
@@ -21,6 +22,8 @@ import logging
 import sys
 from datetime import date
 from pathlib import Path
+
+import argcomplete
 
 # ----------------------------------------------------------
 from aquascope.collectors.india_wris import IndiaWRISCollector
@@ -67,6 +70,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
     """Run a data collector and save results."""
     from aquascope.collectors import (
         AquastatCollector,
+        CAMELSBRCollector,
         CAMELSCLCollector,
         CopernicusCollector,
         EUWFDCollector,
@@ -81,6 +85,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         PegelonlineCollector,
         SDG6Collector,
         TaiwanCivilIoTCollector,
+        TaiwanCWACollector,
         TaiwanDataGovCollector,
         TaiwanMOENVCollector,
         TaiwanWRAFhyCollector,
@@ -97,6 +102,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
     source = args.source.lower()
     collector_map = {
         "taiwan_moenv": lambda: TaiwanMOENVCollector(api_key=args.api_key or ""),
+        "taiwan_cwa": lambda: TaiwanCWACollector(),
         "taiwan_wra_level": lambda: TaiwanWRAWaterLevelCollector(),
         "taiwan_wra_reservoir": lambda: TaiwanWRAReservoirCollector(),
         "usgs": lambda: USGSCollector(api_key=args.api_key or "DEMO_KEY"),
@@ -120,6 +126,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
         "hubeau_hydrometrie": lambda: HubeauHydrometrieCollector(),
         "grdc": lambda: GRDCCollector(),
         "camels_cl": lambda: CAMELSCLCollector(),
+        "camels_br": lambda: CAMELSBRCollector(),
         "noaa_nwps": lambda: NOAANWPSCollector(),
         "pegelonline": lambda: PegelonlineCollector(),
     }
@@ -133,6 +140,13 @@ def cmd_collect(args: argparse.Namespace) -> None:
     kwargs = {}
     if source == "usgs" and args.days:
         kwargs["datetime_range"] = f"P{args.days}D"
+    if source == "taiwan_cwa":
+        if args.station_ids:
+            kwargs["station_ids"] = [s.strip() for s in args.station_ids.split(",") if s.strip()]
+        if args.start_date:
+            kwargs["start"] = args.start_date
+        if args.end_date:
+            kwargs["end"] = args.end_date
     if source == "uk_ea":
         if args.collection:
             kwargs["collection"] = args.collection
@@ -201,7 +215,7 @@ def cmd_collect(args: argparse.Namespace) -> None:
             logger.error("GRDC --mode must be 'in_situ' or 'satellite'; got '%s'.", args.mode)
             sys.exit(1)
         kwargs["source_type"] = args.mode
-    if source == "camels_cl":
+    if source in ("camels_cl", "camels_br"):
         if args.station_ids:
             kwargs["station_ids"] = [s.strip() for s in args.station_ids.split(",") if s.strip()]
         if args.start_date:
@@ -433,6 +447,7 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
 
     source_info = {
         "taiwan_moenv": ("Taiwan MOENV", "Taiwan", "River/tap water quality, RPI", "https://data.moenv.gov.tw"),
+        "taiwan_cwa": ("Taiwan CWA climate", "Taiwan", "Daily station climate: rain, temp, RH, radiation, wind", "https://codis.cwa.gov.tw"),
         "taiwan_wra": ("Taiwan WRA", "Taiwan", "Water levels, reservoir status", "https://opendata.wra.gov.tw"),
         "taiwan_civil_iot": (
             "Taiwan Civil IoT",
@@ -521,6 +536,18 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
         ),
         "noaa_nwps": ("NOAA NWPS", "USA", " Streamflow forecasts, stream observations, streamflow output, crest history, flood impacts, low water history, flood category levels, and location metadata.", "https://www.water.noaa.gov"),
         "pegelonline": ("PEGELONLINE", "Germany", "River water level and discharge", "https://www.pegelonline.wsv.de"),
+        "camels_cl": (
+            "CAMELS-CL",
+            "Chile",
+            "Observed streamflow, meteorological forcing, attributes",
+            "https://www.cr2.cl/camels-cl",
+        ),
+        "camels_br": (
+            "CAMELS-BR",
+            "Brazil",
+            "Observed streamflow, meteorological forcing, attributes",
+            "https://doi.org/10.5281/zenodo.3709337",
+        ),
     }
 
     for src in DataSource:
@@ -530,6 +557,12 @@ def cmd_list_sources(args: argparse.Namespace) -> None:
         print(f"    Data   : {info[2]}")
         print(f"    URL    : {info[3]}")
         print()
+
+
+def cmd_completion(args: argparse.Namespace) -> None:
+    """Print the shell activation line for tab-completion."""
+    from argcomplete.shell_integration import shellcode
+    print(shellcode(["aquascope"], shell=args.shell))
 
 
 def cmd_solve(args: argparse.Namespace) -> None:
@@ -1075,6 +1108,7 @@ def main() -> None:
         required=True,
         choices=[
             "taiwan_moenv",
+            "taiwan_cwa",
             "taiwan_wra_level",
             "taiwan_wra_reservoir",
             "taiwan_wra_fhy",
@@ -1095,10 +1129,11 @@ def main() -> None:
             "korea_wamis",
             "grdc",
             "camels_cl",
+            "camels_br",
             "noaa_nwps",
             "ireland_opw",
             "pegelonline",
-            "uk_ea"
+            "uk_ea",
         ],
         help="Data source to collect from",
     )
@@ -1131,10 +1166,14 @@ def main() -> None:
     p_collect.add_argument("--end-year", type=int, default=2023, help="End year (AQUASTAT)")
     p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")
     p_collect.add_argument("--year", type=int, default=None, help="Year filter (EU WFD)")
-    p_collect.add_argument("--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl)")
+    p_collect.add_argument(
+        "--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl, camels_br)"
+    )
     p_collect.add_argument("--station", default=None, help="Station UUID/SUID (PEGELONLINE/UKEA)")
     p_collect.add_argument(
-        "--timeseries", default=None, choices=["W", "Q"],
+        "--timeseries",
+        default=None,
+        choices=["W", "Q"],
         help="PEGELONLINE timeseries: W for water level or Q for discharge (default: both)",
     )
     p_collect.add_argument(
@@ -1177,6 +1216,10 @@ def main() -> None:
     p_run.add_argument("--file", required=True, help="Path to JSON or CSV data file")
     p_run.add_argument("--config", default=None, help="Pipeline config as JSON string")
     p_run.add_argument("--output", default=None, help="Path to save results JSON")
+
+    # ── completion  ────────────────────────────────────────────────────
+    p_completion = sub.add_parser("completion", help="Print shell tab-completion activation script")
+    p_completion.add_argument("shell", choices=["bash", "zsh", "fish"], help="Shell to generate completion for")
 
     # ── list-methods ─────────────────────────────────────────────────
     sub.add_parser("list-methods", help="List all available research methodologies and pipelines")
@@ -1359,6 +1402,7 @@ def main() -> None:
     p_hydro.add_argument("--n-day", type=int, default=None, help="N-day window for low-flow (default: 7)")
     p_hydro.add_argument("--return-period", type=int, default=None, help="Return period for low-flow (default: 10)")
 
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
     commands = {
         "collect": cmd_collect,
@@ -1377,6 +1421,7 @@ def main() -> None:
         "agri": cmd_agri,
         "groundwater": cmd_groundwater,
         "climate": cmd_climate,
+        "completion": cmd_completion,
     }
 
     handler = commands.get(args.command)

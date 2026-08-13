@@ -233,9 +233,9 @@ class USGSCollector(BaseCollector):
 
             return all_features
 
-        if any([sites, bbox_val, state_cd, county_cd, huc_val]):
+        if any([sites, parameter_cd, state_cd, county_cd, huc_val]) or (kwargs.get("bBox") and not bbox):
             logger.warning(
-                "The USGS OGC (keyed) path does not accept filter parameters (station_id, bbox, stateCd, countyCd, or huc) "
+                "The USGS OGC (keyed) path does not accept filter parameters (station_id, stateCd, countyCd, or huc) "
                 "or queries based on parameter code (parameter). Any instances of the mentioned kwargs being passed "
                 "are ignored by the OGC path. To fetch data using these parameters, set your api key for USGS queries "
                 "to 'DEMO_KEY' explicitly or pass None to the USGSCollector constructor to fall back to the DEMO_KEY. "

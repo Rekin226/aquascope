@@ -135,6 +135,13 @@ class USGSCollector(BaseCollector):
                 f"{end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
             )
 
+        sites = kwargs.get("station_id") or kwargs.get("sites") or kwargs.get("monitoring_location_id")
+        parameter_cd = kwargs.get("parameter") or kwargs.get("parameterCd") or kwargs.get("parameter_code")
+        bbox_val = bbox or kwargs.get("bBox")
+        state_cd = kwargs.get("stateCd")
+        county_cd = kwargs.get("countyCd")
+        huc_val = kwargs.get("huc")
+
         if self.api_key == "DEMO_KEY" or not self.api_key:
             if collection not in ("daily", "sta"):
                 raise ValueError(
@@ -143,13 +150,6 @@ class USGSCollector(BaseCollector):
                     "Please provide a valid USGS_API_KEY to use the OGC API path. "
                     "For a reliable keyless demo source, use OpenMeteoCollector."
                 )
-
-            sites = kwargs.get("station_id") or kwargs.get("sites") or kwargs.get("monitoring_location_id")
-            parameter_cd = kwargs.get("parameter") or kwargs.get("parameterCd") or kwargs.get("parameter_code")
-            bbox_val = bbox or kwargs.get("bBox")
-            state_cd = kwargs.get("stateCd")
-            county_cd = kwargs.get("countyCd")
-            huc_val = kwargs.get("huc")
 
             if not any([sites, bbox_val, state_cd, county_cd, huc_val]):
                 raise ValueError(
@@ -250,6 +250,15 @@ class USGSCollector(BaseCollector):
                 all_features = all_features[:max_items]
 
             return all_features
+
+        if any([sites, parameter_cd, state_cd, county_cd, huc_val]) or (kwargs.get("bBox") and not bbox):
+            logger.warning(
+                "The USGS OGC (keyed) path does not accept filter parameters (station_id, stateCd, countyCd, or huc) "
+                "or queries based on parameter code (parameter). Any instances of the mentioned kwargs being passed "
+                "are ignored by the OGC path. To fetch data using these parameters, set your api key for USGS queries "
+                "to 'DEMO_KEY' explicitly or pass None to the USGSCollector constructor to fall back to the DEMO_KEY. "
+                "Note that the shared DEMO_KEY is heavily rate-limited and may fail under load."
+            )
 
         all_features: list[dict] = []
         params: dict[str, Any] = {

@@ -17,6 +17,7 @@ class DataSource(str, Enum):
     """Supported data providers."""
 
     TAIWAN_MOENV = "taiwan_moenv"
+    TAIWAN_CWA = "taiwan_cwa"
     TAIWAN_WRA = "taiwan_wra"
     TAIWAN_CIVIL_IOT = "taiwan_civil_iot"
     USGS = "usgs"
@@ -89,6 +90,28 @@ class WaterQualitySample(BaseModel):
             ]
         }
     }
+
+
+class ClimateReading(BaseModel):
+    """A single climate/weather station observation (rainfall, temperature, …).
+
+    Deliberately mirrors :class:`WaterQualitySample`'s field shape
+    (``sample_datetime`` / ``parameter`` / ``value`` / ``unit``) so
+    ``records_to_xarray`` and other parameter-pivoting consumers handle it
+    through their existing code path, while keeping climate observations
+    semantically separate from water-quality samples (the #97 lesson).
+    """
+
+    source: DataSource
+    station_id: str
+    station_name: str | None = None
+    location: GeoLocation | None = None
+    altitude_m: float | None = None
+    sample_datetime: datetime
+    parameter: str = Field(..., description="e.g. rainfall_mm, temperature_mean_c, wind_speed_ms")
+    value: float
+    unit: str
+    remark: str | None = None
 
 
 class WaterLevelReading(BaseModel):

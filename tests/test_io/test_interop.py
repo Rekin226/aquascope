@@ -23,7 +23,7 @@ from aquascope.schemas.water_data import (
 )
 
 
-def _sf(station, dt, discharge, source_type="in_situ", loc=None):
+def _sf(station, dt, discharge, source_type="in_situ", loc=None, catchment_area_km2=None):
     return StreamflowReading(
         source=DataSource.GRDC,
         station_id=station,
@@ -31,6 +31,7 @@ def _sf(station, dt, discharge, source_type="in_situ", loc=None):
         discharge_cms=discharge,
         source_type=source_type,
         location=loc,
+        catchment_area_km2=catchment_area_km2,
     )
 
 
@@ -143,6 +144,35 @@ class TestRecordsToXarray:
         assert abs(runoff_val - 8.64) < 1e-6
         assert ds["runoff"].attrs.get("units") == "mm/day"
         assert ds["catchment_area"].attrs.get("units") == "km2"
+
+    def test_mixed_record_types_are_merged(self):
+        """Mixed collector payloads retain variables from every schema."""
+        dt = datetime(2026, 1, 1)
+
+        quality = _wq("S1", dt, "DO", 8.5)
+        # Ensure catchment area set in order to generate runoff variable.
+        streamflow = _sf("S2", dt, 45.2, catchment_area_km2=100.0)
+
+        # Start with streamflow to exercise the branch that previously tried
+        # to read ``discharge_cms`` from every record in the payload.
+        ds = records_to_xarray([streamflow, quality])
+
+        # Assert that all expected variables are present and that the values are correct for each station.
+        assert {"discharge", "catchment_area", "runoff", "DO"} <= set(ds.data_vars)
+
+        assert ds["DO"].sel(time=dt, station_id="S1").item() == 8.5
+        assert ds["discharge"].sel(time=dt, station_id="S1").isnull()
+        assert ds["catchment_area"].sel(time=dt, station_id="S1").isnull()
+        assert ds["runoff"].sel(time=dt, station_id="S1").isnull()
+
+        assert ds["discharge"].sel(time=dt, station_id="S2").item() == 45.2
+        assert ds["catchment_area"].sel(time=dt, station_id="S2").item() == 100.0
+        assert ds["runoff"].sel(time=dt, station_id="S2").item() == 39.052800000000005
+        assert ds["DO"].sel(time=dt, station_id="S2").isnull()
+
+        assert "source" in ds.attrs
+        assert ds.attrs["source"] == "grdc+wqp"
+
 
     def test_empty_input(self):
         ds = records_to_xarray([])

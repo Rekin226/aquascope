@@ -211,6 +211,20 @@ class TestLmoments:
         lmom_100 = lmom_res.return_periods[100.0]
         np.testing.assert_allclose(lmom_100, mle_100, rtol=0.25)
 
+    def test_fit_gev_lmoments_parameter_recovery(self):
+        """Test parameter recovery on a large synthetic sample (n=100,000)."""
+        from scipy.stats import genextreme
+
+        from aquascope.hydrology.flood_frequency import _fit_gev_lmoments_params
+
+        for true_shape in [-0.3, -0.15, 0.0, 0.15]:
+            true_loc, true_scale = 100.0, 25.0
+            data = genextreme.rvs(true_shape, loc=true_loc, scale=true_scale, size=100000, random_state=42)
+            scipy_shape, xi, alpha = _fit_gev_lmoments_params(data)
+            np.testing.assert_allclose(scipy_shape, true_shape, atol=0.01)
+            np.testing.assert_allclose(xi, true_loc, rtol=0.01)
+            np.testing.assert_allclose(alpha, true_scale, rtol=0.01)
+
 
 # ---------------------------------------------------------------------------
 # Non-stationary GEV

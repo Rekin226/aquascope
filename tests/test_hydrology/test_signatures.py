@@ -11,9 +11,11 @@ from aquascope.hydrology.signatures import (
     baseflow_index_simple,
     compare_signatures,
     compute_signatures,
+    fdc_slope,
     flashiness_index,
     flow_elasticity,
     recession_constant,
+    runoff_ratio,
     seasonality_index,
     similarity_score,
 )
@@ -60,6 +62,7 @@ def _make_report(**overrides: float) -> SignatureReport:
         "seasonality_index": 0.3,
         "rising_limb_density": 0.45,
         "flashiness_index": 0.2,
+        "fdc_slope": 0.5,
         "mean_recession_constant": 0.05,
         "runoff_ratio": 0.4,
         "elasticity": 1.5,
@@ -82,7 +85,7 @@ class TestComputeSignatures:
             "high_flow_frequency", "high_flow_duration", "q_peak_mean",
             "low_flow_frequency", "baseflow_index", "zero_flow_fraction",
             "peak_month", "seasonality_index", "rising_limb_density",
-            "flashiness_index", "mean_recession_constant",
+            "flashiness_index", "fdc_slope", "mean_recession_constant",
         ]:
             val = getattr(report, field_name)
             assert val is not None, f"{field_name} should not be None"
@@ -271,3 +274,65 @@ class TestSimilarityScore:
         r1 = _make_report(mean_flow=10.0, baseflow_index=0.3)
         r2 = _make_report(mean_flow=50.0, baseflow_index=0.9)
         assert similarity_score(r1, r2) > 0
+
+
+class TestFDCSlope:
+    """Tests for fdc_slope."""
+
+    def test_fdc_slope_analytic_exponential(self):
+        """Analytical exponential series exp(-2.0 * p) has an exact FDC slope of 2.0."""
+        p = np.arange(365) / 364
+        q = pd.Series(np.exp(-2.0 * p), index=_daily_index(365))
+        assert fdc_slope(q) == pytest.approx(2.0, rel=1e-2)
+
+    def test_fdc_slope_seasonal_series(self):
+        """Synthetic seasonal discharge series should yield a finite, positive log slope."""
+        q = _seasonal_series(730)
+        slope = fdc_slope(q, lower=0.33, upper=0.66)
+        assert np.isfinite(slope)
+        assert slope > 0
+
+    def test_fdc_slope_custom_exceedance(self):
+        """Custom lower and upper exceedance percentiles."""
+        q = _seasonal_series(730)
+        slope = fdc_slope(q, lower=0.20, upper=0.80)
+        assert np.isfinite(slope)
+        assert slope > 0
+
+    def test_fdc_slope_zero_or_negative_flow(self):
+        """Zero/negative flows are filtered out gracefully without errors."""
+        q_vals = np.full(100, 10.0)
+        q_vals[:20] = 0.0
+        q_vals[20:40] = -5.0
+        q = pd.Series(q_vals, index=_daily_index(100))
+        slope = fdc_slope(q)
+        assert np.isfinite(slope)
+
+
+class TestRunoffRatio:
+    """Tests for standalone runoff_ratio."""
+
+    def test_runoff_ratio_exact(self):
+        """Runoff ratio matches sum(Q) / sum(P)."""
+        idx = _daily_index(365)
+        p = pd.Series(10.0, index=idx)
+        q = pd.Series(4.0, index=idx)
+        ratio = runoff_ratio(q, p)
+        assert ratio == pytest.approx(0.4)
+
+    def test_runoff_ratio_zero_precipitation(self):
+        """Zero precipitation returns 0.0 without division by zero."""
+        idx = _daily_index(365)
+        p = pd.Series(0.0, index=idx)
+        q = pd.Series(4.0, index=idx)
+        assert runoff_ratio(q, p) == pytest.approx(0.0)
+
+    def test_runoff_ratio_aligned_intersection(self):
+        """Intersection of dates is correctly evaluated."""
+        p_idx = _daily_index(365, start="2000-01-01")
+        q_idx = _daily_index(365, start="2000-06-01")
+        p = pd.Series(10.0, index=p_idx)
+        q = pd.Series(2.0, index=q_idx)
+        ratio = runoff_ratio(q, p)
+        assert ratio == pytest.approx(0.2)
+

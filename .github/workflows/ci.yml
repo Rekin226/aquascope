@@ -68,3 +68,4 @@ jobs:
             echo "::error::The contributors board is missing: $missing. Comment '@all-contributors please add @<username> for <contribution>' on their merged PR (needs the all-contributors GitHub App), or run 'npx all-contributors-cli add <username> <contribution>' locally."
             exit 1
           fi
+

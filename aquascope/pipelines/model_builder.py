@@ -55,10 +55,7 @@ def _pivot_params(df: pd.DataFrame, dt_col: str = "sample_datetime") -> pd.DataF
 
 def run_mann_kendall(df: pd.DataFrame, config: dict | None = None) -> PipelineResult:
     """Mann-Kendall trend test for each parameter at each station."""
-    try:
-        import pymannkendall as mk
-    except ImportError:
-        raise ImportError("pip install pymannkendall  (required for trend analysis)")
+    from aquascope.analysis.trends import mann_kendall
 
     config = config or {}
     alpha = config.get("alpha", 0.05)
@@ -72,16 +69,16 @@ def run_mann_kendall(df: pd.DataFrame, config: dict | None = None) -> PipelineRe
             if len(vals) < 10:
                 continue
             try:
-                res = mk.original_test(vals.values, alpha=alpha)
+                res = mann_kendall(vals, alpha=alpha)
                 results_rows.append({
                     "station": station,
                     "parameter": param,
                     "trend": res.trend,
-                    "p_value": round(res.p, 6),
-                    "z_score": round(res.z, 4),
-                    "tau": round(res.Tau, 4),
+                    "p_value": round(res.p_value, 6),
+                    "z_score": round(res.z_stat, 4),
+                    "tau": round(res.tau, 4),
                     "slope": round(res.slope, 6),
-                    "significant": res.p < alpha,
+                    "significant": res.h,
                 })
             except Exception as e:
                 logger.debug("MK test failed for %s/%s: %s", station, param, e)

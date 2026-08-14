@@ -5,8 +5,10 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
+- **CI CHANGELOG enforcement** (`.github/workflows/ci.yml` and `.github/scripts/check_changelog.py`): added a CI workflow check that enforces a `CHANGELOG.md` entry on pull requests unless the `no-changelog` opt-out label is present (#144).
 - **Taiwan CWA climate collector** (`collectors/taiwan_cwa.py`): daily station climate observations (rainfall, temperature mean/max/min, humidity, solar radiation, wind, Class-A pan evaporation) from Taiwan's official weather network via the keyless CODIS archive, with history verified back to 1960. Records use the new `ClimateReading` schema, which pivots through the existing xarray interop path unchanged. This is the observed-forcing layer for the CAMELS-TW epic. (#177, closes #177; contributes to #100)
 - **`relax_strict_tls` option on `CachedHTTPClient`**: Taiwan government certificate chains lack the Subject Key Identifier extension that Python 3.13+ requires by default; the new flag relaxes only the strict profile check while keeping full chain and hostname verification, replacing any need for `verify=False` on these hosts. Root cause and the one-line fix for `taiwan_wra_iot` are documented in #169.
+- **Flow Duration Curve (FDC) slope signature** (`aquascope.hydrology.fdc_slope`): added log-space percentile slope signature function and `fdc_slope` field on `SignatureReport` (#45).
 
 ### Fixed
 - **USGS discharge now normalises into `StreamflowReading`** (`collectors/usgs.py`): discharge (00060) values from both API endpoints are emitted as `StreamflowReading` instead of `WaterQualitySample`, with unit conversion (ft³/s → m³/s for discharge, miles² → km² for catchment area), significant-figure preservation, and a helper to fetch catchment area when not already present. Water quality sample normalisation for non-discharge parameters is unchanged. (#155, contributes to #97 and #104)
@@ -38,6 +40,7 @@ Most of this release came from the community again. Thanks to @taran-dev4u,
 - **Groundwater dashboard page** (`dashboard/views/groundwater.py`): SGI standardised groundwater index, drought event detection, recharge estimation, and aquifer tools as a workspace page. Thanks @laishettikarthik-tech (#139, closes #125).
 - **CAMELS-BR collector** (`collectors/camels_br.py`): daily observed streamflow for Brazilian catchments from the CAMELS-BR large-sample dataset on Zenodo, joined with catchment attributes (gauge name, coordinates, area). Emitted as `StreamflowReading` with `catchment_area_km2` set, so `runoff_mm_day` comes for free. AquaScope's 27th source. Thanks @taran-dev4u (#140, closes #124).
 - **Flow Duration Curve (FDC) slope signature** (`aquascope.hydrology.fdc_slope`): added log-space percentile slope signature function and `fdc_slope` field on `SignatureReport`. Thanks @taran-dev4u (#148, closes #45).
+>>>>>>> origin/main
 
 ### Fixed
 - **`flood_analysis(method="gev_lmoments")` returned incorrect return levels** in every release from v0.4.0 through v0.9.0. Two sign errors in the GEV L-moment estimator (the shape passed to scipy, and the location term) made fitted quantiles off by roughly 0.5x to 2x depending on the tail, always understating heavy-tailed floods. Parameter recovery is now within 0.5% of truth on large synthetic samples. `fit_gev` also seeds its ML fit from L-moments and constrains the shape to a plausible range, so 40-year records no longer produce absurd return levels (previously a shape of -6.2 and a 100-year flood of 3.3e11). **If you used `gev_lmoments`, recheck your results.** Thanks @taran-dev4u (#154, closes #119).

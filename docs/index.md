@@ -67,6 +67,9 @@ pip install "aquascope[all]"       # everything: ML, viz, spatial, dashboard
 - :material-code-braces: **[API reference](api.md)**
   Every public function, class, and method, auto-generated from the source.
 
+- :material-notebook-outline: **[Agricultural water tutorial](https://github.com/Rekin226/aquascope/blob/main/notebooks/07_agricultural_water_demand.ipynb)**
+  End-to-end FAO-56 notebook with Open-Meteo fallback and irrigation scheduling.
+
 </div>
 
 ---

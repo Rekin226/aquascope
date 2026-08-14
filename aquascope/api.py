@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
     from aquascope.analysis.changepoint import ChangePointResult
     from aquascope.analysis.copulas import CopulaResult
+    from aquascope.analysis.trends import MannKendallResult, SensSlopeResult
     from aquascope.hydrology.baseflow import BaseflowResult
     from aquascope.hydrology.flood_frequency import FloodFreqResult
     from aquascope.hydrology.flow_duration import FDCResult
@@ -296,6 +297,64 @@ def fit_copula(
         return results[0]  # best AIC
 
     return _fit_copula(u, v, family=family, **kwargs)
+
+
+def trend_analysis(
+    series: np.ndarray | pd.Series | list[float],
+    alpha: float = 0.05,
+    method: str = "original",
+) -> MannKendallResult:
+    """Perform a Mann-Kendall trend test with Sen's slope estimation.
+
+    Parameters
+    ----------
+    series:
+        Time-series data.
+    alpha:
+        Significance level (default: ``0.05``).
+    method:
+        Mann-Kendall test variant (``"original"``, ``"hamed_rao"``,
+        ``"yue_wang"``, ``"pre_whitening"``, ``"tfpw"``).
+
+    Returns
+    -------
+    MannKendallResult
+        Test statistics, p-value, trend classification, and Sen's slope.
+    """
+    from aquascope.analysis.trends import mann_kendall as _mann_kendall
+
+    return _mann_kendall(series, alpha=alpha, method=method)
+
+
+def mann_kendall(
+    series: np.ndarray | pd.Series | list[float],
+    alpha: float = 0.05,
+    method: str = "original",
+) -> MannKendallResult:
+    """Alias for :func:`trend_analysis`."""
+    from aquascope.analysis.trends import mann_kendall as _mann_kendall
+
+    return _mann_kendall(series, alpha=alpha, method=method)
+
+
+def sens_slope(
+    series: np.ndarray | pd.Series | list[float],
+) -> SensSlopeResult:
+    """Estimate Sen's slope for a time series.
+
+    Parameters
+    ----------
+    series:
+        Time-series data.
+
+    Returns
+    -------
+    SensSlopeResult
+        Slope, intercept, and sample counts.
+    """
+    from aquascope.analysis.trends import sens_slope as _sens_slope
+
+    return _sens_slope(series)
 
 
 # -- Model convenience functions ---------------------------------------------

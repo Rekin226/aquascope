@@ -86,7 +86,7 @@ class TestTrendDetection:
             trend_detection(levels, method="invalid")
 
     def test_short_series_raises(self):
-        with pytest.raises(ValueError, match="at least 3"):
+        with pytest.raises(ValueError, match="need >= 3|at least 3"):
             trend_detection(pd.Series([1.0, 2.0], index=_daily_index(2)))
 
 

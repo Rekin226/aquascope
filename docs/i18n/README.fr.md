@@ -1,6 +1,6 @@
 # AquaScope, démarrage rapide
 
-[English](../../README.md)
+[English](../index.md)
 
 ## ⚡ Installation
 ```bash
@@ -44,7 +44,7 @@ print(bf.bfi)                  # indice d'écoulement de base, ex. 0.42
 print(sig.q5, sig.q95)         # dépassements de hautes eaux / basses eaux
 print(sig.flashiness_index)    # indice de flashiness de Richards-Baker
 ```
-21 signatures couvrant l'amplitude, la variabilité, la temporalité, la récession et la flashiness — voir [docs/features.md](../../docs/features.md#hydrological-analysis).
+21 signatures couvrant l'amplitude, la variabilité, la temporalité, la récession et la flashiness — voir [docs/features.md](../features.md#hydrological-analysis).
 
 ## 💻 CLI
 AquaScope propose une CLI de 19 commandes pour les workflows les plus courants :

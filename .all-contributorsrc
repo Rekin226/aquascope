@@ -168,6 +168,17 @@
       "contributions": [
         "doc"
       ]
+    },
+    {
+      "login": "Osheun",
+      "name": "Osheun",
+      "avatar_url": "https://avatars.githubusercontent.com/u/138526540?v=4",
+      "profile": "https://github.com/Osheun",
+      "contributions": [
+        "code",
+        "test",
+        "doc"
+      ]
     }
   ],
   "commitType": "docs"

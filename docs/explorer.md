@@ -1,7 +1,7 @@
 # The Explorer: click any gauge on Earth, nothing to install
 
 **Live:** [rekin226-aquascope-explorer.static.hf.space](https://rekin226-aquascope-explorer.static.hf.space/)
-(also under [/explorer/](https://rekin226.github.io/aquascope/explorer/) on this docs site).
+(a copy also runs under [/explorer/app/](https://rekin226.github.io/aquascope/explorer/app/) on this docs site).
 
 A static page, no server. It reads the station catalog from the
 [Archive](archive.md) with DuckDB-WASM, shows every station on a MapLibre map,
@@ -232,7 +232,7 @@ loop is nine times faster, same numbers to 1e-14), which is what makes
   It runs unchanged in CPython, which is how it is tested (`tests/test_explore.py`).
 - `build.py`: assembles the site (wheel + `wheels.json` + cache-busting token).
   `.github/workflows/explorer.yml` publishes it to the Hugging Face static Space
-  on every push to `main`; `docs.yml` adds it under `/explorer/` here.
+  on every push to `main`; `docs.yml` adds it under `/explorer/app/` here.
 
 First analysis in a session loads about 15 MB of Python once; the catalog
 itself arrives in a few seconds. Sources that don't allow browser fetches

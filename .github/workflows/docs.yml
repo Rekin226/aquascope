@@ -48,8 +48,11 @@ jobs:
       - name: Build site
         run: mkdocs build --strict
 
-      - name: Add the Explorer under /explorer/ (#189)
-        run: python explorer/build.py --out site/explorer --no-space-readme
+      # Under /explorer/app/, not /explorer/: mkdocs renders docs/explorer.md to
+      # site/explorer/index.html, and copying the app on top of it made that page
+      # unreachable, so the nav entry opened the app instead of the documentation.
+      - name: Add the Explorer under /explorer/app/ (#189)
+        run: python explorer/build.py --out site/explorer/app --no-space-readme
 
       - uses: actions/upload-pages-artifact@v3
         with:

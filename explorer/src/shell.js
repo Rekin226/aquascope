@@ -3,6 +3,7 @@
 // Nothing here knows about hydrology; the panels call into it.
 
 import { $, escapeHtml, state } from "./core.js?v=__BUILD__";
+import { announce, captureFocus } from "./a11y.js?v=__BUILD__";
 
 const SURFACES = ["panel-empty", "panel-station", "panel-point", "panel-workbench"];
 
@@ -133,7 +134,14 @@ export function setCard(el, kind, { message = "", retry = null, title = "" } = {
     return;
   }
   const icon = kind === "error" ? "!" : "·";
-  note.innerHTML = `<span class="note-icon ${kind}">${icon}</span><span>${escapeHtml(message || (kind === "empty" ? "Not available here." : "Something went wrong."))}</span>`;
+  const text = message || (kind === "empty" ? "Not available here." : "Something went wrong.");
+  note.innerHTML = `<span class="note-icon ${kind}">${icon}</span><span>${escapeHtml(text)}</span>`;
+  if (kind === "error") {
+    // A card that fails says so on screen; say it to a reader too. "empty" is
+    // not announced: several cards are legitimately empty on most stations.
+    const heading = el.querySelector("h3, h2");
+    announce(heading ? `${heading.textContent.trim()}: ${text}` : text);
+  }
   if (retry) {
     const b = document.createElement("button");
     b.className = "btn tiny";
@@ -159,6 +167,7 @@ export function setStatusEl(el, text, kind = "info") {
   el.textContent = text || "";
   el.className = `status ${kind}`;
   el.hidden = !text;
+  if (text && (kind === "error" || kind === "warn")) announce(text);
 }
 
 // ── boot progress ───────────────────────────────────────────────────────────
@@ -194,20 +203,28 @@ export function bootDone() {
 // The drawer sits beside the inspector instead of replacing it, so the station
 // stays on screen while the Analyst works.
 
+let releaseDrawer = null;
+
 export function openDrawer() {
   const d = $("drawer");
   if (!d) return;
   d.hidden = false;
   document.body.classList.add("drawer-open");
   $("btn-ask").setAttribute("aria-expanded", "true");
+  // Not trapped: on a wide screen the drawer sits beside the inspector, and
+  // tabbing out to the map is the right behaviour.
+  releaseDrawer = captureFocus(d, { onEscape: closeDrawer, restoreTo: $("btn-ask") });
+  announce("Ask panel opened");
 }
 
 export function closeDrawer() {
   const d = $("drawer");
   if (!d) return;
+  const wasOpen = !d.hidden;
   d.hidden = true;
   document.body.classList.remove("drawer-open");
   $("btn-ask").setAttribute("aria-expanded", "false");
+  if (releaseDrawer) { releaseDrawer({ restore: wasOpen }); releaseDrawer = null; }
 }
 
 export function toggleDrawer() {
@@ -222,11 +239,21 @@ export function drawerOpen() {
 
 // ── left rail (mobile) ──────────────────────────────────────────────────────
 
+let releaseRail = null;
+
 export function toggleRail(force) {
   const open = force === undefined ? !document.body.classList.contains("rail-open") : force;
   document.body.classList.toggle("rail-open", open);
   const btn = $("btn-rail");
   if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+  // The rail only overlays the map on a narrow screen; that is also the only
+  // width where the toggle exists, so focus follows it there and nowhere else.
+  if (open && btn && btn.offsetParent !== null) {
+    releaseRail = captureFocus($("rail"), { onEscape: () => toggleRail(false), restoreTo: btn });
+  } else if (releaseRail) {
+    releaseRail({ restore: true });
+    releaseRail = null;
+  }
 }
 
 // ── modal ───────────────────────────────────────────────────────────────────
@@ -236,18 +263,17 @@ export function openModal(title, html) {
   $("modal-title").textContent = title;
   $("modal-body").innerHTML = html;
   m.hidden = false;
-  const close = $("modal-close");
-  close.focus();
-  const onKey = (e) => { if (e.key === "Escape") { closeModal(); } };
-  m.__onKey = onKey;
-  document.addEventListener("keydown", onKey);
+  // aria-modal="true" is a promise to the reader that the rest of the page is
+  // out of reach, so Tab has to stay inside for it to be true.
+  m.__release = captureFocus(m, { onEscape: closeModal, trap: true });
+  announce(title);
 }
 
 export function closeModal() {
   const m = $("modal");
   if (!m || m.hidden) return;
   m.hidden = true;
-  if (m.__onKey) document.removeEventListener("keydown", m.__onKey);
+  if (m.__release) { m.__release(); m.__release = null; }
 }
 
 export function initShell() {

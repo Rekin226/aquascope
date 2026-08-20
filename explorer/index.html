@@ -8,13 +8,24 @@
   <meta property="og:title" content="AquaScope Explorer" />
   <meta property="og:description" content="Click any public water gauge on Earth: the observed record, flood frequency with confidence limits, flow duration, trend and a rainfall-runoff model, computed in your browser. Nothing to install." />
   <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://rekin226-aquascope-explorer.static.hf.space/" />
+  <!-- Drawn from the published catalog by explorer/make_og_image.py, so the
+       preview is the actual coverage rather than a stock illustration. -->
+  <meta property="og:image" content="https://rekin226-aquascope-explorer.static.hf.space/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Every public water gauge AquaScope can reach, one dot each: dense across the United States, the United Kingdom, France, Germany, Ireland and Taiwan." />
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://rekin226-aquascope-explorer.static.hf.space/og.png" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌊</text></svg>" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="./style.css?v=__BUILD__" />
 </head>
 <body>
   <a class="skip" href="#panel">Skip to the results panel</a>
+  <!-- What the cards say on screen ("loading", "failed, retry"), said once,
+       politely, for a screen reader. Written by src/a11y.js. -->
+  <div id="a11y-live" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <header id="top">
     <div class="brand">
@@ -433,7 +444,7 @@
           <button id="ask-forget" class="btn tiny" hidden>Forget key</button></p>
       </details>
 
-      <textarea id="ask-question" rows="3" placeholder="e.g. What is the 100-year flood of the Thames at Kingston, and how sure can we be?"></textarea>
+      <textarea id="ask-question" rows="3" data-autofocus placeholder="e.g. What is the 100-year flood of the Thames at Kingston, and how sure can we be?"></textarea>
       <label class="ask-context-toggle"><input type="checkbox" id="ask-use-context" checked /> tell it what I am looking at</label>
       <p id="ask-context" class="muted ask-context" hidden><span id="ask-context-text"></span></p>
       <div id="ask-showcase" class="ask-showcase" hidden></div>

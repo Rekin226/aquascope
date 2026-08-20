@@ -112,6 +112,31 @@ def test_build_copies_the_modules_and_nothing_ships_with_a_build_token(tmp_path:
     assert json.loads((out / "wheels.json").read_text(encoding="utf-8"))["build"] == "abc1234"
 
 
+def test_the_social_card_exists_is_declared_and_ships(tmp_path: Path) -> None:
+    """A link to the Explorer previewed as a blank rectangle: og:image was never set (#231)."""
+    card = EXPLORER / "og.png"
+    assert card.exists(), "explorer/og.png is missing; regenerate it with make_og_image.py"
+    assert card.stat().st_size > 10_000, "the card looks empty"
+    assert card.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", "og:image has to be a real PNG (SVG is not accepted)"
+
+    page = (EXPLORER / "index.html").read_text(encoding="utf-8")
+    for tag in ('property="og:image"', 'name="twitter:image"', 'property="og:image:alt"',
+                'property="og:url"'):
+        assert tag in page, f"index.html is missing {tag}"
+    assert 'content="https://' in page.split('property="og:image"')[1][:80], (
+        "og:image must be an absolute URL: scrapers do not resolve relative ones"
+    )
+
+    build = _build_module()
+    assert Path("og.png") in build.binary_files(), "the card has to be copied into the built site"
+
+    wheel = tmp_path / "aquascope-0.0.0-py3-none-any.whl"
+    wheel.write_bytes(b"not a real wheel")
+    out = tmp_path / "site"
+    build.assemble(out, wheel, "abc1234", space_readme=False)
+    assert (out / "og.png").read_bytes() == card.read_bytes(), "the card must survive the copy unchanged"
+
+
 def test_the_recorded_showcase_traces_are_part_of_the_build(tmp_path: Path, monkeypatch) -> None:
     """The traces the page replays live in explorer/showcase/, so they have to ship.
 
@@ -343,3 +368,127 @@ def test_place_search_uses_a_geocoder_whose_terms_allow_autocomplete() -> None:
     assert "photon.komoot.io" in src
     called = re.findall(r'https?://[^\s"\')]+', src)
     assert not [u for u in called if "nominatim" in u.lower()], "Nominatim forbids autocomplete"
+
+
+# ── focus and announcements (#231 follow-up) ────────────────────────────────
+#
+# Opening the drawer, the modal or the mobile rail used to leave focus where it
+# was and ignore Escape, and closing one dropped focus to the top of the
+# document. These exercise src/a11y.js against a hand-built DOM: node has no
+# document, and the logic worth testing is the filtering and the Tab cycle.
+
+A11Y = EXPLORER / "src" / "a11y.js"
+
+FAKE_DOM = """
+const focused = [];
+const el = (name, opts = {}) => ({
+  name, hidden: opts.hidden || false, disabled: opts.disabled || false,
+  offsetParent: opts.detached ? null : {},
+  closest: (sel) => (opts.inHidden && sel === "[hidden]" ? {} : null),
+  focus() { focused.push(this.name); globalThis.document.activeElement = this; },
+});
+const opener = el("opener");
+const first = el("first"), middle = el("middle"), last = el("last");
+const skipped = el("skipped", { hidden: true });
+const container = { children: [first, middle, skipped, last],
+  querySelector: () => null,
+  querySelectorAll: () => [first, middle, skipped, last],
+  contains: (x) => [first, middle, skipped, last].includes(x) };
+const handlers = [];
+globalThis.document = {
+  activeElement: opener,
+  addEventListener: (type, fn) => handlers.push(fn),
+  removeEventListener: (type, fn) => { const i = handlers.indexOf(fn); if (i >= 0) handlers.splice(i, 1); },
+  contains: () => true,
+  getElementById: () => null,
+  createElement: () => ({ setAttribute(k, v) { this[k] = v; }, className: "", textContent: "" }),
+  body: { appendChild: (x) => { globalThis.__region = x; } },
+};
+const key = (k, shift = false) => {
+  let prevented = false;
+  const ev = { key: k, shiftKey: shift, preventDefault: () => { prevented = true; } };
+  for (const h of [...handlers]) h(ev);
+  return prevented;
+};
+"""
+
+
+@pytestmark_node
+def test_a_hidden_control_is_not_a_focus_target() -> None:
+    script = f"""
+    {FAKE_DOM}
+    const m = await import({json.dumps(A11Y.as_uri())});
+    const names = m.focusableWithin(container).map((e) => e.name);
+    console.log(JSON.stringify(names));
+    """
+    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout) == ["first", "middle", "last"]
+
+
+@pytestmark_node
+def test_opening_moves_focus_in_and_closing_puts_it_back() -> None:
+    script = f"""
+    {FAKE_DOM}
+    const m = await import({json.dumps(A11Y.as_uri())});
+    const release = m.captureFocus(container, {{ restoreTo: opener }});
+    release();
+    console.log(JSON.stringify(focused));
+    """
+    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout) == ["first", "opener"], "focus goes in, then back to what opened it"
+
+
+@pytestmark_node
+def test_escape_closes_and_a_trap_keeps_tab_inside() -> None:
+    script = f"""
+    {FAKE_DOM}
+    const m = await import({json.dumps(A11Y.as_uri())});
+    let escapes = 0;
+    m.captureFocus(container, {{ trap: true, onEscape: () => {{ escapes += 1; }} }});
+    const atLast = (globalThis.document.activeElement = last, key("Tab"));     // wraps to first
+    const atFirst = (globalThis.document.activeElement = first, key("Tab", true));  // wraps to last
+    const middleTab = (globalThis.document.activeElement = middle, key("Tab"));     // ordinary, untouched
+    key("Escape");
+    console.log(JSON.stringify({{ focused, escapes, atLast, atFirst, middleTab }}));
+    """
+    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    got = json.loads(out.stdout)
+    assert got["escapes"] == 1, "Escape has to close the surface"
+    assert got["atLast"] and got["atFirst"], "Tab off either end is intercepted"
+    assert not got["middleTab"], "Tab in the middle is left alone"
+    assert got["focused"] == ["first", "first", "last"], "wraps to the far end each way"
+
+
+@pytestmark_node
+def test_without_a_trap_tab_leaves_the_surface() -> None:
+    """The Ask drawer sits beside the page on a wide screen; tabbing out to the map is correct."""
+    script = f"""
+    {FAKE_DOM}
+    const m = await import({json.dumps(A11Y.as_uri())});
+    m.captureFocus(container, {{ onEscape: () => {{}} }});
+    globalThis.document.activeElement = last;
+    console.log(JSON.stringify(key("Tab")));
+    """
+    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout) is False
+
+
+@pytestmark_node
+def test_announcements_go_to_one_polite_live_region() -> None:
+    script = f"""
+    {FAKE_DOM}
+    const m = await import({json.dumps(A11Y.as_uri())});
+    m.announce("GR4J failed, retry");
+    const r = globalThis.__region;
+    console.log(JSON.stringify({{ role: r.role, live: r["aria-live"], text: r.textContent, cls: r.className }}));
+    """
+    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    got = json.loads(out.stdout)
+    assert got["role"] == "status" and got["live"] == "polite"
+    assert got["text"] == "GR4J failed, retry"
+    assert got["cls"] == "visually-hidden", "announced, not shown"
+
+
+def test_the_visually_hidden_class_the_live_region_uses_exists() -> None:
+    css = (EXPLORER / "style.css").read_text(encoding="utf-8")
+    assert ".visually-hidden" in css, "the live region would otherwise be visible on the page"

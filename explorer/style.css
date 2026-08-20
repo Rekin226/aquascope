@@ -48,6 +48,9 @@ ul, ol { margin: 0; }
 
 .skip { position: absolute; left: -9999px; top: 0; z-index: 100; background: var(--bg); padding: .5rem .8rem; border: 1px solid var(--line); }
 .skip:focus { left: .5rem; top: .5rem; }
+/* Announced, not shown: the polite live region in src/a11y.js. */
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 
 /* ── header ──────────────────────────────────────────────────────────────── */
 

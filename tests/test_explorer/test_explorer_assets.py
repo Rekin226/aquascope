@@ -297,3 +297,30 @@ def test_the_page_has_no_second_provider_list() -> None:
     # The fallback is deliberately one provider plus `custom`; more than that is drift.
     fallback = ask.split("let ASK_PROVIDERS = {", 1)[1].split("};", 1)[0]
     assert fallback.count("base_url:") <= 2, "the offline fallback grew into a second registry"
+
+
+# ── the tools the page offers to an in-browser agent (#236) ─────────────────
+
+
+def test_webmcp_registration_is_feature_detected() -> None:
+    """A browser without navigator.modelContext must be unaffected."""
+    src = (EXPLORER / "src" / "webmcp.js").read_text(encoding="utf-8")
+    assert "navigator.modelContext" in src
+    assert "webmcpAvailable()" in src
+    assert "if (!webmcpAvailable()) return false" in src
+
+
+def test_webmcp_tools_are_described_and_schema_d() -> None:
+    src = (EXPLORER / "src" / "webmcp.js").read_text(encoding="utf-8")
+    for name in ("aquascope_find_stations", "aquascope_analyze_station", "aquascope_anywhere",
+                 "aquascope_describe_catchment", "aquascope_show_on_map"):
+        assert name in src, f"{name} should be offered to an agent"
+    assert src.count("inputSchema") >= 5, "every tool needs a schema an agent can fill in"
+
+
+def test_place_search_uses_a_geocoder_whose_terms_allow_autocomplete() -> None:
+    """Photon allows autocomplete; OSM's Nominatim forbids it, so it must not be called."""
+    src = (EXPLORER / "src" / "search.js").read_text(encoding="utf-8")
+    assert "photon.komoot.io" in src
+    called = re.findall(r'https?://[^\s"\')]+', src)
+    assert not [u for u in called if "nominatim" in u.lower()], "Nominatim forbids autocomplete"

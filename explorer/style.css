@@ -410,3 +410,8 @@ body.workbench-mode .panel { width: auto; flex: 1; }
 .ask-tier { display: flex; flex-direction: column; gap: .2rem; font-size: .8rem; margin: .5rem 0; }
 .ask-tier label { display: flex; align-items: center; gap: .35rem; }
 .ask-tier input:disabled + span, .ask-tier label:has(input:disabled) { opacity: .55; }
+
+/* Places in the search results (#231 follow-up). */
+.search-results .hit-head { padding: .3rem .6rem .15rem; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; }
+.search-results .hit .pin { width: 10px; height: 10px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  background: #455a64; display: inline-block; flex: none; }

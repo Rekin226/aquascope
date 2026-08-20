@@ -22,6 +22,7 @@ import { initAsk } from "./src/ask.js?v=__BUILD__";
 import { initUrl, readUrl, writeUrl } from "./src/url.js?v=__BUILD__";
 import { ensureWorker } from "./src/worker-client.js?v=__BUILD__";
 import { openCite } from "./src/methods.js?v=__BUILD__";
+import { registerWebMcpTools } from "./src/webmcp.js?v=__BUILD__";
 
 // Everything that can arrive from a URL: a station, a point, a tab, the map
 // view and the source filter. Called at boot, on hashchange and on Back.
@@ -170,5 +171,7 @@ function goHome() {
   ensureWorker();  // warm Python in the background so the first click is quicker
 
   applyUrl(url);
+  // Offer the page's tools to an in-browser agent, where the browser has WebMCP.
+  registerWebMcpTools({ actions });
   state.booting = false;
 })();

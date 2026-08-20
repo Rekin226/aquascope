@@ -167,3 +167,41 @@ def test_regionalize_signatures_tool_dispatches(monkeypatch):
 
     monkeypatch.setattr("aquascope.archive.regionalize.regionalize_point", boom)
     assert "no signatures yet" in m.regionalize_signatures(0, 0)["error"]
+
+
+# ── inline views for clients that render them (MCP Apps, #236) ──────────────
+
+
+def test_station_view_carries_a_renderable_html_view() -> None:
+    from unittest.mock import patch
+
+    from aquascope.mcp_server import station_view
+
+    fake = {
+        "name": "Fish River", "source": "usgs", "station_id": "USGS-1", "start": "1986-01-01",
+        "end": "2026-01-01", "years": 40, "unit": "m3/s", "stats": {"mean": 43.4, "max": 507.0},
+        "series": {"v": [1, 5, 3, 9, 2, 7, 4, 8, 3, 6] * 20},
+        "ffa": {"return_periods": [2, 100], "fits": {"gev_lmoments": {"q": [228.6, 583.2]}}},
+        "attribution": "U.S. Geological Survey", "license": "public domain",
+    }
+    with patch("aquascope.mcp_server.analyze_station", return_value=fake):
+        result = station_view("usgs", "USGS-1")
+
+    # The ordinary result is untouched, so a client without the extension loses nothing.
+    assert result["stats"]["mean"] == 43.4
+    view = result["_meta"]["mcp/view"]
+    assert view["mimeType"] == "text/html"
+    assert "<svg" in view["html"], "the hydrograph is drawn inline, with no library"
+    assert "583.2" in view["html"], "the 100-year flood is shown"
+    assert "U.S. Geological Survey" in view["html"], "attribution travels with the view"
+
+
+def test_station_view_passes_an_error_straight_through() -> None:
+    from unittest.mock import patch
+
+    from aquascope.mcp_server import station_view
+
+    with patch("aquascope.mcp_server.analyze_station", return_value={"error": "no such station"}):
+        result = station_view("usgs", "nope")
+    assert result["error"] == "no such station"
+    assert "_meta" not in result

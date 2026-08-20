@@ -48,15 +48,42 @@ export function searchStations(query, limit = 25) {
   return hits.slice(0, limit).map(([, r]) => r);
 }
 
+
+// Places, not just gauges. Photon (komoot) is keyless and its terms allow
+// autocomplete, which OSM's own Nominatim does not; picking a place drops the
+// map there and asks the "anywhere" card about it.
+const PHOTON = "https://photon.komoot.io/api/";
+let placeAbort = null;
+
+async function findPlaces(query, limit = 3) {
+  if (placeAbort) placeAbort.abort();
+  placeAbort = new AbortController();
+  try {
+    const res = await fetch(`${PHOTON}?q=${encodeURIComponent(query)}&limit=${limit}`, { signal: placeAbort.signal });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.features || []).map((f) => ({
+      name: f.properties.name,
+      detail: [f.properties.city, f.properties.state, f.properties.country].filter(Boolean).join(", "),
+      lon: f.geometry.coordinates[0],
+      lat: f.geometry.coordinates[1],
+      kind: f.properties.osm_value || f.properties.type || "place",
+    })).filter((p) => p.name);
+  } catch (err) {
+    if (err.name !== "AbortError") console.info("place search unavailable:", err.message);
+    return [];
+  }
+}
+
 export function initSearch() {
   const input = $("search"), box = $("search-results");
-  let t, hits = [], active = -1;
+  let t, hits = [], places = [], active = -1;
 
-  const close = () => { box.hidden = true; active = -1; input.setAttribute("aria-expanded", "false"); };
+  const close = () => { box.hidden = true; active = -1; places = []; input.setAttribute("aria-expanded", "false"); };
 
   const paint = () => {
     box.innerHTML = "";
-    if (!hits.length) {
+    if (!hits.length && !places.length) {
       box.innerHTML = `<div class="hit muted">no match</div>`;
     } else {
       hits.forEach((r, i) => {
@@ -73,8 +100,31 @@ export function initSearch() {
         box.appendChild(d);
       });
     }
+    if (places.length) {
+      const head = document.createElement("div");
+      head.className = "hit-head muted";
+      head.textContent = "Places (click for the climate and catchment there)";
+      box.appendChild(head);
+      places.forEach((p, i) => {
+        const d = document.createElement("div");
+        d.className = `hit place${hits.length + i === active ? " active" : ""}`;
+        d.setAttribute("role", "option");
+        d.innerHTML = `<i class="pin"></i><span class="hit-name">${escapeHtml(p.name)}</span>` +
+          `<span class="muted hit-id">${escapeHtml(p.detail || p.kind)}</span>`;
+        d.addEventListener("mousedown", (e) => { e.preventDefault(); choosePlace(i); });
+        box.appendChild(d);
+      });
+    }
     box.hidden = false;
     input.setAttribute("aria-expanded", "true");
+  };
+
+  const choosePlace = (i) => {
+    const p = places[i];
+    if (!p) return;
+    close();
+    input.value = "";
+    actions.selectPoint(p.lat, p.lon, { fly: true });
   };
 
   const choose = (i) => {
@@ -91,12 +141,20 @@ export function initSearch() {
 
   input.addEventListener("input", () => {
     clearTimeout(t);
-    t = setTimeout(() => {
-      hits = searchStations(input.value);
+    t = setTimeout(async () => {
+      const query = input.value;
+      hits = searchStations(query);
       active = hits.length ? 0 : -1;
-      if (foldText(input.value).trim().length < 2) { close(); return; }
+      if (foldText(query).trim().length < 2) { close(); return; }
+      places = [];
       paint();
-    }, 110);
+      // Places come from a third party, so they arrive second and never block
+      // the gauge results.
+      if (foldText(query).trim().length >= 3) {
+        const found = await findPlaces(query.trim());
+        if (input.value === query) { places = found; paint(); }
+      }
+    }, 140);
   });
 
   input.addEventListener("keydown", (e) => {

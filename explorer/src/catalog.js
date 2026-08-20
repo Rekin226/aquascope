@@ -4,6 +4,7 @@
 
 import { CONFIG } from "../config.js?v=__BUILD__";
 import { sourceStyle, state, stationKey, trace } from "./core.js?v=__BUILD__";
+import { RECENT_BREAKS, RECORD_BREAKS, breakColor, recordYears, yearsSinceLast } from "./layers.js?v=__BUILD__";
 
 let duckPromise = null;
 
@@ -74,14 +75,28 @@ export async function loadCatalog() {
   return rows;
 }
 
+// The map gets one colour per style mode, computed here so the paint
+// expression stays a plain ["get", ...] and the legend and the dots cannot
+// drift apart.
 export function toFeatureCollection(rows) {
+  const now = new Date();
   return {
     type: "FeatureCollection",
-    features: rows.filter((r) => !state.hidden.has(r.source)).map((r) => ({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [r.lon, r.lat] },
-      properties: { key: stationKey(r), source: r.source, name: r.name ?? "", color: sourceStyle(r.source).color },
-    })),
+    features: rows.filter((r) => !state.hidden.has(r.source)).map((r) => {
+      const years = recordYears(r, now);
+      const stale = yearsSinceLast(r, now);
+      return {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [r.lon, r.lat] },
+        properties: {
+          key: stationKey(r), source: r.source, name: r.name ?? "",
+          color: sourceStyle(r.source).color,
+          colorRecord: breakColor(RECORD_BREAKS, years),
+          colorRecent: breakColor(RECENT_BREAKS, stale),
+          years: years === null ? -1 : Math.round(years * 10) / 10,
+        },
+      };
+    }),
   };
 }
 

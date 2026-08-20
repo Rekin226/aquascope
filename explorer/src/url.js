@@ -29,6 +29,15 @@ export function readUrl(hash = location.hash) {
   }
   if (q.has("hide")) out.hidden = String(q.get("hide")).split(",").filter(Boolean);
   if (q.has("basins")) out.basins = q.get("basins") === "1";
+  // layers (#232)
+  if (q.has("b")) out.basemap = q.get("b");
+  if (q.has("o")) out.overlays = String(q.get("o")).split(",").filter(Boolean);
+  if (q.has("d")) out.date = q.get("d");
+  if (q.has("t")) out.terrain = q.get("t") === "1";
+  if (q.has("hs")) out.hillshade = q.get("hs") === "1";
+  if (q.has("gl")) out.globe = q.get("gl") === "1";
+  if (q.has("gs")) out.gaugeStyle = q.get("gs");
+  if (q.has("hm")) out.heat = q.get("hm") === "1";
   return out;
 }
 
@@ -40,6 +49,14 @@ function currentHash({ view } = {}) {
   if (view) q.set("v", `${view.zoom.toFixed(2)}/${view.lat.toFixed(4)}/${view.lon.toFixed(4)}`);
   if (state.hidden.size) q.set("hide", [...state.hidden].join(","));
   if (state.basinsOn) q.set("basins", "1");
+  if (state.basemap && state.basemap !== "light") q.set("b", state.basemap);
+  if (state.overlays && state.overlays.size) q.set("o", [...state.overlays].join(","));
+  if (state.date && (state.overlays.size || state.basemap === "daily")) q.set("d", state.date);
+  if (state.terrain) q.set("t", "1");
+  if (state.hillshade) q.set("hs", "1");
+  if (state.globe) q.set("gl", "1");
+  if (state.gaugeStyle && state.gaugeStyle !== "source") q.set("gs", state.gaugeStyle);
+  if (state.heat) q.set("hm", "1");
   return `#${q.toString().replace(/%2F/gi, "/").replace(/%2C/gi, ",")}`;
 }
 

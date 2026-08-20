@@ -9,6 +9,8 @@
 import { $, actions, state, trace } from "./src/core.js?v=__BUILD__";
 import { loadCatalog, toFeatureCollection } from "./src/catalog.js?v=__BUILD__";
 import { addStationLayers, initMap, map, refreshMapData, setView, webglAvailable } from "./src/map.js?v=__BUILD__";
+import { defaultDate } from "./src/layers.js?v=__BUILD__";
+import { applyLayerState, initLayerUI, syncRailControls } from "./src/layer-ui.js?v=__BUILD__";
 import { buildRail, syncRail, updateCount } from "./src/rail.js?v=__BUILD__";
 import { setBasinsVisible } from "./src/basins.js?v=__BUILD__";
 import { initSearch } from "./src/search.js?v=__BUILD__";
@@ -28,6 +30,7 @@ function applyUrl(url, { fromHistory = false } = {}) {
     refreshMapData();
     syncRail();
   }
+  if (fromHistory && readLayerState(url)) applyLayerState();
   if (url.basins !== undefined && url.basins !== state.basinsOn) setBasinsVisible(url.basins);
   if (url.view) { state.view = url.view; setView(url.view); }
   if (url.station) {
@@ -53,6 +56,34 @@ function applyUrl(url, { fromHistory = false } = {}) {
     state.point = null;
     showSurface("panel-empty");
   }
+}
+
+// Copy the layer part of a URL into state. Returns true when anything changed,
+// so Back and a pasted link both restore the map as it was.
+function readLayerState(url) {
+  let changed = false;
+  const set = (key, value) => {
+    if (value === undefined || value === null) return;
+    if (state[key] !== value) { state[key] = value; changed = true; }
+  };
+  set("basemap", url.basemap);
+  set("date", url.date);
+  set("terrain", url.terrain);
+  set("hillshade", url.hillshade);
+  set("globe", url.globe);
+  set("gaugeStyle", url.gaugeStyle);
+  set("heat", url.heat);
+  if (url.overlays) {
+    const next = new Set(url.overlays);
+    if (next.size !== state.overlays.size || [...next].some((o) => !state.overlays.has(o))) {
+      state.overlays = next;
+      changed = true;
+    }
+  } else if (state.overlays.size) {
+    state.overlays = new Set();
+    changed = true;
+  }
+  return changed;
 }
 
 function goHome() {
@@ -88,8 +119,10 @@ function goHome() {
   }
 
   if (url.hidden) state.hidden = new Set(url.hidden);
+  state.date = url.date || defaultDate();
+  readLayerState(url);
 
-  const mapReady = initMap(url.view);
+  const mapReady = initMap(url.view, { basemap: state.basemap, date: state.date });
   trace("map init called");
   const catalogReady = loadCatalog().then(() => true).catch((err) => {
     console.error(err);
@@ -124,6 +157,11 @@ function goHome() {
   }
   buildRail();
   updateCount();
+  if (mapOk) {
+    initLayerUI();
+    applyLayerState();
+    syncRailControls();
+  }
   if (state.basinsOn || url.basins) setBasinsVisible(true);
   ensureWorker();  // warm Python in the background so the first click is quicker
 

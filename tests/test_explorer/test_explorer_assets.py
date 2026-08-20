@@ -158,3 +158,120 @@ def test_fold_text_ignores_accents_and_case() -> None:
     """
     out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
     assert json.loads(out.stdout) == ["le rhone a anthon", "munchen"]
+
+
+# ── the layer catalogue (#232) ──────────────────────────────────────────────
+#
+# Every layer on the map has to be free, keyless and correctly credited. These
+# checks are the standing guard on that: a layer added later with no licence,
+# with a key in its URL, or from a host whose terms forbid this use, fails here.
+
+LAYERS = EXPLORER / "src" / "layers.js"
+
+# Checked on 2026-08-20: keyless, CORS-enabled, and usable from a static page.
+ALLOWED_TILE_HOSTS = {
+    "tiles.openfreemap.org",          # vector basemaps, no key, no limits stated
+    "tiles.maps.eox.at",              # Sentinel-2 cloudless and terrain, CC BY / CC BY-NC-SA
+    "gibs.earthdata.nasa.gov",        # NASA GIBS imagery and environmental rasters
+    "basemap.nationalmap.gov",        # USGS imagery, public domain, US only
+    "elevation-tiles-prod.s3.amazonaws.com",  # AWS Terrain Tiles (Mapzen/Tilezen)
+    "wmts.terrascope.be",             # ESA WorldCover, CC BY 4.0
+}
+
+# Hosts that must never appear: their terms do not allow this use, or they need
+# a billing-enabled key.
+FORBIDDEN_HOSTS = (
+    "mt.google.com", "khms", "maps.googleapis.com",
+    "server.arcgisonline.com", "ibasemaps-api.arcgis.com",
+)
+
+
+def _layers_json() -> dict:
+    script = f"""
+    const m = await import({json.dumps(LAYERS.as_uri())});
+    console.log(JSON.stringify({{
+      basemaps: m.BASEMAPS, overlays: m.OVERLAYS, dem: m.TERRAIN_DEM,
+      defaultDate: m.defaultDate(new Date("2026-08-20T00:00:00Z")),
+      monthly: m.layerDate(m.overlayById("storage"), "2026-08-13"),
+      daily: m.layerDate(m.overlayById("precip"), "2026-08-13"),
+      precipUrl: m.tileUrls(m.overlayById("precip"), "2026-08-13")[0],
+      credits: m.creditLines("satellite", ["precip"], {{terrain: true}}),
+      years: m.recordYears({{period_start: "2000-01-01", period_end: "2020-01-01"}}, new Date("2026-01-01T00:00:00Z")),
+      openEnded: m.recordYears({{period_start: "2016-01-01"}}, new Date("2026-01-01T00:00:00Z")),
+      color: m.breakColor(m.RECORD_BREAKS, 30),
+      noColor: m.breakColor(m.RECORD_BREAKS, null),
+    }}));
+    """
+    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    return json.loads(out.stdout)
+
+
+@pytestmark_node
+def test_every_layer_is_credited_and_licensed() -> None:
+    data = _layers_json()
+    for layer in [*data["basemaps"], *data["overlays"], data["dem"]]:
+        assert layer.get("attribution"), f"{layer.get('id')} has no attribution"
+        assert layer.get("licence"), f"{layer.get('id')} has no licence"
+
+
+@pytestmark_node
+def test_layer_ids_are_unique() -> None:
+    data = _layers_json()
+    for key in ("basemaps", "overlays"):
+        ids = [layer["id"] for layer in data[key]]
+        assert len(ids) == len(set(ids)), f"duplicate ids in {key}: {ids}"
+    assert sum(1 for b in data["basemaps"] if b.get("default")) == 1, "exactly one basemap is the default"
+
+
+@pytestmark_node
+def test_tile_hosts_are_keyless_and_allowed() -> None:
+    data = _layers_json()
+    urls = []
+    for layer in [*data["basemaps"], *data["overlays"], data["dem"]]:
+        urls.extend(layer.get("tiles") or [])
+        if layer.get("url"):
+            urls.append(layer["url"])
+        if layer.get("legend"):
+            urls.append(layer["legend"])
+    assert urls
+    for url in urls:
+        host = re.sub(r"^https?://([^/?]+).*$", r"\1", url)
+        assert host in ALLOWED_TILE_HOSTS, f"{host} is not in the checked, keyless allow-list"
+        assert not re.search(r"[?&](api_?key|token|access_token)=", url, re.I), f"{url} carries a key"
+
+
+def test_no_forbidden_tile_host_anywhere_in_the_explorer() -> None:
+    """Google tiles and Esri's legacy imagery are out; keep them out."""
+    for path in [*MODULES, LAYERS, INDEX]:
+        text = path.read_text(encoding="utf-8")
+        for host in FORBIDDEN_HOSTS:
+            assert host not in text, f"{path.name} references {host}"
+
+
+@pytestmark_node
+def test_time_layers_carry_a_date_and_snap_correctly() -> None:
+    data = _layers_json()
+    for layer in [*data["basemaps"], *data["overlays"]]:
+        for tile in layer.get("tiles") or []:
+            same = ("{date}" in tile) == bool(layer.get("time"))
+            assert same, f"{layer['id']}: date placeholder and time flag disagree"
+    assert data["defaultDate"] == "2026-08-13", "the default date is a week back, for data latency"
+    assert data["daily"] == "2026-08-13"
+    assert data["monthly"] == "2026-08-01", "monthly products snap to the first of the month"
+    assert "{date}" not in data["precipUrl"] and "2026-08-13" in data["precipUrl"]
+
+
+@pytestmark_node
+def test_credits_cover_everything_on_screen() -> None:
+    data = _layers_json()
+    labels = [c["label"] for c in data["credits"]]
+    assert labels == ["Satellite (2016)", "Elevation", "Precipitation rate"]
+    assert all(c["attribution"] and c["licence"] for c in data["credits"])
+
+
+@pytestmark_node
+def test_record_length_comes_from_the_catalog_period() -> None:
+    data = _layers_json()
+    assert abs(data["years"] - 20) < 0.1
+    assert abs(data["openEnded"] - 10) < 0.1, "an open-ended record runs to today"
+    assert data["color"] != data["noColor"], "a station with no period is not coloured like one with 30 years"

@@ -51,7 +51,30 @@
         <span id="count" class="count">loading catalog…</span>
       </div>
       <div id="rail-sources" class="rail-list"></div>
+      <div class="rail-list rail-style">
+        <label class="rail-field">Colour by
+          <select id="gauge-style"></select>
+        </label>
+        <div id="gauge-legend" class="swatches" hidden></div>
+        <label class="rail-row"><input type="checkbox" id="toggle-heat" /><span class="rail-label">Density heat map</span></label>
+        <button id="btn-area" class="btn small block" type="button">Select an area</button>
+        <div id="area-result" class="area-result" hidden></div>
+      </div>
+
+      <div class="rail-head"><h2>Basemap</h2></div>
+      <div id="rail-basemaps" class="rail-list"></div>
+
+      <div class="rail-head"><h2>Terrain</h2></div>
+      <div id="rail-terrain" class="rail-list"></div>
+      <p id="rail-terrain-note" class="rail-note muted"></p>
+
       <div class="rail-head"><h2>Overlays</h2></div>
+      <div id="rail-date" class="rail-date" hidden>
+        <button id="date-prev" class="icon-btn tiny" type="button" title="Previous day">‹</button>
+        <input type="date" id="date-input" aria-label="Date for the time-driven layers" />
+        <button id="date-next" class="icon-btn tiny" type="button" title="Next day">›</button>
+      </div>
+      <div id="rail-overlays" class="rail-list"></div>
       <div class="rail-list">
         <label class="rail-row">
           <input type="checkbox" id="toggle-basins" />
@@ -59,9 +82,12 @@
           <span class="rail-label">Catchments (BasinATLAS)</span>
         </label>
       </div>
+
+      <div class="rail-head"><h2>Credits</h2></div>
+      <div id="rail-credits" class="rail-credits muted"></div>
       <p class="rail-foot muted">
-        Catalog: <a href="https://huggingface.co/datasets/Rekin226/aquascope-gauges" target="_blank" rel="noopener">Rekin226/aquascope-gauges</a>,
-        GeoParquet, rebuilt weekly. More layers are coming (<a href="https://github.com/Rekin226/aquascope/issues/232" target="_blank" rel="noopener">#232</a>).
+        Gauges: <a href="https://huggingface.co/datasets/Rekin226/aquascope-gauges" target="_blank" rel="noopener">Rekin226/aquascope-gauges</a>,
+        GeoParquet, rebuilt weekly. Layer sources and licences are listed above; nothing here needs a key.
       </p>
     </nav>
 

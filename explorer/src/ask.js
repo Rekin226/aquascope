@@ -14,6 +14,7 @@ import {
 import { closeDrawer, drawerOpen, openDrawer, setStatusEl } from "./shell.js?v=__BUILD__";
 import { Cancelled, callCancelable, call, onAskProgress } from "./worker-client.js?v=__BUILD__";
 import { map } from "./map.js?v=__BUILD__";
+import { visibleLayerSummary } from "./layer-ui.js?v=__BUILD__";
 
 // Defaults per provider. Groq retired llama-3.3-70b-versatile on 2026-08-16;
 // gpt-oss-120b is its production tool-calling model.
@@ -88,6 +89,8 @@ export function currentContext() {
   if (state.mapOk && map) {
     const c = map.getCenter();
     bits.push(`a map centred on ${c.lat.toFixed(2)}, ${c.lng.toFixed(2)} at zoom ${map.getZoom().toFixed(1)}`);
+    const layers = visibleLayerSummary();
+    if (layers) bits.push(`layers on the map: ${layers}`);
   }
   const hidden = [...state.hidden];
   if (hidden.length) bits.push(`sources hidden on the map: ${hidden.join(", ")}`);

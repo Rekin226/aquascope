@@ -34,6 +34,10 @@ export const state = {
   selected: null, result: null, point: null,
   workerReady: false, booting: true, pending: new Map(), reqId: 0,
   mapOk: false, marker: null, basinsOn: false,
+  // layers (#232)
+  basemap: "light", overlays: new Set(), opacity: {}, date: null,
+  terrain: false, hillshade: false, globe: false,
+  gaugeStyle: "source", heat: false,
   ask: { running: false, catalogSent: false, markdown: null, run: 0 },
 };
 dbg.state = state;

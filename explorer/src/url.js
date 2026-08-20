@@ -30,6 +30,7 @@ export function readUrl(hash = location.hash) {
   if (q.has("hide")) out.hidden = String(q.get("hide")).split(",").filter(Boolean);
   if (q.has("basins")) out.basins = q.get("basins") === "1";
   // layers (#232)
+  if (q.has("m")) out.mode = q.get("m");
   if (q.has("b")) out.basemap = q.get("b");
   if (q.has("o")) out.overlays = String(q.get("o")).split(",").filter(Boolean);
   if (q.has("d")) out.date = q.get("d");
@@ -43,7 +44,8 @@ export function readUrl(hash = location.hash) {
 
 function currentHash({ view } = {}) {
   const q = new URLSearchParams();
-  if (state.selected) q.set("s", `${state.selected.source}/${state.selected.station_id}`);
+  if (state.mode === "workbench") q.set("m", "workbench");
+  else if (state.selected) q.set("s", `${state.selected.source}/${state.selected.station_id}`);
   else if (state.point) q.set("p", `${state.point.lat},${state.point.lon}`);
   if (state.activeTab) q.set("tab", state.activeTab);
   if (view) q.set("v", `${view.zoom.toFixed(2)}/${view.lat.toFixed(4)}/${view.lon.toFixed(4)}`);

@@ -4,7 +4,7 @@
 
 import { $, escapeHtml, state } from "./core.js?v=__BUILD__";
 
-const SURFACES = ["panel-empty", "panel-station", "panel-point"];
+const SURFACES = ["panel-empty", "panel-station", "panel-point", "panel-workbench"];
 
 export function showSurface(id) {
   for (const s of SURFACES) { const el = $(s); if (el) el.hidden = s !== id; }

@@ -360,3 +360,30 @@ table.regime td:first-child { white-space: nowrap; }
   [role="tabpanel"][hidden] { display: block !important; }
   .card { break-inside: avoid; }
 }
+
+/* ── the workbench (your own data) ───────────────────────────────────────── */
+
+.wb-drop {
+  border: 2px dashed var(--line); border-radius: var(--radius); padding: 1.2rem .9rem;
+  text-align: center; margin-bottom: .7rem; background: var(--bg-soft);
+}
+.wb-drop.over { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 8%, var(--bg)); }
+.wb-drop p { margin: .3rem 0; font-size: .85rem; }
+.wb-drop .link { color: var(--blue); cursor: pointer; text-decoration: underline; }
+#wb-paste { width: 100%; font: inherit; font-size: .8rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: .45rem .55rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.wb-params { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem .6rem; margin-bottom: .3rem; }
+.wb-field { display: flex; flex-direction: column; gap: .15rem; font-size: .72rem; color: var(--muted); }
+.wb-field input, .wb-field select {
+  font: inherit; font-size: .82rem; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: .25rem .35rem;
+}
+.wb-result { margin-top: .4rem; font-size: .84rem; }
+.wb-result table.ffa td:first-child { color: var(--muted); }
+.wb-result .btn.tiny { margin-top: .4rem; }
+.wb-json { background: var(--bg-soft); padding: .5rem; border-radius: 8px; overflow: auto; max-height: 260px; font-size: .74rem; }
+.wb-warnings { padding-left: 1.1rem; font-size: .78rem; color: var(--warn-ink); line-height: 1.5; }
+.wb-suggestions { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
+/* In workbench mode the map steps aside: the table is the subject. */
+body.workbench-mode .map-wrap { display: none; }
+body.workbench-mode .panel { width: auto; flex: 1; }

@@ -33,6 +33,7 @@
                role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list" />
         <div id="search-results" class="search-results" role="listbox" aria-label="Search results" hidden></div>
       </div>
+      <button id="btn-workbench" class="btn" title="Analyse your own data with the same tools">My data</button>
       <button id="btn-cite-top" class="btn" title="How to cite AquaScope and the data">Cite</button>
       <button id="btn-ask" class="btn ask-toggle" aria-expanded="false" aria-controls="drawer"
               title="Ask a question in plain language; answered from real gauges by aquascope's tools, in your browser">Ask ✨</button>
@@ -138,6 +139,7 @@
             <a id="st-agency" href="#" target="_blank" rel="noopener" class="btn">Agency page ↗</a>
             <button id="btn-share" class="btn" title="Copy a link to exactly this view">Copy link</button>
             <button id="btn-csv" class="btn" disabled>Download CSV</button>
+            <button id="btn-to-workbench" class="btn" title="Analyse this record with the workbench tools">Send to workbench</button>
             <button id="btn-cite" class="btn" title="How to cite this">Cite</button>
           </div>
           <div id="status" class="status" hidden></div>
@@ -318,6 +320,78 @@
                 <ol id="pt-methods"></ol>
                 <p class="muted" id="pt-attribution"></p>
               </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- your own data -->
+      <div id="panel-workbench" hidden>
+        <div class="head">
+          <span class="badge" style="background:#00695c">Workbench</span>
+          <h2 id="wb-label">Your data</h2>
+          <div class="st-meta" id="wb-meta">A CSV or an Excel export, or the gauge you are looking at. Everything runs in this tab.</div>
+          <div class="st-actions">
+            <button id="wb-back" class="btn">Back to the map</button>
+          </div>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Workbench analyses">
+          <button role="tab" data-tab="data" aria-controls="wb-tab-data" aria-selected="true" id="wb-t-data">Data</button>
+          <button role="tab" data-tab="quality" aria-controls="wb-tab-quality" aria-selected="false" tabindex="-1" id="wb-t-quality" disabled>Quality</button>
+          <button role="tab" data-tab="hydrology" aria-controls="wb-tab-hydrology" aria-selected="false" tabindex="-1" id="wb-t-hydrology" disabled>Hydrology</button>
+          <button role="tab" data-tab="extremes" aria-controls="wb-tab-extremes" aria-selected="false" tabindex="-1" id="wb-t-extremes" disabled>Extremes</button>
+          <button role="tab" data-tab="groundwater" aria-controls="wb-tab-groundwater" aria-selected="false" tabindex="-1" id="wb-t-groundwater" disabled>Groundwater</button>
+          <button role="tab" data-tab="methods" aria-controls="wb-tab-methods" aria-selected="false" tabindex="-1" id="wb-t-methods" disabled>Methods</button>
+        </div>
+
+        <div class="panes">
+          <section id="wb-tab-data" role="tabpanel" aria-labelledby="wb-t-data" tabindex="0">
+            <div id="wb-empty">
+              <div id="wb-drop" class="wb-drop">
+                <p><strong>Drop a file here</strong>, or <label class="link" for="wb-file">choose one</label>.</p>
+                <input type="file" id="wb-file" accept=".csv,.txt,.xlsx,.xls" hidden />
+                <p class="muted">CSV or Excel. aquascope works out which column is the date and which is the value,
+                  converts to SI units and writes a QA report. Nothing is uploaded: the file is read in this tab.</p>
+              </div>
+              <div class="card">
+                <div class="card-title"><h3>Or paste a table</h3></div>
+                <div class="card-body">
+                  <textarea id="wb-paste" rows="4" placeholder="date,discharge&#10;2020-01-01,3.2&#10;2020-01-02,3.4"></textarea>
+                  <div class="row-actions"><button id="wb-paste-run" class="btn small">Use this table</button></div>
+                </div>
+              </div>
+              <p class="muted">Looking at a gauge? Open it here with "Send to workbench" on its page.</p>
+            </div>
+            <div id="wb-loaded" hidden>
+              <div id="wb-load-card" class="card" hidden><div class="card-body"></div></div>
+              <div id="wb-qa-card" class="card" hidden>
+                <div class="card-title"><h3>Read and checked</h3></div>
+                <div class="card-body"></div>
+              </div>
+              <div id="wb-insights-card" class="card" hidden>
+                <div class="card-title"><h3>What this table looks like</h3></div>
+                <div class="card-body"></div>
+              </div>
+            </div>
+          </section>
+
+          <section id="wb-tab-quality" role="tabpanel" aria-labelledby="wb-t-quality" tabindex="0" hidden>
+            <div id="wb-quality-list"></div>
+          </section>
+          <section id="wb-tab-hydrology" role="tabpanel" aria-labelledby="wb-t-hydrology" tabindex="0" hidden>
+            <div id="wb-hydrology-list"></div>
+          </section>
+          <section id="wb-tab-extremes" role="tabpanel" aria-labelledby="wb-t-extremes" tabindex="0" hidden>
+            <div id="wb-extremes-list"></div>
+          </section>
+          <section id="wb-tab-groundwater" role="tabpanel" aria-labelledby="wb-t-groundwater" tabindex="0" hidden>
+            <div id="wb-groundwater-list"></div>
+          </section>
+          <section id="wb-tab-methods" role="tabpanel" aria-labelledby="wb-t-methods" tabindex="0" hidden>
+            <div class="card">
+              <div class="card-title"><h3>Methods and citations</h3></div>
+              <div class="card-body"><ol id="wb-methods"></ol></div>
             </div>
           </section>
         </div>

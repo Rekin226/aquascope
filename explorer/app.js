@@ -17,6 +17,7 @@ import { initSearch } from "./src/search.js?v=__BUILD__";
 import { initShell, initTabs, selectTab, setStatusEl, showSurface } from "./src/shell.js?v=__BUILD__";
 import { initStationPanel, selectStation } from "./src/panel-station.js?v=__BUILD__";
 import { initPointPanel, selectPoint } from "./src/panel-point.js?v=__BUILD__";
+import { initWorkbench, openWorkbench } from "./src/panel-workbench.js?v=__BUILD__";
 import { initAsk } from "./src/ask.js?v=__BUILD__";
 import { initUrl, readUrl, writeUrl } from "./src/url.js?v=__BUILD__";
 import { ensureWorker } from "./src/worker-client.js?v=__BUILD__";
@@ -33,6 +34,7 @@ function applyUrl(url, { fromHistory = false } = {}) {
   if (fromHistory && readLayerState(url)) applyLayerState();
   if (url.basins !== undefined && url.basins !== state.basinsOn) setBasinsVisible(url.basins);
   if (url.view) { state.view = url.view; setView(url.view); }
+  if (url.mode === "workbench") { openWorkbench(); return; }
   if (url.station) {
     const key = decodeURIComponent(url.station);
     if (!state.selected || `${state.selected.source}/${state.selected.station_id}` !== key) {
@@ -101,8 +103,10 @@ function goHome() {
   initShell();
   initTabs($("panel-station"));
   initTabs($("panel-point"));
+  initTabs($("panel-workbench"));
   initStationPanel();
   initPointPanel();
+  initWorkbench();
   initAsk();   // async: fills the provider list from providers.json
   initSearch();
   initUrl();

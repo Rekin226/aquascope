@@ -346,3 +346,29 @@ def test_the_dashboard_uses_the_workbench_rather_than_its_own_copy() -> None:
     assert _state.profile is wb.profile
     assert _state.datetime_indexed is wb.datetime_indexed
     assert _state.DataProfile is wb.DataProfile
+
+
+# ── loading data that is already in memory (the browser has no filesystem) ──
+
+
+def test_ingest_text_reads_a_pasted_csv() -> None:
+    from aquascope.ingest import ingest_text
+
+    idx = pd.date_range("2015-01-01", periods=1200, freq="D")
+    rng = np.random.default_rng(2)
+    csv = pd.DataFrame({"date": idx, "flow_m3s": np.abs(rng.normal(6, 2, len(idx)))}).to_csv(index=False)
+
+    res = ingest_text(csv, "gauge.csv")
+    assert res["mapping"]["datetime_column"] == "date"
+    assert res["mapping"]["value_column"] == "flow_m3s"
+    assert res["mapping"]["variable"] == "discharge"
+    assert res["qa"]["n_values"] == len(idx)
+    assert res["analysis"]["n"] == len(idx)
+
+
+def test_ingest_text_accepts_bytes_too() -> None:
+    from aquascope.ingest import ingest_text
+
+    csv = b"date,level_m\n2020-01-01,1.5\n2020-01-02,1.7\n2020-01-03,1.6\n"
+    res = ingest_text(csv, "levels.csv")
+    assert res["qa"]["n_values"] == 3

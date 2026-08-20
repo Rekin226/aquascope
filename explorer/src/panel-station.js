@@ -395,6 +395,7 @@ export function initStationPanel() {
 
   $("btn-share").addEventListener("click", (e) => copyText(canonicalUrl(), e.currentTarget, "Link copied"));
   $("btn-cite").addEventListener("click", () => openCite(methodsOnPage("methods")));
+  $("btn-to-workbench").addEventListener("click", () => actions.openStationInWorkbench());
 
   $("btn-csv").addEventListener("click", async () => {
     if (!state.result || !state.selected) return;

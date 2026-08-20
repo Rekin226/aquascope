@@ -107,7 +107,7 @@ Three options, cheapest first:
 
 There is no anonymous hosted inference: HuggingFace returns 401 without a
 token. If you are running a public deployment for others, see
-[the Space README](https://github.com/Rekin226/aquascope/blob/main/deploy/huggingface-space/README.md)
+[the Explorer](https://rekin226-aquascope-explorer.static.hf.space/), which runs the same analyses in your browser
 for how to supply one token server-side so visitors need no account.
 
 ### "Free hosted AI unavailable"

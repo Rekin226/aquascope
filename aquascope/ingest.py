@@ -12,6 +12,7 @@ Nothing here talks to an agency; nothing here needs a key.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import re
@@ -337,6 +338,31 @@ def ingest(
     series, qa = qa_series(raw, n_rows_in=len(df))
     analysis = analyze_series(series, mapping.variable, mapping.unit) if len(series) else {}
     return {"mapping": mapping.to_dict(), "series": series, "qa": qa.to_dict(), "analysis": analysis}
+
+
+def ingest_text(
+    text: str | bytes,
+    filename: str = "upload.csv",
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """:func:`ingest` for data that is already in memory (a browser upload, a paste).
+
+    The Explorer has no filesystem to hand a path to, so the bytes are written
+    to a temporary file and read back through the same reader, which keeps one
+    code path for CSV, Excel and the rest.
+    """
+    import tempfile
+
+    suffix = Path(filename).suffix or ".csv"
+    data = text.encode("utf-8") if isinstance(text, str) else text
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as fh:
+        fh.write(data)
+        tmp = fh.name
+    try:
+        return ingest(tmp, **kwargs)
+    finally:
+        with contextlib.suppress(OSError):
+            Path(tmp).unlink()
 
 
 def write_outputs(result: dict[str, Any], out_stem: str | Path) -> dict[str, str]:

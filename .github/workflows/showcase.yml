@@ -73,8 +73,8 @@ jobs:
             echo "no change in the recorded answers"
             exit 0
           fi
-          git commit -m "showcase: re-record the Analyst's worked examples
-
-Recorded by .github/workflows/showcase.yml so the Explorer can show what the
-Analyst does without an API key (#233)."
+          # Two -m flags rather than one multi-line string: a body at column 0
+          # would end this block scalar and make the whole workflow unparseable.
+          git commit -m "showcase: re-record the Analyst's worked examples" \
+                     -m "Recorded by .github/workflows/showcase.yml so the Explorer can show what the Analyst does without an API key (#233)."
           git push

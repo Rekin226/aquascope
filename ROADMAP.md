@@ -11,6 +11,18 @@ AquaScope is becoming **the open, continuously updated, citable record of the wo
 3. **The Analyst**: the same tools for assistants (`aquascope mcp`, [#113](https://github.com/Rekin226/aquascope/issues/113)) and for people who ask in plain language (`aquascope ask`), plus `aquascope ingest` for any agency export.
 4. **Ecosystem**: the GeoLibre plugin (`integrations/geolibre`), QGIS/R readers of the archive, a data paper.
 
+### Next: one platform (August 2026 direction pass)
+
+The four layers exist. They are also four separate things to learn: the Explorer is a map with a scrolling panel, the Streamlit dashboard is a different app with different methods and no gauges, and the Analyst answers two-tool questions well and complex ones not at all. The next arc merges them into **one zero-install app, GIS-grade, with the Python engine running in a browser worker**: the map is one mode, a workbench (your own data, plus the dashboard's methods) is another, and the Analyst is a drawer that keeps context across both. One engine, three faces: every capability stays a plain Python function in the package, and the web app, the MCP server and the CLI are thin faces over it.
+
+- [ ] The app's shell, information architecture and UX: tabbed inspector, Ask beside the station, URL-as-state, search, mobile, export, "cite this" ([#231](https://github.com/Rekin226/aquascope/issues/231))
+- [ ] Layers v1: free keyless basemaps, Sentinel imagery, 3D terrain and globe, NASA GIBS climate rasters with a date slider, BasinATLAS choropleths, gauge heat maps, measure and draw ([#232](https://github.com/Rekin226/aquascope/issues/232))
+- [ ] Try the AI without a key: showcase replays, a model in the browser, an optional community demo pool, one provider registry ([#233](https://github.com/Rekin226/aquascope/issues/233))
+- [ ] The Analyst, level 3: a Python sandbox tool in the page, plan then execute then verify, a streamed trace, and every answer as a report plus a re-runnable `study.yaml` ([#234](https://github.com/Rekin226/aquascope/issues/234), with [#54](https://github.com/Rekin226/aquascope/issues/54))
+- [ ] Workbench: the dashboard's ten pages as panels over the same engine (`aquascope/workbench.py`), upload and ingest, a Data mode; Streamlit stays as the local UI ([#235](https://github.com/Rekin226/aquascope/issues/235))
+- [ ] WebMCP tools in the page and MCP Apps views for `aquascope mcp` ([#236](https://github.com/Rekin226/aquascope/issues/236))
+- [ ] HydroGym as a public, verifiable hydrology-agent benchmark on real basins, and the agent measured on it ([#175](https://github.com/Rekin226/aquascope/issues/175))
+
 ## Shipped
 
 - [x] 29 data source collectors (Taiwan ×8, USA ×3, Global ×5, FAO ×2, EU, France, Germany, Ireland, UK, Japan, Korea, India, Chile, Brazil, Australia)
@@ -45,7 +57,7 @@ AquaScope is becoming **the open, continuously updated, citable record of the wo
 
 ## In progress
 
-- [x] Hosted demo (try without installing) — [live on Hugging Face](https://huggingface.co/spaces/Rekin226/aquascope-dashboard), runs fully in-browser via stlite/WebAssembly
+- [x] Hosted demo (try without installing): [live on Hugging Face](https://huggingface.co/spaces/Rekin226/aquascope-dashboard), runs fully in-browser via stlite/WebAssembly. Being folded into the one app; the dashboard Space ships an older wheel and will redirect there ([#235](https://github.com/Rekin226/aquascope/issues/235))
 - [ ] Tutorial notebooks on Binder / Colab
 
 ## Planned
@@ -60,10 +72,10 @@ AquaScope is becoming **the open, continuously updated, citable record of the wo
 Ambitious, high-impact work that takes AquaScope to the next level. These are [`major feature`](https://github.com/Rekin226/aquascope/labels/major%20feature) · `help wanted` — larger than a weekend, mentorship available. Comment on the issue to discuss scope before starting.
 
 - [ ] Archive Phase 3: reservoir storage and water-quality variables, more agencies with a `stations()` catalog (Australia BOM, Taiwan WRA), a data paper ([#188](https://github.com/Rekin226/aquascope/issues/188))
-- [ ] Explorer Phase 3: GR4J calibrated in the page shipped (JS port + differential evolution, ~2 s for 40 years); still open: agency catchment boundaries under open licences (UK NRFA), sub-daily where terms allow ([#189](https://github.com/Rekin226/aquascope/issues/189))
+- [ ] Explorer Phase 3: GR4J calibrated in the page shipped (JS port + differential evolution, ~2 s for 40 years); still open here: agency catchment boundaries under open licences (UK NRFA), sub-daily where terms allow ([#189](https://github.com/Rekin226/aquascope/issues/189)). The shell and UX rebuild is [#231](https://github.com/Rekin226/aquascope/issues/231), the map layers [#232](https://github.com/Rekin226/aquascope/issues/232)
 - [ ] CAMELS-TW: `aquascope caravan export` is ready; the Taiwan daily discharge collector ([#211](https://github.com/Rekin226/aquascope/issues/211)) is the missing leg ([#100](https://github.com/Rekin226/aquascope/issues/100), [#99](https://github.com/Rekin226/aquascope/issues/99))
 - [x] Prediction in Ungauged Basins: flow signatures regionalised over the similar-basins donors (similarity-weighted transfer + ridge regression, leave-one-out skill published with the archive; `aquascope basins regionalize`, MCP `regionalize_signatures`, Explorer table) ([#53](https://github.com/Rekin226/aquascope/issues/53)); parameter regionalisation (GR4J parameters from donors) is the follow-up
-- [x] HydroGym Phase 0: `aquascope.gym.CalibrationEnv` (gymnasium API, GR4J calibration on any Archive basin or a synthetic one, NSE/KGE/log-NSE reward with validation metrics), three baselines, a leaderboard, `aquascope gym`; Phases 1 and 2 (task suite across regions, LLM-loop reference agent, leaderboard doc) stay open ([#175](https://github.com/Rekin226/aquascope/issues/175))
+- [x] HydroGym Phase 0: `aquascope.gym.CalibrationEnv` (gymnasium API, GR4J calibration on any Archive basin or a synthetic one, NSE/KGE/log-NSE reward with validation metrics), three baselines, a leaderboard, `aquascope gym`; Phases 1 and 2 stay open and are now scoped as a public, verifiable hydrology-agent benchmark on real basins (task suite with unsolvable tasks, held-out splits, cost accounting, frontier and small models, leaderboard) ([#175](https://github.com/Rekin226/aquascope/issues/175))
 - [ ] Declarative, reproducible study runner `aquascope run study.yaml` with provenance ([#54](https://github.com/Rekin226/aquascope/issues/54))
 - [ ] Plugin architecture — third-party collectors & methodologies via entry points ([#55](https://github.com/Rekin226/aquascope/issues/55))
 - [ ] Large-sample CAMELS benchmark — automated accuracy report ([#56](https://github.com/Rekin226/aquascope/issues/56))

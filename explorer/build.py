@@ -23,8 +23,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "explorer"
-# Every text asset of the app, including the ES modules in explorer/src/.
-TEXT_GLOBS = ("*.html", "*.js", "*.css", "*.json", "src/*.js")
+# Every text asset of the app: the page, the ES modules in explorer/src/, and
+# the recorded Analyst traces in explorer/showcase/ that the page replays (#233).
+TEXT_GLOBS = ("*.html", "*.js", "*.css", "*.json", "src/*.js", "showcase/*.json")
 SKIP = {"build.py"}
 
 

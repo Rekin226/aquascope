@@ -112,6 +112,25 @@ def test_build_copies_the_modules_and_nothing_ships_with_a_build_token(tmp_path:
     assert json.loads((out / "wheels.json").read_text(encoding="utf-8"))["build"] == "abc1234"
 
 
+def test_the_recorded_showcase_traces_are_part_of_the_build(tmp_path: Path, monkeypatch) -> None:
+    """The traces the page replays live in explorer/showcase/, so they have to ship.
+
+    Without the glob they simply would not be copied, and the panel would be
+    empty in production while being full locally.
+    """
+    build = _build_module()
+    src = tmp_path / "explorer"
+    (src / "showcase").mkdir(parents=True)
+    (src / "index.html").write_text("<!-- page -->", encoding="utf-8")
+    (src / "showcase" / "index.json").write_text('{"examples": []}', encoding="utf-8")
+    (src / "showcase" / "kingston.json").write_text('{"id": "kingston"}', encoding="utf-8")
+    monkeypatch.setattr(build, "SRC", src)
+
+    files = build.text_files()
+    assert Path("showcase/index.json") in files
+    assert Path("showcase/kingston.json") in files
+
+
 pytestmark_node = pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 
 

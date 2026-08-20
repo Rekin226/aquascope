@@ -47,8 +47,16 @@ If `aquascope` is not on the client's PATH, use the interpreter explicitly:
 | `similar_basins(lat, lon | source, station_id, k, method, sources)` | the gauged basins whose catchments most resemble a point's or a station's (BasinATLAS attribute space and/or distance): donor selection for ungauged sites | no (Archive `basins/station_catchments.parquet`) |
 | `regionalize_signatures(lat, lon, k, method)` | the estimated flow regime of an ungauged point (mean/median/Q95/Q05 flow in mm/d, annual maximum, runoff ratio, baseflow index, FDC slope, flow frequencies, seasonality, flashiness) transferred from the most similar gauged donors, with a band and the leave-one-out skill; `method`: similarity, regression or both | no (Archive `basins/station_signatures.parquet` + `regionalization_skill.json`) |
 | `archive_health()` | per-source status of the last catalog harvest | no |
+| `list_analyses()` | the sixteen `aquascope.workbench` analyses with their parameters: quality, preprocessing, insights, the WHO drinking-water screen, flow duration, three baseflow separations, recession, GEV flood frequency, flow signatures, return periods, FAO-56 ET0 and irrigation, SGI drought, WTF recharge, Theis drawdown | no |
+| `analyse_table(csv, analysis, params)` | run one of those on a table the assistant already has (a user's own export, for instance): the date and value columns are detected, units converted to SI, and the result carries its methods and citations | no |
+| `station_view(source, station_id, years)` | the `analyze_station` result plus a self-contained HTML view (inline hydrograph, headline numbers, attribution) under `_meta["mcp/view"]`, for clients that support the MCP Apps extension; clients that do not simply ignore the extra key | yes |
 
 Resources: `aquascope://sources` and `aquascope://methods` (JSON).
+
+In a browser, the same tools are available a second way: where WebMCP
+(`navigator.modelContext`) exists, the [Explorer](explorer.md) registers
+`find_stations`, `analyze_station`, `anywhere`, `describe_catchment` and
+`show_on_map` in the page itself, with nothing installed at all.
 
 Response sizes are bounded on purpose (station caps, thinning, no raw daily
 arrays in analyses): an assistant's context is not a data lake. Ask for

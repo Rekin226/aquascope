@@ -113,6 +113,29 @@ def test_a_failed_example_is_not_published(tmp_path) -> None:
     assert index["examples"] == []
 
 
+def test_an_authentication_failure_says_what_to_do_about_it() -> None:
+    """The first live run recorded 0/8 behind eight identical 403s, which said nothing useful."""
+    entries = [showcase.ShowcaseEntry(
+        id=str(i), question="q", shows="",
+        error="LLMHTTPError: HTTP 403 from https://router.huggingface.co/v1/chat/completions: "
+              '{"error":"This authentication method does not have sufficient permissions to '
+              'call Inference Providers on behalf of user Rekin226"}',
+    ) for i in range(3)]
+    said = showcase.diagnose(entries)
+    assert "Inference Providers" in said
+    assert "GROQ_API_KEY" in said, "name the free-tier way out, not just the diagnosis"
+
+
+def test_a_rate_limit_is_not_reported_as_a_permission_problem() -> None:
+    entries = [showcase.ShowcaseEntry(id="a", question="q", shows="", error="LLMHTTPError: HTTP 429 too many requests")]
+    said = showcase.diagnose(entries)
+    assert "rate limit" in said.lower() and "--only" in said
+
+
+def test_nothing_is_diagnosed_when_nothing_failed() -> None:
+    assert showcase.diagnose([showcase.ShowcaseEntry(id="a", question="q", shows="", answer="fine")]) == ""
+
+
 def test_the_questions_are_distinct_and_described() -> None:
     ids = [q["id"] for q in showcase.QUESTIONS]
     assert len(ids) == len(set(ids))

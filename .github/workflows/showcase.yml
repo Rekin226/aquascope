@@ -45,8 +45,14 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          if [ -n "$GROQ_API_KEY" ] || [ -n "$OPENAI_API_KEY" ] || [ -n "$HF_TOKEN" ]; then
+          if [ -n "$GROQ_API_KEY" ] || [ -n "$OPENAI_API_KEY" ]; then
             echo "have_key=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$HF_TOKEN" ]; then
+            # HF_TOKEN is here for the Archive, where a write token scoped to
+            # repositories is enough. Calling a model needs the separate "Make
+            # calls to Inference Providers" permission, so this may still 403.
+            echo "have_key=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Only HF_TOKEN is set. It records the showcase only if it also has the 'Make calls to Inference Providers' permission."
           else
             echo "have_key=false" >> "$GITHUB_OUTPUT"
             echo "::notice::No LLM key secret is set, so the showcase cannot be recorded. Set GROQ_API_KEY (free tier) to enable it."

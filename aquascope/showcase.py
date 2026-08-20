@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,7 +30,7 @@ from aquascope import __version__
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["QUESTIONS", "ShowcaseEntry", "build", "write"]
+__all__ = ["QUESTIONS", "ShowcaseEntry", "build", "diagnose", "write"]
 
 #: The questions worth showing. Each is answerable from the archive, exercises a
 #: different part of the tool surface, and is short enough to read.
@@ -187,6 +188,37 @@ def write(entries: list[ShowcaseEntry], out_dir: str | Path) -> dict[str, str]:
     return written
 
 
+def diagnose(entries: list[ShowcaseEntry]) -> str:
+    """Say what went wrong when nothing recorded, in terms of what to do about it.
+
+    "0/8 recorded" plus eight identical stack traces is a poor error. The common
+    causes are specific and each has a specific fix, so name them.
+    """
+    errors = [e.error or "" for e in entries if e.error]
+    if not errors:
+        return ""
+    joined = " ".join(errors).lower()
+    if "403" in joined or "sufficient permissions" in joined or "401" in joined:
+        return (
+            "Every question failed on authentication, so the key exists but is not allowed to "
+            "call the model. A Hugging Face token needs the 'Make calls to Inference Providers' "
+            "permission (a write token scoped to repositories does not have it); a Groq key "
+            "needs nothing else. Set GROQ_API_KEY as a repository secret for the free tier: "
+            "https://console.groq.com/keys"
+        )
+    if "429" in joined or "rate" in joined and "limit" in joined:
+        return (
+            "Every question hit a rate limit. Free tiers are per minute as well as per day, so "
+            "re-run with --only to record a few at a time."
+        )
+    if "no api key" in joined or "not configured" in joined:
+        return (
+            "No key reached the recorder. Set one of GROQ_API_KEY, OPENAI_API_KEY or HF_TOKEN "
+            "(with Inference Providers access) in the environment."
+        )
+    return f"Nothing recorded. The first failure was: {errors[0]}"
+
+
 def main(argv: list[str] | None = None) -> None:  # pragma: no cover - a maintenance command
     ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     ap.add_argument("--out", default="explorer/showcase")
@@ -195,17 +227,18 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - a mainten
     ap.add_argument("--max-steps", type=int, default=8)
     ap.add_argument("--only", default=None, help="Comma-separated ids to rebuild")
     args = ap.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
     questions = QUESTIONS
     if args.only:
         wanted = {q.strip() for q in args.only.split(",")}
         questions = [q for q in QUESTIONS if q["id"] in wanted]
     entries = build(questions, provider=args.provider, model=args.model, max_steps=args.max_steps,
-                    on_event=lambda m: print(m))
+                    on_event=lambda m: print(m, flush=True))
     paths = write(entries, args.out)
     ok = sum(1 for e in entries if not e.error)
-    print(f"recorded {ok}/{len(entries)} into {args.out}")
+    print(f"recorded {ok}/{len(entries)} into {args.out}", flush=True)
     if ok == 0:
+        print(diagnose(entries), flush=True)
         raise SystemExit(1)
     print("\n".join(f"  {k}: {v}" for k, v in paths.items()))
 

@@ -31,6 +31,62 @@ Stations already mirrored in the [Archive](archive.md) load from it (one small
 file) instead of from the agency, so they are faster and do not add load
 upstream.
 
+## My data: your own record, the same analyses
+
+**My data** (top left) is the other half of the app. Drop a CSV or an Excel
+export, paste a table, or send the gauge you are looking at. `aquascope.ingest`
+works out which column is the date and which is the value, converts to SI and
+shows a QA report (gaps, duplicates, flat runs, outliers, units) before anything
+is computed. Then the [workbench](https://github.com/Rekin226/aquascope/blob/main/aquascope/workbench.py)
+analyses appear by tab:
+
+| tab | analyses |
+| --- | --- |
+| Quality | exploratory summary, quality report, preprocessing, insights, the WHO drinking-water screen |
+| Hydrology | flow-duration curve, baseflow separation (Lyne-Hollick, Eckhardt, UKIH), recession, flow signatures, FAO-56 ET0 and irrigation scheduling |
+| Extremes | GEV flood frequency, return periods (GEV / LP3 / Gumbel with confidence limits and the empirical points) |
+| Groundwater | standardised groundwater index with drought events, water-table-fluctuation recharge, Theis drawdown |
+
+Each has its own parameters, a chart, a JSON download, and its methods and
+citations, accumulated for whatever you actually ran. **Nothing is uploaded**:
+the file is read in your tab and the analysis runs there.
+
+These are the same functions the Streamlit dashboard used to own, so
+`aquascope dashboard`, the MCP server, `aquascope ask` and this page all run one
+implementation rather than four that drift. The public Streamlit deployments
+have been retired in favour of this.
+
+## Map layers
+
+The left rail is a layer stack, and every layer in it is keyless and free to
+use. Nothing here needs an account, and each carries its attribution and licence
+in the rail, in the map credits and in an info panel.
+
+**Basemaps**: OpenFreeMap light, dark and streets (OpenStreetMap data, ODbL);
+Sentinel-2 cloudless 2016 and 2025 from EOX; EOX Terrain Light; NASA GIBS VIIRS
+true colour for a chosen day; USGS imagery over the United States.
+
+**Terrain**: 3D terrain and hillshade from the AWS Terrain Tiles DEM, and a
+globe projection.
+
+**Overlays**, each with an opacity slider and its own colour scale: GPM IMERG
+precipitation rate, SMAP root-zone soil moisture, MODIS snow cover, MODIS land
+surface temperature, GRACE water storage anomaly, and ESA WorldCover land cover.
+The time-driven ones share a single date control, so you can walk a flood or a
+snowmelt day by day.
+
+**The gauges themselves** can be coloured by agency, by record length or by how
+recently they last reported, with a legend, and a density heat map shows where
+the world is actually measured. **Select an area** drags a box and hands back
+the gauges inside it as CSV.
+
+The whole state (basemap, overlays, opacity, date, terrain, globe, colouring)
+lives in the URL, so a view is a link.
+
+Google Maps and Google Earth tiles are deliberately absent: their terms forbid
+this use. Esri's legacy imagery answers without a token but Esri's own
+documentation requires one, so it is out too.
+
 ## Catchments
 
 For every USGS gauge, and for any point clicked in the United States, the
@@ -93,6 +149,38 @@ has no server, and the request is made by the browser worker (a plain
 unless you tick "remember", which stores it in your browser's local storage.
 The model has to support tool calling; the provider defaults do.
 
+### Three ways to use it, and only one needs a key
+
+**Worked examples.** The drawer opens on questions that were already answered
+and recorded: the question, every tool call with its arguments, the answer, and
+the checks. The prose is a recording, and the panel says so. **Run the tools
+again** re-runs the deterministic half in your own browser, live, with no key,
+and shows the fresh numbers beside the recorded ones. The traces are produced by
+`python -m aquascope.showcase` and published weekly by
+`.github/workflows/showcase.yml`, so they track the current archive.
+
+**On your device.** If your browser has Chrome's built-in Prompt API, Ask uses
+it directly. Otherwise you can choose to download a small open model (about 2 GB,
+WebLLM over WebGPU, cached by the browser after the first time). Neither is
+reliable at native tool calling at that size, so this tier uses a smaller loop:
+the model picks one tool at a time from five by replying with JSON, and after a
+few steps it writes the answer. It is labelled "on your device, reduced tool
+set" rather than presented as the full Analyst.
+
+**Your own key**, as described above, for the full tool loop.
+
+### For an assistant already in your browser
+
+Where the browser supports [WebMCP](https://github.com/webmachinelearning/webmcp)
+(`navigator.modelContext`), the Explorer registers `find_stations`,
+`analyze_station`, `anywhere`, `describe_catchment` and `show_on_map` as tools,
+so an assistant in the same browser can query every gauge in the archive with
+aquascope installed nowhere. It is entirely feature-detected: where the API is
+absent, which is most browsers today, nothing changes. For assistants outside
+the browser, `aquascope mcp` is the same tools over [MCP](mcp.md), including
+`station_view`, which returns an inline hydrograph view for clients that
+support the MCP Apps extension.
+
 ## What works today (Phase 0 of [#189](https://github.com/Rekin226/aquascope/issues/189))
 
 | source | record you get | analyses |
@@ -130,9 +218,13 @@ loop is nine times faster, same numbers to 1e-14), which is what makes
 
 `explorer/` in the repository, no build step:
 
-- `index.html`, `style.css`, `app.js`: map (MapLibre + CARTO raster basemap),
-  catalog (DuckDB-WASM over the archive's GeoParquet, GeoJSON fallback), search,
-  panel and Plotly charts.
+- `index.html`, `style.css` and ES modules under `src/` (still no bundler):
+  `map.js`, `layers.js` and `layer-ui.js` (MapLibre, the basemap and overlay
+  registry), `catalog.js` (DuckDB-WASM over the archive's GeoParquet, GeoJSON
+  fallback), `search.js`, `shell.js` and `url.js` (the three-pane shell and
+  URL-as-state), the `panel-*.js` inspectors, `charts.js` (Plotly), `ask.js`
+  with `showcase.js` and `local-model.js`, and `webmcp.js`. `app.js` wires them
+  together.
 - `worker.js`: a Web Worker that loads Pyodide, numpy / scipy / pandas, and the
   aquascope wheel, then calls `aquascope.explore`.
 - `aquascope.explore` (in the package): the Python half, the same

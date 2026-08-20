@@ -45,6 +45,11 @@ export function captureFocus(container, { onEscape = null, trap = false, restore
 
   const onKey = (e) => {
     if (e.key === "Escape" && onEscape) {
+      // A trapped surface owns every key. An untrapped one only owns Escape
+      // while focus is inside it: the search box and the area-select tool have
+      // their own meaning for Escape, and the open drawer must not eat theirs.
+      const where = e.target || document.activeElement;
+      if (!trap && where && !container.contains(where)) return;
       e.preventDefault();
       onEscape();
       return;

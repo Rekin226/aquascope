@@ -404,9 +404,11 @@ globalThis.document = {
   createElement: () => ({ setAttribute(k, v) { this[k] = v; }, className: "", textContent: "" }),
   body: { appendChild: (x) => { globalThis.__region = x; } },
 };
-const key = (k, shift = false) => {
+const outside = el("outside");
+const key = (k, shift = false, target = undefined) => {
   let prevented = false;
-  const ev = { key: k, shiftKey: shift, preventDefault: () => { prevented = true; } };
+  const ev = { key: k, shiftKey: shift, target: target === undefined ? globalThis.document.activeElement : target,
+               preventDefault: () => { prevented = true; } };
   for (const h of [...handlers]) h(ev);
   return prevented;
 };
@@ -492,3 +494,35 @@ def test_announcements_go_to_one_polite_live_region() -> None:
 def test_the_visually_hidden_class_the_live_region_uses_exists() -> None:
     css = (EXPLORER / "style.css").read_text(encoding="utf-8")
     assert ".visually-hidden" in css, "the live region would otherwise be visible on the page"
+
+
+@pytestmark_node
+def test_an_untrapped_surface_leaves_escape_alone_outside_itself() -> None:
+    """The Ask drawer must not eat the search box's Escape, or the area tool's."""
+    script = f"""
+    {FAKE_DOM}
+    const m = await import({json.dumps(A11Y.as_uri())});
+    let escapes = 0;
+    m.captureFocus(container, {{ onEscape: () => {{ escapes += 1; }} }});
+    const fromOutside = key("Escape", false, outside);
+    const inside = key("Escape", false, first);
+    console.log(JSON.stringify({{ escapes, fromOutside, inside }}));
+    """
+    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    got = json.loads(out.stdout)
+    assert got["escapes"] == 1, "Escape inside closes it; Escape elsewhere is somebody else's"
+    assert not got["fromOutside"] and got["inside"]
+
+
+@pytestmark_node
+def test_a_trapped_surface_owns_escape_wherever_it_came_from() -> None:
+    script = f"""
+    {FAKE_DOM}
+    const m = await import({json.dumps(A11Y.as_uri())});
+    let escapes = 0;
+    m.captureFocus(container, {{ trap: true, onEscape: () => {{ escapes += 1; }} }});
+    key("Escape", false, outside);
+    console.log(JSON.stringify(escapes));
+    """
+    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout) == 1

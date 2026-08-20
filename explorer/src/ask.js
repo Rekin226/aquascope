@@ -8,6 +8,7 @@
 // question carries what you are looking at, the run can be stopped, and the
 // key defaults to this tab only.
 
+import { CONFIG } from "../config.js?v=__BUILD__";
 import {
   $, actions, copyText, downloadBlob, escapeHtml, sourceStyle, state, stationKey,
 } from "./core.js?v=__BUILD__";
@@ -16,16 +17,30 @@ import { Cancelled, callCancelable, call, onAskProgress } from "./worker-client.
 import { map } from "./map.js?v=__BUILD__";
 import { visibleLayerSummary } from "./layer-ui.js?v=__BUILD__";
 
-// Defaults per provider. Groq retired llama-3.3-70b-versatile on 2026-08-16;
-// gpt-oss-120b is its production tool-calling model.
-const ASK_PROVIDERS = {
-  groq: { base_url: "https://api.groq.com/openai/v1", model: "openai/gpt-oss-120b" },
-  huggingface: { base_url: "https://router.huggingface.co/v1", model: "Qwen/Qwen2.5-72B-Instruct" },
-  openai: { base_url: "https://api.openai.com/v1", model: "gpt-4o-mini" },
-  mistral: { base_url: "https://api.mistral.ai/v1", model: "mistral-small-latest" },
-  openrouter: { base_url: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini" },
-  custom: { base_url: "", model: "" },
+// Providers come from the package's registry (aquascope/ai_engine/providers.py),
+// written to explorer/providers.json by `python -m aquascope.ai_engine.providers`.
+// The page used to keep its own copy, which drifted from the Python one until a
+// retired Groq model broke both. This small fallback only covers the case where
+// the JSON did not load at all.
+let ASK_PROVIDERS = {
+  groq: { label: "Groq (free tier, fast)", base_url: "https://api.groq.com/openai/v1", model: "openai/gpt-oss-120b" },
+  custom: { label: "Custom OpenAI-compatible endpoint", base_url: "", model: "" },
 };
+
+async function loadProviders() {
+  try {
+    const res = await fetch(`./providers.json?v=${CONFIG.build}`);
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json();
+    const next = {};
+    for (const p of data.providers || []) {
+      next[p.id] = { label: p.label, base_url: p.base_url || "", model: p.model || "", models: p.models || [], free: p.free, signup: p.signup, note: p.note };
+    }
+    if (Object.keys(next).length) ASK_PROVIDERS = next;
+  } catch (err) {
+    console.info("provider registry unavailable, using the built-in defaults:", err && err.message);
+  }
+}
 
 const ASK_EXAMPLES = [
   "What is the 100-year flood of the Thames at Kingston, and how sure can we be?",
@@ -302,8 +317,11 @@ export function mdToHtml(md) {
   return html.join("\n").replace(/<p>(Produced by aquascope[^<]*)<\/p>/, '<p class="foot">$1</p>');
 }
 
-export function initAsk() {
+export async function initAsk() {
+  await loadProviders();
   const provider = $("ask-provider"), model = $("ask-model"), baseRow = $("ask-base-url-row"), base = $("ask-base-url");
+  provider.innerHTML = Object.entries(ASK_PROVIDERS)
+    .map(([id, p]) => `<option value="${id}">${escapeHtml(p.label || id)}</option>`).join("");
   const saved = askSettings();
   if (saved.provider && ASK_PROVIDERS[saved.provider]) provider.value = saved.provider;
   const applyProvider = (keepModel) => {
@@ -312,6 +330,10 @@ export function initAsk() {
     if (!keepModel) model.value = p.model;
     if (provider.value !== "custom") base.value = p.base_url;
     model.placeholder = p.model || "model id";
+    const note = $("ask-provider-note");
+    const bits = [p.free, p.note].filter(Boolean);
+    note.textContent = bits.join(" ");
+    note.hidden = !bits.length;
   };
   applyProvider(Boolean(saved.model));
   if (saved.model) model.value = saved.model;

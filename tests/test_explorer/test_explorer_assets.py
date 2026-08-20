@@ -275,3 +275,25 @@ def test_record_length_comes_from_the_catalog_period() -> None:
     assert abs(data["years"] - 20) < 0.1
     assert abs(data["openEnded"] - 10) < 0.1, "an open-ended record runs to today"
     assert data["color"] != data["noColor"], "a station with no period is not coloured like one with 30 years"
+
+
+# ── the provider registry ───────────────────────────────────────────────────
+
+
+def test_explorer_provider_json_matches_the_python_registry() -> None:
+    """explorer/providers.json is generated; regenerate it when the registry changes."""
+    from aquascope.ai_engine.providers import as_json  # noqa: PLC0415
+
+    shipped = (EXPLORER / "providers.json").read_text(encoding="utf-8")
+    assert shipped == as_json(), (
+        "explorer/providers.json is stale: run `python -m aquascope.ai_engine.providers`"
+    )
+
+
+def test_the_page_has_no_second_provider_list() -> None:
+    """The model ids live in one place; the page keeps only a tiny offline fallback."""
+    ask = (EXPLORER / "src" / "ask.js").read_text(encoding="utf-8")
+    assert "providers.json" in ask, "the page must read the generated registry"
+    # The fallback is deliberately one provider plus `custom`; more than that is drift.
+    fallback = ask.split("let ASK_PROVIDERS = {", 1)[1].split("};", 1)[0]
+    assert fallback.count("base_url:") <= 2, "the offline fallback grew into a second registry"

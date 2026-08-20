@@ -20,6 +20,7 @@ from aquascope.ai_engine.knowledge_base import (
     METHODOLOGIES,
     ResearchMethodology,
 )
+from aquascope.ai_engine.providers import PROVIDERS as _REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -204,35 +205,16 @@ _OPENAI_HOST = "api.openai.com"
 _HUGGINGFACE_HOST = "huggingface.co"   # matches router.* and the retired api-inference.*
 _GROQ_HOST = "api.groq.com"
 
-# Public constants used by the dashboard UI
+# Public constants used by the dashboard UI. The registry
+# (aquascope.ai_engine.providers) is the single source: this module used to keep
+# its own copies, and they drifted from the analyst's until a retired Groq model
+# broke both at once.
 PROVIDER_BASE_URLS: dict[str, str | None] = {
-    "openai": None,
-    # api-inference.huggingface.co was retired and no longer resolves; the
-    # serverless inference API now lives behind router.huggingface.co.
-    "huggingface": "https://router.huggingface.co/v1",
-    "groq": "https://api.groq.com/openai/v1",
-    "ollama": "http://localhost:11434/v1",
+    p.id: (None if p.id == "openai" else p.base_url) for p in _REGISTRY.values()
 }
 
 PROVIDER_MODELS: dict[str, list[str]] = {
-    "openai": ["gpt-4o-mini", "gpt-4o"],
-    # Checked against https://router.huggingface.co/v1/models — the previous
-    # defaults (Mistral-7B-Instruct-v0.3, zephyr-7b-beta, Meta-Llama-3-8B)
-    # are no longer served and returned 404 for every request.
-    "huggingface": [
-        "Qwen/Qwen2.5-7B-Instruct",
-        "meta-llama/Llama-3.1-8B-Instruct",
-        "Qwen/Qwen3-8B",
-        "google/gemma-3-12b-it",
-        "microsoft/phi-4",
-    ],
-    # Groq retired llama-3.1-8b-instant and llama-3.3-70b-versatile on 2026-08-16
-    # (console.groq.com/docs/deprecations); these are the production chat models now.
-    "groq": [
-        "openai/gpt-oss-120b",
-        "openai/gpt-oss-20b",
-    ],
-    "ollama": ["mistral", "llama3.2", "qwen2.5:7b"],
+    p.id: list(p.models or [p.model]) for p in _REGISTRY.values()
 }
 
 # ── Deployment-supplied ("hosted") credentials ───────────────────────

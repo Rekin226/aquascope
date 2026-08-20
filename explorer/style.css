@@ -275,6 +275,7 @@ table.regime td:first-child { white-space: nowrap; }
 }
 .ask-grid .ask-remember { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: .4rem; }
 .ask-grid .ask-remember input { width: auto; }
+.ask-provider-note { font-size: .74rem; line-height: 1.45; margin: .4rem 0 0; }
 .ask-privacy { font-size: .75rem; line-height: 1.45; margin: .5rem 0 0; }
 #ask-question { width: 100%; font: inherit; font-size: .9rem; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px; resize: vertical; margin-top: .4rem; background: var(--bg); color: var(--ink); }
 .ask-context-toggle { display: flex; align-items: center; gap: .35rem; font-size: .76rem; color: var(--muted); margin-top: .35rem; }

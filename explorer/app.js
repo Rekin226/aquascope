@@ -103,7 +103,7 @@ function goHome() {
   initTabs($("panel-point"));
   initStationPanel();
   initPointPanel();
-  initAsk();
+  initAsk();   // async: fills the provider list from providers.json
   initSearch();
   initUrl();
   actions.applyUrl = applyUrl;

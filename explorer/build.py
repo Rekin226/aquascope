@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "explorer"
 # Every text asset of the app, including the ES modules in explorer/src/.
-TEXT_GLOBS = ("*.html", "*.js", "*.css", "src/*.js")
+TEXT_GLOBS = ("*.html", "*.js", "*.css", "*.json", "src/*.js")
 SKIP = {"build.py"}
 
 

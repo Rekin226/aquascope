@@ -339,20 +339,14 @@
         <summary>Model and key</summary>
         <div class="ask-grid">
           <label>Provider
-            <select id="ask-provider">
-              <option value="groq">Groq (free tier, fast)</option>
-              <option value="huggingface">Hugging Face (free with an account)</option>
-              <option value="openai">OpenAI</option>
-              <option value="mistral">Mistral</option>
-              <option value="openrouter">OpenRouter</option>
-              <option value="custom">Custom OpenAI-compatible endpoint</option>
-            </select>
+            <select id="ask-provider"></select>
           </label>
           <label>Model <input id="ask-model" type="text" autocomplete="off" spellcheck="false" /></label>
           <label id="ask-base-url-row" hidden>Base URL <input id="ask-base-url" type="url" placeholder="https://host/v1" autocomplete="off" spellcheck="false" /></label>
           <label>API key <input id="ask-key" type="password" autocomplete="off" placeholder="paste your key" /></label>
           <label class="ask-remember"><input id="ask-remember" type="checkbox" /> keep the key in this browser after I close the tab</label>
         </div>
+        <p id="ask-provider-note" class="muted ask-provider-note" hidden></p>
         <p class="muted ask-privacy">Your key goes from this tab straight to the provider you chose (this page has no server), and the model
           must support tool calling. By default it is kept for this tab only. Free keys:
           <a href="https://console.groq.com/keys" target="_blank" rel="noopener">Groq</a>,

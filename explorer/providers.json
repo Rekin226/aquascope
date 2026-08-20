@@ -1,0 +1,87 @@
+{
+  "generated_by": "python -m aquascope.ai_engine.providers",
+  "providers": [
+    {
+      "id": "groq",
+      "label": "Groq (free tier, fast)",
+      "base_url": "https://api.groq.com/openai/v1",
+      "model": "openai/gpt-oss-120b",
+      "models": [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b"
+      ],
+      "free": "Free tier: about 1,000 requests a day, 8k tokens a minute.",
+      "signup": "https://console.groq.com/keys",
+      "browser": true,
+      "note": null
+    },
+    {
+      "id": "huggingface",
+      "label": "Hugging Face (free with an account)",
+      "base_url": "https://router.huggingface.co/v1",
+      "model": "Qwen/Qwen2.5-72B-Instruct",
+      "models": [
+        "Qwen/Qwen2.5-72B-Instruct",
+        "Qwen/Qwen2.5-7B-Instruct",
+        "meta-llama/Llama-3.1-8B-Instruct"
+      ],
+      "free": "Free accounts get a small monthly credit on Inference Providers.",
+      "signup": "https://huggingface.co/settings/tokens",
+      "browser": true,
+      "note": null
+    },
+    {
+      "id": "openai",
+      "label": "OpenAI",
+      "base_url": "https://api.openai.com/v1",
+      "model": "gpt-4o-mini",
+      "models": [
+        "gpt-4o-mini",
+        "gpt-4o"
+      ],
+      "free": null,
+      "signup": "https://platform.openai.com/api-keys",
+      "browser": true,
+      "note": null
+    },
+    {
+      "id": "mistral",
+      "label": "Mistral",
+      "base_url": "https://api.mistral.ai/v1",
+      "model": "mistral-small-latest",
+      "models": [
+        "mistral-small-latest",
+        "mistral-large-latest"
+      ],
+      "free": null,
+      "signup": "https://console.mistral.ai/api-keys/",
+      "browser": true,
+      "note": null
+    },
+    {
+      "id": "openrouter",
+      "label": "OpenRouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "model": "openai/gpt-4o-mini",
+      "models": [
+        "openai/gpt-4o-mini",
+        "google/gemma-3-27b-it"
+      ],
+      "free": "Models whose id ends in `:free` cost nothing, with a small daily cap.",
+      "signup": "https://openrouter.ai/keys",
+      "browser": true,
+      "note": null
+    },
+    {
+      "id": "custom",
+      "label": "Custom OpenAI-compatible endpoint",
+      "base_url": "",
+      "model": "",
+      "models": [],
+      "free": null,
+      "signup": null,
+      "browser": true,
+      "note": "Any endpoint that speaks /chat/completions with tool calling."
+    }
+  ]
+}

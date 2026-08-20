@@ -28,26 +28,18 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aquascope import __version__
+from aquascope.ai_engine.providers import ENV_SCAN_ORDER
+from aquascope.ai_engine.providers import PROVIDERS as _REGISTRY
 
 logger = logging.getLogger(__name__)
 
 MAX_TOOL_RESULT_CHARS = 14_000
 
+# One registry for the whole project (aquascope.ai_engine.providers); this dict
+# is the shape the loop already used, kept so callers and tests do not change.
 PROVIDERS: dict[str, dict[str, str | None]] = {
-    "openai": {"base_url": None, "model": "gpt-4o-mini", "env": "OPENAI_API_KEY"},
-    # Groq retired llama-3.3-70b-versatile on 2026-08-16 (console.groq.com/docs/deprecations);
-    # gpt-oss-120b is the production tool-calling model on the free tier.
-    "groq": {
-        "base_url": "https://api.groq.com/openai/v1", "model": "openai/gpt-oss-120b", "env": "GROQ_API_KEY",
-    },
-    "huggingface": {
-        "base_url": "https://router.huggingface.co/v1", "model": "Qwen/Qwen2.5-72B-Instruct", "env": "HF_TOKEN",
-    },
-    "mistral": {"base_url": "https://api.mistral.ai/v1", "model": "mistral-small-latest", "env": "MISTRAL_API_KEY"},
-    "openrouter": {
-        "base_url": "https://openrouter.ai/api/v1", "model": "openai/gpt-4o-mini", "env": "OPENROUTER_API_KEY",
-    },
-    "ollama": {"base_url": "http://localhost:11434/v1", "model": "qwen2.5:7b", "env": None},
+    p.id: {"base_url": None if p.id == "openai" else p.base_url, "model": p.model, "env": p.env}
+    for p in _REGISTRY.values()
 }
 
 SYSTEM_PROMPT = """You are AquaScope's analyst, a careful hydrologist's assistant.
@@ -187,7 +179,7 @@ def resolve_llm(
             "model": model or os.environ.get("AQUASCOPE_LLM_MODEL") or PROVIDERS["huggingface"]["model"],
         }
     if provider is None:
-        for name in ("openai", "groq", "huggingface", "mistral", "openrouter"):
+        for name in ENV_SCAN_ORDER:
             env = PROVIDERS[name]["env"]
             if env and os.environ.get(env):
                 provider = name

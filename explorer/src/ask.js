@@ -17,6 +17,7 @@ import { Cancelled, callCancelable, call, onAskProgress } from "./worker-client.
 import { map } from "./map.js?v=__BUILD__";
 import { visibleLayerSummary } from "./layer-ui.js?v=__BUILD__";
 import { initShowcase } from "./showcase.js?v=__BUILD__";
+import { askLocally, describeLocal, localAnswerHtml, localModelPossible } from "./local-model.js?v=__BUILD__";
 
 // Providers come from the package's registry (aquascope/ai_engine/providers.py),
 // written to explorer/providers.json by `python -m aquascope.ai_engine.providers`.
@@ -178,9 +179,54 @@ async function ensureCatalogInWorker() {
   state.ask.catalogSent = true;
 }
 
+function currentTier() {
+  const el = document.querySelector('input[name="ask-tier"]:checked');
+  return el ? el.value : "key";
+}
+
+// The device tier: a small model here, a reduced tool set, tools run in the
+// worker exactly as they do for the full loop.
+async function runLocally(question) {
+  const ctx = $("ask-use-context").checked ? contextLine() : "";
+  state.ask.running = true;
+  $("ask-run").disabled = true;
+  $("ask-run").textContent = "Working…";
+  $("ask-log").innerHTML = "";
+  $("ask-log").hidden = false;
+  $("ask-result").hidden = true;
+  $("ask-checks").hidden = true;
+  askStatus("Starting the model on your device…");
+  try {
+    const res = await askLocally(question, {
+      callTool: (name, args) => call("tool", { name, arguments: args }),
+      onEvent: (m) => (m.startsWith("tool ") ? askLog(m) : askStatus(m)),
+      context: ctx,
+    });
+    askStatus("");
+    state.ask.markdown = `# ${question}\n\n${res.answer}\n`;
+    $("ask-result").innerHTML = localAnswerHtml(res);
+    $("ask-result").hidden = false;
+    $("ask-copy").hidden = false;
+    $("ask-download").hidden = false;
+    $("ask-study").hidden = true;
+    $("ask-rerun").hidden = true;
+  } catch (err) {
+    askStatus(`The on-device model could not run: ${err.message}`, "error");
+  } finally {
+    state.ask.running = false;
+    $("ask-run").disabled = false;
+    $("ask-run").textContent = "Ask";
+  }
+}
+
 async function runAsk() {
   if (state.ask.running) return;
   const question = $("ask-question").value.trim();
+  if (currentTier() === "local") {
+    if (!question) { askStatus("Type a question first.", "warn"); return; }
+    await runLocally(question);
+    return;
+  }
   const provider = $("ask-provider").value;
   const key = $("ask-key").value.trim();
   const model = $("ask-model").value.trim() || ASK_PROVIDERS[provider].model;
@@ -395,5 +441,20 @@ export async function initAsk() {
   });
   onAskProgress(askLog);
   initShowcase();
+
+  // The device tier is offered only where it can actually run.
+  const possible = localModelPossible();
+  $("ask-local-note").textContent = describeLocal();
+  const localRadio = document.querySelector('input[name="ask-tier"][value="local"]');
+  localRadio.disabled = !possible;
+  for (const r of document.querySelectorAll('input[name="ask-tier"]')) {
+    r.addEventListener("change", () => {
+      const local = currentTier() === "local";
+      $("ask-settings").hidden = local;
+      askStatus(local
+        ? "Nothing leaves this tab: the model runs here, and so do the tools."
+        : "");
+    });
+  }
   actions.openAsk = openAsk;
 }

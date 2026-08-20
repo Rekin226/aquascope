@@ -35,8 +35,10 @@ MAX_TOOL_RESULT_CHARS = 14_000
 
 PROVIDERS: dict[str, dict[str, str | None]] = {
     "openai": {"base_url": None, "model": "gpt-4o-mini", "env": "OPENAI_API_KEY"},
+    # Groq retired llama-3.3-70b-versatile on 2026-08-16 (console.groq.com/docs/deprecations);
+    # gpt-oss-120b is the production tool-calling model on the free tier.
     "groq": {
-        "base_url": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile", "env": "GROQ_API_KEY",
+        "base_url": "https://api.groq.com/openai/v1", "model": "openai/gpt-oss-120b", "env": "GROQ_API_KEY",
     },
     "huggingface": {
         "base_url": "https://router.huggingface.co/v1", "model": "Qwen/Qwen2.5-72B-Instruct", "env": "HF_TOKEN",

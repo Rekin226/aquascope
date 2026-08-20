@@ -372,7 +372,9 @@ function renderPoint(res) {
       ["aridity", `${fmt(c.aridity_index, 2)}`, c.aridity_class || "P / ET0"],
       ["temperature", `${fmt(c.temperature_mean_c, 1)} °C`, `wettest day ${fmt(c.wettest_day_mm, 0)} mm`],
     ].map(([l, v, s]) => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
-    const months = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+    // Distinct labels: Plotly merges categorical x values with the same name, so
+    // one-letter months collapsed May/Jun/Jul/Aug into Mar/Jan/Apr and drew 8 bars.
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     Plotly.react("plot-climate", [
       { x: months, y: c.monthly_precipitation_mm, type: "bar", name: "rain (mm)", marker: { color: "#1565c0" } },
       { x: months, y: c.monthly_et0_mm, type: "scatter", mode: "lines+markers", name: "ET0 (mm)", line: { color: "#ef6c00" } },
@@ -1130,7 +1132,7 @@ function renderFfaPlot(ffa, unit, color) {
 // ends with Data and Methods sections assembled from tool results.
 
 const ASK_PROVIDERS = {
-  groq: { base_url: "https://api.groq.com/openai/v1", model: "llama-3.3-70b-versatile" },
+  groq: { base_url: "https://api.groq.com/openai/v1", model: "openai/gpt-oss-120b" },
   huggingface: { base_url: "https://router.huggingface.co/v1", model: "Qwen/Qwen2.5-72B-Instruct" },
   openai: { base_url: "https://api.openai.com/v1", model: "gpt-4o-mini" },
   mistral: { base_url: "https://api.mistral.ai/v1", model: "mistral-small-latest" },

@@ -12,6 +12,8 @@ All notable changes to AquaScope are documented here.
 
 ### Fixed
 - `aquascope.models` no longer imports the scikit-learn ensembles at package import time (PEP 562 lazy attributes), so `from aquascope.models.rainfall_runoff import GR4J`, `aquascope.gym` and `pip install "aquascope[gym]"` work on a bare install; the ensembles still import on first use with the `ml` extra.
+- Groq retired `llama-3.3-70b-versatile` and `llama-3.1-8b-instant` on 2026-08-16, so `aquascope ask --provider groq`, the Explorer's Ask panel and the dashboard recommender failed with a model-not-found error on the default. The Groq defaults are now `openai/gpt-oss-120b` (analyst, Explorer) and `openai/gpt-oss-120b` / `openai/gpt-oss-20b` (recommender picker); an explicit `--model` still wins.
+- Explorer: the "Monthly climate" chart on the click-anywhere card drew eight bars instead of twelve. Plotly merges categorical x values with the same label, and the one-letter month labels repeated (M, J, A), so May, June, July and August were folded into March, January and April. Months are now labelled Jan..Dec.
 
 ## [0.12.0] - 2026-08-18
 

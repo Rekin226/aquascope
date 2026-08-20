@@ -226,10 +226,11 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "google/gemma-3-12b-it",
         "microsoft/phi-4",
     ],
+    # Groq retired llama-3.1-8b-instant and llama-3.3-70b-versatile on 2026-08-16
+    # (console.groq.com/docs/deprecations); these are the production chat models now.
     "groq": [
-        "llama-3.1-8b-instant",
-        "llama-3.3-70b-versatile",
-        "llama3-8b-8192",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
     ],
     "ollama": ["mistral", "llama3.2", "qwen2.5:7b"],
 }

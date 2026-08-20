@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 import streamlit as st
 
+from aquascope import workbench
 from aquascope.dashboard import _state
 
 WHO_GUIDELINES: dict[str, tuple[float, float, str]] = {
@@ -47,41 +48,10 @@ class Insights:
 
 
 def who_exceedances(df: pd.DataFrame, prof: _state.DataProfile) -> list[dict]:
-    """Per-parameter WHO exceedance stats for long-format quality data."""
-    if not prof.has_params:
-        return []
-    results = []
-    params = df[prof.param_col].astype(str).str.lower().unique()
-    for param in params:
-        if param not in WHO_GUIDELINES:
-            continue
-        lo, hi, unit = WHO_GUIDELINES[param]
-        subset = df[df[prof.param_col].astype(str).str.lower() == param][prof.value_col].dropna()
-        if subset.empty:
-            continue
-        n = len(subset)
-        if hi == float("inf"):
-            n_exceed = int((subset < lo).sum())
-            rule = f"≥ {lo} {unit}"
-        elif lo == 0:
-            n_exceed = int((subset > hi).sum())
-            rule = f"≤ {hi} {unit}"
-        else:
-            n_exceed = int(((subset < lo) | (subset > hi)).sum())
-            rule = f"{lo}–{hi} {unit}"
-        pct = n_exceed / n * 100 if n else 0.0
-        plain = "Alert" if pct > 10 else "Warning" if pct > 0 else "OK"
-        results.append(
-            {
-                "parameter": param,
-                "rule": rule,
-                "n": n,
-                "n_exceed": n_exceed,
-                "pct": round(pct, 1),
-                "status_plain": plain,
-            }
-        )
-    return results
+    """Per-parameter WHO screen. The rule lives in aquascope.workbench.who_screen."""
+    rows = workbench.who_screen(df)["rows"]
+    # The panel still speaks its own key for the status.
+    return [{**r, "status_plain": r["status"]} for r in rows]
 
 
 def build(df: pd.DataFrame, prof: _state.DataProfile) -> Insights:

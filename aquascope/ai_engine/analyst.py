@@ -154,6 +154,21 @@ def _tool_specs() -> list[ToolSpec]:
             t.regionalize_signatures,
         ),
         ToolSpec(
+            "list_analyses",
+            "The analyses available for a table of the user's own data (the workbench): what each needs and does.",
+            {"type": "object", "properties": {}}, t.list_analyses,
+        ),
+        ToolSpec(
+            "analyse_table",
+            "Run one workbench analysis on a table the user supplied as CSV text: eda, quality, who_screen, "
+            "flow_duration, baseflow, recession, flood_frequency, signatures, return_periods, sgi_drought, "
+            "recharge, aquifer_drawdown. params carries the analysis's own options.",
+            {"type": "object", "properties": {"csv": {"type": "string"}, "analysis": {"type": "string"},
+                                              "params": {"type": "object"}},
+             "required": ["analysis"]},
+            t.analyse_table,
+        ),
+        ToolSpec(
             "describe_methods", "What each analysis computes and the reference to cite.",
             {"type": "object", "properties": {}}, t.describe_methods,
         ),

@@ -63,11 +63,15 @@ STATION_VARIABLE_CODES: dict[str, tuple[str, ...]] = {
 }
 
 # 50 states + DC + territories, as the NWIS site service's stateCd expects.
+# NWIS uses FIPS 5-1 alpha codes, where American Samoa is "aq" (not the newer
+# postal "as", which the service rejects with HTTP 400). Micronesia (fm),
+# Marshall Islands (mh) and Palau (pw) are included so their stations are swept
+# too.
 NWIS_STATE_CODES: tuple[str, ...] = (
     "al", "ak", "az", "ar", "ca", "co", "ct", "de", "dc", "fl", "ga", "hi", "id", "il", "in", "ia", "ks", "ky",
     "la", "me", "md", "ma", "mi", "mn", "ms", "mo", "mt", "ne", "nv", "nh", "nj", "nm", "ny", "nc", "nd", "oh",
     "ok", "or", "pa", "ri", "sc", "sd", "tn", "tx", "ut", "vt", "va", "wa", "wv", "wi", "wy", "pr", "vi", "gu",
-    "as", "mp",
+    "aq", "mp", "fm", "mh", "pw",
 )
 
 

@@ -16,6 +16,7 @@ import { closeDrawer, drawerOpen, openDrawer, setStatusEl } from "./shell.js?v=_
 import { Cancelled, callCancelable, call, onAskProgress } from "./worker-client.js?v=__BUILD__";
 import { map } from "./map.js?v=__BUILD__";
 import { visibleLayerSummary } from "./layer-ui.js?v=__BUILD__";
+import { initShowcase } from "./showcase.js?v=__BUILD__";
 
 // Providers come from the package's registry (aquascope/ai_engine/providers.py),
 // written to explorer/providers.json by `python -m aquascope.ai_engine.providers`.
@@ -393,5 +394,6 @@ export async function initAsk() {
     if (state.ask.study) downloadBlob("study.yaml", state.ask.study, "text/yaml");
   });
   onAskProgress(askLog);
+  initShowcase();
   actions.openAsk = openAsk;
 }

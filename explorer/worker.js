@@ -231,6 +231,32 @@ json.dumps({"n": int(len(_STORE["frame"])), "columns": ["date", "discharge"],
   post("result", { id, result: JSON.parse(out) });
 }
 
+
+// Run one analyst tool by name, for the showcase's "run the tools again": the
+// deterministic half of a recorded answer, live, with no model and no key.
+async function runTool({ id, name, arguments: args }) {
+  self.__aqTool = JSON.stringify({ name, args: args || {} });
+  const code = `
+import json
+from js import __aqTool
+from aquascope.ai_engine import analyst as _analyst
+_a = json.loads(__aqTool)
+_specs = {s.name: s for s in _analyst._tool_specs()}
+_spec = _specs.get(_a["name"])
+if _spec is None:
+    _out = {"error": f"unknown tool {_a['name']}"}
+else:
+    try:
+        _out = _spec.func(**(_a.get("args") or {}))
+    except Exception as exc:
+        _out = {"error": f"{type(exc).__name__}: {exc}"}
+json.dumps(_out, default=str)
+`;
+  const out = await pyodide.runPythonAsync(code);
+  self.__aqTool = null;
+  post("result", { id, result: JSON.parse(out) });
+}
+
 self.onmessage = async (e) => {
   const m = e.data;
   try {
@@ -245,6 +271,7 @@ self.onmessage = async (e) => {
     if (m.type === "ingest") return await ingestText(m);
     if (m.type === "load_table") return await loadTable(m);
     if (m.type === "workbench") return await workbench(m);
+    if (m.type === "tool") return await runTool(m);
     if (m.type === "frame_from_station") return await frameFromStation(m);
   } catch (err) {
     // Pyodide raises PythonError with the full traceback in .message; keep the

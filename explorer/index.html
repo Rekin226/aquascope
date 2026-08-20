@@ -431,12 +431,14 @@
       <textarea id="ask-question" rows="3" placeholder="e.g. What is the 100-year flood of the Thames at Kingston, and how sure can we be?"></textarea>
       <label class="ask-context-toggle"><input type="checkbox" id="ask-use-context" checked /> tell it what I am looking at</label>
       <p id="ask-context" class="muted ask-context" hidden><span id="ask-context-text"></span></p>
+      <div id="ask-showcase" class="ask-showcase" hidden></div>
       <div id="ask-examples" class="ask-examples"></div>
       <div class="row-actions">
         <button id="ask-run" class="btn primary">Ask</button>
         <button id="ask-stop" class="btn" hidden>Stop</button>
         <button id="ask-copy" class="btn" hidden>Copy Markdown</button>
         <button id="ask-download" class="btn" hidden>Download .md</button>
+        <button id="ask-rerun" class="btn" hidden title="Run this answer's tool calls again here, live, with no key">Run the tools again</button>
         <button id="ask-study" class="btn" hidden title="The steps behind this answer, to run again with `aquascope run study.yaml`">Download study.yaml</button>
       </div>
       <div id="ask-status" class="status" hidden></div>

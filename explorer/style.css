@@ -396,3 +396,12 @@ body.workbench-mode .panel { width: auto; flex: 1; }
 .ask-checks[hidden] { display: none; }
 .ask-code { background: var(--bg-soft); padding: .35rem .5rem; border-radius: 6px; margin: .25rem 0 0;
   font-size: .72rem; overflow: auto; max-height: 160px; white-space: pre-wrap; }
+
+/* Worked examples, for readers with no key (#233). */
+.ask-showcase { margin: .6rem 0; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-soft); }
+.ask-showcase[hidden] { display: none; }
+.showcase-head { font-size: .78rem; margin-bottom: .35rem; }
+.showcase-list { display: flex; flex-direction: column; gap: .25rem; }
+.showcase-chip { text-align: left; font-size: .74rem; }
+.showcase-note { font-size: .76rem; color: var(--muted); border-left: 2px solid var(--line); padding-left: .5rem; margin-bottom: .6rem; line-height: 1.5; }
+.ask-log .changed { color: var(--warn-ink); }

@@ -23,7 +23,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "explorer"
-TEXT_FILES = ("index.html", "app.js", "worker.js", "gr4j.js", "config.js", "style.css")
+# Every text asset of the app, including the ES modules in explorer/src/.
+TEXT_GLOBS = ("*.html", "*.js", "*.css", "src/*.js")
+SKIP = {"build.py"}
+
+
+def text_files() -> list[Path]:
+    """Explorer sources to copy, relative to ``explorer/`` and in a stable order."""
+    out: list[Path] = []
+    for pattern in TEXT_GLOBS:
+        for path in sorted(SRC.glob(pattern)):
+            rel = path.relative_to(SRC)
+            if rel.name in SKIP or rel in out:
+                continue
+            out.append(rel)
+    return out
 
 
 def _git_sha() -> str:
@@ -46,9 +60,11 @@ def build_wheel() -> Path:
 
 def assemble(out: Path, wheel: Path, build: str, space_readme: bool = True) -> None:
     out.mkdir(parents=True, exist_ok=True)
-    for name in TEXT_FILES:
-        text = (SRC / name).read_text(encoding="utf-8").replace("__BUILD__", build)
-        (out / name).write_text(text, encoding="utf-8")
+    for rel in text_files():
+        text = (SRC / rel).read_text(encoding="utf-8").replace("__BUILD__", build)
+        dest = out / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(text, encoding="utf-8")
     shutil.copy2(wheel, out / wheel.name)
     (out / "wheels.json").write_text(json.dumps({"wheel": wheel.name, "build": build}), encoding="utf-8")
     if space_readme:

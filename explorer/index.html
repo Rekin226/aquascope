@@ -5,81 +5,86 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AquaScope Explorer: click any gauge on Earth</title>
   <meta name="description" content="Every public water gauge AquaScope can reach, on one map. Click a station for the observed record, flood frequency, flow duration and trend, computed in your browser." />
+  <meta property="og:title" content="AquaScope Explorer" />
+  <meta property="og:description" content="Click any public water gauge on Earth: the observed record, flood frequency with confidence limits, flow duration, trend and a rainfall-runoff model, computed in your browser. Nothing to install." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌊</text></svg>" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="./style.css?v=__BUILD__" />
 </head>
 <body>
+  <a class="skip" href="#panel">Skip to the results panel</a>
+
   <header id="top">
     <div class="brand">
-      <span class="logo">🌊</span>
-      <div>
-        <h1>AquaScope Explorer</h1>
-        <p class="tagline">Every public gauge we can reach, on one map. Click one. Nothing to install.</p>
-      </div>
+      <button id="btn-rail" class="icon-btn only-narrow" aria-expanded="false" aria-controls="rail" title="Layers and sources">☰</button>
+      <button id="btn-home" class="brand-btn" title="Back to the start">
+        <span class="logo" aria-hidden="true">🌊</span>
+        <span class="brand-text">
+          <span class="brand-name">AquaScope Explorer</span>
+          <span class="tagline">Every public gauge we can reach, on one map.</span>
+        </span>
+      </button>
     </div>
     <div class="controls">
-      <input id="search" type="search" placeholder="Search station name or id…" autocomplete="off" />
-      <div id="search-results" class="search-results" hidden></div>
-      <div id="legend" class="legend" title="Toggle sources"></div>
-      <span id="count" class="count">loading catalog…</span>
-      <button id="btn-ask" class="btn ask-toggle" title="Ask a question in plain language; answered from real gauges by aquascope's tools, in your browser">Ask ✨</button>
+      <div class="search-wrap">
+        <input id="search" type="search" placeholder="Search a gauge, river or id…  (press /)" autocomplete="off"
+               role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list" />
+        <div id="search-results" class="search-results" role="listbox" aria-label="Search results" hidden></div>
+      </div>
+      <button id="btn-cite-top" class="btn" title="How to cite AquaScope and the data">Cite</button>
+      <button id="btn-ask" class="btn ask-toggle" aria-expanded="false" aria-controls="drawer"
+              title="Ask a question in plain language; answered from real gauges by aquascope's tools, in your browser">Ask ✨</button>
     </div>
   </header>
 
+  <div id="boot" class="boot" hidden>
+    <div id="boot-fill" class="boot-fill"></div>
+    <span id="boot-label" class="boot-label"></span>
+  </div>
+
   <main>
-    <div id="map" role="application" aria-label="World map of water gauges"></div>
-
-    <aside id="panel" class="panel" aria-live="polite">
-      <div id="panel-ask" hidden>
-        <div class="station-head">
-          <span class="badge" style="background:#6a1b9a">Analyst</span>
-          <h2>Ask AquaScope</h2>
-          <div class="st-meta">A question in plain language. A model picks the tools (find stations, analyse a record, flood frequency,
-            climate of a point); aquascope runs them here in your browser; the answer ends with the data used and the
-            methods with citations, assembled from the tool results, not from the model.</div>
-        </div>
-        <details id="ask-settings" class="ask-settings" open>
-          <summary>Model and key</summary>
-          <div class="ask-grid">
-            <label>Provider
-              <select id="ask-provider">
-                <option value="groq">Groq (free tier, fast)</option>
-                <option value="huggingface">Hugging Face (free with an account)</option>
-                <option value="openai">OpenAI</option>
-                <option value="mistral">Mistral</option>
-                <option value="openrouter">OpenRouter</option>
-                <option value="custom">Custom OpenAI-compatible endpoint</option>
-              </select>
-            </label>
-            <label>Model <input id="ask-model" type="text" autocomplete="off" spellcheck="false" /></label>
-            <label id="ask-base-url-row" hidden>Base URL <input id="ask-base-url" type="url" placeholder="https://host/v1" autocomplete="off" spellcheck="false" /></label>
-            <label>API key <input id="ask-key" type="password" autocomplete="off" placeholder="paste your key" /></label>
-            <label class="ask-remember"><input id="ask-remember" type="checkbox" /> remember the key in this browser</label>
-          </div>
-          <p class="muted ask-privacy">Your key goes from this tab straight to the provider you chose (this page has no server), and the model
-            must support tool calling. Free keys: <a href="https://console.groq.com/keys" target="_blank" rel="noopener">Groq</a>,
-            <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">Hugging Face</a>.</p>
-        </details>
-        <textarea id="ask-question" rows="3" placeholder="e.g. What is the 100-year flood of the Thames at Kingston, and how sure can we be?"></textarea>
-        <div id="ask-examples" class="ask-examples"></div>
-        <div class="st-actions">
-          <button id="ask-run" class="btn primary">Ask</button>
-          <button id="ask-copy" class="btn" hidden>Copy Markdown</button>
-          <button id="ask-download" class="btn" hidden>Download .md</button>
-        </div>
-        <div id="ask-status" class="status" hidden></div>
-        <ol id="ask-log" class="ask-log" hidden></ol>
-        <div id="ask-stations" class="ask-stations" hidden></div>
-        <article id="ask-result" class="ask-result" hidden></article>
+    <nav id="rail" class="rail" aria-label="Layers and sources">
+      <div class="rail-head">
+        <h2>Gauges</h2>
+        <span id="count" class="count">loading catalog…</span>
       </div>
+      <div id="rail-sources" class="rail-list"></div>
+      <div class="rail-head"><h2>Overlays</h2></div>
+      <div class="rail-list">
+        <label class="rail-row">
+          <input type="checkbox" id="toggle-basins" />
+          <i style="background:#6a1b9a;border-radius:2px"></i>
+          <span class="rail-label">Catchments (BasinATLAS)</span>
+        </label>
+      </div>
+      <p class="rail-foot muted">
+        Catalog: <a href="https://huggingface.co/datasets/Rekin226/aquascope-gauges" target="_blank" rel="noopener">Rekin226/aquascope-gauges</a>,
+        GeoParquet, rebuilt weekly. More layers are coming (<a href="https://github.com/Rekin226/aquascope/issues/232" target="_blank" rel="noopener">#232</a>).
+      </p>
+    </nav>
 
+    <div class="map-wrap">
+      <div id="map" role="application" aria-label="World map of water gauges"></div>
+      <div id="map-fallback" class="map-fallback" hidden>
+        <div id="map-fallback-text" class="status warn"></div>
+      </div>
+    </div>
+
+    <aside id="panel" class="panel">
+      <!-- welcome -->
       <div id="panel-empty" class="panel-empty">
         <h2>Pick a gauge</h2>
         <p>Click any dot on the map, or search by name. You get the observed record straight from the agency,
-        plus flood frequency, flow duration and trend, computed here in your browser by
-        <a href="https://github.com/Rekin226/aquascope" target="_blank" rel="noopener">aquascope</a>.</p>
-        <p class="muted">Catalog: <a id="dataset-link" href="https://huggingface.co/datasets/Rekin226/aquascope-gauges" target="_blank" rel="noopener">Rekin226/aquascope-gauges</a> (GeoParquet, updated weekly).</p>
+          plus flood frequency, flow duration, trend and a rainfall-runoff model, computed here in your browser by
+          <a href="https://github.com/Rekin226/aquascope" target="_blank" rel="noopener">aquascope</a>.</p>
+        <div class="try">
+          <span class="muted">Try:</span>
+          <button class="chip" data-try="s" data-key="usgs/USGS-01013500">a US gauge</button>
+          <button class="chip" data-try="p" data-lat="25.05" data-lon="121.55">the climate of Taipei</button>
+          <button class="chip" data-try="ask">the Analyst</button>
+        </div>
         <details class="tips">
           <summary>What works today</summary>
           <ul>
@@ -87,119 +92,276 @@
             <li><strong>PEGELONLINE</strong>, <strong>Ireland OPW</strong>: the last ~month (that is all those feeds publish) → hydrograph.</li>
             <li><strong>Taiwan CWA</strong>: daily rainfall, last 10 years.</li>
             <li>Click anywhere that is not a gauge: ERA5 rainfall, temperature, FAO-56 ET0, aridity, and GloFAS modelled discharge for that spot, plus the nearest gauges.</li>
-            <li><strong>Catchments</strong>: for USGS gauges and any point in the US, the upstream drainage basin is drawn on the map (USGS NLDI over NHDPlus V2, public domain), with its area. Everywhere on land, the BasinATLAS sub-basin (HydroATLAS, CC BY 4.0) gives the upstream area, climate, land cover, soils and population of the catchment, and the upstream sub-basins light up on the map (toggle "Basins" in the legend).</li>
-            <li><strong>Similar gauged basins</strong>: for any point or station, the gauges whose catchments look most like it (attributes + distance), the donor list for an ungauged site.</li>
-            <li><strong>Ask ✨</strong> (top right): a plain-language question, answered from real gauges with a Data and Methods section. Bring your own key (Groq and Hugging Face have free tiers).</li>
-            <li>First analysis loads Python in your browser (about 15 MB, once). After that it is quick.</li>
+            <li><strong>Catchments</strong>: for USGS gauges and any point in the US, the upstream drainage basin is drawn on the map (USGS NLDI over NHDPlus V2, public domain). Everywhere on land, the BasinATLAS sub-basin (HydroATLAS, CC BY 4.0) gives the upstream area, climate, land cover, soils and population.</li>
+            <li><strong>Similar gauged basins</strong> and an <strong>estimated flow regime</strong> for any point: the donor list for an ungauged site, with leave-one-out skill.</li>
+            <li><strong>Ask ✨</strong>: a plain-language question, answered from real gauges with a Data and Methods section. Bring your own key (Groq and Hugging Face have free tiers).</li>
+            <li>The first analysis loads Python in your browser (about 15 MB, once). After that it is quick.</li>
           </ul>
         </details>
       </div>
 
-      <div id="panel-point" hidden>
-        <div class="station-head">
-          <span class="badge" style="background:#455a64">Anywhere</span>
-          <h2 id="pt-title">Point</h2>
-          <div class="st-meta"><span id="pt-coords"></span> · ERA5 climate + GloFAS modelled discharge, last 10 years</div>
-          <div id="pt-catchment" class="catchment" hidden></div>
-          <div id="pt-basin" class="basin" hidden></div>
-          <section id="pt-similar" hidden></section>
-          <div class="st-actions">
-            <button id="btn-share-pt" class="btn" title="Copy a link to this point">Copy link</button>
-          </div>
-        </div>
-        <div id="pt-status" class="status"></div>
-        <section id="pt-sec-climate" hidden>
-          <div class="kpis" id="pt-kpis"></div>
-          <h3>Monthly climate</h3>
-          <div id="plot-climate" class="plot"></div>
-        </section>
-        <section id="pt-sec-glofas" hidden>
-          <h3>Modelled river discharge (GloFAS) <span class="muted">grid cell, not a gauge</span></h3>
-          <div id="pt-glofas-kpis" class="kpis"></div>
-          <table class="ffa" id="pt-ffa-table"></table>
-        </section>
-        <section id="pt-sec-nearest">
-          <h3>Nearest gauges</h3>
-          <ul id="pt-nearest" class="nearest"></ul>
-        </section>
-        <section id="pt-sec-notes" hidden><ul id="pt-notes"></ul></section>
-        <section id="pt-sec-methods" hidden>
-          <details><summary>Methods and citations</summary><ol id="pt-methods"></ol><p class="muted" id="pt-attribution"></p></details>
-        </section>
-      </div>
-
+      <!-- a station -->
       <div id="panel-station" hidden>
-        <div class="station-head">
+        <div class="head">
           <span id="st-source" class="badge"></span>
           <h2 id="st-name">Station</h2>
           <div class="st-meta">
-            <span id="st-id"></span> · <span id="st-vars"></span>
-            <span id="st-period"></span>
+            <span id="st-id"></span> · <span id="st-vars"></span><span id="st-period"></span>
           </div>
-          <div id="st-catchment" class="catchment" hidden></div>
-          <div id="st-basin" class="basin" hidden></div>
-          <section id="st-similar" hidden></section>
           <div class="st-actions">
             <a id="st-agency" href="#" target="_blank" rel="noopener" class="btn">Agency page ↗</a>
-            <button id="btn-share" class="btn" title="Copy a link to this station">Copy link</button>
+            <button id="btn-share" class="btn" title="Copy a link to exactly this view">Copy link</button>
             <button id="btn-csv" class="btn" disabled>Download CSV</button>
+            <button id="btn-cite" class="btn" title="How to cite this">Cite</button>
+          </div>
+          <div id="status" class="status" hidden></div>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Station analyses">
+          <button role="tab" data-tab="overview" aria-controls="tab-overview" aria-selected="true" id="t-overview">Overview</button>
+          <button role="tab" data-tab="floods" aria-controls="tab-floods" aria-selected="false" tabindex="-1" id="t-floods">Floods</button>
+          <button role="tab" data-tab="flows" aria-controls="tab-flows" aria-selected="false" tabindex="-1" id="t-flows">Flows</button>
+          <button role="tab" data-tab="model" aria-controls="tab-model" aria-selected="false" tabindex="-1" id="t-model">Model</button>
+          <button role="tab" data-tab="catchment" aria-controls="tab-catchment" aria-selected="false" tabindex="-1" id="t-catchment">Catchment</button>
+          <button role="tab" data-tab="similar" aria-controls="tab-similar" aria-selected="false" tabindex="-1" id="t-similar">Similar<span class="tab-badge" hidden></span></button>
+          <button role="tab" data-tab="methods" aria-controls="tab-methods" aria-selected="false" tabindex="-1" id="t-methods">Methods</button>
+        </div>
+
+        <div class="panes">
+          <section id="tab-overview" role="tabpanel" aria-labelledby="t-overview" tabindex="0">
+            <div id="st-kpis-card" class="card" hidden>
+              <div class="card-body"><div class="kpis" id="kpis"></div></div>
+            </div>
+            <div id="st-hydro-card" class="card" hidden>
+              <div class="card-title"><h3>Observed record</h3></div>
+              <div class="card-body"><div id="plot-hydro" class="plot"></div></div>
+            </div>
+            <div id="st-notes-card" class="card" hidden>
+              <div class="card-title"><h3>Notes</h3></div>
+              <div class="card-body"><ul id="notes"></ul></div>
+            </div>
+          </section>
+
+          <section id="tab-floods" role="tabpanel" aria-labelledby="t-floods" tabindex="0" hidden>
+            <div id="st-ffa-card" class="card" hidden>
+              <div class="card-title">
+                <h3>Flood frequency <span class="muted" id="ffa-years"></span></h3>
+                <span id="ffa-actions" class="card-tools"></span>
+              </div>
+              <div class="card-body">
+                <table class="ffa" id="ffa-table"></table>
+                <div class="row-actions">
+                  <button id="btn-ci" class="btn small">Add bootstrap 90 % CI (GEV, slow)</button>
+                  <button id="btn-ci-stop" class="btn small" hidden>Stop</button>
+                </div>
+                <div id="plot-ffa" class="plot"></div>
+              </div>
+            </div>
+          </section>
+
+          <section id="tab-flows" role="tabpanel" aria-labelledby="t-flows" tabindex="0" hidden>
+            <div id="st-fdc-card" class="card" hidden>
+              <div class="card-title"><h3>Flow duration</h3></div>
+              <div class="card-body"><div id="plot-fdc" class="plot"></div></div>
+            </div>
+            <div id="st-trend-card" class="card" hidden>
+              <div class="card-title"><h3>Trend</h3></div>
+              <div class="card-body"><p id="trend-text"></p></div>
+            </div>
+          </section>
+
+          <section id="tab-model" role="tabpanel" aria-labelledby="t-model" tabindex="0" hidden>
+            <div id="st-gr4j-card" class="card" hidden>
+              <div class="card-title">
+                <h3>Rainfall-runoff model <span class="muted">GR4J, calibrated here</span></h3>
+                <span id="gr4j-actions" class="card-tools"></span>
+              </div>
+              <div class="card-body">
+                <p class="muted">Fit the four-parameter GR4J model to this record with ERA5-Land/ERA5 rainfall and FAO-56 ET0 at the gauge
+                  (Open-Meteo), 65 % of the record to calibrate, the rest to validate. Runs in your browser in a few seconds.</p>
+                <div class="row-actions">
+                  <button id="btn-gr4j" class="btn small">Calibrate GR4J</button>
+                  <button id="btn-gr4j-stop" class="btn small" hidden>Stop</button>
+                  <button id="btn-gr4j-csv" class="btn small" hidden>Simulation CSV</button>
+                </div>
+                <div id="gr4j-status" class="status" hidden></div>
+                <div id="gr4j-out" hidden>
+                  <table class="ffa" id="gr4j-table"></table>
+                  <div id="plot-gr4j" class="plot"></div>
+                  <div class="basin-foot muted" id="gr4j-foot"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="tab-catchment" role="tabpanel" aria-labelledby="t-catchment" tabindex="0" hidden>
+            <div id="st-catchment" class="card catchment" hidden><div class="card-body"></div></div>
+            <div id="st-basin" class="card basin" hidden><div class="card-body"></div></div>
+          </section>
+
+          <section id="tab-similar" role="tabpanel" aria-labelledby="t-similar" tabindex="0" hidden>
+            <div id="st-similar" class="card" hidden>
+              <div class="card-title"><h3>Similar gauged basins <span class="muted">catchment attributes + distance</span></h3></div>
+              <div class="card-body"></div>
+            </div>
+            <div id="st-regime" class="card" hidden><div class="card-body"></div></div>
+          </section>
+
+          <section id="tab-methods" role="tabpanel" aria-labelledby="t-methods" tabindex="0" hidden>
+            <div class="card">
+              <div class="card-title"><h3>Methods and citations</h3></div>
+              <div class="card-body">
+                <ol id="methods"></ol>
+                <p class="muted" id="attribution"></p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- anywhere -->
+      <div id="panel-point" hidden>
+        <div class="head">
+          <span class="badge" style="background:#455a64">Anywhere</span>
+          <h2 id="pt-title">Point</h2>
+          <div class="st-meta"><span id="pt-coords"></span> · ERA5 climate + GloFAS modelled discharge, last 10 years</div>
+          <div class="st-actions">
+            <button id="btn-share-pt" class="btn" title="Copy a link to exactly this view">Copy link</button>
+            <button id="btn-cite-pt" class="btn" title="How to cite this">Cite</button>
           </div>
         </div>
 
-        <div id="status" class="status"></div>
+        <div class="tabs" role="tablist" aria-label="Point analyses">
+          <button role="tab" data-tab="overview" aria-controls="pt-tab-overview" aria-selected="true" id="pt-t-overview">Overview</button>
+          <button role="tab" data-tab="modelled" aria-controls="pt-tab-modelled" aria-selected="false" tabindex="-1" id="pt-t-modelled">Modelled</button>
+          <button role="tab" data-tab="catchment" aria-controls="pt-tab-catchment" aria-selected="false" tabindex="-1" id="pt-t-catchment">Catchment</button>
+          <button role="tab" data-tab="similar" aria-controls="pt-tab-similar" aria-selected="false" tabindex="-1" id="pt-t-similar">Similar<span class="tab-badge" hidden></span></button>
+          <button role="tab" data-tab="methods" aria-controls="pt-tab-methods" aria-selected="false" tabindex="-1" id="pt-t-methods">Methods</button>
+        </div>
 
-        <section id="sec-summary" hidden>
-          <div class="kpis" id="kpis"></div>
-        </section>
+        <div class="panes">
+          <section id="pt-tab-overview" role="tabpanel" aria-labelledby="pt-t-overview" tabindex="0">
+            <div id="pt-climate-card" class="card" hidden>
+              <div class="card-title"><h3>Climate of this point</h3></div>
+              <div class="card-body">
+                <div class="kpis" id="pt-kpis"></div>
+                <h4>Monthly climate</h4>
+                <div id="plot-climate" class="plot"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title"><h3>Nearest gauges</h3></div>
+              <div class="card-body"><ul id="pt-nearest" class="nearest"></ul></div>
+            </div>
+            <div id="pt-notes-card" class="card" hidden>
+              <div class="card-title"><h3>Notes</h3></div>
+              <div class="card-body"><ul id="pt-notes"></ul></div>
+            </div>
+          </section>
 
-        <section id="sec-hydro" hidden>
-          <h3>Observed record</h3>
-          <div id="plot-hydro" class="plot"></div>
-        </section>
+          <section id="pt-tab-modelled" role="tabpanel" aria-labelledby="pt-t-modelled" tabindex="0" hidden>
+            <div id="pt-glofas-card" class="card" hidden>
+              <div class="card-title">
+                <h3>Modelled river discharge <span class="muted">GloFAS grid cell, not a gauge</span></h3>
+                <span id="pt-glofas-actions" class="card-tools"></span>
+              </div>
+              <div class="card-body">
+                <div id="pt-glofas-kpis" class="kpis"></div>
+                <table class="ffa" id="pt-ffa-table"></table>
+              </div>
+            </div>
+          </section>
 
-        <section id="sec-ffa" hidden>
-          <h3>Flood frequency <span class="muted" id="ffa-years"></span></h3>
-          <table class="ffa" id="ffa-table"></table>
-          <button id="btn-ci" class="btn small">Add bootstrap 90 % CI (GEV, slow)</button>
-          <div id="plot-ffa" class="plot"></div>
-        </section>
+          <section id="pt-tab-catchment" role="tabpanel" aria-labelledby="pt-t-catchment" tabindex="0" hidden>
+            <div id="pt-catchment" class="card catchment" hidden><div class="card-body"></div></div>
+            <div id="pt-basin" class="card basin" hidden><div class="card-body"></div></div>
+          </section>
 
-        <section id="sec-fdc" hidden>
-          <h3>Flow duration</h3>
-          <div id="plot-fdc" class="plot"></div>
-        </section>
+          <section id="pt-tab-similar" role="tabpanel" aria-labelledby="pt-t-similar" tabindex="0" hidden>
+            <div id="pt-similar" class="card" hidden>
+              <div class="card-title"><h3>Similar gauged basins <span class="muted">catchment attributes + distance</span></h3></div>
+              <div class="card-body"></div>
+            </div>
+            <div id="pt-regime" class="card" hidden><div class="card-body"></div></div>
+          </section>
 
-        <section id="sec-trend" hidden>
-          <h3>Trend</h3>
-          <p id="trend-text"></p>
-        </section>
-
-        <section id="sec-gr4j" hidden>
-          <h3>Rainfall-runoff model <span class="muted">GR4J, calibrated here</span></h3>
-          <p class="muted" id="gr4j-intro">Fit the four-parameter GR4J model to this record with ERA5-Land/ERA5 rainfall and FAO-56 ET0 at the gauge (Open-Meteo), 65 % of the record to calibrate, the rest to validate. Runs in your browser in a few seconds.</p>
-          <button id="btn-gr4j" class="btn small">Calibrate GR4J</button>
-          <span class="muted" id="gr4j-status"></span>
-          <div id="gr4j-out" hidden>
-            <table class="ffa" id="gr4j-table"></table>
-            <div id="plot-gr4j" class="plot"></div>
-            <div class="basin-foot muted" id="gr4j-foot"></div>
-          </div>
-        </section>
-
-        <section id="sec-notes" hidden>
-          <ul id="notes"></ul>
-        </section>
-
-        <section id="sec-methods" hidden>
-          <details>
-            <summary>Methods and citations</summary>
-            <ol id="methods"></ol>
-            <p class="muted" id="attribution"></p>
-          </details>
-        </section>
+          <section id="pt-tab-methods" role="tabpanel" aria-labelledby="pt-t-methods" tabindex="0" hidden>
+            <div class="card">
+              <div class="card-title"><h3>Methods and citations</h3></div>
+              <div class="card-body">
+                <ol id="pt-methods"></ol>
+                <p class="muted" id="pt-attribution"></p>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </aside>
+
+    <!-- the Analyst, beside the inspector rather than instead of it -->
+    <aside id="drawer" class="drawer" aria-label="Ask AquaScope" hidden>
+      <div class="drawer-head">
+        <span class="badge" style="background:#6a1b9a">Analyst</span>
+        <h2>Ask AquaScope</h2>
+        <button id="drawer-close" class="icon-btn" title="Close">✕</button>
+      </div>
+      <p class="st-meta">A question in plain language. A model picks the tools (find stations, analyse a record, flood frequency,
+        climate of a point); aquascope runs them here in your browser; the answer ends with the data used and the
+        methods with citations, assembled from the tool results, not from the model.</p>
+
+      <details id="ask-settings" class="ask-settings" open>
+        <summary>Model and key</summary>
+        <div class="ask-grid">
+          <label>Provider
+            <select id="ask-provider">
+              <option value="groq">Groq (free tier, fast)</option>
+              <option value="huggingface">Hugging Face (free with an account)</option>
+              <option value="openai">OpenAI</option>
+              <option value="mistral">Mistral</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="custom">Custom OpenAI-compatible endpoint</option>
+            </select>
+          </label>
+          <label>Model <input id="ask-model" type="text" autocomplete="off" spellcheck="false" /></label>
+          <label id="ask-base-url-row" hidden>Base URL <input id="ask-base-url" type="url" placeholder="https://host/v1" autocomplete="off" spellcheck="false" /></label>
+          <label>API key <input id="ask-key" type="password" autocomplete="off" placeholder="paste your key" /></label>
+          <label class="ask-remember"><input id="ask-remember" type="checkbox" /> keep the key in this browser after I close the tab</label>
+        </div>
+        <p class="muted ask-privacy">Your key goes from this tab straight to the provider you chose (this page has no server), and the model
+          must support tool calling. By default it is kept for this tab only. Free keys:
+          <a href="https://console.groq.com/keys" target="_blank" rel="noopener">Groq</a>,
+          <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">Hugging Face</a>.
+          <button id="ask-forget" class="btn tiny" hidden>Forget key</button></p>
+      </details>
+
+      <textarea id="ask-question" rows="3" placeholder="e.g. What is the 100-year flood of the Thames at Kingston, and how sure can we be?"></textarea>
+      <label class="ask-context-toggle"><input type="checkbox" id="ask-use-context" checked /> tell it what I am looking at</label>
+      <p id="ask-context" class="muted ask-context" hidden><span id="ask-context-text"></span></p>
+      <div id="ask-examples" class="ask-examples"></div>
+      <div class="row-actions">
+        <button id="ask-run" class="btn primary">Ask</button>
+        <button id="ask-stop" class="btn" hidden>Stop</button>
+        <button id="ask-copy" class="btn" hidden>Copy Markdown</button>
+        <button id="ask-download" class="btn" hidden>Download .md</button>
+      </div>
+      <div id="ask-status" class="status" hidden></div>
+      <ol id="ask-log" class="ask-log" hidden></ol>
+      <div id="ask-stations" class="ask-stations" hidden></div>
+      <article id="ask-result" class="ask-result" hidden></article>
+    </aside>
   </main>
+
+  <div id="boot-error" class="status" hidden></div>
+
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2 id="modal-title"></h2>
+        <button id="modal-close" class="icon-btn" title="Close">✕</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pmtiles@3.2.1/dist/pmtiles.js"></script>

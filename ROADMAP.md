@@ -15,12 +15,14 @@ AquaScope is becoming **the open, continuously updated, citable record of the wo
 
 The four layers exist. They are also four separate things to learn: the Explorer is a map with a scrolling panel, the Streamlit dashboard is a different app with different methods and no gauges, and the Analyst answers two-tool questions well and complex ones not at all. The next arc merges them into **one zero-install app, GIS-grade, with the Python engine running in a browser worker**: the map is one mode, a workbench (your own data, plus the dashboard's methods) is another, and the Analyst is a drawer that keeps context across both. One engine, three faces: every capability stays a plain Python function in the package, and the web app, the MCP server and the CLI are thin faces over it.
 
-- [ ] The app's shell, information architecture and UX: tabbed inspector, Ask beside the station, URL-as-state, search, mobile, export, "cite this" ([#231](https://github.com/Rekin226/aquascope/issues/231))
-- [ ] Layers v1: free keyless basemaps, Sentinel imagery, 3D terrain and globe, NASA GIBS climate rasters with a date slider, BasinATLAS choropleths, gauge heat maps, measure and draw ([#232](https://github.com/Rekin226/aquascope/issues/232))
-- [ ] Try the AI without a key: showcase replays, a model in the browser, an optional community demo pool, one provider registry ([#233](https://github.com/Rekin226/aquascope/issues/233))
-- [ ] The Analyst, level 3: a Python sandbox tool in the page, plan then execute then verify, a streamed trace, and every answer as a report plus a re-runnable `study.yaml` ([#234](https://github.com/Rekin226/aquascope/issues/234), with [#54](https://github.com/Rekin226/aquascope/issues/54))
-- [ ] Workbench: the dashboard's ten pages as panels over the same engine (`aquascope/workbench.py`), upload and ingest, a Data mode; Streamlit stays as the local UI ([#235](https://github.com/Rekin226/aquascope/issues/235))
-- [ ] WebMCP tools in the page and MCP Apps views for `aquascope mcp` ([#236](https://github.com/Rekin226/aquascope/issues/236))
+Most of that arc shipped between 18 and 20 August 2026 and is live in the Explorer; what is left is listed under it.
+
+- [x] The app's shell, information architecture and UX: tabbed inspector, Ask beside the station, URL-as-state, search, mobile, export, "cite this" ([#231](https://github.com/Rekin226/aquascope/issues/231), [#238](https://github.com/Rekin226/aquascope/pull/238)). Still open there: an OG image, i18n, and a focus-management and screen-reader pass
+- [x] Layers v1: eight keyless basemaps, Sentinel-2 cloudless, 3D terrain and a globe, six NASA GIBS and ESA rasters on a shared date control, gauge colouring and a density heat map, area select to CSV ([#232](https://github.com/Rekin226/aquascope/issues/232), [#241](https://github.com/Rekin226/aquascope/pull/241)). Still open there: BasinATLAS choropleths, COG climatologies, and measure and draw
+- [x] Try the AI without a key: recorded showcase replays that re-run their tools live, a model on your device (Chrome's Prompt API or WebLLM) with a reduced tool set, and one provider registry ([#233](https://github.com/Rekin226/aquascope/issues/233), [#242](https://github.com/Rekin226/aquascope/pull/242), [#248](https://github.com/Rekin226/aquascope/pull/248))
+- [x] The Analyst, level 3: a `run_python` sandbox with the data on screen in scope, deterministic checks printed as "what this answer does not establish", and every answer as a re-runnable `study.yaml` that `aquascope run` executes with no model in the loop ([#234](https://github.com/Rekin226/aquascope/issues/234), [#246](https://github.com/Rekin226/aquascope/pull/246), closing the runner half of [#54](https://github.com/Rekin226/aquascope/issues/54))
+- [x] Workbench: sixteen analyses as plain functions in `aquascope/workbench.py`, a My data mode in the app with ingest and a QA report, and the public Streamlit deployments retired ([#235](https://github.com/Rekin226/aquascope/issues/235), [#244](https://github.com/Rekin226/aquascope/pull/244), [#245](https://github.com/Rekin226/aquascope/pull/245))
+- [x] WebMCP tools in the page and an MCP Apps view for `aquascope mcp` ([#236](https://github.com/Rekin226/aquascope/issues/236), [#248](https://github.com/Rekin226/aquascope/pull/248))
 - [ ] HydroGym as a public, verifiable hydrology-agent benchmark on real basins, and the agent measured on it ([#175](https://github.com/Rekin226/aquascope/issues/175))
 
 ## Shipped
@@ -57,7 +59,7 @@ The four layers exist. They are also four separate things to learn: the Explorer
 
 ## In progress
 
-- [x] Hosted demo (try without installing): [live on Hugging Face](https://huggingface.co/spaces/Rekin226/aquascope-dashboard), runs fully in-browser via stlite/WebAssembly. Being folded into the one app; the dashboard Space ships an older wheel and will redirect there ([#235](https://github.com/Rekin226/aquascope/issues/235))
+- [x] Hosted demo (try without installing): the [Explorer](https://rekin226-aquascope-explorer.static.hf.space/), which now carries the dashboard's analyses in its My data mode. The old stlite dashboard Space was serving a v0.8.1 wheel and is a redirect to it; `aquascope dashboard` stays for local use ([#235](https://github.com/Rekin226/aquascope/issues/235))
 - [ ] Tutorial notebooks on Binder / Colab
 
 ## Planned

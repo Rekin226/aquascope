@@ -155,7 +155,13 @@ function askLog(text) {
   log.hidden = false;
   const li = document.createElement("li");
   const m = String(text).match(/^tool (\w+)\((.*)\)$/);
-  li.innerHTML = m ? `<code>${escapeHtml(m[1])}</code>(${escapeHtml(m[2]).slice(0, 160)})` : escapeHtml(text);
+  if (m && m[1] === "run_python") {
+    // Show the code it wrote: this is the step a reader most wants to see.
+    const code = (m[2].match(/code='([\s\S]*)'$/) || [])[1] || m[2];
+    li.innerHTML = `<code>run_python</code><pre class="ask-code">${escapeHtml(code.slice(0, 800))}</pre>`;
+  } else {
+    li.innerHTML = m ? `<code>${escapeHtml(m[1])}</code>(${escapeHtml(m[2]).slice(0, 160)})` : escapeHtml(text);
+  }
   log.appendChild(li);
   log.scrollTop = log.scrollHeight;
 }
@@ -236,6 +242,9 @@ function renderAsk(res) {
   out.hidden = false;
   $("ask-copy").hidden = false;
   $("ask-download").hidden = false;
+  renderChecks(res.checks || [], res.verified);
+  state.ask.study = res.study || "";
+  $("ask-study").hidden = !state.ask.study;
   // chips for every station the tools touched: click to open it on the map
   const chips = [];
   for (const d of res.data_used || []) {
@@ -262,6 +271,21 @@ function renderAsk(res) {
     for (const c of chips) box.appendChild(c);
   }
   box.hidden = chips.length === 0;
+}
+
+// What the answer did and did not establish, from the deterministic checks in
+// aquascope.ai_engine.verify (not a model grading a model).
+function renderChecks(checks, verified) {
+  const box = $("ask-checks");
+  if (!checks.length) { box.hidden = true; return; }
+  const unmet = checks.filter((c) => !c.passed);
+  box.hidden = false;
+  box.className = `ask-checks ${unmet.length ? "warn" : "ok"}`;
+  box.innerHTML = unmet.length
+    ? `<strong>${unmet.length} of ${checks.length} checks not met</strong><ul>` +
+      unmet.map((c) => `<li>${escapeHtml(c.detail || c.name)}</li>`).join("") + "</ul>"
+    : `<strong>All ${checks.length} checks passed</strong>: every number in the answer appears in a tool result, ` +
+      `the record is named, and units and uncertainty are quoted.`;
 }
 
 // A small Markdown renderer for the analyst's reports (headings, lists,
@@ -364,6 +388,9 @@ export async function initAsk() {
   $("ask-copy").addEventListener("click", (e) => { if (state.ask.markdown) copyText(state.ask.markdown, e.currentTarget, "Copied!"); });
   $("ask-download").addEventListener("click", () => {
     if (state.ask.markdown) downloadBlob("aquascope-answer.md", state.ask.markdown, "text/markdown");
+  });
+  $("ask-study").addEventListener("click", () => {
+    if (state.ask.study) downloadBlob("study.yaml", state.ask.study, "text/yaml");
   });
   onAskProgress(askLog);
   actions.openAsk = openAsk;

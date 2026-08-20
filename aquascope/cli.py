@@ -634,6 +634,56 @@ def cmd_ask(args: argparse.Namespace) -> None:
         print(result.answer)
     else:
         print(md)
+    if args.study and result.study:
+        Path(args.study).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.study).write_text(result.study, encoding="utf-8")
+        print(f"  Study saved to {args.study}; re-run it with `aquascope run {args.study}`")
+    unmet = [c for c in result.checks if not c.get("passed")]
+    if unmet and not args.quiet:
+        print("\n  Checks this answer did not meet:", file=sys.stderr)
+        for c in unmet:
+            print(f"   · {c.get('detail') or c.get('name')}", file=sys.stderr)
+
+
+
+def cmd_run(args: argparse.Namespace) -> None:
+    """`aquascope run`: a study file if one is named, otherwise a methodology pipeline."""
+    if args.study:
+        cmd_run_study(args)
+        return
+    if not (args.method and args.file):
+        logger.error("Give a study file (aquascope run study.yaml) or --method and --file for a pipeline.")
+        sys.exit(1)
+    cmd_run_pipeline(args)
+
+
+def cmd_run_study(args: argparse.Namespace) -> None:
+    """Run a study file: the steps behind an answer, again, with no model in the loop."""
+    from aquascope.study import load, run_study, write_outputs
+
+    try:
+        study = load(args.study)
+    except (OSError, ValueError) as exc:
+        logger.error("Could not read %s: %s", args.study, exc)
+        sys.exit(1)
+
+    def on_event(msg: str) -> None:
+        if not args.quiet:
+            print(f"  · {msg}", file=sys.stderr)
+
+    if args.dry_run:
+        print(f"{len(study.steps)} step(s) in {args.study}:")
+        for i, step in enumerate(study.steps, 1):
+            print(f"  {i}. {step.tool}({', '.join(f'{k}={v!r}' for k, v in step.arguments.items())})")
+        return
+    run = run_study(study, on_event=on_event)
+    if args.out:
+        paths = write_outputs(run, args.out)
+        print(f"\n  Report saved to {paths['report.md']}")
+    else:
+        print(run.to_markdown())
+    if not run.ok:
+        sys.exit(1)
 
 
 def cmd_ingest(args: argparse.Namespace) -> None:
@@ -1536,11 +1586,19 @@ def main() -> None:
     p_quality.add_argument("--fix", action="store_true", help="Apply recommended preprocessing and save cleaned file")
 
     # ── run ───────────────────────────────────────────────────────────
-    p_run = sub.add_parser("run", help="Execute a methodology pipeline on data")
-    p_run.add_argument("--method", required=True, help="Pipeline method ID (use list-methods to see available)")
-    p_run.add_argument("--file", required=True, help="Path to JSON or CSV data file")
+    p_run = sub.add_parser(
+        "run",
+        help="Run a study file (the steps behind an answer, reproducibly), or a methodology pipeline on data",
+    )
+    p_run.add_argument("study", nargs="?", default=None,
+                       help="A study.yaml from `aquascope ask --study` or written by hand (#54)")
+    p_run.add_argument("--method", default=None, help="Pipeline method ID (use list-methods to see available)")
+    p_run.add_argument("--file", default=None, help="Path to JSON or CSV data file")
     p_run.add_argument("--config", default=None, help="Pipeline config as JSON string")
     p_run.add_argument("--output", default=None, help="Path to save results JSON")
+    p_run.add_argument("--out", "-o", default=None, help="Study: write report.md, manifest.json and results.json here")
+    p_run.add_argument("--dry-run", action="store_true", help="Study: list the steps without running them")
+    p_run.add_argument("--quiet", "-q", action="store_true", help="Study: do not print steps as they run")
 
     # ── completion  ────────────────────────────────────────────────────
     p_completion = sub.add_parser("completion", help="Print shell tab-completion activation script")
@@ -1610,6 +1668,9 @@ def main() -> None:
     p_ask.add_argument("--max-steps", type=int, default=8, help="Tool-call rounds allowed (default 8)")
     p_ask.add_argument("--out", "-o", default=None, help="Save the Markdown report here")
     p_ask.add_argument("--quiet", "-q", action="store_true", help="Do not print tool calls as they happen")
+    p_ask.add_argument("--study", default=None,
+                       help="Write the steps behind the answer here, to re-run with `aquascope run`")
+
 
     # ── ingest ───────────────────────────────────────────────────────
     p_ingest = sub.add_parser("ingest", help="Map + QA any CSV/Excel export into a clean daily series with a report")
@@ -1907,7 +1968,6 @@ def main() -> None:
         "recommend": cmd_recommend,
         "eda": cmd_eda,
         "quality": cmd_quality,
-        "run": cmd_run_pipeline,
         "list-methods": cmd_list_methods,
         "list-sources": cmd_list_sources,
         "stations": cmd_stations,
@@ -1917,6 +1977,7 @@ def main() -> None:
         "gym": cmd_gym,
         "caravan": cmd_caravan,
         "ask": cmd_ask,
+        "run": cmd_run,
         "ingest": cmd_ingest,
         "solve": cmd_solve,
         "forecast": cmd_forecast,

@@ -126,6 +126,8 @@ _res = _analyst.ask(
     base_url=_args.get("base_url") or None,
     max_steps=int(_args.get("max_steps") or 8),
     on_event=lambda m: __aqAskEvent(m),
+    # The record on screen, so run_python can work on it (#234).
+    data={"df": _STORE["frame"]} if _STORE.get("frame") is not None else None,
 )
 json.dumps({
     "answer": _res.answer,
@@ -136,6 +138,9 @@ json.dumps({
     "tool_calls": [{"name": c.name, "arguments": c.arguments, "ok": c.ok} for c in _res.tool_calls],
     "data_used": _res.data_used,
     "methods": _res.methods,
+    "checks": _res.checks,
+    "verified": _res.verified,
+    "study": _res.study,
 })
 `;
   try {

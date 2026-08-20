@@ -387,3 +387,12 @@ table.regime td:first-child { white-space: nowrap; }
 /* In workbench mode the map steps aside: the table is the subject. */
 body.workbench-mode .map-wrap { display: none; }
 body.workbench-mode .panel { width: auto; flex: 1; }
+
+/* The Analyst's checks and the code it wrote (#234). */
+.ask-checks { margin-top: .7rem; padding: .5rem .65rem; border-radius: 8px; font-size: .8rem; line-height: 1.5; }
+.ask-checks.ok { background: var(--bg-soft); color: var(--muted); }
+.ask-checks.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.ask-checks ul { padding-left: 1.1rem; margin: .3rem 0 0; }
+.ask-checks[hidden] { display: none; }
+.ask-code { background: var(--bg-soft); padding: .35rem .5rem; border-radius: 6px; margin: .25rem 0 0;
+  font-size: .72rem; overflow: auto; max-height: 160px; white-space: pre-wrap; }

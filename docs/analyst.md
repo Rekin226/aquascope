@@ -72,3 +72,61 @@ What happens:
 
 Nothing in `ingest` needs a key or a network connection unless you ask for
 `--llm`.
+
+## Level 3: code, checks and a study you can run again
+
+Three things were added in #234, and they change what an answer *is*.
+
+### `run_python`
+
+The fixed tools cover the questions we anticipated. For the rest, the model can
+write a short snippet and run it where the library and the data already are:
+in your own browser tab, or in your own shell.
+
+```
+aquascope ask "Compare the wettest decade with the driest at USGS-01013500"
+  · tool find_stations(query='01013500')
+  · tool analyze_station(source='usgs', station_id='USGS-01013500')
+  · tool run_python(code='decades = df.groupby(df.index.year // 10 * 10)...')
+```
+
+`aquascope`, `workbench`, `pandas` (`pd`) and `numpy` (`np`) are already in
+scope, along with whatever data the caller passed (the Explorer passes the
+record on screen as `df`). Whatever the snippet leaves in `result` comes back.
+
+Imports are checked against an allow-list before anything runs, and `eval`,
+`exec`, `open`, `__import__` and dunder attribute access are refused. That is
+not a security boundary and is not sold as one: the boundary is the platform.
+In the Explorer the snippet runs inside the reader's own browser (WASM, their
+data, their machine); in the CLI it runs with the same rights as the aquascope
+process you started. Run it on data and questions you would run a script on.
+
+### Checks under the answer
+
+The Data and Methods sections were always assembled from tool output. The prose
+between them is still the model's, so it is now checked, deterministically, by
+`aquascope.ai_engine.verify`:
+
+* every number in the answer appears in a tool result (allowing for rounding),
+* a return level is quoted with its confidence interval,
+* a claim about significance agrees with the test's p-value,
+* the units and the record are named,
+* at least one tool call actually succeeded.
+
+Unmet checks are printed under the answer, in the report and in the Explorer's
+drawer, as "What this answer does not establish". No model grades another model.
+
+### `study.yaml`
+
+Every answer now also comes with the steps that produced it:
+
+```bash
+aquascope ask "What is the 100-year flood of the Thames at Kingston?" --study study.yaml
+aquascope run study.yaml --out results/
+```
+
+`aquascope run` calls the same tools with the same arguments, with no model in
+the loop, and writes `report.md`, `manifest.json` (aquascope version, times and
+a hash per step, so drift is visible) and `results.json`. The model writes the
+study; the engine runs the study. That is the reproducible unit, and it is what
+the declarative runner of #54 was for.

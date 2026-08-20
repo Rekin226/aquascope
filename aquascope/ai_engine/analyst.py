@@ -67,6 +67,22 @@ class ToolSpec:
     func: Callable[..., Any]
 
 
+
+# Data the sandbox tool can see (the record on screen, an uploaded table). The
+# caller fills this in for one ask() and it is cleared afterwards.
+_SANDBOX_DATA: dict[str, Any] = {}
+
+
+def _run_python_tool(code: str) -> dict[str, Any]:
+    """The run_python tool: execute a snippet against aquascope and the current data."""
+    from aquascope.ai_engine.sandbox import SandboxError, run_python
+
+    try:
+        return run_python(code, data=_SANDBOX_DATA).to_dict()
+    except SandboxError as exc:
+        return {"ok": False, "error": str(exc)}
+
+
 def _tool_specs() -> list[ToolSpec]:
     from aquascope import mcp_server as t
     from aquascope.explore import anywhere
@@ -154,6 +170,15 @@ def _tool_specs() -> list[ToolSpec]:
             t.regionalize_signatures,
         ),
         ToolSpec(
+            "run_python",
+            "Run a short Python snippet with aquascope, workbench, pandas (pd) and numpy (np) already imported, "
+            "plus any data the page passed (for example df, the record on screen). Leave what you want back in a "
+            "variable called result. Use this when no other tool fits: decadal statistics, a ratio between two "
+            "records, the same analysis over several donors. Imports outside the standard scientific set are refused.",
+            {"type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]},
+            _run_python_tool,
+        ),
+        ToolSpec(
             "list_analyses",
             "The analyses available for a table of the user's own data (the workbench): what each needs and does.",
             {"type": "object", "properties": {}}, t.list_analyses,
@@ -237,9 +262,19 @@ class AskResult:
     methods: list[dict[str, str]] = field(default_factory=list)
     data_used: list[dict[str, Any]] = field(default_factory=list)
     steps: int = 0
+    #: Deterministic checks over the answer and the tool results (verify.py).
+    checks: list[dict[str, Any]] = field(default_factory=list)
+    verified: bool = True
+    #: The steps behind the answer as a study file, so it can be run again.
+    study: str = ""
 
     def to_markdown(self) -> str:
         lines = [f"# {self.question}", "", self.answer.strip(), ""]
+        unmet = [c for c in self.checks if not c.get("passed")]
+        if unmet:
+            lines += ["## What this answer does not establish", ""]
+            lines += [f"- {c.get('detail') or c.get('name')}" for c in unmet]
+            lines += [""]
         if self.data_used:
             lines += ["## Data", ""]
             for d in self.data_used:
@@ -326,12 +361,19 @@ def ask(
     max_steps: int = 8,
     client: Any | None = None,
     on_event: Callable[[str], None] | None = None,
+    data: dict[str, Any] | None = None,
+    verify_answer: bool = True,
 ) -> AskResult:
     """Answer ``question`` with tool calls over aquascope; returns an :class:`AskResult`.
 
     ``client`` lets tests (or callers with their own SDK setup) pass an
     OpenAI-compatible client; otherwise one is built from ``resolve_llm``
     (the ``openai`` SDK if installed, else the built-in ``urllib`` client).
+
+    ``data`` is put in reach of the ``run_python`` tool (the Explorer passes the
+    record on screen). ``verify_answer`` runs the deterministic checks in
+    :mod:`aquascope.ai_engine.verify` and reports what the answer does not
+    establish, rather than leaving it to the reader to notice.
     """
     cfg = {"provider": "custom", "model": model or "test", "api_key": None, "base_url": base_url}
     if client is None:
@@ -347,6 +389,9 @@ def ask(
     ]
     result = AskResult(question=question, answer="", model=str(cfg["model"]), provider=str(cfg["provider"]))
     say = on_event or (lambda _m: None)
+    _SANDBOX_DATA.clear()
+    _SANDBOX_DATA.update(data or {})
+    seen: list[dict[str, Any]] = []          # what each tool actually returned, for the checks
 
     for step in range(1, max_steps + 1):
         result.steps = step
@@ -383,6 +428,7 @@ def ask(
                     payload = {"error": f"{type(exc).__name__}: {exc}"}
                     ok = False
             _harvest_provenance(name, args, payload, result)
+            seen.append({"name": name, "arguments": args, "payload": payload, "ok": ok})
             text = json.dumps(payload, ensure_ascii=False, default=str)
             summary = text[:160]
             result.tool_calls.append(ToolCallRecord(name=name, arguments=args, ok=ok, summary=summary))
@@ -394,4 +440,16 @@ def ask(
         )
     if not result.answer:
         result.answer = "The model returned no answer."
+    if verify_answer:
+        from aquascope.ai_engine.verify import verify as _verify
+
+        checks = _verify(result.answer, seen, question=question)
+        result.checks = checks.to_dict()["checks"]
+        result.verified = checks.ok
+    # The steps that produced this answer, written down so they can be run again
+    # without a model (aquascope run study.yaml).
+    from aquascope.study import study_from_calls
+
+    result.study = study_from_calls(question, result.tool_calls, model=str(cfg["model"])).to_yaml()
+    _SANDBOX_DATA.clear()
     return result

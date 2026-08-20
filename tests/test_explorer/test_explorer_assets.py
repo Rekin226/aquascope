@@ -526,3 +526,30 @@ def test_a_trapped_surface_owns_escape_wherever_it_came_from() -> None:
     """
     out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
     assert json.loads(out.stdout) == 1
+
+
+def test_the_ask_button_is_wired_before_anything_is_awaited() -> None:
+    """Clicking Ask right after load used to do nothing at all.
+
+    `initAsk()` began with `await loadProviders()`, a fetch of providers.json,
+    and only attached the button's click listener afterwards. Between load and
+    that response the app's headline control was inert and silent about it. The
+    listener has to be attached before the first await; this is the invariant,
+    stated where it will fail if someone moves it back.
+    """
+    src = (EXPLORER / "src" / "ask.js").read_text(encoding="utf-8")
+    body = src[src.index("export async function initAsk()"):]
+    # The statement, not the comment that explains it: match on the indentation.
+    wired = body.index('\n  $("btn-ask").addEventListener')
+    awaited = body.index("\n  await loadProviders();")
+    assert wired < awaited, "initAsk() must wire the Ask button before it awaits the provider list"
+
+
+def test_running_before_the_provider_list_arrives_says_so() -> None:
+    """The Run button is live from the start too, so it has to survive an empty picker."""
+    src = (EXPLORER / "src" / "ask.js").read_text(encoding="utf-8")
+    run = src[src.index("async function runAsk()"):]
+    guard = run[:run.index("const key =")]
+    assert "ASK_PROVIDERS[provider]" in guard and "askStatus(" in guard, (
+        "runAsk() must check the chosen provider exists and report it, not throw on undefined"
+    )

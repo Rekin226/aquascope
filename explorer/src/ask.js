@@ -228,9 +228,16 @@ async function runAsk() {
     return;
   }
   const provider = $("ask-provider").value;
+  const chosen = ASK_PROVIDERS[provider];
+  if (!chosen) {
+    // The picker fills from providers.json a moment after load. Running before
+    // that used to throw on an undefined provider with nothing on screen.
+    askStatus("Still loading the provider list, try again in a second.", "warn");
+    return;
+  }
   const key = $("ask-key").value.trim();
-  const model = $("ask-model").value.trim() || ASK_PROVIDERS[provider].model;
-  const base_url = provider === "custom" ? $("ask-base-url").value.trim() : ASK_PROVIDERS[provider].base_url;
+  const model = $("ask-model").value.trim() || chosen.model;
+  const base_url = provider === "custom" ? $("ask-base-url").value.trim() : chosen.base_url;
   if (!question) { askStatus("Type a question first.", "warn"); return; }
   if (!key && provider !== "custom") {
     askStatus("Paste an API key (Groq and Hugging Face give free ones).", "warn");
@@ -389,33 +396,11 @@ export function mdToHtml(md) {
 }
 
 export async function initAsk() {
-  await loadProviders();
-  const provider = $("ask-provider"), model = $("ask-model"), baseRow = $("ask-base-url-row"), base = $("ask-base-url");
-  provider.innerHTML = Object.entries(ASK_PROVIDERS)
-    .map(([id, p]) => `<option value="${id}">${escapeHtml(p.label || id)}</option>`).join("");
-  const saved = askSettings();
-  if (saved.provider && ASK_PROVIDERS[saved.provider]) provider.value = saved.provider;
-  const applyProvider = (keepModel) => {
-    const p = ASK_PROVIDERS[provider.value];
-    baseRow.hidden = provider.value !== "custom";
-    if (!keepModel) model.value = p.model;
-    if (provider.value !== "custom") base.value = p.base_url;
-    model.placeholder = p.model || "model id";
-    const note = $("ask-provider-note");
-    const bits = [p.free, p.note].filter(Boolean);
-    note.textContent = bits.join(" ");
-    note.hidden = !bits.length;
-  };
-  applyProvider(Boolean(saved.model));
-  if (saved.model) model.value = saved.model;
-  if (saved.base_url && provider.value === "custom") base.value = saved.base_url;
-  if (saved.key) $("ask-key").value = saved.key;
-  $("ask-remember").checked = Boolean(saved.remember);
-  $("ask-settings").open = !saved.key;
-  updateForgetButton();
-  provider.addEventListener("change", () => applyProvider(false));
-  for (const el of [provider, model, base, $("ask-key"), $("ask-remember")]) el.addEventListener("change", saveAskSettings);
-  $("ask-forget").addEventListener("click", forgetKey);
+  // Wire the button that opens the drawer before anything is awaited. This used
+  // to sit after `await loadProviders()`, so between load and that fetch coming
+  // back, clicking Ask did nothing at all and said nothing about why. The
+  // picker below fills in a moment later; the drawer does not need it to open.
+  $("btn-ask").addEventListener("click", () => { if (drawerOpen()) closeDrawer(); else openAsk(); });
 
   const ex = $("ask-examples");
   for (const q of ASK_EXAMPLES) {
@@ -427,7 +412,6 @@ export async function initAsk() {
     ex.appendChild(b);
   }
 
-  $("btn-ask").addEventListener("click", () => { if (drawerOpen()) closeDrawer(); else openAsk(); });
   $("ask-run").addEventListener("click", runAsk);
   $("ask-stop").addEventListener("click", () => { if (cancelAsk) cancelAsk(); });
   $("ask-question").addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") runAsk(); });
@@ -457,4 +441,34 @@ export async function initAsk() {
     });
   }
   actions.openAsk = openAsk;
+
+  // Last, because it is the only part that waits on the network: the provider
+  // list. Everything above works without it.
+  await loadProviders();
+  const provider = $("ask-provider"), model = $("ask-model"), baseRow = $("ask-base-url-row"), base = $("ask-base-url");
+  provider.innerHTML = Object.entries(ASK_PROVIDERS)
+    .map(([id, p]) => `<option value="${id}">${escapeHtml(p.label || id)}</option>`).join("");
+  const saved = askSettings();
+  if (saved.provider && ASK_PROVIDERS[saved.provider]) provider.value = saved.provider;
+  const applyProvider = (keepModel) => {
+    const p = ASK_PROVIDERS[provider.value];
+    baseRow.hidden = provider.value !== "custom";
+    if (!keepModel) model.value = p.model;
+    if (provider.value !== "custom") base.value = p.base_url;
+    model.placeholder = p.model || "model id";
+    const note = $("ask-provider-note");
+    const bits = [p.free, p.note].filter(Boolean);
+    note.textContent = bits.join(" ");
+    note.hidden = !bits.length;
+  };
+  applyProvider(Boolean(saved.model));
+  if (saved.model) model.value = saved.model;
+  if (saved.base_url && provider.value === "custom") base.value = saved.base_url;
+  if (saved.key) $("ask-key").value = saved.key;
+  $("ask-remember").checked = Boolean(saved.remember);
+  $("ask-settings").open = !saved.key;
+  updateForgetButton();
+  provider.addEventListener("change", () => applyProvider(false));
+  for (const el of [provider, model, base, $("ask-key"), $("ask-remember")]) el.addEventListener("change", saveAskSettings);
+  $("ask-forget").addEventListener("click", forgetKey);
 }

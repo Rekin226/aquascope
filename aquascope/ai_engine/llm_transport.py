@@ -17,7 +17,9 @@ shapes the analyst reads: ``response.choices[0].message.content`` and
 from __future__ import annotations
 
 import json
+import re
 import sys
+import time
 from typing import Any
 
 from aquascope import __version__
@@ -72,6 +74,30 @@ class LLMHTTPError(RuntimeError):
         super().__init__(f"HTTP {status} from {url}: {hint}. {body[:300]}")
 
 
+#: Providers state the wait in the error body, in seconds ("try again in 14.5725s")
+#: or as a bare number of milliseconds. Prefer what they say over a guess.
+_RETRY_HINT = re.compile(r"try again in ([0-9.]+)\s*(ms|s\b|seconds?)", re.I)
+
+MAX_BACKOFF_SECONDS = 30.0
+
+
+def retry_after(body: str, attempt: int = 0) -> float:
+    """How long to wait before retrying, from the provider's own words if it gave them.
+
+    Falls back to exponential backoff (1, 2, 4, 8 s) when it did not, and never
+    waits longer than ``MAX_BACKOFF_SECONDS``: a minute-window limit clears in
+    seconds, and anything longer is a quota, which waiting will not fix.
+    """
+    m = _RETRY_HINT.search(body or "")
+    if m:
+        value = float(m.group(1))
+        seconds = value / 1000 if m.group(2).lower() == "ms" else value
+        # A hair more than asked: the window is a moving average, and coming
+        # back at the exact boundary earns a second 429.
+        return min(seconds + 0.5, MAX_BACKOFF_SECONDS)
+    return min(2.0 ** attempt, MAX_BACKOFF_SECONDS)
+
+
 class _Completions:
     def __init__(self, client: UrllibChatClient):
         self._client = client
@@ -100,14 +126,37 @@ class UrllibChatClient:
         *,
         timeout: float = 120,
         extra_headers: dict[str, str] | None = None,
+        max_retries: int = 4,
+        sleep: Any = None,
     ):
         self.api_key = api_key or ""
         self.base_url = (base_url or "https://api.openai.com/v1").rstrip("/")
         self.timeout = timeout
         self.extra_headers = dict(extra_headers or {})
+        self.max_retries = max_retries
+        self._sleep = sleep or time.sleep
         self.chat = _Chat(self)
 
     def request(self, payload: dict[str, Any]) -> Any:
+        """One completion, waiting out a rate limit rather than failing on it.
+
+        Free tiers are per minute as much as per day, and a tool-calling loop
+        spends a question's whole budget in a few seconds. Providers say how
+        long to wait ("Please try again in 14.5725s"), so the honest thing is to
+        wait that long and go again, up to ``max_retries``. Only 429 and 5xx are
+        retried: a rejected key or a bad request will not improve with time.
+        """
+        for attempt in range(self.max_retries + 1):
+            try:
+                return self._request_once(payload)
+            except LLMHTTPError as exc:
+                retryable = exc.status == 429 or 500 <= exc.status < 600
+                if not retryable or attempt == self.max_retries:
+                    raise
+                self._sleep(retry_after(exc.body, attempt))
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    def _request_once(self, payload: dict[str, Any]) -> Any:
         import urllib.error
         import urllib.request
 

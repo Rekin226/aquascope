@@ -110,17 +110,28 @@ def build(
     max_steps: int = 8,
     on_event: Any = None,
     client: Any = None,
+    pause: float = 0.0,
 ) -> list[ShowcaseEntry]:
     """Run each question once and record the trace.
 
     ``client`` is an OpenAI-compatible client for tests and for callers that
     already have one; otherwise the usual environment configuration applies.
+
+    ``pause`` waits between questions. A free tier is limited per minute as well
+    as per day, and one tool-calling question spends most of a minute's tokens,
+    so eight in a row hit the wall on the second. The transport retries a 429,
+    but arriving slower is cheaper than retrying.
     """
+    import time
+
     from aquascope.ai_engine.analyst import ask
 
     say = on_event or (lambda m: logger.info("%s", m))
     out: list[ShowcaseEntry] = []
-    for spec in questions or QUESTIONS:
+    for index, spec in enumerate(questions or QUESTIONS):
+        if index and pause:
+            say(f"waiting {pause:.0f}s so the rate-limit window refills")
+            time.sleep(pause)
         entry = ShowcaseEntry(id=spec["id"], question=spec["question"], shows=spec.get("shows", ""))
         say(f"asking: {spec['id']}")
         try:
@@ -238,6 +249,8 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - a mainten
     ap.add_argument("--model", default=None)
     ap.add_argument("--max-steps", type=int, default=8)
     ap.add_argument("--only", default=None, help="Comma-separated ids to rebuild")
+    ap.add_argument("--pause", type=float, default=25.0,
+                    help="Seconds between questions, so a per-minute rate limit can refill")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
     questions = QUESTIONS
@@ -245,7 +258,7 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - a mainten
         wanted = {q.strip() for q in args.only.split(",")}
         questions = [q for q in QUESTIONS if q["id"] in wanted]
     entries = build(questions, provider=args.provider, model=args.model, max_steps=args.max_steps,
-                    on_event=lambda m: print(m, flush=True))
+                    pause=args.pause, on_event=lambda m: print(m, flush=True))
     paths = write(entries, args.out)
     ok = sum(1 for e in entries if not e.error)
     print(f"recorded {ok}/{len(entries)} into {args.out}", flush=True)

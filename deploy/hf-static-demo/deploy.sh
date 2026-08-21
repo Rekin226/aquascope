@@ -17,7 +17,7 @@ HERE="$ROOT/deploy/hf-static-demo"
 # NOTE: upload via the Python API, not `hf upload` - the CLI pre-flights a
 # repos/create call that 402s on free accounts (it defaults the sdk to
 # gradio), even when the target static Space already exists.
-echo "→ Uploading the redirect to $SPACE…"
+echo "→ Uploading the redirect to ${SPACE}…"
 python - "$SPACE" "$HERE" <<'PY'
 import sys
 from huggingface_hub import HfApi

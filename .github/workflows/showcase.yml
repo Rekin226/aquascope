@@ -7,6 +7,11 @@ name: Showcase
 #
 # Needs one of GROQ_API_KEY / OPENAI_API_KEY / HF_TOKEN as a repository secret.
 # Without one the job says so and stops, rather than failing the repo.
+#
+# The result arrives as a pull request. A pull request opened with GITHUB_TOKEN
+# does not start a workflow run, so its required checks stay pending: close and
+# reopen it to run them, or set REPAIR_TOKEN (a fine-grained PAT with contents
+# and pull-requests write) as repair.yml already does.
 
 on:
   schedule:
@@ -20,6 +25,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: showcase
@@ -69,8 +75,13 @@ jobs:
           python -m aquascope.showcase --out explorer/showcase \
             ${{ github.event.inputs.only && format('--only {0}', github.event.inputs.only) || '' }}
 
-      - name: Commit what changed
+      # A pull request, not a push to main. Two reasons: main is protected and
+      # rejects a direct push, and these files are prose a model wrote, about to
+      # be published under the project's name. Someone should read them first.
+      - name: Open a pull request with the recordings
         if: steps.key.outputs.have_key == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.REPAIR_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -79,8 +90,22 @@ jobs:
             echo "no change in the recorded answers"
             exit 0
           fi
+          BRANCH="showcase/recordings"
+          git checkout -b "$BRANCH"
           # Two -m flags rather than one multi-line string: a body at column 0
           # would end this block scalar and make the whole workflow unparseable.
           git commit -m "showcase: re-record the Analyst's worked examples" \
                      -m "Recorded by .github/workflows/showcase.yml so the Explorer can show what the Analyst does without an API key (#233)."
-          git push
+          git push --force origin "$BRANCH"
+          if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
+            echo "the open pull request now carries the new recordings"
+          else
+            gh pr create --base main --head "$BRANCH" \
+              --title "Showcase: re-record the Analyst's worked examples" \
+              --body "Recorded by \`.github/workflows/showcase.yml\` (#233). Each file is one question, every tool call with its arguments, the answer, the deterministic checks and the study.
+
+The prose is a model's, so read it before merging: it goes on the Explorer's Ask panel as a worked example. The tool results next to it are not a recording, and the page re-runs them live.
+
+Merging publishes them: the push to main triggers the Explorer deploy." \
+              --label no-changelog
+          fi

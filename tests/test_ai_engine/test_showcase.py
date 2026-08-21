@@ -126,6 +126,19 @@ def test_an_authentication_failure_says_what_to_do_about_it() -> None:
     assert "GROQ_API_KEY" in said, "name the free-tier way out, not just the diagnosis"
 
 
+def test_a_rejected_key_is_not_reported_as_a_permission_problem() -> None:
+    """The live run hit this: Groq answered 401, and the message talked about HF permissions."""
+    entries = [showcase.ShowcaseEntry(
+        id="a", question="q", shows="",
+        error='LLMHTTPError: HTTP 401 from https://api.groq.com/openai/v1/chat/completions: '
+              'the API key was rejected. {"error":{"message":"Invalid API Key"}}',
+    )]
+    said = showcase.diagnose(entries)
+    assert "401" in said and "rejected the key" in said
+    assert "gsk_" in said, "say what a good key looks like, since a truncated paste is the usual cause"
+    assert "Inference Providers" not in said, "that is the 403 story, and it sends you the wrong way"
+
+
 def test_a_rate_limit_is_not_reported_as_a_permission_problem() -> None:
     entries = [showcase.ShowcaseEntry(id="a", question="q", shows="", error="LLMHTTPError: HTTP 429 too many requests")]
     said = showcase.diagnose(entries)

@@ -198,12 +198,24 @@ def diagnose(entries: list[ShowcaseEntry]) -> str:
     if not errors:
         return ""
     joined = " ".join(errors).lower()
-    if "403" in joined or "sufficient permissions" in joined or "401" in joined:
+    # 401 and 403 are different problems with different fixes, and saying the
+    # wrong one sends you looking in the wrong place: 401 is "this key is not a
+    # key", 403 is "this key is real but may not call the model".
+    if "401" in joined or "invalid api key" in joined or "rejected" in joined:
         return (
-            "Every question failed on authentication, so the key exists but is not allowed to "
-            "call the model. A Hugging Face token needs the 'Make calls to Inference Providers' "
-            "permission (a write token scoped to repositories does not have it); a Groq key "
-            "needs nothing else. Set GROQ_API_KEY as a repository secret for the free tier: "
+            "Every question failed with 401: the provider rejected the key itself. It is not a "
+            "permissions problem, the value is wrong. The usual cause is a truncated or "
+            "whitespace-padded paste; a Groq key starts with 'gsk_' and is about fifty characters "
+            "longer than that. Pipe it in rather than typing it at a prompt:\n"
+            "  printf '%s' \"$(pbpaste)\" | gh secret set GROQ_API_KEY --repo <owner>/<repo>\n"
+            "Then check the key is still listed at https://console.groq.com/keys"
+        )
+    if "403" in joined or "sufficient permissions" in joined:
+        return (
+            "Every question failed with 403: the key is real but is not allowed to call the "
+            "model. A Hugging Face token needs the 'Make calls to Inference Providers' "
+            "permission, which a write token scoped to repositories does not have. A Groq key "
+            "needs nothing else, so setting GROQ_API_KEY is the shorter path: "
             "https://console.groq.com/keys"
         )
     if "429" in joined or "rate" in joined and "limit" in joined:

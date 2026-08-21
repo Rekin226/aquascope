@@ -16,6 +16,8 @@ key, so the file "parses" while GitHub rejects it. Hence the allow-list below.
 
 from __future__ import annotations
 
+import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -70,3 +72,40 @@ def test_a_workflow_has_no_keys_github_would_not_recognise(path: Path) -> None:
         f"{path.name} has top-level keys GitHub does not define: {unexpected}. "
         "Usually a line at column 0 inside a `run: |` block ended the block early."
     )
+
+
+# ── the shell inside the YAML ───────────────────────────────────────────────
+#
+# A `run:` script is shell that nothing checks until a runner executes it. That
+# is how a heredoc whose terminator arrived indented (YAML strips the block's
+# indent, the terminator sat inside an `else` and kept two spaces) got as far as
+# a live job before failing with "here-document delimited by end-of-file".
+# `bash -n` parses without running, and finds exactly that.
+
+_EXPRESSION = re.compile(r"\$\{\{[^}]*\}\}")
+
+
+def _runs(workflow: dict):
+    """Every `run:` script in a workflow, with its step name."""
+    for job in (workflow.get("jobs") or {}).values():
+        for step in job.get("steps") or []:
+            script = step.get("run")
+            if not script:
+                continue
+            shell = step.get("shell", "bash")
+            if shell not in ("bash", "sh"):
+                continue
+            yield step.get("name") or "<unnamed step>", script
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
+def test_every_run_script_is_valid_shell(path: Path) -> None:
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    for name, script in _runs(loaded):
+        # ${{ ... }} is GitHub's, not the shell's; stand it in with a bare word
+        # so what is left is the shell the runner would actually execute.
+        checked = _EXPRESSION.sub("EXPR", script)
+        result = subprocess.run(["bash", "-n"], input=checked, text=True, capture_output=True)
+        assert result.returncode == 0, (
+            f"{path.name}, step {name!r}: the shell does not parse.\n{result.stderr.strip()}"
+        )

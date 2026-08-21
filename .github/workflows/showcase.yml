@@ -100,18 +100,19 @@ jobs:
           if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
             echo "the open pull request now carries the new recordings"
           else
-            # The body goes through a file. Written inline, its blank lines and
-            # paragraphs sit at column 0 once YAML strips this block's indent,
-            # which ends the block scalar and makes the workflow unparseable.
-            cat > /tmp/showcase-pr.md <<'MD'
-            Recorded by `.github/workflows/showcase.yml` (#233). Each file is one question, every tool call with its arguments, the answer, the deterministic checks and the study.
-
-            The prose is a model's, so read it before merging: it goes on the Explorer's Ask panel as a worked example. The tool results beside it are not a recording, and the page re-runs them live.
-
-            Merging publishes them: the push to main triggers the Explorer deploy.
-            MD
+            # printf rather than a heredoc: YAML strips this block's indent, so a
+            # heredoc terminator written inside the `else` arrives indented and
+            # bash never finds it. No backticks or apostrophes in the text below
+            # either, since it is inside double quotes.
+            printf '%s\n' \
+              "Recorded by the showcase workflow (#233). Each file is one question, every tool call with its arguments, the answer, the deterministic checks and the study." \
+              "" \
+              "The prose was written by a model, so read it before merging: it appears on the Explorer Ask panel as a worked example. The tool results beside it are not a recording, and the page re-runs them live." \
+              "" \
+              "Merging publishes them: the push to main triggers the Explorer deploy." \
+              > /tmp/showcase-pr.md
             gh pr create --base main --head "$BRANCH" \
-              --title "Showcase: re-record the Analyst's worked examples" \
+              --title "Showcase: re-record the Analyst worked examples" \
               --body-file /tmp/showcase-pr.md \
               --label no-changelog
           fi

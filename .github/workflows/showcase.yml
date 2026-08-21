@@ -42,7 +42,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install aquascope
-        run: pip install -e ".[dev]"
+        # basins too: describe_catchment and regionalize_signatures read the
+        # BasinATLAS files through pyogrio, and without it two of the questions
+        # answer from a failed tool, which is exactly what the checks flag.
+        run: pip install -e ".[dev,basins]"
 
       - name: Check a key is configured
         id: key

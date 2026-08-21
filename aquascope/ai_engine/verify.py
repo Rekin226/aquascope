@@ -15,10 +15,11 @@ quietly hoping.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
-__all__ = ["Check", "verify"]
+__all__ = ["Check", "normalise", "verify"]
 
 
 @dataclass
@@ -56,10 +57,43 @@ class Verification:
 
 _NUMBER = re.compile(r"-?\d[\d,]*\.?\d*")
 
+# A date is prose, not a claim: "1986-08-21 to 2026-08-19" should not put 8, 21
+# and 19 up for checking against the tool output.
+_DATE = re.compile(r"\b\d{4}-\d{1,2}-\d{1,2}\b")
 
-def _numbers(text: str) -> list[float]:
+# A percentage is nearly always a ratio the model worked out from two numbers
+# that *are* in the results ("the interval is about 7 % of the median"). Asking
+# for it verbatim in a tool result would flag correct arithmetic.
+_PERCENT = re.compile(r"-?\d[\d,]*\.?\d*\s*%")
+
+#: Dashes and minus signs a model reaches for, all meaning ASCII "-".
+_DASHES = dict.fromkeys(map(ord, "‐‑‒–—―−"), "-")
+
+#: Digit grouping with a space: "14 555" is one number, not 14 and 555. Only
+#: before a group of exactly three digits, which is what grouping means.
+_GROUPED = re.compile(r"(?<=\d)[\s\u00a0\u202f\u2009](?=\d{3}\b)")
+
+
+def normalise(text: str) -> str:
+    """Fold a well-typeset answer onto the plain ASCII the checks compare against.
+
+    Good models write good typography: ``m³ s⁻¹`` for the unit, a non-breaking
+    hyphen inside a station id, a narrow space grouping ``14 555``. Every one of
+    those made a check fail on an answer that was correct, which is worse than
+    having no check at all, so the text is folded first: NFKC turns the
+    superscripts into digits, the dashes become ASCII, and grouped digits join up.
+    """
+    folded = unicodedata.normalize("NFKC", text or "").translate(_DASHES)
+    return _GROUPED.sub("", folded)
+
+
+def _numbers(text: str, *, claims_only: bool = False) -> list[float]:
+    """Numbers in the text. ``claims_only`` drops the dates and percentages."""
+    text = text or ""
+    if claims_only:
+        text = _PERCENT.sub(" ", _DATE.sub(" ", text))
     out = []
-    for token in _NUMBER.findall(text or ""):
+    for token in _NUMBER.findall(text):
         try:
             out.append(float(token.replace(",", "")))
         except ValueError:
@@ -98,6 +132,33 @@ def _close(value: float, pool: list[float], *, rel: float = 0.02) -> bool:
     return False
 
 
+def units_in(ok_results: list[dict[str, Any]]) -> set[str]:
+    """The units the successful tool results reported."""
+    return {r["payload"].get("unit") for r in ok_results
+            if isinstance(r.get("payload"), dict) and r["payload"].get("unit")} - {None, ""}
+
+
+def _unit_spellings(unit: str) -> set[str]:
+    """The ways an answer may legitimately write a unit like ``m3/s``.
+
+    After :func:`normalise`, ``m³ s⁻¹`` reads as ``m3 s-1``, which is the same
+    unit and has to count. So does ``m^3/s``, and ``cumec`` for discharge.
+    """
+    u = normalise(unit).lower().replace(" ", "")
+    forms = {u, u.replace("/", ""), u.replace("^", "")}
+    if "/" in u:
+        top, _, bottom = u.partition("/")
+        forms |= {f"{top}{bottom}-1", f"{top} {bottom}-1", f"{top}per{bottom}"}
+    if u in {"m3/s", "m^3/s"}:
+        forms |= {"cumec", "cubicmetrespersecond", "cubicmeterspersecond"}
+    return {f for f in forms if f}
+
+
+def _unit_named(unit: str, answer: str) -> bool:
+    flat = answer.lower().replace(" ", "")
+    return any(form.replace(" ", "") in flat for form in _unit_spellings(unit))
+
+
 def verify(answer: str, tool_results: list[dict[str, Any]], *, question: str = "") -> Verification:
     """Run the deterministic checks over an answer and the results behind it.
 
@@ -105,7 +166,7 @@ def verify(answer: str, tool_results: list[dict[str, Any]], *, question: str = "
     "ok": bool}``, which is what the loop records as it goes.
     """
     v = Verification()
-    answer = answer or ""
+    answer = normalise(answer or "")
     ok_results = [r for r in tool_results if r.get("ok")]
 
     # 1. Did anything actually run?
@@ -119,7 +180,14 @@ def verify(answer: str, tool_results: list[dict[str, Any]], *, question: str = "
     for r in ok_results:
         pool.extend(_walk(r.get("payload")))
     # Years and small integers are usually prose, not claims; check the rest.
-    claimed = [n for n in _numbers(answer) if abs(n) >= 0.001 and not (1800 <= n <= 2100 and float(n).is_integer())]
+    # Strip the units before reading numbers: "m3 s-1" is a unit, not a claim
+    # of 3 and -1, and flagging those would discredit the whole check.
+    prose = answer
+    for unit in units_in(ok_results):
+        for form in _unit_spellings(unit):
+            prose = re.sub(re.escape(form).replace(r"\ ", r"\s*"), " ", prose, flags=re.I)
+    claimed = [n for n in _numbers(prose, claims_only=True)
+               if abs(n) >= 0.001 and not (1800 <= n <= 2100 and float(n).is_integer())]
     unsupported = [n for n in claimed if not _close(n, pool)]
     if pool:
         v.checks.append(Check(
@@ -161,10 +229,9 @@ def verify(answer: str, tool_results: list[dict[str, Any]], *, question: str = "
             ))
 
     # 5. Units: if every result carries a unit, the answer should name one.
-    units = {r["payload"].get("unit") for r in ok_results
-             if isinstance(r.get("payload"), dict) and r["payload"].get("unit")}
+    units = units_in(ok_results)
     if units and re.search(r"\b\d", answer):
-        named = any(u and u.lower().replace("³", "3") in answer.lower().replace("³", "3") for u in units)
+        named = any(u and _unit_named(u, answer) for u in units)
         listed = ", ".join(sorted(u for u in units if u))
         v.checks.append(Check(
             "units_are_named", named,

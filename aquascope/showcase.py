@@ -175,6 +175,12 @@ def write(entries: list[ShowcaseEntry], out_dir: str | Path) -> dict[str, str]:
         if entry.error and not entry.answer:
             logger.warning("skipping %s: %s", entry.id, entry.error)
             continue
+        # A model will happily answer over a failed tool call. That is what
+        # `tools_were_used` catches, and an answer with nothing behind it is the
+        # last thing to publish as a worked example.
+        if any(c.get("name") == "tools_were_used" and not c.get("passed") for c in entry.checks):
+            logger.warning("skipping %s: no tool call succeeded, so there is nothing to show", entry.id)
+            continue
         path = out / f"{entry.id}.json"
         path.write_text(json.dumps(entry.to_dict(), indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
         written[entry.id] = str(path)

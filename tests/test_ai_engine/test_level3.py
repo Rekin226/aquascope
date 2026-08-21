@@ -232,3 +232,85 @@ def test_a_study_is_built_from_what_the_model_actually_ran() -> None:
     study = study_from_calls("Q?", calls, model="test-model")
     assert [s.tool for s in study.steps] == ["find_stations", "analyze_station"]
     assert study.model == "test-model" and study.author == "analyst"
+
+
+# ── the checks against real prose (#233) ────────────────────────────────────
+#
+# The first live recording scored 2/5, 1/5 and 0/1 on answers that were correct.
+# Every one of those failures was the check's fault: a good model writes good
+# typography, and the checks compared it against plain ASCII. A check that cries
+# wolf on a correct answer is worse than no check, because it is printed to the
+# reader as "what this answer does not establish".
+
+KINGSTON_PAYLOAD = {
+    "unit": "m3/s", "station_id": "8496ce69-482c-406a-a2f0-ac418ef8f099", "name": "Kingston",
+    "agency": "Environment Agency", "years": 40.0, "n": 14555,
+    "ffa": {"return_periods": [100], "fits": {"gev": {"q": [497.0], "ci": [[453.0, 525.0]]}}},
+}
+
+# Copied from explorer/showcase/kingston-flood.json: narrow no-break spaces,
+# non-breaking hyphens, superscript unit, grouped digits, percentages.
+KINGSTON_ANSWER = (
+    "**100‑year flood at Kingston (River Thames)**\n\n"
+    "Environment Agency (UK) | **Kingston** (station ID "
+    "8496ce69‑482c‑406a‑a2f0‑ac418ef8f099) | "
+    "1986‑08‑21 to 2026‑08‑19 (≈ 40 yr, 14 555 daily values) | "
+    "**≈ 497 m³ s⁻¹** | **453 – 525 m³ s⁻¹** (90 % CI)\n\n"
+    "The GEV‑bootstrap interval (≈ ± 7 % of the median) quantifies the sampling uncertainty."
+)
+
+
+def _one(payload: dict) -> list[dict]:
+    return [{"name": "flood_frequency", "arguments": {}, "payload": payload, "ok": True}]
+
+
+def test_a_well_typeset_answer_passes_every_check() -> None:
+    v = verify_mod.verify(KINGSTON_ANSWER, _one(KINGSTON_PAYLOAD))
+    assert v.ok, f"false failures on a correct answer: {[(c.name, c.detail) for c in v.failed]}"
+
+
+def test_a_superscript_unit_counts_as_naming_the_unit() -> None:
+    """m³ s⁻¹ is the unit. Reading it as 'no unit named' was the check's fault."""
+    v = verify_mod.verify("Flow at Kingston is 497 m³ s⁻¹.", _one(KINGSTON_PAYLOAD))
+    assert "units_are_named" not in {c.name for c in v.failed}
+
+
+def test_a_unit_is_not_read_as_a_claimed_number() -> None:
+    """'m3 s-1' contains 3 and -1; flagging those would discredit the check."""
+    v = verify_mod.verify("Flow at Kingston is 497 m3 s-1.", _one(KINGSTON_PAYLOAD))
+    assert "numbers_come_from_tools" not in {c.name for c in v.failed}
+
+
+def test_a_non_breaking_hyphen_in_an_id_still_names_the_record() -> None:
+    v = verify_mod.verify(
+        "Station 8496ce69‑482c‑406a‑a2f0‑ac418ef8f099 gives 497 m3/s.",
+        _one(KINGSTON_PAYLOAD),
+    )
+    assert "record_is_named" not in {c.name for c in v.failed}
+
+
+def test_grouped_digits_are_one_number() -> None:
+    v = verify_mod.verify("The record has 14 555 daily values, in m3/s at Kingston.",
+                          _one(KINGSTON_PAYLOAD))
+    assert "numbers_come_from_tools" not in {c.name for c in v.failed}
+
+
+def test_a_date_is_not_a_claim() -> None:
+    v = verify_mod.verify("Kingston's record runs 1986-08-21 to 2026-08-19, in m3/s.",
+                          _one(KINGSTON_PAYLOAD))
+    assert "numbers_come_from_tools" not in {c.name for c in v.failed}
+
+
+def test_a_derived_percentage_is_not_a_fabricated_number() -> None:
+    """"about 7 % of the median" is arithmetic over numbers that are in the result."""
+    v = verify_mod.verify("At Kingston the interval is about 7 % of the 497 m3/s median.",
+                          _one(KINGSTON_PAYLOAD))
+    assert "numbers_come_from_tools" not in {c.name for c in v.failed}
+
+
+def test_a_fabricated_number_is_still_caught_after_all_that_folding() -> None:
+    """The point of the loosening is fewer false alarms, not a check that passes everything."""
+    v = verify_mod.verify("At Kingston the 100-year flood is 497 m3/s (453 to 525), "
+                          "and the 1908 peak reached 1234.5 m3/s.", _one(KINGSTON_PAYLOAD))
+    assert "numbers_come_from_tools" in {c.name for c in v.failed}
+    assert "1234.5" in next(c.detail for c in v.failed if c.name == "numbers_come_from_tools")

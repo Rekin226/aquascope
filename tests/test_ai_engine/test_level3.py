@@ -11,6 +11,7 @@ import json
 import pandas as pd
 import pytest
 
+from aquascope.ai_engine import analyst as analyst_mod
 from aquascope.ai_engine import verify as verify_mod
 from aquascope.ai_engine.sandbox import SandboxError, run_python
 from aquascope.study import Step, Study, loads, run_study, study_from_calls, write_outputs
@@ -314,3 +315,54 @@ def test_a_fabricated_number_is_still_caught_after_all_that_folding() -> None:
                           "and the 1908 peak reached 1234.5 m3/s.", _one(KINGSTON_PAYLOAD))
     assert "numbers_come_from_tools" in {c.name for c in v.failed}
     assert "1234.5" in next(c.detail for c in v.failed if c.name == "numbers_come_from_tools")
+
+
+# ── fitting the context (#233) ──────────────────────────────────────────────
+#
+# Half the showcase questions failed with "Request too large ... Limit 8000,
+# Requested 12073". Not a rate limit: the accumulated tool results were bigger
+# than the whole per-minute window, so retrying could never help.
+
+def _conversation(n_tools: int, size: int) -> list[dict]:
+    msgs = [{"role": "system", "content": "you are the analyst"},
+            {"role": "user", "content": "what is the 100-year flood?"}]
+    for i in range(n_tools):
+        msgs.append({"role": "assistant", "content": "", "tool_calls": [{"id": f"c{i}"}]})
+        msgs.append({"role": "tool", "tool_call_id": f"c{i}", "name": "analyze_station",
+                     "content": f"result {i} " + "x" * size})
+    return msgs
+
+
+def test_a_conversation_that_fits_is_left_alone() -> None:
+    msgs = _conversation(2, 100)
+    assert analyst_mod.fit_context(msgs) == msgs
+
+
+def test_the_oldest_results_are_cut_first_and_the_newest_survives() -> None:
+    msgs = _conversation(4, 12_000)
+    fitted = analyst_mod.fit_context(msgs, budget=20_000)
+    tools = [m for m in fitted if m["role"] == "tool"]
+    assert len(tools[0]["content"]) < 600, "the oldest result should be trimmed"
+    assert tools[-1]["content"].startswith("result 3 "), "the newest result is what the answer needs"
+    assert "trimmed" in tools[0]["content"], "it should say what was removed"
+
+
+def test_it_does_not_touch_the_question_or_the_system_prompt() -> None:
+    msgs = _conversation(3, 20_000)
+    fitted = analyst_mod.fit_context(msgs, budget=5_000)
+    assert fitted[0]["content"] == "you are the analyst"
+    assert fitted[1]["content"] == "what is the 100-year flood?"
+
+
+def test_one_huge_result_is_cut_down_too() -> None:
+    """With a single tool call there is no older message to sacrifice."""
+    msgs = _conversation(1, 60_000)
+    fitted = analyst_mod.fit_context(msgs, budget=10_000)
+    assert sum(len(str(m.get("content") or "")) for m in fitted) <= 10_000
+
+
+def test_the_original_messages_are_not_mutated() -> None:
+    msgs = _conversation(3, 12_000)
+    before = [str(m.get("content")) for m in msgs]
+    analyst_mod.fit_context(msgs, budget=5_000)
+    assert [str(m.get("content")) for m in msgs] == before

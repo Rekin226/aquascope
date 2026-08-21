@@ -35,6 +35,13 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_RESULT_CHARS = 14_000
 
+#: The whole conversation's budget, in characters (roughly four to a token).
+#: A per-result cap is not enough on a small window: three results at the cap
+#: exceed a free tier's 8,000 tokens a minute on their own, and the provider
+#: answers 413 "Request too large", which no amount of retrying will fix.
+#: 24,000 characters is about 6,000 tokens, leaving room for the reply.
+MAX_CONTEXT_CHARS = 24_000
+
 # One registry for the whole project (aquascope.ai_engine.providers); this dict
 # is the shape the loop already used, kept so callers and tests do not change.
 PROVIDERS: dict[str, dict[str, str | None]] = {
@@ -351,6 +358,43 @@ def _truncate(text: str, limit: int = MAX_TOOL_RESULT_CHARS) -> str:
     return text if len(text) <= limit else text[:limit] + f'... [truncated {len(text) - limit} chars]'
 
 
+def _conversation_size(messages: list[dict[str, Any]]) -> int:
+    return sum(len(str(m.get("content") or "")) for m in messages)
+
+
+def fit_context(messages: list[dict[str, Any]], budget: int = MAX_CONTEXT_CHARS) -> list[dict[str, Any]]:
+    """Shrink the oldest tool results until the conversation fits the budget.
+
+    The model needs the last result in full to answer; the older ones it has
+    usually already summarised into its own reasoning. So the oldest are cut
+    first, each keeping a readable head and saying what was removed, and the
+    most recent is left alone. Nothing else is touched: the system prompt, the
+    question and the assistant's own turns stay whole.
+    """
+    if _conversation_size(messages) <= budget:
+        return messages
+    out = [dict(m) for m in messages]
+    tool_indexes = [i for i, m in enumerate(out) if m.get("role") == "tool"]
+    for i in tool_indexes[:-1] if len(tool_indexes) > 1 else []:
+        if _conversation_size(out) <= budget:
+            break
+        content = str(out[i].get("content") or "")
+        if len(content) <= 400:
+            continue
+        out[i]["content"] = content[:400] + f"... [trimmed {len(content) - 400} chars to fit the context]"
+    # Still over: the newest result is itself too big, so cut that too. The
+    # note about the cut is part of the message, so leave room for it, or the
+    # conversation comes out just over the budget it was supposed to fit.
+    if _conversation_size(out) > budget and tool_indexes:
+        i = tool_indexes[-1]
+        content = str(out[i].get("content") or "")
+        note_allowance = 80
+        room = max(200, budget - (_conversation_size(out) - len(content)) - note_allowance)
+        if len(content) > room:
+            out[i]["content"] = content[:room] + f"... [trimmed {len(content) - room} chars to fit the context]"
+    return out
+
+
 def ask(
     question: str,
     *,
@@ -395,6 +439,7 @@ def ask(
 
     for step in range(1, max_steps + 1):
         result.steps = step
+        messages = fit_context(messages)
         response = client.chat.completions.create(
             model=cfg["model"], messages=messages, tools=tools, tool_choice="auto"
         )

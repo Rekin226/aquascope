@@ -6,7 +6,7 @@ colorTo: green
 sdk: static
 pinned: false
 license: mit
-short_description: Moved: the analyses are in the AquaScope Explorer
+short_description: "Moved: the analyses are in the AquaScope Explorer"
 ---
 
 # This Space has moved

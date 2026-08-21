@@ -8,6 +8,10 @@ at column 0 inside a `run: |` block, which ends the block scalar and takes the
 rest of the file with it.
 
 These checks are cheap and would have caught it on the branch.
+
+PyYAML alone is not enough, which the second occurrence proved: a paragraph at
+column 0 that happens to contain a colon parses as a perfectly valid top-level
+key, so the file "parses" while GitHub rejects it. Hence the allow-list below.
 """
 
 from __future__ import annotations
@@ -42,3 +46,27 @@ def test_a_workflow_has_triggers_and_jobs(path: Path) -> None:
     triggers = loaded.get("on", loaded.get(True))
     assert triggers, f"{path.name} declares no triggers, so nothing would ever run it"
     assert loaded.get("jobs"), f"{path.name} declares no jobs"
+
+
+# GitHub Actions' complete set of top-level workflow keys. Anything else means a
+# block scalar ended early and swallowed part of the file into the document.
+ALLOWED_TOP_LEVEL = {"name", "run-name", "on", "permissions", "env", "defaults", "concurrency", "jobs"}
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
+def test_a_workflow_has_no_keys_github_would_not_recognise(path: Path) -> None:
+    """The failure this catches: text meant for a `run:` script parsed as YAML.
+
+    `gh pr create --body "line one\n\nline two"` written inline in a `run: |`
+    block puts "line two" at column 0 once the block indent is stripped. If it
+    contains a colon, PyYAML reads it as a new top-level key and reports success;
+    GitHub answers 422 "Unexpected value". Naming the allowed keys catches it.
+    """
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    # PyYAML reads the bare key `on` as the boolean True (YAML 1.1); GitHub does not.
+    keys = {"on" if k is True else k for k in loaded}
+    unexpected = sorted(str(k) for k in keys - ALLOWED_TOP_LEVEL)
+    assert not unexpected, (
+        f"{path.name} has top-level keys GitHub does not define: {unexpected}. "
+        "Usually a line at column 0 inside a `run: |` block ended the block early."
+    )

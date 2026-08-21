@@ -100,12 +100,18 @@ jobs:
           if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
             echo "the open pull request now carries the new recordings"
           else
+            # The body goes through a file. Written inline, its blank lines and
+            # paragraphs sit at column 0 once YAML strips this block's indent,
+            # which ends the block scalar and makes the workflow unparseable.
+            cat > /tmp/showcase-pr.md <<'MD'
+            Recorded by `.github/workflows/showcase.yml` (#233). Each file is one question, every tool call with its arguments, the answer, the deterministic checks and the study.
+
+            The prose is a model's, so read it before merging: it goes on the Explorer's Ask panel as a worked example. The tool results beside it are not a recording, and the page re-runs them live.
+
+            Merging publishes them: the push to main triggers the Explorer deploy.
+            MD
             gh pr create --base main --head "$BRANCH" \
               --title "Showcase: re-record the Analyst's worked examples" \
-              --body "Recorded by \`.github/workflows/showcase.yml\` (#233). Each file is one question, every tool call with its arguments, the answer, the deterministic checks and the study.
-
-The prose is a model's, so read it before merging: it goes on the Explorer's Ask panel as a worked example. The tool results next to it are not a recording, and the page re-runs them live.
-
-Merging publishes them: the push to main triggers the Explorer deploy." \
+              --body-file /tmp/showcase-pr.md \
               --label no-changelog
           fi

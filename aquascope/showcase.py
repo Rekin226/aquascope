@@ -21,8 +21,8 @@ import argparse
 import json
 import logging
 import sys
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field, fields
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +30,7 @@ from aquascope import __version__
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["QUESTIONS", "ShowcaseEntry", "build", "diagnose", "write"]
+__all__ = ["QUESTIONS", "ShowcaseEntry", "already_recorded", "build", "diagnose", "load_recorded", "write"]
 
 #: The questions worth showing. Each is answerable from the archive, exercises a
 #: different part of the tool surface, and is short enough to read.
@@ -100,6 +100,51 @@ class ShowcaseEntry:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def already_recorded(out_dir: str | Path, *, fresh_for_days: float) -> set[str]:
+    """Ids with a recording newer than ``fresh_for_days``, which need not be redone.
+
+    Eight questions cost about a free tier's whole daily token budget, so a run
+    that fails halfway must be able to top up rather than start again. Anything
+    already recorded and still fresh is left alone.
+    """
+    out = Path(out_dir)
+    if not out.is_dir() or fresh_for_days <= 0:
+        return set()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=fresh_for_days)
+    fresh: set[str] = set()
+    for path in out.glob("*.json"):
+        if path.name == "index.json":
+            continue
+        try:
+            entry = json.loads(path.read_text(encoding="utf-8"))
+            when = datetime.fromisoformat(entry["recorded"])
+        except (OSError, ValueError, KeyError):
+            continue
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        if when > cutoff and entry.get("answer"):
+            fresh.add(str(entry.get("id") or path.stem))
+    return fresh
+
+
+def load_recorded(out_dir: str | Path) -> list[ShowcaseEntry]:
+    """The recordings already on disk, so a top-up run can republish them all."""
+    out = Path(out_dir)
+    entries: list[ShowcaseEntry] = []
+    if not out.is_dir():
+        return entries
+    known = {f.name for f in fields(ShowcaseEntry)}
+    for path in sorted(out.glob("*.json")):
+        if path.name == "index.json":
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        entries.append(ShowcaseEntry(**{k: v for k, v in data.items() if k in known}))
+    return entries
 
 
 def build(
@@ -257,20 +302,40 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover - a mainten
     ap.add_argument("--only", default=None, help="Comma-separated ids to rebuild")
     ap.add_argument("--pause", type=float, default=25.0,
                     help="Seconds between questions, so a per-minute rate limit can refill")
+    ap.add_argument("--refresh-after", type=float, default=30.0, metavar="DAYS",
+                    help="Re-record an example only when its recording is older than this "
+                         "(0 records every question every time). A full run costs about a free "
+                         "tier's daily token budget, so a failed half is topped up, not redone.")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
     questions = QUESTIONS
+    kept: list[ShowcaseEntry] = []
     if args.only:
         wanted = {q.strip() for q in args.only.split(",")}
         questions = [q for q in QUESTIONS if q["id"] in wanted]
+        kept = [e for e in load_recorded(args.out) if e.id not in wanted]
+    else:
+        fresh = already_recorded(args.out, fresh_for_days=args.refresh_after)
+        if fresh:
+            print(f"already recorded and still fresh, skipping: {', '.join(sorted(fresh))}", flush=True)
+            kept = [e for e in load_recorded(args.out) if e.id in fresh]
+            questions = [q for q in QUESTIONS if q["id"] not in fresh]
+    if not questions:
+        print(f"nothing to record: all {len(kept)} examples are current", flush=True)
+        return
     entries = build(questions, provider=args.provider, model=args.model, max_steps=args.max_steps,
                     pause=args.pause, on_event=lambda m: print(m, flush=True))
-    paths = write(entries, args.out)
+    # Republish what was kept alongside what was just recorded, or the index
+    # would shrink to this run's handful.
+    paths = write(kept + entries, args.out)
     ok = sum(1 for e in entries if not e.error)
-    print(f"recorded {ok}/{len(entries)} into {args.out}", flush=True)
-    if ok == 0:
+    print(f"recorded {ok}/{len(entries)} this run, {len(paths) - 1} published in total", flush=True)
+    if ok == 0 and not kept:
         print(diagnose(entries), flush=True)
         raise SystemExit(1)
+    if ok == 0:
+        print(diagnose(entries), flush=True)
+        print("kept the existing recordings; run again when the budget refills", flush=True)
     print("\n".join(f"  {k}: {v}" for k, v in paths.items()))
 
 

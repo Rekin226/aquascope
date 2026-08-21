@@ -67,6 +67,16 @@ jobs:
             echo "::notice::No LLM key secret is set, so the showcase cannot be recorded. Set GROQ_API_KEY (free tier) to enable it."
           fi
 
+      # Start from whatever is already recorded, on main or on the open branch,
+      # so a run that runs out of daily budget tops up instead of starting over.
+      - name: Seed from the existing recordings
+        if: steps.key.outputs.have_key == 'true'
+        run: |
+          if git fetch --quiet origin showcase/recordings 2>/dev/null; then
+            git checkout FETCH_HEAD -- explorer/showcase 2>/dev/null || true
+          fi
+          ls -1 explorer/showcase 2>/dev/null | wc -l | xargs echo "recordings already present:"
+
       - name: Record the answers
         if: steps.key.outputs.have_key == 'true'
         env:

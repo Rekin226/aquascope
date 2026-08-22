@@ -26,6 +26,51 @@ _API_KEY_SOURCES: dict[str, tuple[str, str]] = {
     if meta.requires_api_key
 }
 
+# Fetch arguments a source cannot run without, as source_key -> {kwarg: label}.
+#
+# The forms below only write a kwarg when the user typed something, so leaving a
+# required field blank produced no kwarg at all and the collector's own guard
+# fired -- the user saw a raw `ValueError: PEGELONLINE station_id must not be
+# empty.` (#174). The collectors are right to guard; the dashboard was wrong to
+# let an invalid submission through in the first place.
+#
+# Each entry names a field the collector raises on, so adding a source here is
+# how a new required field gets a friendly message instead of a traceback.
+_REQUIRED_FETCH_FIELDS: dict[str, dict[str, str]] = {
+    "pegelonline": {"station_id": "Station UUID"},
+    "bom": {"station_id": "AWRC station number"},
+}
+
+# Sources needing at least one of several fields, rather than all of them.
+# NOAA-NWPS raises "One of 'lid' or 'bbox' is required." when the form is
+# submitted with the LID box cleared and no bounding box typed.
+_REQUIRED_ONE_OF_FETCH_FIELDS: dict[str, tuple[dict[str, str], ...]] = {
+    "noaa_nwps": ({"lid": "Station LID", "bbox": "Bounding box"},),
+}
+
+
+def missing_required_fields(source_key: str, fetch: dict) -> list[str]:
+    """Labels of required fetch arguments this submission does not supply.
+
+    Pure and Streamlit-free so it can be tested without rendering a page.
+
+    A field counts as supplied when it is present *and* truthy: the forms strip
+    whitespace before writing, so an empty string can only arrive from a caller
+    that has not, and an empty tuple is not a bounding box.
+    """
+    supplied = {name for name, value in fetch.items() if value or value == 0}
+
+    missing = [
+        label for name, label in _REQUIRED_FETCH_FIELDS.get(source_key, {}).items() if name not in supplied
+    ]
+
+    for group in _REQUIRED_ONE_OF_FETCH_FIELDS.get(source_key, ()):
+        if not supplied & set(group):
+            missing.append(" or ".join(group.values()))
+
+    return missing
+
+
 _REGION_ORDER = [
     "Global",
     "United States",
@@ -109,6 +154,18 @@ def _render_api_tab() -> None:
 
     if st.button("🚀 Collect data", type="primary", key="collect_btn"):
         label = SOURCES[source_key][0]
+
+        # Check before the spinner: a predictable empty field should not look
+        # like a network round trip that then failed.
+        missing = missing_required_fields(source_key, fetch_kwargs)
+        if missing:
+            them = "it" if len(missing) == 1 else "them"
+            st.warning(
+                f"{label} needs {_join_labels(missing)} before it can collect. "
+                f"Fill {them} in above and press Collect again."
+            )
+            return
+
         with st.spinner(f"Collecting from {label}…"):
             try:
                 records = _run_collector(source_key, api_key, ctor_kwargs, fetch_kwargs)
@@ -132,6 +189,14 @@ def _render_api_tab() -> None:
             file_name=f"aquascope_{source_key}.csv",
             mime="text/csv",
         )
+
+
+def _join_labels(labels: list[str]) -> str:
+    """"a", "a and b", "a, b and c" -- readable in a sentence."""
+    if len(labels) == 1:
+        return f"**{labels[0]}**"
+    bold = [f"**{label}**" for label in labels]
+    return f"{', '.join(bold[:-1])} and {bold[-1]}"
 
 
 def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C901, PLR0915 — one branch per source

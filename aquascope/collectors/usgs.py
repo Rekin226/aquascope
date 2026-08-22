@@ -26,6 +26,7 @@ from aquascope.schemas.water_data import (
     DataSource,
     GeoLocation,
     StreamflowReading,
+    WaterLevelReading,
     WaterQualitySample,
 )
 from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
@@ -54,6 +55,7 @@ PARAM_LABELS: dict[str, str] = {
 
 MILES2_TO_KM2 = 2.589988110336
 FT3S_TO_M3S = 0.028316846592
+FT_TO_M = 0.3048
 
 # Registry variable -> USGS parameter codes advertised in time-series-metadata.
 STATION_VARIABLE_CODES: dict[str, tuple[str, ...]] = {
@@ -592,8 +594,8 @@ class USGSCollector(BaseCollector):
                 return features
             url, page_params = next_link, None
 
-    def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample | StreamflowReading]:
-        samples: Sequence[WaterQualitySample | StreamflowReading] = []
+    def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample | StreamflowReading | WaterLevelReading]:
+        samples: list[WaterQualitySample | StreamflowReading | WaterLevelReading] = []
         for feat in raw:
             try:
                 props = feat.get("properties", {})
@@ -606,6 +608,11 @@ class USGSCollector(BaseCollector):
                 val = props.get("value")
                 if val is None:
                     continue
+
+                time_str = props.get("time")
+                if time_str is None:
+                    continue
+                dt = datetime.fromisoformat(str(time_str).replace("Z", "+00:00"))
 
                 loc = None
                 if coords[0] is not None:
@@ -628,12 +635,31 @@ class USGSCollector(BaseCollector):
                             station_id=props.get("monitoring_location_id"),
                             station_name=props.get("station_name"),
                             location=loc,
-                            reading_datetime=datetime.fromisoformat(props["time"]),
+                            reading_datetime=dt,
                             discharge_cms=rounded_discharge_cms,
                             source_type="in_situ",
                             uncertainty_cms=None,
                             catchment_area_km2=catchment_area_km2,
                             unit="m3/s",
+                        )
+                    )
+
+                elif param_code == "00065":  # Gage height, feet -> metres
+                    stage_sig_figs = self._count_sig_figs(val)
+                    if not stage_sig_figs:
+                        stage_sig_figs = 3  # default to 3 significant figures if unable to determine
+                    stage_m = float(val) * FT_TO_M
+                    rounded_stage_m = USGSCollector._round_to_sig_figs(stage_m, stage_sig_figs)
+
+                    samples.append(
+                        WaterLevelReading(
+                            source=DataSource.USGS,
+                            station_id=props.get("monitoring_location_id"),
+                            station_name=props.get("station_name"),
+                            location=loc,
+                            reading_datetime=dt,
+                            water_level=rounded_stage_m,
+                            unit="m",
                         )
                     )
 
@@ -643,7 +669,7 @@ class USGSCollector(BaseCollector):
                             source=DataSource.USGS,
                             station_id=props.get("monitoring_location_id", "unknown"),
                             location=loc,
-                            sample_datetime=datetime.fromisoformat(props["time"]),
+                            sample_datetime=dt,
                             parameter=param_label,
                             value=float(val),
                             unit=props.get("unit_of_measure", ""),

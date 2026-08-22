@@ -12,7 +12,13 @@ from aquascope.collectors.taiwan_wra import (
     _extract_location,
 )
 from aquascope.collectors.usgs import USGSCollector
-from aquascope.schemas.water_data import GeoLocation
+from aquascope.schemas.water_data import (
+    DataSource,
+    GeoLocation,
+    StreamflowReading,
+    WaterLevelReading,
+    WaterQualitySample,
+)
 
 
 class TestUSGSKeyResolution:
@@ -258,6 +264,19 @@ class TestUSGSCollectorKeyless:
         assert args[0].startswith("https://waterservices.usgs.gov/nwis/iv/")
         assert kwargs["params"]["bBox"] == "-77.2,38.8,-77.0,39.0"
 
+        samples = collector.normalise(raw)
+        assert len(samples) == 1
+        reading = samples[0]
+        assert isinstance(reading, WaterLevelReading)
+        assert reading.source == DataSource.USGS
+        assert reading.station_id == "01646500"
+        assert reading.unit == "m"
+        # 12.3 has 3 sig figs: 12.3 * 0.3048 = 3.74904 -> 3.75
+        assert reading.water_level == pytest.approx(3.75)
+        assert reading.location is not None
+        assert reading.location.latitude == 38.9
+        assert reading.location.longitude == -77.1
+
 
 class TestUSGSMonitoringLocationCatchmentArea:
     def test_returns_none_for_empty_location_id(self):
@@ -336,6 +355,110 @@ class TestUSGSCollectorKeyed:
         mock_get_json.assert_called_once()
         args, kwargs = mock_get_json.call_args
         assert args[0] == "collections/daily/items"
+
+    def test_keyed_normalise_gage_height_to_water_level_reading(self):
+        collector = USGSCollector(api_key="valid-key")
+        raw = [
+            {
+                "geometry": {"coordinates": [-77.1, 38.9]},
+                "properties": {
+                    "monitoring_location_id": "01646500",
+                    "station_name": "Potomac River",
+                    "parameter_code": "00065",
+                    "value": "5.40",
+                    "time": "2026-07-20T12:00:00Z",
+                    "unit_of_measure": "ft",
+                },
+            }
+        ]
+        samples = collector.normalise(raw)
+        assert len(samples) == 1
+        reading = samples[0]
+        assert isinstance(reading, WaterLevelReading)
+        assert reading.source == DataSource.USGS
+        assert reading.station_id == "01646500"
+        assert reading.station_name == "Potomac River"
+        assert reading.unit == "m"
+        # 5.40 has 3 sig figs: 5.40 * 0.3048 = 1.64592 -> 1.65
+        assert reading.water_level == pytest.approx(1.65)
+        assert reading.location is not None
+        assert reading.location.latitude == 38.9
+        assert reading.location.longitude == -77.1
+
+
+class TestUSGSGageHeightNormalisation:
+    """#240: USGS gage height (00065) normalises to WaterLevelReading in metres."""
+
+    @pytest.mark.parametrize(
+        ("val_str", "expected_water_level"),
+        [
+            ("10.0", 3.05),    # 3 sig figs: 10.0 * 0.3048 = 3.048 -> 3.05
+            ("12.3", 3.75),    # 3 sig figs: 12.3 * 0.3048 = 3.74904 -> 3.75
+            ("5.400", 1.646),  # 4 sig figs: 5.400 * 0.3048 = 1.64592 -> 1.646
+            ("0.5", 0.2),      # 1 sig fig:  0.5 * 0.3048 = 0.1524 -> 0.2
+            ("100", 30.0),     # 1 sig fig:  100 * 0.3048 = 30.48 -> 30.0
+        ],
+    )
+    def test_gage_height_sig_figs_and_metre_conversion(self, val_str, expected_water_level):
+        collector = USGSCollector(api_key="valid-key")
+        raw = [
+            {
+                "geometry": {"coordinates": [-77.1, 38.9]},
+                "properties": {
+                    "monitoring_location_id": "01646500",
+                    "parameter_code": "00065",
+                    "value": val_str,
+                    "time": "2026-07-20T12:00:00Z",
+                },
+            }
+        ]
+        samples = collector.normalise(raw)
+        assert len(samples) == 1
+        reading = samples[0]
+        assert isinstance(reading, WaterLevelReading)
+        assert reading.unit == "m"
+        assert reading.water_level == pytest.approx(expected_water_level)
+
+    def test_discharge_and_water_quality_schemas_preserved(self):
+        collector = USGSCollector(api_key="valid-key")
+        raw = [
+            {
+                "geometry": {"coordinates": [-77.1, 38.9]},
+                "properties": {
+                    "monitoring_location_id": "01646500",
+                    "parameter_code": "00060",
+                    "value": "100.0",
+                    "time": "2026-07-20T12:00:00Z",
+                },
+            },
+            {
+                "geometry": {"coordinates": [-77.1, 38.9]},
+                "properties": {
+                    "monitoring_location_id": "01646500",
+                    "parameter_code": "00065",
+                    "value": "10.0",
+                    "time": "2026-07-20T12:00:00Z",
+                },
+            },
+            {
+                "geometry": {"coordinates": [-77.1, 38.9]},
+                "properties": {
+                    "monitoring_location_id": "01646500",
+                    "parameter_code": "00400",
+                    "value": "7.5",
+                    "time": "2026-07-20T12:00:00Z",
+                    "unit_of_measure": "pH units",
+                },
+            },
+        ]
+        samples = collector.normalise(raw)
+        assert len(samples) == 3
+        assert isinstance(samples[0], StreamflowReading)
+        assert isinstance(samples[1], WaterLevelReading)
+        assert isinstance(samples[2], WaterQualitySample)
+        assert samples[0].unit == "m3/s"
+        assert samples[1].unit == "m"
+        assert samples[2].parameter == "pH"
 
 
 class TestUSGSKeyedFiltersReachTheOGCPath:

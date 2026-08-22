@@ -46,6 +46,14 @@ MAX_CONTEXT_CHARS = 24_000
 #: something other than the conversation and should surface rather than loop.
 MIN_CONTEXT_CHARS = 3_000
 
+#: Said back to a model whose tool call the provider could not parse. Short on
+#: purpose: it is added to a conversation that may already be near the limit.
+TOOL_JSON_REMINDER = (
+    "Your last tool call could not be parsed. The arguments must be a single JSON object, "
+    'with any code as one JSON string: {"code": "import numpy as np\\nresult = 1"}. '
+    "Newlines and quotes inside it have to be escaped. Please make that call again."
+)
+
 # One registry for the whole project (aquascope.ai_engine.providers); this dict
 # is the shape the loop already used, kept so callers and tests do not change.
 PROVIDERS: dict[str, dict[str, str | None]] = {
@@ -459,19 +467,30 @@ def ask(
         # any speed, so retrying it unchanged is pointless. Halve the budget and
         # go again: the window belongs to the provider and is not ours to guess.
         from aquascope.ai_engine.llm_transport import LLMHTTPError
-        for attempt in range(4):
+        malformed = 0
+        for attempt in range(6):
             try:
                 response = client.chat.completions.create(
                     model=cfg["model"], messages=messages, tools=tools, tool_choice="auto"
                 )
                 break
             except LLMHTTPError as exc:
-                too_large = exc.status == 413 or "too large" in (exc.body or "").lower()
-                if not too_large or attempt == 3 or budget <= MIN_CONTEXT_CHARS:
+                body = (exc.body or "").lower()
+                too_large = exc.status == 413 or "too large" in body
+                # Some providers reject the whole request when the model's own
+                # tool call will not parse as JSON. The model wrote it, so the
+                # model can write it again: say what was wrong and resample.
+                bad_call = exc.status == 400 and "tool_use_failed" in body
+                if too_large and attempt < 5 and budget > MIN_CONTEXT_CHARS:
+                    budget = max(MIN_CONTEXT_CHARS, budget // 2)
+                    say(f"the request was too large for the model's window, retrying within {budget} characters")
+                    messages = fit_context(messages, budget)
+                elif bad_call and malformed < 2:
+                    malformed += 1
+                    say("the model's tool call was not valid JSON, asking it to write that call again")
+                    messages = [*messages, {"role": "user", "content": TOOL_JSON_REMINDER}]
+                else:
                     raise
-                budget = max(MIN_CONTEXT_CHARS, budget // 2)
-                say(f"the request was too large for the model's window, retrying within {budget} characters")
-                messages = fit_context(messages, budget)
         choice = response.choices[0]
         msg = choice.message
         calls = getattr(msg, "tool_calls", None) or []

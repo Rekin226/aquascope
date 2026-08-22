@@ -421,3 +421,59 @@ def test_a_request_too_large_shrinks_the_context_and_tries_again() -> None:
     assert len(sizes) >= 3, f"one call, one refusal, one retry: {sizes}"
     assert sizes[-1] < sizes[-2], f"the retry has to be smaller than what was refused: {sizes}"
     assert sizes[-1] < 8_000
+
+
+def test_an_unparseable_tool_call_is_sent_back_to_the_model() -> None:
+    """Groq rejects the whole request when the model's tool call is not valid JSON.
+
+    It happened on a showcase question twice running: the model wrote raw Python
+    where the JSON arguments object belongs. The model wrote it, so the model can
+    write it again, rather than the question being lost.
+    """
+    from types import SimpleNamespace
+
+    from aquascope.ai_engine.llm_transport import LLMHTTPError
+
+    BAD = ('{"error":{"message":"Failed to parse tool call arguments as JSON",'
+           '"type":"invalid_request_error","code":"tool_use_failed"}}')
+    seen: list[list[dict]] = []
+
+    class MalformedOnce:
+        def __init__(self):
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+            self.turn = 0
+
+        def _create(self, **kwargs):
+            seen.append(kwargs["messages"])
+            self.turn += 1
+            if self.turn == 1:
+                raise LLMHTTPError(400, BAD, "https://x/v1")
+            msg = SimpleNamespace(content="Taipei is wetter than London.", tool_calls=None)
+            return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
+
+    result = analyst_mod.ask("How wet is Taipei?", client=MalformedOnce(), model="test", max_steps=2)
+    assert result.answer == "Taipei is wetter than London."
+    assert len(seen) == 2, "it should have asked again"
+    assert "single JSON object" in str(seen[1][-1]["content"]), "and said what was wrong"
+
+
+def test_it_does_not_argue_with_the_model_forever() -> None:
+    """Two nudges, then the failure surfaces: a model that cannot format a call will not learn."""
+    from types import SimpleNamespace
+
+    from aquascope.ai_engine.llm_transport import LLMHTTPError
+
+    BAD = '{"error":{"code":"tool_use_failed"}}'
+    calls = {"n": 0}
+
+    class AlwaysMalformed:
+        def __init__(self):
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+        def _create(self, **kwargs):
+            calls["n"] += 1
+            raise LLMHTTPError(400, BAD, "https://x/v1")
+
+    with pytest.raises(LLMHTTPError):
+        analyst_mod.ask("How wet is Taipei?", client=AlwaysMalformed(), model="test", max_steps=2)
+    assert calls["n"] == 3, f"the first try and two nudges, then stop: {calls['n']}"

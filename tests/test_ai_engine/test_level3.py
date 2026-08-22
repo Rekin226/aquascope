@@ -434,7 +434,7 @@ def test_an_unparseable_tool_call_is_sent_back_to_the_model() -> None:
 
     from aquascope.ai_engine.llm_transport import LLMHTTPError
 
-    BAD = ('{"error":{"message":"Failed to parse tool call arguments as JSON",'
+    bad = ('{"error":{"message":"Failed to parse tool call arguments as JSON",'
            '"type":"invalid_request_error","code":"tool_use_failed"}}')
     seen: list[list[dict]] = []
 
@@ -447,7 +447,7 @@ def test_an_unparseable_tool_call_is_sent_back_to_the_model() -> None:
             seen.append(kwargs["messages"])
             self.turn += 1
             if self.turn == 1:
-                raise LLMHTTPError(400, BAD, "https://x/v1")
+                raise LLMHTTPError(400, bad, "https://x/v1")
             msg = SimpleNamespace(content="Taipei is wetter than London.", tool_calls=None)
             return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
 
@@ -463,7 +463,7 @@ def test_it_does_not_argue_with_the_model_forever() -> None:
 
     from aquascope.ai_engine.llm_transport import LLMHTTPError
 
-    BAD = '{"error":{"code":"tool_use_failed"}}'
+    bad = '{"error":{"code":"tool_use_failed"}}'
     calls = {"n": 0}
 
     class AlwaysMalformed:
@@ -472,7 +472,7 @@ def test_it_does_not_argue_with_the_model_forever() -> None:
 
         def _create(self, **kwargs):
             calls["n"] += 1
-            raise LLMHTTPError(400, BAD, "https://x/v1")
+            raise LLMHTTPError(400, bad, "https://x/v1")
 
     with pytest.raises(LLMHTTPError):
         analyst_mod.ask("How wet is Taipei?", client=AlwaysMalformed(), model="test", max_steps=2)

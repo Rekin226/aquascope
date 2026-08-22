@@ -37,7 +37,12 @@ class GRDCCollector(BaseCollector):
 
     name = "grdc"
 
-    def fetch_raw(self, source_type: str = "in_situ", **kwargs) -> list[dict]:
+    def fetch_raw(
+        self,
+        source_type: str = "in_situ",
+        max_items: int | None = 50_000,
+        **kwargs,
+    ) -> list[dict]:
         """
         Fetch raw GRDC records.
 
@@ -46,14 +51,16 @@ class GRDCCollector(BaseCollector):
         source_type : str
             ``"in_situ"`` (default, Zenodo gauge subset) or
             ``"satellite"`` (RSEG, DaRUS).
+        max_items : int | None
+            Maximum number of records to return. ``None`` returns all records.
         """
         if source_type == "in_situ":
-            return self._fetch_zenodo_insitu()
+            return self._fetch_zenodo_insitu(max_items=max_items)
         elif source_type == "satellite":
-            return self._fetch_rseg()
+            return self._fetch_rseg(max_items=max_items)
         raise ValueError(f"source_type must be 'in_situ' or 'satellite', got {source_type!r}")
 
-    def _fetch_zenodo_insitu(self) -> list[dict]:
+    def _fetch_zenodo_insitu(self, max_items: int | None = 50_000) -> list[dict]:
         """Download (and locally cache) the Zenodo in-situ ZIP, parse station text files."""
         import hashlib
         import zipfile
@@ -90,7 +97,22 @@ class GRDCCollector(BaseCollector):
             station_files = [n for n in zf.namelist() if n.endswith(".txt") or n.endswith(".Cmd")]
             for name in station_files:
                 with zf.open(name) as fh:
-                    raw.extend(self._parse_grdc_station_file(fh.read().decode("latin-1"), name))
+                    raw.extend(
+                        self._parse_grdc_station_file(
+                            fh.read().decode("latin-1"),
+                            name,
+                        )
+                    )
+
+                if max_items is not None and len(raw) >= max_items:
+                    raw = raw[:max_items]
+                    logger.info(
+                        "GRDC in-situ records truncated at max_items=%d. "
+                        "Use max_items=None to fetch all records.",
+                        max_items,
+                    )
+                    break
+
         return raw
 
     @staticmethod
@@ -144,7 +166,7 @@ class GRDCCollector(BaseCollector):
             )
         return rows
 
-    def _fetch_rseg(self) -> list[dict]:
+    def _fetch_rseg(self, max_items: int | None = 50_000) -> list[dict]:
         """
         Fetch the RSEG satellite discharge extension from DaRUS.
 
@@ -208,6 +230,14 @@ class GRDCCollector(BaseCollector):
 
         df = df.dropna(subset=["discharge"])
         raw = df.to_dict("records")
+
+        if max_items is not None and len(raw) > max_items:
+            raw = raw[:max_items]
+            logger.info(
+                "GRDC/RSEG records truncated at max_items=%d. "
+                "Use max_items=None to fetch all records.",
+                max_items,
+            )
         for row in raw:
             row["source_type"] = "satellite"
             row["station_id"] = str(row.get("station_id", row.get("grdc_no", "")))

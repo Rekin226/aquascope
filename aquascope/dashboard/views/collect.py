@@ -207,10 +207,25 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
             "Source type",
             ["in_situ", "satellite"],
             horizontal=True,
-            format_func=lambda v: {"in_situ": "In-situ gauges (Zenodo)", "satellite": "Satellite RSEG (DaRUS)"}[v],
+            format_func=lambda v: {
+                "in_situ": "In-situ gauges (Zenodo)",
+                "satellite": "Satellite RSEG (DaRUS)",
+            }[v],
         )
+
         fetch["source_type"] = mode
-        st.caption("First run downloads and caches the archive locally — allow a few minutes.")
+
+        fetch["max_items"] = st.slider(
+            "Max records",
+            100,
+            20_000,
+            2_000,
+            step=100,
+        )
+
+        st.caption(
+            "First run downloads and caches the archive locally — allow a few minutes."
+        )
 
     elif source_key == "hubeau_hydrometrie":
         c1, c2 = st.columns(2)

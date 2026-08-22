@@ -143,6 +143,49 @@ class TestGRDCFetchRaw:
         result = collector.fetch_raw(source_type="satellite")
         assert result == []
 
+    def test_fetch_raw_passes_max_items_to_in_situ(self, monkeypatch):
+        called = {}
+
+        def fake_fetch(max_items):
+            called["max_items"] = max_items
+            return []
+
+        monkeypatch.setattr(
+            self.collector,
+            "_fetch_zenodo_insitu",
+            fake_fetch,
+        )
+
+        result = self.collector.fetch_raw(
+            source_type="in_situ",
+            max_items=100,
+        )
+
+        assert result == []
+        assert called["max_items"] == 100
+
+
+    def test_fetch_raw_passes_max_items_to_satellite(self, monkeypatch):
+        called = {}
+
+        def fake_fetch(max_items):
+            called["max_items"] = max_items
+            return []
+
+        monkeypatch.setattr(
+            self.collector,
+            "_fetch_rseg",
+            fake_fetch,
+        )
+
+        result = self.collector.fetch_raw(
+            source_type="satellite",
+            max_items=100,
+        )
+
+        assert result == []
+        assert called["max_items"] == 100
+
 
 class TestGRDCResolveVar:
     def test_resolves_first_matching_candidate(self):

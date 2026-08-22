@@ -7,6 +7,7 @@ is what it does not establish, and here is how to run it again".
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
@@ -366,3 +367,57 @@ def test_the_original_messages_are_not_mutated() -> None:
     before = [str(m.get("content")) for m in msgs]
     analyst_mod.fit_context(msgs, budget=5_000)
     assert [str(m.get("content")) for m in msgs] == before
+
+
+def test_the_size_count_includes_what_the_model_wrote_not_just_the_text() -> None:
+    """A run_python call carries its snippet in tool_calls, which used to be free."""
+    msgs = [{"role": "assistant", "content": "", "tool_calls": [
+        {"id": "c0", "type": "function",
+         "function": {"name": "run_python", "arguments": '{"code": "' + "x" * 5000 + '"}'}}]}]
+    assert analyst_mod._conversation_size(msgs) > 5000, (
+        "counting only 'content' reads this conversation as empty, which is how a request "
+        "budgeted at 6,000 tokens arrived as 9,300"
+    )
+
+
+def test_a_request_too_large_shrinks_the_context_and_tries_again() -> None:
+    """413 means "this cannot fit my window", so the same request will never work.
+
+    Three of the showcase questions died here: two records to compare, several
+    tool results, and the accumulated conversation was bigger than the whole
+    per-minute window. Retrying it unchanged was pointless; shrinking is the move.
+    """
+    from types import SimpleNamespace
+
+    from aquascope.ai_engine.llm_transport import LLMHTTPError
+
+    sizes: list[int] = []
+
+    class TooLargeUntilSmall:
+        """Asks for a tool, then refuses the follow-up until the result is trimmed."""
+
+        def __init__(self):
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+            self.turn = 0
+
+        def _create(self, **kwargs):
+            size = analyst_mod._conversation_size(kwargs["messages"])
+            sizes.append(size)
+            self.turn += 1
+            if self.turn == 1:
+                call = SimpleNamespace(id="c0", function=SimpleNamespace(name="list_sources", arguments="{}"))
+                return SimpleNamespace(choices=[SimpleNamespace(
+                    message=SimpleNamespace(content="", tool_calls=[call]))])
+            if size > 8_000:
+                raise LLMHTTPError(413, '{"error":{"message":"Request too large"}}', "https://x/v1")
+            msg = SimpleNamespace(content="There are sources.", tool_calls=None)
+            return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
+
+    big = {"sources": [{"id": f"s{i}", "notes": "y" * 400} for i in range(60)]}
+    with patch("aquascope.mcp_server.list_sources", return_value=big):
+        result = analyst_mod.ask("What sources are there?", client=TooLargeUntilSmall(),
+                                 model="test", max_steps=3)
+    assert result.answer == "There are sources.", "it should answer once the context fits"
+    assert len(sizes) >= 3, f"one call, one refusal, one retry: {sizes}"
+    assert sizes[-1] < sizes[-2], f"the retry has to be smaller than what was refused: {sizes}"
+    assert sizes[-1] < 8_000

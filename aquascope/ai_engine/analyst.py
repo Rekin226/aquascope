@@ -42,6 +42,10 @@ MAX_TOOL_RESULT_CHARS = 14_000
 #: 24,000 characters is about 6,000 tokens, leaving room for the reply.
 MAX_CONTEXT_CHARS = 24_000
 
+#: Below this there is no room for a useful tool result, so a 413 here is about
+#: something other than the conversation and should surface rather than loop.
+MIN_CONTEXT_CHARS = 3_000
+
 # One registry for the whole project (aquascope.ai_engine.providers); this dict
 # is the shape the loop already used, kept so callers and tests do not change.
 PROVIDERS: dict[str, dict[str, str | None]] = {
@@ -359,7 +363,17 @@ def _truncate(text: str, limit: int = MAX_TOOL_RESULT_CHARS) -> str:
 
 
 def _conversation_size(messages: list[dict[str, Any]]) -> int:
-    return sum(len(str(m.get("content") or "")) for m in messages)
+    """Everything that goes on the wire, not just the text a human would read.
+
+    An assistant turn carries its ``tool_calls`` with the arguments the model
+    wrote, which for a ``run_python`` call is a whole snippet. Counting only
+    ``content`` under-reads the request badly, which is how a conversation
+    budgeted at 6,000 tokens arrived as 9,300.
+    """
+    try:
+        return len(json.dumps(messages, ensure_ascii=False, default=str))
+    except (TypeError, ValueError):  # pragma: no cover - defensive
+        return sum(len(str(m.get("content") or "")) for m in messages)
 
 
 def fit_context(messages: list[dict[str, Any]], budget: int = MAX_CONTEXT_CHARS) -> list[dict[str, Any]]:
@@ -437,12 +451,27 @@ def ask(
     _SANDBOX_DATA.update(data or {})
     seen: list[dict[str, Any]] = []          # what each tool actually returned, for the checks
 
+    budget = MAX_CONTEXT_CHARS
     for step in range(1, max_steps + 1):
         result.steps = step
-        messages = fit_context(messages)
-        response = client.chat.completions.create(
-            model=cfg["model"], messages=messages, tools=tools, tool_choice="auto"
-        )
+        messages = fit_context(messages, budget)
+        # A 413 is the provider saying this request cannot fit its window, at
+        # any speed, so retrying it unchanged is pointless. Halve the budget and
+        # go again: the window belongs to the provider and is not ours to guess.
+        from aquascope.ai_engine.llm_transport import LLMHTTPError
+        for attempt in range(4):
+            try:
+                response = client.chat.completions.create(
+                    model=cfg["model"], messages=messages, tools=tools, tool_choice="auto"
+                )
+                break
+            except LLMHTTPError as exc:
+                too_large = exc.status == 413 or "too large" in (exc.body or "").lower()
+                if not too_large or attempt == 3 or budget <= MIN_CONTEXT_CHARS:
+                    raise
+                budget = max(MIN_CONTEXT_CHARS, budget // 2)
+                say(f"the request was too large for the model's window, retrying within {budget} characters")
+                messages = fit_context(messages, budget)
         choice = response.choices[0]
         msg = choice.message
         calls = getattr(msg, "tool_calls", None) or []

@@ -43,6 +43,7 @@ All notable changes to AquaScope are documented here.
 - Explorer: the "Monthly climate" chart on the click-anywhere card drew eight bars instead of twelve. Plotly merges categorical x values with the same label, and the one-letter month labels repeated (M, J, A), so May, June, July and August were folded into March, January and April. Months are now labelled Jan..Dec.
 - USGS keyed path: `stateCd` / `countyCd` are translated to the ANSI codes the OGC API expects (`MD` to `24`, `24033` to `033` with the implied state `24` if `state_code` is not in the parameter list). Comma-separated `stateCd` / `countyCd` / `huc` values trigger a warning since the OGC API takes single values for these fields - we choose to pass the first value of the comma-separated list as the parameter in these instances rather than returning nothing. (#160)
 - Explorer: `fmt(x, digits)` ignored `digits` below 10, so catchment areas and populations printed three decimals ("303.412 km²"); the trend sentence read "a increasing trend"; and a slow network was reported as "WebGL is off" (WebGL is now tested directly, and a slow style load says so). (#231)
+- The NWIS sweep sent `stateCd=as` for American Samoa, a code NWIS rejects with HTTP 400, and the error was swallowed so the territory was never collected; it also skipped the Federated States of Micronesia, the Marshall Islands and Palau. American Samoa now uses its NWIS alpha code `aq`, and `fm`, `mh` and `pw` are added to the sweep. (#239)
 
 ## [0.12.0] - 2026-08-18
 

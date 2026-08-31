@@ -331,8 +331,8 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("discharge", "water_level", "reservoir_storage", "groundwater_level", "precipitation",
                    "water_quality"),
         output_model="StreamflowReading | WaterLevelReading | WaterQualitySample",
-        license="unknown", redistributable=False,
-        attribution="Bureau of Meteorology, Water Data Online (KISTERS KiWIS); terms to verify before mirroring",
+        license="CC-BY-4.0", redistributable=True,
+        attribution="Bureau of Meteorology, © Commonwealth of Australia",
         supports_station_lookup=True,
     ),
     # ── Global ──────────────────────────────────────────────────────────

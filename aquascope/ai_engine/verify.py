@@ -93,7 +93,24 @@ _CONVENTIONS = {0.05, 0.01, 0.1, 0.9, 0.95, 0.99}
 
 #: Digit grouping with a space: "14 555" is one number, not 14 and 555. Only
 #: before a group of exactly three digits, which is what grouping means.
-_GROUPED = re.compile(r"(?<=\d)[\s\u00a0\u202f\u2009](?=\d{3}\b)")
+#:
+#: The leading run must not be part of an alphanumeric label. "Q2 325" and
+#: "Q10 433" are a return-period label followed by its value, and joining them
+#: invented 2325 and 10433 -- numbers no tool returned, which is exactly what
+#: the checks then reported as unestablished. A digit preceded by a letter (or
+#: by another digit, so only the whole run is considered) is not the start of a
+#: grouped number.
+_GROUPED = re.compile(r"(?<![A-Za-z0-9])(\d{1,3})[\s\u00a0\u202f\u2009](?=\d{3}\b)")
+
+#: A dash between two numbers is a range, not a minus sign: "297-348" and
+#: "453 - 525" are two positive bounds. Read as a negative, the lower bound of
+#: every interval in an answer became a number no tool returned.
+#:
+#: The lookbehind is what keeps genuine negatives working: in "skew=-0.864" and
+#: "tau = -0.14" the character before the dash (ignoring spaces) is "=" or a
+#: letter, not a digit, so those are left alone. Unicode dashes are listed too,
+#: so this holds whether or not the text has been through `normalise`.
+_RANGE_DASH = re.compile(r"(?<=\d)[ \t\u00a0\u202f\u2009]*[-\u2010-\u2015\u2212][ \t\u00a0\u202f\u2009]*(?=\d)")
 
 
 def normalise(text: str) -> str:
@@ -106,7 +123,7 @@ def normalise(text: str) -> str:
     superscripts into digits, the dashes become ASCII, and grouped digits join up.
     """
     folded = unicodedata.normalize("NFKC", text or "").translate(_DASHES)
-    return _GROUPED.sub("", folded)
+    return _GROUPED.sub(r"\1", folded)
 
 
 def _numbers(text: str, *, claims_only: bool = False) -> list[float]:
@@ -114,6 +131,9 @@ def _numbers(text: str, *, claims_only: bool = False) -> list[float]:
     text = text or ""
     if claims_only:
         text = _SQUARED_UNIT.sub(" ", _EXPONENT_UNIT.sub(" ", _PERCENT.sub(" ", _DATE.sub(" ", text))))
+    # Split ranges last, so a unit's negative exponent has already been removed
+    # above and cannot be mistaken for one bound of an interval.
+    text = _RANGE_DASH.sub(" ", text)
     out = []
     for token in _NUMBER.findall(text):
         try:

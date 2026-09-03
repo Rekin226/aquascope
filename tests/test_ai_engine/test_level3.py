@@ -297,6 +297,70 @@ def test_grouped_digits_are_one_number() -> None:
     assert "numbers_come_from_tools" not in {c.name for c in v.failed}
 
 
+# ── ranges and label-number pairs (#324) ────────────────────────────────────
+#
+# The first live run of the Anthropic provider reported six numbers as "not in
+# any tool result" and none of them were real. They came from how the answer was
+# written: an en dash between two bounds read as a negative, and a return-period
+# label read as part of the following value.
+
+KINGSTON_CURVE_PAYLOAD = {
+    "unit": "m3/s", "station_id": "8496ce69-482c-406a-a2f0-ac418ef8f099", "name": "Kingston",
+    "agency": "Environment Agency", "years": 40.0, "n": 14555,
+    "ffa": {
+        "return_periods": [2, 10, 100],
+        "fits": {"gev": {
+            "q": [325.0, 433.0, 497.0],
+            "ci": [[297.0, 348.0], [400.0, 466.0], [453.0, 525.0]],
+        }},
+    },
+}
+
+KINGSTON_CURVE_ANSWER = (
+    "**Flood frequency at Kingston (River Thames)**\n\n"
+    "Environment Agency (UK) | **Kingston** (station ID "
+    "8496ce69-482c-406a-a2f0-ac418ef8f099) | 40 yr, 14 555 daily values | "
+    "Q2 325 (297–348) | Q10 433 (400–466) | Q100 497 m³ s⁻¹ "
+    "(453 – 525 m³ s⁻¹, 90 % CI)"
+)
+
+
+def test_a_range_written_with_an_en_dash_is_two_positive_bounds() -> None:
+    """`297–348` is an interval, not 297 and minus 348."""
+    assert verify_mod._numbers(verify_mod.normalise("297–348")) == [297.0, 348.0]
+    assert verify_mod._numbers(verify_mod.normalise("453 – 525")) == [453.0, 525.0]
+    assert verify_mod._numbers(verify_mod.normalise("447 - 604")) == [447.0, 604.0]
+
+
+def test_a_label_is_not_glued_onto_the_following_number() -> None:
+    """`Q2 325` is a return-period label and its value, not 2325."""
+    for prose, expected in (("Q2 325", 325.0), ("Q10 433", 433.0), ("T100 495", 495.0)):
+        got = verify_mod._numbers(verify_mod.normalise(prose))
+        assert expected in got, f"{prose!r} lost its value: {got}"
+        assert not any(n > 1000 for n in got), f"{prose!r} invented {got}"
+
+
+def test_digit_grouping_still_joins() -> None:
+    """The label fix must not undo the grouping fix it sits next to."""
+    assert verify_mod._numbers(verify_mod.normalise("14 555")) == [14555.0]
+    assert verify_mod._numbers(verify_mod.normalise("1 234 567")) == [1234567.0]
+
+
+def test_a_genuine_negative_survives() -> None:
+    """Only a dash *between two digits* is a range separator."""
+    assert verify_mod._numbers(verify_mod.normalise("skew=-0.864")) == [-0.864]
+    assert verify_mod._numbers(verify_mod.normalise("τ = -0.14")) == [-0.14]
+    assert -3.0 in verify_mod._numbers(verify_mod.normalise("values: 5, -3"))
+
+
+def test_a_flood_curve_answer_produces_no_false_unestablished_line() -> None:
+    """The reported case, end to end: six false numbers, none of them real."""
+    v = verify_mod.verify(KINGSTON_CURVE_ANSWER, _one(KINGSTON_CURVE_PAYLOAD))
+    assert "numbers_come_from_tools" not in {c.name for c in v.failed}, [
+        (c.name, c.detail) for c in v.failed
+    ]
+
+
 def test_a_date_is_not_a_claim() -> None:
     v = verify_mod.verify("Kingston's record runs 1986-08-21 to 2026-08-19, in m3/s.",
                           _one(KINGSTON_PAYLOAD))

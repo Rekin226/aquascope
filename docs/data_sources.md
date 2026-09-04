@@ -1,6 +1,6 @@
 # Data Sources
 
-AquaScope ships **29 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
+AquaScope ships **30 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
 
 Most sources emit point observations and share the unified `water_data` schema (`WaterQualitySample`, `WaterLevelReading`, `ReservoirStatus`). Three aggregate/gridded sources use purpose-built record types that match their data shape: **FAO AQUASTAT** returns country-level `AquastatRecord`, **UN SDG 6** returns `SDG6Indicator`, and **FAO WaPOR** returns gridded `WaPORObservation`.
 
@@ -38,6 +38,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [GRDC](https://zenodo.org/records/19126732) | Global | River discharge (in-situ gauges + RSEG satellite) | Zenodo / Dataverse | ✅ |
 | [CAMELS-CL](https://www.cr2.cl/camels-cl/) | Chile | Daily observed streamflow, catchment attributes | ZIP / CSV | ✅ |
 | [CAMELS-BR](https://doi.org/10.5281/zenodo.3709337) | Brazil | Daily observed streamflow, catchment attributes | ZIP / CSV | ✅ |
+| [ANA Hidroweb](https://www.snirh.gov.br/hidroweb/) | Brazil | Telemetric streamflow, stage, rainfall | REST | ✅ |
 | [Ireland OPW](https://waterlevel.ie) | Ireland | River / lake water level (15-min resolution) | GeoJSON / CSV | ✅ |
 | [UK Environment Agency](https://environment.data.gov.uk) | UK | River and groundwater levels, river flow, rainfall data | REST | ✅ |
 | [BOM Water Data Online](http://www.bom.gov.au/waterdata/) | Australia | Streamflow, water level, storage, groundwater level | KISTERS WISKI (KiWIS) | ✅ |
@@ -235,3 +236,29 @@ From the CLI:
 ```bash
 aquascope collect --source camels_br --station-ids 10500000
 ```
+
+## ANA Hidroweb (Brazil)
+
+- **Source type:** `brazil_ana`
+- **Coverage:** Brazil — telemetric streamflow (discharge), stage (water level) and rainfall from ANA's national hydrometeorological network
+- **Collector:** `aquascope.collectors.brazil_ana.BrazilANACollector`
+- **Auth:** Free ANA account (CPF/CNPJ + password). ANA's own docs list two request addresses for two different services — hidro@ana.gov.br for the modern HidroWebService API used here, telemetria@ana.gov.br for the legacy SOAP service's CotaOnline options — so try hidro@ana.gov.br first and confirm against https://www.ana.gov.br/hidrowebservice/swagger-ui.html. Resolved from `ANA_HIDROWEB_IDENTIFICADOR` / `ANA_HIDROWEB_SENHA` environment variables, or passed to the constructor. The station catalog (`.stations()`) works without credentials — only time-series requests need them.
+
+**Usage:**
+```python
+from aquascope.collectors import BrazilANACollector
+
+collector = BrazilANACollector(identificador="00000000000", senha="...")
+
+# Public station catalog (no credentials needed)
+stations = collector.stations()
+
+# Telemetric time series (credentials required)
+readings = collector.collect(station_ids=["15400000"], days=30)
+```
+
+From the CLI:
+```bash
+aquascope collect --source brazil_ana --station-ids 15400000
+```
+

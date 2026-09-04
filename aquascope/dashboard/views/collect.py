@@ -684,6 +684,29 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
         if ed:
             fetch["end"] = str(ed)
 
+    elif source_key == "brazil_ana":
+        st.caption(
+            "ANA Hidroweb (Brazil) — telemetric stage, discharge and rainfall. "
+            "Time series needs a free ANA account (email hidro@ana.gov.br); the station "
+            "catalog below works without one."
+        )
+        identificador = st.text_input("Identificador (CPF/CNPJ)", key="ana_identificador")
+        senha = st.text_input("Senha", type="password", key="ana_senha")
+        if identificador.strip():
+            ctor["identificador"] = identificador.strip()
+        if senha.strip():
+            ctor["senha"] = senha.strip()
+        sids = st.text_input("Station codes (comma-separated)", placeholder="15400000")
+        if sids.strip():
+            fetch["station_ids"] = [s.strip() for s in sids.split(",") if s.strip()]
+        c1, c2 = st.columns(2)
+        sd = c1.date_input("Start date (optional)", value=None, key="ana_start")
+        ed = c2.date_input("End date (optional)", value=None, key="ana_end")
+        if sd:
+            fetch["start_date"] = str(sd)
+        if ed:
+            fetch["end_date"] = str(ed)
+
     elif source_key == "bom":
         st.caption(
             "BOM Water Data Online (Australia) — not every station has a populated discharge series; "

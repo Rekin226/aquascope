@@ -178,6 +178,15 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["start"] = args.start_date
         if args.end_date:
             kwargs["end"] = args.end_date
+    if source == "brazil_ana":
+        if args.station_ids:
+            kwargs["station_ids"] = [s.strip() for s in args.station_ids.split(",") if s.strip()]
+        if args.days is not None:
+            kwargs["days"] = args.days
+        if args.start_date:
+            kwargs["start_date"] = args.start_date
+        if args.end_date:
+            kwargs["end_date"] = args.end_date
     if source == "noaa_nwps":
         if not args.bbox and not args.lid:
             logger.error("NOAA NWPS requires either the --bbox or --lid argument.")
@@ -1535,7 +1544,7 @@ def main() -> None:
     p_collect.add_argument("--format", default="json", choices=["json", "csv", "geojson"], help="Output format")
     p_collect.add_argument("--year", type=int, default=None, help="Year filter (EU WFD)")
     p_collect.add_argument(
-        "--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl, camels_br)"
+        "--station-ids", default=None, help="Comma-separated gauge codes to filter (camels_cl, camels_br, brazil_ana)"
     )
     p_collect.add_argument(
         "--station", default=None, help="Station UUID/SUID (PEGELONLINE/UKEA), or AWRC station number (BOM)"

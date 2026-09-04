@@ -4,6 +4,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Added
+- **New collector: Brazil — ANA Hidroweb** (#17). `BrazilANACollector` collects telemetric streamflow (discharge), stage (water level) and rainfall from ANA's national hydrometeorological network. `stations()` uses the public SNIRH ArcGIS station catalog (no credentials needed); `fetch_raw()`/`collect()` use the credentialed `HidroWebService` REST API (OAuth token via `Identificador`/`Senha`, resolved from `ANA_HIDROWEB_IDENTIFICADOR`/`ANA_HIDROWEB_SENHA` or constructor args), splitting each reading row into `StreamflowReading`, `WaterLevelReading` and `ClimateReading` as available, with per-parameter QC-flag remarks.
+
 ### Changed
 - `CITATION.cff` lists the v0.13.0 version DOI `10.5281/zenodo.22152064` (concept DOI unchanged).
 - **WQP collector moved to the WQX 3.0 API** (#170). The old WQX 2.2 endpoint missed USGS data after 2024-03-11. `fetch_raw` now calls `/wqx3/Result/search` with `dataProfile=narrow`; a clean break from 2.2 — only WQX 3.0 field names are read (cross-walked from the official schema, e.g. `ResultMeasureValue` to `Result_Measure`, `CharacteristicName` to `Characteristic_Name`, `MonitoringLocationIdentifier` to `Location_Identifier`), with no dual-version support.

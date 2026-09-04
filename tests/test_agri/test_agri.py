@@ -650,3 +650,47 @@ class TestNewFao56Crops:
         assert get_kc("sorghum", "mid") == 1.05
         assert get_kc("groundnut", "mid") == 1.15
         assert get_kc("sugar_beet", "mid") == 1.20
+
+
+class TestMilletCassavaChickpea:
+    """Millet, cassava and chickpea added from FAO-56 Tables 11, 12 and 17."""
+
+    NEW_CROPS = ["millet", "cassava", "chickpea"]
+
+    @pytest.mark.parametrize("crop", NEW_CROPS)
+    def test_get_kc_returns_dict(self, crop):
+        """get_kc returns the full Kc dict for each new crop."""
+        kc = get_kc(crop)
+
+        assert set(kc) == {"initial", "mid", "late"}
+        assert all(isinstance(v, float) for v in kc.values())
+
+    @pytest.mark.parametrize("crop", NEW_CROPS)
+    def test_present_in_required_tables(self, crop):
+        """Each new crop has Kc, Kcb and default growth-stage data."""
+        assert crop in KC_TABLE
+        assert crop in KCB_TABLE
+        assert crop in DEFAULT_STAGE_LENGTHS
+
+    @pytest.mark.parametrize("crop", NEW_CROPS)
+    def test_crop_water_requirement_runs(self, crop):
+        """A full season computes and every day gets a stage."""
+        n_days = sum(DEFAULT_STAGE_LENGTHS[crop].values())
+        eto = _make_daily_series(n_days, 5.0)
+
+        df = crop_water_requirement(eto, crop, date(2024, 1, 1))
+
+        assert len(df) == n_days
+        assert set(df["stage"].unique()) == {
+            "initial",
+            "development",
+            "mid",
+            "late",
+        }
+        assert (df["etc"] > 0).all()
+
+    def test_fao56_mid_season_values(self):
+        """Kc mid-season values match FAO-56 Table 12."""
+        assert get_kc("millet", "mid") == 1.00
+        assert get_kc("cassava", "mid") == 0.80
+        assert get_kc("chickpea", "mid") == 1.00

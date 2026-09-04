@@ -206,7 +206,12 @@ def _tool_specs() -> list[ToolSpec]:
             "analyse_table",
             "Run one workbench analysis on a table the user supplied as CSV text: eda, quality, who_screen, "
             "flow_duration, baseflow, recession, flood_frequency, signatures, return_periods, sgi_drought, "
-            "recharge, aquifer_drawdown. params carries the analysis's own options.",
+            "recharge, aquifer_drawdown. params carries the analysis's own options. "
+            "For ccme_wqi, supply CSV columns parameter and value. "
+            "params.guidelines maps parameter names to min and/or max limits "
+            "in the same units as the measurements. Use data for one selected "
+            "body of water and reporting period. Ask for missing guidelines; "
+            "never invent thresholds.",
             {"type": "object", "properties": {"csv": {"type": "string"}, "analysis": {"type": "string"},
                                               "params": {"type": "object"}},
              "required": ["analysis"]},

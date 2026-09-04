@@ -35,6 +35,7 @@ __all__ = [
     "DataProfile",
     "aquifer_drawdown",
     "baseflow",
+    "ccme_wqi",
     "datetime_indexed",
     "eda",
     "flood_frequency",
@@ -436,6 +437,39 @@ def who_screen(df: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def ccme_wqi(
+    df: pd.DataFrame,
+    *,
+    guidelines: dict[str, dict[str, float]],
+) -> dict[str, Any]:
+    """Compute CCME WQI for a selected body of water and reporting period.
+
+    Measurement values and their guidelines must use matching units.
+    """
+    from aquascope.analysis.water_quality_index import ccme_wqi as calculate_ccme_wqi
+
+    calculation = calculate_ccme_wqi(df, guidelines)
+    result: dict[str, Any] = jsonable(calculation)
+
+    result["guidelines"] = jsonable(guidelines)
+    result["methods"] = [
+        {
+            "name": "CCME Water Quality Index",
+            "text": (
+                "Combines the scope, frequency, and amplitude of failures "
+                "against user-provided water-quality guidelines."
+            ),
+            "citation": (
+                "Canadian Council of Ministers of the Environment (2017). "
+                "CCME Water Quality Index User's Manual, 2017 Update. "
+                "https://ccme.ca/en/res/wqimanualen.pdf"
+            ),
+        }
+    ]
+
+    return result
+
+
 # ── hydrology ───────────────────────────────────────────────────────────────
 
 
@@ -779,6 +813,8 @@ TOOLS: dict[str, dict[str, Any]] = {
     "preprocess": {"func": preprocess, "needs": "frame", "summary": "Clean a table with a list of steps."},
     "insights": {"func": insights, "needs": "frame", "summary": "Quality score, WHO screen and next steps."},
     "who_screen": {"func": who_screen, "needs": "frame", "summary": "WHO drinking-water guideline screen."},
+    "ccme_wqi": {"func": ccme_wqi, "needs": "frame", "summary": "CCME Water Quality Index; supply guidelines with "
+                                                                "per-parameter min/max limits."},
     "flow_duration": {"func": flow_duration, "needs": "frame", "summary": "Flow-duration curve and percentiles."},
     "baseflow": {"func": baseflow, "needs": "frame", "summary": "Baseflow separation and the baseflow index."},
     "recession": {"func": recession, "needs": "frame", "summary": "Recession segments and constant."},

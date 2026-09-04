@@ -15,6 +15,7 @@ import pandas as pd
 import pytest
 
 from aquascope import workbench as wb
+from aquascope.schemas.water_data import WaterQualitySample
 
 
 @pytest.fixture(scope="module")
@@ -375,3 +376,52 @@ def test_ingest_text_accepts_bytes_too() -> None:
     csv = b"date,level_m\n2020-01-01,1.5\n2020-01-02,1.7\n2020-01-03,1.6\n"
     res = ingest_text(csv, "levels.csv")
     assert res["qa"]["n_values"] == 3
+
+
+def test_ccme_wqi_runs_through_workbench():
+    # Synthetic measurements using the project's existing schema.
+    samples = [
+        WaterQualitySample(
+            source="usgs",
+            station_id="TEST-1",
+            sample_datetime=date,
+            parameter=parameter,
+            value=value,
+            unit=unit,
+        )
+        for date in pd.date_range("2024-01-01", periods=4, freq="QS")
+        for parameter, value, unit in [
+            ("DO", 8.0, "mg/L"),
+            ("pH", 7.5, "pH units"),
+            ("TP", 0.02, "mg/L"),
+            ("Pb", 0.001, "mg/L"),
+        ]
+    ]
+
+    measurements = pd.DataFrame(
+        [sample.model_dump() for sample in samples]
+    )
+
+    guidelines = {
+        "DO": {"min": 5.0},
+        "pH": {"min": 6.5, "max": 9.0},
+        "TP": {"max": 0.05},
+        "Pb": {"max": 0.004},
+    }
+
+    measurements.loc[0, "value"] = 2.5
+
+    result = wb.run(
+        "ccme_wqi",
+        measurements,
+        guidelines=guidelines,
+    )
+
+    assert result["score"] == pytest.approx(84.738878, abs=0.000001)
+    assert result["category"] == "Good"
+    assert result["f1"] == pytest.approx(25.0)
+    assert result["f2"] == pytest.approx(6.25)
+    assert result["f3"] == pytest.approx(5.88235294117647)
+    assert result["methods"][0]["citation"]
+
+    _strict_json(result)

@@ -6,6 +6,7 @@ import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pandas as pd
 import pytest
 
 from aquascope.ai_engine import analyst
@@ -106,3 +107,64 @@ def test_tool_specs_cover_the_mcp_surface():
                      "run_python"}
     tools = analyst._openai_tools(analyst._tool_specs())
     assert all(t["type"] == "function" and "parameters" in t["function"] for t in tools)
+
+def test_ask_runs_ccme_wqi_and_preserves_citation():
+    measurements = pd.DataFrame(
+        {
+            "parameter": ["DO", "pH", "TP", "Pb"] * 4,
+            "value": [8.0, 7.5, 0.02, 0.001] * 4,
+        }
+    )
+    measurements.loc[0, "value"] = 2.5
+
+    guidelines = {
+        "DO": {"min": 5.0},
+        "pH": {"min": 6.5, "max": 9.0},
+        "TP": {"max": 0.05},
+        "Pb": {"max": 0.004},
+    }
+
+    client = FakeChat(
+        [
+            [("list_analyses", {})],
+            [
+                (
+                    "analyse_table",
+                    {
+                        "csv": measurements.to_csv(index=False),
+                        "analysis": "ccme_wqi",
+                        "params": {"guidelines": guidelines},
+                    },
+                )
+            ],
+            "The CCME WQI is approximately 84.74, classified as Good.",
+        ]
+    )
+
+    result = analyst.ask(
+        "Calculate CCME WQI using my measurements and guidelines.",
+        client=client,
+        model="fake",
+    )
+
+    assert [call.name for call in result.tool_calls] == [
+        "list_analyses",
+        "analyse_table",
+    ]
+    assert all(call.ok for call in result.tool_calls)
+
+    payloads = {
+        message["name"]: json.loads(message["content"])
+        for message in client.requests[-1]["messages"]
+        if message["role"] == "tool"
+    }
+
+    available = payloads["list_analyses"]["analyses"]
+    assert any(item["name"] == "ccme_wqi" for item in available)
+
+    calculation = payloads["analyse_table"]
+    assert calculation["score"] == pytest.approx(84.738878, abs=0.000001)
+    assert calculation["category"] == "Good"
+    assert calculation["guidelines"] == guidelines
+
+    assert "https://ccme.ca/en/res/wqimanualen.pdf" in result.to_markdown()

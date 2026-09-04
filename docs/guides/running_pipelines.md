@@ -94,6 +94,85 @@ print(result.summary)
 print(result.metrics)
 ```
 
+## CCME WQI alongside PCA and correlation
+
+CCME WQI is available through `aquascope.workbench.run("ccme_wqi", ...)`.
+It accepts the `parameter` and `value` columns from WaterQualitySample
+tables, with additional metadata columns preserved in the input table.
+
+The example below uses a CSV containing `station_id`, `sample_datetime`,
+`parameter`, `value`, and `unit`. It selects one station and reporting year,
+then passes the same measurements to CCME and the existing correlation
+and PCA pipelines.
+
+Replace the station, dates, and illustrative guideline limits with values
+appropriate to your study. The concentration limits below assume mg/L;
+the pH limits use the pH scale.
+
+```python
+import pandas as pd
+
+from aquascope import workbench
+from aquascope.pipelines.model_builder import run_pipeline
+
+df = pd.read_csv(
+    "water_quality.csv",
+    parse_dates=["sample_datetime"],
+    dtype={"station_id": str},
+)
+
+# Illustrative limits; choose appropriate guidelines for your study.
+guidelines = {
+    "DO": {"min": 5.0},
+    "pH": {"min": 6.5, "max": 9.0},
+    "TP": {"max": 0.05},
+    "Pb": {"max": 0.004},
+}
+
+selected = df.loc[
+    (df["station_id"] == "STATION-1")
+    & (df["sample_datetime"] >= "2024-01-01")
+    & (df["sample_datetime"] < "2025-01-01")
+    & df["parameter"].isin(guidelines)
+].copy()
+
+wqi = workbench.run("ccme_wqi", selected, guidelines=guidelines)
+print(wqi["score"], wqi["category"])
+
+correlation = run_pipeline("correlation_analysis", selected)
+print(correlation.details["correlation_matrix"])
+
+pca = run_pipeline(
+    "pca_clustering",
+    selected,
+    config={"n_components": 2, "n_clusters": 3},
+)
+print(pca.metrics)
+```
+
+PCA requires the project's existing `ml` extra. Its current implementation
+requires at least ten complete sampling dates and two parameters.
+Use data suitable for each analysis: CCME excludes missing measurements
+individually, whereas these PCA and correlation pipelines use complete
+rows after pivoting the selected parameters.
+
+Pass measurements in their original physical units to CCME. The PCA
+pipeline performs its own standardization internally.
+
+The workbench result includes the score, category, F1/F2/F3 factors,
+supplied guidelines, and method citation. The Analyst can call this same
+calculation through its existing `analyse_table` tool.
+
+This implementation supports finite guideline limits with minimums
+greater than or equal to zero and maximums greater than zero. Nonpositive
+measurements that fail a minimum guideline raise an error. These are
+implementation limits, not universal water-quality standards.
+
+The existing `wqi_calculation` pipeline continues to compute Taiwan RPI.
+Use the workbench call above for CCME.
+
+Reference: [CCME Water Quality Index User's Manual, 2017 Update](https://ccme.ca/en/res/wqimanualen.pdf).
+
 ## Pipeline Configuration
 
 Each pipeline accepts an optional `config` dict:

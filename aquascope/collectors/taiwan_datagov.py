@@ -2,11 +2,12 @@
 Collector for Taiwan 政府資料開放平台 (data.gov.tw).
 
 Portal  : https://data.gov.tw
+API     : https://opendata.wra.gov.tw/api/v2  (datasets re-hosted by WRA)
 License : Open Government Data License v1.0 (free, attribution required)
 
-Key datasets:
-  25768  — Real-time river water level (即時水位)
-  161082 — Real-time groundwater level (地下水位即時資料)
+Key datasets (data.gov.tw id → WRA API UUID):
+  25768  → 73c4c3de-4045-4765-abeb-89f9f9cd5ff0  Real-time river water level (即時水位)
+  161082 → 58a7aa39-287a-4b96-985d-47ffbc7abbd4  Real-time groundwater level (地下水位即時資料)
 """
 
 from __future__ import annotations
@@ -25,10 +26,14 @@ from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
 
 logger = logging.getLogger(__name__)
 
-DATAGOV_BASE = "https://data.gov.tw/api/v2"
+DATAGOV_BASE = "https://opendata.wra.gov.tw/api/v2"
 
-DATASET_WATER_LEVEL = "25768"
-DATASET_GROUNDWATER = "161082"
+DATASET_WATER_LEVEL = "73c4c3de-4045-4765-abeb-89f9f9cd5ff0"
+DATASET_GROUNDWATER = "58a7aa39-287a-4b96-985d-47ffbc7abbd4"
+LEGACY_DATASET_IDS = {
+    "25768": DATASET_WATER_LEVEL,
+    "161082": DATASET_GROUNDWATER,
+}
 
 
 class TaiwanDataGovCollector(BaseCollector):
@@ -39,8 +44,9 @@ class TaiwanDataGovCollector(BaseCollector):
     Parameters
     ----------
     dataset_id : str
-        Dataset identifier.  Use ``"25768"`` (default) for real-time river
-        water level or ``"161082"`` for real-time groundwater level.
+        WRA Open Data UUID.  Use :data:`DATASET_WATER_LEVEL` (default) for
+        real-time river water level or :data:`DATASET_GROUNDWATER` for
+        real-time groundwater level.
     """
 
     name = "taiwan_datagov"
@@ -56,37 +62,26 @@ class TaiwanDataGovCollector(BaseCollector):
                 base_url=DATAGOV_BASE,
                 rate_limiter=RateLimiter(max_calls=10, period_seconds=60),
                 cache_ttl_seconds=600,
+                relax_strict_tls=True,
             )
         )
-        self.dataset_id = dataset_id
+        self.dataset_id = LEGACY_DATASET_IDS.get(dataset_id, dataset_id)
 
-    def fetch_raw(self, limit: int = 1000, offset: int = 0, **kwargs) -> list[dict]:
+    def fetch_raw(self, limit: int | None = None, offset: int = 0, **kwargs) -> list[dict]:
         """
-        Page through the data.gov.tw API for the configured dataset.
+        Fetch records from the WRA Open Data API for the configured dataset.
 
-        Parameters
-        ----------
-        limit : int
-            Records per page (max 1000).
-        offset : int
-            Starting record offset.
+        The API returns the full dataset in one response; ``offset`` and an
+        optional ``limit`` are applied client-side. By default all records are
+        returned.
         """
-        all_records: list[dict] = []
-        while True:
-            data = self.client.get_json(
-                self.dataset_id,
-                params={"limit": limit, "offset": offset, "format": "json"},
-            )
-            records = data.get("result", data.get("records", []))
-            if not records:
-                break
-            all_records.extend(records)
-            if len(records) < limit:
-                break
-            offset += limit
-            logger.debug("Fetched %d cumulative records …", len(all_records))
-
-        return all_records
+        data = self.client.get_json(self.dataset_id, params={"format": "json"})
+        records = data if isinstance(data, list) else data.get("result", data.get("records", []))
+        if offset:
+            records = records[offset:]
+        if limit is not None:
+            records = records[:limit]
+        return records
 
     def normalise(self, raw: list[dict]) -> Sequence[WaterLevelReading]:
         readings: list[WaterLevelReading] = []
@@ -95,6 +90,7 @@ class TaiwanDataGovCollector(BaseCollector):
                 level_str = (
                     rec.get("WaterLevel")
                     or rec.get("waterLevel")
+                    or rec.get("waterlevel")
                     or rec.get("water_level")
                     or rec.get("GWLevel")
                     or rec.get("gwLevel")
@@ -113,8 +109,10 @@ class TaiwanDataGovCollector(BaseCollector):
 
                 time_str = (
                     rec.get("RecordTime")
+                    or rec.get("recordtime")
                     or rec.get("ObservationTime")
                     or rec.get("DateTime")
+                    or rec.get("datetime")
                     or rec.get("time")
                     or ""
                 )
@@ -125,11 +123,18 @@ class TaiwanDataGovCollector(BaseCollector):
                         source=DataSource.TAIWAN_DATAGOV,
                         station_id=str(
                             rec.get("StationIdentifier")
+                            or rec.get("stationid")
                             or rec.get("StationNo")
+                            or rec.get("wellidentifier")
                             or rec.get("SiteId")
                             or "unknown"
                         ),
-                        station_name=rec.get("StationName") or rec.get("SiteName"),
+                        station_name=(
+                            rec.get("StationName")
+                            or rec.get("name")
+                            or rec.get("observatoryidentifier")
+                            or rec.get("SiteName")
+                        ),
                         location=loc,
                         reading_datetime=reading_dt,
                         water_level=float(level_str),

@@ -92,9 +92,15 @@ surface temperature, GRACE water storage anomaly, and ESA WorldCover land cover.
 The time-driven ones share a single date control, so you can walk a flood or a
 snowmelt day by day.
 
-**The gauges themselves** can be coloured by agency, by record length or by how
-recently they last reported, with a legend, and a density heat map shows where
-the world is actually measured. **Select an area** drags a box and hands back
+**The gauges themselves** carry their agency as a shape as well as a colour: a
+circle for USGS, a triangle for the Environment Agency, a square for Hub'Eau, a
+diamond for PEGELONLINE, a pentagon for OPW and a cross for CWA. Colour alone
+does not survive colour-vision deficiency (Hub'Eau's red and the Environment
+Agency's green are ΔE 4.2 apart under deuteranopia, and they are the two largest
+European sources), so identity carries two channels. They can also be coloured
+by record length or by how recently they last reported, with a legend, and the
+shape goes on saying the agency underneath; a density heat map shows where the
+world is actually measured. **Select an area** drags a box and hands back
 the gauges inside it as CSV.
 
 The whole state (basemap, overlays, opacity, date, terrain, globe, colouring)
@@ -149,8 +155,8 @@ why BasinATLAS is what we mirror. MERIT-Basins is CC BY-NC.
 The **Ask** button (top right) opens the [Analyst](analyst.md) inside the
 Explorer. Type a question ("What is the 100-year flood of the Thames at
 Kingston, and how sure can we be?"), pick a provider (Groq and Hugging Face
-have free tiers; OpenAI, Mistral, OpenRouter, or any OpenAI-compatible
-endpoint), paste your key, and the same `aquascope.ai_engine.analyst.ask`
+have free tiers; Anthropic, OpenAI, Mistral, OpenRouter, or any
+OpenAI-compatible endpoint), paste your key, and the same `aquascope.ai_engine.analyst.ask`
 that runs behind `aquascope ask` runs in the browser worker: the model picks
 the tools (`find_stations` over the catalog already loaded in your tab,
 `analyze_station`, `flood_frequency`, `get_timeseries`, `anywhere`),
@@ -202,8 +208,8 @@ support the MCP Apps extension.
 
 | source | record you get | analyses |
 | --- | --- | --- |
-| USGS | daily mean discharge (or gage height), full period requested (40 years) | all of the above |
-| UK Environment Agency | daily mean flow (falls back to level, rainfall, groundwater), full period | all of the above |
+| USGS | daily mean discharge (or gage height), full record requested (from the catalog's first date) | all of the above |
+| Environment Agency (England) | daily mean flow (falls back to level, rainfall, groundwater), full record requested | all of the above |
 | Hub'Eau (France) | daily mean discharge (obs_elab `QmnJ`, multi-decade where computed), else last 30 days real-time | all of the above when the daily series exists |
 | PEGELONLINE (Germany) | last 31 days of W / Q | hydrograph |
 | Ireland OPW | last month of 15-minute levels | hydrograph |

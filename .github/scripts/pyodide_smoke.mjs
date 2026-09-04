@@ -33,6 +33,18 @@ import micropip
 await micropip.install(["pyodide-http", "emfs:/tmp/${wheelName}"])
 `);
 
+console.log("Applying pyodide_http.patch_all()…");
+await pyodide.runPythonAsync(`
+import pyodide_http
+pyodide_http.patch_all()
+`);
+
+console.log("Verifying aquascope.explore import under Pyodide…");
+await pyodide.runPythonAsync(`
+import aquascope.explore as _explore
+assert hasattr(_explore, "analyze_series"), "analyze_series missing"
+`);
+
 console.log("Running analyze_series on a synthetic 30-year series…");
 const result = await pyodide.runPythonAsync(`
 import json, numpy as np, pandas as pd
@@ -56,12 +68,6 @@ assert out["fdc"]["q95"] < out["fdc"]["q50"] < out["fdc"]["q10"]
 json.dumps({"status": "ok", "n": out["n"], "years": out["years"]})
 `);
 console.log("Pyodide analyze_series passed:", result);
-
-console.log("Verifying dashboard app import under Pyodide…");
-await pyodide.runPythonAsync(`
-import aquascope.dashboard.app as _app
-assert hasattr(_app, "main"), "dashboard.app.main missing"
-`);
 
 console.log("Verifying CachedHTTPClient Emscripten path…");
 await pyodide.runPythonAsync(`

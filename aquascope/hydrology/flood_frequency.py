@@ -42,6 +42,10 @@ class FloodFreqResult:
         The annual maximum series used for fitting.
     confidence_intervals:
         Optional mapping of return period → (lower, upper) 90 % CI.
+    n_bootstrap:
+        Number of bootstrap resamples drawn (when CI estimation is enabled).
+    n_bootstrap_discarded:
+        Number of bootstrap resample fits discarded due to parameter bounds.
     """
 
     return_periods: dict[int, float] = field(default_factory=dict)
@@ -49,6 +53,8 @@ class FloodFreqResult:
     params: tuple = ()
     annual_max: pd.Series | None = None
     confidence_intervals: dict[int, tuple[float, float]] = field(default_factory=dict)
+    n_bootstrap: int | None = None
+    n_bootstrap_discarded: int | None = None
 
 
 def _extract_annual_max(discharge: pd.Series) -> pd.Series:
@@ -61,7 +67,7 @@ def fit_gev(
     discharge: pd.Series,
     *,
     return_periods: list[int] | None = None,
-    ci_level: float = 0.90,
+    ci_level: float | None = 0.90,
     max_abs_shape: float = 0.5,
 ) -> FloodFreqResult:
     """Fit a Generalized Extreme Value (GEV) distribution via MLE with L-moments seeding.
@@ -148,68 +154,74 @@ def fit_gev(
         rp_map[rp] = float(genextreme.ppf(prob, shape, loc=loc, scale=scale))
 
     # Bootstrap confidence intervals
-    n_boot = 1000
-    rng = np.random.default_rng(42)
-    boot_estimates: dict[int, list[float]] = {rp: [] for rp in return_periods}
-    n_discarded = 0
+    n_boot_val: int | None = None
+    n_discarded_val: int | None = None
 
-    for _ in range(n_boot):
-        sample = rng.choice(data, size=len(data), replace=True)
-        try:
-            l_s, l_loc, l_sc = _fit_gev_lmoments_params(sample)
-        except Exception:  # noqa: BLE001
-            n_discarded += 1
-            continue
+    if ci_level is not None:
+        n_boot = 1000
+        n_boot_val = n_boot
+        rng = np.random.default_rng(42)
+        boot_estimates: dict[int, list[float]] = {rp: [] for rp in return_periods}
+        n_discarded = 0
 
-        s_fit, loc_fit, sc_fit = None, None, None
-        try:
-            s_mle, loc_b, sc_b = genextreme.fit(sample, l_s, loc=l_loc, scale=l_sc)
-            if (
-                np.isfinite(s_mle)
-                and np.isfinite(loc_b)
-                and np.isfinite(sc_b)
-                and sc_b > 0
-                and abs(s_mle) <= max_abs_shape
-            ):
-                s_fit, loc_fit, sc_fit = float(s_mle), float(loc_b), float(sc_b)
-        except Exception:  # noqa: BLE001
-            pass
+        for _ in range(n_boot):
+            sample = rng.choice(data, size=len(data), replace=True)
+            try:
+                l_s, l_loc, l_sc = _fit_gev_lmoments_params(sample)
+            except Exception:  # noqa: BLE001
+                n_discarded += 1
+                continue
 
-        if s_fit is None:
-            if (
-                np.isfinite(l_s)
-                and np.isfinite(l_loc)
-                and np.isfinite(l_sc)
-                and l_sc > 0
-                and abs(l_s) <= max_abs_shape
-            ):
-                s_fit, loc_fit, sc_fit = l_s, l_loc, l_sc
+            s_fit, loc_fit, sc_fit = None, None, None
+            try:
+                s_mle, loc_b, sc_b = genextreme.fit(sample, l_s, loc=l_loc, scale=l_sc)
+                if (
+                    np.isfinite(s_mle)
+                    and np.isfinite(loc_b)
+                    and np.isfinite(sc_b)
+                    and sc_b > 0
+                    and abs(s_mle) <= max_abs_shape
+                ):
+                    s_fit, loc_fit, sc_fit = float(s_mle), float(loc_b), float(sc_b)
+            except Exception:  # noqa: BLE001
+                pass
 
-        if s_fit is None:
-            n_discarded += 1
-            continue
+            if s_fit is None:
+                if (
+                    np.isfinite(l_s)
+                    and np.isfinite(l_loc)
+                    and np.isfinite(l_sc)
+                    and l_sc > 0
+                    and abs(l_s) <= max_abs_shape
+                ):
+                    s_fit, loc_fit, sc_fit = l_s, l_loc, l_sc
 
+            if s_fit is None:
+                n_discarded += 1
+                continue
+
+            for rp in return_periods:
+                prob = 1 - 1.0 / rp
+                val = float(genextreme.ppf(prob, s_fit, loc=loc_fit, scale=sc_fit))
+                if np.isfinite(val) and val > 0:
+                    boot_estimates[rp].append(val)
+
+        n_discarded_val = n_discarded
+        if n_discarded > 0:
+            pct_discarded = (n_discarded / n_boot) * 100
+            logger.warning(
+                "GEV bootstrap: discarded %d of %d resample fits (%.1f%%) due to shape bounds (|c| <= %.2f)",
+                n_discarded,
+                n_boot,
+                pct_discarded,
+                max_abs_shape,
+            )
+
+        alpha = (1 - ci_level) / 2
         for rp in return_periods:
-            prob = 1 - 1.0 / rp
-            val = float(genextreme.ppf(prob, s_fit, loc=loc_fit, scale=sc_fit))
-            if np.isfinite(val) and val > 0:
-                boot_estimates[rp].append(val)
-
-    if n_discarded > 0:
-        pct_discarded = (n_discarded / n_boot) * 100
-        logger.warning(
-            "GEV bootstrap: discarded %d of %d resample fits (%.1f%%) due to shape bounds (|c| <= %.2f)",
-            n_discarded,
-            n_boot,
-            pct_discarded,
-            max_abs_shape,
-        )
-
-    alpha = (1 - ci_level) / 2
-    for rp in return_periods:
-        vals = boot_estimates[rp]
-        if len(vals) > 10:
-            ci_map[rp] = (float(np.percentile(vals, alpha * 100)), float(np.percentile(vals, (1 - alpha) * 100)))
+            vals = boot_estimates[rp]
+            if len(vals) > 10:
+                ci_map[rp] = (float(np.percentile(vals, alpha * 100)), float(np.percentile(vals, (1 - alpha) * 100)))
 
     logger.info("GEV fit: shape=%.3f, loc=%.2f, scale=%.2f", shape, loc, scale)
     return FloodFreqResult(
@@ -218,6 +230,8 @@ def fit_gev(
         params=(shape, loc, scale),
         annual_max=annual_max,
         confidence_intervals=ci_map,
+        n_bootstrap=n_boot_val,
+        n_bootstrap_discarded=n_discarded_val,
     )
 
 

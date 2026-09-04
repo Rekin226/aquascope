@@ -89,7 +89,7 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://waterdata.usgs.gov/",
         variables=("discharge", "water_level", "water_quality"),
         supports_bbox=True, supports_station_lookup=True,
-        output_model="StreamflowReading | WaterQualitySample",
+        output_model="StreamflowReading | WaterLevelReading | WaterQualitySample",
         license="US-PD", redistributable=True,
         attribution="U.S. Geological Survey, National Water Information System (public domain)",
     ),
@@ -136,7 +136,7 @@ SOURCES: dict[str, SourceMeta] = {
     ),
     # ── Europe ──────────────────────────────────────────────────────────
     "uk_ea": _s(
-        key="uk_ea", label="UK Environment Agency", region="United Kingdom",
+        key="uk_ea", label="Environment Agency (England)", region="United Kingdom",
         description="River level, flow, rainfall and groundwater telemetry from the EA Hydrology API (England)",
         agency="Environment Agency", country="GBR",
         homepage="https://environment.data.gov.uk/hydrology/",
@@ -242,10 +242,10 @@ SOURCES: dict[str, SourceMeta] = {
     ),
     "taiwan_wra_iot": _s(
         key="taiwan_wra_iot", label="Taiwan WRA IoT", region="Taiwan",
-        description="Real-time groundwater level and rainfall accumulation",
+        description="Real-time groundwater level (v2 API; rainfall requires paid membership, not supported)",
         agency="Water Resources Agency, MOEA", country="TWN",
         homepage="https://iot.wra.gov.tw/",
-        variables=("groundwater_level", "precipitation"),
+        variables=("groundwater_level",),
         output_model="WaterQualitySample",
         license="OGDL-Taiwan-1.0", redistributable=True,
         attribution="Water Resources Agency, Ministry of Economic Affairs (Open Government Data License 1.0)",
@@ -299,8 +299,8 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="http://www1.river.go.jp/",
         variables=("water_level", "discharge", "water_quality", "precipitation"),
         output_model="WaterQualitySample",
-        license="unknown", redistributable=False,
-        attribution="MLIT Water Information System (terms not yet verified)",
+        license="Public Data License (Version 1.0)", redistributable=True,
+        attribution="Ministry of Land, Infrastructure, Transport and Tourism",
     ),
     "korea_wamis": _s(
         key="korea_wamis", label="Korea WAMIS", region="South Korea",
@@ -331,8 +331,9 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("discharge", "water_level", "reservoir_storage", "groundwater_level", "precipitation",
                    "water_quality"),
         output_model="StreamflowReading | WaterLevelReading | WaterQualitySample",
-        license="unknown", redistributable=False,
-        attribution="Bureau of Meteorology, Water Data Online (KISTERS KiWIS); terms to verify before mirroring",
+        license="CC-BY-3.0-AU", redistributable=True,
+        attribution="Bureau of Meteorology, © Commonwealth of Australia",
+        supports_station_lookup=True,
     ),
     # ── Global ──────────────────────────────────────────────────────────
     "grdc": _s(
@@ -342,8 +343,8 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://grdc.bafg.de/",
         variables=("discharge",),
         output_model="StreamflowReading",
-        license="GRDC-terms", redistributable=False,
-        attribution="Global Runoff Data Centre, 56068 Koblenz, Germany (redistribution not permitted)",
+        license="GRDC Policy Guidelines", redistributable=False,
+        attribution="The Global Runoff Data Centre, 56068 Koblenz, Germany",
     ),
     "openmeteo": _s(
         key="openmeteo", label="Open-Meteo", region="Global",
@@ -384,8 +385,8 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://unstats.un.org/sdgs/",
         variables=("indicator",),
         output_model="SDG6Indicator",
-        license="unknown", redistributable=False,
-        attribution="United Nations Statistics Division, SDG Global Database",
+        license="UNdata Terms of Use", redistributable=True,
+        attribution="United Nations Statistics Division, SDG Global Database (UNdata)",
     ),
     "aquastat": _s(
         key="aquastat", label="FAO AQUASTAT", region="Global",
@@ -394,8 +395,8 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://www.fao.org/aquastat/",
         variables=("indicator",),
         output_model="AquastatRecord",
-        license="unknown", redistributable=False,
-        attribution="FAO AQUASTAT",
+        license="CC-BY-4.0", redistributable=True,
+        attribution="FAO AQUASTAT (© FAO, CC BY 4.0)",
     ),
     "wapor": _s(
         key="wapor", label="FAO WaPOR", region="Africa & Near East",

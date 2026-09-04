@@ -156,3 +156,30 @@ class TestWaterQualityChallenge:
         summary = wq.summary()
         assert len(summary) == 2
         assert "mean" in summary.columns
+
+
+def test_drought_challenge_computes_spei_from_temperature_or_et():
+    """#309: the drought challenge computes SPEI next to SPI, from a PET table or from temperature."""
+    import numpy as np
+    import pandas as pd
+
+    from aquascope.challenges.drought import DroughtChallenge
+
+    idx = pd.date_range("1990-01-01", periods=35 * 12, freq="MS")
+    rng = np.random.default_rng(2)
+    phase = np.arange(len(idx)) % 12
+    precip = pd.DataFrame({"value": rng.gamma(2.0, (80 + 60 * np.sin(2 * np.pi * phase / 12)) / 2.0)}, index=idx)
+    temp = pd.DataFrame({"value": 10 + 8 * np.sin(2 * np.pi * (phase - 3) / 12) + np.linspace(0, 3, len(idx))},
+                        index=idx)
+    dc = DroughtChallenge(51.4, -0.3).load_dataframe(precip)
+    with pytest.raises(RuntimeError, match="evapotranspiration"):
+        dc.compute_spei()
+    out = dc.compute_spei(timescales=[3, 12], temperature_df=temp)
+    assert {"SPI_3", "SPEI_3", "divergence_3", "SPI_12", "SPEI_12", "drought_category"} <= set(out.columns)
+    assert out["divergence_12"].loc["2015":].mean() < -0.2, "warming: SPEI reads drier than SPI"
+    assert dc.spei is out and out.loc[out["SPEI_3"].notna(), "drought_category"].isin(
+        ["extremely_wet", "very_wet", "moderately_wet", "normal", "moderately_dry", "severely_dry",
+         "extremely_dry"]).all()
+    pet = pd.DataFrame({"value": 60.0}, index=idx)
+    given = DroughtChallenge(51.4, -0.3).load_dataframe(precip, et_df=pet).compute_spei(timescales=[3])
+    assert list(given.columns) == ["SPI_3", "SPEI_3", "divergence_3", "drought_category"]

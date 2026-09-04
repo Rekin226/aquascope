@@ -8,8 +8,9 @@ name: Repair failing collectors
 # Anything that does not verify becomes a comment on the collector-health
 # issue with the diagnosis and the rejected diff. Nothing is merged here.
 #
-# Needs an LLM key as a repository secret: OPENAI_API_KEY, GROQ_API_KEY,
-# HF_TOKEN (with inference permission) or AQUASCOPE_LLM_API_KEY +
+# Needs an LLM key as a repository secret: ANTHROPIC_API_KEY (plus
+# ANTHROPIC_WORKSPACE_ID for a key that spans workspaces), OPENAI_API_KEY,
+# GROQ_API_KEY, HF_TOKEN (with inference permission) or AQUASCOPE_LLM_API_KEY +
 # AQUASCOPE_LLM_BASE_URL + AQUASCOPE_LLM_MODEL. Without one the job exits
 # quietly. GITHUB_TOKEN-opened PRs do not trigger CI: push an empty commit or
 # close/reopen the PR to run it, or set REPAIR_TOKEN (a fine-grained PAT with
@@ -47,6 +48,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'schedule'
     env:
       GH_TOKEN: ${{ secrets.REPAIR_TOKEN || secrets.GITHUB_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       AQUASCOPE_LLM_API_KEY: ${{ secrets.AQUASCOPE_LLM_API_KEY }}
@@ -57,8 +60,8 @@ jobs:
       - name: Is a model configured?
         id: gate
         run: |
-          if [ -z "$OPENAI_API_KEY$GROQ_API_KEY$AQUASCOPE_LLM_API_KEY" ]; then
-            echo "no LLM key configured (OPENAI_API_KEY / GROQ_API_KEY / AQUASCOPE_LLM_API_KEY); nothing to do"
+          if [ -z "$ANTHROPIC_API_KEY$OPENAI_API_KEY$GROQ_API_KEY$AQUASCOPE_LLM_API_KEY" ]; then
+            echo "no LLM key configured (ANTHROPIC_API_KEY / OPENAI_API_KEY / GROQ_API_KEY / AQUASCOPE_LLM_API_KEY); nothing to do"
             echo "go=false" >> "$GITHUB_OUTPUT"
           else
             echo "go=true" >> "$GITHUB_OUTPUT"

@@ -89,6 +89,8 @@ callable `agent(env, kwargs) -> dict` (see `notebooks/08_hydrogym_phase0.ipynb`)
 
 One model (GR4J), one task type (calibration), CPU-bound (about 0.03 s per
 simulation-year-decade: 12 years take 30 ms, 40 years 100 ms). Phase 1
-(#175) is the task suite across regions with the CAMELS-style collectors,
-data-gap QA tasks and flood-frequency tasks with synthetic truth; Phase 2 the
-reference LLM-loop agent and a leaderboard doc.
+(#175) is the benchmark of hydrology *agents* on real sites, generated from
+the playbooks with unsolvable tasks, a held-out split, cost accounting and a
+leaderboard: see [hydrogym.md](hydrogym.md) (`aquascope gym tasks | bench |
+leaderboard`). Calibration tasks across regions and data-gap QA tasks remain
+open.

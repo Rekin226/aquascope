@@ -26,6 +26,7 @@ from aquascope.schemas.water_data import (
     DataSource,
     GeoLocation,
     StreamflowReading,
+    WaterLevelReading,
     WaterQualitySample,
 )
 from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
@@ -54,6 +55,7 @@ PARAM_LABELS: dict[str, str] = {
 
 MILES2_TO_KM2 = 2.589988110336
 FT3S_TO_M3S = 0.028316846592
+FT_TO_M = 0.3048
 
 # Registry variable -> USGS parameter codes advertised in time-series-metadata.
 STATION_VARIABLE_CODES: dict[str, tuple[str, ...]] = {
@@ -62,17 +64,8 @@ STATION_VARIABLE_CODES: dict[str, tuple[str, ...]] = {
     "water_quality": ("00010", "00095", "00300", "00400"),
 }
 
-# 50 states + DC + territories, as the NWIS site service's stateCd expects.
-NWIS_STATE_CODES: tuple[str, ...] = (
-    "al", "ak", "az", "ar", "ca", "co", "ct", "de", "dc", "fl", "ga", "hi", "id", "il", "in", "ia", "ks", "ky",
-    "la", "me", "md", "ma", "mi", "mn", "ms", "mo", "mt", "ne", "nv", "nh", "nj", "nm", "ny", "nc", "nd", "oh",
-    "ok", "or", "pa", "ri", "sc", "sd", "tn", "tx", "ut", "vt", "va", "wa", "wv", "wi", "wy", "pr", "vi", "gu",
-    "as", "mp",
-)
-
-# Two-digit ANSI (FIPS) codes for the OGC API's ``state_code`` queryable.
-# The NWIS keyless path accepts 2-letter abbreviations, so we translate.
-STATE_FIPS: dict[str, str] = {
+# NWIS alpha code (FIPS 5-1) -> two digit ANSI numeric code
+US_STATE_CODES: dict[str, str] = {
     "AL": "01", "AK": "02", "AZ": "04", "AR": "05", "CA": "06", "CO": "08",
     "CT": "09", "DE": "10", "DC": "11", "FL": "12", "GA": "13", "HI": "15",
     "ID": "16", "IL": "17", "IN": "18", "IA": "19", "KS": "20", "KY": "21",
@@ -82,8 +75,14 @@ STATE_FIPS: dict[str, str] = {
     "OK": "40", "OR": "41", "PA": "42", "RI": "44", "SC": "45", "SD": "46",
     "TN": "47", "TX": "48", "UT": "49", "VT": "50", "VA": "51", "WA": "53",
     "WV": "54", "WI": "55", "WY": "56",
-    "AS": "60", "GU": "66", "MP": "69", "PR": "72", "VI": "78",
-    "FM": "64", "MH": "68", "PW": "70",
+    "AQ": "60",
+    "FM": "64",
+    "GU": "66",
+    "MH": "68",
+    "MP": "69",
+    "PW": "70",
+    "PR": "72",
+    "VI": "78",
 }
 
 
@@ -217,6 +216,7 @@ class USGSCollector(BaseCollector):
         state_cd = kwargs.get("stateCd")
         county_cd = kwargs.get("countyCd")
         huc_val = kwargs.get("huc")
+        stat_cd = kwargs.get("statCd") or kwargs.get("stat_cd")
 
         if self.api_key == "DEMO_KEY" or not self.api_key:
             if collection not in ("daily", "sta"):
@@ -270,6 +270,8 @@ class USGSCollector(BaseCollector):
                 params["countyCd"] = county_cd
             if huc_val:
                 params["huc"] = huc_val
+            if stat_cd:
+                params["statCd"] = stat_cd  # e.g. 00003, the daily mean only
 
             if start_date:
                 params["startDT"] = start_date
@@ -554,7 +556,7 @@ class USGSCollector(BaseCollector):
     ) -> dict[str, str]:
         """Station names from the keyless NWIS site service (RDB), as a fallback.
 
-        One request for a ``bbox``; otherwise one per state/territory (~56
+        One request for a ``bbox``; otherwise one per state/territory (~59
         requests of ~50 KB). Only stream sites with daily values are asked for.
         """
         names: dict[str, str] = {}
@@ -563,7 +565,7 @@ class USGSCollector(BaseCollector):
         if bbox:
             queries = [{**common, "bBox": ",".join(f"{v:.6f}" for v in bbox)}]
         else:
-            queries = [{**common, "stateCd": st} for st in NWIS_STATE_CODES]
+            queries = [{**common, "stateCd": st} for st in US_STATE_CODES]
         for params in queries:
             try:
                 text = self.client.get_text(base, params=params)
@@ -592,8 +594,8 @@ class USGSCollector(BaseCollector):
                 return features
             url, page_params = next_link, None
 
-    def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample | StreamflowReading]:
-        samples: Sequence[WaterQualitySample | StreamflowReading] = []
+    def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample | StreamflowReading | WaterLevelReading]:
+        samples: list[WaterQualitySample | StreamflowReading | WaterLevelReading] = []
         for feat in raw:
             try:
                 props = feat.get("properties", {})
@@ -606,6 +608,11 @@ class USGSCollector(BaseCollector):
                 val = props.get("value")
                 if val is None:
                     continue
+
+                time_str = props.get("time")
+                if time_str is None:
+                    continue
+                dt = datetime.fromisoformat(str(time_str).replace("Z", "+00:00"))
 
                 loc = None
                 if coords[0] is not None:
@@ -628,12 +635,31 @@ class USGSCollector(BaseCollector):
                             station_id=props.get("monitoring_location_id"),
                             station_name=props.get("station_name"),
                             location=loc,
-                            reading_datetime=datetime.fromisoformat(props["time"]),
+                            reading_datetime=dt,
                             discharge_cms=rounded_discharge_cms,
                             source_type="in_situ",
                             uncertainty_cms=None,
                             catchment_area_km2=catchment_area_km2,
                             unit="m3/s",
+                        )
+                    )
+
+                elif param_code == "00065":  # Gage height, feet -> metres
+                    stage_sig_figs = self._count_sig_figs(val)
+                    if not stage_sig_figs:
+                        stage_sig_figs = 3  # default to 3 significant figures if unable to determine
+                    stage_m = float(val) * FT_TO_M
+                    rounded_stage_m = USGSCollector._round_to_sig_figs(stage_m, stage_sig_figs)
+
+                    samples.append(
+                        WaterLevelReading(
+                            source=DataSource.USGS,
+                            station_id=props.get("monitoring_location_id"),
+                            station_name=props.get("station_name"),
+                            location=loc,
+                            reading_datetime=dt,
+                            water_level=rounded_stage_m,
+                            unit="m",
                         )
                     )
 
@@ -643,7 +669,7 @@ class USGSCollector(BaseCollector):
                             source=DataSource.USGS,
                             station_id=props.get("monitoring_location_id", "unknown"),
                             location=loc,
-                            sample_datetime=datetime.fromisoformat(props["time"]),
+                            sample_datetime=dt,
                             parameter=param_label,
                             value=float(val),
                             unit=props.get("unit_of_measure", ""),
@@ -731,7 +757,7 @@ class USGSCollector(BaseCollector):
                 return code.zfill(2)
             return None
         # Convert NWIS code to corresponding ANSI code; if a mapping doesn't exist, return None.
-        return STATE_FIPS.get(code.upper())
+        return US_STATE_CODES.get(code.upper())
 
     @staticmethod
     def _normalise_county_code(county_cd: str) -> str | None:

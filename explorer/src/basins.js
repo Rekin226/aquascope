@@ -243,6 +243,31 @@ async function subBasinAt(lat, lon) {
   };
 }
 
+// One FlatGeobuf read per point: the basin card and the "what can be answered
+// here" card both ask for the sub-basin of the same click.
+let subBasinCache = { key: null, promise: null };
+function subBasinAtCached(lat, lon) {
+  const key = `${lat},${lon}`;
+  if (subBasinCache.key !== key) {
+    const promise = subBasinAt(lat, lon);
+    subBasinCache = { key, promise };
+    promise.catch(() => { if (subBasinCache.promise === promise) subBasinCache = { key: null, promise: null }; });
+  }
+  return subBasinCache.promise;
+}
+
+// The upstream area of the sub-basin containing a point (km²), or null.
+export async function catchmentAreaAt(lat, lon) {
+  const sb = await subBasinAtCached(lat, lon);
+  return sb && Number.isFinite(sb.up_area) ? sb.up_area : null;
+}
+
+// How many gauged catchments the similarity search can draw donors from.
+export async function donorPoolSize() {
+  const { rows } = await ensureSimilarTable();
+  return rows.filter((r) => r.area_km2 !== null && r.area_km2 !== undefined).length;
+}
+
 async function ensureTopology() {
   if (topoLoaded) return topoLoaded;
   topoLoaded = (async () => {
@@ -264,12 +289,33 @@ async function upstreamIds(hybasId, limit = 20000) {
   return res.toArray().map((r) => Number(r.hybas_id));
 }
 
-async function basinAttributes(hybasId) {
+// The outlet sub-basin's raw BasinATLAS row, as stored.
+async function basinRow(hybasId) {
   const { conn } = await duck();
   const res = await conn.query(`SELECT * FROM read_parquet('${basinsUrl("lev12_attributes.parquet")}') WHERE hybas_id = ${Number(hybasId)} LIMIT 1`);
   const rows = res.toArray().map((r) => r.toJSON());
-  if (!rows.length) return null;
-  const row = rows[0];
+  return rows.length ? rows[0] : null;
+}
+
+// DuckDB hands 64-bit integers back as BigInt, which JSON cannot carry.
+const plain = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "bigint" ? Number(v) : v]));
+
+// What a Solve run needs to describe the catchment in the worker, where
+// BasinATLAS cannot be read: the sub-basin the page found and the outlet's raw
+// row, for aquascope.archive.basins.describe_catchment_from_row. The outlet
+// row's upstream fields already describe the whole catchment, so the upstream
+// walk (a topology download on a fresh page) is not repeated here.
+export async function catchmentForWorker(lat, lon) {
+  const sb = await subBasinAtCached(lat, lon);
+  if (!sb || sb.hybas_id === null) return null;
+  const row = await basinRow(sb.hybas_id).catch(() => null);
+  const { geometry, ...rest } = sb;
+  return { sub_basin: plain(rest), row: row ? plain(row) : null };
+}
+
+async function basinAttributes(hybasId) {
+  const row = await basinRow(hybasId);
+  if (!row) return null;
   const out = {};
   for (const [key, label, uf, sf, unit, div] of BASIN_FIELDS) {
     const raw = row[uf] ?? row[sf];
@@ -289,7 +335,7 @@ export async function requestBasin(lat, lon, target) {
   setCard(el, "loading", { message: "Finding the sub-basin (BasinATLAS)…" });
   setTab(r, "catchment", { enabled: true });
   try {
-    const sb = await subBasinAt(lat, lon);
+    const sb = await subBasinAtCached(lat, lon);
     if (my !== basinReq) return;
     if (!sb || sb.hybas_id === null) {
       setCard(el, "empty", { message: "No BasinATLAS sub-basin here (open sea, or outside the level-12 layer)." });

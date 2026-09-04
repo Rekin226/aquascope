@@ -1,0 +1,162 @@
+# Is this well declining, how fast, with what confidence.
+#
+# Evidence (issue #307): Jasechko et al. 2024 (Nature, doi:10.1038/s41586-023-06879-8)
+# established rapid, widespread groundwater decline from in-situ trends at
+# 170,000 wells; Scanlon et al. 2023 and Kuang et al. 2024 make groundwater the
+# resilience question of the decade. The tree: ten years of monthly levels give
+# a Sen's slope with Mann-Kendall, the Standardised Groundwater Index, and a
+# water-table-fluctuation recharge with a defaulted specific yield; no well
+# within reach gives a regional signal only, labelled as such. Attributing the
+# cause without abstraction data is declined.
+id: groundwater_decline
+title: Groundwater decline at a well
+problem: groundwater_decline
+variable: groundwater_level
+description: Whether a well's level is declining, how fast (m/yr with confidence), groundwater drought status and recharge; regional signal only when no well is within reach.
+intake:
+  - name: horizon
+    label: Years of recent record to compare with the full record
+    type: int
+    default: 10
+    min: 1
+  - name: concern
+    label: Why it matters
+    type: choice
+    options: [supply, subsidence, ecosystem, other]
+    default: other
+  - name: attribute_cause
+    label: Attribute the decline to a cause (pumping, drought, land use)
+    type: bool
+    default: false
+branches:
+  - id: well
+    when:
+      - path: context.years_by_variable.groundwater_level
+        op: ">="
+        value: 10
+    station_variable: groundwater_level
+    rationale: >-
+      {{ station.years }} years of groundwater levels at {{ station.name }} ({{ station.source }}
+      {{ station.station_id }}, {{ station.distance_km }} km from the point): a trend with confidence is
+      defensible. The plan takes the Sen's slope with a Mann-Kendall test on the annual means, the
+      Standardised Groundwater Index for drought status, and a water-table-fluctuation recharge with a
+      stated specific yield; it reports the rate and the confidence, not the cause.
+    steps:
+      - id: s1
+        tool: analyze_station
+        method: groundwater_trend
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          variable: groundwater_level
+        rationale: >-
+          Record summary and the trend on annual means: Sen's slope (m/yr) with the Mann-Kendall p-value.
+          A trend says whether the level is changing, never why.
+        expects:
+          - check: min_years
+            value: 10
+            path: years
+          - check: not_empty
+            path: trend
+          - check: unit_present
+            path: unit
+      - id: s2
+        tool: get_timeseries
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          years: 60
+          resample: M
+          max_points: 2000
+          variable: groundwater_level
+        rationale: The monthly level series the drought index is computed on.
+        expects:
+          - check: not_empty
+            path: points
+      - id: s3
+        tool: sgi_drought
+        method: sgi
+        depends_on: [s2]
+        arguments:
+          from_step: s2
+        rationale: >-
+          Standardised Groundwater Index (Bloomfield and Marchant 2013) on the monthly levels: the current
+          index, the worst month and the drought events. Reported when the series reaches; the trend stands
+          on its own otherwise.
+      - id: s4
+        tool: get_timeseries
+        method: recharge_wtf
+        optional: true
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          years: 5
+          resample: D
+          max_points: 2000
+          variable: groundwater_level
+        rationale: The last five years of daily levels, for a water-table-fluctuation recharge estimate.
+        expects:
+          - check: not_empty
+            path: points
+      - id: s5
+        tool: recharge
+        method: recharge_wtf
+        optional: true
+        depends_on: [s4]
+        arguments:
+          from_step: s4
+          specific_yield: 0.15
+        rationale: >-
+          Recharge by water-table fluctuation (Healy and Cook 2002) with a specific yield of 0.15, a stated
+          assumption: the number scales with it one to one.
+  - id: regional
+    when: []
+    rationale: >-
+      No well with ten years of levels within reach. What can be said is regional: the ERA5 water balance for
+      the cell (precipitation against reference evapotranspiration). A GRACE total-water-storage trend is the
+      regional check to add when it is wired in. Nothing here is a statement about a particular well.
+    steps:
+      - id: s1
+        tool: anywhere
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          years: 10
+        rationale: ERA5 precipitation, reference evapotranspiration and the aridity of the cell, as the regional water-balance signal.
+        expects:
+          - check: not_empty
+            path: climate
+declines:
+  - when:
+      - path: intake.attribute_cause
+        op: "=="
+        value: true
+    say: >-
+      Attributing a groundwater decline to pumping, drought or land-use change needs abstraction records
+      and a water balance this playbook does not have; it reports the rate of change and its confidence and
+      stops there. Ask for the trend, or bring the pumping data.
+caveats:
+  - >-
+    A trend says whether the level is changing and how fast, never why; attribution needs abstraction
+    records (Jasechko et al. 2024 attribute widespread decline to pumping only where such records exist).
+  - say: >-
+      Recharge by water-table fluctuation uses a specific yield of 0.15 unless one is given; the estimate
+      scales with it one to one and is a stated assumption, not a measurement.
+    when:
+      - path: context.years_by_variable.groundwater_level
+        op: ">="
+        value: 10
+  - say: >-
+      This is a regional signal for a cell of tens of kilometres, not a statement about any particular well;
+      a well record within reach is what turns it into a local answer.
+    when:
+      - path: context.years_by_variable.groundwater_level
+        op: exists
+        value: false
+citations:
+  - "Jasechko, S. et al. (2024). Rapid groundwater decline and some cases of recovery in aquifers globally. Nature 625, 715-721. doi:10.1038/s41586-023-06879-8"
+  - "Scanlon, B. R. et al. (2023). Global water resources and the role of groundwater in a resilient water future. Nat. Rev. Earth Environ. 4, 87-101. doi:10.1038/s43017-022-00378-6"
+  - "Kuang, X. et al. (2024). The changing nature of groundwater in the global water cycle. Science 383, eadf0630. doi:10.1126/science.adf0630"
+  - "Bloomfield, J. P. and Marchant, B. P. (2013). Analysis of groundwater drought building on the standardised precipitation index approach. Hydrol. Earth Syst. Sci. 17, 4769-4787."
+  - "Healy, R. W. and Cook, P. G. (2002). Using groundwater levels to estimate recharge. Hydrogeology Journal 10, 91-109."
+  - "Mann, H. B. (1945); Kendall, M. G. (1975); Sen, P. K. (1968): the Mann-Kendall test and Sen's slope."

@@ -1,0 +1,225 @@
+# Can this field be irrigated from this river: the crop's seasonal demand, then the supply.
+#
+# The chain (issue #307): FAO-56 reference ET0 for the point from ERA5, the
+# crop water requirement over the FAO-56 stage lengths with the single crop
+# coefficient, effective rainfall subtracted and the irrigation efficiency
+# applied (aquascope.agri.crop_water), the season repeated over the years of
+# the ERA5 window; the demand in mm, m3 and m3/s, and, when a gauge is within
+# reach, the run-of-river supply check of the supply_reliability playbook on
+# the peak-month demand over the season's months. No gauge: demand only, said
+# plainly. Kc values are the FAO-56 (1998) tables pending the 2025 revision
+# (issue #310); reanalysis-forced ET0 carries bias (Agric. Water Manage. 2024,
+# doi:10.1016/j.agwat.2024.108732). Thresholds (5 years for a flow-duration
+# curve) are the registry's.
+id: irrigation_feasibility
+title: Irrigation feasibility at a point
+problem: irrigation
+variable: discharge
+description: >-
+  A crop's seasonal water demand at a point (FAO-56 single Kc on ERA5 reference ET0) in mm, m3 and m3/s, and
+  whether the nearest gauged river can supply it as a run-of-river abstraction; demand only when no gauge is
+  within reach.
+intake:
+  - name: crop
+    label: Crop (FAO-56 table)
+    type: choice
+    options:
+      - alfalfa
+      - banana
+      - barley
+      - cabbage
+      - citrus
+      - coffee
+      - cotton
+      - grape
+      - groundnut
+      - maize
+      - olive
+      - onion
+      - pepper
+      - potato
+      - rice_paddy
+      - sorghum
+      - soybean
+      - sugar_beet
+      - sugarcane
+      - sunflower
+      - tea
+      - tomato
+      - wheat_winter
+    default: maize
+  - name: area_ha
+    label: Area (ha)
+    type: float
+    default: 10
+  - name: planting_month
+    label: Planting month (1-12)
+    type: int
+    default: 4
+  - name: efficiency
+    label: Irrigation efficiency
+    type: float
+    default: 0.7
+    help: Gross depth is the net requirement divided by this (0.7 for sprinkler, 0.9 for drip, 0.5 for surface).
+  - name: share
+    label: Abstraction share of the flow allowed
+    type: float
+    default: 0.1
+  - name: decision
+    label: What is being decided
+    type: choice
+    options: [seasonal demand, daily schedule]
+    default: seasonal demand
+branches:
+  - id: with_gauge
+    when:
+      - path: context.years_by_variable.discharge
+        op: ">="
+        value: 5
+    station_variable: discharge
+    rationale: >-
+      ERA5 reference evapotranspiration and rainfall are reachable for the point, and {{ station.name }}
+      ({{ station.source }} {{ station.station_id }}, {{ station.distance_km }} km away) has {{ station.years }}
+      years of daily discharge. The plan computes the seasonal demand of {{ intake.crop }} on {{ intake.area_ha }} ha
+      planted in month {{ intake.planting_month }} (FAO-56 single Kc, efficiency {{ intake.efficiency }}), averaged
+      over the seasons in the ERA5 window, then screens the peak-month demand against the gauge's record over the
+      season's months with Q95 kept in the river and at most {{ intake.share }} of the flow taken. The supply is that
+      river at that gauge, not the field's own stream.
+    steps:
+      - id: s1
+        tool: anywhere
+        method: fao56_et0
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          years: 10
+        rationale: >-
+          The climate of the point: ERA5 precipitation, FAO-56 ET0 and the aridity index, as the frame for the demand.
+        expects:
+          - check: not_empty
+            path: climate
+      - id: s2
+        tool: crop_water_demand
+        method: crop_water_requirement
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          crop: "{{ intake.crop }}"
+          area_ha: "{{ intake.area_ha }}"
+          planting_month: "{{ intake.planting_month }}"
+          efficiency: "{{ intake.efficiency }}"
+          years: 10
+        rationale: >-
+          Crop evapotranspiration over the FAO-56 stage lengths, effective rainfall subtracted, the net depth divided
+          by the efficiency: the gross seasonal demand in mm and m3 over {{ intake.area_ha }} ha, as a mean rate and
+          as the peak-month rate in m3/s, with the range across seasons.
+        expects:
+          - check: not_empty
+            path: demand.gross_irrigation_mm
+          - check: not_empty
+            path: demand.peak_month_m3s
+          - check: not_empty
+            path: season.months
+      - id: s3
+        tool: supply_reliability
+        method: supply_reliability
+        depends_on: [s2]
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          demand_m3s: "{{ result.s2.demand.peak_month_m3s }}"
+          months: "{{ result.s2.season.months }}"
+          share: "{{ intake.share }}"
+          reserve: q95
+        rationale: >-
+          The supply check of the supply_reliability playbook on the peak-month demand the previous step computed,
+          over the season's months only: the fraction of days and years the gauge's record could have supplied it
+          while Q95 stayed in the river and no more than the share was taken.
+        expects:
+          - check: min_years
+            value: 5
+            path: years
+          - check: not_empty
+            path: reliability
+          - check: unit_present
+            path: unit
+  - id: demand_only
+    when: []
+    rationale: >-
+      ERA5 reference evapotranspiration and rainfall are reachable for the point, but no gauge with five years of
+      discharge is within reach: the plan computes the seasonal demand of {{ intake.crop }} on {{ intake.area_ha }}
+      ha planted in month {{ intake.planting_month }} and stops there. Supply is not checked; whether a river, a
+      well or a reservoir can meet the demand is a separate question this answer does not settle.
+    steps:
+      - id: s1
+        tool: anywhere
+        method: fao56_et0
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          years: 10
+        rationale: >-
+          The climate of the point: ERA5 precipitation, FAO-56 ET0 and the aridity index, as the frame for the demand.
+        expects:
+          - check: not_empty
+            path: climate
+      - id: s2
+        tool: crop_water_demand
+        method: crop_water_requirement
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          crop: "{{ intake.crop }}"
+          area_ha: "{{ intake.area_ha }}"
+          planting_month: "{{ intake.planting_month }}"
+          efficiency: "{{ intake.efficiency }}"
+          years: 10
+        rationale: >-
+          The gross seasonal demand in mm and m3 over {{ intake.area_ha }} ha, as a mean rate and as the peak-month
+          rate in m3/s, with the range across seasons; supply not checked.
+        expects:
+          - check: not_empty
+            path: demand.gross_irrigation_mm
+          - check: not_empty
+            path: demand.peak_month_m3s
+declines:
+  - when:
+      - path: intake.decision
+        op: "=="
+        value: daily schedule
+    say: >-
+      A day-by-day irrigation schedule (when to irrigate and how much each time) needs the soil's water-holding
+      capacity, the rooting depth and the actual weather of the season; this playbook gives the seasonal demand
+      from a reanalysis climatology and a supply screening. Ask for the seasonal demand, or run
+      aquascope.agri.irrigation_schedule on the season's weather with the soil parameters.
+caveats:
+  - >-
+    Crop coefficients and stage lengths are the FAO-56 (1998) Table 12 values pending verification against the
+    2025 revised edition (FAO, doi:10.4060/cd6621en; issue #310); a coefficient that moved moves the demand with it.
+  - >-
+    Reference ET0 here is FAO-56 Penman-Monteith forced by ERA5 reanalysis (Open-Meteo), which carries bias against
+    station-based ET0 (Agric. Water Manage. 2024, doi:10.1016/j.agwat.2024.108732); the demand is a planning
+    estimate, not a measurement.
+  - say: >-
+      The supply comes from the gauged river named in the plan, at the gauge's distance from the point, under a
+      screening rule (Q95 kept in the river, at most the stated share taken); conveyance to the field, licences,
+      return flows and storage are not in it.
+    when:
+      - path: context.years_by_variable.discharge
+        op: ">="
+        value: 5
+  - say: >-
+      Supply was not checked: no gauge with five years of discharge is within reach, and this answer is the demand
+      alone. Whether any source can meet it is a separate study.
+    when:
+      - path: derived.discharge_years
+        op: "<"
+        value: 5
+citations:
+  - "Allen, R. G., Pereira, L. S., Raes, D., & Smith, M. (1998). Crop evapotranspiration: guidelines for computing crop water requirements. FAO Irrigation and Drainage Paper 56."
+  - "FAO (2025). Crop evapotranspiration: guidelines for computing crop water requirements, revised edition (Pereira, Allen, Paredes, Lopez-Urrea, Raes et al.). doi:10.4060/cd6621en"
+  - "Updated single and basal crop coefficients for temperate fruit trees, vines and shrubs: Irrigation Science (2024), doi:10.1007/s00271-024-00964-0"
+  - "Sensitivity of ERA5-Land-forced FAO-56 ET0 to reanalysis bias: Agricultural Water Management (2024), doi:10.1016/j.agwat.2024.108732"
+  - "Vogel, R. M. and Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage. 120, 485-504."
+  - "Smakhtin, V., & Eriyagama, N. (2008). Developing a software package for global desktop assessment of environmental flows. Environ. Model. Softw. 23, 1396-1406."
+  - "Hersbach, H. et al. (2020). The ERA5 global reanalysis. Q. J. R. Meteorol. Soc. 146, 1999-2049."

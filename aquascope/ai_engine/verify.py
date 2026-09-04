@@ -71,7 +71,10 @@ _DASHES = dict.fromkeys(map(ord, "‐‑‒–—―−"), "-")
 
 #: A unit with a negative exponent, once folded: "mm yr-1", "m3 s-1", "W m-2".
 #: Without this the exponent reads as a claim of -1, repeatedly.
-_EXPONENT_UNIT = re.compile(r"\b[a-zA-Z][a-zA-Z0-9]{0,5}\s?-\d\b")
+#: A unit exponent is glued to its unit and is one digit: "m s-1", "s-1", "kg-1".
+#: With an optional space it also matched "slope -0" in "slope -0.0029", and the
+#: orphaned ".0029" read as 29.
+_EXPONENT_UNIT = re.compile(r"\b[a-zA-Z][a-zA-Z0-9]{0,5}-\d\b(?![.,]\d)")
 
 #: And a positive one, written closed up: "km2", "m3", "km3". No space allowed
 #: here, or "gauge 3" would be swallowed along with it.
@@ -92,8 +95,28 @@ _OTHER_SERIES = re.compile(r"\b(low[- ]flow|q95|q05|q90|q10|baseflow|base flow|p
 _CONVENTIONS = {0.05, 0.01, 0.1, 0.9, 0.95, 0.99}
 
 #: Digit grouping with a space: "14 555" is one number, not 14 and 555. Only
-#: before a group of exactly three digits, which is what grouping means.
-_GROUPED = re.compile(r"(?<=\d)[\s\u00a0\u202f\u2009](?=\d{3}\b)")
+#: before groups of exactly three digits, which is what grouping means, and
+#: only when the leading digits stand on their own: in "Q2 325" the 2 belongs
+#: to the label, and joining it read the return level as 2325 (#324).
+_GROUPED = re.compile(r"(?<![\w.])(\d{1,3})((?:[\s\u00a0\u202f\u2009]\d{3})+)\b")
+_GROUP_SPACE = re.compile(r"[\s\u00a0\u202f\u2009]")
+
+#: A dash between two numbers is a range ("297-348", "453 - 525"), never a
+#: sign. Read as one, every interval's upper bound came out negative (#324).
+_RANGE = re.compile(r"(?<=\d)\s*-\s*(?=\d)")
+
+#: A label with digits in it: Q2, Q95, T100, ET0, GR4J. Not a number, and not
+#: to be glued onto the number that follows it (#324).
+_LABEL = re.compile(r"\b[A-Za-z]+\d+[A-Za-z\d]*\b")
+
+#: A calendar year in the prose: 1800 to 2100, standing on its own (not part of
+#: a longer number, nor a decimal such as "2000.5 m3/s").
+_YEAR = re.compile(r"(?<![\d.,])(1[89]\d\d|20\d\d|2100)(?!\d|[.,]\d)")
+
+#: The label the Analyst is told to put on a fact that came from its memory
+#: rather than from a tool; a sentence carrying it is not held to the data.
+_GENERAL_KNOWLEDGE = re.compile(r"general knowledge", re.I)
+_SENTENCE = re.compile(r"(?<=[.!?])\s+|\n")
 
 
 def normalise(text: str) -> str:
@@ -106,14 +129,20 @@ def normalise(text: str) -> str:
     superscripts into digits, the dashes become ASCII, and grouped digits join up.
     """
     folded = unicodedata.normalize("NFKC", text or "").translate(_DASHES)
-    return _GROUPED.sub("", folded)
+    return _GROUPED.sub(lambda m: m.group(1) + _GROUP_SPACE.sub("", m.group(2)), folded)
 
 
 def _numbers(text: str, *, claims_only: bool = False) -> list[float]:
-    """Numbers in the text. ``claims_only`` drops the dates and percentages."""
-    text = text or ""
+    """Numbers in the text. ``claims_only`` drops the dates, percentages and units.
+
+    A dash between two numbers separates a range, so "297-348" is 297 and 348
+    rather than 297 and -348; a real sign is kept ("skew = -0.864"). Labels
+    such as Q2 or T100 are dropped, so "Q2 325" is 325 alone.
+    """
+    text = (text or "").translate(_DASHES)
     if claims_only:
         text = _SQUARED_UNIT.sub(" ", _EXPONENT_UNIT.sub(" ", _PERCENT.sub(" ", _DATE.sub(" ", text))))
+    text = _LABEL.sub(" ", _RANGE.sub(" ; ", text))
     out = []
     for token in _NUMBER.findall(text):
         try:
@@ -165,13 +194,31 @@ def _identifiers(payload: Any) -> list[str]:
     return found
 
 
+def _decimals(value: float) -> int | None:
+    """How many decimals the prose wrote: 0.004 has three, 29.0 none; None for exponent forms."""
+    text = repr(float(value))
+    if "e" in text or "E" in text:
+        return None
+    frac = text.split(".")[1].rstrip("0") if "." in text else ""
+    return len(frac)
+
+
 def _close(value: float, pool: list[float], *, rel: float = 0.02) -> bool:
-    """Is this number in the tool output, allowing for rounding in the prose?"""
+    """Is this number in the tool output, allowing for rounding in the prose?
+
+    Two tolerances: a relative one for big numbers written approximately, and
+    the rounding the prose itself did (tau = -0.0037 in the result, "-0.004"
+    in the answer, is the same number said to three decimals).
+    """
+    decimals = _decimals(value)
+    half_unit = 0.5 * 10 ** (-decimals) + 1e-12 if decimals is not None else None
     for other in pool:
         if other == value:
             return True
         scale = max(abs(value), abs(other), 1e-9)
         if abs(other - value) / scale <= rel:
+            return True
+        if half_unit is not None and abs(other - value) <= half_unit:
             return True
     return False
 
@@ -247,6 +294,29 @@ def verify(answer: str, tool_results: list[dict[str, Any]], *, question: str = "
             "numbers_come_from_tools", not unsupported,
             "" if not unsupported else
             f"These numbers are not in any tool result: {', '.join(str(n) for n in unsupported[:6])}.",
+        ))
+
+    # 2b. Are the years in the prose traceable to a result? "The 2014 winter
+    # floods" came from the model's memory in a live answer (#324). A year that
+    # appears in no tool result (payload values, dates and period strings
+    # included) and not in the question is listed, unless its sentence says it
+    # is general knowledge, which is the label the Analyst is asked to use.
+    if ok_results:
+        known = {int(n) for n in pool if float(n).is_integer() and 1800 <= n <= 2100}
+        known |= {int(m.group(1)) for m in _YEAR.finditer(normalise(question or ""))}
+        untraced: list[int] = []
+        for sentence in _SENTENCE.split(answer):
+            if _GENERAL_KNOWLEDGE.search(sentence):
+                continue
+            for m in _YEAR.finditer(sentence):
+                year = int(m.group(1))
+                if year not in known and year not in untraced:
+                    untraced.append(year)
+        v.checks.append(Check(
+            "years_traceable", not untraced,
+            "" if not untraced else
+            f"These years are in no tool result: {', '.join(str(y) for y in untraced[:6])}. "
+            "If they are from memory, the sentence should say so: from general knowledge, not from the data.",
         ))
 
     # 3. A return level should come with its uncertainty.

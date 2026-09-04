@@ -264,3 +264,11 @@ class TestBOMConstants:
 
     def test_parameter_units_cover_discharge(self):
         assert PARAMETER_UNITS["Water Course Discharge"] == "m3/s"
+
+    def test_parameter_units_spells_ec_with_at_symbol(self):
+        # BOM's KiWIS instance spells this "Electrical Conductivity @ 25C"
+        # (with an @, not the word "At") -- a mismatch here means every EC
+        # row silently falls through to the default unit / gets dropped
+        # from PARAMETER_VARIABLE_MAP instead of being reported.
+        assert "Electrical Conductivity @ 25C" in PARAMETER_UNITS
+        assert "Electrical Conductivity At 25C" not in PARAMETER_UNITS

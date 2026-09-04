@@ -47,6 +47,8 @@
       <button id="btn-cite-top" class="btn" title="How to cite AquaScope and the data">Cite</button>
       <button id="btn-ask" class="btn ask-toggle" aria-expanded="false" aria-controls="drawer"
               title="Ask a question in plain language; answered from real gauges by aquascope's tools, in your browser">Ask ✨</button>
+      <button id="btn-solve" class="btn ask-toggle" aria-expanded="false" aria-controls="drawer"
+              title="State a water problem at the selected place: a plan you review, then run with a check after every step">Solve</button>
     </div>
   </header>
 
@@ -146,27 +148,20 @@
       <!-- welcome -->
       <div id="panel-empty" class="panel-empty">
         <h2>Pick a gauge</h2>
-        <p>Click a dot on the map, or search by name, and you get the observed record straight from the
-          agency: flood frequency, flow duration, trend and a rainfall-runoff model, computed here in your
-          browser by <a href="https://github.com/Rekin226/aquascope" target="_blank" rel="noopener">aquascope</a>.
-          Click anywhere else for the hydrology of that spot.</p>
+        <p>Click a dot for its record, floods, flows and trend. Click anywhere else for the
+          hydrology of that spot.</p>
         <div class="try">
-          <span class="muted">Try:</span>
-          <button class="chip" data-try="s" data-key="usgs/USGS-01013500">a US gauge</button>
-          <button class="chip" data-try="p" data-lat="25.05" data-lon="121.55">the climate of Taipei</button>
-          <button class="chip" data-try="ask">the Analyst</button>
+          <button class="chip" data-try="s" data-key="usgs/USGS-01013500">A US gauge</button>
+          <button class="chip" data-try="p" data-lat="25.05" data-lon="121.55">Climate of Taipei</button>
+          <button class="chip" data-try="ask">Ask the Analyst</button>
         </div>
         <details class="tips">
           <summary>What works today</summary>
           <ul>
-            <li><strong>USGS</strong>, <strong>UK EA</strong> and <strong>Hub'Eau</strong> (daily mean discharge, obs_elab): full daily records → flood frequency with 90 % CI, FDC, trend.</li>
-            <li><strong>PEGELONLINE</strong>, <strong>Ireland OPW</strong>: the last ~month (that is all those feeds publish) → hydrograph.</li>
-            <li><strong>Taiwan CWA</strong>: daily rainfall, last 10 years.</li>
-            <li>Click anywhere that is not a gauge: ERA5 rainfall, temperature, FAO-56 ET0, aridity, and GloFAS modelled discharge for that spot, plus the nearest gauges.</li>
-            <li><strong>Catchments</strong>: for USGS gauges and any point in the US, the upstream drainage basin is drawn on the map (USGS NLDI over NHDPlus V2, public domain). Everywhere on land, the BasinATLAS sub-basin (HydroATLAS, CC BY 4.0) gives the upstream area, climate, land cover, soils and population.</li>
-            <li><strong>Similar gauged basins</strong> and an <strong>estimated flow regime</strong> for any point: the donor list for an ungauged site, with leave-one-out skill.</li>
-            <li><strong>Ask ✨</strong>: a plain-language question, answered from real gauges with a Data and Methods section. Bring your own key (Groq and Hugging Face have free tiers).</li>
-            <li>The first analysis loads Python in your browser (about 15 MB, once). After that it is quick.</li>
+            <li><strong>USGS</strong>, <strong>UK EA</strong>, <strong>Hub'Eau</strong>: full daily records, so flood frequency, flow duration and trend.</li>
+            <li><strong>PEGELONLINE</strong>, <strong>OPW</strong>: the last month only. <strong>Taiwan CWA</strong>: daily rainfall.</li>
+            <li>Anywhere on land: ERA5 climate, GloFAS modelled discharge, and the upstream catchment.</li>
+            <li>The first analysis loads Python here (about 15 MB, once).</li>
           </ul>
         </details>
       </div>
@@ -180,11 +175,17 @@
             <span id="st-id"></span> · <span id="st-vars"></span><span id="st-period"></span>
           </div>
           <div class="st-actions">
-            <a id="st-agency" href="#" target="_blank" rel="noopener" class="btn" title="Open this gauge on the agency’s own site">Agency ↗</a>
-            <button id="btn-share" class="btn" title="Copy a link to exactly this view">Copy link</button>
-            <button id="btn-csv" class="btn" disabled title="Download the observed record as CSV">CSV</button>
-            <button id="btn-to-workbench" class="btn" title="Analyse this record with the workbench tools">Workbench</button>
-            <button id="btn-cite" class="btn" title="How to cite this">Cite</button>
+            <button id="btn-csv" class="btn" disabled title="Download the observed record as CSV">Download CSV</button>
+            <button id="btn-unit" class="btn" hidden title="Switch the displayed discharge unit. Analyses and CSV downloads stay in m³/s.">Show ft³/s</button>
+            <details class="more">
+              <summary class="btn" title="More actions" aria-label="More actions">···</summary>
+              <div class="more-menu">
+                <a id="st-agency" href="#" target="_blank" rel="noopener" title="Open this gauge on the agency’s own site">Agency page ↗</a>
+                <button id="btn-share" title="Copy a link to exactly this view">Copy link</button>
+                <button id="btn-to-workbench" title="Analyse this record with the workbench tools">Send to workbench</button>
+                <button id="btn-cite" title="How to cite this">Cite</button>
+              </div>
+            </details>
           </div>
           <div id="status" class="status" hidden></div>
         </div>
@@ -207,6 +208,16 @@
             <div id="st-hydro-card" class="card" hidden>
               <div class="card-title"><h3>Observed record</h3></div>
               <div class="card-body"><div id="plot-hydro" class="plot"></div></div>
+            </div>
+            <div id="st-assess-card" class="card assess" hidden>
+              <div class="card-body">
+                <details>
+                  <summary><h3>What can be answered here</h3><span class="assess-counts"></span></summary>
+                  <p class="assess-foot muted"></p>
+                  <ul class="assess-rows"></ul>
+                  <ul class="assess-notes muted"></ul>
+                </details>
+              </div>
             </div>
             <div id="st-notes-card" class="card" hidden>
               <div class="card-title"><h3>Notes</h3></div>
@@ -325,6 +336,16 @@
               <div class="card-title"><h3>Nearest gauges</h3></div>
               <div class="card-body"><ul id="pt-nearest" class="nearest"></ul></div>
             </div>
+            <div id="pt-assess-card" class="card assess" hidden>
+              <div class="card-body">
+                <details>
+                  <summary><h3>What can be answered here</h3><span class="assess-counts"></span></summary>
+                  <p class="assess-foot muted"></p>
+                  <ul class="assess-rows"></ul>
+                  <ul class="assess-notes muted"></ul>
+                </details>
+              </div>
+            </div>
             <div id="pt-notes-card" class="card" hidden>
               <div class="card-title"><h3>Notes</h3></div>
               <div class="card-body"><ul id="pt-notes"></ul></div>
@@ -442,67 +463,148 @@
       </div>
     </aside>
 
-    <!-- the Analyst, beside the inspector rather than instead of it -->
+    <!-- the Analyst, in the inspector's place: Ask (a question) or Solve (a problem at a place) -->
     <aside id="drawer" class="drawer" aria-label="Ask AquaScope" hidden>
       <div class="drawer-head">
-        <span class="badge" style="background:#6a1b9a">Analyst</span>
-        <h2>Ask AquaScope</h2>
-        <button id="drawer-close" class="icon-btn" title="Close">✕</button>
-      </div>
-      <p class="st-meta">A question in plain language. A model picks the tools (find stations, analyse a record, flood frequency,
-        climate of a point); aquascope runs them here in your browser; the answer ends with the data used and the
-        methods with citations, assembled from the tool results, not from the model.</p>
-
-      <div id="ask-tier" class="ask-tier">
-        <label><input type="radio" name="ask-tier" value="showcase" checked> Worked examples <span class="muted">(no key, recorded runs)</span></label>
-        <label><input type="radio" name="ask-tier" value="local"> On your device <span class="muted" id="ask-local-note"></span></label>
-        <label><input type="radio" name="ask-tier" value="key"> Your own key <span class="muted">(the full tool loop)</span></label>
-      </div>
-
-      <div id="ask-showcase" class="ask-showcase" hidden></div>
-
-      <details id="ask-settings" class="ask-settings">
-        <summary>Model and key</summary>
-        <div class="ask-grid">
-          <label>Provider
-            <select id="ask-provider"></select>
-          </label>
-          <label>Model <input id="ask-model" type="text" autocomplete="off" spellcheck="false" /></label>
-          <label id="ask-base-url-row" hidden>Base URL <input id="ask-base-url" type="url" placeholder="https://host/v1" autocomplete="off" spellcheck="false" /></label>
-          <label>API key <input id="ask-key" type="password" autocomplete="off" placeholder="paste your key" /></label>
-          <label class="ask-remember"><input id="ask-remember" type="checkbox" /> keep the key in this browser after I close the tab</label>
+        <button id="drawer-close" class="icon-btn back" title="Back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <div id="drawer-mode" class="drawer-mode" role="radiogroup" aria-label="Ask or Solve">
+          <label class="seg"><input type="radio" name="drawer-mode" value="ask" checked><span>Ask</span></label>
+          <label class="seg"><input type="radio" name="drawer-mode" value="solve"><span>Solve</span></label>
         </div>
-        <p id="ask-provider-note" class="muted ask-provider-note" hidden></p>
-        <p class="muted ask-privacy">Your key goes from this tab straight to the provider you chose (this page has no server), and the model
-          must support tool calling. By default it is kept for this tab only. Free keys:
-          <a href="https://console.groq.com/keys" target="_blank" rel="noopener">Groq</a>,
-          <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">Hugging Face</a>.
-          <button id="ask-forget" class="btn tiny" hidden>Forget key</button></p>
-      </details>
+        <span id="ask-context-chip" class="context-chip" hidden></span>
+      </div>
 
-      <div id="ask-compose">
-        <textarea id="ask-question" rows="3" data-autofocus placeholder="e.g. What is the 100-year flood of the Thames at Kingston, and how sure can we be?"></textarea>
-        <label class="ask-context-toggle"><input type="checkbox" id="ask-use-context" checked /> tell it what I am looking at</label>
-        <p id="ask-context" class="muted ask-context" hidden><span id="ask-context-text"></span></p>
-        <div id="ask-examples" class="ask-examples"></div>
+      <div id="ask-pane">
+
+        <div id="ask-tier" class="ask-tier" role="radiogroup" aria-label="How to answer">
+          <label class="seg"><input type="radio" name="ask-tier" value="showcase" checked><span>Examples</span></label>
+          <label class="seg"><input type="radio" name="ask-tier" value="local"><span>On device</span></label>
+          <label class="seg"><input type="radio" name="ask-tier" value="key"><span>Your key</span></label>
+        </div>
+        <p id="ask-tier-note" class="tier-note muted"></p>
+        <span id="ask-local-note" hidden></span>
+
+        <div id="ask-showcase" class="ask-showcase" hidden></div>
+
+        <details id="ask-settings" class="ask-settings">
+          <summary>Model and key</summary>
+          <div class="ask-grid">
+            <label>Provider
+              <select id="ask-provider"></select>
+            </label>
+            <label>Model <input id="ask-model" type="text" autocomplete="off" spellcheck="false" /></label>
+            <label id="ask-base-url-row" hidden>Base URL <input id="ask-base-url" type="url" placeholder="https://host/v1" autocomplete="off" spellcheck="false" /></label>
+            <label>API key <input id="ask-key" type="password" autocomplete="off" placeholder="paste your key" /></label>
+            <label class="ask-remember"><input id="ask-remember" type="checkbox" /> keep the key in this browser after I close the tab</label>
+          </div>
+          <p id="ask-provider-note" class="muted ask-provider-note" hidden></p>
+          <p class="muted ask-privacy">Your key goes straight to the provider; this page has no server. Free keys:
+            <a href="https://console.groq.com/keys" target="_blank" rel="noopener">Groq</a>,
+            <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">Hugging Face</a>.
+            <button id="ask-forget" class="btn tiny" hidden>Forget key</button></p>
+        </details>
+
+        <div id="ask-compose">
+          <textarea id="ask-question" rows="3" data-autofocus placeholder="e.g. What is the 100-year flood of the Thames at Kingston, and how sure can we be?"></textarea>
+          <div class="ask-context-row">
+            <label class="ask-context-toggle"><input type="checkbox" id="ask-use-context" checked /> tell it what I am looking at</label>
+            <details id="ask-context" class="ask-context" hidden>
+              <summary aria-label="Show what will be sent"></summary>
+              <p class="muted context-detail"><span id="ask-context-text"></span></p>
+            </details>
+          </div>
+          <div id="ask-examples" class="ask-examples"></div>
+        </div>
+        <p id="ask-compose-note" class="muted ask-compose-note" hidden>Recorded runs. Pick another tab to ask your own.</p>
+        <div class="row-actions">
+          <button id="ask-run" class="btn primary">Ask</button>
+          <button id="ask-stop" class="btn" hidden>Stop</button>
+          <button id="ask-copy" class="btn" hidden>Copy Markdown</button>
+          <button id="ask-download" class="btn" hidden>Download .md</button>
+          <button id="ask-rerun" class="btn" hidden title="Run this answer's tool calls again here, live, with no key">Run the tools again</button>
+          <button id="ask-study" class="btn" hidden title="The steps behind this answer, to run again with `aquascope run study.yaml`">Download study.yaml</button>
+        </div>
+        <div id="ask-status" class="status" hidden></div>
+        <ol id="ask-log" class="ask-log" hidden></ol>
+        <div id="ask-checks" class="ask-checks" hidden></div>
+        <div id="ask-stations" class="ask-stations" hidden></div>
+        <article id="ask-result" class="ask-result" tabindex="-1" hidden></article>
       </div>
-      <p id="ask-compose-note" class="muted ask-compose-note" hidden>
-        These are runs recorded once with a key. To ask your own question, pick <strong>On your device</strong> or
-        <strong>Your own key</strong> above.
-      </p>
-      <div class="row-actions">
-        <button id="ask-run" class="btn primary">Ask</button>
-        <button id="ask-stop" class="btn" hidden>Stop</button>
-        <button id="ask-copy" class="btn" hidden>Copy Markdown</button>
-        <button id="ask-download" class="btn" hidden>Download .md</button>
-        <button id="ask-rerun" class="btn" hidden title="Run this answer's tool calls again here, live, with no key">Run the tools again</button>
-        <button id="ask-study" class="btn" hidden title="The steps behind this answer, to run again with `aquascope run study.yaml`">Download study.yaml</button>
+
+      <div id="solve-pane" hidden>
+        <section class="stage" id="stage-where" data-state="open">
+          <button type="button" class="stage-head"><span class="stage-num" aria-hidden="true">1</span><span class="stage-name">Where</span><span class="stage-sum"></span></button>
+          <div class="stage-body">
+            <p id="solve-where-text" class="solve-where"></p>
+          </div>
+        </section>
+        <section class="stage" id="stage-what" data-state="open">
+          <button type="button" class="stage-head"><span class="stage-num" aria-hidden="true">2</span><span class="stage-name">What</span><span class="stage-sum"></span></button>
+          <div class="stage-body">
+            <div id="solve-chips" class="solve-chips"></div>
+            <div id="solve-intake" class="ask-grid solve-intake" hidden></div>
+            <input id="solve-text" class="solve-text" type="text" autocomplete="off" placeholder="In your words (optional)" />
+            <label id="solve-model-row" class="ask-context-toggle solve-model" hidden><input type="checkbox" id="solve-use-key" checked /> <span id="solve-model-label"></span></label>
+            <div class="row-actions"><button id="solve-plan-btn" class="btn primary">Plan</button></div>
+            <div id="solve-what-status" class="status" hidden></div>
+          </div>
+        </section>
+        <section class="stage" id="stage-recon" data-state="pending">
+          <button type="button" class="stage-head"><span class="stage-num" aria-hidden="true">3</span><span class="stage-name">Can it be answered here</span><span class="stage-sum"></span></button>
+          <div class="stage-body">
+            <div id="solve-assess-card" class="card assess solve-assess" hidden>
+              <div class="card-body">
+                <details>
+                  <summary><span class="assess-counts"></span></summary>
+                  <p class="assess-foot muted"></p>
+                  <ul class="assess-rows"></ul>
+                  <ul class="assess-notes muted"></ul>
+                </details>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="stage" id="stage-plan" data-state="pending">
+          <button type="button" class="stage-head"><span class="stage-num" aria-hidden="true">4</span><span class="stage-name">Plan</span><span class="stage-sum"></span></button>
+          <div class="stage-body">
+            <div id="solve-plan-status" class="status" hidden></div>
+            <p id="solve-declined" class="solve-declined" hidden></p>
+            <div id="solve-plan-head" class="solve-plan-head"></div>
+            <ol id="solve-steps" class="solve-steps"></ol>
+            <div class="row-actions">
+              <button id="solve-run" class="btn primary" hidden>Run</button>
+              <button id="solve-edit" class="btn" hidden>Edit</button>
+            </div>
+          </div>
+        </section>
+        <section class="stage" id="stage-run" data-state="pending">
+          <button type="button" class="stage-head"><span class="stage-num" aria-hidden="true">5</span><span class="stage-name">Run</span><span class="stage-sum"></span></button>
+          <div class="stage-body">
+            <ol id="solve-timeline" class="solve-timeline"></ol>
+            <div class="row-actions"><button id="solve-stop" class="btn" hidden>Stop</button></div>
+            <div id="solve-run-status" class="status" hidden></div>
+          </div>
+        </section>
+        <section class="stage" id="stage-result" data-state="pending">
+          <button type="button" class="stage-head"><span class="stage-num" aria-hidden="true">6</span><span class="stage-name">Result</span><span class="stage-sum"></span></button>
+          <div class="stage-body">
+            <article id="solve-answer" class="ask-result solve-answer" tabindex="-1"></article>
+            <div id="solve-not" class="ask-checks"></div>
+            <div id="solve-caveats" class="solve-caveats"></div>
+            <div class="solve-h">Plan and gates</div>
+            <ol id="solve-outcomes" class="solve-steps"></ol>
+            <details id="solve-data" class="ask-settings solve-data"><summary>Data and Methods</summary><div id="solve-data-body" class="solve-data-body"></div></details>
+            <p id="solve-foot" class="solve-foot muted"></p>
+            <div class="row-actions">
+              <button id="solve-study" class="btn" title="The executed plan, to run again with `aquascope run study.yaml`">Download study.yaml</button>
+              <button id="solve-copy" class="btn">Copy report</button>
+              <button id="solve-rerun" class="btn">Re-run</button>
+            </div>
+          </div>
+        </section>
       </div>
-      <div id="ask-status" class="status" hidden></div>
-      <ol id="ask-log" class="ask-log" hidden></ol>
-      <div id="ask-checks" class="ask-checks" hidden></div>
-      <div id="ask-stations" class="ask-stations" hidden></div>
-      <article id="ask-result" class="ask-result" tabindex="-1" hidden></article>
     </aside>
   </main>
 

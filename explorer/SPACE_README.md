@@ -19,7 +19,7 @@ Pyodide. Nothing to install, no server, no account.
 
 - Station catalog: [`Rekin226/aquascope-gauges`](https://huggingface.co/datasets/Rekin226/aquascope-gauges)
   (GeoParquet, harvested weekly), read in place with DuckDB-WASM.
-- Sources with a catalog today: USGS, UK Environment Agency, Hub'Eau (France),
+- Sources with a catalog today: USGS, the Environment Agency (England), Hub'Eau (France),
   PEGELONLINE (Germany), Ireland OPW, Taiwan CWA.
 - Full daily records: USGS, UK EA and Hub'Eau (obs_elab). Real-time feeds
   (last month): PEGELONLINE, OPW. Daily rainfall: Taiwan CWA.

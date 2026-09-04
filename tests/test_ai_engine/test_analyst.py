@@ -100,9 +100,32 @@ def test_tool_specs_cover_the_mcp_surface():
     names = {s.name for s in analyst._tool_specs()}
     assert names == {"list_sources", "find_stations", "analyze_station", "flood_frequency", "get_timeseries",
                      "anywhere", "describe_catchment", "similar_basins", "regionalize_signatures",
+                     # sampled water-quality parameters at a station (#62)
+                     "water_quality_samples",
+                     # reconnaissance before analysis: what the record here supports (#306)
+                     "assess_site",
                      # the workbench: analyses of the user's own table (#235)
                      "list_analyses", "analyse_table", "describe_methods",
                      # code for the questions no fixed tool covers (#234)
-                     "run_python"}
+                     "run_python",
+                     # Ask hands a problem at a place to Solve (#307, #308)
+                     "list_playbooks", "describe_playbook", "solve_plan", "solve_run",
+                     # the site-level tools of the drought, supply and irrigation playbooks (#309)
+                     "drought_indices", "drought_propagation", "low_flow_context", "supply_reliability",
+                     "crop_water_demand"}
     tools = analyst._openai_tools(analyst._tool_specs())
     assert all(t["type"] == "function" and "parameters" in t["function"] for t in tools)
+
+
+def test_the_prompt_forbids_facts_from_memory_and_names_the_label() -> None:
+    """#324: "the 2014 winter floods" and "heavily abstracted upstream" came from no tool."""
+    assert "from memory" in analyst.SYSTEM_PROMPT
+    assert "from general knowledge, not from the data" in analyst.SYSTEM_PROMPT
+
+
+def test_the_years_argument_is_described_as_an_optional_cap() -> None:
+    """#270: the model should know that leaving years out asks for the full record."""
+    specs = {s.name: s for s in analyst._tool_specs()}
+    for name in ("analyze_station", "flood_frequency"):
+        years = specs[name].parameters["properties"]["years"]
+        assert years["type"] == "integer" and "full record" in years["description"]

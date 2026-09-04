@@ -12,8 +12,9 @@ import { CONFIG } from "../config.js?v=__BUILD__";
 import {
   $, actions, copyText, downloadBlob, escapeHtml, sourceStyle, state, stationKey,
 } from "./core.js?v=__BUILD__";
-import { closeDrawer, drawerOpen, openDrawer, setStatusEl } from "./shell.js?v=__BUILD__";
-import { Cancelled, callCancelable, call, onAskProgress } from "./worker-client.js?v=__BUILD__";
+import { shapeSvg } from "./shapes.js?v=__BUILD__";
+import { closeDrawer, drawerMode, drawerOpen, openDrawer, setStatusEl } from "./shell.js?v=__BUILD__";
+import { Cancelled, callCancelable, call, ensureCatalogInWorker, onAskProgress } from "./worker-client.js?v=__BUILD__";
 import { map } from "./map.js?v=__BUILD__";
 import { visibleLayerSummary } from "./layer-ui.js?v=__BUILD__";
 import { initShowcase } from "./showcase.js?v=__BUILD__";
@@ -44,12 +45,13 @@ async function loadProviders() {
   }
 }
 
+// Three, not five: with the "About <this station>" chip prepended, five made a
+// six-chip block under a box you are supposed to be typing in. The full set is
+// still one tab away under Examples.
 const ASK_EXAMPLES = [
   "What is the 100-year flood of the Thames at Kingston, and how sure can we be?",
-  "Compare the low flows (Q95) of the Seine at Paris and the Loire at Blois.",
   "Is the Potomac at Little Falls getting drier? Use the annual-mean trend.",
-  "How wet is Taipei compared with London, and what is the aridity class of each?",
-  "Which UK boreholes near Cambridge have the longest groundwater records?",
+  "How wet is Taipei compared with London?",
 ];
 
 const ASK_STORE = "aquascope.ask.settings";
@@ -93,6 +95,21 @@ function updateForgetButton() {
   $("ask-forget").hidden = !has;
 }
 
+// The model Ask is set up with, for Solve to borrow: one key, one settings
+// block, stored once. Null when there is none; Solve then runs keyless, which
+// is a complete run on its own.
+export function askModelConfig() {
+  const provider = $("ask-provider").value;
+  const chosen = ASK_PROVIDERS[provider];
+  if (!chosen) return null;
+  const key = $("ask-key").value.trim();
+  const base_url = provider === "custom" ? $("ask-base-url").value.trim() : chosen.base_url;
+  if (!key && provider !== "custom") return null;
+  if (provider === "custom" && !base_url) return null;
+  const model = $("ask-model").value.trim() || chosen.model;
+  return { provider, model, api_key: key || "none", base_url, label: `${model} via ${provider}` };
+}
+
 // What the user is looking at, in one line the model can act on. Shown in the
 // drawer so it is never a hidden prompt.
 export function currentContext() {
@@ -118,17 +135,33 @@ function contextLine() {
   const ctx = currentContext();
   const el = $("ask-context-text");
   el.textContent = ctx || "nothing selected yet";
+  // The context itself is five lines of generated prose naming the station, the
+  // centre of the map, the zoom and every layer. That is what gets sent, not
+  // something to read: the checkbox is the control, the text is the receipt.
   $("ask-context").hidden = !ctx;
   return ctx;
 }
 
+// The question we filled in last, so a later selection can replace it without
+// overwriting anything the reader typed themselves.
+let autoQuestion = "";
+
+const summariseQuestion = (r) =>
+  `Summarise the record of ${r.name || r.station_id} (${r.source} / ${r.station_id}): ` +
+  "period, mean, trend, and the flood frequency if the record allows it.";
+
 export function openAsk() {
-  openDrawer();
+  openDrawer({ mode: "ask" });
   const q = $("ask-question");
   contextLine();
-  if (state.selected && !q.value.trim()) {
-    const r = state.selected;
-    q.value = `Summarise the record of ${r.name || r.station_id} (${r.source} / ${r.station_id}): period, mean, trend, and the flood frequency if the record allows it.`;
+  // Only filling an *empty* box meant the first station's question stayed for
+  // every station after it: you could be looking at a gauge in Illinois with
+  // "Summarise the record of L'Yvette à Villebon-sur-Yvette" still in the box,
+  // and the context line underneath naming the Illinois one. Replace our own
+  // text; never replace theirs.
+  if (state.selected && (!q.value.trim() || q.value.trim() === autoQuestion)) {
+    autoQuestion = summariseQuestion(state.selected);
+    q.value = autoQuestion;
   }
   const chip = $("ask-this-station");
   if (chip) chip.remove();
@@ -140,7 +173,8 @@ export function openAsk() {
     b.id = "ask-this-station";
     b.textContent = `About ${r.name || r.station_id}`;
     b.addEventListener("click", () => {
-      q.value = `Summarise the record of ${r.name || r.station_id} (${r.source} / ${r.station_id}): period, mean, trend, and the flood frequency if the record allows it.`;
+      autoQuestion = summariseQuestion(r);
+      q.value = autoQuestion;
       q.focus();
     });
     $("ask-examples").prepend(b);
@@ -168,17 +202,6 @@ function askLog(text) {
   log.scrollTop = log.scrollHeight;
 }
 
-async function ensureCatalogInWorker() {
-  if (state.ask.catalogSent) return;
-  const rows = state.stations.map((r) => ({
-    source: r.source, station_id: r.station_id, name: r.name, latitude: r.lat, longitude: r.lon,
-    variables: r.variables || [], period_start: r.period_start, period_end: r.period_end, url: r.url,
-    agency: sourceStyle(r.source).label,
-  }));
-  await call("catalog", { rows });
-  state.ask.catalogSent = true;
-}
-
 function currentTier() {
   const el = document.querySelector('input[name="ask-tier"]:checked');
   return el ? el.value : "key";
@@ -193,6 +216,12 @@ function currentTier() {
  * (#271). The recorded runs lead now; asking your own question is a tier you
  * choose.
  */
+const TIER_NOTE = {
+  showcase: "Real runs, recorded once a week. No key needed.",
+  local: "Runs on your device. Nothing leaves this tab.",
+  key: "The full tool loop, with your own provider key.",
+};
+
 function applyTier() {
   const tier = currentTier();
   const showcase = tier === "showcase";
@@ -201,9 +230,17 @@ function applyTier() {
   $("ask-compose").hidden = showcase;
   $("ask-compose-note").hidden = !showcase;
   $("ask-run").hidden = showcase;
-  askStatus(tier === "local"
-    ? "Nothing leaves this tab: the model runs here, and so do the tools."
-    : "");
+  // One line, for the tier you actually picked. All three used to explain
+  // themselves at once, which is three explanations to read before you can
+  // choose between them.
+  const note = $("ask-tier-note");
+  if (note) {
+    const local = $("ask-local-note");
+    note.textContent = tier === "local" && local && local.textContent
+      ? `${TIER_NOTE.local} ${local.textContent}`
+      : (TIER_NOTE[tier] || "");
+  }
+  askStatus("");
 }
 
 // Whether CI has published any examples: with none, the tier is an empty box.
@@ -353,7 +390,7 @@ function renderAsk(res) {
     const b = document.createElement("button");
     b.className = "chip";
     b.type = "button";
-    b.innerHTML = `<i style="background:${sourceStyle(r.source).color}"></i>${escapeHtml(r.name || r.station_id)}`;
+    b.innerHTML = `${shapeSvg(sourceStyle(r.source).shape, sourceStyle(r.source).color)}${escapeHtml(r.name || r.station_id)}`;
     b.title = "Open this station on the map";
     b.addEventListener("click", () => actions.selectStation(stationKey(r), { fly: true }));
     chips.push(b);
@@ -443,7 +480,9 @@ export async function initAsk() {
   // to sit after `await loadProviders()`, so between load and that fetch coming
   // back, clicking Ask did nothing at all and said nothing about why. The
   // picker below fills in a moment later; the drawer does not need it to open.
-  $("btn-ask").addEventListener("click", () => { if (drawerOpen()) closeDrawer(); else openAsk(); });
+  $("btn-ask").addEventListener("click", () => {
+    if (drawerOpen() && drawerMode() === "ask") closeDrawer(); else openAsk();
+  });
 
   const ex = $("ask-examples");
   for (const q of ASK_EXAMPLES) {

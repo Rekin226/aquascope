@@ -68,30 +68,39 @@ class TestGetText:
 
 
 class TestWQPRoutesThroughClient:
-    def test_fetch_raw_uses_get_text(self):
+    def test_fetch_raw_falls_back_to_get_text_when_not_streamable(self):
+        from types import SimpleNamespace
+
         from aquascope.collectors.wqp import WQPCollector
 
         csv_body = (
-            "MonitoringLocationIdentifier,ResultMeasureValue\n"
+            "Location_Identifier,Result_Measure\n"
             "USGS-01010000,8.5\n"
         )
         mock_client = MagicMock()
+        mock_client._client = SimpleNamespace()  # no streaming capability
         mock_client.get_text.return_value = csv_body
         collector = WQPCollector(client=mock_client)
 
         rows = collector.fetch_raw(state_code="US:06")
 
         mock_client.get_text.assert_called_once()
-        assert rows[0]["MonitoringLocationIdentifier"] == "USGS-01010000"
+        assert rows[0]["Location_Identifier"] == "USGS-01010000"
 
-    def test_fetch_raw_returns_empty_on_error(self):
+    def test_fetch_raw_raises_rather_than_returning_empty(self):
+        from types import SimpleNamespace
+
         from aquascope.collectors.wqp import WQPCollector
 
+        # A dead endpoint must surface loudly, not masquerade as an empty
+        # result set.
         mock_client = MagicMock()
+        mock_client._client = SimpleNamespace()
         mock_client.get_text.side_effect = RuntimeError("all attempts failed")
         collector = WQPCollector(client=mock_client)
 
-        assert collector.fetch_raw(state_code="US:06") == []
+        with pytest.raises(RuntimeError):
+            collector.fetch_raw(state_code="US:06")
 
 
 class TestRelaxStrictTLS:

@@ -1,0 +1,152 @@
+# What flow to expect at an ungauged site: donors, regionalised signatures,
+# a GloFAS cross-check, and the leave-one-out skill quoted next to every number.
+#
+# Evidence rules (issue #307): donor and parameter regionalisation is validated
+# at national scale (doi:10.5194/hess-28-3367-2024, doi:10.1038/s41598-026-49424-z),
+# so the tree leans on similar_basins + regionalize_signatures with the skill quoted.
+# Three donors is the floor (aquascope.methods: regionalize_signatures.min_donors).
+id: ungauged_flow
+title: Flow to expect at an ungauged site
+problem: ungauged_flow
+variable: discharge
+description: The flow regime (mean, Q95, Q05, seasonality) at a point with no gauge, transferred from similar gauged catchments.
+intake:
+  - name: purpose
+    label: What the flow is for
+    type: choice
+    options: [irrigation offtake, environmental flow, hydropower screening, water supply, other]
+    default: other
+  - name: statistic
+    label: Which statistic matters most
+    type: choice
+    options: [mean, Q95, Q05, all]
+    default: all
+branches:
+  - id: at_gauge
+    when:
+      - path: context.years_by_variable.discharge
+        op: ">="
+        value: 5
+    station_variable: discharge
+    rationale: >-
+      A gauge with {{ station.years }} years of discharge sits {{ station.distance_km }} km away
+      ({{ station.name }}, {{ station.source }} {{ station.station_id }}). Its flow-duration curve is the
+      primary estimate; the regionalised signatures for the point itself are set beside it so the transfer to
+      the exact location can be judged.
+    steps:
+      - id: s1
+        tool: describe_catchment
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: The catchment at the point, to compare with the gauge's.
+      - id: s2
+        tool: analyze_station
+        method: flow_duration
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+        rationale: Flow-duration percentiles (Q95, Q50, Q10) and the record summary at the nearby gauge.
+        expects:
+          - check: min_years
+            value: 5
+            path: years
+          - check: not_empty
+            path: fdc
+          - check: unit_present
+            path: unit
+      - id: s3
+        tool: regionalize_signatures
+        method: regionalize_signatures
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          k: 5
+        rationale: Signatures transferred to the point itself, with the band and the leave-one-out skill, to set beside the gauge.
+        expects:
+          - check: not_empty
+            path: estimates
+  - id: regional
+    when: []
+    rationale: >-
+      No gauge with five years of discharge within reach. Donor gauges are chosen by catchment similarity,
+      the flow signatures are transferred from them with a band and the leave-one-out skill, and GloFAS
+      modelled discharge for the cell is the independent cross-check.
+    steps:
+      - id: s1
+        tool: describe_catchment
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: >-
+          The catchment the transfer is for: area, elevation, climate, land cover, soils, dams.
+        expects:
+          - check: not_empty
+            path: sub_basin
+      - id: s2
+        tool: similar_basins
+        method: similar_basins
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          k: 5
+        rationale: Donor gauges whose catchments most resemble this one (BasinATLAS attribute space and distance).
+        expects:
+          - check: min_donors
+            value: 3
+            path: k
+      - id: s3
+        tool: regionalize_signatures
+        method: regionalize_signatures
+        depends_on: [s2]
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          k: 5
+        rationale: Mean, median, Q95 and Q05 flow in mm/d, runoff ratio, baseflow index and seasonality transferred from the donors, each with a band and the leave-one-out skill.
+        expects:
+          - check: not_empty
+            path: estimates
+          - check: not_empty
+            path: skill
+      - id: s4
+        tool: anywhere
+        method: glofas_cross_check
+        optional: true
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          years: 20
+        rationale: GloFAS modelled discharge and the ERA5 water balance for the cell, as an independent cross-check.
+        expects:
+          - check: not_empty
+            path: glofas
+declines:
+  - when:
+      - path: context.ungauged
+        op: "=="
+        value: true
+      - path: derived.donors
+        op: "<"
+        value: 3
+    say: >-
+      Fewer than three donor gauges with catchment attributes are available for this point
+      ({{ derived.donors }} found), so a transfer of flow signatures has nothing to lean on; this playbook
+      declines rather than quote a number from one or two donors.
+caveats:
+  - >-
+    Every transferred number is quoted with its band across donors and the leave-one-out skill of that
+    signature; a bare regionalised number is not an estimate.
+  - >-
+    Donor regionalisation is validated at national scale (HESS 2024, doi:10.5194/hess-28-3367-2024), which
+    says the method works on average, not that it works at this point; the band and the skill are the local
+    evidence.
+  - >-
+    GloFAS discharge is a model output for a grid cell of about 5 km, not a gauge reading; it is a
+    cross-check, not an observation.
+citations:
+  - "Oudin, L. et al. (2008). Spatial proximity, physical similarity, regression and ungaged catchments. Water Resour. Res. 44, W03413."
+  - "National-scale validation of donor regionalisation: Hydrol. Earth Syst. Sci. 28 (2024), doi:10.5194/hess-28-3367-2024"
+  - "Parameter regionalisation at national scale: Sci. Rep. (2026), doi:10.1038/s41598-026-49424-z"
+  - "Vogel, R. M. and Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage. 120, 485-504."
+  - "Harrigan, S. et al. (2020). GloFAS-ERA5 operational global river discharge reanalysis 1979-present. Earth Syst. Sci. Data 12, 2043-2060."

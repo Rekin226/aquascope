@@ -5,6 +5,7 @@
 import { $, escapeHtml, state } from "./core.js?v=__BUILD__";
 import { announce, captureFocus } from "./a11y.js?v=__BUILD__";
 import { syncMapPadding } from "./map.js?v=__BUILD__";
+import { writeUrl } from "./url.js?v=__BUILD__";
 
 const SURFACES = ["panel-empty", "panel-station", "panel-point", "panel-workbench"];
 
@@ -13,6 +14,9 @@ export function showSurface(id) {
   const panel = $("panel");
   if (panel) panel.scrollTop = 0;
   revealPanel();
+  // Picking something on the map while the Analyst is open is a request to look
+  // at it, so the Analyst steps aside rather than hiding the thing you clicked.
+  if (drawerOpen()) closeDrawer();
 }
 
 export function isSurface(id) {
@@ -201,23 +205,71 @@ export function bootDone() {
   setTimeout(() => { bar.hidden = true; fill.style.width = "0%"; }, 400);
 }
 
-// ── drawer (Ask) ────────────────────────────────────────────────────────────
-// The drawer sits beside the inspector instead of replacing it, so the station
-// stays on screen while the Analyst works.
+// ── the Analyst ─────────────────────────────────────────────────────────────
+// One surface on the right, not two. The Analyst used to open *beside* the
+// inspector so the station stayed on screen, but two cards of the same size and
+// weight, side by side, do not read as "this one, then that one" -- they read
+// as clutter, and together they covered 60 % of a 1,440 px window. It takes the
+// inspector's place now and names what it came from, so the station is still
+// there in a line of text and one click away.
+//
+// One drawer, two modes: Ask (a question) and Solve (a problem at a place),
+// switched by the segmented control in its head. Never both at once.
 
 let releaseDrawer = null;
+const MODES = ["ask", "solve"];
+const modeButton = (mode) => $(mode === "solve" ? "btn-solve" : "btn-ask");
 
-export function openDrawer() {
+export function drawerMode() {
+  return state.drawerMode;
+}
+
+export function setDrawerMode(mode) {
+  if (!MODES.includes(mode)) mode = "ask";
   const d = $("drawer");
   if (!d) return;
+  state.drawerMode = mode;
+  for (const m of MODES) {
+    const pane = $(`${m}-pane`);
+    if (pane) pane.hidden = m !== mode;
+    const radio = d.querySelector(`input[name="drawer-mode"][value="${m}"]`);
+    if (radio) radio.checked = m === mode;
+    const btn = modeButton(m);
+    if (btn) btn.setAttribute("aria-expanded", state.drawerOpen && m === mode ? "true" : "false");
+  }
+  d.setAttribute("aria-label", mode === "solve" ? "Solve a problem at this place" : "Ask AquaScope");
+  d.dispatchEvent(new CustomEvent("drawermode", { detail: { mode, open: state.drawerOpen } }));
+  if (state.drawerOpen) writeUrl();
+}
+
+// What the Analyst is looking at, for the chip in its header.
+function contextChip() {
+  const chip = $("ask-context-chip");
+  if (!chip) return;
+  const st = state.selected;
+  const label = st
+    ? (st.name || st.station_id)
+    : state.point
+      ? `${state.point.lat.toFixed(2)}, ${state.point.lon.toFixed(2)}`
+      : "";
+  chip.textContent = label;
+  chip.hidden = !label;
+}
+
+export function openDrawer({ mode = state.drawerMode } = {}) {
+  const d = $("drawer");
+  if (!d) return;
+  contextChip();
+  const wasOpen = !d.hidden;
   d.hidden = false;
+  state.drawerOpen = true;
   document.body.classList.add("drawer-open");
-  $("btn-ask").setAttribute("aria-expanded", "true");
-  // Not trapped: on a wide screen the drawer sits beside the inspector, and
-  // tabbing out to the map is the right behaviour.
-  releaseDrawer = captureFocus(d, { onEscape: closeDrawer, restoreTo: $("btn-ask") });
+  setDrawerMode(mode);
+  // Not trapped: tabbing out to the map is the right behaviour for a panel that
+  // is not modal. Switching modes in an open drawer keeps the focus it has.
+  if (!wasOpen) releaseDrawer = captureFocus(d, { onEscape: closeDrawer, restoreTo: modeButton(mode) });
   syncMapPadding();
-  announce("Ask panel opened");
+  announce(mode === "solve" ? "Solve panel opened" : "Ask panel opened");
 }
 
 export function closeDrawer() {
@@ -225,10 +277,15 @@ export function closeDrawer() {
   if (!d) return;
   const wasOpen = !d.hidden;
   d.hidden = true;
+  state.drawerOpen = false;
   document.body.classList.remove("drawer-open");
-  $("btn-ask").setAttribute("aria-expanded", "false");
+  for (const m of MODES) {
+    const btn = modeButton(m);
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  }
   if (releaseDrawer) { releaseDrawer({ restore: wasOpen }); releaseDrawer = null; }
   syncMapPadding();
+  if (wasOpen) writeUrl();
 }
 
 export function toggleDrawer() {
@@ -321,6 +378,9 @@ export function initShell() {
   $("btn-rail").addEventListener("click", () => toggleRail());
   $("btn-panel").addEventListener("click", () => togglePanel());
   $("drawer-close").addEventListener("click", closeDrawer);
+  for (const r of document.querySelectorAll('input[name="drawer-mode"]')) {
+    r.addEventListener("change", () => { if (r.checked) setDrawerMode(r.value); });
+  }
   document.addEventListener("keydown", (e) => {
     if (e.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) {
       e.preventDefault();
@@ -328,6 +388,27 @@ export function initShell() {
       $("search").select();
     }
   });
+  // A <details> menu stays open until it is toggled, which is not what anyone
+  // expects of a menu: clicking the map, or pressing Escape, should shut it.
+  document.addEventListener("click", (e) => {
+    for (const d of document.querySelectorAll("details.more[open]")) {
+      if (!d.contains(e.target)) d.open = false;
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    for (const d of document.querySelectorAll("details.more[open]")) {
+      d.open = false;
+      const summary = d.querySelector("summary");
+      if (summary) summary.focus();
+    }
+  });
+  // Choosing something from the menu closes it too.
+  document.addEventListener("click", (e) => {
+    const item = e.target.closest(".more-menu > *");
+    if (item) { const d = item.closest("details.more"); if (d) d.open = false; }
+  });
+
   // The floating cards change size with the window, and the map's idea of
   // where "centre" is has to follow them.
   let resizeTimer = null;

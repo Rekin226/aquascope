@@ -42,8 +42,8 @@ export async function renderList() {
   if (!data.examples || !data.examples.length) { box.hidden = true; return; }
   box.hidden = false;
   box.innerHTML =
-    `<div class="showcase-head"><strong>See what it does, without a key</strong>` +
-    `<span class="muted"> ${data.examples.length} worked examples, recorded ${(data.generated || "").slice(0, 10)}</span></div>` +
+    `<div class="showcase-head" title="Recorded ${escapeHtml((data.generated || "").slice(0, 10))}">` +
+    `${data.examples.length} worked examples</div>` +
     `<div class="showcase-list"></div>`;
   const list = box.querySelector(".showcase-list");
   for (const ex of data.examples) {

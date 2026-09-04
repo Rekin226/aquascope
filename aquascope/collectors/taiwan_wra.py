@@ -8,6 +8,21 @@ Key datasets    :
   - Reservoir water conditions        (2be9044c-6e44-4856-aad5-dd108c2e6679)
   - Groundwater level annual stats    (f3ae2889-ccaf-45a3-a546-0edd8d9fd2da)
   - Water rights statistics           (03be73eb-5da8-45d4-87d9-4e78d476a843)
+
+``opendata.wra.gov.tw`` chains to the same TWCA-issued cert as
+``iot.wra.gov.tw``, whose certificates lack the Subject Key Identifier
+extension — Python 3.13+ rejects that under its default strict profile
+(``SSL: CERTIFICATE_VERIFY_FAILED, Missing Subject Key Identifier``, verified
+2026-08-31). Every ``WRA_BASE`` client below is created with
+``relax_strict_tls=True``, which drops only that strict-profile check; full
+chain and hostname verification stay on (#169). This previously used
+``verify=False``, which disabled verification outright and is explicitly the
+anti-pattern #169 rules out.
+
+``gweb.wra.gov.tw`` (``GWEB_BASE``) is a *different* host with a chain that
+verifies cleanly under the strict profile (confirmed 2026-08-31: no TLS
+error, just an ordinary 403) — it does not need ``relax_strict_tls`` and no
+longer sets ``verify=False`` either.
 """
 
 from __future__ import annotations
@@ -172,7 +187,7 @@ class TaiwanWRAWaterLevelCollector(BaseCollector):
                 base_url=WRA_BASE,
                 rate_limiter=RateLimiter(max_calls=15, period_seconds=60),
                 cache_ttl_seconds=600,  # 10-min TTL to match update freq
-                verify=False,
+                relax_strict_tls=True,
             )
         )
 
@@ -224,7 +239,7 @@ class TaiwanWRAReservoirCollector(BaseCollector):
                 base_url=WRA_BASE,
                 rate_limiter=RateLimiter(max_calls=15, period_seconds=60),
                 cache_ttl_seconds=3600,
-                verify=False,
+                relax_strict_tls=True,
             )
         )
 
@@ -314,7 +329,7 @@ class TaiwanWRAGroundwaterCollector(BaseCollector):
                 base_url=WRA_BASE,
                 rate_limiter=RateLimiter(max_calls=15, period_seconds=60),
                 cache_ttl_seconds=86400,  # annual data: cache for a day
-                verify=False,
+                relax_strict_tls=True,
             )
         )
         self.statistic = statistic
@@ -513,7 +528,9 @@ class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
                 base_url=GWEB_BASE,
                 rate_limiter=RateLimiter(max_calls=15, period_seconds=60),
                 cache_ttl_seconds=7 * 86400,  # daily series are static; cache a week
-                verify=False,
+                # gweb.wra.gov.tw's chain verifies cleanly under the strict
+                # profile (unlike WRA_BASE / opendata.wra.gov.tw) — no
+                # verify=False or relax_strict_tls needed here (#169).
             )
         )
         self.zones = list(zones) if zones else None
@@ -534,7 +551,7 @@ class TaiwanWRAGroundwaterDailyCollector(BaseCollector):
             base_url=WRA_BASE,
             rate_limiter=RateLimiter(max_calls=15, period_seconds=60),
             cache_ttl_seconds=86400,
-            verify=False,
+            relax_strict_tls=True,
         )
         rows = meta_client.get_json(GROUNDWATER_WELL_METADATA_DATASET)
         if isinstance(rows, dict):

@@ -123,3 +123,27 @@ def test_build_and_lookup_roundtrip(tmp_path, monkeypatch):
     local = basins.describe_catchment(1.5, 1.5, upstream=False)
     assert local["upstream"]["n_sub_basins"] == 1 and local["attributes"]["forest_pct"]["value"] == 60.0
 
+
+
+def test_describe_catchment_from_row_builds_the_same_payload_from_what_a_page_read():
+    """The Explorer finds the sub-basin and reads its row itself; the package turns them into the payload."""
+    from aquascope.archive.basins import ATTRIBUTION, describe_catchment_from_row
+
+    sub_basin = {"hybas_id": 2120000010, "next_down": 2120000020, "up_area": 9948.3, "sub_area": 120.5,
+                 "approximate": False, "geometry": "must not survive"}
+    row = {"hybas_id": 2120000010, "ele_mt_uav": 120, "ele_mt_sav": 40, "pre_mm_uyr": 700, "dor_pc_pva": 50,
+           "dis_m3_pyr": 65.0, "for_pc_use": -9999}
+    out = describe_catchment_from_row(51.415, -0.308, sub_basin, row, n_upstream=311)
+    assert out["latitude"] == 51.415 and out["sub_basin"]["hybas_id"] == 2120000010
+    assert "geometry" not in out["sub_basin"]
+    attrs = out["attributes"]
+    assert attrs["upstream_area_km2"] == 9948.3
+    assert attrs["elevation_m"]["value"] == 120 and attrs["elevation_m"]["source"] == "basinatlas_upstream"
+    assert attrs["precipitation_mm_yr"]["value"] == 700
+    assert attrs["degree_of_regulation_pct"]["value"] == 5.0, "stored x10"
+    assert "forest_pct" not in attrs, "NODATA is dropped, not read as -9999 %"
+    assert out["upstream"]["n_sub_basins"] == 311 and out["attribution"] == ATTRIBUTION
+    assert out["methods"][0]["citation"] == ATTRIBUTION
+
+    missing = describe_catchment_from_row(0.0, 0.0, None, None)
+    assert "error" in missing and missing["latitude"] == 0.0

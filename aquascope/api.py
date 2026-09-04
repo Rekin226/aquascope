@@ -31,6 +31,27 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+def _as_annual_maxima(discharge: np.ndarray | pd.Series) -> pd.Series:
+    """Reduce a discharge series to annual maxima, if it is dated.
+
+    Mirrors what :func:`~aquascope.hydrology.flood_frequency.fit_gev` does
+    internally, so every method reached through :func:`flood_analysis` is fitted
+    on the same quantity.
+
+    A series without a :class:`~pandas.DatetimeIndex` is returned untouched:
+    there is nothing to resample on, and the values are then already annual
+    maxima -- which is how the underlying fitting functions are called directly.
+    """
+    import pandas as pd
+
+    from aquascope.hydrology.flood_frequency import _extract_annual_max
+
+    series = discharge if isinstance(discharge, pd.Series) else pd.Series(discharge)
+    if isinstance(series.index, pd.DatetimeIndex):
+        return _extract_annual_max(series)
+    return series
+
+
 _FLOOD_METHODS = {"gev", "lp3", "gumbel", "gev_lmoments", "gpd"}
 _BASEFLOW_METHODS = {"lyne_hollick", "eckhardt"}
 _CHANGEPOINT_METHODS = {"pelt", "cusum", "binary_segmentation", "pettitt"}
@@ -101,10 +122,19 @@ def flood_analysis(
         if regional_skew is not None:
             lp3_kwargs["regional_skew"] = regional_skew
         return fit_lp3(discharge, **lp3_kwargs)
-    if method == "gumbel":
-        return fit_gumbel(discharge, return_periods=return_periods, **kwargs)
-    if method == "gev_lmoments":
-        return fit_gev_lmoments(discharge, return_periods=return_periods, **kwargs)
+    if method in ("gumbel", "gev_lmoments"):
+        # `fit_gumbel` and `fit_gev_lmoments` take annual maxima -- their first
+        # parameter is named `annual_maxima` -- while this function documents
+        # `discharge` as a daily or sub-daily series. Passing the series
+        # straight through made every daily observation an "annual" maximum, so
+        # a six-year record was fitted as ~2,200 of them and the return levels
+        # described the distribution of *daily* flows rather than of annual
+        # floods. `fit_gev` and `fit_lp3` already resample internally; these two
+        # do not, so it happens here.
+        annual_maxima = _as_annual_maxima(discharge)
+        if method == "gumbel":
+            return fit_gumbel(annual_maxima, return_periods=return_periods, **kwargs)
+        return fit_gev_lmoments(annual_maxima, return_periods=return_periods, **kwargs)
     # gpd
     return fit_gpd(discharge, return_periods=return_periods, **kwargs)
 

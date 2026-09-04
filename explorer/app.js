@@ -23,13 +23,21 @@ import { initStationPanel, selectStation } from "./src/panel-station.js?v=__BUIL
 import { initPointPanel, selectPoint } from "./src/panel-point.js?v=__BUILD__";
 import { initWorkbench, openWorkbench } from "./src/panel-workbench.js?v=__BUILD__";
 import { initAsk } from "./src/ask.js?v=__BUILD__";
+import { initSolve } from "./src/solve.js?v=__BUILD__";
 import { initUrl, readUrl, writeUrl } from "./src/url.js?v=__BUILD__";
 import { ensureWorker } from "./src/worker-client.js?v=__BUILD__";
 import { openCite } from "./src/methods.js?v=__BUILD__";
 import { registerWebMcpTools } from "./src/webmcp.js?v=__BUILD__";
 
+// The Solve drawer, after the selection it belongs to has been applied (a
+// selection closes the drawer, so the order matters).
+function openSolveIf(url) {
+  if (url.solve) actions.openSolve(url.solve === "1" ? null : url.solve);
+}
+
 // Everything that can arrive from a URL: a station, a point, a tab, the map
-// view and the source filter. Called at boot, on hashchange and on Back.
+// view, the source filter and the Solve drawer. Called at boot, on hashchange
+// and on Back.
 function applyUrl(url, { fromHistory = false } = {}) {
   if (url.hidden) {
     state.hidden = new Set(url.hidden);
@@ -47,6 +55,7 @@ function applyUrl(url, { fromHistory = false } = {}) {
     } else if (url.tab) {
       selectTab($("panel-station"), url.tab);
     }
+    openSolveIf(url);
     return;
   }
   if (url.point) {
@@ -56,6 +65,7 @@ function applyUrl(url, { fromHistory = false } = {}) {
     } else if (url.tab) {
       selectTab($("panel-point"), url.tab);
     }
+    openSolveIf(url);
     return;
   }
   if (fromHistory) {           // back to the start: show the welcome surface again
@@ -63,6 +73,7 @@ function applyUrl(url, { fromHistory = false } = {}) {
     state.point = null;
     showSurface("panel-empty");
   }
+  openSolveIf(url);
 }
 
 // Copy the layer part of a URL into state. Returns true when anything changed,
@@ -144,6 +155,7 @@ function goHome() {
   initPointPanel();
   initWorkbench();
   initAsk();   // async: fills the provider list from providers.json
+  initSolve(); // async: fills the problem chips from playbooks.json
   initSearch();
   initUrl();
   actions.applyUrl = applyUrl;

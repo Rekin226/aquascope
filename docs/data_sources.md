@@ -39,7 +39,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [CAMELS-CL](https://www.cr2.cl/camels-cl/) | Chile | Daily observed streamflow, catchment attributes | ZIP / CSV | ✅ |
 | [CAMELS-BR](https://doi.org/10.5281/zenodo.3709337) | Brazil | Daily observed streamflow, catchment attributes | ZIP / CSV | ✅ |
 | [Ireland OPW](https://waterlevel.ie) | Ireland | River / lake water level (15-min resolution) | GeoJSON / CSV | ✅ |
-| [UK Environment Agency](https://environment.data.gov.uk) | UK | River and groundwater levels, river flow, rainfall data | REST | ✅ |
+| [Environment Agency (England)](https://environment.data.gov.uk) | England (UK) | River and groundwater levels, river flow, rainfall data | REST | ✅ |
 | [BOM Water Data Online](http://www.bom.gov.au/waterdata/) | Australia | Streamflow, water level, storage, groundwater level | KISTERS WISKI (KiWIS) | ✅ |
 
 ---
@@ -65,7 +65,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | CAMELS-CL | No | Open access |
 | CAMELS-BR | No | Open access via Zenodo |
 | Ireland OPW | No | Open access via waterlevel.ie |
-| UK Environment Agency | No | Open access |
+| Environment Agency (England) | No | Open access |
 | BOM Water Data Online | No | Open access |
 
 ---

@@ -65,6 +65,58 @@ class TestFloodAnalysis:
         with pytest.raises(ValueError, match="Unknown flood-frequency method"):
             flood_analysis(q, method="nonexistent")
 
+    @pytest.mark.parametrize("method", ["gumbel", "gev_lmoments", "gev", "lp3"])
+    def test_daily_input_is_reduced_to_annual_maxima(self, method):
+        """Every method must be fitted on annual maxima, not raw daily values.
+
+        `gumbel` and `gev_lmoments` used to receive the full series, so a
+        six-year daily record was fitted as ~2,200 annual maxima and the
+        return levels described the distribution of daily flows.
+        """
+        from aquascope.api import flood_analysis
+
+        q = _daily_discharge()  # 2,200 daily values spanning 7 calendar years
+        result = flood_analysis(q, method=method)
+
+        assert len(result.annual_max) == q.index.year.nunique()
+        assert len(result.annual_max) < 10
+
+    def test_all_methods_agree_on_the_annual_maximum_series(self):
+        """The quantity fitted must not depend on which distribution is chosen."""
+        from aquascope.api import flood_analysis
+
+        q = _daily_discharge()
+        counts = {
+            method: len(flood_analysis(q, method=method).annual_max)
+            for method in ("gumbel", "gev_lmoments", "gev", "lp3")
+        }
+
+        assert len(set(counts.values())) == 1, counts
+
+    def test_annual_maxima_input_is_passed_through_unchanged(self):
+        """A caller who already has annual maxima must not be resampled again.
+
+        Without a DatetimeIndex there is nothing to resample on, and the values
+        are already the quantity the fitting functions want.
+        """
+        from aquascope.api import flood_analysis
+
+        maxima = np.array([120.0, 95.0, 143.0, 88.0, 131.0, 104.0, 117.0])
+        result = flood_analysis(maxima, method="gumbel")
+
+        assert len(result.annual_max) == len(maxima)
+
+    def test_daily_gumbel_return_level_matches_a_direct_annual_max_fit(self):
+        """The wrapper must agree with calling `fit_gumbel` on annual maxima."""
+        from aquascope.api import flood_analysis
+        from aquascope.hydrology.flood_frequency import fit_gumbel
+
+        q = _daily_discharge()
+        expected = fit_gumbel(q.resample("YS").max().dropna(), return_periods=[100])
+        actual = flood_analysis(q, method="gumbel", return_periods=[100])
+
+        assert actual.return_periods[100] == pytest.approx(expected.return_periods[100])
+
 
 # ---------------------------------------------------------------------------
 # Baseflow

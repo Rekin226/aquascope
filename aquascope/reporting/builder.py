@@ -46,6 +46,21 @@ class ReportSection:
     tables: list[tuple[str, pd.DataFrame]] = field(default_factory=list)
 
 
+def _aquascope_version() -> str:
+    """The installed AquaScope version, for the citation block.
+
+    Imported lazily and defensively: this module is imported during package
+    setup, so a top-level `from aquascope import __version__` risks a circular
+    import, and a report is still worth producing if the version is unknowable.
+    """
+    try:
+        from aquascope import __version__
+
+        return str(__version__)
+    except Exception:  # pragma: no cover - defensive
+        return "unknown"
+
+
 @dataclass
 class ReportMetadata:
     """Report metadata.
@@ -57,6 +72,10 @@ class ReportMetadata:
         description: Short description of the report.
         data_sources: Names of data sources used.
         version: Report version identifier.
+        software_version: Version of AquaScope that produced the report.
+            Defaults to :data:`aquascope.__version__`.
+        doi: DOI for the software, used to build a citation.
+        citation: A verbatim citation, used instead of building one.
     """
 
     title: str
@@ -65,6 +84,14 @@ class ReportMetadata:
     description: str = ""
     data_sources: list[str] = field(default_factory=list)
     version: str = "1.0"
+    # Kept separate from `version`, which identifies the *report* and is the
+    # caller's to set -- a report can be revised without AquaScope changing, and
+    # AquaScope can change without the report being revised. A citation needs
+    # the software version, so it gets its own field rather than overloading one
+    # whose default ("1.0") several callers already rely on.
+    software_version: str = field(default_factory=lambda: _aquascope_version())
+    doi: str | None = None
+    citation: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +439,50 @@ class ReportBuilder:
             Self, for method chaining.
         """
         self._elements.append(_Separator())
+        return self
+
+    def software_citation(self) -> str:
+        """The citation string for this report's software.
+
+        A verbatim `metadata.citation` wins, so a caller who has the exact
+        wording their journal wants is never second-guessed. Otherwise one is
+        built from the author, date and software version, with the DOI appended
+        when there is one.
+
+        Returns:
+            A one-line citation.
+        """
+        if self.metadata.citation:
+            return self.metadata.citation
+
+        year = (self.metadata.date or "")[:4] or datetime.now().strftime("%Y")
+        base = (
+            f"{self.metadata.author} ({year}). AquaScope: Open-source water data "
+            f"aggregation toolkit (version {self.metadata.software_version}) [Software]."
+        )
+        if self.metadata.doi:
+            doi = self.metadata.doi.strip()
+            url = doi if doi.startswith("http") else f"https://doi.org/{doi.removeprefix('doi:')}"
+            return f"{base} Zenodo. {url}"
+        # Said plainly rather than omitted: a reader who sees no DOI cannot tell
+        # whether one exists and the report failed to record it.
+        return f"{base} DOI not yet assigned."
+
+    def add_software_citation(self, heading: str = "Cite this software") -> ReportBuilder:
+        """Add a "Cite this software" section.
+
+        Renders in both Markdown and HTML, because it is built from the same
+        heading and paragraph elements as the rest of the report rather than
+        from renderer-specific markup.
+
+        Parameters:
+            heading: Section heading text.
+
+        Returns:
+            Self, for method chaining.
+        """
+        self._elements.append(_Heading(text=heading, level=2))
+        self._elements.append(_Paragraph(text=self.software_citation()))
         return self
 
     def add_table_of_contents(self) -> ReportBuilder:

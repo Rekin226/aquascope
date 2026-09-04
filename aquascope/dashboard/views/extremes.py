@@ -9,6 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from aquascope.dashboard import _charts, _demo, _state
+from aquascope.utils.formatting import format_p_value
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +69,7 @@ def render() -> None:
         else:
             n_years = series.dropna().shape[0]
         if n_years < 3:
-            st.error(
-                f"Need at least 3 annual maxima — found {n_years}. "
-                "Use the demo streamflow or a longer record."
-            )
+            st.error(f"Need at least 3 annual maxima — found {n_years}. Use the demo streamflow or a longer record.")
             return
 
         with st.spinner("Fitting distribution and bootstrapping return levels…"):
@@ -92,7 +90,7 @@ def render() -> None:
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Distribution", dist_label)
     m2.metric("AIC", f"{fit.aic:.1f}")
-    m3.metric("KS p-value", f"{fit.ks_pvalue:.3f}")
+    m3.metric("KS p-value", format_p_value(fit.ks_pvalue))
     m4.metric("Annual maxima (n)", str(fit.n_samples))
     st.caption("Fitted parameters: " + ", ".join(f"{k} = {v:.4g}" for k, v in fit.parameters.items()))
 

@@ -1,12 +1,34 @@
 """
-Collector for WRA 水利署水文開放資料 IoT API.
+Collector for WRA 水利署水文開放資料 IoT API (v2).
 
-API docs : https://iot.wra.gov.tw  (Swagger: https://iot.wra.gov.tw/swagger)
-No authentication required (免驗證).
+API docs : https://iot.wra.gov.tw  (Swagger: https://iot.wra.gov.tw/swagger/v1/swagger.json)
 
 Provides real-time access to:
-  - Groundwater level data (地下水位)
-  - Rainfall accumulation data (累積雨量)
+  - Groundwater level data (地下水位) — unauthenticated (免驗證).
+
+Rainfall is intentionally NOT supported by this collector. In the v2 API the
+only rainfall endpoints (``/precipitation/basins``, ``/precipitation/CwaFormat``)
+are gated behind "高階會員" (higher-tier membership) and return 401/403
+without an API key — there is no free/anonymous rainfall endpoint any more.
+Passing ``data_type="rainfall"`` raises ``NotImplementedError`` rather than
+silently 404-looping or requiring undocumented credentials; see #169.
+
+Response shape (verified 2026-08-31 against ``/groundwaterlevel/stations``):
+a flat JSON list of station objects, each with station metadata and a nested
+``Measurements`` list (one entry per physical quantity — currently always a
+single 地下水位 reading per station). Note the API's own field name typo,
+``Longtiude`` (not ``Longitude``), which we read as-is since it is what the
+server actually sends.
+
+``iot.wra.gov.tw`` chains to the Taiwan Government Root CA, whose
+certificates lack the Subject Key Identifier extension. Python 3.13+ rejects
+that under its default strict profile (``ssl.VERIFY_X509_STRICT``), which
+surfaces as ``SSL: CERTIFICATE_VERIFY_FAILED, Missing Subject Key
+Identifier`` even though the chain itself is otherwise valid (system curl,
+which trusts the OS keychain, succeeds against the same host). The client is
+created with ``relax_strict_tls=True``, which drops only that strict-profile
+check — full chain and hostname verification stay on (#169, see also #177 /
+``taiwan_cwa.py`` for the same fix against ``codis.cwa.gov.tw``).
 """
 
 from __future__ import annotations
@@ -27,20 +49,10 @@ logger = logging.getLogger(__name__)
 
 IOT_BASE = "https://iot.wra.gov.tw"
 
-# Candidate paths per data type, tried in order.
-# The correct path may be versioned (/api/v1/...) or under /opendata/.
-# Check https://iot.wra.gov.tw/swagger/index.html for the authoritative list.
-_DATA_TYPE_PATHS: dict[str, list[str]] = {
-    "groundwater": [
-        "api/Groundwater/RealTimeInfo",
-        "api/v1/Groundwater/RealTimeInfo",
-        "opendata/Groundwater/RealTimeInfo",
-    ],
-    "rainfall": [
-        "api/Rainfall/Accumulation",
-        "api/v1/Rainfall/Accumulation",
-        "opendata/Rainfall/Accumulation",
-    ],
+# Path per supported data type. "rainfall" is deliberately absent — see the
+# module docstring; requesting it raises NotImplementedError in __init__.
+_DATA_TYPE_PATHS: dict[str, str] = {
+    "groundwater": "groundwaterlevel/stations",
 }
 
 # Hint the server to return JSON rather than an HTML error page.
@@ -48,13 +60,15 @@ _JSON_HEADERS = {"Accept": "application/json"}
 
 _PARAM_NAMES: dict[str, str] = {
     "groundwater": "GroundwaterLevel",
-    "rainfall": "RainfallAccumulation",
 }
 
-_PARAM_UNITS: dict[str, str] = {
-    "groundwater": "m",
-    "rainfall": "mm",
-}
+_RAINFALL_ERROR = (
+    "data_type='rainfall' is not supported: the v2 IoT API only exposes "
+    "rainfall via /precipitation/basins and /precipitation/CwaFormat, both "
+    "restricted to higher-tier (高階會員) accounts and requiring an API key "
+    "this collector does not have. See https://iot.wra.gov.tw/swagger for "
+    "the current endpoint list. (#169)"
+)
 
 
 class TaiwanWRAIoTCollector(BaseCollector):
@@ -64,8 +78,8 @@ class TaiwanWRAIoTCollector(BaseCollector):
     Parameters
     ----------
     data_type : str
-        One of ``"groundwater"`` (地下水位) or ``"rainfall"`` (累積雨量).
-        Defaults to ``"groundwater"``.
+        Currently only ``"groundwater"`` (地下水位) is supported without an
+        API key. Defaults to ``"groundwater"``.
     """
 
     name = "taiwan_wra_iot"
@@ -81,8 +95,11 @@ class TaiwanWRAIoTCollector(BaseCollector):
                 base_url=IOT_BASE,
                 rate_limiter=RateLimiter(max_calls=10, period_seconds=60),
                 cache_ttl_seconds=600,
+                relax_strict_tls=True,
             )
         )
+        if data_type == "rainfall":
+            raise NotImplementedError(_RAINFALL_ERROR)
         if data_type not in _DATA_TYPE_PATHS:
             raise ValueError(
                 f"data_type must be one of {sorted(_DATA_TYPE_PATHS)}, got {data_type!r}"
@@ -90,109 +107,85 @@ class TaiwanWRAIoTCollector(BaseCollector):
         self.data_type = data_type
 
     def fetch_raw(self, **kwargs) -> list[dict]:
-        """Fetch real-time data for the configured data type.
+        """Fetch the station list (each with a nested ``Measurements`` array).
 
-        Tries each candidate path in order with an ``Accept: application/json``
-        header.  ``CachedHTTPClient.get_json`` strips any BOM / leading
-        whitespace and checks Content-Type before parsing, so non-JSON bodies
-        surface as ``ValueError`` rather than an opaque ``JSONDecodeError``.
-
-        On failure the first 200 chars of the response body are logged to help
-        diagnose whether the server returned HTML, XML, or malformed JSON.
+        ``CachedHTTPClient.get_json`` strips any BOM / leading whitespace and
+        checks Content-Type before parsing, so a non-JSON body (e.g. an HTML
+        error page from a stale path) surfaces as ``ValueError`` with a
+        preview of the response rather than an opaque ``JSONDecodeError``.
         """
-        import json as _json  # local import — only needed for the error branch
+        path = _DATA_TYPE_PATHS[self.data_type]
+        try:
+            data = self.client.get_json(path, headers=_JSON_HEADERS)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"[{self.name}] {path!r} returned a non-JSON or malformed body: {exc}. "
+                f"The endpoint may have moved again — check "
+                f"https://iot.wra.gov.tw/swagger and update _DATA_TYPE_PATHS."
+            ) from exc
 
-        candidates = _DATA_TYPE_PATHS[self.data_type]
-        last_error: Exception | None = None
-
-        for path in candidates:
-            try:
-                data = self.client.get_json(path, headers=_JSON_HEADERS)
-            except ValueError as exc:
-                # get_json raises ValueError for HTML/XML bodies or
-                # JSONDecodeError.  The message already contains a preview of
-                # the response body (first 200–500 chars).
-                logger.warning(
-                    "[%s] Path %r returned non-JSON or malformed body: %s",
-                    self.name,
-                    path,
-                    exc,
-                )
-                last_error = exc
-                continue
-            except _json.JSONDecodeError as exc:
-                # Fallback for callers that might bypass _parse_response_json.
-                logger.warning(
-                    "[%s] JSONDecodeError on path %r (char %d): %s",
-                    self.name,
-                    path,
-                    exc.pos,
-                    exc,
-                )
-                last_error = exc
-                continue
-
-            logger.debug("[%s] Fetched data from path %r", self.name, path)
-            if isinstance(data, list):
-                return data
-            return data.get("Data", data.get("data", data.get("records", [])))
-
-        raise RuntimeError(
-            f"[{self.name}] All candidate paths failed for data_type={self.data_type!r}. "
-            f"Last error: {last_error}. "
-            f"Check https://iot.wra.gov.tw/swagger/index.html for the correct "
-            f"endpoint and update _DATA_TYPE_PATHS in taiwan_wra_iot.py."
-        ) from last_error
+        if isinstance(data, list):
+            return data
+        # Defensive fallback in case the API ever wraps the list in an
+        # envelope object (it does not today, as of 2026-08-31).
+        return data.get("Data", data.get("data", data.get("records", [])))
 
     def normalise(self, raw: list[dict]) -> Sequence[WaterQualitySample]:
+        """Flatten each station's nested ``Measurements`` into samples.
+
+        One ``WaterQualitySample`` is emitted per (station, measurement)
+        pair — today that's one reading per station, but the API models it
+        as a list so a station could in principle report more than one
+        physical quantity in the future.
+        """
         param_name = _PARAM_NAMES[self.data_type]
-        unit = _PARAM_UNITS[self.data_type]
         samples: list[WaterQualitySample] = []
 
-        for rec in raw:
+        for station in raw:
             try:
-                value_str = (
-                    rec.get(param_name)
-                    or rec.get(param_name.lower())
-                    or rec.get("Value")
-                    or rec.get("value")
-                )
-                if value_str is None or str(value_str).strip() in ("", "-", "--", "ND"):
-                    continue
-
                 loc = None
-                lat = rec.get("Latitude") or rec.get("lat") or rec.get("TWD97Lat")
-                lon = rec.get("Longitude") or rec.get("lon") or rec.get("TWD97Lon")
-                if lat and lon:
+                lat = station.get("Latitude")
+                # The API's own field name is misspelled "Longtiude" — that
+                # is what the server actually sends, not a typo on our end.
+                lon = station.get("Longtiude") or station.get("Longitude")
+                if lat is not None and lon is not None:
                     loc = GeoLocation(latitude=float(lat), longitude=float(lon))
 
-                time_str = (
-                    rec.get("RecordTime")
-                    or rec.get("ObservationTime")
-                    or rec.get("DateTime")
-                    or ""
-                )
-                sample_dt = datetime.fromisoformat(time_str) if time_str else datetime.utcnow()
+                station_id = str(station.get("StationId") or "unknown")
+                station_name = station.get("Name")
+                county = station.get("CountyName")
 
-                samples.append(
-                    WaterQualitySample(
-                        source=DataSource.TAIWAN_WRA_IOT,
-                        station_id=str(
-                            rec.get("StationNo")
-                            or rec.get("StationIdentifier")
-                            or rec.get("ID")
-                            or "unknown"
-                        ),
-                        station_name=rec.get("StationName") or rec.get("stationName"),
-                        location=loc,
-                        sample_datetime=sample_dt,
-                        parameter=param_name,
-                        value=float(value_str),
-                        unit=unit,
-                        county=rec.get("County") or rec.get("county"),
-                    )
-                )
+                for meas in station.get("Measurements", []):
+                    try:
+                        value = meas.get("Value")
+                        if value is None or str(value).strip() in ("", "-", "--", "ND"):
+                            continue
+
+                        time_str = meas.get("TimeStamp") or ""
+                        sample_dt = (
+                            datetime.fromisoformat(time_str) if time_str else datetime.utcnow()
+                        )
+
+                        samples.append(
+                            WaterQualitySample(
+                                source=DataSource.TAIWAN_WRA_IOT,
+                                station_id=station_id,
+                                station_name=station_name,
+                                location=loc,
+                                sample_datetime=sample_dt,
+                                parameter=param_name,
+                                value=float(value),
+                                unit=meas.get("SIUnit") or "m",
+                                county=county,
+                            )
+                        )
+                    except (ValueError, KeyError, TypeError) as exc:
+                        logger.debug(
+                            "Skipping WRA IoT measurement for station %s: %s",
+                            station_id,
+                            exc,
+                        )
             except (ValueError, KeyError, TypeError) as exc:
-                logger.debug("Skipping WRA IoT record: %s", exc)
+                logger.debug("Skipping WRA IoT station record: %s", exc)
 
         return samples

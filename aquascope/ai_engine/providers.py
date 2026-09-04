@@ -10,10 +10,12 @@ So: one registry here, read by the Python side, and written out as JSON for the
 Explorer by :func:`as_json` (``explorer/providers.json``, refreshed by
 ``python -m aquascope.ai_engine.providers``). A model id is edited once.
 
-Every provider listed here speaks the OpenAI chat-completions API, supports tool
-calling on the model named below, and (except Ollama, which is local) allows a
-browser to call it directly, which is what makes bring-your-own-key work on a
-static page with no server of ours.
+Every provider listed here supports tool calling on the model named below and
+(except Ollama, which is local) allows a browser to call it directly, which is
+what makes bring-your-own-key work on a static page with no server of ours.
+Most speak the OpenAI chat-completions API; Anthropic speaks its own Messages
+API, and ``api`` says which, so :func:`aquascope.ai_engine.llm_transport.make_client`
+can pick the transport.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ __all__ = ["PROVIDERS", "Provider", "as_json", "default_model", "env_var", "prov
 
 @dataclass(frozen=True)
 class Provider:
-    """One OpenAI-compatible endpoint."""
+    """One LLM endpoint the Analyst can use."""
 
     id: str
     label: str
@@ -42,6 +44,11 @@ class Provider:
     #: Reachable from a browser (CORS), so the Explorer can offer it.
     browser: bool = True
     note: str | None = None
+    #: The wire protocol: "openai" (chat completions) or "anthropic" (the Messages API).
+    api: str = "openai"
+    #: How much conversation (characters) the Analyst may keep before trimming old
+    #: tool results. None means the conservative free-tier default in the loop.
+    context_chars: int | None = None
 
 
 PROVIDERS: dict[str, Provider] = {
@@ -56,6 +63,21 @@ PROVIDERS: dict[str, Provider] = {
         env="GROQ_API_KEY",
         free="Free tier: about 1,000 requests a day, 8k tokens a minute.",
         signup="https://console.groq.com/keys",
+    ),
+    "anthropic": Provider(
+        id="anthropic",
+        label="Anthropic (Claude)",
+        base_url="https://api.anthropic.com",
+        model="claude-opus-5",
+        models=["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],
+        env="ANTHROPIC_API_KEY",
+        signup="https://console.anthropic.com/settings/keys",
+        note="Pay as you go. In the browser use a key created for a single workspace: keys that span "
+             "several need a workspace id header the page does not ask for.",
+        api="anthropic",
+        # Roughly 50k tokens: plenty for a tool loop, a fraction of the window,
+        # and old tool results stop being trimmed to 400 characters.
+        context_chars=200_000,
     ),
     "huggingface": Provider(
         id="huggingface",
@@ -106,10 +128,22 @@ PROVIDERS: dict[str, Provider] = {
         browser=False,
         note="Needs `ollama serve` on this machine; a page served over HTTPS cannot reach it.",
     ),
+    "nvidia": Provider(
+        id="nvidia",
+        label="NVIDIA Build (free trial credits)",
+        base_url="https://integrate.api.nvidia.com/v1",
+        model="openai/gpt-oss-120b",
+        models=["openai/gpt-oss-120b", "nvidia/llama-3.1-nemotron-70b-instruct", "openai/gpt-oss-20b"],
+        env="NVIDIA_API_KEY",
+        free="1,000 API calls on signup, more on request; not a refilling quota.",
+        signup="https://build.nvidia.com",
+        browser=False,
+        note="NVIDIA Build endpoints do not support browser CORS; use from the CLI or behind a proxy.",
+    ),
 }
 
 #: The order the CLI scans the environment in when no provider was named.
-ENV_SCAN_ORDER = ("openai", "groq", "huggingface", "mistral", "openrouter")
+ENV_SCAN_ORDER = ("anthropic", "openai", "groq", "nvidia", "huggingface", "mistral", "openrouter")
 
 
 def provider_ids(*, browser_only: bool = False) -> list[str]:
@@ -140,6 +174,7 @@ def as_json(*, browser_only: bool = True) -> str:
         "id": "custom", "label": "Custom OpenAI-compatible endpoint", "base_url": "", "model": "",
         "models": [], "free": None, "signup": None, "browser": True,
         "note": "Any endpoint that speaks /chat/completions with tool calling.",
+        "api": "openai", "context_chars": None,
     })
     return json.dumps(out, indent=2) + "\n"
 

@@ -167,11 +167,16 @@ def _pick_stations(
     max_stations: int,
     refresh_days: int,
     only: list[str] | None,
-    years: int = 40,
+    years: int | None = None,
 ) -> list[dict[str, Any]]:
     done = manifest["sources"].get(entry_key(source, variable), {}).get("stations", {})
     cutoff = datetime.now(timezone.utc) - timedelta(days=refresh_days)
-    closed_before = (datetime.now(timezone.utc) - timedelta(days=int(years * 365.25))).date().isoformat()
+    # Only a capped harvest can skip a station: closed long before the window
+    # it asks for, there is nothing to fetch. A full-record harvest (the
+    # default, #270) mirrors closed stations too; their record is the point.
+    closed_before = (
+        (datetime.now(timezone.utc) - timedelta(days=int(years * 365.25))).date().isoformat() if years else None
+    )
     fresh: list[dict[str, Any]] = []
     stale: list[dict[str, Any]] = []
     for row in catalog:
@@ -180,7 +185,7 @@ def _pick_stations(
         if only and row["station_id"] not in only:
             continue
         end = row.get("period_end")
-        if end and str(end)[:10] < closed_before:
+        if closed_before and end and str(end)[:10] < closed_before:
             continue  # closed long before the window we ask for: nothing to harvest
         entry = done.get(row["station_id"])
         if entry is None:
@@ -202,7 +207,7 @@ def _harvest_one(
     key: str,
     var: str,
     fetch_series: Any,
-    years: int,
+    years: int | None,
     max_stations: int,
     refresh_days: int,
     only_stations: list[str] | None,
@@ -268,7 +273,7 @@ def harvest_observations(
     *,
     sources: list[str] | None = None,
     variable: str | None = None,
-    years: int = 40,
+    years: int | None = None,
     max_stations: int = 100,
     refresh_days: int = 30,
     catalog: list[dict[str, Any]] | None = None,
@@ -279,8 +284,10 @@ def harvest_observations(
     ``variable`` restricts the run to one variable (it must be harvestable for
     every source given); by default every variable in :data:`HARVESTABLE` is
     harvested for each source, each with its own budget and manifest cursor.
-    ``catalog`` defaults to the published station catalog. Failures are
-    recorded per source and never raised. Returns an :class:`ObsReport`.
+    ``years`` caps the record asked for to the last N years; by default the full
+    record is requested, from the catalog's first date (#270). ``catalog``
+    defaults to the published station catalog. Failures are recorded per source
+    and never raised. Returns an :class:`ObsReport`.
     """
     from aquascope.explore import fetch_series
 

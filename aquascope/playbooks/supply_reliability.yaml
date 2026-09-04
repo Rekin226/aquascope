@@ -1,0 +1,286 @@
+# Can this river supply a demand: a run-of-river screening against the flow-duration curve.
+#
+# The rule (issue #307): on any day the abstraction may take at most a share of
+# the flow and must leave an environmental reserve in the river (Q95 by default,
+# the flow exceeded 95 % of the time); reliability is the fraction of days, of
+# years without a shortfall and of the volume on which what may be taken meets
+# the demand. It is a screening rule in the tradition of flow-duration-curve
+# environmental-flow practice (Smakhtin and Eriyagama 2008; Acreman and Dunbar
+# 2004), not a licence assessment and not a storage-yield analysis, which the
+# playbook declines. Gauged: read off the record, with the low-flow statistics
+# beside it. Ungauged: donors, regionalised Q95, median and Q05 with their band
+# and the leave-one-out skill, the reliability read off those three points as a
+# band. Thresholds (10 years, marginal at 5, three donors) are the registry's.
+id: supply_reliability
+title: Supply reliability of a river
+problem: supply_reliability
+variable: discharge
+description: >-
+  Whether a river can supply a stated demand as a run-of-river abstraction: the fraction of days and years the
+  flow, less an environmental reserve and capped at an abstraction share, meets it; from the gauge record, or
+  from donor catchments as a band when there is no gauge.
+intake:
+  - name: demand_m3s
+    label: Demand (m3/s)
+    type: float
+    help: The abstraction wanted, in cubic metres per second; or give demand_ml_day.
+  - name: demand_ml_day
+    label: Demand (ML/day)
+    type: float
+    help: The abstraction wanted, in megalitres a day (1 ML/day is 0.01157 m3/s).
+  - name: use
+    label: What the water is for
+    type: choice
+    options: [municipal, irrigation, industrial, other]
+    default: other
+  - name: share
+    label: Abstraction share of the flow allowed
+    type: float
+    default: 0.1
+    help: The largest fraction of the day's flow the abstraction may take (a screening rule).
+  - name: storage
+    label: The scheme has a reservoir or storage
+    type: bool
+    default: false
+branches:
+  - id: gauged
+    when:
+      - path: context.years_by_variable.discharge
+        op: ">="
+        value: 10
+    station_variable: discharge
+    rationale: >-
+      {{ station.years }} years of daily discharge at {{ station.name }} ({{ station.source }}
+      {{ station.station_id }}, {{ station.distance_km }} km from the point): the reliability is read off the record.
+      The flow-duration curve gives Q95, Q50 and Q10, the baseflow index and 7Q10 say how the river behaves in dry
+      spells, and the screening rule (keep Q95 in the river, take at most {{ intake.share }} of the flow) gives the
+      fraction of days, of years and of the volume on which the demand is met.
+    steps:
+      - id: s1
+        tool: describe_catchment
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: Catchment size, climate and regulation by dams frame the supply and say whether the low flows are natural.
+      - id: s2
+        tool: analyze_station
+        method: flow_duration
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+        rationale: The record summary, the flow-duration percentiles and the trend on annual means at the gauge.
+        expects:
+          - check: min_years
+            value: 10
+            path: years
+          - check: not_empty
+            path: fdc
+          - check: unit_present
+            path: unit
+      - id: s3
+        tool: supply_reliability
+        method: supply_reliability
+        depends_on: [s2]
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          demand_m3s: "{{ intake.demand_m3s }}"
+          demand_ml_day: "{{ intake.demand_ml_day }}"
+          share: "{{ intake.share }}"
+          reserve: q95
+        rationale: >-
+          The screening rule on the daily record: the days, years and volume on which the demand can be taken while
+          Q95 stays in the river and no more than the share is abstracted; Q95, Q50, Q10, the baseflow index and
+          7Q10 beside it.
+        expects:
+          - check: min_years
+            value: 10
+            path: years
+          - check: not_empty
+            path: reliability
+          - check: not_empty
+            path: fdc
+  - id: gauged_short
+    when:
+      - path: context.years_by_variable.discharge
+        op: ">="
+        value: 5
+    station_variable: discharge
+    rationale: >-
+      {{ station.years }} years of discharge at {{ station.name }} ({{ station.source }} {{ station.station_id }}):
+      enough for a flow-duration curve, too short for the reliability to stand alone (a dry decade may be missing).
+      The at-site numbers are marginal and are quoted next to the regional estimate from donor catchments.
+    steps:
+      - id: s1
+        tool: describe_catchment
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: Catchment size, climate and regulation by dams frame the supply.
+      - id: s2
+        tool: analyze_station
+        method: flow_duration
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+        rationale: The record summary and the flow-duration percentiles at the gauge; marginal on its own.
+        expects:
+          - check: min_years
+            value: 5
+            path: years
+          - check: not_empty
+            path: fdc
+          - check: unit_present
+            path: unit
+      - id: s3
+        tool: supply_reliability
+        method: supply_reliability
+        depends_on: [s2]
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          demand_m3s: "{{ intake.demand_m3s }}"
+          demand_ml_day: "{{ intake.demand_ml_day }}"
+          share: "{{ intake.share }}"
+          reserve: q95
+        rationale: The screening rule on the short record; every number is quoted with the regional estimate.
+        expects:
+          - check: min_years
+            value: 5
+            path: years
+          - check: not_empty
+            path: reliability
+      - id: s4
+        tool: supply_reliability
+        method: regionalize_signatures
+        optional: true
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          demand_m3s: "{{ intake.demand_m3s }}"
+          demand_ml_day: "{{ intake.demand_ml_day }}"
+          share: "{{ intake.share }}"
+          reserve: q95
+          k: 5
+        rationale: >-
+          The same screening from Q95, median and Q05 transferred from donor catchments, with the band and the
+          leave-one-out skill, as the regional estimate to set beside the short record.
+        expects:
+          - check: not_empty
+            path: reliability
+  - id: regional
+    when: []
+    rationale: >-
+      No gauge with five years of discharge within reach: the supply is regionalised. Donor gauges are chosen by
+      catchment similarity, Q95, the median and Q05 are transferred from them with a band and the leave-one-out
+      skill, converted to m3/s over the upstream area, and the reliability of the demand is read off those three
+      points as a band, not a number.
+    steps:
+      - id: s1
+        tool: describe_catchment
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: The catchment the transfer is for, and the upstream area that turns mm/d into m3/s.
+        expects:
+          - check: not_empty
+            path: sub_basin
+      - id: s2
+        tool: similar_basins
+        method: similar_basins
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          k: 5
+        rationale: Donor gauges whose catchments most resemble this one (BasinATLAS attribute space and distance).
+        expects:
+          - check: min_donors
+            value: 3
+            path: k
+      - id: s3
+        tool: supply_reliability
+        method: regionalize_signatures
+        depends_on: [s2]
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          demand_m3s: "{{ intake.demand_m3s }}"
+          demand_ml_day: "{{ intake.demand_ml_day }}"
+          share: "{{ intake.share }}"
+          reserve: q95
+          k: 5
+        rationale: >-
+          Q95, median and Q05 transferred from the donors with their band and skill, in m3/s over the upstream area;
+          the flow the demand needs under the screening rule and how often the transferred curve exceeds it.
+        expects:
+          - check: not_empty
+            path: reliability
+          - check: not_empty
+            path: signatures_m3s
+declines:
+  - when:
+      - path: intake.storage
+        op: "=="
+        value: true
+    say: >-
+      A scheme with a reservoir needs a storage-yield (yield-reliability) analysis: the capacity, the operating
+      rule and a sequence of inflows worked through the storage. This playbook screens a run-of-river abstraction
+      against the flow-duration curve and does not do that. Ask for the run-of-river reliability, or bring the
+      reservoir's capacity and rule for a separate study.
+  - when:
+      - path: intake.demand_m3s
+        op: exists
+        value: false
+      - path: intake.demand_ml_day
+        op: exists
+        value: false
+    say: >-
+      State the demand: how much water is to be taken, as demand_m3s (cubic metres per second) or demand_ml_day
+      (megalitres a day). Reliability is the fraction of time that demand can be met, so without it there is
+      nothing to screen.
+  - when:
+      - path: context.ungauged
+        op: "=="
+        value: true
+      - path: derived.donors
+        op: "<"
+        value: 3
+    say: >-
+      Fewer than three donor gauges with catchment attributes are available for this point
+      ({{ derived.donors }} found), so a transfer of the flow-duration curve has nothing to lean on; this
+      playbook declines rather than quote a reliability from one or two donors.
+caveats:
+  - >-
+    A screening rule, not a licence assessment: Q95 kept in the river and at most the stated share of the flow
+    taken are assumptions in the tradition of flow-duration-curve environmental-flow practice (Smakhtin and
+    Eriyagama 2008; Acreman and Dunbar 2004); the regulator's flow standard, return flows, upstream abstractions
+    and storage are not in the number.
+  - >-
+    Reliability read off the record describes the years on record; a changing climate, new upstream abstraction or
+    a drier decade than any recorded moves it.
+  - say: >-
+      The gauge record is shorter than ten years: a dry decade may be missing from it, and the reliability is
+      marginal until set beside the regional estimate.
+    when:
+      - path: context.years_by_variable.discharge
+        op: "<"
+        value: 10
+      - path: context.years_by_variable.discharge
+        op: ">="
+        value: 5
+  - say: >-
+      Every transferred flow is quoted with its band across donors and the leave-one-out skill; three
+      flow-duration points give the reliability to within that band and not beyond it, and a bare regionalised
+      reliability is not an estimate.
+    when:
+      - path: context.years_by_variable.discharge
+        op: exists
+        value: false
+citations:
+  - "Vogel, R. M. and Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage. 120, 485-504."
+  - "Smakhtin, V., & Eriyagama, N. (2008). Developing a software package for global desktop assessment of environmental flows. Environ. Model. Softw. 23, 1396-1406. doi:10.1016/j.envsoft.2008.04.002"
+  - "Acreman, M., & Dunbar, M. J. (2004). Defining environmental river flow requirements: a review. Hydrol. Earth Syst. Sci. 8, 861-876."
+  - "Smakhtin, V. U. (2001). Low flow hydrology: a review. J. Hydrol. 240, 147-186."
+  - "Lyne, V., & Hollick, M. (1979). Stochastic time-variable rainfall-runoff modelling. Inst. Eng. Aust. Natl. Conf. Publ. 79/10, 89-93."
+  - "Oudin, L. et al. (2008). Spatial proximity, physical similarity, regression and ungaged catchments. Water Resour. Res. 44, W03413."
+  - "National-scale validation of donor regionalisation: Hydrol. Earth Syst. Sci. 28 (2024), doi:10.5194/hess-28-3367-2024"

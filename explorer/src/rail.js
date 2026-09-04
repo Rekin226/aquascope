@@ -3,6 +3,7 @@
 // phone could neither filter sources nor turn the basins on.
 
 import { $, escapeHtml, sourceStyle, state } from "./core.js?v=__BUILD__";
+import { shapeSvg } from "./shapes.js?v=__BUILD__";
 import { sourceCounts } from "./catalog.js?v=__BUILD__";
 import { refreshMapData } from "./map.js?v=__BUILD__";
 import { setBasinsVisible } from "./basins.js?v=__BUILD__";
@@ -18,7 +19,7 @@ export function buildRail() {
     const row = document.createElement("label");
     row.className = "rail-row";
     row.innerHTML = `<input type="checkbox" id="${id}" ${state.hidden.has(src) ? "" : "checked"}>` +
-      `<i style="background:${st.color}"></i>` +
+      `${shapeSvg(st.shape, st.color)}` +
       `<span class="rail-label">${escapeHtml(st.label)}</span>` +
       `<span class="rail-count">${counts[src].toLocaleString()}</span>`;
     row.querySelector("input").addEventListener("change", (e) => {

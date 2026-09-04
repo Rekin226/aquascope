@@ -91,6 +91,7 @@ export function toFeatureCollection(rows) {
         properties: {
           key: stationKey(r), source: r.source, name: r.name ?? "",
           color: sourceStyle(r.source).color,
+          shape: sourceStyle(r.source).shape,
           colorRecord: breakColor(RECORD_BREAKS, years),
           colorRecent: breakColor(RECENT_BREAKS, stale),
           years: years === null ? -1 : Math.round(years * 10) / 10,

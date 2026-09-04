@@ -103,6 +103,19 @@ def test_keyed_numeric_state_code_passes_through(collector, fake_client):
     assert fake_client.calls[0][1]["state_code"] == "24"
 
 
+@pytest.mark.parametrize(
+    ("alpha_code", "numeric_code"),
+    [
+        ("AQ", "60"),
+        ("FM", "64"),
+        ("MH", "68"),
+        ("PW", "70"),
+    ],
+)
+def test_normalise_added_state_codes(alpha_code, numeric_code):
+    assert USGSCollector._normalise_state_code(alpha_code) == numeric_code
+
+
 def test_keyed_three_digit_county_code_passes_through(collector, fake_client):
     collector.fetch_raw(days=7, countyCd="033")
 

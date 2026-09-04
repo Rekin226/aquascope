@@ -47,12 +47,17 @@ _STORE = {}
   post("ready");
 }
 
-async function analyze({ id, source, station_id, years }) {
+// The full record is requested unless the page passes a cap in years (#270).
+// The catalog's first date for the station travels with the request so Python
+// can ask from it, and say in the note when the agency served less than that.
+async function analyze({ id, source, station_id, years, period_start }) {
   post("progress", { text: "Fetching the record from the agency…" });
+  const cap = Number(years) > 0 ? `years=${Math.round(Number(years))}, ` : "";
+  const since = period_start ? `period_start=${JSON.stringify(String(period_start).slice(0, 10))}, ` : "";
   const code = `
 import json
 _STORE.clear()
-_res = analysis.analyze_station(${JSON.stringify(source)}, ${JSON.stringify(station_id)}, years=${Number(years) || 40}, store=_STORE)
+_res = analysis.analyze_station(${JSON.stringify(source)}, ${JSON.stringify(station_id)}, ${cap}${since}store=_STORE)
 _STORE["result"] = _res
 json.dumps(_res)
 `;
@@ -87,6 +92,34 @@ async function csv({ id }) {
 analysis.to_csv(_STORE["result"])
 `);
   post("result", { id, result: out });
+}
+
+// "What can be answered here": aquascope.explore.assess_site over the catalog
+// the page handed over (send it first with "catalog"). The page passes the
+// catchment area and donor count it already holds, since BasinATLAS and the
+// similarity table are read by DuckDB-WASM on the main thread, not here.
+async function assess({ id, lat, lon, radius_km, problem, area_km2, donors }) {
+  post("progress", { text: "Checking what the record here supports…" });
+  self.__aqAssess = JSON.stringify({
+    lat: Number(lat), lon: Number(lon), radius_km: Number(radius_km) || 50, problem: problem || null,
+    area_km2: Number.isFinite(Number(area_km2)) && area_km2 !== null ? Number(area_km2) : null,
+    donors: Number.isFinite(Number(donors)) && donors !== null ? Number(donors) : null,
+  });
+  const code = `
+import json
+from js import __aqAssess
+_a = json.loads(__aqAssess)
+json.dumps(analysis.assess_site(
+    _a["lat"], _a["lon"], radius_km=_a["radius_km"], problem=_a.get("problem"),
+    area_km2=_a.get("area_km2"), donors=_a.get("donors"),
+))
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqAssess = null;
+  }
 }
 
 // The main thread already holds the station catalog (DuckDB-WASM); hand it to
@@ -149,6 +182,107 @@ json.dumps({
   } finally {
     self.__aqAsk = null;
     self.__aqAskEvent = null;
+  }
+}
+
+// ── Solve: a problem at a place, planned first ──────────────────────────────
+// The two halves of aquascope.ai_engine.team, the same code the CLI and the MCP
+// server run. The page has already run the reconnaissance (with the catchment
+// area and donor count only it can read), so it travels in as `recon` and the
+// Scout is not asked again. A model is used only when the page passes one.
+
+function solveArgs() {
+  return `provider=_a.get("provider") or None, model=_a.get("model") or None,
+    api_key=_a.get("api_key") or None, base_url=_a.get("base_url") or None`;
+}
+
+// The plan half: the playbook the chips or the keyword rules pick, the branch
+// the tree selects for the data that exists, the study it fills. Nothing runs.
+async function solvePlan({ id, problem, lat, lon, playbook, intake, recon, provider, model, api_key, base_url }) {
+  self.__aqSolve = JSON.stringify({
+    problem: problem || "", lat: Number(lat), lon: Number(lon), playbook: playbook || null,
+    intake: intake || null, recon: recon || null, provider, model, api_key, base_url,
+  });
+  const code = `
+import json
+from js import __aqSolve
+from aquascope.ai_engine import team as _team
+_a = json.loads(__aqSolve)
+_res = _team.solve(
+    _a["problem"], lat=_a["lat"], lon=_a["lon"], playbook=_a.get("playbook"), intake=_a.get("intake"),
+    recon=_a.get("recon"), ${solveArgs()},
+    execute=False,
+)
+json.dumps(_res.to_dict(), default=str)
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqSolve = null;
+  }
+}
+
+// The intake a small model wrote on the reader's device, made safe by the
+// package's own rules (aquascope.playbooks.coerce_intake): a field the playbook
+// has not got is dropped, a value the field cannot take becomes its default.
+// An unknown playbook comes back as null, and the page falls back to the
+// keyword rules solve_plan applies anyway.
+async function coerceIntake({ id, playbook, intake }) {
+  self.__aqIntake = JSON.stringify({ playbook: playbook || null, intake: intake || null });
+  const code = `
+import json
+from js import __aqIntake
+from aquascope import playbooks as _pbk
+_a = json.loads(__aqIntake)
+try:
+    _pb = _pbk.load(_a["playbook"] or "")
+    _out = {"playbook": _pb.id, "intake": _pbk.coerce_intake(_pb, _a.get("intake"))}
+except _pbk.PlaybookError as exc:
+    _out = {"playbook": None, "intake": None, "error": str(exc)}
+json.dumps(_out, default=str)
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqIntake = null;
+  }
+}
+
+// The run half: the reviewed study (edited or not) with its gates, one bounded
+// replan, the Reviewer's "not established" list and the Narrator. Every
+// timeline event is posted as it happens, the way ask() streams its tool log.
+// BasinATLAS cannot be read here (no pyogrio in Pyodide), so the sub-basin and
+// attribute row the page found with DuckDB and FlatGeobuf travel in as
+// `catchment`, and the package builds describe_catchment's payload from them.
+async function solveRun({ id, study, recon, catchment, provider, model, api_key, base_url }) {
+  self.__aqSolveEvent = (text) => post("solve_progress", { id, event: JSON.parse(text) });
+  self.__aqSolve = JSON.stringify({ study, recon: recon || null, catchment: catchment || null, provider, model, api_key, base_url });
+  const code = `
+import json
+from js import __aqSolve, __aqSolveEvent
+from aquascope.ai_engine import team as _team
+_a = json.loads(__aqSolve)
+_tools = {}
+_c = _a.get("catchment")
+if _c and (_c.get("sub_basin") or {}).get("hybas_id") is not None:
+    from aquascope.archive import basins as _basins
+    _tools["describe_catchment"] = lambda lat=None, lon=None, **_kw: _basins.describe_catchment_from_row(
+        lat, lon, _c["sub_basin"], _c.get("row"), n_upstream=_c.get("n_upstream"))
+_res = _team.run_reviewed(
+    _a["study"], recon=_a.get("recon"), ${solveArgs()},
+    on_event=lambda e: __aqSolveEvent(json.dumps(e, default=str)),
+    tools=_tools or None,
+)
+json.dumps(_res.to_dict(), default=str)
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqSolve = null;
+    self.__aqSolveEvent = null;
   }
 }
 
@@ -264,10 +398,14 @@ self.onmessage = async (e) => {
     await ready;
     if (m.type === "analyze") return await analyze(m);
     if (m.type === "anywhere") return await anywhere(m);
+    if (m.type === "assess") return await assess(m);
     if (m.type === "flood_ci") return await floodCi(m);
     if (m.type === "csv") return await csv(m);
     if (m.type === "catalog") return await catalog(m);
     if (m.type === "ask") return await ask(m);
+    if (m.type === "solve_plan") return await solvePlan(m);
+    if (m.type === "coerce_intake") return await coerceIntake(m);
+    if (m.type === "solve_run") return await solveRun(m);
     if (m.type === "ingest") return await ingestText(m);
     if (m.type === "load_table") return await loadTable(m);
     if (m.type === "workbench") return await workbench(m);

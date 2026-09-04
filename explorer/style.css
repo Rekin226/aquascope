@@ -34,6 +34,7 @@
   --warn-ink: #8a5300;
   --err-bg: #fdeceb;
   --err-ink: #b3261e;
+  --ok-ink: #1e7b45;
 
   /* the space behind the globe, swapped per basemap by body[data-basemap] */
   --map-void: radial-gradient(62% 78% at 50% 38%, #f4f9fd 0%, #dceaf5 45%, #b8d2e8 78%, #9dbfda 100%);
@@ -74,6 +75,7 @@
     --warn-ink: #f2c879;
     --err-bg: #3a1d1c;
     --err-ink: #ff9a92;
+    --ok-ink: #78d295;
     --map-void: radial-gradient(62% 78% at 50% 38%, #1a2836 0%, #101a25 45%, #080d13 78%, #04070a 100%);
     --shadow-1: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 8px rgba(0, 0, 0, .35);
     --shadow-2: 0 2px 6px rgba(0, 0, 0, .45), 0 14px 38px rgba(0, 0, 0, .55);
@@ -162,6 +164,10 @@ header#top {
 .search-results .hit-id { margin-left: auto; white-space: nowrap; font-size: .76rem; color: var(--muted);
   max-width: 42%; overflow: hidden; text-overflow: ellipsis; }
 .search-results .hit i, .chip i, .rail-row i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+/* The source swatch is a shape, not a dot: colour alone does not survive
+   colour-vision deficiency, so the legend has to show what the map draws. */
+.shape-swatch { flex: none; display: inline-block; vertical-align: -1px; margin-right: .1rem; }
+.nearest .shape-swatch, .ask-stations .shape-swatch { margin-right: .35rem; }
 .search-results .hit-head { padding: .45rem .55rem .2rem; font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 640; }
 .search-results .hit .pin { width: 10px; height: 10px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: #4b5f6d; display: inline-block; flex: none; }
 
@@ -393,6 +399,23 @@ body.drawer-open #btn-panel { display: none; }
 .head h2 { font-size: 1.1rem; line-height: 1.3; letter-spacing: -.02em; }
 .st-meta { font-size: .76rem; color: var(--muted); margin: .25rem 0 .55rem; line-height: 1.5; }
 .st-actions, .row-actions { display: flex; gap: .3rem; flex-wrap: wrap; align-items: center; }
+/* One action in the open, the rest behind a menu. Five peer buttons above the
+   tabs gave no clue which one anybody actually wanted. */
+.more { position: relative; }
+.more > summary { list-style: none; cursor: pointer; padding: .38rem .6rem; letter-spacing: .08em; line-height: 1; }
+.more > summary::-webkit-details-marker { display: none; }
+.more[open] > summary { background: var(--bg-soft); }
+.more-menu {
+  position: absolute; right: 0; top: calc(100% + 5px); z-index: 20; min-width: 190px;
+  display: flex; flex-direction: column; padding: .25rem;
+  background: var(--surface-solid); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-2);
+}
+.more-menu > * {
+  font: inherit; font-size: .8rem; text-align: left; padding: .42rem .55rem; border: 0; border-radius: var(--radius-xs);
+  background: none; color: var(--ink); cursor: pointer; text-decoration: none; white-space: nowrap;
+}
+.more-menu > *:hover { background: var(--bg-soft); }
 .row-actions { margin: .55rem 0; }
 
 /* ── tabs ────────────────────────────────────────────────────────────────── */
@@ -451,10 +474,31 @@ body.drawer-open #btn-panel { display: none; }
 .basin .kv b { font-weight: 620; white-space: nowrap; }
 .basin-foot { margin-top: .4rem; font-size: .71rem; line-height: 1.5; }
 
+/* what can be answered here: counts on the summary line, rows behind it */
+.assess details > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
+.assess details > summary::-webkit-details-marker { display: none; }
+.assess details > summary h3 { font-size: .9rem; letter-spacing: -.005em; }
+.assess details > summary::after {
+  content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg); margin-left: .1rem; flex: none; align-self: center; transition: transform .12s;
+}
+.assess details[open] > summary::after { transform: rotate(225deg); }
+.assess-counts { margin-left: auto; font-size: .74rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.assess .ok { color: var(--ok-ink); }
+.assess .warn { color: var(--warn-ink); }
+.assess .no { color: var(--err-ink); }
+.assess-foot { font-size: .74rem; margin: .45rem 0 0; line-height: 1.45; }
+.assess-rows { list-style: none; padding: 0; margin: .4rem 0 0; }
+.assess-rows li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 .6rem; padding: .35rem 0; border-top: 1px solid var(--line-soft); font-size: .8rem; }
+.assess-status { font-size: .7rem; font-weight: 640; white-space: nowrap; }
+.assess-why { grid-column: 1 / -1; font-size: .72rem; line-height: 1.45; }
+.assess-notes { padding-left: 1.1rem; margin: .45rem 0 0; font-size: .7rem; line-height: 1.5; }
+.assess-notes:empty { display: none; }
+
 /* ── controls ────────────────────────────────────────────────────────────── */
 
 .btn {
-  font: inherit; font-size: .78rem; font-weight: 520; padding: .38rem .7rem; border-radius: var(--radius-xs);
+  font: inherit; font-size: .78rem; font-weight: 520; padding: .48rem .75rem; border-radius: var(--radius-xs);
   border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
   text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: .3rem;
   transition: background .13s, border-color .13s;
@@ -507,23 +551,36 @@ table.regime td:first-child { white-space: nowrap; }
 
 /* ── drawer (Ask) ────────────────────────────────────────────────────────── */
 
+/* The Analyst takes the inspector's place rather than sitting next to it. Two
+   cards of the same size and weight side by side do not read as an order to
+   read them in; they read as clutter, and together they covered 60 % of a
+   1,440 px window. One surface, and the station is named in its header. */
 .drawer {
   position: absolute; right: var(--gap); top: var(--gap); max-height: calc(100% - var(--gap) * 2); z-index: 10;
-  width: var(--drawer-w); overflow: auto; overscroll-behavior: contain;
+  width: var(--panel-w); overflow: auto; overscroll-behavior: contain;
   background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-2);
-  padding: .85rem .95rem 2rem;
+  padding: .8rem .95rem 1.6rem;
+  animation: surface-in .18s ease;
 }
 .drawer[hidden] { display: none; }
-/* Wide enough for both: the Analyst sits beside the station rather than over
-   it, which is the whole point of a drawer that is not a modal. */
-@media (min-width: 1360px) {
-  :root { --drawer-w: clamp(340px, 26vw, 420px); }
-  body.drawer-open .drawer { right: calc(var(--panel-w) + var(--gap) * 2); }
+/* The inspector stays mounted underneath, so its scroll and its results survive
+   a trip to the Analyst; it is just not painted while the Analyst is up. */
+body.drawer-open .panel { visibility: hidden; }
+@keyframes surface-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
+.drawer-head { display: flex; align-items: center; gap: .55rem; padding-bottom: .2rem; }
+.drawer-head h2 { font-size: 1.02rem; letter-spacing: -.02em; }
+.icon-btn.back { padding: .3rem; border: 0; background: none; }
+.icon-btn.back:hover { background: var(--bg-soft); }
+.icon-btn.back svg { width: 18px; height: 18px; display: block; }
+/* What the Analyst is looking at, so leaving the station does not lose it. */
+.context-chip {
+  margin-left: auto; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: .74rem; color: var(--muted); background: var(--bg-soft);
+  border: 1px solid var(--line); border-radius: 999px; padding: .16rem .55rem;
 }
-.drawer-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-.drawer-head h2 { font-size: 1.02rem; flex: 1; letter-spacing: -.02em; }
-.drawer-head .badge { margin-bottom: 0; }
+.context-chip[hidden] { display: none; }
 .ask-settings { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: .55rem .7rem; margin: .65rem 0; font-size: .84rem; background: var(--bg); }
 .ask-settings summary { cursor: pointer; color: var(--blue); font-weight: 560; }
 .ask-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem .7rem; margin-top: .55rem; }
@@ -541,8 +598,20 @@ table.regime td:first-child { white-space: nowrap; }
   border-radius: var(--radius-sm); resize: vertical; margin-top: .45rem; background: var(--bg); color: var(--ink);
 }
 #ask-question:focus { border-color: var(--blue); outline: none; box-shadow: 0 0 0 3px var(--blue-soft); }
-.ask-context-toggle { display: flex; align-items: center; gap: .35rem; font-size: .75rem; color: var(--muted); margin-top: .4rem; }
-.ask-context { font-size: .73rem; line-height: 1.5; margin: .25rem 0 0; padding-left: .55rem; border-left: 2px solid var(--line); }
+.ask-context-toggle { display: inline-flex; align-items: center; gap: .35rem; font-size: .75rem; color: var(--muted); cursor: pointer; }
+.ask-context-toggle input { accent-color: var(--blue); }
+/* The context is a receipt, not a briefing: the checkbox is always there, the
+   generated paragraph only when you ask to see it. */
+/* The checkbox is the control and sits outside the disclosure: nesting it in
+   the <summary> made one click toggle both. */
+.ask-context-row { display: flex; align-items: baseline; gap: .4rem; flex-wrap: wrap; margin-top: .45rem; }
+.ask-context[hidden] { display: none; }
+.ask-context > summary { list-style: none; cursor: pointer; font-size: .7rem; color: var(--blue); }
+.ask-context > summary::-webkit-details-marker { display: none; }
+.ask-context > summary::after { content: "see what it sends"; }
+.ask-context[open] > summary::after { content: "hide"; }
+.ask-context-row .context-detail { flex-basis: 100%; }
+.context-detail { font-size: .72rem; line-height: 1.5; margin: .35rem 0 0; padding-left: .55rem; border-left: 2px solid var(--line); }
 .ask-examples { display: flex; flex-wrap: wrap; gap: .3rem; margin: .55rem 0; }
 .ask-examples .chip { font-size: .71rem; text-align: left; }
 .ask-log { margin: .6rem 0 0; padding-left: 1.2rem; font-size: .77rem; color: var(--muted); line-height: 1.55; max-height: 180px; overflow: auto; }
@@ -572,16 +641,35 @@ table.regime td:first-child { white-space: nowrap; }
 .ask-code { background: var(--bg-sunken); padding: .38rem .5rem; border-radius: 6px; margin: .25rem 0 0;
   font-size: .71rem; overflow: auto; max-height: 160px; white-space: pre-wrap; }
 
-.ask-showcase { margin: .6rem 0; padding: .65rem .7rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg-soft); }
+.ask-showcase { margin: .5rem 0; padding: 0; border: 0; background: none; }
 .ask-showcase[hidden] { display: none; }
-.showcase-head { font-size: .8rem; margin-bottom: .45rem; }
+.showcase-head { font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 640; margin-bottom: .4rem; }
+.showcase-head strong { font-weight: 640; }
 .showcase-list { display: flex; flex-direction: column; gap: .25rem; }
-.showcase-chip { text-align: left; font-size: .73rem; }
+/* One line each with the full question on hover: eight two-line chips is a
+   paragraph of reading before anything has been asked. */
+.showcase-chip {
+  text-align: left; font-size: .76rem; border-radius: var(--radius-xs); padding: .4rem .55rem;
+  display: block; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .showcase-note { font-size: .75rem; color: var(--muted); border-left: 2px solid var(--line); padding-left: .55rem; margin-bottom: .6rem; line-height: 1.55; }
 .ask-log .changed { color: var(--warn-ink); }
 
-.ask-tier { display: flex; flex-direction: column; gap: .2rem; font-size: .79rem; margin: .55rem 0; }
-.ask-tier input { accent-color: var(--blue); }
+/* A segmented control, not three stacked radios each carrying its own sentence.
+   Three explanations to read before you can choose between three things is two
+   explanations too many; the chosen one explains itself underneath. */
+.ask-tier { display: flex; gap: 2px; margin: .7rem 0 .4rem; padding: 3px; background: var(--bg-sunken); border-radius: 999px; }
+.ask-tier .seg { flex: 1; position: relative; }
+.ask-tier .seg input { position: absolute; opacity: 0; pointer-events: none; }
+.ask-tier .seg span {
+  display: block; text-align: center; font-size: .78rem; padding: .32rem .3rem; border-radius: 999px;
+  color: var(--muted); cursor: pointer; white-space: nowrap; transition: background .14s, color .14s;
+}
+.ask-tier .seg:hover span { color: var(--ink); }
+.ask-tier .seg:has(input:checked) span { background: var(--surface-solid); color: var(--ink); font-weight: 600; box-shadow: var(--shadow-1); }
+.ask-tier .seg:has(input:disabled) span { opacity: .4; cursor: not-allowed; }
+.ask-tier .seg:has(input:focus-visible) span { outline: 2px solid var(--blue); outline-offset: 1px; }
+.tier-note { font-size: .75rem; line-height: 1.5; margin: 0 0 .5rem; min-height: 1.1em; }
 .ask-compose-note { font-size: .78rem; line-height: 1.55; margin: .6rem 0 0; padding-left: .55rem; border-left: 2px solid var(--line); }
 .ask-compose-note strong { color: var(--ink-2); font-weight: 600; }
 #ask-result:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
@@ -636,6 +724,133 @@ body.workbench-mode .panel {
 }
 body.workbench-mode .map-tools, body.workbench-mode #btn-panel,
 body.workbench-mode .maplibregl-control-container { display: none; }
+/* The workbench sits in the middle, so the Analyst replaces it there rather
+   than reappearing against the right edge: a surface that swaps should swap in
+   place, not jump across the window. */
+body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%); }
+
+/* ── the drawer's two modes, and Solve ───────────────────────────────────── */
+
+/* Ask or Solve: the same pill as the tiers, in the drawer's head. */
+.drawer-mode { display: flex; gap: 2px; padding: 3px; background: var(--bg-sunken); border-radius: 999px; }
+.drawer-mode .seg { position: relative; }
+.drawer-mode .seg input { position: absolute; opacity: 0; pointer-events: none; }
+.drawer-mode .seg span {
+  display: block; font-size: .8rem; padding: .24rem .7rem; border-radius: 999px; color: var(--muted);
+  cursor: pointer; white-space: nowrap; transition: background .14s, color .14s;
+}
+.drawer-mode .seg:hover span { color: var(--ink); }
+.drawer-mode .seg:has(input:checked) span { background: var(--surface-solid); color: var(--ink); font-weight: 620; box-shadow: var(--shadow-1); }
+.drawer-mode .seg:has(input:focus-visible) span { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* Solve: six stages, one on screen at a time. A stage that is done folds to
+   its head and a one-line summary; a stage not reached yet is not drawn. */
+.stage { border-top: 1px solid var(--line-soft); padding: .5rem 0 .55rem; }
+#solve-pane .stage:first-child { border-top: 0; padding-top: .35rem; }
+.stage[data-state="pending"] { display: none; }
+.stage-head {
+  display: flex; align-items: center; gap: .5rem; width: 100%; min-width: 0; border: 0; background: none;
+  padding: .2rem .25rem .2rem 0; margin: 0 0 0 -.1rem; font: inherit; color: var(--ink); text-align: left;
+  border-radius: var(--radius-xs); cursor: pointer;
+}
+.stage[data-state="open"] .stage-head { cursor: default; }
+.stage[data-state="done"] .stage-head:hover { background: var(--bg-soft); }
+.stage-num {
+  flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  font-size: .66rem; font-weight: 660; background: var(--bg-sunken); color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.stage[data-state="open"] .stage-num { background: var(--blue); color: #fff; }
+.stage[data-state="done"] .stage-num { background: var(--blue-soft); color: var(--blue-dark); }
+.stage-name { flex: none; font-size: .86rem; font-weight: 640; letter-spacing: -.01em; }
+.stage-sum { flex: 1; min-width: 0; font-size: .77rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage[data-state="open"] .stage-sum { display: none; }
+.stage[data-state="done"] .stage-body { display: none; }
+.stage-body { padding: .3rem 0 0 1.75rem; }
+.stage-body .row-actions { margin: .6rem 0 .1rem; }
+
+.solve-where { margin: .15rem 0 0; font-size: .86rem; display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+.solve-chips { display: flex; flex-wrap: wrap; gap: .3rem; margin: .1rem 0 .2rem; }
+.solve-chips .chip[aria-pressed="true"] { background: var(--blue-soft); border-color: var(--blue); color: var(--blue-dark); font-weight: 600; }
+.solve-intake { margin-top: .55rem; }
+.solve-intake .solve-bool { flex-direction: row; align-items: center; gap: .4rem; }
+.solve-intake .solve-bool input { width: auto; accent-color: var(--blue); }
+.solve-text {
+  width: 100%; font: inherit; font-size: .86rem; padding: .45rem .6rem; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); background: var(--bg); color: var(--ink); margin-top: .6rem;
+}
+.solve-text:focus { border-color: var(--blue); outline: none; box-shadow: 0 0 0 3px var(--blue-soft); }
+.solve-model { margin-top: .5rem; }
+
+/* the recon card, without its own title: the stage is the title */
+.solve-assess { margin: .15rem 0 0; }
+.solve-assess .assess-counts { margin-left: 0; }
+
+/* the plan: branch, why, then a numbered checklist with the gates as chips */
+.solve-declined { font-size: .85rem; line-height: 1.55; color: var(--ink-2); margin: .3rem 0; padding-left: .6rem; border-left: 2px solid var(--line); }
+.solve-plan-head { font-size: .82rem; line-height: 1.5; margin-top: .15rem; }
+.solve-branch b { font-weight: 640; }
+.solve-why {
+  margin: .2rem 0 0; font-size: .76rem; line-height: 1.5; cursor: pointer;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.solve-why.open { display: block; -webkit-line-clamp: unset; }
+.solve-notes { margin-top: .25rem; font-size: .74rem; }
+.solve-notes > summary { cursor: pointer; color: var(--blue); list-style: none; }
+.solve-notes > summary::-webkit-details-marker { display: none; }
+.solve-note { margin: .2rem 0 0; font-size: .74rem; line-height: 1.5; }
+.solve-steps { list-style: none; padding: 0; margin: .4rem 0 0; counter-reset: step; }
+.solve-steps li {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: .12rem .45rem; padding: .42rem 0;
+  border-top: 1px solid var(--line-soft); font-size: .8rem; line-height: 1.45;
+}
+.solve-steps li::before {
+  counter-increment: step; content: counter(step); font-size: .68rem; color: var(--muted);
+  font-variant-numeric: tabular-nums; padding-top: .15rem; grid-row: 1 / span 4;
+}
+.solve-steps li.ok::before { color: var(--ok-ink); }
+.solve-steps li.fail::before { color: var(--warn-ink); }
+.solve-steps .step-main { grid-column: 2; min-width: 0; }
+.solve-steps .step-tool { font-weight: 620; }
+.solve-steps .step-args { color: var(--muted); font-size: .72rem; overflow-wrap: anywhere; }
+.solve-steps .step-why { grid-column: 2; font-size: .74rem; color: var(--ink-2); }
+.solve-steps .step-gates { grid-column: 2; display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .15rem; }
+.solve-steps .step-more { grid-column: 2; font-size: .73rem; color: var(--ink-2); margin-top: .15rem; }
+.solve-steps .step-edit {
+  grid-column: 2; width: 100%; margin-top: .3rem; font: inherit; font-size: .72rem; line-height: 1.4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: .35rem .45rem;
+  border: 1px solid var(--line); border-radius: var(--radius-xs); background: var(--bg); color: var(--ink); resize: vertical;
+}
+.gate {
+  font-size: .66rem; border: 1px solid var(--line); border-radius: 999px; padding: .04rem .42rem;
+  color: var(--muted); background: var(--bg-soft); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.gate.ok { color: var(--ok-ink); border-color: transparent; background: var(--bg-sunken); }
+.gate.fail { color: var(--warn-ink); border-color: transparent; background: var(--warn-bg); }
+
+/* the run: who did what, one line each, the running step lit */
+.solve-timeline { list-style: none; padding: 0; margin: .3rem 0 0; font-size: .75rem; line-height: 1.5; max-height: 280px; overflow: auto; }
+.solve-timeline li {
+  display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: .45rem; padding: .2rem .25rem;
+  border-top: 1px solid var(--line-soft); color: var(--muted); border-radius: var(--radius-xs);
+}
+.solve-timeline .tl-role { font-size: .64rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 640; padding-top: .14rem; }
+.solve-timeline .tl-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.solve-timeline .tl-step { font-weight: 620; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.solve-timeline li.current { color: var(--ink); background: var(--bg-soft); }
+.solve-timeline li.ok .tl-role { color: var(--ok-ink); }
+.solve-timeline li.fail .tl-role { color: var(--warn-ink); }
+
+/* the result: the Ask result's language */
+.solve-answer { margin-top: .2rem; }
+.solve-answer p:first-child { margin-top: 0; }
+.solve-h { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 640; margin: .85rem 0 .25rem; }
+.solve-caveats ul { padding-left: 1.1rem; margin: 0; font-size: .78rem; line-height: 1.5; color: var(--ink-2); }
+.solve-caveats li { margin-bottom: .2rem; }
+.solve-data { margin: .75rem 0 .3rem; }
+.solve-data-body { font-size: .77rem; line-height: 1.55; margin-top: .4rem; }
+.solve-data-body ul, .solve-data-body ol { padding-left: 1.1rem; margin: .2rem 0 .5rem; }
+.solve-foot { font-size: .73rem; line-height: 1.5; margin: .4rem 0 0; }
+#solve-answer:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
 
 /* ── narrow screens ──────────────────────────────────────────────────────── */
 
@@ -676,6 +891,9 @@ body.workbench-mode .maplibregl-control-container { display: none; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ask-grid { grid-template-columns: 1fr; }
   .basin .kv { grid-template-columns: 1fr; }
+  .stage-body { padding-left: 0; }
+  .solve-timeline li { grid-template-columns: 80px minmax(0, 1fr); }
+  .solve-timeline .tl-role { font-size: .58rem; }
   .basemap-grid { grid-template-columns: 1fr 1fr; }
   body.workbench-mode .panel { height: auto; max-height: none; top: var(--gap); border-radius: var(--radius); }
 }

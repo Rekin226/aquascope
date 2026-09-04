@@ -246,7 +246,7 @@ def test_a_study_is_built_from_what_the_model_actually_ran() -> None:
 
 KINGSTON_PAYLOAD = {
     "unit": "m3/s", "station_id": "8496ce69-482c-406a-a2f0-ac418ef8f099", "name": "Kingston",
-    "agency": "Environment Agency", "years": 40.0, "n": 14555,
+    "agency": "Environment Agency", "years": 40.0, "n": 14555, "start": "1986-08-21", "end": "2026-08-19",
     "ffa": {"return_periods": [100], "fits": {"gev": {"q": [497.0], "ci": [[453.0, 525.0]]}}},
 }
 
@@ -574,3 +574,168 @@ def test_a_counted_thing_is_not_mistaken_for_a_unit() -> None:
                 "payload": {"stations": [{"name": "A"}], "n_returned": 1}, "ok": True}]
     v = verify_mod.verify("Station A is gauge 3 of the set.", results)
     assert "numbers_come_from_tools" in {c.name for c in v.failed}, "3 is a claim, not a unit"
+
+
+# ── ranges, labels and years (#324) ──────────────────────────────────────────
+#
+# A live answer quoted "Q2 325 (297-348), Q10 433 (401-453)", en dashes in the
+# ranges, and the check read 2325, -348, 10433 and -453 out of it: the label's digits were glued onto the
+# next number by the grouping rule, and the dash of a range was taken for a
+# sign. The same answer added "the 2014 winter floods" from memory; nothing
+# checked that.
+
+
+@pytest.mark.parametrize("text", ["453 – 525", "297–348", "447 - 604"])
+def test_a_dash_between_two_numbers_is_a_range_not_a_sign(text) -> None:
+    assert verify_mod._numbers(verify_mod.normalise(text)) == [float(text[:3]), float(text[-3:])]
+
+
+@pytest.mark.parametrize("text, value", [("Q2 325", 325.0), ("Q10 433", 433.0), ("T100 495", 495.0)])
+def test_a_label_is_not_glued_onto_the_number_after_it(text, value) -> None:
+    assert verify_mod._numbers(verify_mod.normalise(text)) == [value]
+
+
+def test_a_real_negative_survives() -> None:
+    assert verify_mod._numbers("-0.864") == [-0.864]
+    assert verify_mod._numbers("skew = -0.864") == [-0.864]
+    assert verify_mod._numbers(verify_mod.normalise("tau = −0.14")) == [-0.14]
+
+
+RETURN_LEVELS = {
+    "unit": "m3/s", "station_id": "K",
+    "ffa": {"return_periods": [2, 10, 50], "fits": {
+        "gev_lmoments": {"q": [325.0, 433.0, 482.0]},
+        "lp3": {"q": [325.0, 433.0, 482.0], "ci": [[297.0, 348.0], [401.0, 453.0], [443.0, 507.0]]},
+    }},
+}
+
+
+def test_return_levels_with_their_intervals_are_not_reported_as_fabricated() -> None:
+    answer = "At K: Q2 325 (297–348), Q10 433 (401–453), Q50 482 (443–507) m³/s."
+    v = verify_mod.verify(answer, _one(RETURN_LEVELS))
+    assert "numbers_come_from_tools" not in {c.name for c in v.failed}, [c.detail for c in v.failed]
+
+
+def test_a_year_from_memory_is_listed_as_not_established() -> None:
+    v = verify_mod.verify("Kingston's peak in the 2014 winter floods was 497 m3/s.", _one(KINGSTON_PAYLOAD))
+    failed = {c.name: c.detail for c in v.failed}
+    assert "years_traceable" in failed and "2014" in failed["years_traceable"]
+
+
+def test_a_year_labelled_general_knowledge_is_allowed() -> None:
+    v = verify_mod.verify(
+        "Kingston flooded in the winter of 2014 (from general knowledge, not from the data). "
+        "The 100-year flood is 497 m3/s (453 to 525).",
+        _one(KINGSTON_PAYLOAD),
+    )
+    assert "years_traceable" not in {c.name for c in v.failed}
+
+
+def test_a_year_in_a_result_date_or_period_is_traceable() -> None:
+    v = verify_mod.verify("Kingston's record runs from 1986 to 2026, in m3/s.", _one(KINGSTON_PAYLOAD))
+    assert "years_traceable" not in {c.name for c in v.failed}
+
+
+def test_a_year_the_user_asked_about_is_not_the_models_memory() -> None:
+    v = verify_mod.verify("Kingston has no data for 1947, in m3/s.", _one(KINGSTON_PAYLOAD),
+                          question="What happened at Kingston in 1947?")
+    assert "years_traceable" not in {c.name for c in v.failed}
+
+
+def test_the_years_check_prints_with_the_others() -> None:
+    v = verify_mod.verify("The 2014 floods at Kingston.", _one(KINGSTON_PAYLOAD))
+    md = v.to_markdown()
+    assert "does not establish" in md and "2014" in md and "general knowledge" in md
+
+
+def test_prose_rounding_and_gate_words_are_not_invented_numbers():
+    """A live run flagged tau -0.004 (result -0.0037), 29.0 and a gate's '20 needed' as invented."""
+    from aquascope.ai_engine import verify as v
+
+    assert v._close(-0.004, [-0.0037])
+    assert v._close(29.0, [29.4])
+    assert v._close(650.0, [652.5])
+    assert not v._close(0.004, [0.0091])
+    assert not v._close(1234.0, [1300.0])
+    results = [
+        {"name": "analyze_station", "arguments": {}, "ok": True,
+         "payload": {"years": 142.9, "trend": {"tau": -0.0037}}},
+        {"name": "gates", "arguments": {}, "ok": True,
+         "payload": {"gates": [{"check": "min_years", "passed": True, "detail": "142.9 years of record, 20 needed"}]}},
+    ]
+    out = v.verify("Kendall tau = -0.004 over 142.9 years, against the 20 years the gate needs.", results)
+    numbers = next(c for c in out.checks if "number" in c.name)
+    assert numbers.passed, numbers.detail
+
+
+def test_a_negative_slope_is_not_a_unit_exponent():
+    """The keyless Kingston answer said "Sen's slope -0.0029 m3/s per year" and the check reported 29.0."""
+    from aquascope.ai_engine import verify as v
+
+    assert v._numbers("Sen's slope -0.0029 m3/s per year over 140 years", claims_only=True) == [-0.0029, 140.0]
+    assert v._numbers("tau -0.14 and skew=-0.864", claims_only=True) == [-0.14, -0.864]
+    assert v._numbers("mean flow 65.5 m s-1 and 12 kg-1", claims_only=True) == [65.5, 12.0]
+
+
+# ── ranges and label-number pairs (#324) ────────────────────────────────────
+#
+# The first live run of the Anthropic provider reported six numbers as "not in
+# any tool result" and none of them were real. They came from how the answer was
+# written: an en dash between two bounds read as a negative, and a return-period
+# label read as part of the following value.
+
+KINGSTON_CURVE_PAYLOAD = {
+    "unit": "m3/s", "station_id": "8496ce69-482c-406a-a2f0-ac418ef8f099", "name": "Kingston",
+    "agency": "Environment Agency", "years": 40.0, "n": 14555,
+    "ffa": {
+        "return_periods": [2, 10, 100],
+        "fits": {"gev": {
+            "q": [325.0, 433.0, 497.0],
+            "ci": [[297.0, 348.0], [400.0, 466.0], [453.0, 525.0]],
+        }},
+    },
+}
+
+KINGSTON_CURVE_ANSWER = (
+    "**Flood frequency at Kingston (River Thames)**\n\n"
+    "Environment Agency (UK) | **Kingston** (station ID "
+    "8496ce69-482c-406a-a2f0-ac418ef8f099) | 40 yr, 14 555 daily values | "
+    "Q2 325 (297–348) | Q10 433 (400–466) | Q100 497 m³ s⁻¹ "
+    "(453 – 525 m³ s⁻¹, 90 % CI)"
+)
+
+
+def test_a_range_written_with_an_en_dash_is_two_positive_bounds() -> None:
+    """`297–348` is an interval, not 297 and minus 348."""
+    assert verify_mod._numbers(verify_mod.normalise("297–348")) == [297.0, 348.0]
+    assert verify_mod._numbers(verify_mod.normalise("453 – 525")) == [453.0, 525.0]
+    assert verify_mod._numbers(verify_mod.normalise("447 - 604")) == [447.0, 604.0]
+
+
+def test_a_label_is_not_glued_onto_the_following_number() -> None:
+    """`Q2 325` is a return-period label and its value, not 2325."""
+    for prose, expected in (("Q2 325", 325.0), ("Q10 433", 433.0), ("T100 495", 495.0)):
+        got = verify_mod._numbers(verify_mod.normalise(prose))
+        assert expected in got, f"{prose!r} lost its value: {got}"
+        assert not any(n > 1000 for n in got), f"{prose!r} invented {got}"
+
+
+def test_digit_grouping_still_joins() -> None:
+    """The label fix must not undo the grouping fix it sits next to."""
+    assert verify_mod._numbers(verify_mod.normalise("14 555")) == [14555.0]
+    assert verify_mod._numbers(verify_mod.normalise("1 234 567")) == [1234567.0]
+
+
+def test_a_genuine_negative_survives() -> None:
+    """Only a dash *between two digits* is a range separator."""
+    assert verify_mod._numbers(verify_mod.normalise("skew=-0.864")) == [-0.864]
+    assert verify_mod._numbers(verify_mod.normalise("τ = -0.14")) == [-0.14]
+    assert -3.0 in verify_mod._numbers(verify_mod.normalise("values: 5, -3"))
+
+
+def test_a_flood_curve_answer_produces_no_false_unestablished_line() -> None:
+    """The reported case, end to end: six false numbers, none of them real."""
+    v = verify_mod.verify(KINGSTON_CURVE_ANSWER, _one(KINGSTON_CURVE_PAYLOAD))
+    assert "numbers_come_from_tools" not in {c.name for c in v.failed}, [
+        (c.name, c.detail) for c in v.failed
+    ]

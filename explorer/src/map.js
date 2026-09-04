@@ -5,6 +5,7 @@
 import { EMPTY_FC, actions, dbg, escapeHtml, sourceStyle, state, trace } from "./core.js?v=__BUILD__";
 import { toFeatureCollection } from "./catalog.js?v=__BUILD__";
 import { TERRAIN_DEM, basemapById, overlayById, tileUrls } from "./layers.js?v=__BUILD__";
+import { SHAPE_NAMES, shapeSdf } from "./shapes.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
 
 export let map = null;
@@ -263,10 +264,26 @@ export function setBasemap(id, { date = null, then = null } = {}) {
     if (terrainOn && map.getSource("terrain-dem")) {
       map.setTerrain({ source: "terrain-dem", exaggeration: 1.3 });
     }
-    // setStyle replaces the projection along with everything else.
+    // setStyle replaces the projection and the image table along with the rest.
+    ensureShapeImages();
     if (globeOn) setGlobe(true);
     if (then) then();
   });
+}
+
+// One SDF image per shape, registered on the current style. setStyle throws the
+// image table away with everything else, so this runs again after a basemap
+// change; the shapes themselves are computed once and reused.
+const sdfCache = new Map();
+
+export function ensureShapeImages() {
+  if (!map) return;
+  for (const name of SHAPE_NAMES) {
+    const id = `gauge-${name}`;
+    if (map.hasImage && map.hasImage(id)) continue;
+    if (!sdfCache.has(name)) sdfCache.set(name, shapeSdf(name));
+    try { map.addImage(id, sdfCache.get(name), { sdf: true, pixelRatio: 2 }); } catch { /* already there */ }
+  }
 }
 
 function firstDataLayerId() {
@@ -370,7 +387,7 @@ const COLOR_FIELD = { source: "color", record: "colorRecord", recent: "colorRece
 
 export function setGaugeStyle(mode) {
   if (!state.mapOk || !map.getLayer("points")) return;
-  map.setPaintProperty("points", "circle-color", ["get", COLOR_FIELD[mode] || "color"]);
+  map.setPaintProperty("points", "icon-color", ["get", COLOR_FIELD[mode] || "color"]);
 }
 
 export function setHeatmap(on) {
@@ -416,14 +433,28 @@ export function addStationLayers(fc) {
     layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": ["step", ["get", "point_count"], 11, 250, 12.5], "text-font": LABEL_FONT },
     paint: { "text-color": "#fff", "text-halo-color": "rgba(10,45,80,.35)", "text-halo-width": 0.6 },
   });
+  // A symbol layer rather than a circle, so which agency a gauge belongs to is
+  // carried by outline as well as by hue (#283). SDF icons keep the colour
+  // data-driven, so "colour by record length" still works and the shape goes on
+  // saying the source underneath. allow-overlap because every gauge counts:
+  // symbol layers hide colliding icons by default, and a circle layer does not.
+  ensureShapeImages();
   map.addLayer({
-    id: "points", type: "circle", source: "stations", filter: ["!", ["has", "point_count"]],
+    id: "points", type: "symbol", source: "stations", filter: ["!", ["has", "point_count"]],
+    layout: {
+      "icon-image": ["concat", "gauge-", ["get", "shape"]],
+      // The icon is 24 px of shape in a 40 px field at pixelRatio 2, so 12 CSS
+      // px natural; these factors put it back on the diameters the circle layer
+      // used (6.8 px at z4 up to 18 px at z14).
+      "icon-size": ["interpolate", ["linear"], ["zoom"], 4, 0.57, 7, 0.77, 10, 1.08, 14, 1.5],
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+    },
     paint: {
-      "circle-color": ["get", "color"],
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 3.4, 7, 4.6, 10, 6.5, 14, 9],
-      "circle-stroke-color": "rgba(255,255,255,.92)",
-      "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 4, 0.8, 10, 1.4],
-      "circle-opacity": 0.95,
+      "icon-color": ["get", "color"],
+      "icon-halo-color": "rgba(255,255,255,.92)",
+      "icon-halo-width": ["interpolate", ["linear"], ["zoom"], 4, 1, 10, 1.6],
+      "icon-opacity": 0.98,
     },
   });
   map.addLayer({

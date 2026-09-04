@@ -4,6 +4,7 @@
 // silently returning nothing, which is what the old substring scan did).
 
 import { $, actions, escapeHtml, foldText, sourceStyle, state, stationKey } from "./core.js?v=__BUILD__";
+import { shapeSvg } from "./shapes.js?v=__BUILD__";
 
 let index = null;
 
@@ -94,7 +95,7 @@ export function initSearch() {
         d.setAttribute("aria-selected", i === active ? "true" : "false");
         const st = sourceStyle(r.source);
         const filtered = state.hidden.has(r.source) ? ` <span class="muted">(source hidden)</span>` : "";
-        d.innerHTML = `<i style="background:${st.color}"></i><span class="hit-name">${escapeHtml(r.name || r.station_id)}</span>` +
+        d.innerHTML = `${shapeSvg(st.shape, st.color)}<span class="hit-name">${escapeHtml(r.name || r.station_id)}</span>` +
           `<span class="muted hit-id">${escapeHtml(r.station_id)}</span>${filtered}`;
         d.addEventListener("mousedown", (e) => { e.preventDefault(); choose(i); });
         box.appendChild(d);

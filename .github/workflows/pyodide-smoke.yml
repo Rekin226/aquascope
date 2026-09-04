@@ -11,15 +11,13 @@ on:
       - "explorer/**"
       - "pyproject.toml"
       - ".github/scripts/pyodide_smoke.mjs"
+      - ".github/workflows/pyodide-smoke.yml"
   schedule:
     - cron: "0 0 * * 1"  # 00:00 UTC on Monday — weekly upstream canary
   workflow_dispatch:
 
 permissions:
   contents: read
-
-env:
-  PYODIDE_VERSION: "0.28.2" # Current version of Pyodide used by Explorer, found in explorer/config.js
 
 jobs:
   smoke:
@@ -37,23 +35,41 @@ jobs:
         with:
           node-version: 24
 
+      - name: Get Pyodide version
+        id: pyodide-version
+        if: github.event_name != 'schedule'
+        run: |
+          PYODIDE_VERSION=$(grep -oP 'pyodideIndexURL:\s*"[^"]*/v\K[^/"]+' explorer/config.js)
+
+          if [ -z "$PYODIDE_VERSION" ]; then
+            echo "Failed to extract Pyodide version from explorer/config.js index URL."
+            exit 1
+          fi
+
+          echo "Using Pyodide $PYODIDE_VERSION"
+          echo "PYODIDE_VERSION=$PYODIDE_VERSION" >> "$GITHUB_ENV"
+          echo "version=$PYODIDE_VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Install pyodide
         run: |
           # PRs/dispatch: pinned to PYODIDE_VERSION (the version explorer/config.js
-          # loads) so this job tests the runtime the site actually serves.
+          # specifies) so this job tests the runtime the site actually serves.
           # Scheduled Monday canary: float, to detect new incompatibilities early.
           if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "Using floating Pyodide version..."
             npm install pyodide
           else
-            npm install pyodide@${{ env.PYODIDE_VERSION }}
+            echo "Using Pyodide $PYODIDE_VERSION..."
+            npm install "pyodide@${PYODIDE_VERSION}"
           fi
 
       - name: Cache Pyodide packages
+        if: github.event_name != 'schedule'
         uses: actions/cache@v5
         with:
           path: /tmp/pyodide-cache
-          key: pyodide-${{ hashFiles('.github/scripts/pyodide_smoke.mjs') }}
-          restore-keys: pyodide-
+          key: pyodide-${{ steps.pyodide-version.outputs.version }}--${{ hashFiles('.github/scripts/pyodide_smoke.mjs') }}
+          restore-keys: pyodide-${{ steps.pyodide-version.outputs.version }}-
 
       - name: Build wheel
         run: |

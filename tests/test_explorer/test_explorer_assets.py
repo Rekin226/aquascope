@@ -170,7 +170,13 @@ def test_fmt_honours_its_digits_argument() -> None:
       m.fmt(3.4217), m.fmt(null), m.fmt(2320.4, 0),
     ]));
     """
-    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    out = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
     got = json.loads(out.stdout)
     assert got[0] == "303"          # digits honoured below 1000
     assert got[1] == "1.51"         # and below 10
@@ -179,6 +185,35 @@ def test_fmt_honours_its_digits_argument() -> None:
     assert got[4] == "3.422"
     assert got[5] == "—"
     assert got[6] == "2,320"
+
+
+@pytestmark_node
+def test_fmt_p_formats_small_p_values_and_handles_nones() -> None:
+    """A test with p = 0.000192 must format as '< 0.001' rather than 'p = 0'."""
+    core = EXPLORER / "src" / "core.js"
+    script = f"""
+    const m = await import({json.dumps(core.as_uri())});
+    console.log(JSON.stringify([
+      m.fmtP(0.000192), m.fmtP(0.0009), m.fmtP(0.001), m.fmtP(0.042),
+      m.fmtP(1.0), m.fmtP(null), m.fmtP(undefined), m.fmtP(Number.NaN),
+    ]));
+    """
+    out = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    got = json.loads(out.stdout)
+    assert got[0] == "< 0.001"
+    assert got[1] == "< 0.001"
+    assert got[2] == "0.001"
+    assert got[3] == "0.042"
+    assert got[4] == "1.000"
+    assert got[5] == "—"
+    assert got[6] == "—"
+    assert got[7] == "—"
 
 
 @pytestmark_node
@@ -553,3 +588,45 @@ def test_running_before_the_provider_list_arrives_says_so() -> None:
     assert "ASK_PROVIDERS[provider]" in guard and "askStatus(" in guard, (
         "runAsk() must check the chosen provider exists and report it, not throw on undefined"
     )
+
+
+def test_the_explorer_asks_for_the_full_record_by_default() -> None:
+    """#270: the page passed a 40-year window while the note said 'full period requested'."""
+    config = (EXPLORER / "config.js").read_text(encoding="utf-8")
+    assert re.search(r"\byears:\s*null\b", config), "CONFIG.years is a cap; null asks for the full record"
+    worker = (EXPLORER / "worker.js").read_text(encoding="utf-8")
+    assert "|| 40" not in worker, "the worker must not fall back to a hard-coded window"
+    assert "period_start" in worker, "the catalog's first date travels with the request"
+    panel = (EXPLORER / "src" / "panel-station.js").read_text(encoding="utf-8")
+    assert "period_start: r.period_start" in panel
+
+
+# ── Solve (the plan-first Analyst in the page) ──────────────────────────────
+
+
+def test_the_solve_drawer_is_wired_end_to_end() -> None:
+    """One drawer, two modes; the worker face of team.solve / run_reviewed; the button wired before any await."""
+    html = _html()
+    for needed in ('id="btn-solve"', 'id="solve-pane"', 'id="ask-pane"', 'name="drawer-mode"', 'id="stage-result"'):
+        assert needed in html, needed
+    app = (EXPLORER / "app.js").read_text(encoding="utf-8")
+    assert "initSolve" in app and "url.solve" in app
+    solve = (EXPLORER / "src" / "solve.js").read_text(encoding="utf-8")
+    body = solve[solve.index("export async function initSolve()"):]
+    assert body.index('$("btn-solve").addEventListener') < body.index("await loadPlaybooks()")
+    assert "playbooks.json" in solve, "the chips come from the generated list, not a copy in the page"
+    worker = (EXPLORER / "worker.js").read_text(encoding="utf-8")
+    for needed in ("solve_plan", "solve_run", "solve_progress", "run_reviewed", "execute=False",
+                   "describe_catchment_from_row"):
+        assert needed in worker, needed
+    client = (EXPLORER / "src" / "worker-client.js").read_text(encoding="utf-8")
+    assert "solve_progress" in client and "onSolveProgress" in client
+    url = (EXPLORER / "src" / "url.js").read_text(encoding="utf-8")
+    assert 'q.set("solve"' in url and 'q.has("solve")' in url
+
+
+def test_the_solve_surface_writes_with_plain_hyphens() -> None:
+    """House style: no em or en dashes in what the Solve surface says."""
+    for path in (EXPLORER / "src" / "solve.js", EXPLORER / "playbooks.json"):
+        text = path.read_text(encoding="utf-8")
+        assert "—" not in text and "–" not in text, path.name

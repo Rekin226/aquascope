@@ -5,7 +5,8 @@ name: Showcase
 # once a week, with the maintainer's key; the page replays the trace and can
 # re-run the deterministic half live in the reader's browser.
 #
-# Needs one of GROQ_API_KEY / OPENAI_API_KEY / HF_TOKEN as a repository secret.
+# Needs one of ANTHROPIC_API_KEY (plus ANTHROPIC_WORKSPACE_ID for a key that spans
+# workspaces) / GROQ_API_KEY / OPENAI_API_KEY / HF_TOKEN as a repository secret.
 # Without one the job says so and stops, rather than failing the repo.
 #
 # The result arrives as a pull request. A pull request opened with GITHUB_TOKEN
@@ -50,11 +51,12 @@ jobs:
       - name: Check a key is configured
         id: key
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          if [ -n "$GROQ_API_KEY" ] || [ -n "$OPENAI_API_KEY" ]; then
+          if [ -n "$ANTHROPIC_API_KEY" ] || [ -n "$GROQ_API_KEY" ] || [ -n "$OPENAI_API_KEY" ]; then
             echo "have_key=true" >> "$GITHUB_OUTPUT"
           elif [ -n "$HF_TOKEN" ]; then
             # HF_TOKEN is here for the Archive, where a write token scoped to
@@ -80,6 +82,8 @@ jobs:
       - name: Record the answers
         if: steps.key.outputs.have_key == 'true'
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_WORKSPACE_ID: ${{ secrets.ANTHROPIC_WORKSPACE_ID }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}

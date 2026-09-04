@@ -99,6 +99,10 @@ def test_helper_lists():
     assert source_keys() == sorted(SOURCES)
 
 
+def test_usgs_output_model():
+    assert SOURCES["usgs"].output_model == "StreamflowReading | WaterLevelReading | WaterQualitySample"
+
+
 def test_station_variables_validated():
     with pytest.raises(ValueError):
         Station(source="x", station_id="1", latitude=0, longitude=0, variables=("lava",))

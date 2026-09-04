@@ -11,8 +11,9 @@ export const CONFIG = {
   pyodideIndexURL: "https://cdn.jsdelivr.net/pyodide/v0.28.2/full/",
   // Written by the deploy step next to index.html: {"wheel": "aquascope-X.Y.Z-py3-none-any.whl"}.
   wheelsJson: "./wheels.json",
-  // How far back to ask each agency (years).
-  years: 40,
+  // Cap on how far back to ask each agency, in years. null asks for the full
+  // record, from the catalog's first date for the station (#270).
+  years: null,
   // Cache-busting token, replaced at deploy time (git sha).
   build: "__BUILD__",
 };

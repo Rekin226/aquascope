@@ -39,7 +39,8 @@ const TOOLS = [
       type: "object",
       properties: {
         source: { type: "string" }, station_id: { type: "string" },
-        years: { type: "integer" }, variable: { type: "string" },
+        years: { type: "integer", description: "Optional cap on the record (the last N years); leave it out for the full record." },
+        variable: { type: "string" },
       },
       required: ["source", "station_id"],
     },

@@ -53,6 +53,12 @@ KC_TABLE: dict[str, dict[str, float]] = {
     "sorghum": {"initial": 0.30, "mid": 1.05, "late": 0.55},
     "groundnut": {"initial": 0.40, "mid": 1.15, "late": 0.60},
     "sugar_beet": {"initial": 0.35, "mid": 1.20, "late": 0.70},
+    # FAO-56 Table 12
+    "millet": {"initial": 0.30, "mid": 1.00, "late": 0.30},
+    # FAO-56 Table 12
+    "cassava": {"initial": 0.30, "mid": 0.80, "late": 0.30},
+    # FAO-56 Table 12; initial Kc inherited from the Legumes group header.
+    "chickpea": {"initial": 0.40, "mid": 1.00, "late": 0.35},
 }
 
 # ---------------------------------------------------------------------------
@@ -84,6 +90,12 @@ KCB_TABLE: dict[str, dict[str, float]] = {
     "sorghum": {"initial": 0.15, "mid": 0.95, "late": 0.35},
     "groundnut": {"initial": 0.15, "mid": 1.10, "late": 0.50},
     "sugar_beet": {"initial": 0.15, "mid": 1.15, "late": 0.50},
+    # FAO-56 Table 17; initial Kcb inherited from the Cereals group header.
+    "millet": {"initial": 0.15, "mid": 0.95, "late": 0.20},
+    # FAO-56 Table 17, cassava year 1.
+    "cassava": {"initial": 0.15, "mid": 0.70, "late": 0.20},
+    # FAO-56 Table 17; initial Kcb inherited from the Legumes group header.
+    "chickpea": {"initial": 0.15, "mid": 0.95, "late": 0.25},
 }
 
 # ---------------------------------------------------------------------------
@@ -114,6 +126,16 @@ DEFAULT_STAGE_LENGTHS: dict[str, dict[str, int]] = {
     "sorghum": {"initial": 20, "development": 35, "mid": 40, "late": 30},
     "groundnut": {"initial": 25, "development": 35, "mid": 45, "late": 25},
     "sugar_beet": {"initial": 30, "development": 45, "mid": 90, "late": 15},
+
+    # FAO-56 Table 11
+    "millet": {"initial": 15, "development": 25, "mid": 40, "late": 25},
+
+    # FAO-56 Table 11, cassava year 1. Year 2 is listed separately at 360 days.
+    "cassava": {"initial": 20, "development": 40, "mid": 90, "late": 60},
+
+    # FAO-56 Table 11 has no chickpea row. Lentil is the closest listed crop
+    # (cool-season food legume, same duration class), used here as a proxy.
+    "chickpea": {"initial": 20, "development": 30, "mid": 60, "late": 40},  # 150 d
 }
 
 

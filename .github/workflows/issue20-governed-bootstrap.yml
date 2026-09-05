@@ -43,6 +43,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev,all]" build
 
+      - name: Apply deterministic Ruff fixes to issue-20 files
+        run: |
+          ruff check --fix \
+            aquascope/collectors/south_africa_dws.py \
+            tests/test_collectors/test_south_africa_dws.py \
+            tests/test_cli/test_south_africa_dws_collect.py
+          ruff format \
+            aquascope/collectors/south_africa_dws.py \
+            tests/test_collectors/test_south_africa_dws.py \
+            tests/test_cli/test_south_africa_dws_collect.py
+
       - name: Ruff lint
         run: ruff check aquascope/ tests/
 

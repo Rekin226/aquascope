@@ -263,7 +263,7 @@ Switch to MCMC with `degree>1` for polynomial models, or pass `prior_precision` 
 
 ## 💻 CLI
 
-AquaScope ships a 25-command CLI (`agri`, `basins`, `caravan` and `gym` carry subcommands) for the most common workflows:
+AquaScope ships a 27-command CLI (`agri`, `basins`, `caravan`, `gym` and `playbooks` carry subcommands) for the most common workflows:
 
 ```bash
 # Find stations, then collect data
@@ -272,6 +272,7 @@ aquascope harvest stations --out archive          # the open gauge catalog (GeoP
 aquascope basins at 48.85 2.35                    # the catchment of any point: area, climate, land cover, soils, dams (BasinATLAS)
 aquascope basins similar 25.04 121.56             # gauged basins whose catchments look most like this point's (ungauged-site donors)
 aquascope basins regionalize 52.29 -3.51          # estimated flow regime of an ungauged point from those donors, with the leave-one-out skill
+aquascope assess 51.415 -0.308 --problem flood_risk   # what can be answered here: gauges in reach, catchment, which methods the record supports
 aquascope caravan export --source uk_ea --out caravan_gb   # a Caravan-format large-sample dataset from the archive
 aquascope gym run --basin uk_ea/013054a3-670e-49ee-afda-e0865a449197   # HydroGym: calibrate GR4J on a real basin as a gym episode
 aquascope mcp                                     # serve the same tools to Claude / Cursor over MCP
@@ -289,7 +290,7 @@ aquascope agri plan --crop maize --planting-date 2026-04-01 --lat 30.0 --lon 31.
 
 # AI recommendation + natural-language problem solving
 aquascope recommend --parameters DO,BOD5,COD --goal "pollution trend detection"
-aquascope solve --problem "Assess flood risk for a 100-year return period"
+aquascope solve "Design flow for a road crossing, 100-year return period" --lat 51.415 --lon -0.308
 
 # Interactive Streamlit dashboard — multipage workspace with 21 live sources,
 # smart auto-insights, and fully interactive Plotly charts
@@ -308,7 +309,7 @@ Run `aquascope --help` for the full command list.
 30 data collectors spanning four regions (highlights below, full list in the [docs](docs/data_sources.md)):
 
 - 🌎 **Americas** — USGS (streamflow + WQ), NOAA NWPS (US streamflow), Water Quality Portal (400+ agencies), CAMELS-CL (Chile), CAMELS-BR (Brazil), ANA Hidroweb (Brazil)
-- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau, Germany PEGELONLINE, UK Environment Agency
+- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau, Germany PEGELONLINE, England's Environment Agency
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / Civil IoT / DataGov, Japan MLIT, Korea WAMIS, India WRIS
 - 🌐 **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo, FAO AQUASTAT, FAO WaPOR, GRDC (river discharge)
 
@@ -436,7 +437,7 @@ If you use AquaScope in your research, please cite:
   author  = {Ouédraogo, Abdoul Rachid},
   year    = {2026},
   url     = {https://github.com/Rekin226/aquascope},
-  version = {0.13.0},
+  version = {0.14.0},
   doi     = {10.5281/zenodo.21903143},
   license = {MIT}
 }
@@ -445,7 +446,7 @@ If you use AquaScope in your research, please cite:
 Machine-readable metadata lives in [CITATION.cff](CITATION.cff); GitHub's "Cite this
 repository" button renders it in APA and BibTeX. Every tagged release is archived on
 Zenodo; `10.5281/zenodo.21903143` is the concept DOI that always resolves to the latest
-version (v0.12.0 is [10.5281/zenodo.21995649](https://doi.org/10.5281/zenodo.21995649)).
+version (v0.13.0 is [10.5281/zenodo.22152064](https://doi.org/10.5281/zenodo.22152064)).
 
 ## 📄 License
 

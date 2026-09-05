@@ -9,10 +9,12 @@ Usage
     aquascope quality --file data/raw/water_data.json
     aquascope run --method trend_analysis --file data/raw/water_data.json
     aquascope agri plan --crop maize --planting-date 2026-04-01 --eto-file eto.csv --precip-file precip.csv
+    aquascope assess 51.415 -0.308 --problem flood_risk
     aquascope list-methods
     aquascope list-sources
     aquascope completion bash
 """
+
 # PYTHON_ARGCOMPLETE_OK
 from __future__ import annotations
 
@@ -187,6 +189,11 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["start_date"] = args.start_date
         if args.end_date:
             kwargs["end_date"] = args.end_date
+        if args.mode:
+            if args.mode not in ("telemetric", "historical"):
+                logger.error("brazil_ana --mode must be 'telemetric' or 'historical', got %r.", args.mode)
+                sys.exit(1)
+            kwargs["mode"] = args.mode
     if source == "noaa_nwps":
         if not args.bbox and not args.lid:
             logger.error("NOAA NWPS requires either the --bbox or --lid argument.")
@@ -475,9 +482,7 @@ def cmd_stations(args: argparse.Namespace) -> None:
         api_key=args.api_key,
     )
     if not catalogs:
-        logger.error(
-            "No station-capable source matches. Sources with a catalog: %s", station_sources(args.variable)
-        )
+        logger.error("No station-capable source matches. Sources with a catalog: %s", station_sources(args.variable))
         sys.exit(1)
 
     stations = [s for key in sorted(catalogs) for s in catalogs[key].stations]
@@ -501,15 +506,31 @@ def cmd_stations(args: argparse.Namespace) -> None:
         features = []
         for props in rows:
             lon, lat = props.pop("longitude"), props.pop("latitude")
-            features.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props})
-        out_path.write_text(json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, indent=2))
+            features.append(
+                {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props}
+            )
+        out_path.write_text(
+            json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, indent=2)
+        )
     elif fmt == "json":
         out_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2))
     else:
         import csv
 
-        fields = ["source", "station_id", "name", "latitude", "longitude", "variables", "period_start", "period_end",
-                  "url", "river", "country", "extra"]
+        fields = [
+            "source",
+            "station_id",
+            "name",
+            "latitude",
+            "longitude",
+            "variables",
+            "period_start",
+            "period_end",
+            "url",
+            "river",
+            "country",
+            "extra",
+        ]
         with out_path.open("w", newline="", encoding="utf-8") as fh:
             writer = csv.DictWriter(fh, fieldnames=fields)
             writer.writeheader()
@@ -572,8 +593,12 @@ def _cmd_harvest_obs(args: argparse.Namespace) -> None:
         if args.variable:
             bad = [s for s in sources if args.variable not in HARVESTABLE[s]]
             if bad:
-                logger.error("%s is not harvested for %s (they mirror %s)", args.variable, bad,
-                             {s: list(HARVESTABLE[s]) for s in bad})
+                logger.error(
+                    "%s is not harvested for %s (they mirror %s)",
+                    args.variable,
+                    bad,
+                    {s: list(HARVESTABLE[s]) for s in bad},
+                )
                 sys.exit(2)
     report = harvest_observations(
         args.out,
@@ -629,8 +654,13 @@ def cmd_ask(args: argparse.Namespace) -> None:
 
     try:
         result = ask(
-            args.question, provider=args.provider, model=args.model, api_key=args.api_key, base_url=args.base_url,
-            max_steps=args.max_steps, on_event=on_event,
+            args.question,
+            provider=args.provider,
+            model=args.model,
+            api_key=args.api_key,
+            base_url=args.base_url,
+            max_steps=args.max_steps,
+            on_event=on_event,
         )
     except (RuntimeError, ValueError, ImportError) as exc:
         logger.error("%s", exc)
@@ -654,7 +684,6 @@ def cmd_ask(args: argparse.Namespace) -> None:
             print(f"   · {c.get('detail') or c.get('name')}", file=sys.stderr)
 
 
-
 def cmd_run(args: argparse.Namespace) -> None:
     """`aquascope run`: a study file if one is named, otherwise a methodology pipeline."""
     if args.study:
@@ -676,23 +705,91 @@ def cmd_run_study(args: argparse.Namespace) -> None:
         logger.error("Could not read %s: %s", args.study, exc)
         sys.exit(1)
 
-    def on_event(msg: str) -> None:
+    def on_event(event: dict) -> None:
         if not args.quiet:
-            print(f"  · {msg}", file=sys.stderr)
+            print(f"  · {_format_event(event)}", file=sys.stderr)
 
     if args.dry_run:
         print(f"{len(study.steps)} step(s) in {args.study}:")
         for i, step in enumerate(study.steps, 1):
-            print(f"  {i}. {step.tool}({', '.join(f'{k}={v!r}' for k, v in step.arguments.items())})")
+            label = f"{step.id}: " if step.id else ""
+            print(f"  {i}. {label}{step.tool}({', '.join(f'{k}={v!r}' for k, v in step.arguments.items())})")
+            for g in step.expects:
+                print(f"       gate {g.get('check')} {g.get('path') or g.get('paths') or ''} {g.get('value', '')}")
         return
     run = run_study(study, on_event=on_event)
     if args.out:
         paths = write_outputs(run, args.out)
         print(f"\n  Report saved to {paths['report.md']}")
+        for g in run.gates:
+            print(f"  gate {g['step']} {g['check']}: {'passed' if g['passed'] else 'FAILED'}, {g.get('detail', '')}")
+        if run.stop_reason:
+            print(f"  stopped at {run.stopped_at}: {run.stop_reason}")
     else:
         print(run.to_markdown())
     if not run.ok:
         sys.exit(1)
+
+
+def _format_event(event: dict) -> str:
+    """One line for a runner or team event ({role, step, event, detail})."""
+    if not isinstance(event, dict):
+        return str(event)
+    step = f" {event['step']}" if event.get("step") else ""
+    return f"{event.get('role', '')}{step}: {event.get('event', '')} {event.get('detail', '')}".strip()
+
+
+def cmd_playbooks(args: argparse.Namespace) -> None:
+    """`aquascope playbooks [list | show ID]`: the method chains `aquascope solve` follows (#307)."""
+    from aquascope import playbooks as pbk
+
+    if getattr(args, "playbooks_cmd", None) == "show":
+        try:
+            pb = pbk.load(args.id)
+        except pbk.PlaybookError as exc:
+            logger.error("%s", exc)
+            sys.exit(1)
+        print(f"{pb.id}: {pb.title}")
+        print(f"  problem: {pb.problem}")
+        if pb.description:
+            print(f"  {pb.description}")
+        if pb.intake:
+            print("  intake:")
+            for f in pb.intake:
+                kind = f.type + (" " + " | ".join(str(o) for o in f.options) if f.options else "")
+                print(f"    {f.name} ({kind}; default {f.default!r}): {f.label or ''}")
+        print("  branches (first match wins):")
+        for br in pb.branches:
+            cond = " and ".join(f"{c.path} {c.op} {c.value!r}" for c in br.when) or "otherwise"
+            print(f"    {br.id}: when {cond}")
+            for s in br.steps:
+                gates = ", ".join(str(g.get("check")) for g in s.expects)
+                extra = f"  [gates: {gates}]" if gates else ""
+                opt = " (optional)" if s.optional else ""
+                print(f"      {s.id} {s.tool}{opt}{extra}")
+        if pb.declines:
+            print("  declines:")
+            for d in pb.declines:
+                print(f"    - {d.say}")
+        if pb.caveats:
+            print("  caveats:")
+            for c in pb.caveats:
+                print(f"    - {c if isinstance(c, str) else c.say}")
+        if pb.citations:
+            print("  citations:")
+            for c in pb.citations:
+                print(f"    - {c}")
+        return
+    rows = pbk.list_playbooks()
+    for r in rows:
+        if r.get("error"):
+            print(f"  {r['id']:<22} (broken: {r['error']})")
+            continue
+        print(f"  {r['id']:<22} {r['title']}  (branches: {', '.join(r['branches'])})")
+    print(
+        f"\n  {len(rows)} playbook(s); `aquascope playbooks show ID` prints one, "
+        '`aquascope solve "PROBLEM" --lat LAT --lon LON` runs one.'
+    )
 
 
 def cmd_ingest(args: argparse.Namespace) -> None:
@@ -711,20 +808,33 @@ def cmd_ingest(args: argparse.Namespace) -> None:
             logger.warning("LLM mapping unavailable (%s); using heuristics", exc)
     try:
         result = ingest(
-            args.file, variable=args.variable, date_column=args.date_column, value_column=args.value_column,
-            unit=args.unit, station=args.station, sheet=args.sheet, llm_client=client, llm_model=model,
+            args.file,
+            variable=args.variable,
+            date_column=args.date_column,
+            value_column=args.value_column,
+            unit=args.unit,
+            station=args.station,
+            sheet=args.sheet,
+            llm_client=client,
+            llm_model=model,
             description=args.describe or "",
         )
     except (ValueError, FileNotFoundError) as exc:
         logger.error("%s", exc)
         sys.exit(1)
     m, q = result["mapping"], result["qa"]
-    print(f"  mapping  : {m['datetime_column']} + {m['value_column']} -> {m['variable']} [{m['unit']}] "
-          f"(x{m['to_si_factor']}, {m['method']}, confidence {m['confidence']:.0%})")
-    print(f"  values   : {q['n_values']:,} kept of {q['n_rows_in']:,} rows; {q['start']} -> {q['end']}; "
-          f"coverage {q['coverage_pct']}%")
-    print(f"  dropped  : {q['n_duplicates_dropped']} duplicates, {q['n_sentinels_dropped']} sentinels; "
-          f"flagged {q['n_negative']} negative, {q['n_spikes_flagged']} spikes")
+    print(
+        f"  mapping  : {m['datetime_column']} + {m['value_column']} -> {m['variable']} [{m['unit']}] "
+        f"(x{m['to_si_factor']}, {m['method']}, confidence {m['confidence']:.0%})"
+    )
+    print(
+        f"  values   : {q['n_values']:,} kept of {q['n_rows_in']:,} rows; {q['start']} -> {q['end']}; "
+        f"coverage {q['coverage_pct']}%"
+    )
+    print(
+        f"  dropped  : {q['n_duplicates_dropped']} duplicates, {q['n_sentinels_dropped']} sentinels; "
+        f"flagged {q['n_negative']} negative, {q['n_spikes_flagged']} spikes"
+    )
     for w in q["warnings"]:
         print(f"  warning  : {w}")
     stem = args.out or str(Path(args.file).with_suffix("")) + "_clean"
@@ -774,12 +884,16 @@ def cmd_basins(args: argparse.Namespace) -> None:
         if res.get("error"):
             print(f"  {res['error']}")
             sys.exit(1)
-        print(f"  {res['k']} of {res['n_candidates']} gauged basins, method {res['method']}, "
-              f"features {', '.join(res['features_used'])}")
+        print(
+            f"  {res['k']} of {res['n_candidates']} gauged basins, method {res['method']}, "
+            f"features {', '.join(res['features_used'])}"
+        )
         for i, st in enumerate(res["stations"], 1):
             dist = f"{st['distance_km']:,.0f} km" if st.get("distance_km") is not None else ""
-            print(f"  {i:>2}. {st['source']:<20} {st['station_id']:<40} {(st.get('name') or '')[:38]:<38} "
-                  f"area {st['up_area_km2']:>9,.0f} km2  score {st['score']:.3f} {dist}")
+            print(
+                f"  {i:>2}. {st['source']:<20} {st['station_id']:<40} {(st.get('name') or '')[:38]:<38} "
+                f"area {st['up_area_km2']:>9,.0f} km2  score {st['score']:.3f} {dist}"
+            )
         return
     if args.basins_cmd == "regionalize":
         from aquascope.archive.regionalize import regionalize_point
@@ -792,8 +906,10 @@ def cmd_basins(args: argparse.Namespace) -> None:
             print(f"  {res['error']}")
             sys.exit(1)
         est = res.get("estimates", {})
-        print(f"  {len(est)} signatures from {res.get('n_donors_available', 0):,} donors, method {res['method']}"
-              + (f", k={res['similarity']['k']}" if "similarity" in res else ""))
+        print(
+            f"  {len(est)} signatures from {res.get('n_donors_available', 0):,} donors, method {res['method']}"
+            + (f", k={res['similarity']['k']}" if "similarity" in res else "")
+        )
         skill = (res.get("skill") or {}).get("by_signature", {})
         for name, e in est.items():
             sk = skill.get(name) or {}
@@ -848,8 +964,10 @@ def cmd_basins(args: argparse.Namespace) -> None:
         print(f"  {res['error']}")
         sys.exit(1)
     sb = res["sub_basin"]
-    print(f"  Sub-basin {sb['hybas_id']} (Pfafstetter {sb.get('pfaf_id')}), {sb.get('sub_area', 0):,.1f} km², "
-          f"upstream area {sb.get('up_area', 0):,.1f} km²")
+    print(
+        f"  Sub-basin {sb['hybas_id']} (Pfafstetter {sb.get('pfaf_id')}), {sb.get('sub_area', 0):,.1f} km², "
+        f"upstream area {sb.get('up_area', 0):,.1f} km²"
+    )
     print(f"  {res['upstream']['note']}")
     attrs = res.get("attributes", {})
     for key, v in attrs.items():
@@ -858,13 +976,157 @@ def cmd_basins(args: argparse.Namespace) -> None:
     print(f"\n  {res['attribution']}")
 
 
+def _format_assessment(res: dict, *, radius_km: float) -> str:
+    """The assess_site result as a short table: defensible first, one line per method with its reason."""
+    from aquascope.methods import DEFENSIBLE, MARGINAL, NOT_DEFENSIBLE
+
+    ctx = res.get("context") or {}
+    catch = res.get("catchment") or {}
+    stations = res.get("stations") or []
+    rows = res.get("sufficiency") or []
+    head = [
+        f"{res['point']['lat']:.4f}, {res['point']['lon']:.4f}",
+        f"{len(stations)} gauge{'' if len(stations) == 1 else 's'} within {radius_km:g} km",
+    ]
+    area = ctx.get("area_km2")
+    if area:
+        head.append(f"catchment {area:,.0f} km²" + (" (caller)" if catch.get("source") == "caller" else ""))
+    elif catch.get("error"):
+        head.append("catchment unknown")
+    if ctx.get("donors") is not None:
+        head.append(f"{ctx['donors']} donors")
+    lines = ["  " + "  ·  ".join(head)]
+    years = ctx.get("years_by_variable") or {}
+    if years:
+        for var, yr in years.items():
+            st = next((s for s in stations if var in (s.get("variables") or []) and s.get("years") == yr), None)
+            tail = f", {st.get('name') or st['station_id']} ({st['source']}/{st['station_id']})" if st else ""
+            lines.append(f"  {var.replace('_', ' ')}: {yr:g} yr{tail}")
+    else:
+        lines.append("  no gauge record within reach: ungauged")
+    width = max((len(r["label"]) for r in rows), default=20)
+    for status, title in ((DEFENSIBLE, "defensible"), (MARGINAL, "marginal"), (NOT_DEFENSIBLE, "not defensible")):
+        block = [r for r in rows if r["status"] == status]
+        if not block:
+            continue
+        lines.append(f"\n  {title}")
+        for r in block:
+            lines.append(f"    {r['label']:<{width}}  {r['reason']}")
+    if res.get("notes"):
+        lines.append("\n  notes")
+        lines.extend(f"    - {n}" for n in res["notes"])
+    return "\n".join(lines)
+
+
+def cmd_assess(args: argparse.Namespace) -> None:
+    """`aquascope assess LAT LON`: what can be answered at a place, from the catalog and BasinATLAS, no agency call."""
+    from aquascope.explore import assess_site
+
+    res = assess_site(
+        args.lat, args.lon, radius_km=args.radius_km, problem=args.problem, return_period=args.return_period
+    )
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return
+    print(_format_assessment(res, radius_km=args.radius_km))
+
+
 def cmd_gym(args: argparse.Namespace) -> None:
-    """`aquascope gym basins|run|leaderboard`: HydroGym, the calibration environment over real basins."""
+    """`aquascope gym basins|run|leaderboard`: HydroGym, the calibration environment over real basins (Phase 0),
+    and `aquascope gym tasks|bench|leaderboard FILES`: the playbook benchmark (Phase 1)."""
     from aquascope import gym as hg
 
+    def say(msg: str) -> None:
+        if not getattr(args, "quiet", False):
+            print(f"  · {msg}", file=sys.stderr)
+
+    if args.gym_cmd == "tasks":
+        from aquascope.gym import tasks as gt
+        from aquascope.playbooks import list_playbooks
+
+        pbs = args.playbook or [p["id"] for p in list_playbooks() if "error" not in p]
+        probes = None if args.probes == "all" else int(args.probes)
+        n_probes = sum(len(gt.decline_probes(p)) for p in pbs) if probes is None else probes
+        per_site = max(1, len(pbs) + n_probes)
+        sites = gt.suggest_sites(
+            -(-args.n // per_site),
+            seed=args.seed,
+            sources=args.source or None,
+            ungauged_share=args.ungauged_share,
+            on_land=None if args.no_check_land else gt.on_land_basinatlas,
+        )
+        skipped: list[dict] = []
+        tasks = gt.tasks_from_playbooks(sites, pbs, probes=probes, on_event=say, skipped=skipped)[: args.n]
+        gt.write_tasks(tasks, args.out)
+        hard = sum(1 for t in tasks if t.unsolvable)
+        test = sum(1 for t in tasks if t.split == "test")
+        n_sites = len({gt.site_key(t.site) for t in tasks})
+        print(f"  {len(tasks)} tasks from {n_sites} sites ({hard} unsolvable, {test} held out as test) -> {args.out}")
+        if skipped:
+            sites_lost = sum(1 for e in skipped if "playbook" not in e)
+            print(
+                f"  skipped: {sites_lost} of {len(sites)} sites (reconnaissance unavailable), "
+                f"{len(skipped) - sites_lost} tasks (no key):"
+            )
+            for entry in skipped:
+                what = f" {entry['playbook']}" if entry.get("playbook") else ""
+                print(f"    {gt.site_key(entry['site'])}{what}: {entry['error'][:100]}")
+        counts: dict[str, int] = {}
+        for t in tasks:
+            key = f"{t.playbook}/{'declined' if t.unsolvable else t.expected.get('branch')}"
+            counts[key] = counts.get(key, 0) + 1
+        for key, n in sorted(counts.items()):
+            print(f"    {key:<36} {n}")
+        return
+
+    if args.gym_cmd == "bench":
+        from aquascope.gym import bench as gb
+
+        results = gb.run_bench(
+            args.tasks,
+            args.agent,
+            provider=args.provider,
+            model=args.model,
+            api_key=args.api_key,
+            base_url=args.base_url,
+            limit=args.limit,
+            unsolvable=args.unsolvable,
+            task_ids=args.task or None,
+            timeout=args.timeout or None,
+            out=args.out,
+            max_steps=args.max_steps,
+            context_chars=args.context_chars,
+            on_event=say,
+            spread=args.spread,
+            resume=args.resume,
+        )
+        if args.json:
+            print(json.dumps(gb.summarize(results), indent=2, default=str))
+            return
+        print(gb.leaderboard(results, title=f"aquascope gym bench: {args.agent}"))
+        if args.out:
+            print(f"  -> {args.out}")
+        return
+
+    if args.gym_cmd == "leaderboard" and args.results:
+        from aquascope.gym import bench as gb
+
+        results = gb.load_results(args.results)
+        if args.json:
+            print(json.dumps(gb.summarize(results), indent=2, default=str))
+            return
+        print(gb.leaderboard(results, out=args.out, title=args.title))
+        if args.out:
+            print(f"  -> {args.out}")
+        return
+
     if args.gym_cmd == "basins":
-        rows = hg.suggest_basins(args.n, sources=args.source or None, min_years=args.min_years,
-                                 max_snow_pct=None if args.allow_snow else 20.0)
+        rows = hg.suggest_basins(
+            args.n,
+            sources=args.source or None,
+            min_years=args.min_years,
+            max_snow_pct=None if args.allow_snow else 20.0,
+        )
         if args.json:
             print(json.dumps(rows, indent=2, default=str))
             return
@@ -874,8 +1136,10 @@ def cmd_gym(args: argparse.Namespace) -> None:
         print(f"  {len(rows)} basins with long archived discharge and a catchment area (use SOURCE/ID with `gym run`)")
         for r in rows:
             snow = f"snow {r['snow_cover_pct']:.0f} %" if r.get("snow_cover_pct") is not None else ""
-            print(f"  {r['source']}/{r['station_id']:<42} {r['area_km2']:>9,.0f} km2  {r['n_years']:>4.0f} yr  "
-                  f"q {r['q_mean_mm']:.2f} mm/d  RR {r['runoff_ratio'] if r['runoff_ratio'] is not None else float('nan'):.2f}  {snow}")
+            print(
+                f"  {r['source']}/{r['station_id']:<42} {r['area_km2']:>9,.0f} km2  {r['n_years']:>4.0f} yr  "
+                f"q {r['q_mean_mm']:.2f} mm/d  RR {r['runoff_ratio'] if r['runoff_ratio'] is not None else float('nan'):.2f}  {snow}"
+            )
         return
 
     def _basins():
@@ -889,8 +1153,9 @@ def cmd_gym(args: argparse.Namespace) -> None:
 
     if args.gym_cmd == "leaderboard":
         basins = _basins()
-        table = hg.run_leaderboard(basins, args.agent or None, objective=args.objective, max_steps=args.steps,
-                                   seeds=tuple(range(args.seeds)))
+        table = hg.run_leaderboard(
+            basins, args.agent or None, objective=args.objective, max_steps=args.steps, seeds=tuple(range(args.seeds))
+        )
         if args.json:
             print(table.to_json(orient="records", indent=2))
             return
@@ -910,8 +1175,10 @@ def cmd_gym(args: argparse.Namespace) -> None:
         print(json.dumps({**res, "history": hg.episode_table(env).to_dict("records")}, indent=2, default=str))
         return
     print(env.render())
-    print(f"  {res['agent']}: {res['steps']} steps, {res.get('simulator_calls', res['steps'])} simulator calls, "
-          f"{res['seconds']} s")
+    print(
+        f"  {res['agent']}: {res['steps']} steps, {res.get('simulator_calls', res['steps'])} simulator calls, "
+        f"{res['seconds']} s"
+    )
     val = res.get("validation") or {}
     print(f"  validation: NSE {val.get('nse')}, KGE {val.get('kge')}, PBIAS {val.get('pbias')}")
 
@@ -935,20 +1202,37 @@ def cmd_caravan(args: argparse.Namespace) -> None:
 
     try:
         report = caravan.export_caravan(
-            args.source, args.out, station_ids=args.station or None, max_stations=args.max_stations,
-            min_years=args.min_years, start=args.start, end=args.end, prefix=args.prefix,
-            forcing=not args.no_forcing, forcing_models=None if args.era5 else "best_match",
-            fetch_missing=args.fetch_missing, write_netcdf=args.netcdf, pause=args.pause, on_event=say,
+            args.source,
+            args.out,
+            station_ids=args.station or None,
+            max_stations=args.max_stations,
+            min_years=args.min_years,
+            start=args.start,
+            end=args.end,
+            prefix=args.prefix,
+            forcing=not args.no_forcing,
+            forcing_models=None if args.era5 else "best_match",
+            fetch_missing=args.fetch_missing,
+            write_netcdf=args.netcdf,
+            pause=args.pause,
+            on_event=say,
         )
     except ValueError as exc:
         logger.error("%s", exc)
         sys.exit(2)
     for g in report.gauges:
-        status = f"{g.n_days:>6} days, {g.n_streamflow:>6} with flow, area {g.area_km2:,.0f} km2 ({g.area_source})" \
-            if g.ok else f"skipped: {g.error}"
+        status = (
+            f"{g.n_days:>6} days, {g.n_streamflow:>6} with flow, area {g.area_km2:,.0f} km2 ({g.area_source})"
+            if g.ok
+            else f"skipped: {g.error}"
+        )
         print(f"  {g.gauge_id:<48} {status}")
     print(f"\n  {report.n_ok}/{len(report.gauges)} gauges written under {report.out_dir} (prefix {report.prefix})")
-    res = caravan.validate_caravan(args.out, report.prefix) if report.n_ok else {"ok": False, "problems": ["nothing written"]}
+    res = (
+        caravan.validate_caravan(args.out, report.prefix)
+        if report.n_ok
+        else {"ok": False, "problems": ["nothing written"]}
+    )
     print(f"  validation: {'OK' if res['ok'] else '; '.join(res['problems'][:5])}")
     if report.n_ok == 0:
         sys.exit(1)
@@ -957,11 +1241,16 @@ def cmd_caravan(args: argparse.Namespace) -> None:
 def cmd_completion(args: argparse.Namespace) -> None:
     """Print the shell activation line for tab-completion."""
     from argcomplete.shell_integration import shellcode
+
     print(shellcode(["aquascope"], shell=args.shell))
 
 
 def cmd_solve(args: argparse.Namespace) -> None:
-    """Solve a water challenge using NL description (agent mode)."""
+    """`aquascope solve`: a problem at a point through the plan-first team (with --lat/--lon), or the legacy
+    challenge agent over a data file."""
+    if args.lat is not None or args.lon is not None or args.playbook:
+        cmd_solve_team(args)
+        return
     from aquascope.ai_engine.agent import HydroAgent
 
     agent = HydroAgent(default_model=args.model)
@@ -979,6 +1268,101 @@ def cmd_solve(args: argparse.Namespace) -> None:
     result = agent.solve(args.query, data=data)
     explanation = agent.explain(result)
     print(explanation)
+
+
+def _parse_intake(pairs: list[str] | None) -> dict:
+    out: dict = {}
+    for pair in pairs or []:
+        key, sep, value = pair.partition("=")
+        if not sep or not key.strip():
+            raise ValueError(f"--intake expects KEY=VALUE, got {pair!r}")
+        out[key.strip()] = value.strip()
+    return out
+
+
+def cmd_solve_team(args: argparse.Namespace) -> None:
+    """The plan-first Analyst (#308): recon, plan, your review, execution with gates, report."""
+    from aquascope.ai_engine.team import solve
+
+    if args.lat is None or args.lon is None:
+        logger.error("solve needs both --lat and --lon (or neither, for the legacy challenge agent).")
+        sys.exit(1)
+    try:
+        intake = _parse_intake(args.intake)
+    except ValueError as exc:
+        logger.error("%s", exc)
+        sys.exit(1)
+
+    def on_event(event: dict) -> None:
+        if not args.quiet:
+            print(f"  · {_format_event(event)}", file=sys.stderr)
+
+    def review(study):
+        plan = study.plan or {}
+        print(f"\nPlan: playbook {plan.get('playbook')}, branch {plan.get('branch')}, {len(study.steps)} step(s)")
+        if plan.get("rationale"):
+            print(f"  {plan['rationale']}")
+        for n in (plan.get("recon_notes") or []) + (plan.get("notes") or []):
+            print(f"  note: {n}")
+        for i, step in enumerate(study.steps, 1):
+            print(f"  {i}. {step.tool}({', '.join(f'{k}={v!r}' for k, v in step.arguments.items())})")
+            if step.rationale:
+                print(f"     {step.rationale}")
+            for g in step.expects:
+                where = g.get("path") or ", ".join(g.get("paths") or [])
+                value = f" {g['value']}" if g.get("value") is not None else ""
+                print(f"     gate {g.get('check')}{value} on {where}")
+            if isinstance(step.fallback, dict) and step.fallback.get("step"):
+                print(f"     fallback: {step.fallback['step'].get('tool')}")
+        if plan.get("caveats"):
+            print(f"  {len(plan['caveats'])} caveat(s) will be printed verbatim in the report.")
+        if args.yes:
+            return study
+        if not sys.stdin.isatty():
+            print("  Not a terminal: pass --yes to run the plan.", file=sys.stderr)
+            return None
+        try:
+            answer = input("Run this plan? [y/N] ")
+        except EOFError:
+            return None
+        return study if answer.strip().lower() in ("y", "yes") else None
+
+    try:
+        result = solve(
+            args.query,
+            lat=args.lat,
+            lon=args.lon,
+            playbook=args.playbook,
+            intake=intake,
+            provider=args.provider,
+            model=args.model,
+            api_key=args.api_key,
+            base_url=args.base_url,
+            review=review,
+            on_event=on_event,
+        )
+    except (RuntimeError, ValueError, ImportError) as exc:
+        logger.error("%s", exc)
+        sys.exit(1)
+    md = result.to_markdown()
+    if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.out).write_text(md, encoding="utf-8")
+        print(f"\n  Report saved to {args.out}")
+        if result.answer:
+            print(result.answer)
+    else:
+        print(md)
+    if args.study and result.study.steps:
+        Path(args.study).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.study).write_text(result.study_yaml, encoding="utf-8")
+        print(f"  Study saved to {args.study}; re-run it with `aquascope run {args.study}`")
+    if result.declined:
+        print(f"\n  Declined: {result.declined_reason}", file=sys.stderr)
+    elif result.not_established and not args.quiet:
+        print("\n  What this answer does not establish:", file=sys.stderr)
+        for line in result.not_established:
+            print(f"   · {line}", file=sys.stderr)
 
 
 def cmd_forecast(args: argparse.Namespace) -> None:
@@ -1234,12 +1618,13 @@ def cmd_groundwater(args: argparse.Namespace) -> None:
 
     if analysis == "trend":
         from aquascope.groundwater.wells import trend_detection
+        from aquascope.utils.formatting import format_p_value
 
         result = trend_detection(levels)
         print("\nWell Trend Analysis (Mann-Kendall)")
         print(f"  Trend: {result.trend}")
         print(f"  Slope: {result.slope:.6f} per time-step")
-        print(f"  p-value: {result.p_value:.4f}")
+        print(f"  p-value: {format_p_value(result.p_value)}")
     elif analysis == "recession":
         from aquascope.groundwater.wells import recession_analysis
 
@@ -1493,9 +1878,7 @@ def main() -> None:
     from aquascope.registry import source_keys
     from aquascope.schemas.station import VARIABLES
 
-    parser = argparse.ArgumentParser(
-        description="AquaScope — Water data collection, analysis & AI research recomm..."
-    )
+    parser = argparse.ArgumentParser(description="AquaScope — Water data collection, analysis & AI research recomm...")
     sub = parser.add_subparsers(dest="command")
 
     # — collect ——————————————————————————————
@@ -1526,12 +1909,14 @@ def main() -> None:
     p_collect.add_argument("--measure", default=None, help="Measure identifier (UKEA)")
     p_collect.add_argument("--variables", default=None, help="Comma-separated variable IDs (AQUASTAT)")
     p_collect.add_argument(
-      "--bbox",
-      default=None,
-      help="Bounding box west,south,east,north (WaPOR), or min_lon, min_lat, max_lon, max_lat (USGS/UKEA)"
+        "--bbox",
+        default=None,
+        help="Bounding box west,south,east,north (WaPOR), or min_lon, min_lat, max_lon, max_lat (USGS/UKEA)",
     )
     p_collect.add_argument(
-        "--mode", default=None, help="Collector mode (openmeteo: weather/forecast/flood; grdc: in_situ/satellite)"
+        "--mode",
+        default=None,
+        help="Collector mode (openmeteo: weather/forecast/flood; grdc: in_situ/satellite; brazil_ana: telemetric/historical)",
     )
     p_collect.add_argument("--variable", default=None, help="Variable code for the selected collector (WaPOR)")
     p_collect.add_argument("--lid", default=None, help="A unique 5-character alphanumeric code e.g. ANAW1 (NOAA_NWPS)")
@@ -1599,8 +1984,9 @@ def main() -> None:
         "run",
         help="Run a study file (the steps behind an answer, reproducibly), or a methodology pipeline on data",
     )
-    p_run.add_argument("study", nargs="?", default=None,
-                       help="A study.yaml from `aquascope ask --study` or written by hand (#54)")
+    p_run.add_argument(
+        "study", nargs="?", default=None, help="A study.yaml from `aquascope ask --study` or written by hand (#54)"
+    )
     p_run.add_argument("--method", default=None, help="Pipeline method ID (use list-methods to see available)")
     p_run.add_argument("--file", default=None, help="Path to JSON or CSV data file")
     p_run.add_argument("--config", default=None, help="Pipeline config as JSON string")
@@ -1628,7 +2014,8 @@ def main() -> None:
         help="Source to search (repeatable). Default: every source with a station catalog",
     )
     p_stations.add_argument(
-        "--bbox", default=None,
+        "--bbox",
+        default=None,
         help="Bounding box west,south,east,north (WGS84). Write --bbox=-77,38,-76,39 when it starts with a minus",
     )
     p_stations.add_argument(
@@ -1644,42 +2031,68 @@ def main() -> None:
 
     # ── harvest ──────────────────────────────────────────────────────
     p_harvest = sub.add_parser("harvest", help="Harvest catalogs into GeoParquet for the open archive (#188)")
-    p_harvest.add_argument("what", choices=["stations", "obs", "bundles"],
-                           help="stations: the catalog; obs: daily series per station; bundles: one Parquet per "
-                                "variable and source rolled up from obs/")
+    p_harvest.add_argument(
+        "what",
+        choices=["stations", "obs", "bundles"],
+        help="stations: the catalog; obs: daily series per station; bundles: one Parquet per "
+        "variable and source rolled up from obs/",
+    )
     p_harvest.add_argument("--out", default="archive", help="Output folder (default: ./archive)")
     p_harvest.add_argument("--source", action="append", choices=source_keys(), help="Restrict to a source (repeatable)")
     p_harvest.add_argument("--max-items", type=int, default=None, help="stations: cap per source (for smoke tests)")
-    p_harvest.add_argument("--variable", default=None, dest="variable",
-                           help="obs: harvest only this variable (default: every harvestable variable per source)")
-    p_harvest.add_argument("--variables", action="append", dest="variable_list", metavar="VAR",
-                           help="bundles: restrict to these variables (repeatable)")
-    p_harvest.add_argument("--years", type=int, default=40, help="obs: how far back to ask (default 40)")
+    p_harvest.add_argument(
+        "--variable",
+        default=None,
+        dest="variable",
+        help="obs: harvest only this variable (default: every harvestable variable per source)",
+    )
+    p_harvest.add_argument(
+        "--variables",
+        action="append",
+        dest="variable_list",
+        metavar="VAR",
+        help="bundles: restrict to these variables (repeatable)",
+    )
+    p_harvest.add_argument(
+        "--years",
+        type=int,
+        default=None,
+        help="obs: cap the record asked for, in years (default: the full record, from the catalog's first date)",
+    )
     p_harvest.add_argument("--max-stations", type=int, default=100, help="obs: stations per source per run")
     p_harvest.add_argument("--refresh-days", type=int, default=30, help="obs: re-harvest a station older than this")
     p_harvest.add_argument("--station", action="append", help="obs: only these station ids (repeatable)")
-    p_harvest.add_argument("--sync-from", default=None, metavar="REPO_ID",
-                           help="obs: download the existing obs/ tree from this dataset first (incremental runs)")
+    p_harvest.add_argument(
+        "--sync-from",
+        default=None,
+        metavar="REPO_ID",
+        help="obs: download the existing obs/ tree from this dataset first (incremental runs)",
+    )
     p_harvest.add_argument("--api-key", default=None)
     p_harvest.add_argument("--workers", type=int, default=4)
     p_harvest.add_argument("--no-geojson", action="store_true", help="Skip stations.geojson")
-    p_harvest.add_argument("--publish", default=None, metavar="REPO_ID",
-                           help="Upload the folder to this Hugging Face dataset (needs HF_TOKEN)")
+    p_harvest.add_argument(
+        "--publish",
+        default=None,
+        metavar="REPO_ID",
+        help="Upload the folder to this Hugging Face dataset (needs HF_TOKEN)",
+    )
 
     # ── ask ──────────────────────────────────────────────────────────
+    from aquascope.ai_engine.providers import provider_ids  # light: no pandas behind it
+
     p_ask = sub.add_parser("ask", help="Ask a water question in plain language; get a cited answer from real data")
     p_ask.add_argument("question")
-    p_ask.add_argument("--provider", choices=["openai", "groq", "huggingface", "mistral", "openrouter", "ollama"],
-                       default=None)
+    p_ask.add_argument("--provider", choices=provider_ids(), default=None)
     p_ask.add_argument("--model", default=None)
     p_ask.add_argument("--api-key", default=None)
-    p_ask.add_argument("--base-url", default=None, help="Any OpenAI-compatible endpoint")
+    p_ask.add_argument("--base-url", default=None, help="Any OpenAI-compatible endpoint (or Anthropic's)")
     p_ask.add_argument("--max-steps", type=int, default=8, help="Tool-call rounds allowed (default 8)")
     p_ask.add_argument("--out", "-o", default=None, help="Save the Markdown report here")
     p_ask.add_argument("--quiet", "-q", action="store_true", help="Do not print tool calls as they happen")
-    p_ask.add_argument("--study", default=None,
-                       help="Write the steps behind the answer here, to re-run with `aquascope run`")
-
+    p_ask.add_argument(
+        "--study", default=None, help="Write the steps behind the answer here, to re-run with `aquascope run`"
+    )
 
     # ── ingest ───────────────────────────────────────────────────────
     p_ingest = sub.add_parser("ingest", help="Map + QA any CSV/Excel export into a clean daily series with a report")
@@ -1692,8 +2105,7 @@ def main() -> None:
     p_ingest.add_argument("--sheet", default=None, help="Excel sheet name or index")
     p_ingest.add_argument("--describe", default=None, help="A sentence about the file (helps the LLM mapping)")
     p_ingest.add_argument("--llm", action="store_true", help="Let a configured LLM propose the column mapping")
-    p_ingest.add_argument("--provider", choices=["openai", "groq", "huggingface", "mistral", "openrouter", "ollama"],
-                          default=None)
+    p_ingest.add_argument("--provider", choices=provider_ids(), default=None)
     p_ingest.add_argument("--model", default=None)
     p_ingest.add_argument("--api-key", default=None)
     p_ingest.add_argument("--out", "-o", default=None, help="Output stem (default: <file>_clean)")
@@ -1707,10 +2119,14 @@ def main() -> None:
     p_bat.add_argument("lon", type=float)
     p_bat.add_argument("--local", action="store_true", help="Only the level-12 sub-basin containing the point")
     p_bat.add_argument("--json", action="store_true")
-    p_bsim = basins_sub.add_parser("similar", help="Gauged basins whose catchments most resemble a point's or a station's")
+    p_bsim = basins_sub.add_parser(
+        "similar", help="Gauged basins whose catchments most resemble a point's or a station's"
+    )
     p_bsim.add_argument("lat", type=float, nargs="?", default=None)
     p_bsim.add_argument("lon", type=float, nargs="?", default=None)
-    p_bsim.add_argument("--station", default=None, metavar="SOURCE/ID", help="Use a station's own catchment as the target")
+    p_bsim.add_argument(
+        "--station", default=None, metavar="SOURCE/ID", help="Use a station's own catchment as the target"
+    )
     p_bsim.add_argument("--k", type=int, default=10)
     p_bsim.add_argument("--method", choices=["similarity", "proximity", "combined"], default="combined")
     p_bsim.add_argument("--source", action="append", help="Restrict donors to these sources (repeatable)")
@@ -1725,12 +2141,16 @@ def main() -> None:
     p_breg.add_argument("--k", type=int, default=10)
     p_breg.add_argument("--method", choices=["similarity", "regression", "both"], default="similarity")
     p_breg.add_argument("--json", action="store_true")
-    p_bsig = basins_sub.add_parser("signatures", help="Build basins/station_signatures.parquet from the discharge bundles")
+    p_bsig = basins_sub.add_parser(
+        "signatures", help="Build basins/station_signatures.parquet from the discharge bundles"
+    )
     p_bsig.add_argument("--archive", default="archive", help="Local archive folder holding obs/discharge/*.parquet")
     p_bsig.add_argument("--catchments", default=None, help="Local station_catchments.parquet (default: from the Hub)")
     p_bsig.add_argument("--out", default="archive/basins/station_signatures.parquet")
     p_bsig.add_argument("--min-years", type=float, default=10.0)
-    p_bloo = basins_sub.add_parser("loo", help="Leave-one-out regionalisation skill -> basins/regionalization_skill.json")
+    p_bloo = basins_sub.add_parser(
+        "loo", help="Leave-one-out regionalisation skill -> basins/regionalization_skill.json"
+    )
     p_bloo.add_argument("--signatures", default=None, help="Local station_signatures.parquet (default: from the Hub)")
     p_bloo.add_argument("--catchments", default=None, help="Local station_catchments.parquet (default: from the Hub)")
     p_bloo.add_argument("--out", default="archive/basins/regionalization_skill.json")
@@ -1746,6 +2166,23 @@ def main() -> None:
     p_bbuild.add_argument("--fgb", action="store_true", help="Also write lev12.fgb from Python (needs memory)")
 
     # ── gym (HydroGym) ───────────────────────────────────────────────
+    from aquascope.methods import METHODS as _METHODS
+
+    p_assess = sub.add_parser(
+        "assess", help="What can be answered at a place: gauges in reach, catchment, which methods the record supports"
+    )
+    p_assess.add_argument("lat", type=float)
+    p_assess.add_argument("lon", type=float, help="Longitude (a negative value is fine as a positional)")
+    p_assess.add_argument(
+        "--problem",
+        choices=sorted({p for m in _METHODS.values() for p in m.problems}),
+        default=None,
+        help="Only the methods for this problem kind",
+    )
+    p_assess.add_argument("--radius-km", type=float, default=50.0, help="How far a gauge may be to count (default 50)")
+    p_assess.add_argument("--return-period", type=float, default=None, help="The T (years) the question asks for")
+    p_assess.add_argument("--json", action="store_true")
+
     p_gym = sub.add_parser("gym", help="HydroGym: a gym-style calibration environment over real basins (#175)")
     gym_sub = p_gym.add_subparsers(dest="gym_cmd", required=True)
     p_gb = gym_sub.add_parser("basins", help="Suggest gauged basins from the Archive that make good tasks")
@@ -1754,23 +2191,89 @@ def main() -> None:
     p_gb.add_argument("--min-years", type=float, default=15.0)
     p_gb.add_argument("--allow-snow", action="store_true", help="Keep snowy catchments (GR4J has no snow routine)")
     p_gb.add_argument("--json", action="store_true")
-    for name, help_ in (("run", "Play one baseline agent on a basin"),
-                        ("leaderboard", "Play the baselines on one or more basins, one row per run")):
+    for name, help_ in (
+        ("run", "Play one baseline agent on a basin"),
+        ("leaderboard", "Play the baselines on one or more basins, one row per run"),
+    ):
         p_g = gym_sub.add_parser(name, help=help_)
         p_g.add_argument("--basin", action="append", metavar="SOURCE/ID", help="Archive station (repeatable)")
         p_g.add_argument("--synthetic", action="store_true", help="Use synthetic GR4J basins (no network)")
         p_g.add_argument("--n-synthetic", type=int, default=1)
-        p_g.add_argument("--agent", action="append", choices=["random_search", "nelder_mead", "differential_evolution"],
-                         help="Baseline agent(s); default: differential_evolution for run, all three for leaderboard")
+        p_g.add_argument(
+            "--agent",
+            action="append",
+            choices=["random_search", "nelder_mead", "differential_evolution"],
+            help="Baseline agent(s); default: differential_evolution for run, all three for leaderboard",
+        )
         p_g.add_argument("--objective", choices=["nse", "kge", "log_nse"], default="nse")
         p_g.add_argument("--steps", type=int, default=30, help="Step budget per episode")
         p_g.add_argument("--seed", type=int, default=0)
         p_g.add_argument("--seeds", type=int, default=1, help="leaderboard: number of seeds per agent and basin")
-        p_g.add_argument("--out", default=None, help="leaderboard: write the table as CSV")
+        p_g.add_argument("--out", default=None, help="leaderboard: write the table (CSV; Markdown for bench results)")
         p_g.add_argument("--json", action="store_true")
+    p_g_lb = gym_sub.choices["leaderboard"]
+    p_g_lb.add_argument(
+        "results",
+        nargs="*",
+        metavar="RESULTS.jsonl",
+        help="Bench result files (Phase 1): render their leaderboard instead of playing the baselines",
+    )
+    p_g_lb.add_argument("--title", default=None, help="Heading of the Markdown leaderboard")
+    p_gt = gym_sub.add_parser("tasks", help="Generate benchmark tasks from the playbooks on catalog sites (Phase 1)")
+    p_gt.add_argument("--n", type=int, default=60, help="Number of tasks (default 60)")
+    p_gt.add_argument("--seed", type=int, default=0)
+    p_gt.add_argument("--source", action="append", help="Restrict sites to these sources (repeatable)")
+    p_gt.add_argument("--playbook", action="append", help="Only these playbooks (repeatable; default all)")
+    p_gt.add_argument(
+        "--probes",
+        default="1",
+        help="Decline probes per site: an integer or 'all' (default 1, rotating over the rules)",
+    )
+    p_gt.add_argument("--ungauged-share", type=float, default=0.25, help="Share of sites that are bare points")
+    p_gt.add_argument(
+        "--no-check-land",
+        action="store_true",
+        help="Do not ask BasinATLAS whether a bare point is on land (offline; the gauge proxy still applies)",
+    )
+    p_gt.add_argument("--out", default="tasks.jsonl")
+    p_gt.add_argument("--quiet", action="store_true")
+    p_gbench = gym_sub.add_parser("bench", help="Play an agent on the tasks and score it against the keys (Phase 1)")
+    p_gbench.add_argument("--tasks", required=True, help="tasks.jsonl from `gym tasks`")
+    p_gbench.add_argument("--agent", choices=["tree", "team", "ask"], default="tree")
+    p_gbench.add_argument(
+        "--provider",
+        default=None,
+        help="LLM provider (anthropic, openai, groq, huggingface, ollama, ...); none: keyless team",
+    )
+    p_gbench.add_argument("--model", default=None)
+    p_gbench.add_argument("--api-key", default=None)
+    p_gbench.add_argument("--base-url", default=None)
+    p_gbench.add_argument("--limit", type=int, default=None, help="Play the first N tasks")
+    p_gbench.add_argument(
+        "--unsolvable", type=int, default=None, help="With --limit: at most this many unsolvable tasks among the N"
+    )
+    p_gbench.add_argument("--task", action="append", help="Play these task ids only (repeatable)")
+    p_gbench.add_argument(
+        "--spread",
+        action="store_true",
+        help="With --limit: take tasks round robin over the sites rather than the first N",
+    )
+    p_gbench.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip tasks --out already holds a finished row for (errors and timeouts are replayed)",
+    )
+    p_gbench.add_argument("--timeout", type=float, default=900.0, help="Seconds per task (0: none)")
+    p_gbench.add_argument("--max-steps", type=int, default=8, help="ask: tool-call steps")
+    p_gbench.add_argument("--context-chars", type=int, default=40_000, help="ask: conversation budget in characters")
+    p_gbench.add_argument("--out", default=None, help="Append results as JSONL")
+    p_gbench.add_argument("--json", action="store_true", help="Print the summary rows as JSON")
+    p_gbench.add_argument("--quiet", action="store_true")
 
     # ── caravan ──────────────────────────────────────────────────────
-    p_car = sub.add_parser("caravan", help="Caravan-format sub-datasets (forcing + mm/day streamflow + attributes) from the Archive")
+    p_car = sub.add_parser(
+        "caravan", help="Caravan-format sub-datasets (forcing + mm/day streamflow + attributes) from the Archive"
+    )
     car_sub = p_car.add_subparsers(dest="caravan_cmd", required=True)
     p_cex = car_sub.add_parser("export", help="Export one source's discharge stations in the Caravan layout")
     p_cex.add_argument("--source", required=True, choices=["usgs", "uk_ea", "hubeau_hydrometrie"])
@@ -1782,8 +2285,9 @@ def main() -> None:
     p_cex.add_argument("--end", type=date.fromisoformat, default=None, help="Forcing end (default last observation)")
     p_cex.add_argument("--prefix", default=None, help="Sub-dataset prefix (default aquascope_<source>)")
     p_cex.add_argument("--no-forcing", action="store_true", help="Streamflow and attributes only, no Open-Meteo calls")
-    p_cex.add_argument("--era5", action="store_true",
-                       help="Use plain ERA5 (25 km) instead of Open-Meteo's ERA5-Land + ERA5 blend")
+    p_cex.add_argument(
+        "--era5", action="store_true", help="Use plain ERA5 (25 km) instead of Open-Meteo's ERA5-Land + ERA5 blend"
+    )
     p_cex.add_argument("--fetch-missing", action="store_true", help="Fetch stations the archive lacks from the agency")
     p_cex.add_argument("--netcdf", action="store_true", help="Also write timeseries/netcdf (needs xarray + netCDF4)")
     p_cex.add_argument("--pause", type=float, default=3.0, help="Seconds between Open-Meteo calls (default 3)")
@@ -1795,14 +2299,49 @@ def main() -> None:
     p_mcp = sub.add_parser("mcp", help="Serve find_stations / get_timeseries / analyze_station over MCP (#113)")
     p_mcp.add_argument("--transport", choices=["stdio", "sse", "streamable-http"], default="stdio")
 
+    # ── playbooks ─────────────────────────────────────────────────────
+    p_playbooks = sub.add_parser("playbooks", help="The problem playbooks `aquascope solve` follows (#307)")
+    playbooks_sub = p_playbooks.add_subparsers(dest="playbooks_cmd")
+    playbooks_sub.add_parser("list", help="List the playbooks")
+    p_pb_show = playbooks_sub.add_parser("show", help="Print one playbook: intake, branches, gates, declines")
+    p_pb_show.add_argument("id")
+
     # ── solve ─────────────────────────────────────────────────────────
-    p_solve = sub.add_parser("solve", help="Solve a water challenge from a natural-language description")
+    p_solve = sub.add_parser(
+        "solve",
+        help="Solve a problem at a point: recon, plan, your review, execution with gates, report (#308); "
+        "without --lat/--lon, the legacy challenge agent",
+    )
     p_solve.add_argument(
         "query",
-        help="Natural-language challenge description (e.g. 'Forecast flooding at lat 13.5, lon 2.1')",
+        help="The problem in plain language (e.g. 'Design flow for a road crossing, 100-year return period')",
     )
-    p_solve.add_argument("--model", default=None, help="Override model (e.g. prophet, arima, random_forest)")
-    p_solve.add_argument("--file", default=None, help="Optional data file (JSON/CSV) to use instead of fetching")
+    p_solve.add_argument("--lat", type=float, default=None, help="Latitude of the site (with --lon: the team)")
+    p_solve.add_argument("--lon", type=float, default=None, help="Longitude of the site")
+    p_solve.add_argument("--playbook", default=None, help="Playbook id (see `aquascope playbooks`); else keyword rules")
+    p_solve.add_argument(
+        "--intake",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="An intake field, e.g. --intake return_period=200 (repeatable)",
+    )
+    p_solve.add_argument("--yes", "-y", action="store_true", help="Run the plan without asking")
+    p_solve.add_argument(
+        "--provider",
+        choices=provider_ids(),
+        default=None,
+        help="Use a model for the rationale, fallbacks and prose (keyless otherwise)",
+    )
+    p_solve.add_argument(
+        "--model", default=None, help="Model name (with --lat/--lon: the LLM; otherwise the legacy forecast model)"
+    )
+    p_solve.add_argument("--api-key", default=None)
+    p_solve.add_argument("--base-url", default=None, help="Any OpenAI-compatible endpoint (or Anthropic's)")
+    p_solve.add_argument("--out", "-o", default=None, help="Save the Markdown report here")
+    p_solve.add_argument("--study", default=None, help="Write the executed study here, to re-run with `aquascope run`")
+    p_solve.add_argument("--quiet", "-q", action="store_true", help="Do not print the timeline as it happens")
+    p_solve.add_argument("--file", default=None, help="Legacy agent: a data file (JSON/CSV) instead of fetching")
 
     # ── forecast ──────────────────────────────────────────────────────
     p_forecast = sub.add_parser("forecast", help="Run a predictive model on time-series data")
@@ -1983,12 +2522,14 @@ def main() -> None:
         "harvest": cmd_harvest,
         "mcp": cmd_mcp,
         "basins": cmd_basins,
+        "assess": cmd_assess,
         "gym": cmd_gym,
         "caravan": cmd_caravan,
         "ask": cmd_ask,
         "run": cmd_run,
         "ingest": cmd_ingest,
         "solve": cmd_solve,
+        "playbooks": cmd_playbooks,
         "forecast": cmd_forecast,
         "plot": cmd_plot,
         "hydro": cmd_hydro,

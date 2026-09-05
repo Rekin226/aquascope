@@ -159,13 +159,15 @@ def _parse_historical_xml(xml_text: str) -> list[dict]:
     under the document root, each with one child element per column — we
     don't hardcode the row/root element names (documented as
     ``DocumentElement``/``SerieHistorica`` but not verified live) and just
-    read whatever structure is actually there, so a naming difference
-    degrades to "no rows" rather than an exception.
+    read whatever structure is actually there. A well-formed document with
+    zero row elements (ANA's own representation of "no data for this
+    station/period") legitimately returns ``[]``. A document that doesn't
+    parse as XML at all (HTML error page, truncated response, endpoint
+    moved) is a different situation - that's raised as ``ET.ParseError``
+    rather than swallowed, so the caller can tell "no data" apart from
+    "something broke" instead of both looking like an empty list.
     """
-    try:
-        root = ET.fromstring(xml_text)  # noqa: S314 - trusted gov.br domain, not user-supplied XML
-    except ET.ParseError:
-        return []
+    root = ET.fromstring(xml_text)  # noqa: S314 - trusted gov.br domain, not user-supplied XML
 
     rows = []
     for elem in root:
@@ -433,6 +435,7 @@ class BrazilANACollector(BaseCollector):
 
         token = self._get_token()
         rows: list[dict] = []
+        failures = 0
         for station_id in station_ids:
             try:
                 data = self.client.get_json(
@@ -445,8 +448,20 @@ class BrazilANACollector(BaseCollector):
                     },
                     headers={"Authorization": f"Bearer {token}"},
                 )
-            except Exception as exc:  # noqa: BLE001 - one bad station shouldn't abort the batch
+            except Exception as exc:  # noqa: BLE001 - counted below; one bad station shouldn't abort the batch
                 logger.warning("Brazil ANA: failed to fetch station %s: %s", station_id, exc)
+                failures += 1
+                continue
+
+            if "items" not in data:
+                # A genuine HidroWebService response always has an "items" key, even when
+                # it's an empty list (no data for the period). A missing key is a shape
+                # drift signal (renamed field, error page, etc.), not "no data" - count it
+                # as a failure rather than silently treating it as zero readings.
+                logger.warning(
+                    "Brazil ANA: unexpected response shape for station %s (no 'items' key): %s", station_id, data
+                )
+                failures += 1
                 continue
 
             items = data.get("items") or []
@@ -454,6 +469,14 @@ class BrazilANACollector(BaseCollector):
                 item.setdefault("codigoestacao", str(station_id))
                 item["_mode"] = "telemetric"
                 rows.append(item)
+
+        if failures and failures == len(station_ids):
+            raise RuntimeError(
+                f"Brazil ANA: all {failures} station request(s) failed or returned an unexpected "
+                "response shape. This most likely means the HidroWebService endpoint or its "
+                "response shape has changed, not that the requested station(s) have no data - "
+                "see the warnings above for the per-station errors."
+            )
 
         return rows
 
@@ -468,7 +491,12 @@ class BrazilANACollector(BaseCollector):
 
         No credentials required. One request per (station, variable); a
         failure on any one is logged and skipped rather than aborting the
-        whole batch (mirrors the telemetric path's per-station isolation).
+        whole batch (mirrors the telemetric path's per-station isolation) -
+        but if *every* request in the batch fails (network error, or a
+        response that doesn't parse as XML at all), that's raised rather
+        than silently returned as "no data", since it almost always means
+        the endpoint or its response shape has changed rather than that
+        every requested station/variable genuinely has no records.
         """
         for v in variables:
             if v not in _TIPO_DADOS:
@@ -481,8 +509,11 @@ class BrazilANACollector(BaseCollector):
             date_params["dataFim"] = end_date if isinstance(end_date, str) else end_date.isoformat()
 
         rows: list[dict] = []
+        attempted = 0
+        failures = 0
         for station_id in station_ids:
             for variable in variables:
+                attempted += 1
                 try:
                     xml_text = self.legacy_client.get_text(
                         HISTORICAL_SERIES_PATH,
@@ -496,17 +527,30 @@ class BrazilANACollector(BaseCollector):
                             **date_params,
                         },
                     )
-                except Exception as exc:  # noqa: BLE001 - one bad station/variable shouldn't abort the batch
+                    parsed_rows = _parse_historical_xml(xml_text)
+                except Exception as exc:  # noqa: BLE001 - counted below; one bad station/variable shouldn't abort the batch
                     logger.warning(
-                        "Brazil ANA (historical): failed to fetch station %s / %s: %s", station_id, variable, exc
+                        "Brazil ANA (historical): failed to fetch/parse station %s / %s: %s",
+                        station_id,
+                        variable,
+                        exc,
                     )
+                    failures += 1
                     continue
 
-                for row in _parse_historical_xml(xml_text):
+                for row in parsed_rows:
                     row["_mode"] = "historical"
                     row["_station_id"] = str(station_id)
                     row["_variable"] = variable
                     rows.append(row)
+
+        if failures and failures == attempted:
+            raise RuntimeError(
+                f"Brazil ANA (historical): all {failures} request(s) failed to fetch or parse. "
+                "This most likely means the HidroSerieHistorica endpoint or its response shape "
+                "has changed, not that the requested station(s)/variable(s) have no data - see "
+                "the warnings above for the per-request errors."
+            )
 
         return rows
 

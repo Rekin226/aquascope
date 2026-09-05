@@ -7,6 +7,7 @@ data shaped like ANA's documented API responses - no network calls.
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
 from unittest.mock import MagicMock
 
 import pytest
@@ -210,6 +211,37 @@ class TestBrazilANAFetchRaw:
         rows = collector.fetch_raw(station_ids=["bad_station", "15400000"])
         assert len(rows) == 4  # only the second (working) station's rows
 
+    def test_fetch_raw_raises_when_every_station_fails(self):
+        """A shape drift/dead endpoint must surface as an error, not silently look like '[] records'."""
+        mock_client = MagicMock()
+        mock_client.get_json.side_effect = [
+            FAKE_AUTH_RESPONSE,
+            RuntimeError("boom 1"),
+            RuntimeError("boom 2"),
+        ]
+        collector = BrazilANACollector(identificador="x", senha="y", client=mock_client)
+
+        with pytest.raises(RuntimeError, match="all 2 station"):
+            collector.fetch_raw(station_ids=["bad_1", "bad_2"])
+
+    def test_fetch_raw_raises_when_response_missing_items_key(self):
+        """Missing 'items' entirely (vs. present-but-empty) signals a shape drift, not 'no data'."""
+        mock_client = MagicMock()
+        mock_client.get_json.side_effect = [FAKE_AUTH_RESPONSE, {"status": "OK"}]  # no "items" key
+        collector = BrazilANACollector(identificador="x", senha="y", client=mock_client)
+
+        with pytest.raises(RuntimeError, match="unexpected response shape|all 1 station"):
+            collector.fetch_raw(station_ids=["15400000"])
+
+    def test_fetch_raw_genuinely_empty_items_does_not_raise(self):
+        """A station with zero readings this period ('items': []) is legitimate, not a failure."""
+        mock_client = MagicMock()
+        mock_client.get_json.side_effect = [FAKE_AUTH_RESPONSE, {"status": "OK", "items": []}]
+        collector = BrazilANACollector(identificador="x", senha="y", client=mock_client)
+
+        rows = collector.fetch_raw(station_ids=["15400000"])
+        assert rows == []
+
     def test_fetch_raw_auth_failure_raises(self):
         mock_client = MagicMock()
         mock_client.get_json.return_value = {"status": "ERROR", "items": {}}
@@ -361,10 +393,13 @@ class TestParseHistoricalXML:
         assert rows[0]["NivelConsistencia"] == "1"
         assert rows[0]["Vazao01"] == "100.0"
 
-    def test_malformed_xml_returns_empty_list(self):
-        assert _parse_historical_xml("<not><valid") == []
+    def test_malformed_xml_raises_parse_error(self):
+        """Genuinely broken/unparseable XML must not look identical to 'no data'."""
+        with pytest.raises(ET.ParseError):
+            _parse_historical_xml("<not><valid")
 
     def test_empty_document_returns_empty_list(self):
+        """A well-formed document with zero row elements is ANA's legitimate 'no data' shape."""
         assert _parse_historical_xml("<DocumentElement></DocumentElement>") == []
 
 
@@ -435,6 +470,44 @@ class TestBrazilANAFetchHistoricalRaw:
             station_ids=["bad_station", "15400000"], mode="historical", variables=("water_level",)
         )
         assert len(rows) == 1  # only the working station's row
+
+    def test_raises_when_every_request_fails(self):
+        """A dead endpoint (network errors on every request) must surface as an error."""
+        mock_legacy = MagicMock()
+        mock_legacy.get_text.side_effect = [RuntimeError("boom 1"), RuntimeError("boom 2")]
+        collector = BrazilANACollector(client=MagicMock(), legacy_client=mock_legacy)
+
+        with pytest.raises(RuntimeError, match="all 2 request"):
+            collector.fetch_raw(station_ids=["bad_1", "bad_2"], mode="historical", variables=("water_level",))
+
+    def test_raises_when_every_response_is_unparseable(self):
+        """A shape drift (endpoint now returns an HTML error page, say) must not look like 'no data'."""
+        mock_legacy = MagicMock()
+        mock_legacy.get_text.return_value = "<html>not the expected XML</html"  # malformed
+        collector = BrazilANACollector(client=MagicMock(), legacy_client=mock_legacy)
+
+        with pytest.raises(RuntimeError, match="all 1 request"):
+            collector.fetch_raw(station_ids=["15400000"], mode="historical", variables=("water_level",))
+
+    def test_genuinely_empty_document_does_not_raise(self):
+        """A station with no historical records ('<DocumentElement/>') is legitimate, not a failure."""
+        mock_legacy = MagicMock()
+        mock_legacy.get_text.return_value = "<DocumentElement></DocumentElement>"
+        collector = BrazilANACollector(client=MagicMock(), legacy_client=mock_legacy)
+
+        rows = collector.fetch_raw(station_ids=["15400000"], mode="historical", variables=("water_level",))
+        assert rows == []
+
+    def test_partial_failure_does_not_raise(self):
+        """Only some requests failing (mix of good stations/data and bad ones) must not raise."""
+        mock_legacy = MagicMock()
+        mock_legacy.get_text.side_effect = [RuntimeError("boom"), FAKE_HISTORICAL_XML_SINGLE]
+        collector = BrazilANACollector(client=MagicMock(), legacy_client=mock_legacy)
+
+        rows = collector.fetch_raw(
+            station_ids=["bad_station", "15400000"], mode="historical", variables=("water_level",)
+        )
+        assert len(rows) == 1
 
 
 class TestBrazilANANormaliseHistorical:

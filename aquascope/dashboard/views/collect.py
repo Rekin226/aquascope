@@ -21,9 +21,7 @@ SOURCES: dict[str, tuple[str, str, str]] = {
 }
 
 _API_KEY_SOURCES: dict[str, tuple[str, str]] = {
-    key: (meta.label, meta.api_key_signup_url or "")
-    for key, meta in _REGISTRY.items()
-    if meta.requires_api_key
+    key: (meta.label, meta.api_key_signup_url or "") for key, meta in _REGISTRY.items() if meta.requires_api_key
 }
 
 # Fetch arguments a source cannot run without, as source_key -> {kwarg: label}.
@@ -60,9 +58,7 @@ def missing_required_fields(source_key: str, fetch: dict) -> list[str]:
     """
     supplied = {name for name, value in fetch.items() if value or value == 0}
 
-    missing = [
-        label for name, label in _REQUIRED_FETCH_FIELDS.get(source_key, {}).items() if name not in supplied
-    ]
+    missing = [label for name, label in _REQUIRED_FETCH_FIELDS.get(source_key, {}).items() if name not in supplied]
 
     for group in _REQUIRED_ONE_OF_FETCH_FIELDS.get(source_key, ()):
         if not supplied & set(group):
@@ -192,7 +188,7 @@ def _render_api_tab() -> None:
 
 
 def _join_labels(labels: list[str]) -> str:
-    """"a", "a and b", "a, b and c" -- readable in a sentence."""
+    """ "a", "a and b", "a, b and c" -- readable in a sentence."""
     if len(labels) == 1:
         return f"**{labels[0]}**"
     bold = [f"**{label}**" for label in labels]
@@ -292,9 +288,7 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
             step=100,
         )
 
-        st.caption(
-            "First run downloads and caches the archive locally — allow a few minutes."
-        )
+        st.caption("First run downloads and caches the archive locally — allow a few minutes.")
 
     elif source_key == "hubeau_hydrometrie":
         c1, c2 = st.columns(2)
@@ -685,17 +679,42 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
             fetch["end"] = str(ed)
 
     elif source_key == "brazil_ana":
-        st.caption(
-            "ANA Hidroweb (Brazil) — telemetric stage, discharge and rainfall. "
-            "Time series needs a free ANA account (email hidro@ana.gov.br); the station "
-            "catalog below works without one."
+        mode = st.radio(
+            "Mode",
+            ["telemetric", "historical"],
+            horizontal=True,
+            format_func=lambda v: {
+                "telemetric": "Telemetric (near-real-time, needs an ANA account)",
+                "historical": "Historical (conventional network, no account needed)",
+            }[v],
         )
-        identificador = st.text_input("Identificador (CPF/CNPJ)", key="ana_identificador")
-        senha = st.text_input("Senha", type="password", key="ana_senha")
-        if identificador.strip():
-            ctor["identificador"] = identificador.strip()
-        if senha.strip():
-            ctor["senha"] = senha.strip()
+        fetch["mode"] = mode
+
+        if mode == "telemetric":
+            st.caption(
+                "Stage, discharge and rainfall from ANA's live telemetric network. "
+                "Needs a free ANA account (email hidro@ana.gov.br)."
+            )
+            identificador = st.text_input("Identificador (CPF/CNPJ)", key="ana_identificador")
+            senha = st.text_input("Senha", type="password", key="ana_senha")
+            if identificador.strip():
+                ctor["identificador"] = identificador.strip()
+            if senha.strip():
+                ctor["senha"] = senha.strip()
+        else:
+            st.caption(
+                "Decades of manually-read data from ANA's conventional network. "
+                "No account needed — works for stations outside the telemetric network too."
+            )
+            variables = st.multiselect(
+                "Variables",
+                ["discharge", "water_level", "precipitation"],
+                default=["discharge"],
+                key="ana_historical_variables",
+            )
+            if variables:
+                fetch["variables"] = variables
+
         sids = st.text_input("Station codes (comma-separated)", placeholder="15400000")
         if sids.strip():
             fetch["station_ids"] = [s.strip() for s in sids.split(",") if s.strip()]
@@ -733,7 +752,7 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
         fetch["days"] = st.slider("Days of history", 1, 90, 30, key="bom_days")
 
     elif source_key == "uk_ea":
-        st.caption("UK Environment Agency — real-time river level, flow, rainfall, and groundwater telemetry.")
+        st.caption("Environment Agency (England) — real-time river level, flow, rainfall, and groundwater telemetry.")
         fetch["observed_property"] = st.selectbox(
             "Observed property",
             ["waterFlow", "waterLevel", "rainfall", "groundwaterLevel"],

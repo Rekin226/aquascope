@@ -123,7 +123,10 @@ jobs:
           tests/test_collectors/test_south_africa_dws.py
           EOF
           sed -i 's/^          //' /tmp/expected-files
-          git status --short | sed 's/^...//' | sort > /tmp/actual-files
+          git status --short \
+            | sed 's/^...//' \
+            | grep -Ev '^\.github/(issue20_apply_patch\.py|issue20_dws_section\.md|workflows/issue20-governed-bootstrap\.yml)$' \
+            | sort > /tmp/actual-files
           sort -o /tmp/expected-files /tmp/expected-files
           diff -u /tmp/expected-files /tmp/actual-files
           git config user.name "bazinga0027-gif"

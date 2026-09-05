@@ -36,7 +36,7 @@ jobs:
           path = Path("tests/test_docs_counts.py")
           text = path.read_text(encoding="utf-8")
           old = r'r"(\d+) data collectors spanning four regions",'
-          new = r'r"(\d+) data collectors spanning \d+ regions",'
+          new = r'r"(\d+) data collectors spanning [a-z]+ regions",'
           if text.count(old) != 1:
               raise RuntimeError("collector region-count test anchor did not match exactly once")
           path.write_text(text.replace(old, new, 1), encoding="utf-8")

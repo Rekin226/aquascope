@@ -228,6 +228,16 @@
         "code",
         "test"
       ]
+    },
+    {
+      "login": "mikemikimike",
+      "name": "mikemikimike",
+      "avatar_url": "https://avatars.githubusercontent.com/u/186855910?v=4",
+      "profile": "https://github.com/mikemikimike",
+      "contributions": [
+        "code",
+        "test"
+      ]
     }
   ],
   "commitType": "docs"

@@ -30,6 +30,17 @@ jobs:
         run: |
           set -euo pipefail
           python .github/issue20_apply_patch.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/test_docs_counts.py")
+          text = path.read_text(encoding="utf-8")
+          old = r'r"(\d+) data collectors spanning four regions",'
+          new = r'r"(\d+) data collectors spanning \d+ regions",'
+          if text.count(old) != 1:
+              raise RuntimeError("collector region-count test anchor did not match exactly once")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
           rm -f \
             .github/issue20_apply_patch.py \
             .github/issue20_dws_section.md \
@@ -121,6 +132,7 @@ jobs:
           tests/test_cli/test_dashboard_required_fields.py
           tests/test_cli/test_south_africa_dws_collect.py
           tests/test_collectors/test_south_africa_dws.py
+          tests/test_docs_counts.py
           EOF
           sed -i 's/^          //' /tmp/expected-files
           git status --short \

@@ -463,7 +463,9 @@ def build_collector(source_key: str, api_key: str | None = None, **ctor_kwargs):
         ),
         "taiwan_wra_fhy": lambda: c.TaiwanWRAFhyCollector(data_type=ctor_kwargs.get("data_type", "water")),
         "taiwan_wra_iot": lambda: c.TaiwanWRAIoTCollector(data_type=ctor_kwargs.get("data_type", "groundwater")),
-        "taiwan_datagov": lambda: c.TaiwanDataGovCollector(dataset_id=ctor_kwargs.get("dataset_id", "25768")),
+        "taiwan_datagov": lambda: c.TaiwanDataGovCollector(
+            dataset_id=ctor_kwargs.get("dataset_id", "73c4c3de-4045-4765-abeb-89f9f9cd5ff0")
+        ),
         "taiwan_civil_iot": lambda: c.TaiwanCivilIoTCollector(),
         "japan_mlit": lambda: c.JapanMLITCollector(),
         "korea_wamis": lambda: c.KoreaWAMISCollector(),

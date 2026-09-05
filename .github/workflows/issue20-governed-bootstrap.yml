@@ -1,0 +1,152 @@
+name: Issue 20 governed implementation bootstrap
+
+on:
+  push:
+    branches:
+      - feat/issue-20-south-africa-dws
+
+permissions:
+  contents: write
+
+jobs:
+  implement-verify-and-seal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out the feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Apply deterministic issue-20 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/issue20_apply_patch.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/test_docs_counts.py")
+          text = path.read_text(encoding="utf-8")
+          old = r'r"(\d+) data collectors spanning four regions",'
+          new = r'r"(\d+) data collectors spanning [a-z]+ regions",'
+          if text.count(old) != 1:
+              raise RuntimeError("collector region-count test anchor did not match exactly once")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+          rm -f \
+            .github/issue20_apply_patch.py \
+            .github/issue20_dws_section.md \
+            .github/workflows/issue20-governed-bootstrap.yml
+          git diff --check
+          printf '%s\n' 'Changed files before verification:'
+          git status --short
+
+      - name: Install AquaScope development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,all]" build
+
+      - name: Apply deterministic Ruff fixes to issue-20 files
+        run: |
+          ruff check --fix \
+            aquascope/collectors/south_africa_dws.py \
+            tests/test_collectors/test_south_africa_dws.py \
+            tests/test_cli/test_south_africa_dws_collect.py
+          ruff format \
+            aquascope/collectors/south_africa_dws.py \
+            tests/test_collectors/test_south_africa_dws.py \
+            tests/test_cli/test_south_africa_dws_collect.py
+
+      - name: Ruff lint
+        run: ruff check aquascope/ tests/
+
+      - name: Ruff format check (new issue-20 files)
+        run: >-
+          ruff format --check
+          aquascope/collectors/south_africa_dws.py
+          tests/test_collectors/test_south_africa_dws.py
+          tests/test_cli/test_south_africa_dws_collect.py
+
+      - name: Scoped type check
+        run: mypy aquascope/collectors/south_africa_dws.py --follow-imports=skip --ignore-missing-imports
+
+      - name: Targeted issue-20 tests
+        run: >-
+          pytest
+          tests/test_collectors/test_south_africa_dws.py
+          tests/test_cli/test_south_africa_dws_collect.py
+          tests/test_cli/test_dashboard_required_fields.py
+          tests/test_cli/test_dashboard_sources.py
+          tests/test_registry.py
+          tests/test_docs_counts.py
+
+      - name: Full repository test suite
+        run: pytest --cov=aquascope --cov-report=term-missing
+
+      - name: Build distribution and prove clean-wheel import
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m build
+          python -m venv /tmp/aquascope-issue20-wheel
+          /tmp/aquascope-issue20-wheel/bin/python -m pip install --upgrade pip
+          /tmp/aquascope-issue20-wheel/bin/python -m pip install dist/*.whl
+          /tmp/aquascope-issue20-wheel/bin/python - <<'PY'
+          from aquascope.collectors import SouthAfricaDWSCollector
+          from aquascope.registry import SOURCES, build_collector
+          from aquascope.schemas.water_data import DataSource
+
+          assert DataSource.SOUTH_AFRICA_DWS.value == "south_africa_dws"
+          assert "south_africa_dws" in SOURCES
+          assert isinstance(build_collector("south_africa_dws"), SouthAfricaDWSCollector)
+          print("Clean wheel import and registry construction passed.")
+          PY
+
+      - name: Seal verified tree as one atomic commit
+        env:
+          BASE_SHA: b4613e91dd7298108fa0a5f9a08390ad2805a269
+          BRANCH_NAME: feat/issue-20-south-africa-dws
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/expected-files <<'EOF'
+          CHANGELOG.md
+          README.md
+          ROADMAP.md
+          aquascope/cli.py
+          aquascope/collectors/__init__.py
+          aquascope/collectors/south_africa_dws.py
+          aquascope/dashboard/views/collect.py
+          aquascope/registry.py
+          aquascope/schemas/water_data.py
+          docs/data_sources.md
+          docs/index.md
+          tests/test_cli/test_dashboard_required_fields.py
+          tests/test_cli/test_south_africa_dws_collect.py
+          tests/test_collectors/test_south_africa_dws.py
+          tests/test_docs_counts.py
+          EOF
+          sed -i 's/^          //' /tmp/expected-files
+          git status --short \
+            | sed 's/^...//' \
+            | grep -Ev '^\.github/(issue20_apply_patch\.py|issue20_dws_section\.md|workflows/issue20-governed-bootstrap\.yml)$' \
+            | sort > /tmp/actual-files
+          sort -o /tmp/expected-files /tmp/expected-files
+          diff -u /tmp/expected-files /tmp/actual-files
+          git config user.name "bazinga0027-gif"
+          git config user.email "241781992+bazinga0027-gif@users.noreply.github.com"
+          git reset --soft "$BASE_SHA"
+          git add -A
+          git diff --cached --check
+          git commit \
+            --author="bazinga0027-gif <241781992+bazinga0027-gif@users.noreply.github.com>" \
+            -m "feat(collectors): add South Africa DWS hydrology collector (#20)"
+          git push --force-with-lease origin "HEAD:${BRANCH_NAME}"

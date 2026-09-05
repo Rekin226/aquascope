@@ -28,7 +28,8 @@ export function focusableWithin(container) {
 export function focusFirst(container) {
   if (!container) return null;
   const preferred = container.querySelector("[data-autofocus]");
-  const target = (preferred && !preferred.disabled) ? preferred : focusableWithin(container)[0];
+  const usable = preferred && !preferred.disabled && !preferred.closest("[hidden]");
+  const target = usable ? preferred : focusableWithin(container)[0];
   if (target) target.focus();
   return target || null;
 }

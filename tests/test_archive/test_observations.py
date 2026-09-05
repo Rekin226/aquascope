@@ -206,3 +206,16 @@ def test_explore_prefers_archive(monkeypatch):
         bc.return_value.collect.return_value = []
         out = explore.fetch_series("hubeau_hydrometrie", "H1", years=5, variable="water_level")
     assert fa.call_count == 0 and out["series"] is None
+
+
+def test_a_full_record_harvest_keeps_closed_stations_and_a_capped_one_skips_them():
+    """#270: the harvest asked for 40 years and skipped anything closed before that window."""
+    rows = [
+        {"source": "usgs", "station_id": "OLD", "variables": ["discharge"], "period_end": "1950-12-31"},
+        {"source": "usgs", "station_id": "NEW", "variables": ["discharge"], "period_end": None},
+    ]
+    manifest = {"sources": {}}
+    picked = obs._pick_stations(rows, manifest, "usgs", "discharge", 10, 30, None)
+    assert [r["station_id"] for r in picked] == ["OLD", "NEW"]
+    picked = obs._pick_stations(rows, manifest, "usgs", "discharge", 10, 30, None, years=40)
+    assert [r["station_id"] for r in picked] == ["NEW"]

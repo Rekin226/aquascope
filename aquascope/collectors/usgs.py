@@ -216,6 +216,7 @@ class USGSCollector(BaseCollector):
         state_cd = kwargs.get("stateCd")
         county_cd = kwargs.get("countyCd")
         huc_val = kwargs.get("huc")
+        stat_cd = kwargs.get("statCd") or kwargs.get("stat_cd")
 
         if self.api_key == "DEMO_KEY" or not self.api_key:
             if collection not in ("daily", "sta"):
@@ -269,6 +270,8 @@ class USGSCollector(BaseCollector):
                 params["countyCd"] = county_cd
             if huc_val:
                 params["huc"] = huc_val
+            if stat_cd:
+                params["statCd"] = stat_cd  # e.g. 00003, the daily mean only
 
             if start_date:
                 params["startDT"] = start_date

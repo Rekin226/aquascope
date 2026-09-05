@@ -21,7 +21,9 @@ from aquascope.climate.indices import (
     heat_wave_index,
     palmer_drought_severity_index,
     precipitation_concentration_index,
+    standardized_precipitation_evapotranspiration_index,
     standardized_precipitation_index,
+    thornthwaite_pet,
 )
 from aquascope.climate.scenarios import (
     DroughtStats,
@@ -59,7 +61,9 @@ __all__ = [
     "heat_wave_index",
     "palmer_drought_severity_index",
     "precipitation_concentration_index",
+    "standardized_precipitation_evapotranspiration_index",
     "standardized_precipitation_index",
+    "thornthwaite_pet",
     # scenarios
     "DroughtStats",
     "ReturnPeriodShift",

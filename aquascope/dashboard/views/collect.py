@@ -234,10 +234,14 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
     elif source_key == "taiwan_datagov":
         ctor["dataset_id"] = st.selectbox(
             "Dataset",
-            ["25768", "161082"],
-            format_func=lambda v: {"25768": "River water level (real-time)", "161082": "Groundwater level (real-time)"}[
-                v
+            [
+                "73c4c3de-4045-4765-abeb-89f9f9cd5ff0",
+                "58a7aa39-287a-4b96-985d-47ffbc7abbd4",
             ],
+            format_func=lambda v: {
+                "73c4c3de-4045-4765-abeb-89f9f9cd5ff0": "River water level (real-time)",
+                "58a7aa39-287a-4b96-985d-47ffbc7abbd4": "Groundwater level (real-time)",
+            }[v],
         )
         fetch["limit"] = st.slider("Max records", 100, 5_000, 1_000, step=100)
 

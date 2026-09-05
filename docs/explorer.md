@@ -155,8 +155,8 @@ why BasinATLAS is what we mirror. MERIT-Basins is CC BY-NC.
 The **Ask** button (top right) opens the [Analyst](analyst.md) inside the
 Explorer. Type a question ("What is the 100-year flood of the Thames at
 Kingston, and how sure can we be?"), pick a provider (Groq and Hugging Face
-have free tiers; OpenAI, Mistral, OpenRouter, or any OpenAI-compatible
-endpoint), paste your key, and the same `aquascope.ai_engine.analyst.ask`
+have free tiers; Anthropic, OpenAI, Mistral, OpenRouter, or any
+OpenAI-compatible endpoint), paste your key, and the same `aquascope.ai_engine.analyst.ask`
 that runs behind `aquascope ask` runs in the browser worker: the model picks
 the tools (`find_stations` over the catalog already loaded in your tab,
 `analyze_station`, `flood_frequency`, `get_timeseries`, `anywhere`),
@@ -208,8 +208,8 @@ support the MCP Apps extension.
 
 | source | record you get | analyses |
 | --- | --- | --- |
-| USGS | daily mean discharge (or gage height), full period requested (40 years) | all of the above |
-| UK Environment Agency | daily mean flow (falls back to level, rainfall, groundwater), full period | all of the above |
+| USGS | daily mean discharge (or gage height), full record requested (from the catalog's first date) | all of the above |
+| Environment Agency (England) | daily mean flow (falls back to level, rainfall, groundwater), full record requested | all of the above |
 | Hub'Eau (France) | daily mean discharge (obs_elab `QmnJ`, multi-decade where computed), else last 30 days real-time | all of the above when the daily series exists |
 | PEGELONLINE (Germany) | last 31 days of W / Q | hydrograph |
 | Ireland OPW | last month of 15-minute levels | hydrograph |

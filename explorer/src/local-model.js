@@ -133,6 +133,7 @@ export async function loadLocalModel(onProgress = () => {}) {
   engine = {
     kind: "webllm",
     label: pick.model_id,
+    mlc,
     async generate(prompt) {
       const res = await mlc.chat.completions.create({
         messages: [{ role: "system", content: SYSTEM }, { role: "user", content: prompt }],
@@ -147,6 +148,91 @@ export async function loadLocalModel(onProgress = () => {}) {
 
 export function localModelLabel() {
   return engine ? engine.label : null;
+}
+
+// The model a structured call would run on, named for a status line.
+export function localReaderLabel() {
+  if (promptApiAvailable()) return "Chrome's built-in model";
+  return engine ? engine.label : null;
+}
+
+// ── one small structured call ───────────────────────────────────────────────
+// Solve reads a sentence into a playbook and its intake fields with a single
+// call: its own system prompt, a schema, a low temperature, a timeout. It must
+// never start a download on its own (a sentence typed into Solve is not a
+// choice to fetch gigabytes): it runs when Chrome's model is already on the
+// machine, or when a WebLLM engine is already loaded in this tab.
+
+const READY = { ok: false };  // cached: Chrome's model, already on this machine
+
+export async function localModelReady() {
+  if (engine) return true;
+  if (READY.ok) return true;
+  if (!promptApiAvailable()) return false;
+  try {
+    READY.ok = (await globalThis.LanguageModel.availability()) === "available";
+  } catch {
+    READY.ok = false;
+  }
+  return READY.ok;
+}
+
+// Chrome wants temperature and topK together; the defaults come from params().
+async function promptOptions(temperature) {
+  try {
+    const p = await globalThis.LanguageModel.params();
+    if (!p || !Number.isFinite(p.defaultTopK)) return {};
+    return { temperature: Math.min(temperature, p.maxTemperature || temperature), topK: p.defaultTopK };
+  } catch {
+    return {};
+  }
+}
+
+function withTimeout(promise, ms, controller) {
+  let timer;
+  const clock = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      try { controller.abort(); } catch { /* fine */ }
+      reject(new Error(`the on-device model took more than ${Math.round(ms / 1000)} s`));
+    }, ms);
+  });
+  return Promise.race([promise, clock]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * One reply from the on-device model as text: `system` and `prompt`, a JSON
+ * `schema` the reply is constrained to where the runtime allows, `temperature`
+ * where it allows, and `timeoutMs` after which the caller gets an error and
+ * falls back. Chrome's model gets a session of its own for this one call (Ask's
+ * session, with its tool prompt, is not touched); WebLLM is used only when Ask
+ * has already loaded it. Check `localModelReady()` first.
+ */
+export async function generateJsonLocally({ system, prompt, schema = null, temperature = 0.1, timeoutMs = 25000,
+                                            onProgress = () => {} } = {}) {
+  const controller = new AbortController();
+  if (promptApiAvailable()) {
+    onProgress("Reading your words on your device...");
+    const session = await globalThis.LanguageModel.create({
+      initialPrompts: [{ role: "system", content: system }],
+      ...(await promptOptions(temperature)),
+    });
+    try {
+      const opts = { signal: controller.signal };
+      if (schema) opts.responseConstraint = schema;
+      return await withTimeout(session.prompt(prompt, opts), timeoutMs, controller);
+    } finally {
+      try { session.destroy(); } catch { /* fine */ }
+    }
+  }
+  if (!engine || engine.kind !== "webllm" || !engine.mlc) throw new Error("no on-device model is loaded in this tab");
+  onProgress(`Reading your words on your device (${engine.label})...`);
+  const req = engine.mlc.chat.completions.create({
+    messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+    temperature,
+    response_format: schema ? { type: "json_object", schema: JSON.stringify(schema) } : { type: "json_object" },
+  });
+  const res = await withTimeout(req, timeoutMs, controller);
+  return res.choices[0].message.content || "";
 }
 
 // ── the reduced loop ────────────────────────────────────────────────────────

@@ -375,3 +375,57 @@ def test_ingest_text_accepts_bytes_too() -> None:
     csv = b"date,level_m\n2020-01-01,1.5\n2020-01-02,1.7\n2020-01-03,1.6\n"
     res = ingest_text(csv, "levels.csv")
     assert res["qa"]["n_values"] == 3
+
+
+# ── drought indices ─────────────────────────────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def climate_frame() -> pd.DataFrame:
+    """Forty years of monthly rainfall and temperature with two degrees of warming."""
+    rng = np.random.default_rng(3)
+    idx = pd.date_range("1985-01-01", periods=40 * 12, freq="MS")
+    phase = np.arange(len(idx)) % 12
+    return pd.DataFrame({
+        "date": idx,
+        "rain_mm": rng.gamma(2.0, (80 + 60 * np.sin(2 * np.pi * phase / 12)) / 2.0),
+        "tmean_c": 10 + 8 * np.sin(2 * np.pi * (phase - 3) / 12) + np.linspace(0, 2, len(idx)),
+    })
+
+
+def test_spei_from_temperature_reports_both_indices_and_their_divergence(climate_frame: pd.DataFrame) -> None:
+    res = wb.run("spei", climate_frame, temperature_column="tmean_c", latitude=51.4)
+    _strict_json(res)
+    assert res["column"] == "rain_mm" and res["pet_method"] == "thornthwaite" and res["timescales"] == [1, 3, 12]
+    assert res["headline_timescale"] == 3 and res["headline_index"] == "spei" and res["years"] == 40.0
+    row = next(r for r in res["indices"] if r["timescale"] == 12)
+    assert row["spi"]["class"] in ("normal", "moderately_dry", "severely_dry", "extremely_dry", "moderately_wet",
+                                   "very_wet", "extremely_wet")
+    assert row["divergence"]["mean_last_10y"] < 0, "warming: SPEI runs drier than SPI over the last decade"
+    assert row["divergence"]["correlation"] > 0.9 and set(row["series"]) == {"index", "step", "spi", "spei"}
+    assert res["current"]["spi"]["12"] is not None and res["current"]["spei"]["12"] is not None
+    assert [m["name"] for m in res["methods"]][1:] == ["Standardized Precipitation-Evapotranspiration Index",
+                                                        "Thornthwaite potential evapotranspiration"]
+
+
+def test_spei_takes_a_ready_pet_column_or_says_what_it_needs(climate_frame: pd.DataFrame) -> None:
+    df = climate_frame.assign(pet_mm=60.0)
+    res = wb.spei(df, "rain_mm", pet_column="pet_mm", timescales=[3])
+    assert res["pet_method"] == "given" and [r["timescale"] for r in res["indices"]] == [3]
+    with pytest.raises(ValueError, match="pet_column"):
+        wb.spei(climate_frame)
+    with pytest.raises(ValueError, match="latitude"):
+        wb.spei(climate_frame, temperature_column="tmean_c")
+    with pytest.raises(ValueError, match="No column"):
+        wb.spei(climate_frame, pet_column="nope")
+
+
+def test_standardized_indices_without_pet_gives_spi_only(climate_frame: pd.DataFrame) -> None:
+    p = climate_frame.set_index("date")["rain_mm"]
+    res = wb.standardized_indices(p, timescales=(3,))
+    assert res["headline_index"] == "spi" and res["indices"][0]["spei"] is None
+    assert res["indices"][0]["divergence"] is None and res["current"]["spei"] == {}
+    with pytest.raises(ValueError, match="two years"):
+        wb.standardized_indices(p.iloc[:12])
+    with pytest.raises(ValueError, match="positive"):
+        wb.standardized_indices(p, timescales=(0,))

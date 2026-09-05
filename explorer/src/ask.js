@@ -13,8 +13,8 @@ import {
   $, actions, copyText, downloadBlob, escapeHtml, sourceStyle, state, stationKey,
 } from "./core.js?v=__BUILD__";
 import { shapeSvg } from "./shapes.js?v=__BUILD__";
-import { closeDrawer, drawerOpen, openDrawer, setStatusEl } from "./shell.js?v=__BUILD__";
-import { Cancelled, callCancelable, call, onAskProgress } from "./worker-client.js?v=__BUILD__";
+import { closeDrawer, drawerMode, drawerOpen, openDrawer, setStatusEl } from "./shell.js?v=__BUILD__";
+import { Cancelled, callCancelable, call, ensureCatalogInWorker, onAskProgress } from "./worker-client.js?v=__BUILD__";
 import { map } from "./map.js?v=__BUILD__";
 import { visibleLayerSummary } from "./layer-ui.js?v=__BUILD__";
 import { initShowcase } from "./showcase.js?v=__BUILD__";
@@ -95,6 +95,21 @@ function updateForgetButton() {
   $("ask-forget").hidden = !has;
 }
 
+// The model Ask is set up with, for Solve to borrow: one key, one settings
+// block, stored once. Null when there is none; Solve then runs keyless, which
+// is a complete run on its own.
+export function askModelConfig() {
+  const provider = $("ask-provider").value;
+  const chosen = ASK_PROVIDERS[provider];
+  if (!chosen) return null;
+  const key = $("ask-key").value.trim();
+  const base_url = provider === "custom" ? $("ask-base-url").value.trim() : chosen.base_url;
+  if (!key && provider !== "custom") return null;
+  if (provider === "custom" && !base_url) return null;
+  const model = $("ask-model").value.trim() || chosen.model;
+  return { provider, model, api_key: key || "none", base_url, label: `${model} via ${provider}` };
+}
+
 // What the user is looking at, in one line the model can act on. Shown in the
 // drawer so it is never a hidden prompt.
 export function currentContext() {
@@ -136,7 +151,7 @@ const summariseQuestion = (r) =>
   "period, mean, trend, and the flood frequency if the record allows it.";
 
 export function openAsk() {
-  openDrawer();
+  openDrawer({ mode: "ask" });
   const q = $("ask-question");
   contextLine();
   // Only filling an *empty* box meant the first station's question stayed for
@@ -185,17 +200,6 @@ function askLog(text) {
   }
   log.appendChild(li);
   log.scrollTop = log.scrollHeight;
-}
-
-async function ensureCatalogInWorker() {
-  if (state.ask.catalogSent) return;
-  const rows = state.stations.map((r) => ({
-    source: r.source, station_id: r.station_id, name: r.name, latitude: r.lat, longitude: r.lon,
-    variables: r.variables || [], period_start: r.period_start, period_end: r.period_end, url: r.url,
-    agency: sourceStyle(r.source).label,
-  }));
-  await call("catalog", { rows });
-  state.ask.catalogSent = true;
 }
 
 function currentTier() {
@@ -476,7 +480,9 @@ export async function initAsk() {
   // to sit after `await loadProviders()`, so between load and that fetch coming
   // back, clicking Ask did nothing at all and said nothing about why. The
   // picker below fills in a moment later; the drawer does not need it to open.
-  $("btn-ask").addEventListener("click", () => { if (drawerOpen()) closeDrawer(); else openAsk(); });
+  $("btn-ask").addEventListener("click", () => {
+    if (drawerOpen() && drawerMode() === "ask") closeDrawer(); else openAsk();
+  });
 
   const ex = $("ask-examples");
   for (const q of ASK_EXAMPLES) {

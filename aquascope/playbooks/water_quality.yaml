@@ -1,0 +1,261 @@
+# Is the water fit for a use: an index over the parameters that were actually sampled.
+#
+# Evidence (issue #62, the 2024-2026 application sweep): a water quality index
+# with a guideline exceedance core (CCME WQI 1.0) is the standard descriptive
+# tool, usually paired with PCA (doi:10.3390/su16135644, doi:10.3390/w16111570);
+# irrigation suitability indices (SAR, RSC, Na%, FAO 29) are the natural second
+# index (doi:10.3390/w16020264). Data reality: the AquaScope archive carries no
+# water-quality variables until Phase 3 (#188), so the samples come straight
+# from the agency (USGS daily water-quality values, the Water Quality Portal),
+# over a capped window: a screening, not a bulk download. The tree: a station
+# with sampled parameters within reach gives the samples, the WHO screen and
+# the index against the guideline set of the use, plus the irrigation index for
+# irrigation use; no samples within reach is declined, and so is a health
+# verdict, which no index over sampled parameters can give.
+id: water_quality
+title: Water quality at a station
+problem: water_quality
+variable: water_quality
+description: A water quality index (CCME WQI 1.0, and the NSF WQI when its parameters are present) over the parameters sampled at the nearest water-quality station, against the guidelines of the use (drinking, irrigation, aquatic life); irrigation suitability (SAR, sodium percentage, RSC, FAO 29) for irrigation use.
+intake:
+  - name: use
+    label: What the water is for
+    type: choice
+    options: [drinking, irrigation, aquatic life]
+    default: drinking
+  - name: years
+    label: Years of recent samples to screen
+    type: int
+    default: 5
+  - name: health_verdict
+    label: Ask for a health verdict (is it safe) rather than an index over the sampled parameters
+    type: bool
+    default: false
+branches:
+  - id: irrigation
+    when:
+      - path: intake.use
+        op: "=="
+        value: irrigation
+      - path: context.years_by_variable.water_quality
+        op: exists
+    station_variable: water_quality
+    rationale: >-
+      Sampled water quality is listed at {{ station.name }} ({{ station.source }} {{ station.station_id }},
+      {{ station.distance_km }} km from the point). The plan fetches the last {{ intake.years }} years of samples,
+      indexes them against the FAO 29 irrigation thresholds (CCME WQI 1.0), and reads the irrigation suitability
+      itself: sodium adsorption ratio, sodium percentage and residual sodium carbonate with the FAO degree of
+      restriction on use. Only the parameters that were sampled enter; what was not sampled is reported as unknown.
+    steps:
+      - id: s1
+        tool: water_quality_samples
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          years: "{{ intake.years }}"
+          use: irrigation
+        rationale: >-
+          The sampled parameters over the last {{ intake.years }} years, as tidy rows with per-parameter counts,
+          units and period; a screening list, not the agency's whole catalogue.
+        expects:
+          - check: not_empty
+            path: samples
+          - check: unit_present
+            path: unit
+      - id: s2
+        tool: wqi
+        method: water_quality_index
+        depends_on: [s1]
+        arguments:
+          from_step: s1
+          use: irrigation
+        rationale: >-
+          CCME WQI 1.0 against the FAO 29 thresholds above which the restriction on irrigation use is severe:
+          scope, frequency and amplitude of exceedances over the sampled parameters, the 0 to 100 score and its
+          category. The NSF WQI is added when enough of its nine parameters are present.
+        expects:
+          - check: not_empty
+            path: ccme.score
+          - check: min_samples
+            value: 4
+            path: ccme.sample_counts
+        fallback: stop
+      - id: s3
+        tool: iwqi
+        method: iwqi
+        depends_on: [s1]
+        arguments:
+          from_step: s1
+        rationale: >-
+          Irrigation suitability after FAO 29: SAR, sodium percentage and RSC (ions in meq/L) with their classes,
+          the degree of restriction for salinity, infiltration, ion toxicity and miscellaneous effects, and the
+          worst of them as the verdict. A parameter that was not sampled is listed as missing, not cleared.
+        expects:
+          - check: not_empty
+            path: restriction
+  - id: aquatic_life
+    when:
+      - path: intake.use
+        op: "=="
+        value: aquatic life
+      - path: context.years_by_variable.water_quality
+        op: exists
+    station_variable: water_quality
+    rationale: >-
+      Sampled water quality is listed at {{ station.name }} ({{ station.source }} {{ station.station_id }},
+      {{ station.distance_km }} km from the point). The plan fetches the last {{ intake.years }} years of samples
+      and indexes them against the CCME freshwater aquatic-life guidelines (long-term values) with the CCME WQI
+      1.0; the NSF WQI is added when enough of its nine parameters are present. Only sampled parameters enter.
+    steps:
+      - id: s1
+        tool: water_quality_samples
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          years: "{{ intake.years }}"
+          use: aquatic life
+        rationale: >-
+          The sampled parameters over the last {{ intake.years }} years, as tidy rows with per-parameter counts,
+          units and period.
+        expects:
+          - check: not_empty
+            path: samples
+          - check: unit_present
+            path: unit
+      - id: s2
+        tool: wqi
+        method: water_quality_index
+        depends_on: [s1]
+        arguments:
+          from_step: s1
+          use: aquatic life
+        rationale: >-
+          CCME WQI 1.0 against the CCME freshwater aquatic-life guidelines: scope, frequency and amplitude of
+          exceedances over the sampled parameters, the score and its category; the NSF WQI beside it when its
+          parameters are present.
+        expects:
+          - check: not_empty
+            path: ccme.score
+          - check: min_samples
+            value: 4
+            path: ccme.sample_counts
+        fallback: stop
+  - id: drinking
+    when:
+      - path: context.years_by_variable.water_quality
+        op: exists
+    station_variable: water_quality
+    rationale: >-
+      Sampled water quality is listed at {{ station.name }} ({{ station.source }} {{ station.station_id }},
+      {{ station.distance_km }} km from the point). The plan fetches the last {{ intake.years }} years of samples,
+      screens each parameter against the WHO (2022) drinking-water guideline, and indexes them with the CCME
+      WQI 1.0 against the same guidelines; the NSF WQI is added when enough of its nine parameters are present.
+      The result is an index over the sampled parameters, not a verdict that the water is safe to drink.
+    steps:
+      - id: s1
+        tool: water_quality_samples
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          years: "{{ intake.years }}"
+          use: drinking
+        rationale: >-
+          The sampled parameters over the last {{ intake.years }} years, as tidy rows with per-parameter counts,
+          units and period; a screening list, not the agency's whole catalogue.
+        expects:
+          - check: not_empty
+            path: samples
+          - check: unit_present
+            path: unit
+      - id: s2
+        tool: who_screen
+        depends_on: [s1]
+        arguments:
+          from_step: s1
+        rationale: >-
+          Share of samples outside the WHO (2022) guideline for each recognised parameter: over 10 percent is an
+          alert, any exceedance a warning. A parameter with no WHO guideline value is not screened.
+      - id: s3
+        tool: wqi
+        method: water_quality_index
+        depends_on: [s1]
+        arguments:
+          from_step: s1
+          use: drinking
+        rationale: >-
+          CCME WQI 1.0 against the WHO (2022) drinking-water guidelines: scope, frequency and amplitude of
+          exceedances over the sampled parameters, the 0 to 100 score and its category (Excellent, Good, Fair,
+          Marginal, Poor). The NSF WQI is added when enough of its nine parameters are present.
+        expects:
+          - check: not_empty
+            path: ccme.score
+          - check: min_samples
+            value: 4
+            path: ccme.sample_counts
+        fallback: stop
+declines:
+  - when:
+      - path: context.years_by_variable.water_quality
+        op: exists
+        value: false
+    say: >-
+      No station with sampled water-quality parameters is within reach of this point, and the AquaScope archive
+      carries no water-quality variables until Phase 3 (#188), so there is nothing to index here. Where samples do
+      exist, aquascope reaches them at USGS stations and the Water Quality Portal in the United States; the EU
+      Water Framework Directive status data and UNEP GEMStat are catalogued sources whose samples this playbook
+      does not yet fetch.
+  - when:
+      - path: intake.health_verdict
+        op: "=="
+        value: true
+    say: >-
+      Whether the water is safe to drink is a health judgement over every hazard present, including the pathogens,
+      pesticides and metals that were never sampled at this station; an index over the sampled parameters cannot
+      make it and this playbook will not. Ask for the index against the drinking-water guidelines, or bring a full
+      laboratory analysis.
+caveats:
+  - >-
+    The index covers the parameters that were sampled and nothing else; a parameter that was not sampled is not
+    cleared, it is unknown, and a Good or Excellent score is a statement about the sampled parameters, not a
+    verdict that the water is safe for the use.
+  - >-
+    The NSF sub-index curves used here are digitised approximations of the published rating curves (Brown et al.
+    1970), and the weights are renormalised when some of the nine parameters are missing.
+  - say: >-
+      Guideline values are the WHO (2022) drinking-water guidelines (4th edition with addenda), as the WHO
+      screen carries them.
+    when:
+      - path: intake.use
+        op: "=="
+        value: drinking
+  - say: >-
+      Guideline values are FAO Irrigation and Drainage Paper 29 (Ayers and Westcot 1985): the CCME index counts
+      an exceedance at the threshold above which the restriction on use is severe, and the graded restriction
+      (none, slight to moderate, severe) per component is the irrigation index's.
+    when:
+      - path: intake.use
+        op: "=="
+        value: irrigation
+  - say: >-
+      Guideline values are the CCME freshwater aquatic-life guidelines, long-term values, with hardness-dependent
+      metals taken at the least strict bound of their range.
+    when:
+      - path: intake.use
+        op: "=="
+        value: aquatic life
+  - say: >-
+      USGS daily water-quality values are a continuous monitor's daily means for temperature, specific
+      conductance, dissolved oxygen and pH; nutrients, metals and bacteria come from discrete sampling (the Water
+      Quality Portal) and are not in a USGS daily record.
+    when:
+      - path: station.source
+        op: "=="
+        value: usgs
+citations:
+  - "CCME (2001). Canadian water quality guidelines for the protection of aquatic life: CCME Water Quality Index 1.0, User's Manual. Canadian Council of Ministers of the Environment, Winnipeg."
+  - "Brown, R. M., McClelland, N. I., Deininger, R. A. and Tozer, R. G. (1970). A water quality index: do we dare? Water and Sewage Works 117, 339-343."
+  - "World Health Organization (2022). Guidelines for drinking-water quality, 4th edition, incorporating the first and second addenda. WHO, Geneva."
+  - "Ayers, R. S. and Westcot, D. W. (1985). Water quality for agriculture. FAO Irrigation and Drainage Paper 29, Rev. 1. FAO, Rome."
+  - "Richards, L. A. (ed.) (1954). Diagnosis and improvement of saline and alkali soils. USDA Handbook 60; Wilcox, L. V. (1955). Classification and use of irrigation waters. USDA Circular 969."
+  - "WQI with PCA as the descriptive pair in current applications: Sustainability 16 (2024), doi:10.3390/su16135644; Water 16 (2024), doi:10.3390/w16111570."
+  - "Irrigation suitability indices (SAR, RSC, sodium percentage) in current applications: Water 16 (2024), doi:10.3390/w16020264."

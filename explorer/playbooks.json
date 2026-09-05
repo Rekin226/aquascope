@@ -1,0 +1,430 @@
+{
+  "playbooks": [
+    {
+      "id": "drought_status",
+      "title": "Drought status at a place",
+      "problem": "drought",
+      "description": "Whether a place is in drought and how severe it is: SPI and SPEI at several timescales from a rain gauge or the ERA5 cell, the groundwater drought index and its lag at a well within reach, the low-flow context at a gauge.",
+      "variable": "precipitation",
+      "intake": [
+        {
+          "name": "timescales",
+          "label": "Timescales (months)",
+          "type": "list",
+          "default": [
+            1,
+            3,
+            12
+          ],
+          "options": [],
+          "required": false,
+          "help": "Accumulation periods for SPI and SPEI, in months (1 for the month, 3 for the season, 12 for the year).",
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "drought_concern",
+          "label": "What the drought matters for",
+          "type": "choice",
+          "default": "other",
+          "options": [
+            "agriculture",
+            "water supply",
+            "groundwater",
+            "other"
+          ],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "flash_drought",
+          "label": "Flash drought (weeks, not months)",
+          "type": "bool",
+          "default": false,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        }
+      ],
+      "branches": [
+        "gauge_indices",
+        "gauge_indices_marginal",
+        "gauge_spi_only",
+        "reanalysis"
+      ]
+    },
+    {
+      "id": "flood_risk",
+      "title": "Flood risk at a site",
+      "problem": "flood_risk",
+      "description": "Design flow or flood screening at a point, from a long gauge record, a short one, or none.",
+      "variable": "discharge",
+      "intake": [
+        {
+          "name": "return_period",
+          "label": "Return period (years)",
+          "type": "int",
+          "default": 100,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": 2.0,
+          "max": null
+        },
+        {
+          "name": "decision",
+          "label": "What is being decided",
+          "type": "choice",
+          "default": "design flow",
+          "options": [
+            "design flow",
+            "risk screening",
+            "insurance",
+            "inundation extent"
+          ],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        }
+      ],
+      "branches": [
+        "at_site",
+        "short_record",
+        "regional"
+      ]
+    },
+    {
+      "id": "groundwater_decline",
+      "title": "Groundwater decline at a well",
+      "problem": "groundwater_decline",
+      "description": "Whether a well's level is declining, how fast (m/yr with confidence), groundwater drought status and recharge; regional signal only when no well is within reach.",
+      "variable": "groundwater_level",
+      "intake": [
+        {
+          "name": "horizon",
+          "label": "Years of recent record to compare with the full record",
+          "type": "int",
+          "default": 10,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": 1.0,
+          "max": null
+        },
+        {
+          "name": "concern",
+          "label": "Why it matters",
+          "type": "choice",
+          "default": "other",
+          "options": [
+            "supply",
+            "subsidence",
+            "ecosystem",
+            "other"
+          ],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "attribute_cause",
+          "label": "Attribute the decline to a cause (pumping, drought, land use)",
+          "type": "bool",
+          "default": false,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        }
+      ],
+      "branches": [
+        "well",
+        "regional"
+      ]
+    },
+    {
+      "id": "irrigation_feasibility",
+      "title": "Irrigation feasibility at a point",
+      "problem": "irrigation",
+      "description": "A crop's seasonal water demand at a point (FAO-56 single Kc on ERA5 reference ET0) in mm, m3 and m3/s, and whether the nearest gauged river can supply it as a run-of-river abstraction; demand only when no gauge is within reach.",
+      "variable": "discharge",
+      "intake": [
+        {
+          "name": "crop",
+          "label": "Crop (FAO-56 table)",
+          "type": "choice",
+          "default": "maize",
+          "options": [
+            "alfalfa",
+            "banana",
+            "barley",
+            "cabbage",
+            "citrus",
+            "coffee",
+            "cotton",
+            "grape",
+            "groundnut",
+            "maize",
+            "olive",
+            "onion",
+            "pepper",
+            "potato",
+            "rice_paddy",
+            "sorghum",
+            "soybean",
+            "sugar_beet",
+            "sugarcane",
+            "sunflower",
+            "tea",
+            "tomato",
+            "wheat_winter"
+          ],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "area_ha",
+          "label": "Area (ha)",
+          "type": "float",
+          "default": 10,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "planting_month",
+          "label": "Planting month (1-12)",
+          "type": "int",
+          "default": 4,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "efficiency",
+          "label": "Irrigation efficiency",
+          "type": "float",
+          "default": 0.7,
+          "options": [],
+          "required": false,
+          "help": "Gross depth is the net requirement divided by this (0.7 for sprinkler, 0.9 for drip, 0.5 for surface).",
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "share",
+          "label": "Abstraction share of the flow allowed",
+          "type": "float",
+          "default": 0.1,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "decision",
+          "label": "What is being decided",
+          "type": "choice",
+          "default": "seasonal demand",
+          "options": [
+            "seasonal demand",
+            "daily schedule"
+          ],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        }
+      ],
+      "branches": [
+        "with_gauge",
+        "demand_only"
+      ]
+    },
+    {
+      "id": "supply_reliability",
+      "title": "Supply reliability of a river",
+      "problem": "supply_reliability",
+      "description": "Whether a river can supply a stated demand as a run-of-river abstraction: the fraction of days and years the flow, less an environmental reserve and capped at an abstraction share, meets it; from the gauge record, or from donor catchments as a band when there is no gauge.",
+      "variable": "discharge",
+      "intake": [
+        {
+          "name": "demand_m3s",
+          "label": "Demand (m3/s)",
+          "type": "float",
+          "default": null,
+          "options": [],
+          "required": false,
+          "help": "The abstraction wanted, in cubic metres per second; or give demand_ml_day.",
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "demand_ml_day",
+          "label": "Demand (ML/day)",
+          "type": "float",
+          "default": null,
+          "options": [],
+          "required": false,
+          "help": "The abstraction wanted, in megalitres a day (1 ML/day is 0.01157 m3/s).",
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "use",
+          "label": "What the water is for",
+          "type": "choice",
+          "default": "other",
+          "options": [
+            "municipal",
+            "irrigation",
+            "industrial",
+            "other"
+          ],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "share",
+          "label": "Abstraction share of the flow allowed",
+          "type": "float",
+          "default": 0.1,
+          "options": [],
+          "required": false,
+          "help": "The largest fraction of the day's flow the abstraction may take (a screening rule).",
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "storage",
+          "label": "The scheme has a reservoir or storage",
+          "type": "bool",
+          "default": false,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        }
+      ],
+      "branches": [
+        "gauged",
+        "gauged_short",
+        "regional"
+      ]
+    },
+    {
+      "id": "ungauged_flow",
+      "title": "Flow to expect at an ungauged site",
+      "problem": "ungauged_flow",
+      "description": "The flow regime (mean, Q95, Q05, seasonality) at a point with no gauge, transferred from similar gauged catchments.",
+      "variable": "discharge",
+      "intake": [
+        {
+          "name": "purpose",
+          "label": "What the flow is for",
+          "type": "choice",
+          "default": "other",
+          "options": [
+            "irrigation offtake",
+            "environmental flow",
+            "hydropower screening",
+            "water supply",
+            "other"
+          ],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "statistic",
+          "label": "Which statistic matters most",
+          "type": "choice",
+          "default": "all",
+          "options": [
+            "mean",
+            "Q95",
+            "Q05",
+            "all"
+          ],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        }
+      ],
+      "branches": [
+        "at_gauge",
+        "regional"
+      ]
+    },
+    {
+      "id": "water_quality",
+      "title": "Water quality at a station",
+      "problem": "water_quality",
+      "description": "A water quality index (CCME WQI 1.0, and the NSF WQI when its parameters are present) over the parameters sampled at the nearest water-quality station, against the guidelines of the use (drinking, irrigation, aquatic life); irrigation suitability (SAR, sodium percentage, RSC, FAO 29) for irrigation use.",
+      "variable": "water_quality",
+      "intake": [
+        {
+          "name": "use",
+          "label": "What the water is for",
+          "type": "choice",
+          "default": "drinking",
+          "options": [
+            "drinking",
+            "irrigation",
+            "aquatic life"
+          ],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "years",
+          "label": "Years of recent samples to screen",
+          "type": "int",
+          "default": 5,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "health_verdict",
+          "label": "Ask for a health verdict (is it safe) rather than an index over the sampled parameters",
+          "type": "bool",
+          "default": false,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        }
+      ],
+      "branches": [
+        "irrigation",
+        "aquatic_life",
+        "drinking"
+      ]
+    }
+  ]
+}

@@ -14,7 +14,7 @@ export const EMPTY_FC = { type: "FeatureCollection", features: [] };
 // the pairs which collapse on hue are the least alike in outline.
 export const SOURCE_STYLE = {
   usgs: { label: "USGS (US)", color: "#1565c0", shape: "circle" },
-  uk_ea: { label: "Environment Agency (UK)", color: "#2e7d32", shape: "triangle" },
+  uk_ea: { label: "Environment Agency (England)", color: "#2e7d32", shape: "triangle" },
   hubeau_hydrometrie: { label: "Hub'Eau (FR)", color: "#c62828", shape: "square" },
   pegelonline: { label: "PEGELONLINE (DE)", color: "#ef6c00", shape: "diamond" },
   ireland_opw: { label: "OPW (IE)", color: "#6a1b9a", shape: "pentagon" },
@@ -61,6 +61,9 @@ export const state = {
   overlays: new Set(), opacity: {}, date: null,
   ...LAYER_DEFAULTS,
   ask: { running: false, catalogSent: false, markdown: null, run: 0 },
+  // One drawer, two modes (Ask, Solve); the Solve chip is part of the URL.
+  drawerOpen: false, drawerMode: "ask",
+  solve: { playbook: null, running: false },
 };
 dbg.state = state;
 
@@ -69,6 +72,7 @@ export const actions = {
   selectStation: () => {},
   selectPoint: () => {},
   openAsk: () => {},
+  openSolve: () => {},
   applyUrl: () => {},
   refreshMapData: () => {},
 };

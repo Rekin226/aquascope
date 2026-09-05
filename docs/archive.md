@@ -24,7 +24,7 @@ Parquet bundle per variable and source** for whole-source reads. See
 | `obs/<variable>/<source>.parquet` | the folder above as one Parquet bundle: `station_id, date, value`, sorted, snappy; `station_id` joins to `stations.parquet` |
 | `obs/manifest.json` | every harvested station with period, count, unit, measure note and harvest time, keyed by `source/variable`, plus every bundle; `obs/last_run.json` the last run's per-source tallies |
 
-Sources with a station catalog today: USGS, UK Environment Agency, Hub'Eau
+Sources with a station catalog today: USGS, the Environment Agency (England), Hub'Eau
 (France), PEGELONLINE (Germany), Ireland OPW, Taiwan CWA. Every source that
 gains a `stations()` implementation appears on the next run.
 

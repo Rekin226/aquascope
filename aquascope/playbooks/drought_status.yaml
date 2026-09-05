@@ -1,0 +1,365 @@
+# Is this place in drought: by which index, at which timescale, and is it reaching the wells.
+#
+# Evidence (issues #307, #309): SPEI is the preferred index wherever warming
+# matters, because it sees the evaporative-demand drought SPI misses (a
+# 219-station comparison across Turkiye, Earth Sci. Inform. 2024,
+# doi:10.1007/s12145-024-01401-8; an SPI-SPEI study in Umbria, ESPR 2024,
+# doi:10.1007/s11356-024-35740-2). The tree: a rain gauge with a long record
+# and temperature reachable gives SPI and SPEI with their divergence; a gauge
+# without temperature gives SPI with the caveat; no gauge gives both indices
+# from the ERA5 cell. A well within reach adds the SGI and the SPI-to-SGI lag
+# (Bloomfield and Marchant 2013); a discharge gauge adds the low-flow context.
+# Thresholds (30 years, marginal at 20; 10 years for the SGI) are the registry's
+# (aquascope.methods); every step names its method and is gated at plan time.
+id: drought_status
+title: Drought status at a place
+problem: drought
+variable: precipitation
+description: >-
+  Whether a place is in drought and how severe it is: SPI and SPEI at several timescales from a rain gauge or the
+  ERA5 cell, the groundwater drought index and its lag at a well within reach, the low-flow context at a gauge.
+intake:
+  - name: timescales
+    label: Timescales (months)
+    type: list
+    default: [1, 3, 12]
+    help: Accumulation periods for SPI and SPEI, in months (1 for the month, 3 for the season, 12 for the year).
+  - name: drought_concern
+    label: What the drought matters for
+    type: choice
+    options: [agriculture, water supply, groundwater, other]
+    default: other
+  - name: flash_drought
+    label: Flash drought (weeks, not months)
+    type: bool
+    default: false
+branches:
+  - id: gauge_indices
+    when:
+      - path: context.years_by_variable.precipitation
+        op: ">="
+        value: 30
+      - path: derived.has_temperature
+        op: "=="
+        value: true
+    station_variable: precipitation
+    rationale: >-
+      {{ station.years }} years of precipitation at {{ station.name }} ({{ station.source }} {{ station.station_id }},
+      {{ station.distance_km }} km from the point) and ERA5 temperature for the cell: SPI and SPEI are both
+      defensible. SPI is computed on the gauge's monthly totals at {{ intake.timescales }} months, SPEI on the same
+      totals less Thornthwaite PET from ERA5 temperature, and the divergence between them is reported, because SPEI
+      sees the evaporative-demand drought that SPI misses under warming. A well within reach adds the groundwater
+      drought index and the lag at which rainfall deficits reach it; a discharge gauge adds the low-flow context.
+    steps:
+      - id: s1
+        tool: drought_indices
+        method: spei
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          timescales: "{{ intake.timescales }}"
+          years: 40
+        rationale: >-
+          SPI and SPEI at {{ intake.timescales }} months on the gauge's record: the current value and class of each,
+          the worst month, the drought events, and the SPEI-minus-SPI divergence over the last ten years next to
+          the ERA5 temperature trend that drives it.
+        expects:
+          - check: min_years
+            value: 30
+            path: years
+          - check: not_empty
+            path: indices
+          - check: not_empty
+            path: current.spei
+        fallback:
+          step:
+            tool: drought_indices
+            arguments:
+              lat: "{{ site.lat }}"
+              lon: "{{ site.lon }}"
+              timescales: "{{ intake.timescales }}"
+              years: 40
+            rationale: The gauge's record did not pass its gates; the same indices from the ERA5 cell, labelled as the cell's.
+            expects:
+              - check: not_empty
+                path: indices
+      - id: s2
+        tool: low_flow_context
+        method: flow_duration
+        optional: true
+        station_variable: discharge
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+        rationale: >-
+          The river's side of the drought at the nearest discharge gauge: Q95, Q50 and Q10, the baseflow index,
+          7Q10 where the record allows, and where the last 30 and 90 days sit in the record.
+        expects:
+          - check: not_empty
+            path: fdc
+          - check: unit_present
+            path: unit
+      - id: s3
+        tool: drought_propagation
+        method: sgi
+        optional: true
+        station_variable: groundwater_level
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: >-
+          The Standardised Groundwater Index at the nearest well and the SPI accumulation period and lag (months)
+          whose cross-correlation with it is highest: how long a rainfall deficit takes to reach the water table.
+        expects:
+          - check: min_years
+            value: 10
+            path: years
+          - check: not_empty
+            path: sgi
+  - id: gauge_indices_marginal
+    when:
+      - path: context.years_by_variable.precipitation
+        op: ">="
+        value: 20
+      - path: derived.has_temperature
+        op: "=="
+        value: true
+    station_variable: precipitation
+    rationale: >-
+      {{ station.years }} years of precipitation at {{ station.name }} ({{ station.source }} {{ station.station_id }}):
+      between the 20-year floor and the 30 years WMO recommends, so the distribution fits behind SPI and SPEI are
+      marginal and every class is quoted with that caveat. The same chain runs: both indices at
+      {{ intake.timescales }} months with their divergence, then the well and the river where records exist.
+    steps:
+      - id: s1
+        tool: drought_indices
+        method: spei
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          timescales: "{{ intake.timescales }}"
+          years: 40
+        rationale: SPI and SPEI on a marginal record; the classes are indicative, the divergence is the signal to read.
+        expects:
+          - check: min_years
+            value: 20
+            path: years
+          - check: not_empty
+            path: indices
+          - check: not_empty
+            path: current.spei
+      - id: s2
+        tool: low_flow_context
+        method: flow_duration
+        optional: true
+        station_variable: discharge
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+        rationale: The low-flow context at the nearest discharge gauge.
+        expects:
+          - check: not_empty
+            path: fdc
+          - check: unit_present
+            path: unit
+      - id: s3
+        tool: drought_propagation
+        method: sgi
+        optional: true
+        station_variable: groundwater_level
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: The groundwater drought index at the nearest well and the SPI-to-SGI lag.
+        expects:
+          - check: min_years
+            value: 10
+            path: years
+          - check: not_empty
+            path: sgi
+  - id: gauge_spi_only
+    when:
+      - path: context.years_by_variable.precipitation
+        op: ">="
+        value: 20
+    station_variable: precipitation
+    rationale: >-
+      {{ station.years }} years of precipitation at {{ station.name }} ({{ station.source }} {{ station.station_id }})
+      and no temperature series within reach: SPI alone, at {{ intake.timescales }} months. SPEI is preferable under
+      warming because it sees the evaporative-demand drought SPI cannot; without PET this answer is the rainfall
+      deficit only.
+    steps:
+      - id: s1
+        tool: drought_indices
+        method: spi
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          timescales: "{{ intake.timescales }}"
+          pet: none
+          years: 40
+        rationale: SPI at the requested timescales on the gauge's monthly totals; no PET, so no SPEI.
+        expects:
+          - check: min_years
+            value: 20
+            path: years
+          - check: not_empty
+            path: current.spi
+      - id: s2
+        tool: low_flow_context
+        method: flow_duration
+        optional: true
+        station_variable: discharge
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+        rationale: The low-flow context at the nearest discharge gauge.
+        expects:
+          - check: not_empty
+            path: fdc
+      - id: s3
+        tool: drought_propagation
+        method: sgi
+        optional: true
+        station_variable: groundwater_level
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: The groundwater drought index at the nearest well and the SPI-to-SGI lag.
+        expects:
+          - check: min_years
+            value: 10
+            path: years
+          - check: not_empty
+            path: sgi
+  - id: reanalysis
+    when: []
+    rationale: >-
+      No rain gauge with twenty years of record within reach: SPI and SPEI at {{ intake.timescales }} months are
+      computed from ERA5 precipitation and temperature for the cell (about 9 km) over the last 40 years, and
+      describe the area's climate rather than a gauge. A well or a discharge gauge within reach still adds the
+      groundwater drought index with its lag and the low-flow context.
+    steps:
+      - id: s1
+        tool: drought_indices
+        method: spei_reanalysis
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          timescales: "{{ intake.timescales }}"
+          years: 40
+        rationale: >-
+          SPI and SPEI for the ERA5 cell at {{ intake.timescales }} months: current values and classes, the worst
+          month, the drought events, the SPEI-minus-SPI divergence and the temperature trend behind it.
+        expects:
+          - check: min_years
+            value: 30
+            path: years
+          - check: not_empty
+            path: indices
+          - check: not_empty
+            path: current.spei
+      - id: s2
+        tool: low_flow_context
+        method: flow_duration
+        optional: true
+        station_variable: discharge
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+        rationale: >-
+          The river's side of the drought at the nearest discharge gauge: Q95, Q50 and Q10, the baseflow index,
+          7Q10 where the record allows, and where the last 30 and 90 days sit in the record.
+        expects:
+          - check: not_empty
+            path: fdc
+          - check: unit_present
+            path: unit
+      - id: s3
+        tool: drought_propagation
+        method: sgi
+        optional: true
+        station_variable: groundwater_level
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: The groundwater drought index at the nearest well and the SPI-to-SGI lag in months.
+        expects:
+          - check: min_years
+            value: 10
+            path: years
+          - check: not_empty
+            path: sgi
+declines:
+  - when:
+      - path: intake.flash_drought
+        op: "=="
+        value: true
+    say: >-
+      This playbook sees monthly droughts: SPI, SPEI and the SGI are computed on monthly totals and monthly levels,
+      and a flash drought (a few weeks of rapid drying) needs a sub-monthly index of soil moisture or evaporative
+      demand that aquascope does not compute. Ask for the monthly drought status, or bring weekly soil-moisture data.
+caveats:
+  - >-
+    Monthly resolution: the indices see droughts a month and longer; what happened this week is not in them, and a
+    flash drought is out of their reach.
+  - >-
+    SPI and SPEI say how unusual a deficit is against this record; they say nothing about its cause, and the
+    SPI-to-SGI lag is a statistical association read off the two series, not a model of the aquifer.
+  - say: >-
+      SPEI needs a PET series: here PET is Thornthwaite (1948) from ERA5 temperature, a temperature-only
+      approximation and the formulation SPEI was introduced with; FAO-56 Penman-Monteith is the better PET where
+      humidity, wind and radiation exist.
+    when:
+      - path: derived.has_temperature
+        op: "=="
+        value: true
+  - say: >-
+      SPEI is preferable to SPI under warming (Vicente-Serrano et al. 2010): SPI alone cannot see a drought driven
+      by evaporative demand with unchanged rainfall. No temperature series was within reach, so this answer is
+      the rainfall deficit only.
+    when:
+      - path: derived.has_temperature
+        op: "=="
+        value: false
+  - say: >-
+      The precipitation record is shorter than the 30 years WMO recommends for a standardised index; the fitted
+      distributions are marginal and every class is indicative.
+    when:
+      - path: context.years_by_variable.precipitation
+        op: "<"
+        value: 30
+      - path: context.years_by_variable.precipitation
+        op: ">="
+        value: 20
+  - say: >-
+      No rain gauge within reach: the indices describe the ERA5 cell (about 9 km), a reanalysis climate, not a
+      gauge; a gauge record with twenty years is what turns this into a station answer.
+    when:
+      - path: context.years_by_variable.precipitation
+        op: exists
+        value: false
+citations:
+  - "McKee, T. B., Doesken, N. J., & Kleist, J. (1993). The relationship of drought frequency and duration to time scales. Proc. 8th Conf. on Applied Climatology, 179-184."
+  - "Vicente-Serrano, S. M., Begueria, S., & Lopez-Moreno, J. I. (2010). A multiscalar drought index sensitive to global warming: the Standardized Precipitation Evapotranspiration Index. J. Climate 23, 1696-1718. doi:10.1175/2009JCLI2909.1"
+  - "Begueria, S., Vicente-Serrano, S. M., Reig, F., & Latorre, B. (2014). Standardized precipitation evapotranspiration index (SPEI) revisited. Int. J. Climatol. 34, 3001-3023. doi:10.1002/joc.3887"
+  - "Thornthwaite, C. W. (1948). An approach toward a rational classification of climate. Geographical Review 38, 55-94."
+  - "Bloomfield, J. P., & Marchant, B. P. (2013). Analysis of groundwater drought building on the standardised precipitation index approach. Hydrol. Earth Syst. Sci. 17, 4769-4787."
+  - "WMO (2012). Standardized Precipitation Index User Guide (Svoboda, Hayes, Wood). WMO-No. 1090."
+  - "SPI against SPEI at 219 stations across Turkiye: Earth Science Informatics (2024), doi:10.1007/s12145-024-01401-8"
+  - "SPI-SPEI correlation under warming in Umbria: Environ. Sci. Pollut. Res. (2024), doi:10.1007/s11356-024-35740-2"
+  - "Hersbach, H. et al. (2020). The ERA5 global reanalysis. Q. J. R. Meteorol. Soc. 146, 1999-2049."

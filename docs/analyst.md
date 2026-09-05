@@ -6,8 +6,8 @@ and aquascope does the part that has to be right.
 ## `aquascope ask`: a question in, a cited report out
 
 ```bash
-pip install aquascope             # the openai SDK is optional (pip install "aquascope[llm]")
-export GROQ_API_KEY=...            # or OPENAI_API_KEY, HF_TOKEN, MISTRAL_API_KEY, OPENROUTER_API_KEY, or AQUASCOPE_LLM_API_KEY + _BASE_URL + _MODEL
+pip install aquascope             # the openai and anthropic SDKs are optional (pip install "aquascope[llm]")
+export ANTHROPIC_API_KEY=...       # or GROQ_API_KEY, OPENAI_API_KEY, NVIDIA_API_KEY, HF_TOKEN, MISTRAL_API_KEY, OPENROUTER_API_KEY, or AQUASCOPE_LLM_API_KEY + _BASE_URL + _MODEL
 aquascope ask "What is the 100-year flood of the Seine at Paris, and how sure can we be?" -o seine.md
 ```
 
@@ -25,9 +25,16 @@ them against real data. The Markdown report has three parts:
    also assembled from the tool results (never from the model's memory).
 
 A footer records the model, provider, date and the tools called. `--provider`
-picks openai / groq / huggingface / ollama (defaults from the environment),
-`--model` overrides the default model, `--max-steps` bounds the tool loop.
-Works with any OpenAI-compatible endpoint that supports tool calling.
+picks anthropic / openai / groq / nvidia / huggingface / mistral / openrouter /
+ollama (defaults from the environment, scanned in that order), `--model`
+overrides the default model, `--max-steps` bounds the tool loop. Works with any
+OpenAI-compatible endpoint that supports tool calling, and with Anthropic's
+Messages API: `--provider anthropic` defaults to `claude-opus-5`, and
+`AQUASCOPE_LLM_EFFORT` (`low` to `max`) sets how hard Claude thinks per step.
+An identity-linked key that can act in several workspaces also needs
+`ANTHROPIC_WORKSPACE_ID` (the `wrkspc_...` id from the console), which is sent
+as the `anthropic-workspace-id` header; a key created for one workspace does
+not.
 
 This is deliberately not an autonomous agent: no memory, no planning beyond
 the tool loop, no writes. It is the "ask, get the work done, see the work"
@@ -39,9 +46,49 @@ button): the browser worker calls the provider directly with your key through
 `aquascope.ai_engine.llm_transport.UrllibChatClient`, a dependency-free
 OpenAI-compatible client that is also the fallback when the `openai` package
 is not installed, so `pip install aquascope` alone is enough for `aquascope
-ask`. Providers: `openai`, `groq`, `huggingface`, `mistral`, `openrouter`,
-`ollama`, or `AQUASCOPE_LLM_BASE_URL` for anything else that speaks the
-protocol.
+ask`. Claude goes through `AnthropicChatClient` in the same module, which
+speaks the Messages API behind the same surface (the `anthropic` SDK when it
+is installed, plain HTTP in the browser) and sends the model's own content
+blocks back on every tool turn so adaptive thinking carries across steps.
+Providers: `anthropic`, `openai`, `groq`, `nvidia` (CLI only), `huggingface`,
+`mistral`, `openrouter`, `ollama`, or `AQUASCOPE_LLM_BASE_URL` for anything
+else that speaks the chat-completions protocol.
+
+### Supported Providers
+
+| Provider | ID | Environment Variable | Default Model | Free Tier / Trial | Browser (Explorer) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Anthropic** | `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-5` | Paid | Yes |
+| **OpenAI** | `openai` | `OPENAI_API_KEY` | `gpt-4o-mini` | Paid | Yes |
+| **Groq** | `groq` | `GROQ_API_KEY` | `openai/gpt-oss-120b` | Free tier (~1,000 req/day) | Yes |
+| **NVIDIA Build** | `nvidia` | `NVIDIA_API_KEY` | `openai/gpt-oss-120b` | 1,000 trial credits on signup | No (CORS restricted; CLI only) |
+| **Hugging Face** | `huggingface` | `HF_TOKEN` | `Qwen/Qwen2.5-72B-Instruct` | Monthly free tier credit | Yes |
+| **Mistral** | `mistral` | `MISTRAL_API_KEY` | `mistral-small-latest` | Paid | Yes |
+| **OpenRouter** | `openrouter` | `OPENROUTER_API_KEY` | `openai/gpt-4o-mini` | `:free` models available | Yes |
+| **Ollama** | `ollama` | Local (`None`) | `qwen2.5:7b` | Free (runs locally) | No (requires local daemon) |
+
+## From a question to a problem: `aquascope solve`
+
+`ask` improvises: the model decides the next tool call after seeing the last
+result, and the checks run on the finished answer. `solve` plans first. The
+problem and the coordinates go through a reconnaissance of the site, a
+playbook's decision tree fills a study with a gate per step, you see the
+plan before it runs, the engine executes it with the gates, and a failed
+gate runs the fallback or replans once:
+
+```
+intake ──► recon ──► plan ──► [you review] ──► execute ──► report
+                                                 │  ▲
+                                                 ▼  │ gate fails
+                                               verify ─► replan (once)
+```
+
+What the gates establish: that a number was computed from a record long
+enough for it, that a return period is within the record's reach, that an
+interval is finite, that two fits agree, that a transfer had donors. What
+they do not: that the record is right, that the catchment is the one the
+question means, or anything about the future. Everything the gates and the
+checks did not establish is listed under the answer. See [solve.md](solve.md).
 
 ## `aquascope ingest`: any export in, a clean series and a QA report out
 
@@ -72,6 +119,58 @@ What happens:
 
 Nothing in `ingest` needs a key or a network connection unless you ask for
 `--llm`.
+
+## Reconnaissance first: `aquascope assess`
+
+Before any analysis, inventory what exists at the place and what that record
+supports. `assess_site(lat, lon)` in `aquascope.explore` reads the published
+station catalog (true record spans, no agency call), asks BasinATLAS for the
+catchment and the similarity search for donors, and scores every method in
+`aquascope.methods` as defensible, marginal or not defensible here, with the
+reason. One engine, every face: `aquascope assess`, the `assess_site` MCP
+tool, the Analyst's first tool call for any question about a place or a
+station (it will not run a method the table marks not defensible, and says
+why), and the "What can be answered here" card in the Explorer.
+
+```
+$ aquascope assess 51.4150 -0.3080 --problem flood_risk --return-period 100
+  51.4150, -0.3080  ·  25 gauges within 50 km  ·  catchment 9,991 km²  ·  10 donors
+  discharge: 142.9 yr, Kingston (uk_ea/8496ce69-482c-406a-a2f0-ac418ef8f099)
+  water level: 142.9 yr, Kingston (uk_ea/8496ce69-482c-406a-a2f0-ac418ef8f099)
+  groundwater level: 16.9 yr, Teddington (uk_ea/9eaa9d56-ef35-4029-972b-404da217bf90)
+  precipitation: 37.7 yr, Hogsmill (uk_ea/a04aa8e8-45a2-4d8d-9983-7a55330693b0)
+
+  defensible
+    At-site flood frequency (GEV, LP3 / Bulletin 17C)  the record supports it
+    GloFAS modelled discharge as an independent check  the record supports it
+    Flow signatures transferred from donors            the record supports it
+    Mann-Kendall trend with Sen's slope                the record supports it
+
+  marginal
+    Donor gauges by catchment similarity               meant for an ungauged point; a gauge is available here
+
+  notes
+    - Record resolution is not in the catalog; daily is assumed for every variable.
+    - The catalog lists Kingston (uk_ea/8496ce69-482c-406a-a2f0-ac418ef8f099) from 1883-10-01 (142.9 yr); a default fetch serves the last 40 years, so a computed answer covers fewer years than this span.
+    - 10 donor gauges from a pool of 37,053 gauged catchments.
+    - ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land (Open-Meteo); not checked here.
+    - CMIP6 change factors need model output you supply (aquascope.climate works on downloaded data); not counted.
+```
+
+The same point with a 12-year record would put the 100-year flood in
+*marginal* ("T = 100 years is beyond about 36 years, 3 times the record"); an
+ungauged point marks every at-site method not defensible and leaves the
+regionalisation path (`similar_basins`, `regionalize_signatures`) and the
+GloFAS cross-check. `--radius-km` sets how far a gauge may be to count
+(default 50), `--problem` narrows the table to one kind of question
+(`flood_risk`, `ungauged_flow`, `drought`, `groundwater_decline`,
+`supply_reliability`, `climate_change`, `irrigation`, `water_quality`), and
+`--json` prints the full result: `point`, `stations` (nearest first),
+`catchment`, `context` (years per variable, area, donors, what else is
+available), `sufficiency` (one row per method, with the station it would
+use) and `notes`. The notes are the honest part: the catalog does not record
+resolution, so daily is assumed and said; a fetch serves the last 40 years
+whatever the span; a source that publishes only the last month is named.
 
 ## Level 3: code, checks and a study you can run again
 

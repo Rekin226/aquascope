@@ -119,3 +119,63 @@ def drought_events(index: pd.Series, threshold: float = -1.0) -> list[DroughtEve
         events.append(DroughtEvent(run_start, prev, len(seg),
                                    float(seg.sum()), float(seg.min())))
     return events
+
+
+@dataclass
+class PropagationResult:
+    """How a meteorological index leads a groundwater index.
+
+    Attributes
+    ----------
+    lag_months:
+        The lag (months) at which the driver correlates best with the response.
+    correlation:
+        Pearson correlation at that lag.
+    n:
+        Overlapping months at that lag.
+    correlations:
+        Correlation at every lag tried, ``{lag: r}``.
+    """
+
+    lag_months: int
+    correlation: float
+    n: int
+    correlations: dict[int, float]
+
+
+def propagation_lag(
+    driver: pd.Series, response: pd.Series, *, max_lag: int = 24, min_overlap: int = 24
+) -> PropagationResult:
+    """The lag at which a driver index (SPI-n) best explains a response index (SGI).
+
+    Bloomfield and Marchant (2013) characterise drought propagation by the
+    cross-correlation between SPI at several accumulation periods and the SGI:
+    the accumulation period and lag that maximise it say how long a rainfall
+    deficit takes to reach the water table. Both series are read on a monthly
+    calendar (several values in a month are averaged); the driver is shifted
+    forward by ``0 .. max_lag`` months and the Pearson correlation over the
+    overlapping months is taken at each lag. Raises ``ValueError`` when no lag
+    leaves ``min_overlap`` overlapping months.
+    """
+    if not isinstance(driver.index, pd.DatetimeIndex) or not isinstance(response.index, pd.DatetimeIndex):
+        raise ValueError("driver and response must have a DatetimeIndex.")
+    d = driver.dropna().astype(float)
+    r = response.dropna().astype(float)
+    d = d.groupby(d.index.to_period("M")).mean()
+    r = r.groupby(r.index.to_period("M")).mean()
+    correlations: dict[int, float] = {}
+    counts: dict[int, int] = {}
+    for lag in range(0, int(max_lag) + 1):
+        shifted = d.copy()
+        shifted.index = shifted.index + lag
+        pair = pd.concat([shifted.rename("d"), r.rename("r")], axis=1, join="inner").dropna()
+        if len(pair) < min_overlap:
+            continue
+        c = float(pair["d"].corr(pair["r"]))
+        if np.isfinite(c):
+            correlations[lag] = c
+            counts[lag] = int(len(pair))
+    if not correlations:
+        raise ValueError(f"fewer than {min_overlap} overlapping months at every lag up to {max_lag}")
+    best = max(correlations, key=lambda k: correlations[k])
+    return PropagationResult(best, correlations[best], counts[best], correlations)

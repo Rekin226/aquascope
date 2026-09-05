@@ -17,7 +17,9 @@ from aquascope.groundwater.aquifer import (
 )
 from aquascope.groundwater.drought import (
     DroughtEvent,
+    PropagationResult,
     drought_events,
+    propagation_lag,
     standardised_groundwater_index,
 )
 from aquascope.groundwater.grace import (
@@ -62,8 +64,10 @@ __all__ = [
     "seasonal_decomposition",
     "recession_analysis",
     "DroughtEvent",
+    "PropagationResult",
     "standardised_groundwater_index",
     "drought_events",
+    "propagation_lag",
     # recharge
     "RechargeResult",
     "water_table_fluctuation",

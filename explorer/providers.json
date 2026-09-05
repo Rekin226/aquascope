@@ -13,7 +13,26 @@
       "free": "Free tier: about 1,000 requests a day, 8k tokens a minute.",
       "signup": "https://console.groq.com/keys",
       "browser": true,
-      "note": null
+      "note": null,
+      "api": "openai",
+      "context_chars": null
+    },
+    {
+      "id": "anthropic",
+      "label": "Anthropic (Claude)",
+      "base_url": "https://api.anthropic.com",
+      "model": "claude-opus-5",
+      "models": [
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "claude-haiku-4-5"
+      ],
+      "free": null,
+      "signup": "https://console.anthropic.com/settings/keys",
+      "browser": true,
+      "note": "Pay as you go. In the browser use a key created for a single workspace: keys that span several need a workspace id header the page does not ask for.",
+      "api": "anthropic",
+      "context_chars": 200000
     },
     {
       "id": "huggingface",
@@ -28,7 +47,9 @@
       "free": "Free accounts get a small monthly credit on Inference Providers.",
       "signup": "https://huggingface.co/settings/tokens",
       "browser": true,
-      "note": null
+      "note": null,
+      "api": "openai",
+      "context_chars": null
     },
     {
       "id": "openai",
@@ -42,7 +63,9 @@
       "free": null,
       "signup": "https://platform.openai.com/api-keys",
       "browser": true,
-      "note": null
+      "note": null,
+      "api": "openai",
+      "context_chars": null
     },
     {
       "id": "mistral",
@@ -56,7 +79,9 @@
       "free": null,
       "signup": "https://console.mistral.ai/api-keys/",
       "browser": true,
-      "note": null
+      "note": null,
+      "api": "openai",
+      "context_chars": null
     },
     {
       "id": "openrouter",
@@ -70,7 +95,9 @@
       "free": "Models whose id ends in `:free` cost nothing, with a small daily cap.",
       "signup": "https://openrouter.ai/keys",
       "browser": true,
-      "note": null
+      "note": null,
+      "api": "openai",
+      "context_chars": null
     },
     {
       "id": "custom",
@@ -81,7 +108,9 @@
       "free": null,
       "signup": null,
       "browser": true,
-      "note": "Any endpoint that speaks /chat/completions with tool calling."
+      "note": "Any endpoint that speaks /chat/completions with tool calling.",
+      "api": "openai",
+      "context_chars": null
     }
   ]
 }

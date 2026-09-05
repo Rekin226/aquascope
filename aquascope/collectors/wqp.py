@@ -14,6 +14,7 @@ import csv
 import logging
 from collections.abc import Iterator, Sequence
 from datetime import datetime
+from typing import Any
 
 from aquascope.collectors.base import BaseCollector
 from aquascope.schemas.water_data import (
@@ -58,11 +59,12 @@ class WQPCollector(BaseCollector):
     def fetch_raw(
         self,
         state_code: str | None = None,
-        characteristic_name: str | None = None,
+        characteristic_name: str | Sequence[str] | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
         bbox: str | None = None,
         max_results: int = 1000,
+        site_id: str | Sequence[str] | None = None,
         **kwargs,
     ) -> list[dict]:
         """
@@ -72,8 +74,10 @@ class WQPCollector(BaseCollector):
         ----------
         state_code : str | None
             e.g. ``"US:06"`` for California.
-        characteristic_name : str | None
-            e.g. ``"Dissolved oxygen (DO)"``, ``"pH"``
+        characteristic_name : str | Sequence[str] | None
+            e.g. ``"Dissolved oxygen (DO)"``, ``"pH"``; a list asks for several at once.
+        site_id : str | Sequence[str] | None
+            WQP monitoring location id(s), e.g. ``"USGS-01646500"``; a list asks for several.
         start_date : str | None
             ``"MM-DD-YYYY"`` format.
         end_date : str | None
@@ -83,7 +87,7 @@ class WQPCollector(BaseCollector):
         max_results : int
             Limit number of results (WQP default returns CSV).
         """
-        params = {
+        params: dict[str, Any] = {
             "mimeType": "csv",
             "sorted": "no",
             "zip": "no",
@@ -92,7 +96,10 @@ class WQPCollector(BaseCollector):
         if state_code:
             params["statecode"] = state_code
         if characteristic_name:
-            params["characteristicName"] = characteristic_name
+            params["characteristicName"] = (list(characteristic_name) if isinstance(characteristic_name, (list, tuple))
+                                            else characteristic_name)
+        if site_id:
+            params["siteid"] = list(site_id) if isinstance(site_id, (list, tuple)) else site_id
         if start_date:
             params["startDateLo"] = start_date
         if end_date:
@@ -136,7 +143,7 @@ class WQPCollector(BaseCollector):
         """True when the shared client's transport can stream a response body."""
         return callable(getattr(self.client._client, "stream", None))
 
-    def _stream_csv_lines(self, params: dict[str, str]) -> Iterator[str]:
+    def _stream_csv_lines(self, params: dict[str, Any]) -> Iterator[str]:
         """Yield the WQP CSV body one line at a time, without caching.
 
         Streams directly off the underlying httpx transport so the caller can

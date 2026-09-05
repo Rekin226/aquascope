@@ -312,3 +312,73 @@ class TestReportMetadata:
         assert meta.author == "AquaScope"
         assert meta.version == "1.0"
         assert re.match(r"\d{4}-\d{2}-\d{2}", meta.date)
+
+
+class TestSoftwareCitation:
+    """Tests for citation support in ReportMetadata / ReportBuilder (#334)."""
+
+    def test_metadata_accepts_doi_and_citation(self) -> None:
+        meta = ReportMetadata(title="T", doi="10.5281/zenodo.1", citation="Verbatim.")
+        assert meta.doi == "10.5281/zenodo.1"
+        assert meta.citation == "Verbatim."
+
+    def test_citation_fields_default_to_none(self) -> None:
+        meta = ReportMetadata(title="T")
+        assert meta.doi is None
+        assert meta.citation is None
+
+    def test_software_version_defaults_to_the_package_version(self) -> None:
+        import aquascope
+
+        assert ReportMetadata(title="T").software_version == aquascope.__version__
+
+    def test_software_version_is_separate_from_the_report_version(self) -> None:
+        """`version` identifies the report and stays the caller's to set."""
+        meta = ReportMetadata(title="T")
+        assert meta.version == "1.0"
+
+    def test_a_doi_builds_a_resolvable_url(self) -> None:
+        rb = ReportBuilder("T", author="Doe, J. et al.")
+        rb.metadata.date = "2026-01-05"
+        rb.metadata.doi = "10.5281/zenodo.22152064"
+
+        citation = rb.software_citation()
+
+        assert "https://doi.org/10.5281/zenodo.22152064" in citation
+        assert "(2026)" in citation
+        assert "Doe, J. et al." in citation
+
+    def test_a_doi_already_written_as_a_url_is_not_doubled(self) -> None:
+        rb = ReportBuilder("T")
+        rb.metadata.doi = "https://doi.org/10.5281/zenodo.22152064"
+
+        assert rb.software_citation().count("https://doi.org/") == 1
+
+    def test_a_missing_doi_says_so_rather_than_going_quiet(self) -> None:
+        """A reader must be able to tell "no DOI" from "we forgot to record it"."""
+        rb = ReportBuilder("T")
+
+        assert "DOI not yet assigned" in rb.software_citation()
+
+    def test_a_verbatim_citation_wins(self) -> None:
+        rb = ReportBuilder("T")
+        rb.metadata.doi = "10.5281/zenodo.1"
+        rb.metadata.citation = "Exactly what the journal asked for, 2026."
+
+        assert rb.software_citation() == "Exactly what the journal asked for, 2026."
+
+    def test_citation_renders_in_markdown_and_html(self, tmp_path: Path) -> None:
+        rb = ReportBuilder("T", author="Doe, J. et al.")
+        rb.metadata.doi = "10.5281/zenodo.22152064"
+        rb.add_software_citation()
+
+        md = rb.to_markdown(tmp_path / "r.md").read_text(encoding="utf-8")
+        html = rb.to_html(tmp_path / "r.html").read_text(encoding="utf-8")
+
+        for rendered in (md, html):
+            assert "Cite this software" in rendered
+            assert "10.5281/zenodo.22152064" in rendered
+
+    def test_add_software_citation_chains(self) -> None:
+        rb = ReportBuilder("T")
+        assert rb.add_software_citation() is rb

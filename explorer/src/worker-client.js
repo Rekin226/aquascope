@@ -4,13 +4,16 @@
 // a cancelled call never lands on the page.
 
 import { CONFIG } from "../config.js?v=__BUILD__";
-import { state } from "./core.js?v=__BUILD__";
+import { sourceStyle, state } from "./core.js?v=__BUILD__";
 import { bootDone, bootProgress } from "./shell.js?v=__BUILD__";
 
 let worker = null;
 const askListeners = new Set();
+const solveListeners = new Set();
 
 export function onAskProgress(fn) { askListeners.add(fn); return () => askListeners.delete(fn); }
+// Solve's timeline events ({role, step, event, detail}) with the id of the call they belong to.
+export function onSolveProgress(fn) { solveListeners.add(fn); return () => solveListeners.delete(fn); }
 
 export function ensureWorker() {
   if (worker) return worker;
@@ -19,6 +22,7 @@ export function ensureWorker() {
     const m = e.data;
     if (m.type === "progress") { if (!state.workerReady) bootProgress(m.text); return; }
     if (m.type === "ask_progress") { for (const fn of askListeners) fn(m.text); return; }
+    if (m.type === "solve_progress") { for (const fn of solveListeners) fn(m.event, m.id); return; }
     if (m.type === "ready") { state.workerReady = true; bootDone(); return; }
     const pending = state.pending.get(m.id);
     if (!pending) return;                       // cancelled: drop it
@@ -61,6 +65,19 @@ export function callCancelable(type, payload = {}) {
 
 export function call(type, payload = {}) {
   return callCancelable(type, payload).promise;
+}
+
+// The catalog the page holds, handed to Python once so find_stations() and
+// assess_site() answer from memory (the worker cannot read the Hub).
+export async function ensureCatalogInWorker() {
+  if (state.ask.catalogSent) return;
+  const rows = state.stations.map((r) => ({
+    source: r.source, station_id: r.station_id, name: r.name, latitude: r.lat, longitude: r.lon,
+    variables: r.variables || [], period_start: r.period_start, period_end: r.period_end, url: r.url,
+    agency: sourceStyle(r.source).label,
+  }));
+  await call("catalog", { rows });
+  state.ask.catalogSent = true;
 }
 
 export function workerBusyMessage() {

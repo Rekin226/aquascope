@@ -92,3 +92,22 @@ class TestDroughtEvents:
         events = drought_events(pd.Series(vals, index=idx), threshold=-1.0)
         assert len(events) == 1
         assert events[0].duration == 3
+
+
+# ── drought propagation (SPI to SGI lag) ─────────────────────────────────────
+
+
+def test_propagation_lag_finds_the_months_a_deficit_takes_to_reach_the_water_table():
+    from aquascope.groundwater.drought import propagation_lag
+
+    idx = pd.date_range("1990-01-01", periods=360, freq="MS")
+    rng = np.random.default_rng(5)
+    spi = pd.Series(rng.normal(0, 1, len(idx)), index=idx).rolling(6).mean().dropna()
+    sgi = spi.shift(4, freq="MS") + rng.normal(0, 0.15, len(spi))
+    res = propagation_lag(spi, sgi, max_lag=12)
+    assert res.lag_months == 4 and res.correlation > 0.9 and res.n > 300
+    assert set(res.correlations) == set(range(13)) and res.correlations[4] == res.correlation
+    with pytest.raises(ValueError, match="overlapping"):
+        propagation_lag(spi.iloc[:10], sgi.iloc[-10:], max_lag=3)
+    with pytest.raises(ValueError, match="DatetimeIndex"):
+        propagation_lag(pd.Series([1.0, 2.0]), sgi)

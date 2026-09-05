@@ -1,0 +1,291 @@
+# Flood risk at a site: the method chain for the record that actually exists.
+#
+# Evidence rules (2024-2026 application sweep, issue #307):
+# - run a Mann-Kendall pre-test, then report a STATIONARY estimate plus a
+#   scenario caveat; never auto-fit a nonstationary model (design-flood
+#   guidance under climate change is immature, doi:10.5194/hess-28-1251-2024;
+#   nonstationary estimates are parameter-fragile, doi:10.1007/s00477-024-02680-9)
+# - fit at least two distributions and quote the spread
+#   (doi:10.1016/j.jhydrol.2024.130698)
+# - short records: at-site marginal plus donors; ungauged: donors, regionalised
+#   signatures and a GloFAS cross-check
+# Thresholds (20 years, T at most 3 times the record, 3 donors) come from
+# aquascope.methods; a step's `method` is checked against it at plan time.
+id: flood_risk
+title: Flood risk at a site
+problem: flood_risk
+variable: discharge
+description: Design flow or flood screening at a point, from a long gauge record, a short one, or none.
+intake:
+  - name: return_period
+    label: Return period (years)
+    type: int
+    default: 100
+    min: 2
+  - name: decision
+    label: What is being decided
+    type: choice
+    options: [design flow, risk screening, insurance, inundation extent]
+    default: design flow
+branches:
+  - id: at_site
+    when:
+      - path: context.years_by_variable.discharge
+        op: ">="
+        value: 20
+    station_variable: discharge
+    rationale: >-
+      {{ station.years }} years of daily discharge at {{ station.name }} ({{ station.source }}
+      {{ station.station_id }}, {{ station.distance_km }} km from the point): an at-site frequency fit is
+      defensible. The plan checks the record for a trend first, fits two distributions (GEV by L-moments and
+      Log-Pearson III) with a bootstrap band, and quotes the spread. The estimate is stationary; climate change
+      enters as a caveat, not as a nonstationary fit, because design-flood guidance under change is immature.
+    steps:
+      - id: s1
+        tool: describe_catchment
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: Catchment size, elevation and regulation by dams frame the estimate and say whether the maxima are natural.
+      - id: s2
+        tool: analyze_station
+        method: trend_mann_kendall
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+        rationale: >-
+          Trend pre-test. Mann-Kendall with Sen's slope on the annual means says whether the record is
+          stationary enough for a stationary fit; a significant trend is reported as a scenario caveat on the
+          stationary estimate, never turned into a nonstationary model.
+        expects:
+          - check: min_years
+            value: 20
+            path: years
+          - check: not_empty
+            path: trend
+          - check: unit_present
+            path: unit
+      - id: s3
+        tool: flood_frequency
+        method: at_site_flood_frequency
+        depends_on: [s2]
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          bootstrap_ci: true
+        rationale: >-
+          Return levels from GEV (L-moments) and Log-Pearson III (Bulletin 17C), with a bootstrap band on the
+          GEV. The T = {{ intake.return_period }} year quantile is quoted from both fits with its interval and
+          the spread between them.
+        expects:
+          - check: min_years
+            value: 20
+            path: years
+          - check: max_return_period_factor
+            value: 3
+            path: years
+            return_period: "{{ intake.return_period }}"
+          - check: ci_finite
+            path: ffa.fits.gev_bootstrap.ci
+            return_period: "{{ intake.return_period }}"
+          - check: spread_within
+            value: 0.25
+            paths: [ffa.fits.gev_lmoments.q, ffa.fits.lp3.q]
+            return_period: "{{ intake.return_period }}"
+        fallback:
+          step:
+            tool: similar_basins
+            arguments:
+              source: "{{ station.source }}"
+              station_id: "{{ station.station_id }}"
+              k: 5
+            rationale: The at-site fit did not pass its gates; donor gauges from similar catchments give a regional cross-check to quote next to it.
+            expects:
+              - check: min_donors
+                value: 3
+                path: k
+  - id: short_record
+    when:
+      - path: context.years_by_variable.discharge
+        op: ">="
+        value: 8
+    station_variable: discharge
+    rationale: >-
+      {{ station.years }} years of discharge at {{ station.name }} ({{ station.source }} {{ station.station_id }}):
+      too short for an at-site estimate to stand alone. The at-site numbers are marginal and are quoted next
+      to a regional estimate from donor gauges, both with their bands.
+    steps:
+      - id: s1
+        tool: describe_catchment
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: Catchment size, elevation and regulation by dams frame the estimate.
+      - id: s2
+        tool: analyze_station
+        method: flow_duration
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+        rationale: >-
+          The at-site record: annual maxima, a frequency fit when there are ten complete years, and the trend
+          test. Marginal on its own; every number from it is quoted with the regional estimate.
+        expects:
+          - check: min_years
+            value: 8
+            path: years
+          - check: unit_present
+            path: unit
+      - id: s3
+        tool: similar_basins
+        method: similar_basins
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          k: 5
+        rationale: Donor gauges whose catchments resemble this one, for a regional estimate to set beside the short record.
+        expects:
+          - check: min_donors
+            value: 3
+            path: k
+      - id: s4
+        tool: regionalize_signatures
+        method: regionalize_signatures
+        depends_on: [s3]
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          k: 5
+        rationale: Flow signatures (including the mean annual maximum) transferred from the donors, with the band and the leave-one-out skill quoted next to every number.
+        expects:
+          - check: not_empty
+            path: estimates
+          - check: not_empty
+            path: skill
+      - id: s5
+        tool: anywhere
+        method: glofas_cross_check
+        optional: true
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          years: 20
+        rationale: GloFAS modelled discharge for the cell as an independent, indicative cross-check.
+        expects:
+          - check: not_empty
+            path: glofas
+  - id: regional
+    when: []
+    rationale: >-
+      No gauge with eight years of discharge within reach: the estimate is regional. Donor gauges are chosen
+      by catchment similarity, flow signatures are transferred from them with a band and the leave-one-out
+      skill, and GloFAS modelled discharge for the cell is the independent cross-check.
+    steps:
+      - id: s1
+        tool: describe_catchment
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: >-
+          The catchment the transfer is for: area, elevation, climate, land cover, dams.
+        expects:
+          - check: not_empty
+            path: sub_basin
+      - id: s2
+        tool: similar_basins
+        method: similar_basins
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          k: 5
+        rationale: Donor gauges whose catchments most resemble this one (BasinATLAS attribute space and distance).
+        expects:
+          - check: min_donors
+            value: 3
+            path: k
+      - id: s3
+        tool: regionalize_signatures
+        method: regionalize_signatures
+        depends_on: [s2]
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          k: 5
+        rationale: Flow signatures transferred from the donors, with the band and the leave-one-out skill quoted next to every number.
+        expects:
+          - check: not_empty
+            path: estimates
+          - check: not_empty
+            path: skill
+      - id: s4
+        tool: anywhere
+        method: glofas_cross_check
+        optional: true
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          years: 20
+        rationale: GloFAS modelled discharge for the cell, with its own indicative frequency fit, as the cross-check.
+        expects:
+          - check: not_empty
+            path: glofas
+declines:
+  - when:
+      - path: derived.return_period_beyond_cap
+        op: "=="
+        value: true
+      - path: derived.donors
+        op: "<"
+        value: 3
+    say: >-
+      The requested return period of {{ intake.return_period }} years is beyond about three times the record
+      length at the nearest gauge ({{ derived.discharge_years }} years, a cap near {{ derived.return_period_cap }}
+      years), and fewer than three donor gauges are available to extend it regionally. An estimate that far
+      into the tail would be an extrapolation this playbook will not quote; ask for a shorter return period or
+      a regional screening.
+  - when:
+      - path: intake.decision
+        op: "=="
+        value: inundation extent
+    say: >-
+      Inundation extent (which streets or fields flood, and how deep) is out of scope: it needs a hydraulic
+      model over a terrain surface, which aquascope does not run. This playbook gives the design flow at the
+      point; the mapping is a separate study.
+caveats:
+  - >-
+    Design-flood guidance under climate change is immature (Wasko et al. 2024, HESS): the estimate here is
+    stationary, and any climate scenario is an overlay on it, not a nonstationary fit.
+  - >-
+    Rare quantiles move with the distribution and the estimator. Two fits (GEV by L-moments and Log-Pearson
+    III) are quoted with their intervals and the spread between them; a spread above 25 percent is reported
+    as disagreement, not averaged away.
+  - say: >-
+      The catchment has upstream dams (degree of regulation above zero in BasinATLAS): the annual maxima are
+      those of the operated river, and a frequency fit on them describes it as operated, not the natural
+      flood regime.
+    when:
+      - path: derived.dams
+        op: ">"
+        value: 0
+  - say: >-
+      GloFAS discharge is a model output for a grid cell of about 5 km, not a gauge reading; return levels
+      from it are indicative only.
+    when:
+      - path: context.years_by_variable.discharge
+        op: "<"
+        value: 20
+  - say: >-
+      GloFAS discharge is a model output for a grid cell of about 5 km, not a gauge reading; return levels
+      from it are indicative only.
+    when:
+      - path: context.years_by_variable.discharge
+        op: exists
+        value: false
+citations:
+  - "England, J. F. et al. (2019). Guidelines for determining flood flow frequency, Bulletin 17C. USGS Techniques and Methods 4-B5."
+  - "Hosking, J. R. M. (1990). L-moments: analysis and estimation of distributions using linear combinations of order statistics. J. R. Stat. Soc. B 52, 105-124."
+  - "Wasko, C. et al. (2024). A systematic review of climate change science for flood and design guidance. Hydrol. Earth Syst. Sci. 28, 1251-1285. doi:10.5194/hess-28-1251-2024"
+  - "Nonstationary flood frequency estimates are parameter-fragile: Stoch. Environ. Res. Risk Assess. (2024), doi:10.1007/s00477-024-02680-9"
+  - "Multi-approach cross-checks in infrastructure flood practice: J. Hydrol. (2024), doi:10.1016/j.jhydrol.2024.130698"
+  - "Oudin, L. et al. (2008). Spatial proximity, physical similarity, regression and ungaged catchments. Water Resour. Res. 44, W03413."
+  - "Harrigan, S. et al. (2020). GloFAS-ERA5 operational global river discharge reanalysis 1979-present. Earth Syst. Sci. Data 12, 2043-2060."

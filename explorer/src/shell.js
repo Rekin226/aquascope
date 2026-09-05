@@ -5,6 +5,7 @@
 import { $, escapeHtml, state } from "./core.js?v=__BUILD__";
 import { announce, captureFocus } from "./a11y.js?v=__BUILD__";
 import { syncMapPadding } from "./map.js?v=__BUILD__";
+import { writeUrl } from "./url.js?v=__BUILD__";
 
 const SURFACES = ["panel-empty", "panel-station", "panel-point", "panel-workbench"];
 
@@ -211,8 +212,35 @@ export function bootDone() {
 // as clutter, and together they covered 60 % of a 1,440 px window. It takes the
 // inspector's place now and names what it came from, so the station is still
 // there in a line of text and one click away.
+//
+// One drawer, two modes: Ask (a question) and Solve (a problem at a place),
+// switched by the segmented control in its head. Never both at once.
 
 let releaseDrawer = null;
+const MODES = ["ask", "solve"];
+const modeButton = (mode) => $(mode === "solve" ? "btn-solve" : "btn-ask");
+
+export function drawerMode() {
+  return state.drawerMode;
+}
+
+export function setDrawerMode(mode) {
+  if (!MODES.includes(mode)) mode = "ask";
+  const d = $("drawer");
+  if (!d) return;
+  state.drawerMode = mode;
+  for (const m of MODES) {
+    const pane = $(`${m}-pane`);
+    if (pane) pane.hidden = m !== mode;
+    const radio = d.querySelector(`input[name="drawer-mode"][value="${m}"]`);
+    if (radio) radio.checked = m === mode;
+    const btn = modeButton(m);
+    if (btn) btn.setAttribute("aria-expanded", state.drawerOpen && m === mode ? "true" : "false");
+  }
+  d.setAttribute("aria-label", mode === "solve" ? "Solve a problem at this place" : "Ask AquaScope");
+  d.dispatchEvent(new CustomEvent("drawermode", { detail: { mode, open: state.drawerOpen } }));
+  if (state.drawerOpen) writeUrl();
+}
 
 // What the Analyst is looking at, for the chip in its header.
 function contextChip() {
@@ -228,18 +256,20 @@ function contextChip() {
   chip.hidden = !label;
 }
 
-export function openDrawer() {
+export function openDrawer({ mode = state.drawerMode } = {}) {
   const d = $("drawer");
   if (!d) return;
   contextChip();
+  const wasOpen = !d.hidden;
   d.hidden = false;
+  state.drawerOpen = true;
   document.body.classList.add("drawer-open");
-  $("btn-ask").setAttribute("aria-expanded", "true");
+  setDrawerMode(mode);
   // Not trapped: tabbing out to the map is the right behaviour for a panel that
-  // is not modal.
-  releaseDrawer = captureFocus(d, { onEscape: closeDrawer, restoreTo: $("btn-ask") });
+  // is not modal. Switching modes in an open drawer keeps the focus it has.
+  if (!wasOpen) releaseDrawer = captureFocus(d, { onEscape: closeDrawer, restoreTo: modeButton(mode) });
   syncMapPadding();
-  announce("Ask panel opened");
+  announce(mode === "solve" ? "Solve panel opened" : "Ask panel opened");
 }
 
 export function closeDrawer() {
@@ -247,10 +277,15 @@ export function closeDrawer() {
   if (!d) return;
   const wasOpen = !d.hidden;
   d.hidden = true;
+  state.drawerOpen = false;
   document.body.classList.remove("drawer-open");
-  $("btn-ask").setAttribute("aria-expanded", "false");
+  for (const m of MODES) {
+    const btn = modeButton(m);
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  }
   if (releaseDrawer) { releaseDrawer({ restore: wasOpen }); releaseDrawer = null; }
   syncMapPadding();
+  if (wasOpen) writeUrl();
 }
 
 export function toggleDrawer() {
@@ -343,6 +378,9 @@ export function initShell() {
   $("btn-rail").addEventListener("click", () => toggleRail());
   $("btn-panel").addEventListener("click", () => togglePanel());
   $("drawer-close").addEventListener("click", closeDrawer);
+  for (const r of document.querySelectorAll('input[name="drawer-mode"]')) {
+    r.addEventListener("change", () => { if (r.checked) setDrawerMode(r.value); });
+  }
   document.addEventListener("keydown", (e) => {
     if (e.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) {
       e.preventDefault();

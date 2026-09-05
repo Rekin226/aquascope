@@ -147,7 +147,7 @@ SOURCES: dict[str, SourceMeta] = {
     ),
     # ── Europe ──────────────────────────────────────────────────────────
     "uk_ea": _s(
-        key="uk_ea", label="UK Environment Agency", region="United Kingdom",
+        key="uk_ea", label="Environment Agency (England)", region="United Kingdom",
         description="River level, flow, rainfall and groundwater telemetry from the EA Hydrology API (England)",
         agency="Environment Agency", country="GBR",
         homepage="https://environment.data.gov.uk/hydrology/",
@@ -310,8 +310,8 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="http://www1.river.go.jp/",
         variables=("water_level", "discharge", "water_quality", "precipitation"),
         output_model="WaterQualitySample",
-        license="unknown", redistributable=False,
-        attribution="MLIT Water Information System (terms not yet verified)",
+        license="Public Data License (Version 1.0)", redistributable=True,
+        attribution="Ministry of Land, Infrastructure, Transport and Tourism",
     ),
     "korea_wamis": _s(
         key="korea_wamis", label="Korea WAMIS", region="South Korea",
@@ -396,8 +396,8 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://unstats.un.org/sdgs/",
         variables=("indicator",),
         output_model="SDG6Indicator",
-        license="unknown", redistributable=False,
-        attribution="United Nations Statistics Division, SDG Global Database",
+        license="UNdata Terms of Use", redistributable=True,
+        attribution="United Nations Statistics Division, SDG Global Database (UNdata)",
     ),
     "aquastat": _s(
         key="aquastat", label="FAO AQUASTAT", region="Global",
@@ -406,8 +406,8 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://www.fao.org/aquastat/",
         variables=("indicator",),
         output_model="AquastatRecord",
-        license="unknown", redistributable=False,
-        attribution="FAO AQUASTAT",
+        license="CC-BY-4.0", redistributable=True,
+        attribution="FAO AQUASTAT (© FAO, CC BY 4.0)",
     ),
     "wapor": _s(
         key="wapor", label="FAO WaPOR", region="Africa & Near East",
@@ -474,7 +474,9 @@ def build_collector(source_key: str, api_key: str | None = None, **ctor_kwargs):
         ),
         "taiwan_wra_fhy": lambda: c.TaiwanWRAFhyCollector(data_type=ctor_kwargs.get("data_type", "water")),
         "taiwan_wra_iot": lambda: c.TaiwanWRAIoTCollector(data_type=ctor_kwargs.get("data_type", "groundwater")),
-        "taiwan_datagov": lambda: c.TaiwanDataGovCollector(dataset_id=ctor_kwargs.get("dataset_id", "25768")),
+        "taiwan_datagov": lambda: c.TaiwanDataGovCollector(
+            dataset_id=ctor_kwargs.get("dataset_id", "73c4c3de-4045-4765-abeb-89f9f9cd5ff0")
+        ),
         "taiwan_civil_iot": lambda: c.TaiwanCivilIoTCollector(),
         "japan_mlit": lambda: c.JapanMLITCollector(),
         "korea_wamis": lambda: c.KoreaWAMISCollector(),

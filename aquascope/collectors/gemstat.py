@@ -50,8 +50,14 @@ class GEMStatCollector(BaseCollector):
 
     # Core parameters included by default — covers the most common water quality metrics
     DEFAULT_PARAMETERS = [
-        "pH", "Temperature", "Dissolved_Gas", "Oxygen_Demand",
-        "Other_Nitrogen", "Phosphorus", "Optical", "Electrical_Conductance",
+        "pH",
+        "Temperature",
+        "Dissolved_Gas",
+        "Oxygen_Demand",
+        "Other_Nitrogen",
+        "Phosphorus",
+        "Optical",
+        "Electrical_Conductance",
     ]
 
     def fetch_raw(
@@ -102,7 +108,10 @@ class GEMStatCollector(BaseCollector):
             return []
 
         zip_entry = next((f for f in files if f["key"].endswith(".zip")), files[0])
-        download_url = zip_entry["links"]["self"]
+        links = zip_entry.get("links", {})
+        download_url = links.get("content") or links.get("self", "")
+        if not download_url:
+            raise RuntimeError("GEMStat: no download link found in Zenodo record file entry")
         checksum = zip_entry.get("checksum", download_url)
         size_mb = round(zip_entry.get("size", 0) / 1_048_576)
 
@@ -112,16 +121,50 @@ class GEMStatCollector(BaseCollector):
         cache_key = hashlib.md5(checksum.encode()).hexdigest()
         zip_path = cache_dir / f"gemstat_{cache_key}.zip"
 
+        if zip_path.exists() and not zipfile.is_zipfile(zip_path):
+            logger.warning("GEMStat: cached archive %s is corrupted; re-downloading…", zip_path)
+            zip_path.unlink(missing_ok=True)
+
         if not zip_path.exists():
             logger.info("GEMStat: downloading archive (%d MB) — one-time download…", size_mb)
-            with httpx.stream("GET", download_url, follow_redirects=True, timeout=600) as resp:
-                resp.raise_for_status()
-                with zip_path.open("wb") as fh:
-                    for chunk in resp.iter_bytes(chunk_size=65_536):
-                        fh.write(chunk)
+            temp_path = zip_path.with_suffix(".tmp")
+            try:
+                with httpx.stream("GET", download_url, follow_redirects=True, timeout=600) as resp:
+                    resp.raise_for_status()
+                    content_type = resp.headers.get("content-type", "")
+                    if "html" in content_type.lower():
+                        raise RuntimeError(
+                            f"GEMStat: Zenodo returned HTML instead of ZIP archive "
+                            f"(status={resp.status_code}, content-type={content_type!r})"
+                        )
+                    with temp_path.open("wb") as fh:
+                        first = True
+                        for chunk in resp.iter_bytes(chunk_size=65_536):
+                            if first:
+                                first = False
+                                if not chunk.startswith(b"PK"):
+                                    preview = chunk[:200].decode("utf-8", errors="replace")
+                                    raise RuntimeError(
+                                        f"GEMStat: downloaded payload is not a valid ZIP archive "
+                                        f"(status={resp.status_code}, content-type={content_type!r}, "
+                                        f"preview={preview!r})"
+                                    )
+                            fh.write(chunk)
+                if not zipfile.is_zipfile(temp_path):
+                    raise RuntimeError(
+                        f"GEMStat: downloaded file is not a complete or valid ZIP archive (status={resp.status_code})"
+                    )
+                temp_path.replace(zip_path)
+            except Exception:
+                temp_path.unlink(missing_ok=True)
+                raise
             logger.info("GEMStat: archive cached → %s", zip_path)
         else:
             logger.debug("GEMStat: using cached archive %s", zip_path)
+
+        if not zipfile.is_zipfile(zip_path):
+            zip_path.unlink(missing_ok=True)
+            raise RuntimeError(f"GEMStat: cached archive {zip_path} is not a valid ZIP file; removed invalid cache.")
 
         country_lower = country.lower().strip() if country else None
         date_start = start_date[:10] if start_date else None
@@ -144,15 +187,10 @@ class GEMStatCollector(BaseCollector):
             # 4. Determine valid station IDs for the requested country
             valid_ids: set[str] | None = None
             if country_lower:
-                valid_ids = {
-                    sid for sid, m in station_meta.items()
-                    if country_lower in m["country"].lower()
-                }
+                valid_ids = {sid for sid, m in station_meta.items() if country_lower in m["country"].lower()}
                 if not valid_ids:
                     known = sorted({m["country"] for m in station_meta.values() if m["country"]})
-                    logger.warning(
-                        "GEMStat: no stations for country=%r. Available: %s", country, known
-                    )
+                    logger.warning("GEMStat: no stations for country=%r. Available: %s", country, known)
                     return []
                 logger.info("GEMStat: %d stations match country=%r", len(valid_ids), country)
 

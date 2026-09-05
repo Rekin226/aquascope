@@ -8,6 +8,7 @@ import {
   $, VAR_LABEL, actions, article, copyText, downloadBlob, escapeHtml, fmt, fmtP, sourceStyle, state, stationKey,
 } from "./core.js?v=__BUILD__";
 import { addTableDownload, emphasisColor, plot, surfaceColor } from "./charts.js?v=__BUILD__";
+import { requestAssess } from "./assess.js?v=__BUILD__";
 import { clearCatchment, requestBasin, requestCatchment, stationArea } from "./basins.js?v=__BUILD__";
 import { flyToStation, highlightStation, clearPointMarker } from "./map.js?v=__BUILD__";
 import { GR4J_METHODS, addMethodOnce, methodsOnPage, openCite, renderMethodList } from "./methods.js?v=__BUILD__";
@@ -22,6 +23,19 @@ let gr4jCancel = null;
 
 const root = () => $("panel-station");
 const setStatus = (text, kind = "info") => setStatusEl($("status"), text, kind);
+
+// Display units (#316). Discharge can be shown in ft³/s (cfs), but only shown:
+// the worker, the GR4J model and the CSV downloads never see anything but the
+// agency's unit, so the conversion lives here at render time and nowhere else.
+const CFS_PER_CMS = 35.314666721;
+const UNIT_PREF_KEY = "aquascope-unit";
+const isCms = (u) => /m3\/s|m³\/s/.test(u || "");
+let unitPref = "m3s";
+try { if (localStorage.getItem(UNIT_PREF_KEY) === "cfs") unitPref = "cfs"; } catch { /* storage denied */ }
+const cfsOn = (rawUnit) => unitPref === "cfs" && isCms(rawUnit);
+const dUnit = (rawUnit) => (cfsOn(rawUnit) ? "ft³/s" : rawUnit);
+const dVal = (x, rawUnit) => (cfsOn(rawUnit) && x !== null && x !== undefined ? x * CFS_PER_CMS : x);
+const dArr = (a, rawUnit) => (cfsOn(rawUnit) ? Array.from(a, (v) => (v === null || v === undefined ? v : v * CFS_PER_CMS)) : a);
 
 export function selectStation(key, { fly = false, tab = null, push = true } = {}) {
   const r = state.byKey.get(key);
@@ -46,9 +60,10 @@ export function selectStation(key, { fly = false, tab = null, push = true } = {}
   const agency = $("st-agency");
   if (r.url) { agency.href = r.url; agency.hidden = false; } else agency.hidden = true;
   $("btn-csv").disabled = true;
+  $("btn-unit").hidden = true;
 
   // Reset the tabs to "loading" so nothing from the last station lingers.
-  for (const id of ["st-kpis-card", "st-hydro-card", "st-ffa-card", "st-fdc-card", "st-trend-card", "st-gr4j-card", "st-notes-card"]) {
+  for (const id of ["st-kpis-card", "st-hydro-card", "st-ffa-card", "st-fdc-card", "st-trend-card", "st-gr4j-card", "st-notes-card", "st-assess-card"]) {
     hideCard($(id));
   }
   renderMethodList("methods", []);
@@ -70,6 +85,7 @@ export function selectStation(key, { fly = false, tab = null, push = true } = {}
   requestAnalysis(r, my);
   requestCatchment({ station: r, target: "st" });
   requestBasin(r.lat, r.lon, "st");
+  requestAssess({ lat: r.lat, lon: r.lon, target: "st", key });
 }
 
 function tabExists(name) {
@@ -80,7 +96,9 @@ async function requestAnalysis(r, my) {
   const key = stationKey(r);
   setStatus("");
   try {
-    const result = await call("analyze", { source: r.source, station_id: r.station_id, years: CONFIG.years });
+    const result = await call("analyze", {
+      source: r.source, station_id: r.station_id, years: CONFIG.years, period_start: r.period_start || null,
+    });
     if (my !== analysisRun || !state.selected || stationKey(state.selected) !== key) return; // user moved on
     state.result = result;
     render(result, r);
@@ -95,8 +113,14 @@ async function requestAnalysis(r, my) {
 
 function render(res, r) {
   const st = sourceStyle(r.source);
-  const unit = res.unit || "";
+  const rawUnit = res.unit || "";
+  const unit = dUnit(rawUnit);
   const varLabel = VAR_LABEL[res.variable] || res.variable;
+  const ub = $("btn-unit");
+  if (ub) {
+    ub.hidden = !isCms(rawUnit);
+    ub.textContent = unitPref === "cfs" ? "Show m³/s" : "Show ft³/s";
+  }
 
   if (res.error || !res.n) {
     setCard($("st-kpis-card"), "empty", { message: res.error || "The agency returned no observations for this station." });
@@ -114,19 +138,19 @@ function render(res, r) {
     // already on the line under the station name.
     ["record", `${String(res.start).slice(0, 4)}–${String(res.end).slice(0, 4)}`,
       `${res.years} yr · ${res.n.toLocaleString()} obs`],
-    ["mean", `${fmt(k.mean)} ${unit}`, varLabel],
-    ["max", `${fmt(k.max)} ${unit}`, "observed"],
-    ["min", `${fmt(k.min)} ${unit}`, "observed"],
+    ["mean", `${fmt(dVal(k.mean, rawUnit))} ${unit}`, varLabel],
+    ["max", `${fmt(dVal(k.max, rawUnit))} ${unit}`, "observed"],
+    ["min", `${fmt(dVal(k.min, rawUnit))} ${unit}`, "observed"],
   ].map(([l, v, s]) => `<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
   setCard($("st-kpis-card"), "ready");
 
   const traces = [{
-    x: res.series.t, y: res.series.v, mode: "lines", line: { width: 1, color: st.color }, name: varLabel,
+    x: res.series.t, y: dArr(res.series.v, rawUnit), mode: "lines", line: { width: 1, color: st.color }, name: varLabel,
     hovertemplate: "%{x}<br>%{y:.3~f} " + unit + "<extra></extra>",
   }];
   if (res.annual_max && res.annual_max.year.length > 1) {
     traces.push({
-      x: res.annual_max.year.map((y) => `${y}-07-01`), y: res.annual_max.v, mode: "markers",
+      x: res.annual_max.year.map((y) => `${y}-07-01`), y: dArr(res.annual_max.v, rawUnit), mode: "markers",
       // Ink with a ring punched out of the card, not a second hue: these mark
       // the same series, and they have to read beside any of the six agency
       // colours (red markers on the UK's green line are ΔE 5.5 under protanopia).
@@ -144,9 +168,9 @@ function render(res, r) {
     setTab(root(), "floods", { enabled: true });
     setCard($("st-ffa-card"), "ready");
     $("ffa-years").textContent = `(${res.ffa.n_years} annual maxima)`;
-    renderFfaTable(res.ffa, unit);
-    renderFfaPlot(res.ffa, unit, st.color, r);
-    $("btn-ci").disabled = false;
+    renderFfaTable(res.ffa, rawUnit);
+    renderFfaPlot(res.ffa, rawUnit, st.color, r);
+    $("btn-ci").disabled = Boolean(res.ffa.fits.gev_bootstrap);
   } else {
     setTab(root(), "floods", { enabled: false, reason: "Flood frequency needs annual maxima from a multi-year daily record." });
   }
@@ -155,15 +179,16 @@ function render(res, r) {
   const hasFdc = Boolean(res.fdc), hasTrend = Boolean(res.trend);
   if (hasFdc) {
     setCard($("st-fdc-card"), "ready");
+    const q95 = dVal(res.fdc.q95, rawUnit), q10 = dVal(res.fdc.q10, rawUnit);
     plot("plot-fdc", [{
-      x: res.fdc.exceedance, y: res.fdc.q, mode: "lines", line: { color: st.color, width: 2 },
+      x: res.fdc.exceedance, y: dArr(res.fdc.q, rawUnit), mode: "lines", line: { color: st.color, width: 2 },
       hovertemplate: "%{x:.1f} % exceedance<br>%{y:.3~f} " + unit + "<extra></extra>",
     }], {
       xaxis: { title: { text: "% of time exceeded" }, range: [0, 100] },
       yaxis: { title: { text: unit }, type: "log" }, showlegend: false,
       annotations: [
-        { x: 95, y: Math.log10(res.fdc.q95 || 1), text: `Q95 ${fmt(res.fdc.q95)}`, showarrow: true, arrowhead: 2, ax: -40, ay: -30 },
-        { x: 10, y: Math.log10(res.fdc.q10 || 1), text: `Q10 ${fmt(res.fdc.q10)}`, showarrow: true, arrowhead: 2, ax: 40, ay: -30 },
+        { x: 95, y: Math.log10(q95 || 1), text: `Q95 ${fmt(q95)}`, showarrow: true, arrowhead: 2, ax: -40, ay: -30 },
+        { x: 10, y: Math.log10(q10 || 1), text: `Q10 ${fmt(q10)}`, showarrow: true, arrowhead: 2, ax: 40, ay: -30 },
       ],
     }, `${r.source}-${r.station_id}-flow-duration`);
   } else hideCard($("st-fdc-card"));
@@ -172,7 +197,7 @@ function render(res, r) {
     const t = res.trend;
     const dir = t.trend === "no trend" ? "no significant trend" : `${article(t.trend)} ${t.trend} trend`;
     $("trend-text").innerHTML = `Mann-Kendall on ${t.n_years} annual means: <strong>${dir}</strong> ` +
-      `(p = ${fmtP(t.p_value)}, τ = ${fmt(t.tau, 2)}). Sen's slope ${fmt(t.sens_slope_per_year, 3)} ${escapeHtml(unit)}/yr.`;
+      `(p = ${fmtP(t.p_value)}, τ = ${fmt(t.tau, 2)}). Sen's slope ${fmt(dVal(t.sens_slope_per_year, rawUnit), 3)} ${escapeHtml(unit)}/yr.`;
     setCard($("st-trend-card"), "ready");
   } else hideCard($("st-trend-card"));
 
@@ -181,7 +206,7 @@ function render(res, r) {
     : { enabled: false, reason: "Flow duration and trend need a daily record." });
 
   // Model (GR4J): discharge in m3/s, long enough, and the JS model loaded
-  const modelOk = res.variable === "discharge" && /m3\/s|m³\/s/.test(unit) && res.series && res.series.t.length > 365 * 4 && window.GR4J;
+  const modelOk = res.variable === "discharge" && isCms(rawUnit) && res.series && res.series.t.length > 365 * 4 && window.GR4J;
   setTab(root(), "model", modelOk
     ? { enabled: true }
     : { enabled: false, reason: "GR4J needs four or more years of daily discharge in m³/s." });
@@ -206,14 +231,16 @@ function renderMethods(res) {
     : "";
 }
 
-function renderFfaTable(ffa, unit) {
+function renderFfaTable(ffa, rawUnit) {
+  const unit = dUnit(rawUnit);
+  const cv = (x) => dVal(x, rawUnit);
   const rps = ffa.return_periods;
   const g = ffa.fits.gev_lmoments || {}, l = ffa.fits.lp3 || {}, b = ffa.fits.gev_bootstrap;
   const head = `<tr><th>T (yr)</th><th>GEV L-moments</th><th>LP3 (90 % CI)</th>${b ? "<th>GEV bootstrap (90 % CI)</th>" : ""}</tr>`;
   const rows = rps.map((rp, i) => {
-    const gq = g.q ? fmt(g.q[i]) : (g.error ? "n/a" : "—");
-    const lq = l.q ? `${fmt(l.q[i])} <span class="ci">${l.ci && l.ci[i] ? `[${fmt(l.ci[i][0])}, ${fmt(l.ci[i][1])}]` : ""}</span>` : (l.error ? "n/a" : "—");
-    const bq = b ? `${fmt(b.q[i])} <span class="ci">${b.ci && b.ci[i] ? `[${fmt(b.ci[i][0])}, ${fmt(b.ci[i][1])}]` : ""}</span>` : "";
+    const gq = g.q ? fmt(cv(g.q[i])) : (g.error ? "n/a" : "—");
+    const lq = l.q ? `${fmt(cv(l.q[i]))} <span class="ci">${l.ci && l.ci[i] ? `[${fmt(cv(l.ci[i][0]))}, ${fmt(cv(l.ci[i][1]))}]` : ""}</span>` : (l.error ? "n/a" : "—");
+    const bq = b ? `${fmt(cv(b.q[i]))} <span class="ci">${b.ci && b.ci[i] ? `[${fmt(cv(b.ci[i][0]))}, ${fmt(cv(b.ci[i][1]))}]` : ""}</span>` : "";
     return `<tr><td>${rp}</td><td>${gq}</td><td>${lq}</td>${b ? `<td>${bq}</td>` : ""}</tr>`;
   }).join("");
   const table = $("ffa-table");
@@ -231,28 +258,30 @@ function renderFfaTable(ffa, unit) {
   addTableDownload($("ffa-actions"), table, r ? `${r.source}-${r.station_id}-flood-frequency.csv` : "flood-frequency.csv");
 }
 
-function renderFfaPlot(ffa, unit, color, r) {
+function renderFfaPlot(ffa, rawUnit, color, r) {
+  const unit = dUnit(rawUnit);
+  const cv = (x) => dVal(x, rawUnit);
   const rps = ffa.return_periods;
   const traces = [];
   if (ffa.fits.gev_lmoments && ffa.fits.gev_lmoments.q) {
-    traces.push({ x: rps, y: ffa.fits.gev_lmoments.q, mode: "lines+markers", name: "GEV (L-moments)", line: { color } });
+    traces.push({ x: rps, y: ffa.fits.gev_lmoments.q.map(cv), mode: "lines+markers", name: "GEV (L-moments)", line: { color } });
   }
   if (ffa.fits.lp3 && ffa.fits.lp3.q) {
-    traces.push({ x: rps, y: ffa.fits.lp3.q, mode: "lines+markers", name: "LP3", line: { color: "#8e24aa" } });
+    traces.push({ x: rps, y: ffa.fits.lp3.q.map(cv), mode: "lines+markers", name: "LP3", line: { color: "#8e24aa" } });
     if (ffa.fits.lp3.ci) {
       traces.push({
         x: [...rps, ...rps.slice().reverse()],
-        y: [...ffa.fits.lp3.ci.map((c) => c[1]), ...ffa.fits.lp3.ci.map((c) => c[0]).reverse()],
+        y: [...ffa.fits.lp3.ci.map((c) => cv(c[1])), ...ffa.fits.lp3.ci.map((c) => cv(c[0])).reverse()],
         fill: "toself", fillcolor: "rgba(142,36,170,0.12)", line: { color: "transparent" }, name: "LP3 90 % CI", hoverinfo: "skip",
       });
     }
   }
   if (ffa.fits.gev_bootstrap) {
     const b = ffa.fits.gev_bootstrap;
-    traces.push({ x: rps, y: b.q, mode: "lines+markers", name: "GEV (MLE)", line: { color: "#f57c00", dash: "dot" } });
+    traces.push({ x: rps, y: b.q.map(cv), mode: "lines+markers", name: "GEV (MLE)", line: { color: "#f57c00", dash: "dot" } });
     traces.push({
       x: [...rps, ...rps.slice().reverse()],
-      y: [...b.ci.map((c) => c[1]), ...b.ci.map((c) => c[0]).reverse()],
+      y: [...b.ci.map((c) => cv(c[1])), ...b.ci.map((c) => cv(c[0])).reverse()],
       fill: "toself", fillcolor: "rgba(245,124,0,0.12)", line: { color: "transparent" }, name: "GEV 90 % CI", hoverinfo: "skip",
     });
   }
@@ -354,21 +383,22 @@ async function runGr4j() {
     addTableDownload($("gr4j-actions"), $("gr4j-table"), `${r.source}-${r.station_id}-gr4j.csv`);
     // plot: last 6 years, observed vs simulated, in the station's unit
     const from = Math.max(0, n - 365 * 6);
-    const toUnit = (mm) => mm * area.area / 86.4;
+    const toUnit = (mm) => dVal(mm * area.area / 86.4, res.unit);
+    const gUnit = dUnit(res.unit);
     const st = sourceStyle(r.source);
     plot("plot-gr4j", [
       {
         x: days.slice(from), y: Array.from(obs.slice(from), (o) => (Number.isFinite(o) ? toUnit(o) : null)),
         mode: "lines", line: { width: 1, color: st.color }, name: "observed",
-        hovertemplate: "%{x}<br>obs %{y:.3~f} " + res.unit + "<extra></extra>",
+        hovertemplate: "%{x}<br>obs %{y:.3~f} " + gUnit + "<extra></extra>",
       },
       {
         x: days.slice(from), y: Array.from(fit.sim.slice(from), toUnit), mode: "lines",
         line: { width: 1.4, color: emphasisColor(), dash: "dot" }, name: "GR4J",
-        hovertemplate: "%{x}<br>sim %{y:.3~f} " + res.unit + "<extra></extra>",
+        hovertemplate: "%{x}<br>sim %{y:.3~f} " + gUnit + "<extra></extra>",
       },
     ], {
-      yaxis: { title: { text: res.unit }, rangemode: "tozero" }, legend: { orientation: "h", y: 1.15 },
+      yaxis: { title: { text: gUnit }, rangemode: "tozero" }, legend: { orientation: "h", y: 1.15 },
       shapes: calEnd > from ? [{ type: "line", x0: days[calEnd], x1: days[calEnd], y0: 0, y1: 1, yref: "paper", line: { color: emphasisColor(), dash: "dot", width: 1 } }] : [],
     }, `${r.source}-${r.station_id}-gr4j`);
     $("gr4j-foot").textContent =
@@ -407,6 +437,13 @@ export function initStationPanel() {
       const el = $(id);
       if (el && el.offsetParent !== null && el.data) Plotly.Plots.resize(el);
     }
+  });
+
+  $("btn-unit").addEventListener("click", () => {
+    unitPref = unitPref === "cfs" ? "m3s" : "cfs";
+    try { localStorage.setItem(UNIT_PREF_KEY, unitPref); } catch { /* storage denied */ }
+    // Re-render from the untouched result; the GR4J card redraws on recalibrate.
+    if (state.result && state.selected) render(state.result, state.selected);
   });
 
   $("btn-share").addEventListener("click", (e) => copyText(canonicalUrl(), e.currentTarget, "Link copied"));

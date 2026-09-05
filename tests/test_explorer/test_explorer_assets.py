@@ -588,3 +588,45 @@ def test_running_before_the_provider_list_arrives_says_so() -> None:
     assert "ASK_PROVIDERS[provider]" in guard and "askStatus(" in guard, (
         "runAsk() must check the chosen provider exists and report it, not throw on undefined"
     )
+
+
+def test_the_explorer_asks_for_the_full_record_by_default() -> None:
+    """#270: the page passed a 40-year window while the note said 'full period requested'."""
+    config = (EXPLORER / "config.js").read_text(encoding="utf-8")
+    assert re.search(r"\byears:\s*null\b", config), "CONFIG.years is a cap; null asks for the full record"
+    worker = (EXPLORER / "worker.js").read_text(encoding="utf-8")
+    assert "|| 40" not in worker, "the worker must not fall back to a hard-coded window"
+    assert "period_start" in worker, "the catalog's first date travels with the request"
+    panel = (EXPLORER / "src" / "panel-station.js").read_text(encoding="utf-8")
+    assert "period_start: r.period_start" in panel
+
+
+# ── Solve (the plan-first Analyst in the page) ──────────────────────────────
+
+
+def test_the_solve_drawer_is_wired_end_to_end() -> None:
+    """One drawer, two modes; the worker face of team.solve / run_reviewed; the button wired before any await."""
+    html = _html()
+    for needed in ('id="btn-solve"', 'id="solve-pane"', 'id="ask-pane"', 'name="drawer-mode"', 'id="stage-result"'):
+        assert needed in html, needed
+    app = (EXPLORER / "app.js").read_text(encoding="utf-8")
+    assert "initSolve" in app and "url.solve" in app
+    solve = (EXPLORER / "src" / "solve.js").read_text(encoding="utf-8")
+    body = solve[solve.index("export async function initSolve()"):]
+    assert body.index('$("btn-solve").addEventListener') < body.index("await loadPlaybooks()")
+    assert "playbooks.json" in solve, "the chips come from the generated list, not a copy in the page"
+    worker = (EXPLORER / "worker.js").read_text(encoding="utf-8")
+    for needed in ("solve_plan", "solve_run", "solve_progress", "run_reviewed", "execute=False",
+                   "describe_catchment_from_row"):
+        assert needed in worker, needed
+    client = (EXPLORER / "src" / "worker-client.js").read_text(encoding="utf-8")
+    assert "solve_progress" in client and "onSolveProgress" in client
+    url = (EXPLORER / "src" / "url.js").read_text(encoding="utf-8")
+    assert 'q.set("solve"' in url and 'q.has("solve")' in url
+
+
+def test_the_solve_surface_writes_with_plain_hyphens() -> None:
+    """House style: no em or en dashes in what the Solve surface says."""
+    for path in (EXPLORER / "src" / "solve.js", EXPLORER / "playbooks.json"):
+        text = path.read_text(encoding="utf-8")
+        assert "—" not in text and "–" not in text, path.name

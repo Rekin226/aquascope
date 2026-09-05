@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date, timedelta
 from typing import Any
 
 from aquascope import __version__
@@ -38,8 +37,9 @@ SERVER_NAME = "aquascope"
 INSTRUCTIONS = (
     "AquaScope gives you the world's public water gauges (USGS, UK EA, Hub'Eau, PEGELONLINE, Ireland OPW, "
     "Taiwan CWA and more) behind one schema. Start with find_stations (no agency call), then get_timeseries or "
-    "analyze_station for a specific station. Flood frequency needs at least 10 complete years of daily flow. "
-    "Always show the licence/attribution returned with the data."
+    "analyze_station for a specific station. For a place or a station, assess_site(lat, lon) first says which "
+    "methods the record there supports; do not run one it marks not_defensible. Flood frequency needs at least "
+    "10 complete years of daily flow. Always show the licence/attribution returned with the data."
 )
 
 MAX_STATIONS = 200
@@ -106,7 +106,8 @@ def find_stations(
 ) -> dict[str, Any]:
     """Search the published station catalog (no agency call).
 
-    query: substring of the station name or id. bbox: [west, south, east, north] in degrees.
+    query: words from the station name, id or river, accent-insensitive ("Kingston Thames" finds the Thames at
+    Kingston). bbox: [west, south, east, north] in degrees.
     near: [lat, lon]; results are ordered nearest-first. variable: one of the registry vocabulary
     (discharge, water_level, precipitation, groundwater_level, ...). Returns at most ``limit`` (<= 200)
     stations with ids you can pass to get_timeseries / analyze_station.
@@ -187,14 +188,40 @@ def get_timeseries(
     }
 
 
+def water_quality_samples(
+    source: str,
+    station_id: str,
+    years: int | None = None,
+    parameters: list[str] | None = None,
+    use: str | None = None,
+) -> dict[str, Any]:
+    """Sampled water-quality parameters at one station: USGS daily water-quality values (temperature,
+    conductivity, dissolved oxygen, pH) or Water Quality Portal discrete samples, as tidy rows (datetime,
+    parameter, value, unit) with per-parameter counts, units and period, plus licence and attribution. A
+    screening, not a bulk download: the last 5 years and a short parameter list by default (the WQP is slow on
+    large windows); years=0 asks for the full record. use (drinking, irrigation, aquatic life) picks the WQP
+    parameter list. Feed the rows to analyse_table(csv, "wqi" | "iwqi" | "who_screen").
+    """
+    from aquascope.explore import water_quality_samples as _samples
+
+    if source not in SOURCES:
+        return {"error": f"unknown source {source!r}"}
+    try:
+        return _samples(source, station_id, years=years, parameters=parameters, use=use)
+    except ValueError as exc:
+        return {"error": str(exc)}
+
+
 def analyze_station(
-    source: str, station_id: str, years: int = 40, bootstrap_ci: bool = False, variable: str | None = None
+    source: str, station_id: str, years: int | None = None, bootstrap_ci: bool = False, variable: str | None = None
 ) -> dict[str, Any]:
     """Fetch and analyse one station: record summary, annual maxima, flood frequency (GEV L-moments and
     Log-Pearson III with 90 % CI; optional bootstrap GEV band), flow-duration percentiles, Mann-Kendall
     trend, and the method citations. Raw daily arrays are omitted; use get_timeseries for those.
     variable picks one of the station's variables (discharge by default; water_level, precipitation,
-    groundwater_level where the station has them).
+    groundwater_level where the station has them). By default the full record is requested, from the
+    catalog's first date for the station; years caps it to the last N years. fetch_note in the result says
+    what was requested and what the agency actually served.
     """
     from aquascope.explore import analyze_station as _analyze
     from aquascope.explore import flood_ci
@@ -204,7 +231,7 @@ def analyze_station(
     if variable and variable not in VARIABLES:
         return {"error": f"unknown variable {variable!r}; allowed: {list(VARIABLES)}"}
     store: dict[str, Any] = {}
-    res = _analyze(source, station_id, years=int(years), store=store, variable=variable)
+    res = _analyze(source, station_id, years=int(years) if years else None, store=store, variable=variable)
     res.pop("series", None)
     if "fdc" in res:
         res["fdc"] = {k: res["fdc"][k] for k in ("q95", "q50", "q10")}
@@ -220,16 +247,46 @@ def analyze_station(
     return res
 
 
-def flood_frequency(source: str, station_id: str, years: int = 40, bootstrap_ci: bool = False) -> dict[str, Any]:
-    """Return levels for T = 2, 5, 10, 25, 50, 100 years at a station (subset of analyze_station)."""
+def flood_frequency(
+    source: str, station_id: str, years: int | None = None, bootstrap_ci: bool = False
+) -> dict[str, Any]:
+    """Return levels for T = 2, 5, 10, 25, 50, 100 years at a station (subset of analyze_station).
+    years caps the record to the last N years; by default the full record is requested.
+    """
     res = analyze_station(source, station_id, years=years, bootstrap_ci=bootstrap_ci)
     if "error" in res:
         return res
     keep = {k: res.get(k) for k in ("source", "station_id", "agency", "license", "attribution", "unit",
-                                    "start", "end", "years", "n", "ffa", "notes", "methods")}
+                                    "start", "end", "years", "n", "ffa", "notes", "methods",
+                                    "fetch_note", "requested")}
     if not keep.get("ffa"):
         keep["error"] = "flood frequency not available (see notes)"
     return keep
+
+
+def assess_site(
+    lat: float,
+    lon: float,
+    radius_km: float = 50.0,
+    problem: str | None = None,
+    return_period: float | None = None,
+) -> dict[str, Any]:
+    """What can be answered at a place, before any analysis. Call this first for a question about a place or a
+    station. Returns the gauges within radius_km from the catalog (true record spans, no agency call), the
+    BasinATLAS catchment, the site context (years per variable, area, donors) and a sufficiency table: for every
+    method, defensible | marginal | not_defensible here, the reason (record length, resolution, catchment size
+    for a lumped model, return period against record length, donors), the tool that runs it and the station it
+    would use. Respect it: do not run a method marked not_defensible, say why, and offer what is defensible.
+    problem narrows the table: flood_risk, ungauged_flow, drought, groundwater_decline, supply_reliability,
+    climate_change, irrigation, water_quality. return_period is the T the question asks for, if any.
+    """
+    from aquascope.explore import assess_site as _assess
+
+    try:
+        return _assess(float(lat), float(lon), radius_km=float(radius_km), problem=problem or None,
+                       return_period=float(return_period) if return_period is not None else None)
+    except ValueError as exc:
+        return {"error": str(exc)}
 
 
 def describe_methods() -> dict[str, Any]:
@@ -317,9 +374,118 @@ def regionalize_signatures(lat: float, lon: float, k: int = 10, method: str = "s
         return {"error": f"regionalisation failed: {type(exc).__name__}: {exc}"}
 
 
-def _default_years_note() -> str:
-    today = date.today()
-    return f"Records are requested back to {(today - timedelta(days=int(40 * 365.25))).isoformat()} by default."
+def drought_indices(
+    lat: float,
+    lon: float,
+    years: int = 40,
+    timescales: list[int] | None = None,
+    source: str | None = None,
+    station_id: str | None = None,
+    pet: str = "thornthwaite",
+) -> dict[str, Any]:
+    """Drought status at a place: SPI and SPEI at several timescales (default 1, 3 and 12 months) with the
+    divergence between them. Give source + station_id for a rain gauge (its whole record is the P of both
+    indices, ERA5 supplies the PET); without one, ERA5 precipitation for the cell over the last `years`. pet:
+    thornthwaite (from ERA5 temperature, the PET SPEI was introduced with), fao56 (ERA5 FAO-56 ET0) or none
+    (SPI only). Returns current values and classes, the worst month, drought events, the ERA5 temperature
+    trend, the thinned series and the citations. SPEI is preferable under warming; a record shorter than 30
+    years is marginal (20 is the floor).
+    """
+    from aquascope.problems import drought_indices as _run
+
+    try:
+        return _run(float(lat), float(lon), years=int(years), timescales=timescales or (1, 3, 12),
+                    source=source or None, station_id=station_id or None, pet=pet or "thornthwaite")
+    except Exception as exc:  # noqa: BLE001 - the model gets to see it
+        return {"error": f"drought_indices failed: {type(exc).__name__}: {exc}"}
+
+
+def drought_propagation(
+    source: str,
+    station_id: str,
+    lat: float,
+    lon: float,
+    years: int | None = None,
+    max_lag: int = 24,
+) -> dict[str, Any]:
+    """Groundwater drought at a well and how rainfall deficits reach it: the Standardised Groundwater Index
+    (current, worst, events) and the SPI accumulation period (1 to 24 months, on ERA5 precipitation for the
+    cell) and lag (0 to max_lag months) whose cross-correlation with the SGI is highest (Bloomfield and
+    Marchant 2013). Ten years of monthly levels is the registry's floor for the SGI.
+    """
+    from aquascope.problems import drought_propagation as _run
+
+    try:
+        return _run(source, station_id, float(lat), float(lon), years=int(years) if years else None,
+                    max_lag=int(max_lag))
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"drought_propagation failed: {type(exc).__name__}: {exc}"}
+
+
+def low_flow_context(source: str, station_id: str, years: int | None = None) -> dict[str, Any]:
+    """How low is low at a gauge, and is the river low now: Q95, Q50, Q10 (and Q05, Q25, Q75, Q90), the baseflow
+    index (Lyne-Hollick), the 7Q10 low-flow statistic when the record has ten years, and the last 30 and 90
+    days' mean flow with the share of the record that exceeds it.
+    """
+    from aquascope.problems import low_flow_context as _run
+
+    try:
+        return _run(source, station_id, years=int(years) if years else None)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"low_flow_context failed: {type(exc).__name__}: {exc}"}
+
+
+def supply_reliability(
+    demand_m3s: float | None = None,
+    demand_ml_day: float | None = None,
+    source: str | None = None,
+    station_id: str | None = None,
+    lat: float | None = None,
+    lon: float | None = None,
+    share: float = 0.1,
+    reserve: str = "q95",
+    months: list[int] | None = None,
+) -> dict[str, Any]:
+    """Can a river supply a demand, as a run-of-river screening. demand in m3/s or ML/day. On any day the
+    abstraction may take at most `share` of the flow and must leave `reserve` in the river (q95 by default, a
+    number in m3/s, or none). Gauged (source + station_id): the fraction of days, of years without a shortfall
+    and of the volume the record would have supplied, over the year or over `months`; also Q95/Q50/Q10, the
+    baseflow index and 7Q10. Ungauged (lat + lon): the reliability read off Q95, median and Q05 transferred
+    from donor catchments, as a band with the leave-one-out skill. A screening rule (flow-duration-curve
+    environmental-flow practice), not a storage-yield analysis.
+    """
+    from aquascope.problems import supply_reliability as _run
+
+    try:
+        return _run(demand_m3s=demand_m3s, demand_ml_day=demand_ml_day, source=source or None,
+                    station_id=station_id or None, lat=lat, lon=lon, share=float(share), reserve=reserve,
+                    months=months or None)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"supply_reliability failed: {type(exc).__name__}: {exc}"}
+
+
+def crop_water_demand(
+    lat: float,
+    lon: float,
+    crop: str,
+    area_ha: float,
+    planting_month: int,
+    efficiency: float = 0.7,
+    years: int = 10,
+) -> dict[str, Any]:
+    """A crop's seasonal irrigation demand at a point: FAO-56 single Kc (Table 12 crops: maize, wheat_winter,
+    rice_paddy, ...) on ERA5 FAO-56 reference ET0, effective rainfall subtracted, divided by the irrigation
+    efficiency; the season from the first of planting_month is run for every year of the ERA5 window and
+    averaged (range kept). Returns the depth in mm, the volume in m3 over area_ha, the mean and peak-month
+    rates in m3/s, and the season's months for a supply check. Supply is not checked here.
+    """
+    from aquascope.problems import crop_water_demand as _run
+
+    try:
+        return _run(float(lat), float(lon), crop=crop, area_ha=float(area_ha), planting_month=int(planting_month),
+                    efficiency=float(efficiency), years=int(years))
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"crop_water_demand failed: {type(exc).__name__}: {exc}"}
 
 
 def analyse_table(
@@ -331,8 +497,11 @@ def analyse_table(
 
     The analyses are the ones the dashboard pages offer, and they are the same
     code the Explorer runs in the browser: eda, quality, preprocess, insights,
-    who_screen, flow_duration, baseflow, recession, flood_frequency, signatures,
-    return_periods, sgi_drought, recharge, aquifer_drawdown.
+    who_screen, wqi (CCME WQI 1.0 against WHO drinking-water, FAO 29 irrigation or
+    CCME aquatic-life guidelines, plus the NSF WQI; params use, variant,
+    guidelines), iwqi (FAO 29 irrigation suitability), flow_duration, baseflow,
+    recession, flood_frequency, signatures, return_periods, sgi_drought,
+    recharge, aquifer_drawdown.
 
     Pass the data as CSV text (a header row and one row per observation) and the
     parameters of the analysis as a dict, for example
@@ -372,6 +541,98 @@ def list_analyses() -> dict[str, Any]:
     }
 
 
+# ── Solve: playbooks, a plan to review, a study to run (#307, #308) ─────────
+
+
+def list_playbooks() -> dict[str, Any]:
+    """The problem playbooks: for each class of problem (flood risk, ungauged flow, groundwater decline, drought
+    status, supply reliability, irrigation feasibility, water quality), the method chain aquascope follows for
+    the data that exists at a site, as data. Each has intake fields, branches over the reconnaissance, gates per
+    step, the sentences it prints when it declines, caveats and citations.
+    Use solve_plan to get the study a playbook fills for a problem at a point, and solve_run to execute it.
+    """
+    from aquascope import playbooks as pbk
+
+    rows = pbk.list_playbooks()
+    return {"n": len(rows), "playbooks": rows,
+            "note": "describe_playbook(id) shows the whole tree; solve_plan(problem, lat, lon) fills it."}
+
+
+def describe_playbook(playbook: str) -> dict[str, Any]:
+    """One playbook in full: intake fields, branches with their conditions and steps (tool, arguments with
+    placeholders, gates, fallback), decline rules, caveats and citations."""
+    from aquascope import playbooks as pbk
+
+    try:
+        return pbk.describe(playbook)
+    except pbk.PlaybookError as exc:
+        return {"error": str(exc), "known": [p["id"] for p in pbk.list_playbooks()]}
+
+
+def solve_plan(
+    problem: str, lat: float, lon: float, playbook: str | None = None, intake: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Plan (do not run) a problem at a point: reconnaissance of the site (assess_site), the playbook the
+    keyword rules pick (or the one named), the branch its tree selects for the data that exists, and the
+    study-v2 it fills: steps with arguments, rationale and gates. Zero model calls. Review the study, edit it
+    if you like, then pass it to solve_run. `declined` with a reason means the playbook refuses this ask
+    (record too short for the return period, cause attribution without pumping data, out of scope).
+    intake: the playbook's intake fields, for example {"return_period": 100}.
+    """
+    from aquascope.ai_engine.team import _recon_summary, solve
+
+    res = solve(problem, lat=float(lat), lon=float(lon), playbook=playbook, intake=intake, execute=False)
+    plan = res.study.plan or {}
+    return {
+        "declined": res.declined,
+        "reason": res.declined_reason,
+        "playbook": plan.get("playbook"),
+        "branch": plan.get("branch"),
+        "rationale": plan.get("rationale"),
+        "n_steps": len(res.study.steps),
+        "study": res.study.to_dict(),
+        "study_yaml": res.study_yaml,
+        "recon": _recon_summary(res.recon),
+        "timeline": res.timeline,
+        "note": "Review the study (edit arguments or drop steps), then solve_run(study) executes it with its gates.",
+    }
+
+
+def solve_run(study: dict[str, Any] | str) -> dict[str, Any]:
+    """Execute a study (the dict from solve_plan, or study YAML text) with no model in the loop: every step
+    runs in order, its gates are evaluated, a failed gate runs the step's fallback once or stops the study
+    with the reason. Returns the gate outcomes, the report and the study with its results written in, which
+    `aquascope run` reproduces.
+    """
+    from aquascope.study import Study, loads, run_study
+
+    try:
+        st = loads(study) if isinstance(study, str) else Study.from_dict(dict(study))
+    except (ValueError, TypeError) as exc:
+        return {"error": f"could not read the study: {exc}"}
+    if not st.steps:
+        return {"error": "the study has no steps"}
+    # The team's execute-and-report tail, keyless: the same gates, Reviewer
+    # list and template prose the Explorer's Solve surface shows.
+    from aquascope.ai_engine.team import run_reviewed
+
+    result = run_reviewed(st)
+    run = result.run if result.run is not None else run_study(st)
+    return {
+        "ok": run.ok,
+        "stopped_at": run.stopped_at,
+        "stop_reason": run.stop_reason,
+        "gates": run.gates,
+        "answer": result.answer,
+        "not_established": result.not_established,
+        "caveats": result.caveats,
+        "report": result.to_markdown(),
+        "manifest": run.manifest(),
+        "study": st.to_dict(),
+        "study_yaml": st.to_yaml(),
+    }
+
+
 # ── inline views (MCP Apps) ─────────────────────────────────────────────────
 # A client that supports the MCP Apps extension (SEP-1865, in the 2026-07 spec)
 # can render HTML a server returns, inline in the conversation. A hydrograph is
@@ -408,7 +669,7 @@ def _sparkline(values: list[float], width: int = 560, height: int = 120) -> str:
     )
 
 
-def station_view(source: str, station_id: str, years: int = 40) -> dict[str, Any]:
+def station_view(source: str, station_id: str, years: int | None = None) -> dict[str, Any]:
     """analyze_station, plus a small HTML view of it for clients that render one.
 
     The ``_meta`` block is what an MCP Apps client looks for; everything else is
@@ -458,16 +719,27 @@ def build_server():
     server.tool()(list_sources)
     server.tool()(find_stations)
     server.tool()(get_timeseries)
+    server.tool()(water_quality_samples)
     server.tool()(analyze_station)
     server.tool()(flood_frequency)
     server.tool()(describe_methods)
+    server.tool()(assess_site)
     server.tool()(describe_catchment)
     server.tool()(similar_basins)
     server.tool()(regionalize_signatures)
+    server.tool()(drought_indices)
+    server.tool()(drought_propagation)
+    server.tool()(low_flow_context)
+    server.tool()(supply_reliability)
+    server.tool()(crop_water_demand)
     server.tool()(archive_health)
     server.tool()(list_analyses)
     server.tool()(analyse_table)
     server.tool()(station_view)
+    server.tool()(list_playbooks)
+    server.tool()(describe_playbook)
+    server.tool()(solve_plan)
+    server.tool()(solve_run)
 
     @server.resource("aquascope://sources")
     def sources_resource() -> str:

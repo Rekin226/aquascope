@@ -28,6 +28,17 @@ logger = logging.getLogger(__name__)
 RETURN_PERIODS = [2, 5, 10, 25, 50, 100]
 MIN_YEARS_FOR_FFA = 10
 
+#: How far back a full-record request reaches when the catalog has no start
+#: date for the station (#270). Generous on purpose: the agencies filter
+#: server-side, so asking for years that do not exist costs nothing, while a
+#: 40-year cap silently cut the Thames at Kingston (catalogued from 1883) to
+#: 39 annual maxima.
+FULL_RECORD_YEARS = 150
+
+#: CWA CODIS answers one calendar year per request and each takes several
+#: seconds at the source, so that fetch is capped rather than asked in full.
+CWA_MAX_YEARS = 10
+
 METHODS: dict[str, dict[str, str]] = {
     "gev_lmoments": {
         "name": "GEV fitted by L-moments",
@@ -77,11 +88,93 @@ METHODS: dict[str, dict[str, str]] = {
         "citation": "Allen, R. G., Pereira, L. S., Raes, D., & Smith, M. (1998). Crop evapotranspiration. "
         "FAO Irrigation and Drainage Paper 56.",
     },
+    "spi": {
+        "name": "Standardized Precipitation Index",
+        "text": "Monthly precipitation accumulated over 1, 3 and 12 months, a gamma distribution fitted per calendar "
+        "month (a point mass at zero), the probability mapped to a standard-normal score; at or below -1 is drought.",
+        "citation": "McKee, T. B., Doesken, N. J., & Kleist, J. (1993). The relationship of drought frequency and "
+        "duration to time scales. Proc. 8th Conf. on Applied Climatology, 179-184; WMO (2012). Standardized "
+        "Precipitation Index User Guide, WMO-No. 1090.",
+    },
+    "spei": {
+        "name": "Standardized Precipitation-Evapotranspiration Index",
+        "text": "The climatic water balance (precipitation minus PET) accumulated over the timescale, a log-logistic "
+        "(generalized logistic) distribution fitted per calendar month by L-moments, the probability mapped to a "
+        "standard-normal score; sees the evaporative-demand drought under warming that SPI misses.",
+        "citation": "Vicente-Serrano, S. M., Begueria, S., & Lopez-Moreno, J. I. (2010). A multiscalar drought index "
+        "sensitive to global warming: the Standardized Precipitation Evapotranspiration Index. J. Climate 23, "
+        "1696-1718. doi:10.1175/2009JCLI2909.1",
+    },
+    "thornthwaite": {
+        "name": "Thornthwaite potential evapotranspiration",
+        "text": "Monthly PET from mean air temperature and the annual heat index, corrected for day length and the "
+        "days in the month; a temperature-only approximation, the PET SPEI was introduced with.",
+        "citation": "Thornthwaite, C. W. (1948). An approach toward a rational classification of climate. "
+        "Geographical Review 38, 55-94.",
+    },
+    "sgi_propagation": {
+        "name": "SPI to SGI drought propagation",
+        "text": "Cross-correlation between SPI at several accumulation periods, lagged 0 to 24 months, and the "
+        "Standardised Groundwater Index; the accumulation period and lag that maximise it say how long a rainfall "
+        "deficit takes to reach the water table.",
+        "citation": "Bloomfield, J. P., & Marchant, B. P. (2013). Analysis of groundwater drought building on the "
+        "standardised precipitation index approach. Hydrol. Earth Syst. Sci. 17, 4769-4787.",
+    },
+    "supply_reliability": {
+        "name": "Run-of-river supply reliability (flow-duration screening)",
+        "text": "The fraction of days (and of years without a shortfall) on which the flow, less an environmental "
+        "reserve kept in the river (Q95 by default) and capped at an abstraction share of the flow, meets the "
+        "demand; a screening rule in the flow-duration-curve tradition of environmental-flow practice, not a "
+        "storage-yield analysis.",
+        "citation": "Vogel, R. M., & Fennessey, N. M. (1994). Flow-duration curves I. J. Water Resour. Plann. "
+        "Manage. 120, 485-504; Smakhtin, V., & Eriyagama, N. (2008). Developing a software package for global "
+        "desktop assessment of environmental flows. Environ. Model. Softw. 23, 1396-1406; Acreman, M., & Dunbar, "
+        "M. J. (2004). Defining environmental river flow requirements: a review. Hydrol. Earth Syst. Sci. 8, 861-876.",
+    },
+    "crop_water": {
+        "name": "FAO-56 crop water requirement from reanalysis ET0",
+        "text": "Reference ET0 (FAO-56 Penman-Monteith from ERA5 via Open-Meteo) times the single crop coefficient "
+        "over the FAO-56 stage lengths, effective rainfall subtracted, the net depth divided by the irrigation "
+        "efficiency; the season repeated over the years of the window and averaged, the range kept.",
+        "citation": "Allen, R. G., Pereira, L. S., Raes, D., & Smith, M. (1998). Crop evapotranspiration. FAO "
+        "Irrigation and Drainage Paper 56; FAO (2025). Crop evapotranspiration, revised edition, "
+        "doi:10.4060/cd6621en; reanalysis-forced ET0 bias: Agric. Water Manage. (2024), "
+        "doi:10.1016/j.agwat.2024.108732.",
+    },
     "trend": {
         "name": "Mann-Kendall trend on annual means",
         "text": "Non-parametric Mann-Kendall test with Sen's slope on the annual mean series.",
         "citation": "Mann, H. B. (1945). Nonparametric tests against trend. Econometrica, 13, 245-259; "
         "Sen, P. K. (1968). J. Am. Stat. Assoc., 63, 1379-1389.",
+    },
+    "who_screen": {
+        "name": "WHO drinking-water guideline screen",
+        "text": "Share of samples outside the WHO guideline range per recognised parameter; over 10 % is an alert, "
+        "any exceedance a warning.",
+        "citation": "World Health Organization (2022). Guidelines for drinking-water quality, 4th edition, "
+        "incorporating the first and second addenda.",
+    },
+    "ccme_wqi": {
+        "name": "CCME Water Quality Index 1.0",
+        "text": "Scope (F1), frequency (F2) and amplitude (F3) of guideline exceedances over the sampled parameters, "
+        "combined as 100 - sqrt(F1^2 + F2^2 + F3^2) / 1.732; Excellent 95-100, Good 80-94, Fair 65-79, "
+        "Marginal 45-64, Poor 0-44. Guidelines: WHO 2022 (drinking), FAO 29 (irrigation) or CCME (aquatic life).",
+        "citation": "CCME (2001). CCME Water Quality Index 1.0, User's Manual. Canadian Council of Ministers of the "
+        "Environment, Winnipeg.",
+    },
+    "nsf_wqi": {
+        "name": "NSF Water Quality Index",
+        "text": "Nine parameters rated on their sub-index curves (digitised approximations of the published ones) and "
+        "combined with the published weights; weights renormalised when parameters are missing.",
+        "citation": "Brown, R. M., McClelland, N. I., Deininger, R. A. and Tozer, R. G. (1970). A water quality "
+        "index: do we dare? Water and Sewage Works 117, 339-343.",
+    },
+    "iwqi": {
+        "name": "Irrigation water quality (FAO 29)",
+        "text": "SAR, sodium percentage and residual sodium carbonate (meq/L) with the USSL, Wilcox and Eaton classes, "
+        "and the FAO 29 degree of restriction on use (none, slight to moderate, severe) per component.",
+        "citation": "Ayers, R. S. and Westcot, D. W. (1985). Water quality for agriculture. FAO Irrigation and "
+        "Drainage Paper 29, Rev. 1. FAO, Rome.",
     },
 }
 
@@ -159,13 +252,104 @@ def _records_to_series(records: list, prefer: str | None = None) -> tuple[pd.Ser
 _USGS_CODES = {"discharge": "00060", "water_level": "00065"}
 
 
+def _parse_date(value: Any) -> date | None:
+    """An ISO date (a date, a datetime or their string) as a date; ``None`` when it is not one."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def request_window(
+    source: str, station_id: str, *, years: int | None = None, period_start: Any = None,
+) -> dict[str, Any]:
+    """The window a fetch asks for, and the words that say so (#270).
+
+    ``years`` is an explicit cap: the last N years. Without it the whole record
+    is requested, from the catalog's first date for the station when that is
+    known (``period_start``, passed by a caller that holds the catalog row, else
+    looked up in the catalog at hand, never downloaded), and otherwise from
+    :data:`FULL_RECORD_YEARS` back. Returns ``start`` and ``end`` (dates),
+    ``years`` (the cap, or ``None``), ``catalog_start`` (ISO string or ``None``)
+    and ``asked``: the clause the fetch note carries, so the reader sees what
+    was actually requested rather than what happened to come back.
+    """
+    end = datetime.now(timezone.utc).date()
+    listed = _parse_date(period_start)
+    if listed is None:
+        from aquascope.archive.catalog import catalog_period
+
+        listed = _parse_date(catalog_period(source, station_id)[0])
+    if years is not None and years > 0:
+        start = end - timedelta(days=int(years * 365.25))
+        asked = f"last {int(years)} years requested (from {start.isoformat()})"
+    elif listed is not None and listed < end:
+        start = listed
+        asked = f"full record requested (from {start.isoformat()}, the catalog's first date for this station)"
+    else:
+        start = end - timedelta(days=int(FULL_RECORD_YEARS * 365.25))
+        asked = (
+            f"full record requested (back to {start.isoformat()}; the catalog has no start date for this station)"
+        )
+    return {
+        "start": start,
+        "end": end,
+        "years": int(years) if years else None,
+        "catalog_start": listed.isoformat() if listed else None,
+        "asked": asked,
+    }
+
+
+def _record_note(s: pd.Series | None, window: dict[str, Any]) -> str:
+    """One sentence when the served record starts well after the catalog's first date.
+
+    The Thames at Kingston is catalogued from 1883 and served from 1986: a
+    reader who sees "full record requested" next to 39 annual maxima is told
+    which of the two the agency actually answered with.
+    """
+    listed = _parse_date(window.get("catalog_start"))
+    if s is None or s.empty or listed is None:
+        return ""
+    first = s.index.min().date()
+    if (first - listed).days <= 366:
+        return ""
+    if window["start"] > listed:
+        return (
+            f" The catalog lists this station from {listed.isoformat()}; "
+            f"only the last {window['years']} years were requested."
+        )
+    return f" The catalog lists this station from {listed.isoformat()}; the served record starts {first.isoformat()}."
+
+
+def _fetched(s: pd.Series | None, var: str, unit: str, note: str, window: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "series": s,
+        "variable": var,
+        "unit": unit,
+        "note": note,
+        "requested": {
+            "start": window["start"].isoformat(),
+            "end": window["end"].isoformat(),
+            "years": window["years"],
+            "catalog_start": window["catalog_start"],
+        },
+    }
+
+
 def fetch_series(
     source: str,
     station_id: str,
     *,
-    years: int = 40,
+    years: int | None = None,
     prefer_archive: bool = True,
     variable: str | None = None,
+    period_start: Any = None,
 ) -> dict[str, Any]:
     """Fetch the observed record for one station.
 
@@ -176,14 +360,23 @@ def fetch_series(
     collector. ``variable`` asks for one variable (``discharge``,
     ``water_level``, ``precipitation``, ``groundwater_level``); by default the
     source's variables are tried in its preferred order (discharge first).
+
+    By default the full record is requested (#270): from the catalog's first
+    date for the station when it is known, else :data:`FULL_RECORD_YEARS` back.
+    ``years`` caps that to the last N years, and ``period_start`` is the
+    catalog's first date when the caller already holds the station's row (the
+    Explorer does), saving the lookup. See :func:`request_window`.
+
     Returns ``{"series": pd.Series | None, "variable": str, "unit": str,
-    "note": str}``; ``note`` says where the data came from and any
-    record-length limit of the source.
+    "note": str, "requested": dict}``; ``note`` says where the data came from,
+    what was requested and any record-length limit of the source, and
+    ``requested`` is ``{"start", "end", "years", "catalog_start"}`` as ISO
+    strings, so a page can show the request beside the record it got.
     """
     if source not in SOURCES:
         raise ValueError(f"Unknown source {source!r}")
-    end = datetime.now(timezone.utc).date()
-    start = end - timedelta(days=int(years * 365.25))
+    window = request_window(source, station_id, years=years, period_start=period_start)
+    start, end, asked = window["start"], window["end"], window["asked"]
     note = ""
 
     if prefer_archive:
@@ -194,23 +387,24 @@ def fetch_series(
             if var not in harvestable_variables(source):
                 continue
             archived = fetch_archived_series(source, station_id, var)
-            if archived is not None and not archived.empty:
+            if archived is None or archived.empty:
+                continue
+            if window["years"]:
                 archived = archived[archived.index >= pd.Timestamp(start)]
-                return {
-                    "series": archived,
-                    "variable": var,
-                    "unit": ARCHIVE_UNITS.get(var, ""),
-                    "note": (
-                        f"From the AquaScope archive (daily {var.replace('_', ' ')} harvested from "
-                        f"{SOURCES[source].agency}; {archived.index.min().date()} to {archived.index.max().date()})."
-                    ),
-                }
+                if archived.empty:
+                    continue  # nothing in the capped window: let the agency say the same
+            note = (
+                f"From the AquaScope archive (daily {var.replace('_', ' ')} harvested from "
+                f"{SOURCES[source].agency}; {archived.index.min().date()} to {archived.index.max().date()}); "
+                f"{asked}."
+            ) + _record_note(archived, window)
+            return _fetched(archived, var, ARCHIVE_UNITS.get(var, ""), note, window)
 
     if source == "usgs":
         # Pass the catalog id as-is ("USGS-01646500" or another agency's "CA574-09527500");
         # the collector maps it onto NWIS (number + agencyCd) or the OGC monitoring_location_id.
         c = build_collector("usgs")
-        span = int(years * 365.25)
+        span = (end - start).days
         s, var, unit = None, "", ""
         for want in (variable,) if variable else ("discharge", "water_level"):
             code = _USGS_CODES.get(want or "")
@@ -220,7 +414,7 @@ def fetch_series(
             s, var, unit = _records_to_series(recs)
             if s is not None:
                 break
-        note = "USGS daily values (NWIS), full period requested."
+        note = f"USGS daily values (NWIS); {asked}."
     elif source == "uk_ea":
         c = build_collector("uk_ea")
         measure, measure_var = _uk_ea_pick_measure(c, station_id, variable=variable)
@@ -231,7 +425,7 @@ def fetch_series(
             s, var, unit = _records_to_series(recs)
             if s is not None and measure_var == "groundwater_level":
                 var = "groundwater_level"  # WaterLevelReading, but the measure is a borehole / tubewell
-        note = f"Environment Agency Hydrology API, measure {measure or 'n/a'}."
+        note = f"Environment Agency Hydrology API, measure {measure or 'n/a'}; {asked}."
     elif source == "hubeau_hydrometrie":
         c = build_collector("hubeau_hydrometrie")
         s, var, unit = None, "", ""
@@ -243,7 +437,7 @@ def fetch_series(
                 date_fin_obs=end.isoformat(), size=20_000, max_items=None,
             )
             s, var, unit = _records_to_series(recs)
-            note = "Hub'Eau elaborated daily mean discharge (obs_elab QmnJ), full period requested."
+            note = f"Hub'Eau elaborated daily mean discharge (obs_elab QmnJ); {asked}."
         if s is None and variable in (None, "discharge"):
             recs = c.collect(code_station=station_id, grandeur_hydro="Q", days=30)
             s, var, unit = _records_to_series(recs)
@@ -266,22 +460,25 @@ def fetch_series(
         note = "waterlevel.ie month file (15-minute levels, last month)."
     elif source == "taiwan_cwa":
         # CODIS answers one calendar year per request and each takes several
-        # seconds at the source; ten years keeps the click-to-chart wait tolerable.
-        cwa_years = min(years, 10)
+        # seconds at the source, so the full record is never asked for here:
+        # CWA_MAX_YEARS keeps the click-to-chart wait tolerable, and the note
+        # says so rather than claiming the whole record was requested.
+        cwa_years = min(int(years), CWA_MAX_YEARS) if years else CWA_MAX_YEARS
         cwa_start = end - timedelta(days=int(cwa_years * 365.25))
+        window.update(start=cwa_start, years=cwa_years)
         c = build_collector("taiwan_cwa")
         recs = c.collect(station_ids=[station_id], start=cwa_start.isoformat(), end=end.isoformat())
         s, var, unit = _records_to_series(recs)
         note = (
-            f"CWA CODIS daily rainfall, last {cwa_years} years "
-            "(one request per year at the source, a few seconds each)."
+            f"CWA CODIS daily rainfall, last {cwa_years} years requested, not the full record "
+            f"(one request per year at the source, a few seconds each; capped at {CWA_MAX_YEARS} years)."
         )
     else:
         raise ValueError(f"{source} has no Explorer fetch path yet")
 
     if variable and s is not None and var != variable:
         s, var, unit = None, "", ""  # the station has no record of the variable asked for
-    return {"series": s, "variable": var, "unit": unit, "note": note}
+    return _fetched(s, var, unit, note + _record_note(s, window), window)
 
 
 # EA stations publish several measures per property (daily min / mean / max,
@@ -485,9 +682,10 @@ def analyze_station(
     source: str,
     station_id: str,
     *,
-    years: int = 40,
+    years: int | None = None,
     store: dict[str, Any] | None = None,
     variable: str | None = None,
+    period_start: Any = None,
 ) -> dict[str, Any]:
     """Fetch + analyse one station. The entry point the browser worker calls.
 
@@ -495,9 +693,13 @@ def analyze_station(
     ``store["series"]`` for follow-up calls such as :func:`flood_ci` and
     :func:`to_csv` without a second fetch. ``variable`` picks one of the
     station's variables (default: the source's preferred one, discharge first).
+    By default the full record is requested (#270); ``years`` caps it to the
+    last N years, and ``period_start`` is the catalog's first date when the
+    caller already holds the station's row. ``fetch_note`` in the result says
+    what was requested and what came back; ``requested`` carries the window.
     """
     meta = SOURCES[source]
-    fetched = fetch_series(source, station_id, years=years, variable=variable)
+    fetched = fetch_series(source, station_id, years=years, variable=variable, period_start=period_start)
     if store is not None:
         store["series"] = fetched["series"]
         store["source"], store["station_id"] = source, station_id
@@ -508,12 +710,152 @@ def analyze_station(
         "license": meta.license,
         "attribution": meta.attribution,
         "fetch_note": fetched["note"],
+        "requested": fetched.get("requested"),
     }
     s = fetched["series"]
     if s is None or s.empty:
         result.update({"n": 0, "error": "The source returned no observations for this station."})
         return result
     result.update(analyze_series(s, fetched["variable"], fetched["unit"]))
+    return result
+
+
+# ── water-quality samples ───────────────────────────────────────────────────
+# The archive carries no water-quality variables until Phase 3 (#188), so the
+# samples come straight from the agency: USGS daily water-quality values and
+# the Water Quality Portal's discrete samples. A screening, not a bulk
+# download: the window and the parameter list are capped by default.
+
+#: The USGS daily-value parameter codes the catalog's ``water_quality`` flag stands for.
+USGS_WQ_CODES: dict[str, str] = {"temperature": "00010", "conductivity": "00095", "dissolved_oxygen": "00300",
+                                 "ph": "00400"}
+_USGS_WQ_NAMES = {"temperature": "temperature", "temp": "temperature", "water temperature": "temperature",
+                  "conductivity": "conductivity", "specific conductance": "conductivity", "ec": "conductivity",
+                  "dissolved oxygen": "dissolved_oxygen", "dissolved_oxygen": "dissolved_oxygen",
+                  "do": "dissolved_oxygen", "ph": "ph"}
+#: WQP characteristic names asked for by default, per use: a screening list, not the portal's whole catalogue.
+WQP_CHARACTERISTICS: dict[str, tuple[str, ...]] = {
+    "drinking": ("pH", "Dissolved oxygen (DO)", "Temperature, water", "Specific conductance", "Turbidity",
+                 "Nitrate", "Escherichia coli", "Arsenic", "Lead", "Fluoride"),
+    "irrigation": ("Specific conductance", "Sodium", "Calcium", "Magnesium", "Potassium", "Bicarbonate",
+                   "Chloride", "Boron", "pH", "Nitrate", "Total dissolved solids"),
+    "aquatic life": ("pH", "Dissolved oxygen (DO)", "Temperature, water", "Nitrate", "Chloride", "Arsenic",
+                     "Lead", "Copper", "Zinc", "Cadmium"),
+}
+WQ_DEFAULT_YEARS = 5
+WQ_MAX_SAMPLES = 20_000
+
+
+def water_quality_samples(
+    source: str,
+    station_id: str,
+    *,
+    years: int | None = None,
+    parameters: list[str] | None = None,
+    use: str | None = None,
+    max_samples: int = WQ_MAX_SAMPLES,
+) -> dict[str, Any]:
+    """Sampled water-quality parameters at one station, as tidy rows with counts, units, period and licence.
+
+    ``years`` caps the window (default :data:`WQ_DEFAULT_YEARS`, the last
+    five years; ``0`` asks for the full record from the catalog's first date).
+    ``parameters`` names what to fetch (USGS: temperature, conductivity,
+    dissolved oxygen, pH, or their codes; WQP: characteristic names); without
+    it the USGS four are fetched, or the WQP screening list for ``use``
+    (``drinking`` by default, ``irrigation``, ``aquatic life``). The ``samples``
+    rows (``datetime``, ``parameter``, ``value``, ``unit``) feed the workbench's
+    ``wqi``, ``iwqi`` and ``who_screen`` directly, or a study step through
+    ``from_step``.
+    """
+    if source not in SOURCES:
+        raise ValueError(f"Unknown source {source!r}")
+    meta = SOURCES[source]
+    if "water_quality" not in meta.variables:
+        raise ValueError(f"{source} carries no water-quality samples")
+    cap = WQ_DEFAULT_YEARS if years is None else int(years)
+    window = request_window(source, station_id, years=cap if cap > 0 else None)
+    start, end, asked = window["start"], window["end"], window["asked"]
+    use_key = str(use or "drinking").strip().lower().replace("_", " ")
+    if use_key not in WQP_CHARACTERISTICS:
+        use_key = "drinking"
+
+    if source == "usgs":
+        codes: list[str] = []
+        for p in parameters or list(USGS_WQ_CODES):
+            key = str(p).strip().lower()
+            if key in USGS_WQ_CODES.values():
+                codes.append(key)
+            elif _USGS_WQ_NAMES.get(key) in USGS_WQ_CODES:
+                codes.append(USGS_WQ_CODES[_USGS_WQ_NAMES[key]])
+        if not codes:
+            raise ValueError(f"USGS daily water-quality values cover {sorted(USGS_WQ_CODES)} only; got {parameters}")
+        c = build_collector("usgs")
+        recs = c.collect(station_id=station_id, days=(end - start).days, collection="daily",
+                         parameter=",".join(sorted(set(codes))), statCd="00003", max_items=None)
+        note = (f"USGS daily mean values (NWIS, statistic 00003) for parameter codes "
+                f"{', '.join(sorted(set(codes)))}; {asked}.")
+    elif source == "wqp":
+        names = list(parameters) if parameters else list(WQP_CHARACTERISTICS[use_key])
+        c = build_collector("wqp")
+        recs = c.collect(site_id=station_id, characteristic_name=names, start_date=start.strftime("%m-%d-%Y"),
+                         end_date=end.strftime("%m-%d-%Y"), max_results=int(max_samples))
+        note = (f"Water Quality Portal (WQX 3.0) discrete samples for {len(names)} characteristics; {asked}. "
+                "The portal is slow on large windows, so the window and the characteristic list are capped.")
+    else:
+        raise ValueError(
+            f"{meta.label} has no water-quality fetch path yet; samples are served through aquascope for USGS and "
+            "the Water Quality Portal (United States). The archive carries no water-quality variables until Phase 3 "
+            "(#188)."
+        )
+
+    samples = [r for r in recs if type(r).__name__ == "WaterQualitySample"]
+    rows = [
+        {"datetime": r.sample_datetime.isoformat(), "parameter": r.parameter, "value": float(r.value),
+         "unit": r.unit or ""}
+        for r in samples
+    ]
+    rows.sort(key=lambda r: (r["parameter"], r["datetime"]))
+    rows = rows[: int(max_samples)]
+    result: dict[str, Any] = {
+        "source": source,
+        "station_id": station_id,
+        "agency": meta.agency,
+        "license": meta.license,
+        "attribution": meta.attribution,
+        "fetch_note": note,
+        "requested": {"start": start.isoformat(), "end": end.isoformat(), "years": window["years"],
+                      "catalog_start": window["catalog_start"]},
+    }
+    if not rows:
+        result.update({"n_samples": 0, "n_parameters": 0, "samples": [], "sample_counts": {},
+                       "error": "The source returned no water-quality samples for this station in the window."})
+        return result
+    frame = pd.DataFrame(rows)
+    frame["t"] = pd.to_datetime(frame["datetime"], errors="coerce", utc=True).dt.tz_localize(None)
+    per: dict[str, dict[str, Any]] = {}
+    for name, g in frame.groupby("parameter", sort=True):
+        units = g["unit"].astype(str).replace("", pd.NA).dropna()
+        unit = str(units.mode().iloc[0]) if not units.empty else ""
+        vals = g["value"].astype(float)
+        per[str(name)] = {
+            "n": int(len(g)), "unit": unit,
+            "start": _iso(g["t"].min()), "end": _iso(g["t"].max()),
+            "min": _clean(float(vals.min())), "median": _clean(float(vals.median())), "max": _clean(float(vals.max())),
+        }
+    units_all = [p["unit"] for p in per.values() if p["unit"]]
+    t0, t1 = frame["t"].min(), frame["t"].max()
+    result.update({
+        "n_samples": int(len(rows)),
+        "n_parameters": len(per),
+        "parameters": per,
+        "sample_counts": {k: v["n"] for k, v in per.items()},
+        "units": {k: v["unit"] for k, v in per.items()},
+        "unit": max(set(units_all), key=units_all.count) if units_all else "",
+        "start": _iso(t0), "end": _iso(t1),
+        "years": round((t1 - t0).days / 365.25, 2) if pd.notna(t0) and pd.notna(t1) else None,
+        "samples": rows,
+        "methods": [],
+    })
     return result
 
 
@@ -626,3 +968,289 @@ def to_csv(result: dict[str, Any]) -> str:
     lines = [f"date,{result.get('variable', 'value')}_{unit}".replace("/", "_per_")]
     lines += [f"{t},{'' if v is None else v}" for t, v in zip(series["t"], series["v"])]
     return "\n".join(lines) + "\n"
+
+
+# ── reconnaissance ──────────────────────────────────────────────────────────
+# What exists at a place, and what that supports, before any analysis runs.
+# The catalog gives the record spans (no agency call), BasinATLAS the
+# catchment, the similarity search the donors; aquascope.methods turns them
+# into the sufficiency table. Same function behind `aquascope assess`, the
+# MCP tool, the Analyst tool and the Explorer card.
+
+#: Variables a method in the registry can consume.
+RECORD_VARIABLES = ("discharge", "water_level", "precipitation", "groundwater_level", "water_quality")
+#: Sources whose live feed is a short window, whatever the catalog span says.
+SERVED_WINDOW = {"pegelonline": "the last 31 days", "ireland_opw": "the last month"}
+_NEAR_CANDIDATES = 400
+_MAX_STATIONS_LISTED = 25
+_DONOR_K = 10
+_STALE_AFTER_YEARS = 5
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371.0088
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = p2 - p1
+    dlmb = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def _parse_date(value: Any) -> date | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def _span_years(start: Any, end: Any, today: date) -> float | None:
+    """Record length in years from the catalog span; an open end runs to today."""
+    s = _parse_date(start)
+    if s is None:
+        return None
+    e = _parse_date(end) or today
+    return max(0.0, round((e - s).days / 365.25, 1))
+
+
+def _station_entry(row: dict[str, Any], lat: float, lon: float, today: date) -> dict[str, Any]:
+    return {
+        "source": row.get("source"),
+        "station_id": row.get("station_id"),
+        "name": row.get("name"),
+        "distance_km": round(_haversine_km(lat, lon, float(row["latitude"]), float(row["longitude"])), 1),
+        "variables": [v for v in (row.get("variables") or []) if v],
+        "period_start": row.get("period_start"),
+        "period_end": row.get("period_end"),
+        "years": _span_years(row.get("period_start"), row.get("period_end"), today),
+        "url": row.get("url"),
+    }
+
+
+def _label(st: dict[str, Any]) -> str:
+    name = st.get("name") or st.get("station_id")
+    return f"{name} ({st['source']}/{st['station_id']})"
+
+
+def _catchment_subset(desc: dict[str, Any]) -> dict[str, Any]:
+    """The few catchment facts the sufficiency table and a card need, from describe_catchment."""
+    sb = desc.get("sub_basin") or {}
+    attrs = desc.get("attributes") or {}
+
+    def value(key: str) -> Any:
+        entry = attrs.get(key)
+        return entry.get("value") if isinstance(entry, dict) else entry
+
+    up_area = attrs.get("upstream_area_km2")
+    if not isinstance(up_area, (int, float)):
+        up_area = sb.get("up_area")
+    area = attrs.get("area_km2") if isinstance(attrs.get("area_km2"), (int, float)) else up_area
+    return {
+        "hybas_id": sb.get("hybas_id"),
+        "area_km2": _clean(float(area)) if isinstance(area, (int, float)) else None,
+        "upstream_area_km2": _clean(float(up_area)) if isinstance(up_area, (int, float)) else None,
+        "n_sub_basins": (desc.get("upstream") or {}).get("n_sub_basins"),
+        "elevation_m": value("elevation_m"),
+        "precipitation_mm_yr": value("precipitation_mm_yr"),
+        "aridity": value("aridity_index"),
+        "dams": value("degree_of_regulation_pct"),
+        "source": "BasinATLAS (HydroATLAS v1.0)",
+    }
+
+
+def assess_site(
+    lat: float,
+    lon: float,
+    *,
+    radius_km: float = 50.0,
+    problem: str | None = None,
+    return_period: float | None = None,
+    area_km2: float | None = None,
+    donors: int | None = None,
+) -> dict[str, Any]:
+    """What can be answered at a place: the gauges in reach, the catchment, and what the record supports.
+
+    Reads the published station catalog only (true catalog spans, no agency
+    call), asks BasinATLAS for the catchment and the similarity search for
+    donors, builds a :class:`aquascope.methods.SiteContext` and returns the
+    sufficiency table for every method (or those for one ``problem``), each
+    row carrying the station it would use. ``area_km2`` and ``donors`` let a
+    caller that already knows them (the Explorer page holds both) skip those
+    lookups. Everything returned is plain JSON.
+
+    Returns ``{"point", "stations", "catchment", "context", "sufficiency", "notes"}``.
+    """
+    from aquascope.archive.catalog import load_stations, search_stations
+    from aquascope.methods import METHODS, SiteContext, sufficiency_table
+
+    lat, lon = float(lat), float(lon)
+    radius_km = float(radius_km)
+    known_problems = sorted({p for m in METHODS.values() for p in m.problems})
+    if problem is not None and problem not in known_problems:
+        raise ValueError(f"unknown problem {problem!r}; one of {known_problems}")
+    notes: list[str] = []
+    today = datetime.now(timezone.utc).date()
+
+    # ── inventory: the nearest catalog stations, true spans, honest distances
+    rows = load_stations()
+    nearby = [
+        _station_entry(r, lat, lon, today)
+        for r in search_stations(rows, near=(lat, lon), limit=_NEAR_CANDIDATES)
+        if r.get("latitude") is not None and r.get("longitude") is not None
+    ]
+    nearby.sort(key=lambda s: s["distance_km"])
+    within = [s for s in nearby if s["distance_km"] <= radius_km]
+
+    years_by: dict[str, float] = {}
+    resolution_by: dict[str, str] = {}
+    station_by: dict[str, dict[str, Any]] = {}
+    unspanned: dict[str, dict[str, Any]] = {}
+    for st in within:
+        for var in st["variables"]:
+            if var not in RECORD_VARIABLES or var in station_by:
+                continue
+            if st["years"] is None:
+                unspanned.setdefault(var, st)
+                continue
+            years_by[var] = st["years"]
+            resolution_by[var] = "daily"
+            station_by[var] = st
+    # Only the variables a method in the table consumes deserve a "nearest gauge is too far" note.
+    wanted = {m.variable for m in METHODS.values() if m.variable and (problem is None or problem in m.problems)}
+    for var in RECORD_VARIABLES:
+        if var in station_by or var not in wanted:
+            continue
+        if var in unspanned:
+            st = unspanned[var]
+            notes.append(f"{_label(st)} measures {var.replace('_', ' ')} but the catalog has no record span for it; "
+                         "not counted.")
+            continue
+        farther = next((s for s in nearby if var in s["variables"] and s["years"] is not None), None)
+        if within and farther is not None and farther["distance_km"] > radius_km:
+            notes.append(
+                f"Nearest {var.replace('_', ' ')} gauge is {_label(farther)} at {farther['distance_km']:,.0f} km, "
+                f"beyond the {radius_km:g} km radius; not counted."
+            )
+    if not within:
+        if nearby:
+            notes.append(f"No catalog gauge within {radius_km:g} km; the nearest is {_label(nearby[0])} at "
+                         f"{nearby[0]['distance_km']:,.0f} km.")
+        else:
+            notes.append("No catalog gauge near this point.")
+    if years_by:
+        notes.append("Record resolution is not in the catalog; daily is assumed for every variable.")
+    used: dict[tuple[str, str], list[str]] = {}
+    for var, st in station_by.items():
+        used.setdefault((st["source"], st["station_id"]), []).append(var)
+    for key, vars_ in used.items():
+        st = station_by[vars_[0]]
+        what = " and ".join(v.replace("_", " ") for v in vars_)
+        window = SERVED_WINDOW.get(st["source"])
+        if window:
+            notes.append(f"{_label(st)} lists {st['years']:g} years of {what} but the source serves only {window}; "
+                         "a computed answer will not see the full span.")
+        if st["years"] < 2:
+            notes.append(f"The catalog span for {_label(st)} is only {st['years']:g} yr; suspiciously short, the "
+                         "agency may hold more.")
+        end = _parse_date(st["period_end"])
+        if end is not None and (today - end).days > _STALE_AFTER_YEARS * 365:
+            notes.append(f"The {what} record at {_label(st)} ends in {end.year}.")
+
+    # ── catchment (BasinATLAS), unless the caller already knows the area
+    catchment: dict[str, Any]
+    if area_km2 is not None:
+        catchment = {"area_km2": _clean(float(area_km2)), "upstream_area_km2": _clean(float(area_km2)),
+                     "source": "caller"}
+        notes.append("Catchment area supplied by the caller; BasinATLAS was not consulted.")
+    else:
+        from aquascope.mcp_server import describe_catchment
+
+        desc = describe_catchment(lat, lon)
+        if desc.get("error"):
+            catchment = {"error": str(desc["error"])}
+            notes.append(f"Catchment not described: {desc['error']}")
+        else:
+            catchment = _catchment_subset(desc)
+    ctx_area = catchment.get("upstream_area_km2") or catchment.get("area_km2")
+
+    # ── donors for the regionalisation path
+    ctx_donors: int | None
+    if donors is not None:
+        ctx_donors = int(donors)
+        notes.append("Donor count supplied by the caller.")
+    else:
+        from aquascope.mcp_server import similar_basins
+
+        sim = similar_basins(lat=lat, lon=lon, k=_DONOR_K)
+        if sim.get("error"):
+            ctx_donors = None
+            notes.append(f"Donor search not available: {sim['error']}")
+        else:
+            ctx_donors = len(sim.get("stations") or [])
+            pool = sim.get("n_candidates")
+            if isinstance(pool, int):
+                notes.append(f"{ctx_donors} donor gauges from a pool of {pool:,} gauged catchments.")
+
+    # ── point products: the ERA5 / GloFAS path applies to any point on land
+    available = {"glofas", "temperature", "forcing"}
+    notes.append("ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land "
+                 "(Open-Meteo); not checked here.")
+    notes.append("CMIP6 change factors need model output you supply (aquascope.climate works on downloaded data); "
+                 "not counted.")
+
+    ctx = SiteContext(
+        years_by_variable=years_by,
+        resolution_by_variable=resolution_by,
+        area_km2=float(ctx_area) if isinstance(ctx_area, (int, float)) else None,
+        return_period=float(return_period) if return_period is not None else None,
+        donors=ctx_donors,
+        available=available,
+    )
+    if ctx.ungauged:
+        notes.append(f"No gauge with a usable record within {radius_km:g} km: at-site methods are not defensible; "
+                     "what remains is the regionalisation path (similar_basins, regionalize_signatures) and the "
+                     "GloFAS cross-check.")
+
+    # ── the table, each row with the station it would use
+    longest = max(years_by, key=years_by.get) if years_by else None
+    table = sufficiency_table(ctx, problem=problem)
+    for row in table:
+        pre = METHODS[row["method"]]
+        st = None
+        if pre.variable is not None:
+            st = station_by.get(pre.variable)
+        elif pre.min_years is not None and not pre.ungauged and longest is not None:
+            st = station_by[longest]
+        row["station"] = {"source": st["source"], "station_id": st["station_id"]} if st else None
+
+    # The nearest few, plus the station each variable's span came from: at a dense site the well that gives
+    # ``years_by_variable.groundwater_level`` can be the 30th nearest, and a playbook reading the context would
+    # otherwise select a branch whose station is not in the list.
+    listed = within[:_MAX_STATIONS_LISTED]
+    keys = {(s["source"], s["station_id"]) for s in listed}
+    for st in station_by.values():
+        if (st["source"], st["station_id"]) not in keys:
+            listed.append(st)
+            keys.add((st["source"], st["station_id"]))
+
+    return {
+        "point": {"lat": round(lat, 5), "lon": round(lon, 5)},
+        "stations": listed,
+        "catchment": catchment,
+        "context": {
+            "years_by_variable": years_by,
+            "resolution_by_variable": resolution_by,
+            "area_km2": ctx.area_km2,
+            "return_period": ctx.return_period,
+            "donors": ctx.donors,
+            "available": sorted(available),
+            "ungauged": ctx.ungauged,
+        },
+        "sufficiency": table,
+        "notes": notes,
+    }

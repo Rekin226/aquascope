@@ -653,17 +653,72 @@ def describe_catchment(
         "attributes": catchment_attributes(ids, attrs, outlet=sb["hybas_id"]),
         "license": LICENSE,
         "attribution": ATTRIBUTION,
-        "methods": [{
-            "name": "Catchment attributes from BasinATLAS (HydroATLAS v1.0)",
-            "text": "Level-12 HydroBASINS sub-basins traced upstream through the NEXT_DOWN routing field; "
-                    "attributes aggregated as area-weighted means (or outlet / total values where the field is "
-                    "already an upstream aggregate).",
-            "citation": ATTRIBUTION,
-        }],
+        "methods": [_METHOD],
+    }
+
+
+_METHOD = {
+    "name": "Catchment attributes from BasinATLAS (HydroATLAS v1.0)",
+    "text": "Level-12 HydroBASINS sub-basins traced upstream through the NEXT_DOWN routing field; "
+            "attributes aggregated as area-weighted means (or outlet / total values where the field is "
+            "already an upstream aggregate).",
+    "citation": ATTRIBUTION,
+}
+
+_SUB_BASIN_KEYS = ("hybas_id", "next_down", "main_bas", "sub_area", "up_area", "pfaf_id", "approximate")
+
+
+def describe_catchment_from_row(
+    lat: float | None,
+    lon: float | None,
+    sub_basin: dict[str, Any] | None,
+    row: dict[str, Any] | None,
+    *,
+    n_upstream: int | None = None,
+) -> dict[str, Any]:
+    """:func:`describe_catchment` for a caller that has already found the sub-basin and read its row.
+
+    The Explorer reads BasinATLAS with DuckDB and FlatGeobuf on its main
+    thread, where pyogrio cannot run, and its Python worker cannot. It hands
+    the sub-basin it found (``hybas_id``, ``up_area``, ``sub_area``, ...) and
+    the outlet's raw attribute row here and gets the payload every other face
+    gets, built by the same :func:`catchment_attributes`. The outlet row's
+    upstream (``_u``) fields already describe the catchment closed at that
+    outlet, so a single row gives the same attributes a full upstream walk
+    aggregates to; ``n_upstream`` is the count of sub-basins the caller
+    walked, for the note.
+    """
+    sb = {k: v for k, v in dict(sub_basin or {}).items() if k in _SUB_BASIN_KEYS and v is not None}
+    plat = float(lat) if lat is not None else None
+    plon = float(lon) if lon is not None else None
+    if sb.get("hybas_id") is None:
+        return {"latitude": plat, "longitude": plon,
+                "error": "no BasinATLAS sub-basin contains this point (ocean, or outside coverage)"}
+    hybas_id = int(sb["hybas_id"])
+    sb["hybas_id"] = hybas_id
+    frame = pd.DataFrame([{**dict(row or {}), "hybas_id": hybas_id}])
+    for col in ("sub_area", "up_area"):
+        if col not in frame.columns and sb.get(col) is not None:
+            frame[col] = float(sb[col])
+    n = int(n_upstream) if n_upstream else 1
+    note = (f"catchment upstream of the sub-basin containing the point ({n} level-12 sub-basins); "
+            "attributes from the outlet's upstream fields" if n > 1
+            else "attributes from the outlet sub-basin's upstream fields")
+    if sb.get("approximate"):
+        note += "; nearest sub-basin, the point is not inside one"
+    return {
+        "latitude": plat,
+        "longitude": plon,
+        "sub_basin": sb,
+        "upstream": {"n_sub_basins": n, "note": note},
+        "attributes": catchment_attributes([hybas_id], frame, outlet=hybas_id),
+        "license": LICENSE,
+        "attribution": ATTRIBUTION,
+        "methods": [_METHOD],
     }
 
 
 __all__ = [
     "ATTRIBUTE_GUIDE", "ATTRIBUTION", "LICENSE", "Topology", "basins_url", "build_basins", "catchment_attributes",
-    "describe_catchment", "load_attributes", "load_topology", "sub_basin_at",
+    "describe_catchment", "describe_catchment_from_row", "load_attributes", "load_topology", "sub_basin_at",
 ]

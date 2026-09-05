@@ -1,4 +1,4 @@
-"""Data analysis, EDA, quality assessment, change-point detection, and copula modules."""
+"""Data analysis, EDA, quality assessment, change-point detection, copula and water-quality index modules."""
 
 from aquascope.analysis.changepoint import (
     ChangePoint,
@@ -42,6 +42,7 @@ from aquascope.analysis.trends import (
     mann_kendall,
     sens_slope,
 )
+from aquascope.analysis.water_quality import iwqi, wqi_ccme, wqi_nsf
 
 __all__ = [
     "ChangePoint",
@@ -62,6 +63,7 @@ __all__ = [
     "generate_copula_samples",
     "generate_eda_report",
     "generate_synthetic_data",
+    "iwqi",
     "joint_exceedance_probability",
     "mann_kendall",
     "mann_whitney_test",
@@ -76,4 +78,6 @@ __all__ = [
     "sens_slope",
     "tail_dependence",
     "to_pseudo_observations",
+    "wqi_ccme",
+    "wqi_nsf",
 ]

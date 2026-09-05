@@ -47,6 +47,7 @@ class DataSource(str, Enum):
 
     PEGELONLINE = "pegelonline"
     BOM = "bom"
+    BRAZIL_ANA = "brazil_ana"
 
 
 class GeoLocation(BaseModel):

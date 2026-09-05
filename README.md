@@ -416,6 +416,7 @@ Thanks to these wonderful people who make AquaScope possible ([emoji key](CONTRI
     <tr>
       <td align="center" valign="top" width="20%"><a href="https://github.com/leatke"><img src="https://avatars.githubusercontent.com/u/147705788?v=4?s=100" width="100px;" alt="leatke"/><br /><sub><b>leatke</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=leatke" title="Code">💻</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/taliapulsifer"><img src="https://avatars.githubusercontent.com/u/70988138?v=4?s=100" width="100px;" alt="Talia Pulsifer"/><br /><sub><b>Talia Pulsifer</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=taliapulsifer" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=taliapulsifer" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/mikemikimike"><img src="https://avatars.githubusercontent.com/u/186855910?v=4?s=100" width="100px;" alt="mikemikimike"/><br /><sub><b>mikemikimike</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=mikemikimike" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=mikemikimike" title="Tests">⚠️</a></td>
     </tr>
   </tbody>
 </table>

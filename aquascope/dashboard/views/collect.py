@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from io import StringIO
 
 import pandas as pd
@@ -87,6 +88,38 @@ _REGION_ORDER = [
     "India",
     "Africa & Near East",
 ]
+
+
+def _usgs_has_api_key() -> bool:
+    """True when a usable USGS API key is present in the environment.
+
+    The USGS dashboard form shows no key box because the key is optional, so the
+    only place a key can come from is ``USGS_API_KEY``. ``DEMO_KEY`` is the
+    shared throttled key and counts as keyless, matching the collector.
+    """
+    key = os.environ.get("USGS_API_KEY")
+    return bool(key) and key != "DEMO_KEY"
+
+
+def usgs_region_options(has_api_key: bool) -> dict[str, str | None]:
+    """Region-filter choices for the USGS collect form.
+
+    The keyless USGS path rejects a request that carries no filter at all, so the
+    "No filter (all US)" choice is offered only when an API key is present. Without
+    a key the form lists only what the source can actually serve, so a predictable
+    form state can no longer reach the collector and raise a bare ValueError.
+    """
+    options: dict[str, str | None] = {
+        "Northeast US": "-80,37,-66,48",
+        "Southeast US": "-92,24,-80,37",
+        "Midwest US": "-104,36,-80,48",
+        "Pacific Northwest": "-125,42,-104,50",
+        "Southwest US": "-125,32,-104,42",
+    }
+    if has_api_key:
+        options["No filter (all US — slow)"] = None
+    options["Custom bbox"] = "__custom__"
+    return options
 
 
 def render() -> None:
@@ -344,15 +377,12 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
     elif source_key == "usgs":
         fetch["days"] = st.slider("Days of data", 1, 30, 3)
         st.caption("USGS covers thousands of US stations — use a region filter to keep responses fast.")
-        regions = {
-            "Northeast US": "-80,37,-66,48",
-            "Southeast US": "-92,24,-80,37",
-            "Midwest US": "-104,36,-80,48",
-            "Pacific Northwest": "-125,42,-104,50",
-            "Southwest US": "-125,32,-104,42",
-            "No filter (all US — slow)": None,
-            "Custom bbox": "__custom__",
-        }
+        regions = usgs_region_options(_usgs_has_api_key())
+        if not _usgs_has_api_key():
+            st.caption(
+                "The unfiltered \"all US\" option needs a USGS API key "
+                "(set USGS_API_KEY); without one, pick a region or a custom bbox."
+            )
         region_label = st.selectbox("Region filter", list(regions.keys()), index=0)
         bbox_val = regions[region_label]
         if bbox_val == "__custom__":

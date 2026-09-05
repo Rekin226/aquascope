@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -83,7 +83,7 @@ def _col(df: pd.DataFrame, candidates: tuple[str, ...]) -> str | None:
     lower = {str(c).lower(): c for c in df.columns}
     for cand in candidates:
         if cand in lower:
-            return lower[cand]
+            return cast(str, lower[cand])
     return None
 
 
@@ -277,13 +277,42 @@ def _normalise_guidelines(guidelines: dict[str, dict[str, Any]]) -> dict[str, di
     for name, g in guidelines.items():
         key, factor = resolve_parameter(name)
         entry = dict(g or {})
+        parameter = str(name).strip() or repr(name)
+        unknown = sorted(set(entry) - {"min", "max", "unit"})
+        if unknown:
+            raise ValueError(
+                f"invalid guideline for {parameter!r}: unsupported key(s) {unknown!r}; "
+                "accepted keys are min, max, unit"
+            )
+
+        for bound in ("min", "max"):
+            value = entry.get(bound)
+            if value is None:
+                continue
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                raise ValueError(f"invalid guideline for {parameter!r}: {bound} must be a finite number") from None
+            if not math.isfinite(value):
+                raise ValueError(f"invalid guideline for {parameter!r}: {bound} must be a finite number")
+            entry[bound] = value
+
+        if entry.get("min") is None and entry.get("max") is None:
+            raise ValueError(f"invalid guideline for {parameter!r}: at least one of min or max is required")
+        if entry.get("min") is not None and entry.get("max") is not None and entry["min"] > entry["max"]:
+            raise ValueError(f"invalid guideline for {parameter!r}: min must not exceed max")
+
         if key is None:
-            out[str(name).strip().lower()] = entry
+            out[parameter.lower()] = entry
             continue
         for bound in ("min", "max"):
             if entry.get(bound) is not None:
-                conv, _ = _convert(key, float(entry[bound]) * factor, entry.get("unit"))
-                entry[bound] = float(entry[bound]) * factor if conv is None else conv
+                converted, _ = _convert(key, entry[bound] * factor, entry.get("unit"))
+                entry[bound] = entry[bound] * factor if converted is None else converted
+                if not math.isfinite(entry[bound]):
+                    raise ValueError(f"invalid guideline for {parameter!r}: {bound} must be a finite number")
+        if entry.get("min") is not None and entry.get("max") is not None and entry["min"] > entry["max"]:
+            raise ValueError(f"invalid guideline for {parameter!r}: min must not exceed max")
         entry["unit"] = CANONICAL_UNITS[key]
         out[key] = entry
     return out

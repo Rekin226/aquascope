@@ -132,6 +132,20 @@ def test_ccme_guideline_sets_are_named_and_a_custom_table_is_keyed_by_any_spelli
     assert table["nitrate"]["max"] == pytest.approx(44.268)
 
 
+@pytest.mark.parametrize(
+    ("guideline", "message"),
+    [
+        ({"maximum": 8.5}, "pH.*accepted keys.*min, max, unit"),
+        ({"unit": "pH"}, "pH.*at least one of min or max"),
+        ({"min": 9.0, "max": 6.0}, "pH.*min must not exceed max"),
+        ({"max": float("inf")}, "pH.*max must be a finite number"),
+    ],
+)
+def test_ccme_rejects_invalid_custom_guideline_entries(guideline, message):
+    with pytest.raises(ValueError, match=message):
+        wq.wqi_ccme(_block("pH", 7.0, "", n=4), {"pH": guideline})
+
+
 # ── NSF WQI ─────────────────────────────────────────────────────────────────
 
 NINE = lambda: pd.concat([  # noqa: E731 - a fresh frame per test

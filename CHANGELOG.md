@@ -12,6 +12,7 @@ All notable changes to AquaScope are documented here.
 - **The Environment Agency is labelled England, not UK** (#320), in the Explorer, the registry, the README and the docs tables. The EA is England's public body; Scotland (SEPA, #317), Wales (NRW) and Northern Ireland (DfI Rivers, #318) are separate agencies.
 
 ### Fixed
+- **Custom water quality guidelines are validated before scoring** (#343). Unsupported parameters, missing or non-finite bounds, and inverted ranges now fail with clear `ValueError`s instead of reaching the scoring arithmetic.
 
 ## [0.14.0] - 2026-09-04
 

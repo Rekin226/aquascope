@@ -35,6 +35,9 @@ Thumbs.db
 .coverage
 htmlcov/
 
+# Local Benchmarks
+benchmark-output/
+
 # mypy
 .mypy_cache/
 

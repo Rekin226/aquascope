@@ -1,0 +1,747 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Baseflow": {
+      "additionalProperties": false,
+      "properties": {
+        "methods": {
+          "$ref": "#/$defs/BaseflowMethods"
+        },
+        "seconds": {
+          "minimum": 0,
+          "title": "Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "methods",
+        "seconds"
+      ],
+      "title": "Baseflow",
+      "type": "object"
+    },
+    "BaseflowMethod": {
+      "additionalProperties": false,
+      "properties": {
+        "bfi": {
+          "title": "Bfi",
+          "type": "number"
+        },
+        "published_bfi": {
+          "title": "Published Bfi",
+          "type": "number"
+        },
+        "seconds": {
+          "minimum": 0,
+          "title": "Seconds",
+          "type": "number"
+        },
+        "check": {
+          "$ref": "#/$defs/PublishedCheck"
+        }
+      },
+      "required": [
+        "bfi",
+        "published_bfi",
+        "seconds",
+        "check"
+      ],
+      "title": "BaseflowMethod",
+      "type": "object"
+    },
+    "BaseflowMethods": {
+      "additionalProperties": false,
+      "properties": {
+        "lyne_hollick": {
+          "$ref": "#/$defs/BaseflowMethod"
+        },
+        "eckhardt": {
+          "$ref": "#/$defs/BaseflowMethod"
+        }
+      },
+      "required": [
+        "lyne_hollick",
+        "eckhardt"
+      ],
+      "title": "BaseflowMethods",
+      "type": "object"
+    },
+    "BenchmarkMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "generated": {
+          "format": "date",
+          "title": "Generated",
+          "type": "string"
+        },
+        "aquascope_version": {
+          "title": "Aquascope Version",
+          "type": "string"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        },
+        "timings_not_asserted": {
+          "const": true,
+          "title": "Timings Not Asserted",
+          "type": "boolean"
+        },
+        "tolerances": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Tolerance"
+          },
+          "title": "Tolerances",
+          "type": "object"
+        }
+      },
+      "required": [
+        "schema_version",
+        "generated",
+        "aquascope_version",
+        "note",
+        "timings_not_asserted",
+        "tolerances"
+      ],
+      "title": "BenchmarkMetadata",
+      "type": "object"
+    },
+    "Catchment": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "climate": {
+          "title": "Climate",
+          "type": "string"
+        },
+        "signatures": {
+          "$ref": "#/$defs/Signatures"
+        },
+        "baseflow": {
+          "$ref": "#/$defs/Baseflow"
+        },
+        "flood_frequency": {
+          "$ref": "#/$defs/FloodFrequency"
+        },
+        "timings": {
+          "$ref": "#/$defs/CatchmentTimings"
+        }
+      },
+      "required": [
+        "name",
+        "climate",
+        "signatures",
+        "baseflow",
+        "flood_frequency",
+        "timings"
+      ],
+      "title": "Catchment",
+      "type": "object"
+    },
+    "CatchmentTimings": {
+      "additionalProperties": false,
+      "properties": {
+        "signatures_s": {
+          "minimum": 0,
+          "title": "Signatures S",
+          "type": "number"
+        },
+        "baseflow_s": {
+          "minimum": 0,
+          "title": "Baseflow S",
+          "type": "number"
+        },
+        "flood_frequency_s": {
+          "minimum": 0,
+          "title": "Flood Frequency S",
+          "type": "number"
+        },
+        "total_s": {
+          "minimum": 0,
+          "title": "Total S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "signatures_s",
+        "baseflow_s",
+        "flood_frequency_s",
+        "total_s"
+      ],
+      "title": "CatchmentTimings",
+      "type": "object"
+    },
+    "FfaMethod": {
+      "additionalProperties": false,
+      "properties": {
+        "reference_key": {
+          "title": "Reference Key",
+          "type": "string"
+        },
+        "reference_mle_unstable": {
+          "title": "Reference Mle Unstable",
+          "type": "boolean"
+        },
+        "mean_relative_error_pct": {
+          "title": "Mean Relative Error Pct",
+          "type": "number"
+        },
+        "max_relative_error_pct": {
+          "title": "Max Relative Error Pct",
+          "type": "number"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "seconds": {
+          "minimum": 0,
+          "title": "Seconds",
+          "type": "number"
+        },
+        "fits": {
+          "items": {
+            "$ref": "#/$defs/Fit"
+          },
+          "title": "Fits",
+          "type": "array"
+        }
+      },
+      "required": [
+        "reference_key",
+        "reference_mle_unstable",
+        "mean_relative_error_pct",
+        "max_relative_error_pct",
+        "warnings",
+        "seconds",
+        "fits"
+      ],
+      "title": "FfaMethod",
+      "type": "object"
+    },
+    "FfaMethods": {
+      "additionalProperties": false,
+      "properties": {
+        "gev": {
+          "$ref": "#/$defs/FfaMethod"
+        },
+        "gev_lmoments": {
+          "$ref": "#/$defs/FfaMethod"
+        },
+        "lp3": {
+          "$ref": "#/$defs/FfaMethod"
+        }
+      },
+      "required": [
+        "gev",
+        "gev_lmoments",
+        "lp3"
+      ],
+      "title": "FfaMethods",
+      "type": "object"
+    },
+    "Fit": {
+      "additionalProperties": false,
+      "properties": {
+        "return_period": {
+          "enum": [
+            2,
+            5,
+            10,
+            25,
+            50,
+            100
+          ],
+          "title": "Return Period",
+          "type": "integer"
+        },
+        "computed_m3s": {
+          "title": "Computed M3S",
+          "type": "number"
+        },
+        "reference_m3s": {
+          "title": "Reference M3S",
+          "type": "number"
+        },
+        "relative_error_pct": {
+          "title": "Relative Error Pct",
+          "type": "number"
+        },
+        "check_passes": {
+          "title": "Check Passes",
+          "type": "boolean"
+        },
+        "classification": {
+          "enum": [
+            "implementation",
+            "data_limitation"
+          ],
+          "title": "Classification",
+          "type": "string"
+        }
+      },
+      "required": [
+        "return_period",
+        "computed_m3s",
+        "reference_m3s",
+        "relative_error_pct",
+        "check_passes",
+        "classification"
+      ],
+      "title": "Fit",
+      "type": "object"
+    },
+    "FloodFrequency": {
+      "additionalProperties": false,
+      "properties": {
+        "methods": {
+          "$ref": "#/$defs/FfaMethods"
+        },
+        "seconds": {
+          "minimum": 0,
+          "title": "Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "methods",
+        "seconds"
+      ],
+      "title": "FloodFrequency",
+      "type": "object"
+    },
+    "Gates": {
+      "additionalProperties": false,
+      "properties": {
+        "q_mean_nrmse_pct": {
+          "title": "Q Mean Nrmse Pct",
+          "type": "number"
+        },
+        "q_mean_nrmse_tolerance_pct": {
+          "title": "Q Mean Nrmse Tolerance Pct",
+          "type": "number"
+        },
+        "q_mean_gate_met": {
+          "title": "Q Mean Gate Met",
+          "type": "boolean"
+        },
+        "bfi_pbias_pct": {
+          "title": "Bfi Pbias Pct",
+          "type": "number"
+        },
+        "bfi_pbias_tolerance_pct": {
+          "title": "Bfi Pbias Tolerance Pct",
+          "type": "number"
+        },
+        "bfi_gate_met": {
+          "title": "Bfi Gate Met",
+          "type": "boolean"
+        },
+        "ffa_cross_method_mean_relative_error_pct": {
+          "title": "Ffa Cross Method Mean Relative Error Pct",
+          "type": "number"
+        },
+        "ffa_tolerance_pct": {
+          "title": "Ffa Tolerance Pct",
+          "type": "number"
+        },
+        "ffa_gate_met": {
+          "title": "Ffa Gate Met",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "q_mean_nrmse_pct",
+        "q_mean_nrmse_tolerance_pct",
+        "q_mean_gate_met",
+        "bfi_pbias_pct",
+        "bfi_pbias_tolerance_pct",
+        "bfi_gate_met",
+        "ffa_cross_method_mean_relative_error_pct",
+        "ffa_tolerance_pct",
+        "ffa_gate_met"
+      ],
+      "title": "Gates",
+      "type": "object"
+    },
+    "IntegrityCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "enum": [
+            "order",
+            "runoff_ratio",
+            "recession_constant",
+            "fdc_slope",
+            "complete"
+          ],
+          "title": "Metric",
+          "type": "string"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "check_passes": {
+          "title": "Check Passes",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "metric",
+        "detail",
+        "check_passes"
+      ],
+      "title": "IntegrityCheck",
+      "type": "object"
+    },
+    "Metrics": {
+      "additionalProperties": false,
+      "properties": {
+        "rmse": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rmse"
+        },
+        "pbias": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pbias"
+        },
+        "r2": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "R2"
+        }
+      },
+      "required": [
+        "rmse",
+        "pbias",
+        "r2"
+      ],
+      "title": "Metrics",
+      "type": "object"
+    },
+    "PublishedCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "metric": {
+          "title": "Metric",
+          "type": "string"
+        },
+        "computed": {
+          "title": "Computed",
+          "type": "number"
+        },
+        "published": {
+          "title": "Published",
+          "type": "number"
+        },
+        "error_type": {
+          "enum": [
+            "relative",
+            "absolute",
+            "circular_months"
+          ],
+          "title": "Error Type",
+          "type": "string"
+        },
+        "error": {
+          "title": "Error",
+          "type": "number"
+        },
+        "tolerance": {
+          "title": "Tolerance",
+          "type": "number"
+        },
+        "check_passes": {
+          "title": "Check Passes",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "metric",
+        "computed",
+        "published",
+        "error_type",
+        "error",
+        "tolerance",
+        "check_passes"
+      ],
+      "title": "PublishedCheck",
+      "type": "object"
+    },
+    "SignatureValues": {
+      "additionalProperties": false,
+      "properties": {
+        "q_mean": {
+          "title": "Q Mean",
+          "type": "number"
+        },
+        "q5": {
+          "title": "Q5",
+          "type": "number"
+        },
+        "q95": {
+          "title": "Q95",
+          "type": "number"
+        },
+        "median_flow": {
+          "title": "Median Flow",
+          "type": "number"
+        },
+        "runoff_ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Runoff Ratio"
+        },
+        "mean_recession_constant": {
+          "title": "Mean Recession Constant",
+          "type": "number"
+        },
+        "fdc_slope": {
+          "title": "Fdc Slope",
+          "type": "number"
+        },
+        "peak_month": {
+          "maximum": 12,
+          "minimum": 1,
+          "title": "Peak Month",
+          "type": "integer"
+        },
+        "baseflow_index": {
+          "title": "Baseflow Index",
+          "type": "number"
+        }
+      },
+      "required": [
+        "q_mean",
+        "q5",
+        "q95",
+        "median_flow",
+        "runoff_ratio",
+        "mean_recession_constant",
+        "fdc_slope",
+        "peak_month",
+        "baseflow_index"
+      ],
+      "title": "SignatureValues",
+      "type": "object"
+    },
+    "Signatures": {
+      "additionalProperties": false,
+      "properties": {
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/PublishedCheck"
+          },
+          "title": "Checks",
+          "type": "array"
+        },
+        "values": {
+          "$ref": "#/$defs/SignatureValues"
+        },
+        "integrity": {
+          "items": {
+            "$ref": "#/$defs/IntegrityCheck"
+          },
+          "title": "Integrity",
+          "type": "array"
+        },
+        "seconds": {
+          "minimum": 0,
+          "title": "Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "checks",
+        "values",
+        "integrity",
+        "seconds"
+      ],
+      "title": "Signatures",
+      "type": "object"
+    },
+    "SoftwareInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "author": {
+          "title": "Author",
+          "type": "string"
+        },
+        "doi": {
+          "title": "Doi",
+          "type": "string"
+        },
+        "citation": {
+          "title": "Citation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "author",
+        "doi",
+        "citation"
+      ],
+      "title": "SoftwareInfo",
+      "type": "object"
+    },
+    "Summary": {
+      "additionalProperties": false,
+      "properties": {
+        "n_catchments": {
+          "minimum": 0,
+          "title": "N Catchments",
+          "type": "integer"
+        },
+        "n_unmet": {
+          "minimum": 0,
+          "title": "N Unmet",
+          "type": "integer"
+        },
+        "n_data_limitation_findings": {
+          "minimum": 0,
+          "title": "N Data Limitation Findings",
+          "type": "integer"
+        },
+        "n_integrity_failures": {
+          "minimum": 0,
+          "title": "N Integrity Failures",
+          "type": "integer"
+        },
+        "gates": {
+          "$ref": "#/$defs/Gates"
+        },
+        "aggregate": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Metrics"
+          },
+          "title": "Aggregate",
+          "type": "object"
+        },
+        "timings": {
+          "$ref": "#/$defs/SummaryTimings"
+        }
+      },
+      "required": [
+        "n_catchments",
+        "n_unmet",
+        "n_data_limitation_findings",
+        "n_integrity_failures",
+        "gates",
+        "aggregate",
+        "timings"
+      ],
+      "title": "Summary",
+      "type": "object"
+    },
+    "SummaryTimings": {
+      "additionalProperties": false,
+      "properties": {
+        "total_seconds": {
+          "minimum": 0,
+          "title": "Total Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "total_seconds"
+      ],
+      "title": "SummaryTimings",
+      "type": "object"
+    },
+    "Tolerance": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "rationale": {
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "unit",
+        "rationale"
+      ],
+      "title": "Tolerance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Top-level ``results.json`` document (the CAMELS benchmark contract).",
+  "properties": {
+    "metadata": {
+      "$ref": "#/$defs/BenchmarkMetadata"
+    },
+    "catchments": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Catchment"
+      },
+      "title": "Catchments",
+      "type": "object"
+    },
+    "summary": {
+      "$ref": "#/$defs/Summary"
+    },
+    "software": {
+      "$ref": "#/$defs/SoftwareInfo"
+    }
+  },
+  "required": [
+    "metadata",
+    "catchments",
+    "summary",
+    "software"
+  ],
+  "title": "CAMELS benchmark results",
+  "type": "object"
+}

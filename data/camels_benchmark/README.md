@@ -1,8 +1,8 @@
 # CAMELS Benchmark Data
 
-Synthetic daily streamflow series for 10 well-known USGS catchments, generated
-to approximate published CAMELS catchment statistics, plus cached USGS annual
-peak flows for flood-frequency validation.
+Synthetic daily catchment series (discharge + precipitation) for 10 well-known USGS
+catchments, generated to approximate published CAMELS statistics, plus cached USGS
+annual peak flows and their flood-frequency reference quantiles.
 
 ## Purpose
 
@@ -18,9 +18,10 @@ data, cached for reproducibility.
 
 | File / Directory | Description |
 |------------------|-------------|
-| `catchments.json` | Published attributes for 10 CAMELS catchments |
+| `daily_catchments.json` | Published attributes for 10 CAMELS catchments |
 | `generate_synthetic.py` | Script that creates the synthetic CSV files below |
-| `<gauge_id>.csv` | Synthetic daily discharge + precipitation (2000–2009) |
+| `daily/` | Synthetic daily catchment series (discharge + precipitation) |
+| `daily/<gauge_id>_daily.csv` | Daily `discharge_cms` + `precipitation_mm` for one gauge (2000–2009) |
 | `peaks/` | Cached USGS annual peak series (real data) |
 | `peaks/<gauge_id>_peaks.csv` | Annual peak flows for one gauge |
 | `ffa_reference.json` | Pre-computed reference quantiles (GEV-MLE, LP3 via scipy; GEV-LMoments via lmoments3) |

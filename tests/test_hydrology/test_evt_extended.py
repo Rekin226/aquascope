@@ -13,6 +13,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _gumbel_data(n: int = 100, loc: float = 50.0, scale: float = 10.0, seed: int = 42) -> np.ndarray:
     """Generate Gumbel-distributed data."""
     rng = np.random.default_rng(seed)
@@ -43,8 +44,8 @@ def _gpd_data(n: int = 200, shape: float = 0.2, scale: float = 5.0, seed: int = 
 # Gumbel
 # ---------------------------------------------------------------------------
 
-class TestFitGumbel:
 
+class TestFitGumbel:
     def test_fit_gumbel_basic(self):
         from aquascope.hydrology.flood_frequency import fit_gumbel
 
@@ -80,8 +81,8 @@ class TestFitGumbel:
 # Weibull minimum
 # ---------------------------------------------------------------------------
 
-class TestFitWeibullMin:
 
+class TestFitWeibullMin:
     def test_fit_weibull_min_basic(self):
         from aquascope.hydrology.flood_frequency import fit_weibull_min
 
@@ -97,8 +98,8 @@ class TestFitWeibullMin:
 # GPD
 # ---------------------------------------------------------------------------
 
-class TestFitGPD:
 
+class TestFitGPD:
     def test_fit_gpd_basic(self):
         from aquascope.hydrology.flood_frequency import fit_gpd
 
@@ -129,8 +130,8 @@ class TestFitGPD:
 # POT threshold selection
 # ---------------------------------------------------------------------------
 
-class TestSelectPOTThreshold:
 
+class TestSelectPOTThreshold:
     def test_percentile(self):
         from aquascope.hydrology.flood_frequency import select_pot_threshold
 
@@ -168,8 +169,8 @@ class TestSelectPOTThreshold:
 # L-moments
 # ---------------------------------------------------------------------------
 
-class TestLmoments:
 
+class TestLmoments:
     def test_lmoments_known_values(self):
         """For a uniform(0,1) sample the theoretical L1=0.5, L2≈1/6."""
         from aquascope.hydrology.flood_frequency import lmoments_from_sample
@@ -230,8 +231,8 @@ class TestLmoments:
 # Non-stationary GEV
 # ---------------------------------------------------------------------------
 
-class TestNonStationaryGEV:
 
+class TestNonStationaryGEV:
     def test_fit_nonstationary_gev_basic(self):
         from aquascope.hydrology.flood_frequency import fit_nonstationary_gev
 
@@ -279,8 +280,8 @@ class TestNonStationaryGEV:
 # Regional frequency analysis
 # ---------------------------------------------------------------------------
 
-class TestRegionalFrequency:
 
+class TestRegionalFrequency:
     def _make_sites(self, n_sites: int = 4, n_years: int = 40, seed: int = 42) -> dict[str, np.ndarray]:
         rng = np.random.default_rng(seed)
         sites = {}
@@ -299,6 +300,36 @@ class TestRegionalFrequency:
         assert result.growth_curve[100.0] > result.growth_curve[2.0]
         for sid in sites:
             assert sid in result.regional_return_levels
+
+    def test_regional_growth_curve_recovers_homogeneous_gev(self):
+        """Growth curve from a homogeneous synthetic region matches the analytical one (#156).
+
+        Twenty sites, 40 years each, GEV(c=-0.25, loc=800, scale=250) — the #156
+        reproduction. The analytical growth factor is quantile / E[X], where E[X]
+        must come from ``genextreme.mean`` (1025.4), NOT ``loc`` (800): #156's
+        residual "~13% uniform low bias" was an artifact of dividing by 893.6, and
+        the underlying shape-sign defect was already corrected in the regional
+        estimator, so the recovery is within ~1-3%.
+        """
+        from scipy import stats
+
+        from aquascope.hydrology.flood_frequency import regional_frequency_analysis
+
+        c_true, loc, scale = -0.25, 800.0, 250.0
+        sites = {
+            f"s{i}": stats.genextreme.rvs(c=c_true, loc=loc, scale=scale, size=40, random_state=100 + i)
+            for i in range(20)
+        }
+        growth = regional_frequency_analysis(sites, return_periods=[10, 100]).growth_curve
+
+        mean = float(stats.genextreme.mean(c_true, loc=loc, scale=scale))
+        analytical = {
+            rp: float(stats.genextreme.ppf(1 - 1 / rp, c_true, loc=loc, scale=scale)) / mean for rp in (10, 100)
+        }
+        for rp in (10, 100):
+            assert growth[rp] == pytest.approx(analytical[rp], rel=0.05), (
+                f"RP{rp}: regional growth {growth[rp]:.3f} vs analytical {analytical[rp]:.3f}"
+            )
 
     def test_regional_discordancy(self):
         """One outlier site should have a higher discordancy statistic."""
@@ -323,8 +354,8 @@ class TestRegionalFrequency:
 # Goodness-of-fit tests
 # ---------------------------------------------------------------------------
 
-class TestGoodnessOfFit:
 
+class TestGoodnessOfFit:
     def test_anderson_darling_good_fit(self):
         """GEV data tested against fitted GEV — should not reject."""
         from scipy.stats import genextreme

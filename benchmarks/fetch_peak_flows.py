@@ -43,13 +43,14 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-BASE = pathlib.Path(__file__).resolve().parent
-BENCHMARK_DIR = BASE.parent / "data" / "camels_benchmark"
-CATCHMENTS_FILE = BENCHMARK_DIR / "catchments.json"
-PEAKS_DIR = BENCHMARK_DIR / "peaks"
-REFERENCE_FILE = BENCHMARK_DIR / "ffa_reference.json"
+from benchmarks import _paths
+from benchmarks.results_models import RETURN_PERIODS
 
-RETURN_PERIODS = [2, 5, 10, 25, 50, 100]
+BASE = pathlib.Path(__file__).resolve().parent
+BENCHMARK_DIR = _paths.BENCHMARK_DIR
+DAILY_CATCHMENTS_FILE = _paths.DAILY_CATCHMENTS_FILE
+PEAKS_DIR = _paths.PEAKS_DIR
+FFA_REFERENCE_FILE = _paths.FFA_REFERENCE_FILE
 
 FT3S_TO_M3S = 0.028316846592
 
@@ -296,7 +297,7 @@ def _write_artifacts(peak_frames: dict[str, pd.DataFrame], reference: dict) -> N
     PEAKS_DIR.mkdir(parents=True, exist_ok=True)
 
     staged: list[tuple[pathlib.Path, pathlib.Path]] = []
-    tmp_json = REFERENCE_FILE.with_suffix(REFERENCE_FILE.suffix + ".tmp")
+    tmp_json = FFA_REFERENCE_FILE.with_suffix(FFA_REFERENCE_FILE.suffix + ".tmp")
     try:
         for gauge_id, frame in peak_frames.items():
             csv_path = PEAKS_DIR / f"{gauge_id}_peaks.csv"
@@ -304,7 +305,7 @@ def _write_artifacts(peak_frames: dict[str, pd.DataFrame], reference: dict) -> N
             staged.append((tmp_path, csv_path))
             frame.to_csv(tmp_path, index=False)
 
-        staged.append((tmp_json, REFERENCE_FILE))
+        staged.append((tmp_json, FFA_REFERENCE_FILE))
         with open(tmp_json, "w") as f:
             json.dump(reference, f, indent=2)
 
@@ -318,7 +319,7 @@ def _write_artifacts(peak_frames: dict[str, pd.DataFrame], reference: dict) -> N
 
 def main() -> None:
     """Fetch peak flows and compute reference quantiles for all gauges."""
-    with open(CATCHMENTS_FILE) as f:
+    with open(DAILY_CATCHMENTS_FILE) as f:
         catchments = json.load(f)
 
     reference: dict = {
@@ -393,7 +394,7 @@ def main() -> None:
     n_ok = len(reference["catchments"])
     print(f"Done. {n_ok}/{len(catchments)} gauges processed.")
     print(f"  Peaks cached in:  {PEAKS_DIR}")
-    print(f"  Reference file:   {REFERENCE_FILE}")
+    print(f"  Reference file:   {FFA_REFERENCE_FILE}")
 
 
 if __name__ == "__main__":

@@ -353,7 +353,7 @@ def _tiny_frames() -> dict[str, pd.DataFrame]:
 def test_write_artifacts_commits_all_outputs(tmp_path, monkeypatch) -> None:
     """A successful run publishes CSVs + JSON with no temp leftovers."""
     monkeypatch.setattr(fpf, "PEAKS_DIR", tmp_path)
-    monkeypatch.setattr(fpf, "REFERENCE_FILE", tmp_path / "ffa_reference.json")
+    monkeypatch.setattr(fpf, "FFA_REFERENCE_FILE", tmp_path / "ffa_reference.json")
 
     fpf._write_artifacts(_tiny_frames(), {"meta": "fresh"})
 
@@ -366,7 +366,7 @@ def test_write_artifacts_commits_all_outputs(tmp_path, monkeypatch) -> None:
 def test_write_artifacts_aborted_commit_leaves_prior_outputs(tmp_path, monkeypatch) -> None:
     """A mid-commit failure leaves prior artifacts byte-identical, no temps."""
     monkeypatch.setattr(fpf, "PEAKS_DIR", tmp_path)
-    monkeypatch.setattr(fpf, "REFERENCE_FILE", tmp_path / "ffa_reference.json")
+    monkeypatch.setattr(fpf, "FFA_REFERENCE_FILE", tmp_path / "ffa_reference.json")
 
     (tmp_path / "11111111_peaks.csv").write_text("OLD_1\n")
     (tmp_path / "22222222_peaks.csv").write_text("OLD_2\n")
@@ -421,12 +421,12 @@ def test_main_writes_expected_outputs(tmp_path, monkeypatch) -> None:
         {"gauge_id": "11111111", "name": "Catchment One"},
         {"gauge_id": "22222222", "name": "Catchment Two"},
     ]
-    json.dump(catchments, open(tmp_path / "catchments.json", "w"))
+    json.dump(catchments, open(tmp_path / "daily_catchments.json", "w"))
     years = list(range(1990, 2020))
 
-    monkeypatch.setattr(fpf, "CATCHMENTS_FILE", tmp_path / "catchments.json")
+    monkeypatch.setattr(fpf, "DAILY_CATCHMENTS_FILE", tmp_path / "daily_catchments.json")
     monkeypatch.setattr(fpf, "PEAKS_DIR", tmp_path / "peaks")
-    monkeypatch.setattr(fpf, "REFERENCE_FILE", tmp_path / "ffa_reference.json")
+    monkeypatch.setattr(fpf, "FFA_REFERENCE_FILE", tmp_path / "ffa_reference.json")
 
     def fake_fetch(gauge_id: str) -> pd.Series:
         sample = _gbm_sample(years)
@@ -489,12 +489,12 @@ def test_main_writes_nothing_when_a_later_gauge_fails(tmp_path, monkeypatch) -> 
         {"gauge_id": "11111111", "name": "Catchment One"},
         {"gauge_id": "22222222", "name": "Catchment Two"},
     ]
-    json.dump(catchments, open(tmp_path / "catchments.json", "w"))
+    json.dump(catchments, open(tmp_path / "daily_catchments.json", "w"))
     years = list(range(1990, 2020))
 
-    monkeypatch.setattr(fpf, "CATCHMENTS_FILE", tmp_path / "catchments.json")
+    monkeypatch.setattr(fpf, "DAILY_CATCHMENTS_FILE", tmp_path / "daily_catchments.json")
     monkeypatch.setattr(fpf, "PEAKS_DIR", tmp_path / "peaks")
-    monkeypatch.setattr(fpf, "REFERENCE_FILE", tmp_path / "ffa_reference.json")
+    monkeypatch.setattr(fpf, "FFA_REFERENCE_FILE", tmp_path / "ffa_reference.json")
 
     def fake_fetch(gauge_id: str) -> pd.Series:
         sample = _gbm_sample(years)

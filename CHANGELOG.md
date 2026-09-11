@@ -17,6 +17,7 @@ All notable changes to AquaScope are documented here.
 - **Colorado DWR/CDSS telemetry collector** (#319). Collects state-gauge discharge observations from Colorado's Decision Support Systems, handles the CDSS `ResultList` response envelope, converts cfs to m³/s, and exposes the source through the registry and dashboard.
 
 ### Changed
+- **FAO-56 Rev.1 multi-class woody crop and winter wheat coefficient modeling** (#372). Added structured sub-class parameterization for woody crops (`olive`, `grape`, `citrus`) and `wheat_winter` per FAO-56 Rev.1 (2025) Tables 6.3/7.3 and 6.2/7.2. `get_kc`, `get_kcb`, `crop_water_requirement`, and `irrigation_schedule` support optional `ground_cover`, `density`, `variety`, and `class_name` parameters while preserving default backwards compatibility with standard Rev.1 classes.
 - **Verified FAO-56 crop coefficients against the revised 2025 edition and updated citations** (#310). Cross-checked single ($K_c$, Table 12) and basal ($K_{cb}$, Table 17) coefficients across all 26 crops in `aquascope.agri.crop_water` against the 2025 second revised edition (FAO-56 Rev.1, Pereira et al. 2025, doi:10.4060/cd6621en), updated module and function docstring references alongside historical 1998 citations, and updated `aquascope.methods` preconditions.
 
 ### Fixed

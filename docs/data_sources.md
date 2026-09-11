@@ -1,6 +1,6 @@
 # Data Sources
 
-AquaScope ships **36 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
+AquaScope ships **37 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
 
 Most sources emit point observations and share the unified `water_data` schema (`WaterQualitySample`, `WaterLevelReading`, `ReservoirStatus`). Three aggregate/gridded sources use purpose-built record types that match their data shape: **FAO AQUASTAT** returns country-level `AquastatRecord`, **UN SDG 6** returns `SDG6Indicator`, and **FAO WaPOR** returns gridded `WaPORObservation`.
 
@@ -45,6 +45,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [ANA Hidroweb](https://www.snirh.gov.br/hidroweb/) | `brazil_ana` | Brazil | Telemetric streamflow, stage, rainfall | REST | ✅ |
 | [Ireland OPW](https://waterlevel.ie) | `ireland_opw` | Ireland | River / lake water level (15-min resolution) | GeoJSON / CSV | ✅ |
 | [Environment Agency (England)](https://environment.data.gov.uk) | `uk_ea` | England (UK) | River and groundwater levels, river flow, rainfall data | REST | ✅ |
+| [SEPA Hydrometric Data](https://timeseries.sepa.org.uk/) | `scotland_sepa` | Scotland (UK) | River flow and river level (15-min observations) | KISTERS WISKI (KiWIS) | ✅ |
 | [BOM Water Data Online](http://www.bom.gov.au/waterdata/) | `bom` | Australia | Streamflow, water level, storage, groundwater level | KISTERS WISKI (KiWIS) | ✅ |
 | [South Africa DWS](https://www.dws.gov.za/Hydrology/) | `south_africa_dws` | South Africa | Verified river discharge, water level | HTML / text | ✅ |
 | [Colorado DWR/CDSS](https://dwr.state.co.us/Rest/GET/Help) | `colorado_cdss` | Colorado, USA | State telemetry streamflow observations | REST | ✅ |
@@ -76,6 +77,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | Greece Hydroscope | No | Open access via hydroscope.gr |
 | Greece OpenHi.net | No | Open access via system.openhi.net (CC BY-SA 4.0) |
 | Environment Agency (England) | No | Open access |
+| SEPA Hydrometric Data (Scotland) | No | Open access |
 | BOM Water Data Online | No | Open access |
 | Colorado DWR/CDSS | No | Open access |
 

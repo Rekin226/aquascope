@@ -4,11 +4,13 @@ Complete capability reference for AquaScope. For installation and a quick exampl
 
 ---
 
-## Data Collection (20 sources)
+## Data Collection (36 sources)
 
-- **Taiwan** — MOENV water quality, WRA levels/reservoirs, Civil IoT sensors
-- **USA** — USGS streamflow, Water Quality Portal (400+ agencies)
-- **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo weather, Copernicus climate, UKEA hydrology
+- **Taiwan** — MOENV water quality, WRA levels / reservoirs / groundwater (annual and daily) / FHY / IoT, CWA climate, Civil IoT sensors, data.gov.tw
+- **Americas** — USGS streamflow, NOAA NWPS, Colorado DWR/CDSS, Water Quality Portal (400+ agencies), CAMELS-CL, CAMELS-BR, ANA Hidroweb
+- **Europe** — EU Water Framework Directive, France Hub'Eau, Germany PEGELONLINE, England's Environment Agency, Ireland OPW, Greece Hydroscope
+- **Asia-Pacific** — Japan MLIT, Korea WAMIS, India WRIS, Australia BOM
+- **Global** — GEMStat (170 countries), GRDC river discharge, UN SDG 6, OpenMeteo weather, Copernicus climate
 - **FAO** — AQUASTAT country-level water use, WaPOR satellite evapotranspiration
 
 See [docs/data_sources.md](data_sources.md) for the full list with endpoints and API-key requirements.
@@ -20,7 +22,7 @@ See [docs/data_sources.md](data_sources.md) for the full list with endpoints and
 - **Flood frequency** — GEV, LP3 (Bulletin 17C compliant), Gumbel, GPD/POT, L-moments, non-stationary GEV, regional frequency analysis, EMA for censored data
 - **Baseflow separation** — Lyne-Hollick & Eckhardt digital filters
 - **Flow duration curves** — Weibull plotting, FDC slope
-- **21 hydrological signatures** — magnitude, variability, timing, recession, flashiness
+- **22 hydrological signatures** — magnitude, variability, timing, recession, flashiness
 - **Rating curves** — power-law fitting, segmented curves, shift detection, HEC-RAS export
 - **Q-Q/P-P diagnostics** — distribution fit validation with 4-panel diagnostic plots
 - **Cross-validation** — leave-one-out CV and coverage probability for flood frequency
@@ -31,7 +33,7 @@ See [docs/data_sources.md](data_sources.md) for the full list with endpoints and
 
 - **FAO-56 Penman-Monteith ET₀** — reference evapotranspiration with all intermediate steps
 - **Hargreaves ET₀** — temperature-only alternative
-- **Crop water requirements** — 23 crops with FAO-56 Kc coefficients and growth stages; single (Kc) and dual (Kcb + Ke) coefficient modes
+- **Crop water requirements** — 26 crops with FAO-56 Kc coefficients and growth stages; single (Kc) and dual (Kcb + Ke) coefficient modes
 - **Irrigation scheduling** — effective rainfall, net/gross demand, efficiency
 - **Soil water balance** — daily tracking, depletion, auto-irrigation triggers
 - **WaPOR productivity workflows** — biomass water productivity and AETI-to-RET performance metrics
@@ -90,7 +92,7 @@ For when-to-use-which guidance, see the [methodology matrix](methodology_matrix.
 
 ## Infrastructure
 
-- **820+ tests** with CAMELS benchmark validation
-- **Interactive dashboard** — 7-page Streamlit app
-- **14 CLI commands** — `collect`, `recommend`, `eda`, `quality`, `run`, `solve`, `forecast`, `plot`, `hydro`, `alerts`, `dashboard`, `agri`, `list-methods`, `list-sources`
+- **2,500+ tests** with CAMELS benchmark validation
+- **Interactive dashboard** — 10-page Streamlit app
+- **29 CLI commands** — `collect`, `recommend`, `eda`, `quality`, `run`, `completion`, `list-methods`, `list-sources`, `stations`, `harvest`, `ask`, `ingest`, `basins`, `assess`, `gym`, `caravan`, `mcp`, `playbooks`, `solve`, `studio`, `studio-showcase`, `forecast`, `plot`, `dashboard`, `agri`, `alerts`, `groundwater`, `climate`, `hydro`
 - **[Theory guide](theory.md)** — mathematical equations, DOI citations, decision trees

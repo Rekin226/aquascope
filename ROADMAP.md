@@ -30,7 +30,7 @@ Most of that arc shipped between 18 and 20 August 2026 and is live in the Explor
 
 ## Shipped
 
-- [x] 29 data source collectors (Taiwan ×8, USA ×3, Global ×5, FAO ×2, EU, France, Germany, Ireland, UK, Japan, Korea, India, Chile, Brazil, Australia)
+- [x] 30 data source collectors (Taiwan ×8, USA ×3, Global ×5, FAO ×2, EU, France, Germany, Ireland, UK, Japan, Korea, India, South Africa, Chile, Brazil, Australia)
 - [x] Rule-based + LLM methodology recommender (26 methods, OpenAI / Groq / HuggingFace / Ollama)
 - [x] 26 auto-executable analysis pipelines
 - [x] GR4J conceptual rainfall-runoff model + auto-calibration (NSE / KGE / log-NSE)

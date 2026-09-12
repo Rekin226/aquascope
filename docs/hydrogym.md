@@ -248,7 +248,7 @@ Heytesbury A36 gauge in Wiltshire (8.3 years) was captured and left out: a
 53-year gauge sits 300 m away, which the reconnaissance does not see because
 it takes the nearest station's span per variable, so no defensible reference
 could be written for it that the Studio's validator would accept (see the
-[discussion](../aquascope/gym/results/2026-09-07/discussion.md)).
+[discussion](https://github.com/Rekin226/aquascope/blob/main/aquascope/gym/results/2026-09-07/discussion.md)).
 
 ### Scoring
 
@@ -307,7 +307,7 @@ The tree and the Studio Methodologist on Claude Sonnet 5 and Claude Haiku 4.5,
 two repeats each, played on 2026-09-07 from the saved reconnaissance with a
 300 s timeout per case, no errors and no timeouts. The rows (with every plan's
 steps and the explanation of its score), this table, a
-[discussion](../aquascope/gym/results/2026-09-07/discussion.md) with the
+[discussion](https://github.com/Rekin226/aquascope/blob/main/aquascope/gym/results/2026-09-07/discussion.md) with the
 per-case scores and the deposit package for a DOI (`deposit/`: the cases with
 their reconnaissance, a README on the format, the scoring and the licences,
 `zenodo.json`) are under `aquascope/gym/results/2026-09-07/`.

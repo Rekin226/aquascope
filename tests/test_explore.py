@@ -388,3 +388,64 @@ def test_catalog_period_uses_a_cached_copy_whatever_its_age(monkeypatch, tmp_pat
     os.utime(dest, (old, old))
     with patch("aquascope.archive.catalog._download", side_effect=AssertionError("must not download")):
         assert catalog_mod.catalog_period("uk_ea", "K") == ("1883-10-01", None)
+
+
+#: Catalog sources whose stations reach the Explorer map but whose click still
+#: raises "no Explorer fetch path yet". Both predate this guard. Shrink this
+#: set, never grow it: adding a source here means shipping pins a user can
+#: click and get an error from.
+EXPLORER_FETCH_GAPS = {"bom", "brazil_ana"}
+
+
+def test_every_catalog_source_has_an_explorer_fetch_path():
+    """A source that lists stations puts pins on the map, so a click must reach a fetch path.
+
+    Both Greek sources shipped catalog-only first and every click raised
+    "no Explorer fetch path yet". This is the guard against the next one, and
+    EXPLORER_FETCH_GAPS is the standing list of the ones still broken.
+    """
+    from aquascope.registry import station_sources
+
+    broken = set()
+    for source in station_sources():
+        try:
+            with patch.object(analysis, "build_collector", return_value=_NoRecords()):
+                out = analysis.fetch_series(source, "x", years=1, prefer_archive=False)
+        except ValueError as exc:
+            if "no Explorer fetch path" not in str(exc):
+                raise
+            broken.add(source)
+            continue
+        assert out["note"], f"{source} produced no provenance note"
+
+    assert broken == EXPLORER_FETCH_GAPS, (
+        f"Explorer fetch paths drifted. Newly broken: {sorted(broken - EXPLORER_FETCH_GAPS)}; "
+        f"now fixed (remove from EXPLORER_FETCH_GAPS): {sorted(EXPLORER_FETCH_GAPS - broken)}"
+    )
+
+
+class _NoRecords:
+    """Answers every collector call with an empty record list."""
+
+    def collect(self, **kw):
+        return []
+
+    def stations(self, **kw):
+        return []
+
+
+def test_greek_sources_push_the_window_down_and_try_variables_in_order():
+    """Both Greek collectors filter server-side, so start/end must reach them."""
+    seen = []
+
+    class FakeGreece:
+        def collect(self, **kw):
+            seen.append((kw["variable"], kw["station_ids"], kw["start"] is not None, kw["end"] is not None))
+            return []
+
+    for source in ("greece_hydroscope", "greece_openhi"):
+        seen.clear()
+        with patch.object(analysis, "build_collector", return_value=FakeGreece()):
+            analysis.fetch_series(source, "100200045", years=2, prefer_archive=False)
+        assert [v for v, *_ in seen] == ["discharge", "water_level", "precipitation"], source
+        assert all(ids == ["100200045"] and has_start and has_end for _, ids, has_start, has_end in seen), source

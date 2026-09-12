@@ -13,6 +13,7 @@ from aquascope.collectors.france_hubeau import HubeauHydrometrieCollector
 from aquascope.collectors.gemstat import GEMStatCollector
 from aquascope.collectors.grdc import GRDCCollector
 from aquascope.collectors.greece_hydroscope import GreeceHydroscopeCollector
+from aquascope.collectors.greece_openhi import GreeceOpenhiCollector
 from aquascope.collectors.india_wris import IndiaWRISCollector
 from aquascope.collectors.ireland_opw import IrelandOPWCollector
 from aquascope.collectors.japan_mlit import JapanMLITCollector
@@ -21,6 +22,7 @@ from aquascope.collectors.noaa_nwps import NOAANWPSCollector
 from aquascope.collectors.openmeteo import OpenMeteoCollector
 from aquascope.collectors.pegelonline import PegelonlineCollector
 from aquascope.collectors.sdg6 import SDG6Collector
+from aquascope.collectors.south_africa_dws import SouthAfricaDWSCollector
 from aquascope.collectors.taiwan_civil_iot import TaiwanCivilIoTCollector
 from aquascope.collectors.taiwan_cwa import TaiwanCWACollector
 from aquascope.collectors.taiwan_datagov import TaiwanDataGovCollector
@@ -50,6 +52,7 @@ __all__ = [
     "GEMStatCollector",
     "GRDCCollector",
     "GreeceHydroscopeCollector",
+    "GreeceOpenhiCollector",
     "HubeauHydrometrieCollector",
     "IndiaWRISCollector",
     "JapanMLITCollector",
@@ -58,6 +61,7 @@ __all__ = [
     "OpenMeteoCollector",
     "PegelonlineCollector",
     "SDG6Collector",
+    "SouthAfricaDWSCollector",
     "TaiwanCivilIoTCollector",
     "TaiwanDataGovCollector",
     "TaiwanCWACollector",

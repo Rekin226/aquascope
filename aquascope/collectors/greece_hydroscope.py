@@ -109,6 +109,18 @@ VARIABLE_IDS: dict[str, frozenset[int]] = {
     "precipitation": frozenset({8}),  # ΒΡΟΧΟΠΤΩΣΗ
 }
 
+#: Preference order inside one variable, most-preferred first. A station can
+#: hold several series for the same quantity: station 200082 has two ΣΤΑΘΜΗ
+#: series covering 1950-1983 and 1950-1982 plus a ΣΤΑΘΜΗ (ΠΛΗΜΜΥΡΑ) one. Those
+#: are neither interchangeable nor safe to concatenate, so exactly one wins.
+#: Ordinary stage beats flood stage, and ``ΠΑΡΟΧΗ`` beats ``ΥΔΡΟΜΕΤΡΗΣΗ``
+#: (individual gaugings) for discharge.
+VARIABLE_PREFERENCE: dict[str, tuple[int, ...]] = {
+    "discharge": (85, 101),
+    "water_level": (88, 103),
+    "precipitation": (8,),
+}
+
 #: Multiplier onto m3/s, keyed by the unit the ``.hts`` header declares.
 DISCHARGE_UNIT_FACTORS: dict[str, float] = {"m3/s": 1.0, "m³/s": 1.0, "l/s": 0.001, "lt/s": 0.001}
 
@@ -311,7 +323,7 @@ class GreeceHydroscopeCollector(BaseCollector):
                 if bbox is not None and (coords is None or not in_bbox(coords[0], coords[1], bbox)):
                     continue
 
-                matching = [s for s in series_list if self._variable_of(s) == variable]
+                matching = _pick_series([s for s in series_list if self._variable_of(s) == variable], variable)
                 if not matching:
                     continue
 
@@ -437,6 +449,41 @@ class GreeceHydroscopeCollector(BaseCollector):
 
 
 # ── module helpers ───────────────────────────────────────────────────────
+
+
+def _pick_series(candidates: list[dict[str, Any]], variable: str) -> list[dict[str, Any]]:
+    """Choose the one series to represent ``variable`` at a station.
+
+    Concatenating every matching series is wrong twice over: it interleaves
+    quantities that only look alike (ordinary stage against flood stage) and it
+    emits the same timestamp more than once where two series overlap, which at
+    station 200082 meant 515,650 rows carrying 11,219 duplicate timestamps.
+
+    The winner is the most-preferred variable id present, and within that the
+    longest record. The rest are logged rather than silently discarded.
+    """
+    if len(candidates) <= 1:
+        return candidates
+
+    preference = VARIABLE_PREFERENCE.get(variable, ())
+
+    def rank(series: dict[str, Any]) -> tuple[int, float]:
+        native = int(series["variable"]) % ID_SCALE
+        position = preference.index(native) if native in preference else len(preference)
+        start, end = _as_date(series.get("start_date_utc")), _as_date(series.get("end_date_utc"))
+        span = (end - start).days if start and end else 0
+        return (position, -span)  # most-preferred id first, then longest record
+
+    ordered = sorted(candidates, key=rank)
+    winner = ordered[0]
+    logger.debug(
+        "Hydroscope: station has %d %s series; keeping %s and skipping %s",
+        len(candidates),
+        variable,
+        winner["id"],
+        [s["id"] for s in ordered[1:]],
+    )
+    return [winner]
 
 
 def _composite_id(db: int, native_id: int) -> str:

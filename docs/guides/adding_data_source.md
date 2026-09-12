@@ -159,8 +159,16 @@ Create `tests/test_collectors/test_your_source.py` with:
 
 ## Step 6: Update Documentation
 
-- Add your source to the table in `docs/data_sources.md` (the README counts
-  are checked against that table by `tests/test_docs_counts.py`)
+- Add a row to the table in `docs/data_sources.md`, with your registry key in
+  the `--source` column. `tests/test_docs_counts.py` asserts the table lists
+  exactly the ids in `aquascope.registry.SOURCES`, so a collector without a row
+  fails CI
+- Bump the source count wherever it is written out: README (six places),
+  `docs/index.md`, `docs/features.md`, `docs/i18n/README.fr.md` and the
+  `CITATION.cff` abstract. The same test checks each of them, and the failure
+  message names the file
+- Add your source to the regional bullets in the README ("Data sources at a
+  glance") and to `docs/features.md`
 - Update `docs/guides/architecture.md` if needed
 
 ## Guidelines

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aquascope"
-version = "0.15.1"
+version = "0.16.0"
 description = "Open-source water data aggregation toolkit with AI-powered research methodology recommendations"
 readme = "README.md"
 license = {text = "MIT"}
@@ -128,6 +128,7 @@ all = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "pytest-xdist>=3.5",
     "ruff==0.15.20",
     "mypy>=1.8",
     "pre-commit>=3.0",
@@ -187,7 +188,7 @@ select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --tb=short"
+addopts = "--tb=short"
 
 [tool.coverage.run]
 source = ["aquascope"]

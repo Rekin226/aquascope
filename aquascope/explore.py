@@ -458,6 +458,29 @@ def fetch_series(
         recs = c.collect(stations=[{"properties": {"ref": station_id}}])
         s, var, unit = _records_to_series(recs)
         note = "waterlevel.ie month file (15-minute levels, last month)."
+    elif source in ("greece_hydroscope", "greece_openhi"):
+        # Both Greek sources are Enhydris and both filter server-side, so the
+        # requested window is pushed down rather than sliced here: one OpenHi
+        # series is 12.9 MB whole. Variables are tried in the order the source
+        # is actually deep in, which differs between the two (Hydroscope is a
+        # rainfall and stage archive, OpenHi leads with live discharge).
+        c = build_collector(source)
+        s, var, unit = None, "", ""
+        order = ("discharge", "water_level", "precipitation")
+        for want in (variable,) if variable else order:
+            if want not in SOURCES[source].variables:
+                continue
+            recs = c.collect(variable=want, station_ids=[station_id], start=start, end=end)
+            s, var, unit = _records_to_series(recs)
+            if s is not None:
+                break
+        if source == "greece_hydroscope":
+            note = (
+                "Hydroscope, the Greek national databank (an archive: daily stage ends 2013, "
+                f"monthly discharge mostly in the 2000s, rainfall reaches 2019); {asked}."
+            )
+        else:
+            note = f"OpenHi.net (ITIA/NTUA) telemetry, 15-minute where the station reports it; {asked}."
     elif source == "taiwan_cwa":
         # CODIS answers one calendar year per request and each takes several
         # seconds at the source, so the full record is never asked for here:

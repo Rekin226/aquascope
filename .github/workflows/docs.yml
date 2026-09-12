@@ -10,6 +10,17 @@ on:
       - "aquascope/**"
       - "explorer/**"
       - ".github/workflows/docs.yml"
+  # Build (not deploy) on PRs too: --strict fails on any warning, and a broken
+  # build used to surface only after the merge, leaving the site stale for days.
+  # The path list is repeated because Actions does not support YAML anchors.
+  pull_request:
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "pyproject.toml"
+      - "aquascope/**"
+      - "explorer/**"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -21,7 +32,8 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
-  group: pages
+  # Per ref, so a PR build never cancels the deploy running for main.
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -60,6 +72,7 @@ jobs:
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

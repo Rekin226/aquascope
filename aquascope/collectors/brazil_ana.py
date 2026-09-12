@@ -203,7 +203,12 @@ class BrazilANACollector(BaseCollector):
         ``ANA_HIDROWEB_SENHA``.
     client : CachedHTTPClient, optional
         Injected for testing; a default client is created otherwise.
+    legacy_client : CachedHTTPClient, optional
+        Client for the legacy conventional-network service; a default one is
+        created otherwise.
 
+    Notes
+    -----
     Credentials are only needed for :meth:`fetch_raw`'s default telemetric
     mode. :meth:`stations` (public SNIRH catalog) and
     ``fetch_raw(mode="historical", ...)`` (legacy conventional-network

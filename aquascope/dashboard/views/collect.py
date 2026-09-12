@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from io import StringIO
 
 import pandas as pd
@@ -39,6 +40,7 @@ _API_KEY_SOURCES: dict[str, tuple[str, str]] = {
 _REQUIRED_FETCH_FIELDS: dict[str, dict[str, str]] = {
     "pegelonline": {"station_id": "Station UUID"},
     "bom": {"station_id": "AWRC station number"},
+    "south_africa_dws": {"station_id": "DWS station code"},
     "colorado_cdss": {"abbrev": "Station abbreviation"},
 }
 
@@ -72,6 +74,8 @@ def missing_required_fields(source_key: str, fetch: dict) -> list[str]:
     return missing
 
 
+_BLOCKED_KEY = "__blocked__"
+
 _REGION_ORDER = [
     "Global",
     "United States",
@@ -86,8 +90,61 @@ _REGION_ORDER = [
     "Japan",
     "South Korea",
     "India",
+    "South Africa",
     "Africa & Near East",
 ]
+
+
+def _usgs_has_api_key() -> bool:
+    """True when a usable USGS API key is present in the environment.
+
+    The USGS dashboard form shows no key box because the key is optional, so the
+    only place a key can come from is ``USGS_API_KEY``. ``DEMO_KEY`` is the
+    shared throttled key and counts as keyless, matching the collector.
+    """
+    key = os.environ.get("USGS_API_KEY")
+    return bool(key) and key != "DEMO_KEY"
+
+
+def usgs_region_options(has_api_key: bool) -> dict[str, str | None]:
+    """Region-filter choices for the USGS collect form.
+
+    The keyless USGS path rejects a request that carries no filter at all, so the
+    "No filter (all US)" choice is offered only when an API key is present. Without
+    a key the form lists only what the source can actually serve, so a predictable
+    form state can no longer reach the collector and raise a bare ValueError.
+    """
+    options: dict[str, str | None] = {
+        "Northeast US": "-80,37,-66,48",
+        "Southeast US": "-92,24,-80,37",
+        "Midwest US": "-104,36,-80,48",
+        "Pacific Northwest": "-125,42,-104,50",
+        "Southwest US": "-125,32,-104,42",
+    }
+    if has_api_key:
+        options["No filter (all US — slow)"] = None
+    options["Custom bbox"] = "__custom__"
+    return options
+
+
+def usgs_bbox_block_reason(region_label: str, custom_bbox: str | None, has_api_key: bool) -> str | None:
+    """Why the USGS form as filled cannot be collected, or None when it can.
+
+    Selecting "Custom bbox" and leaving the box empty submits no filter at all,
+    which the keyless USGS path rejects with a bare ``ValueError``. That is the
+    same failure #254 is about, reached by a different route, so the form blocks
+    it instead of letting the collector raise.
+    """
+    if region_label != "Custom bbox":
+        return None
+    if (custom_bbox or "").strip():
+        return None
+    if has_api_key:
+        return None
+    return (
+        "Enter a bounding box, or pick a region instead. Without a USGS API key "
+        "the source rejects a request that carries no filter at all."
+    )
 
 
 def render() -> None:
@@ -154,6 +211,10 @@ def _render_api_tab() -> None:
     _source_form(source_key, ctor_kwargs, fetch_kwargs)
 
     if st.button("🚀 Collect data", type="primary", key="collect_btn"):
+        blocked = fetch_kwargs.pop(_BLOCKED_KEY, None)
+        if blocked:
+            st.warning(blocked)
+            return
         label = SOURCES[source_key][0]
 
         # Check before the spinner: a predictable empty field should not look
@@ -345,19 +406,21 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
     elif source_key == "usgs":
         fetch["days"] = st.slider("Days of data", 1, 30, 3)
         st.caption("USGS covers thousands of US stations — use a region filter to keep responses fast.")
-        regions = {
-            "Northeast US": "-80,37,-66,48",
-            "Southeast US": "-92,24,-80,37",
-            "Midwest US": "-104,36,-80,48",
-            "Pacific Northwest": "-125,42,-104,50",
-            "Southwest US": "-125,32,-104,42",
-            "No filter (all US — slow)": None,
-            "Custom bbox": "__custom__",
-        }
+        regions = usgs_region_options(_usgs_has_api_key())
+        if not _usgs_has_api_key():
+            st.caption(
+                "The unfiltered \"all US\" option needs a USGS API key "
+                "(set USGS_API_KEY); without one, pick a region or a custom bbox."
+            )
         region_label = st.selectbox("Region filter", list(regions.keys()), index=0)
         bbox_val = regions[region_label]
         if bbox_val == "__custom__":
-            bbox_val = st.text_input("Bounding box (minLon,minLat,maxLon,maxLat)", placeholder="-80,37,-66,48") or None
+            custom_bbox = st.text_input("Bounding box (minLon,minLat,maxLon,maxLat)", placeholder="-80,37,-66,48")
+            blocked = usgs_bbox_block_reason(region_label, custom_bbox, _usgs_has_api_key())
+            if blocked:
+                st.warning(blocked)
+                fetch[_BLOCKED_KEY] = blocked
+            bbox_val = custom_bbox or None
         if bbox_val:
             fetch["bbox"] = bbox_val
         fetch["max_items"] = st.slider("Max records", 100, 10_000, 2_000, step=100)
@@ -615,6 +678,30 @@ def _source_form(source_key: str, ctor: dict, fetch: dict) -> None:  # noqa: C90
                 fetch["bbox"] = tuple(float(x) for x in bbox_str.split(","))
             except ValueError:
                 st.warning("Bounding box must be four comma-separated numbers.")
+
+    elif source_key == "south_africa_dws":
+        st.caption(
+            "DWS Verified Hydrology — daily mean discharge or point water level. "
+            "Leave both dates blank for the most recent 30 days."
+        )
+        station = st.text_input("DWS station code", placeholder="e.g. C1H001")
+        if station.strip():
+            fetch["station_id"] = station.strip()
+        fetch["variable"] = st.selectbox(
+            "Variable",
+            ["discharge", "water_level"],
+            format_func=lambda value: {
+                "discharge": "Daily mean discharge (m³/s)",
+                "water_level": "Point water level (m)",
+            }[value],
+        )
+        c1, c2 = st.columns(2)
+        sd = c1.date_input("Start date (optional)", value=None, key="dws_start")
+        ed = c2.date_input("End date (optional)", value=None, key="dws_end")
+        if sd:
+            fetch["start_date"] = str(sd)
+        if ed:
+            fetch["end_date"] = str(ed)
 
     elif source_key == "noaa_nwps":
         st.caption("NOAA National Water Prediction Service — fetch by 5-char station LID or bounding box.")

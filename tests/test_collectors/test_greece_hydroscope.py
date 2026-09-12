@@ -17,6 +17,7 @@ from aquascope.collectors.greece_hydroscope import (
     _date_suffix,
     _parse_hts,
     _parse_point,
+    _pick_series,
 )
 from aquascope.schemas.water_data import (
     ClimateReading,
@@ -319,3 +320,54 @@ class TestCollectRoundTrip:
         assert all(r.station_id == "100200045" for r in records)
         assert all(r.station_name == "ΓΕΦ. ΚΟΜΜΑ (ΣΠΕΡΧΕΙΟΣ)" for r in records)
         assert all(r.source == DataSource.GREECE_HYDROSCOPE for r in records)
+
+
+class TestPickSeries:
+    """One series per station and variable.
+
+    Station 200082 really does hold three water-level series: two ΣΤΑΘΜΗ
+    covering 1950-1983 and 1950-1982, plus a ΣΤΑΘΜΗ (ΠΛΗΜΜΥΡΑ). Concatenating
+    them produced 515,650 rows with 11,219 duplicate timestamps and silently
+    interleaved flood stage into the stage record.
+    """
+
+    @staticmethod
+    def _series(series_id, variable, start, end):
+        return {
+            "id": series_id,
+            "variable": variable,
+            "start_date_utc": f"{start}T00:00:00+02:00",
+            "end_date_utc": f"{end}T00:00:00+02:00",
+        }
+
+    def test_longest_record_wins_among_equals(self):
+        short = self._series(23, 88, "1950-10-15", "1982-05-30")
+        long = self._series(1233, 88, "1950-10-15", "1983-07-31")
+        assert [s["id"] for s in _pick_series([short, long], "water_level")] == [1233]
+
+    def test_ordinary_stage_beats_flood_stage_even_when_shorter(self):
+        stage = self._series(1233, 88, "1970-01-01", "1975-01-01")
+        flood = self._series(1234, 103, "1953-11-01", "1983-02-13")
+        assert [s["id"] for s in _pick_series([stage, flood], "water_level")] == [1233]
+
+    def test_flood_stage_is_used_when_it_is_all_there_is(self):
+        flood = self._series(1234, 103, "1953-11-01", "1983-02-13")
+        assert [s["id"] for s in _pick_series([flood], "water_level")] == [1234]
+
+    def test_continuous_discharge_beats_individual_gaugings(self):
+        gaugings = self._series(1367, 101, "1960-01-01", "2010-01-01")  # ΥΔΡΟΜΕΤΡΗΣΗ
+        continuous = self._series(2225, 85, "2004-04-01", "2010-05-01")  # ΠΑΡΟΧΗ
+        assert [s["id"] for s in _pick_series([gaugings, continuous], "discharge")] == [2225]
+
+    def test_single_and_empty_candidates_pass_through(self):
+        one = self._series(1, 88, "1950-01-01", "1960-01-01")
+        assert _pick_series([one], "water_level") == [one]
+        assert _pick_series([], "water_level") == []
+
+    def test_fetch_raw_emits_one_series_per_station(self):
+        """The whole point: no timestamp appears twice."""
+        collector = GreeceHydroscopeCollector(client=_client(HTS_STAGE))
+        rows = collector.fetch_raw(variable="water_level")
+        stamps = [r["datetime"] for r in rows]
+        assert len(stamps) == len(set(stamps))
+        assert len({r["series_id"] for r in rows}) == 1

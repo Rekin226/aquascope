@@ -43,6 +43,12 @@ def test_bom_without_a_station_is_caught():
     ]
 
 
+def test_dws_without_a_station_is_caught():
+    assert missing_required_fields("south_africa_dws", {"variable": "discharge"}) == [
+        "DWS station code"
+    ]
+
+
 @pytest.mark.parametrize(
     "fetch, expected",
     [

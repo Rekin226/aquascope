@@ -38,7 +38,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - run: pip install -e ".[dev,all]"
-      - run: pytest --cov=aquascope --cov-report=term-missing --cov-report=xml
+      # -n auto splits the suite across the runner's cores. The suite is
+      # CPU-bound and was pinned to one core, which is why this step took
+      # ~25 minutes; it is ~3x faster in parallel and the failure set is
+      # unchanged, so nothing here depends on test ordering.
+      - run: pytest -n auto --cov=aquascope --cov-report=term-missing --cov-report=xml
       - name: Upload coverage artifact
         if: matrix.python-version == '3.12'
         uses: actions/upload-artifact@v4

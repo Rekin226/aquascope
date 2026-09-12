@@ -43,8 +43,8 @@ AquaScope unifies **36 global water-data sources** behind one Python schema, the
 ## 🌍 Try it without installing anything
 
 **[AquaScope Explorer](https://rekin226-aquascope-explorer.static.hf.space/)**: every public gauge we can reach on one map
-(62,613 stations from USGS, Australia BOM, UK EA, Hub'Eau, Taiwan CWA, PEGELONLINE and Ireland OPW;
-Greece and Brazil land with the next weekly rebuild). Click one and get the observed record,
+(more than 60,000 stations from USGS, Brazil ANA, UK EA, Australia BOM, Hub'Eau, Taiwan CWA,
+PEGELONLINE, Greece and Ireland OPW; the dataset below carries the live count). Click one and get the observed record,
 flood frequency with confidence limits, flow duration and trend, computed in your browser by aquascope on Pyodide.
 The catalog behind it is an open GeoParquet dataset, [`Rekin226/aquascope-gauges`](https://huggingface.co/datasets/Rekin226/aquascope-gauges), harvested weekly.
 Press **Ask ✨** to type a question in plain language (bring your own key, Groq and Hugging Face are free): the model picks the

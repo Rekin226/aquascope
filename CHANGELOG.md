@@ -7,6 +7,7 @@ All notable changes to AquaScope are documented here.
 ### Added
 
 ### Changed
+- **FAO-56 Rev.1 multi-class woody crop and winter wheat coefficient modeling** (#372). Added structured sub-class parameterization for woody crops (`olive`, `grape`, `citrus`) and `wheat_winter` per FAO-56 Rev.1 (2025) Tables 6.3/7.3 and 6.2/7.2. `get_kc`, `get_kcb`, `crop_water_requirement`, and `irrigation_schedule` support optional `ground_cover`, `density`, `variety`, and `class_name` parameters while preserving default backwards compatibility with standard Rev.1 classes.
 
 ### Fixed
 
@@ -27,7 +28,11 @@ All notable changes to AquaScope are documented here.
 - **Colorado DWR/CDSS telemetry collector** (#319). Collects state-gauge discharge observations from Colorado's Decision Support Systems, handles the CDSS `ResultList` response envelope, converts cfs to m³/s, and exposes the source through the registry and dashboard.
 
 ### Changed
+<<<<<<< HEAD
+- **FAO-56 Rev.1 multi-class woody crop and winter wheat coefficient modeling** (#372). Added structured sub-class parameterization for woody crops (`olive`, `grape`, `citrus`) and `wheat_winter` per FAO-56 Rev.1 (2025) Tables 6.3/7.3 and 6.2/7.2. `get_kc`, `get_kcb`, `crop_water_requirement`, and `irrigation_schedule` support optional `ground_cover`, `density`, `variety`, and `class_name` parameters while preserving default backwards compatibility with standard Rev.1 classes.
+=======
 - **CI runs the test suite in parallel** (~25 min -> ~8 min). `pytest -n auto` via `pytest-xdist`, now in the `dev` extra. The suite is CPU-bound and was running on a single core; the runners are not slow and jobs are not queued, which is what the wall-clock looked like. Coverage is unaffected (it costs ~5%, not the bottleneck) and still reports 82%. `-v` is dropped from `addopts` too, since it wrote all 2,490 test names into every CI log and buried the failures. Locally `pytest -n auto` takes ~1m10s against ~3m45s serial.
+>>>>>>> origin/main
 - **Verified FAO-56 crop coefficients against the revised 2025 edition and updated citations** (#310). Cross-checked single ($K_c$, Table 12) and basal ($K_{cb}$, Table 17) coefficients across all 26 crops in `aquascope.agri.crop_water` against the 2025 second revised edition (FAO-56 Rev.1, Pereira et al. 2025, doi:10.4060/cd6621en), updated module and function docstring references alongside historical 1998 citations, and updated `aquascope.methods` preconditions.
 - **The data-source table now maps one to one onto the registry.** `docs/data_sources.md` gained a `--source` column carrying each registry key, a row for the daily Taiwan WRA groundwater source, and separate rows for WRA water level and WRA reservoirs, which the table had been counting as one. `tests/test_docs_counts.py` asserts the table lists exactly the ids in `aquascope.registry.SOURCES`, so a collector that ships without a docs row now fails CI.
 

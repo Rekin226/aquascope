@@ -15,8 +15,8 @@ from aquascope.collectors.taiwan_cwa import PARAMETER_MAP, TaiwanCWACollector
 from aquascope.schemas.water_data import ClimateReading, DataSource
 
 FIXTURES = Path(__file__).parent / "fixtures"
-STATION_DATA = json.loads((FIXTURES / "cwa_station_data.json").read_text())
-STATION_LIST = json.loads((FIXTURES / "cwa_station_list.json").read_text())
+STATION_DATA = json.loads((FIXTURES / "cwa_station_data.json").read_text(encoding="utf-8"))
+STATION_LIST = json.loads((FIXTURES / "cwa_station_list.json").read_text(encoding="utf-8"))
 
 
 def _collector() -> TaiwanCWACollector:

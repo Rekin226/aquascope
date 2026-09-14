@@ -23,37 +23,15 @@ from pathlib import Path
 
 from aquascope.agri.crop_water import KC_TABLE
 from aquascope.hydrology.signatures import SignatureReport
+from aquascope.maintenance.docs_counts import (
+    CLI_PATTERNS,
+    SOURCE_COUNT_PATTERNS,
+    TABLE_ROW,
+    _cli_command_count,
+)
 from aquascope.registry import SOURCES
 
 ROOT = Path(__file__).resolve().parents[1]
-
-TABLE_ROW = re.compile(r"^\| \[[^\]]+\]\([^)]*\) \| `([a-z0-9_]+)` \|", re.MULTILINE)
-
-CLI_PATTERNS = {
-    "README.md": r"AquaScope ships a (\d+)-command CLI",
-    "docs/features.md": r"\*\*(\d+) CLI commands\*\*",
-    "docs/i18n/README.fr.md": r"CLI de (\d+) commandes",
-}
-
-# Every hand-written mention of the source count, by file.
-SOURCE_COUNT_PATTERNS = {
-    "README.md": [
-        r"unifies \*\*(\d+) global water-data sources\*\*",
-        r"\| (\d+) unified data collectors \|",
-        r"any of the (\d+) sources",
-        r"(\d+) data collectors spanning five regions",
-        r"All (\d+) sources",
-        r"multipage workspace with (\d+) live sources",
-    ],
-    "docs/index.md": [
-        r"unifies \*\*(\d+) global water-data sources\*\*",
-        r"\| (\d+) unified data collectors\s*\|",
-    ],
-    "docs/features.md": [r"## Data Collection \((\d+) sources\)"],
-    "docs/data_sources.md": [r"\*\*(\d+) collectors\*\*"],
-    "docs/i18n/README.fr.md": [r"espace de travail multipage avec (\d+) sources"],
-    "CITATION.cff": [r"interface to (\d+) global water data sources"],
-}
 
 CROP_COUNT_PATTERNS = {
     "README.md": [r"crop water requirements for (\d+) crops"],
@@ -91,21 +69,28 @@ def _read(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
 
 
-def _cli_command_count() -> int:
-    text = _read("aquascope/cli.py")
-    return len(re.findall(r"(?<![A-Za-z_])sub\.add_parser\(", text))  # top-level commands only, not sub-subcommands
-
-
-def _check(patterns: dict[str, list[str]], expected: int, label: str) -> None:
+def _check(
+    patterns: dict[str, list[str]],
+    expected: int,
+    label: str,
+    fix_command: str | None = None,
+) -> None:
     for relative, file_patterns in patterns.items():
         text = _read(relative)
         for pattern in file_patterns:
             match = re.search(pattern, text)
-            assert match is not None, f"{relative} no longer contains the phrase for {pattern!r}"
-            assert int(match.group(1)) == expected, (
+            assert match is not None, (
+                f"{relative} no longer contains the phrase for {pattern!r}"
+            )
+
+            message = (
                 f"{relative} says {match.group(1)} {label} for {pattern!r}, "
                 f"but the code has {expected}"
             )
+            if fix_command:
+                message += f". Run `{fix_command}` to repair count drift."
+
+            assert int(match.group(1)) == expected, message
 
 
 def test_source_table_lists_every_registered_source():
@@ -119,7 +104,13 @@ def test_source_table_lists_every_registered_source():
 
 
 def test_source_counts_match_the_registry():
-    _check(SOURCE_COUNT_PATTERNS, len(SOURCES), "sources")
+    expected = len(TABLE_ROW.findall(_read("docs/data_sources.md")))
+    _check(
+        SOURCE_COUNT_PATTERNS,
+        expected,
+        "sources",
+        "python -m aquascope.maintenance.docs_counts --fix",
+    )
 
 
 def test_crop_counts_match_the_kc_table():
@@ -127,7 +118,11 @@ def test_crop_counts_match_the_kc_table():
 
 
 def test_signature_counts_match_the_report():
-    _check(SIGNATURE_COUNT_PATTERNS, len(dataclasses.fields(SignatureReport)), "signatures")
+    _check(
+        SIGNATURE_COUNT_PATTERNS,
+        len(dataclasses.fields(SignatureReport)),
+        "signatures",
+    )
 
 
 def test_the_test_floor_is_stated_the_same_everywhere():
@@ -137,9 +132,16 @@ def test_the_test_floor_is_stated_the_same_everywhere():
         text = _read(relative)
         for pattern in patterns:
             match = re.search(pattern, text)
-            assert match is not None, f"{relative} no longer contains the phrase for {pattern!r}"
-            stated[f"{relative}: {pattern}"] = int(match.group(1).replace(",", ""))
-    assert len(set(stated.values())) == 1, f"the stated test floor disagrees across files: {stated}"
+            assert match is not None, (
+                f"{relative} no longer contains the phrase for {pattern!r}"
+            )
+            stated[f"{relative}: {pattern}"] = int(
+                match.group(1).replace(",", "")
+            )
+
+    assert len(set(stated.values())) == 1, (
+        f"the stated test floor disagrees across files: {stated}"
+    )
 
 
 def test_cli_counts_match_the_parser():
@@ -148,5 +150,7 @@ def test_cli_counts_match_the_parser():
         match = re.search(pattern, _read(relative))
         assert match is not None, f"{relative} CLI count sentence missing"
         assert int(match.group(1)) == expected, (
-            f"{relative} says {match.group(1)} CLI commands but cli.py defines {expected}"
+            f"{relative} says {match.group(1)} CLI commands but cli.py defines {expected}. "
+            "Run `python -m aquascope.maintenance.docs_counts --fix` "
+            "to repair count drift."
         )

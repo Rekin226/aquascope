@@ -29,6 +29,9 @@ We want to cover water APIs from every country. To add a new collector:
 3. Map raw API fields to our unified schemas in `aquascope/schemas/water_data.py`.
 4. Add tests in `tests/test_collectors/`.
 5. Document the data source in your module docstring (API URL, required keys, datasets).
+6. Add the source row to `docs/data_sources.md`, then run
+   `python -m aquascope.maintenance.docs_counts --fix`
+   to refresh the mirrored source and CLI counts across the documentation.
 
 The cleanest reference to copy is `aquascope/collectors/usgs.py`, and there's a full walkthrough in
 [`docs/guides/adding_data_source.md`](https://rekin226.github.io/aquascope/guides/adding_data_source/).

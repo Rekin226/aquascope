@@ -5,6 +5,7 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
+- **CI runs the test suite on windows-latest (Python 3.12)** (#427). Follow-up to #398: Ubuntu-only CI could not catch encoding or path issues before a Windows contributor hit them.
 
 ### Changed
 

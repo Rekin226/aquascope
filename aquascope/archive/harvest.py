@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 STATIONS_COLUMNS = [
     "source",
     "station_id",
+    "site_id",
     "name",
     "latitude",
     "longitude",
@@ -101,6 +102,7 @@ def stations_to_table(stations: list[Station]):
         meta = SOURCES.get(st.source)
         rows["source"].append(st.source)
         rows["station_id"].append(st.station_id)
+        rows["site_id"].append(st.site_id)
         rows["name"].append(st.name)
         rows["latitude"].append(st.latitude)
         rows["longitude"].append(st.longitude)
@@ -120,6 +122,7 @@ def stations_to_table(stations: list[Station]):
         [
             ("source", pa.string()),
             ("station_id", pa.string()),
+            ("site_id", pa.string()),
             ("name", pa.string()),
             ("latitude", pa.float64()),
             ("longitude", pa.float64()),
@@ -163,7 +166,7 @@ def write_stations_parquet(stations: list[Station], path: Path) -> Path:
     return path
 
 
-GEOJSON_PROPERTIES = ("source", "station_id", "name", "variables", "period_start", "period_end", "url")
+GEOJSON_PROPERTIES = ("source", "station_id", "site_id", "name", "variables", "period_start", "period_end", "url")
 
 
 def write_stations_geojson(stations: list[Station], path: Path) -> Path:
@@ -363,10 +366,13 @@ can reach, harvested on a schedule and published as GeoParquet. Last run
 Files:
 
 - `stations.parquet`: GeoParquet 1.0 (WKB point geometry, WGS84). One row per station: `source`,
-  `station_id`, `name`, `latitude`, `longitude`, `variables`, `period_start`, `period_end`, `url`
+  `station_id`, `site_id`, `name`, `latitude`, `longitude`, `variables`, `period_start`, `period_end`, `url`
   (deep link to the agency page), `river`, `country`, `agency`, `license`, `redistributable`, `extra`.
 - `stations.geojson`: the same rows as GeoJSON for tools that don't read parquet.
 - `health.json`: per-source status of the last run (station count, seconds, error if any).
+
+`site_id` identifies a physical site within a source and defaults to `station_id`.
+Group by `(source, site_id)` to associate sub-stations while preserving every station record.
 
 ## Query it in place
 

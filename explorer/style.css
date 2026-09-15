@@ -548,6 +548,15 @@ table.regime td:first-child { white-space: nowrap; }
 .nearest li:last-child { border-bottom: 0; }
 .nearest li:hover { background: var(--bg-soft); }
 .nearest .dist { margin-left: auto; color: var(--muted); font-size: .75rem; white-space: nowrap; }
+.nearest li.nearest-site { display: block; cursor: default; }
+.nearest-open { display: flex; align-items: center; gap: .35rem; width: 100%; text-align: left; background: transparent; border: 0; padding: .2rem 0; color: inherit; font: inherit; }
+.nearest-name { min-width: 0; overflow-wrap: anywhere; }
+.nearest-open > .muted { overflow-wrap: anywhere; min-width: 0; }
+.nearest-records { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; color: var(--muted); font-size: .75rem; }
+.nearest-records select { min-width: 0; max-width: 100%; font: inherit; }
+.site-records { margin-top: .5rem; font-size: .8rem; }
+.site-records:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.site-records select { min-width: 0; max-width: 100%; font: inherit; }
 
 /* ── drawer (Ask) ────────────────────────────────────────────────────────── */
 

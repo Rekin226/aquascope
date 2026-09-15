@@ -10,7 +10,7 @@ import { clearCatchment, requestBasin, requestCatchment } from "./basins.js?v=__
 import { flyToPoint, setPointMarker, highlightStation } from "./map.js?v=__BUILD__";
 import { addMethodOnce, methodsOnPage, openCite, renderMethodList } from "./methods.js?v=__BUILD__";
 import { hideCard, selectTab, setCard, setTab, showSurface } from "./shell.js?v=__BUILD__";
-import { call } from "./worker-client.js?v=__BUILD__";
+import { call, ensureCatalogInWorker } from "./worker-client.js?v=__BUILD__";
 import { canonicalUrl, writeUrl } from "./url.js?v=__BUILD__";
 
 let pointRun = 0;
@@ -18,15 +18,73 @@ const root = () => $("panel-point");
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function nearestStations(lat, lon, n = 6) {
-  const out = [];
-  for (const r of state.stations) {
-    if (state.hidden.has(r.source)) continue;
-    const d = haversineKm(lat, lon, r.lat, r.lon);
-    if (out.length < n) { out.push([d, r]); out.sort((a, b) => a[0] - b[0]); }
-    else if (d < out[n - 1][0]) { out[n - 1] = [d, r]; out.sort((a, b) => a[0] - b[0]); }
+export async function renderNearestStations(lat, lon, my = pointRun) {
+  const ul = $("pt-nearest");
+  const current = () => my === pointRun && state.point?.lat === lat && state.point?.lon === lon;
+  ul.innerHTML = `<li class="muted">Loading nearest gauges...</li>`;
+  try {
+    const sources = [...new Set(state.stations.map((r) => r.source))].filter((s) => !state.hidden.has(s));
+    let stations = [];
+    if (sources.length) {
+      await ensureCatalogInWorker();
+      if (!current()) return;
+      const result = await call("tool", {
+        name: "find_stations", arguments: { near: [lat, lon], sources, limit: 6 },
+      });
+      if (!current()) return;
+      if (result.error) throw new Error(result.error);
+      stations = result.stations;
+    }
+    ul.replaceChildren();
+    if (!stations.length) {
+      ul.innerHTML = `<li class="muted">no gauges in the catalog</li>`;
+      return;
+    }
+    for (const r of stations) {
+      const li = document.createElement("li");
+      li.className = "nearest-site";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "nearest-open";
+      const st = sourceStyle(r.source);
+      const d = haversineKm(lat, lon, r.latitude, r.longitude);
+      button.innerHTML = `${shapeSvg(st.shape, st.color)}<span class="nearest-name">${escapeHtml(r.name || r.station_id)}</span>` +
+        `<span class="muted">${escapeHtml(st.label)}</span>` +
+        `<span class="dist">${d < 10 ? d.toFixed(1) : Math.round(d)} km</span>`;
+      button.addEventListener("click", () => actions.selectStation(stationKey(r), { fly: true }));
+      li.appendChild(button);
+      if (r.record_count > 1) {
+        const label = document.createElement("label");
+        label.className = "nearest-records";
+        label.append(`${r.record_count} records at this site`);
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", `Records at ${r.name || r.site_id}`);
+        select.add(new Option("Open a record...", ""));
+        for (const record of r.records) {
+          const span = record.period_start ? `${record.period_start} to ${record.period_end || "present"}` : "dates unknown";
+          select.add(new Option(`${record.station_id} (${span})`, stationKey(record)));
+        }
+        select.addEventListener("change", () => {
+          if (select.value) actions.selectStation(select.value, { fly: true });
+          select.value = "";
+        });
+        label.appendChild(select);
+        li.appendChild(label);
+      }
+      ul.appendChild(li);
+    }
+  } catch (err) {
+    if (!current()) return;
+    ul.replaceChildren();
+    const li = document.createElement("li");
+    li.textContent = `Could not load nearest gauges: ${err.message}`;
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.textContent = "Retry";
+    retry.addEventListener("click", () => renderNearestStations(lat, lon, my));
+    li.appendChild(retry);
+    ul.appendChild(li);
   }
-  return out;
 }
 
 export async function selectPoint(lat, lon, { tab = null, push = true, fly = false } = {}) {
@@ -57,28 +115,7 @@ export async function selectPoint(lat, lon, { tab = null, push = true, fly = fal
   writeUrl({ push });
   selectTab(root(), state.activeTab);
 
-  // Nearest gauges are local, so they can be drawn immediately.
-  const near = nearestStations(lat, lon);
-  const ul = $("pt-nearest");
-  ul.innerHTML = "";
-  if (!near.length) {
-    ul.innerHTML = `<li class="muted">no gauges in the catalog</li>`;
-  } else {
-    for (const [d, r] of near) {
-      const li = document.createElement("li");
-      li.tabIndex = 0;
-      li.setAttribute("role", "button");
-      li.dataset.key = stationKey(r);
-      const st = sourceStyle(r.source);
-      li.innerHTML = `${shapeSvg(st.shape, st.color)}${escapeHtml(r.name || r.station_id)} ` +
-        `<span class="muted">${escapeHtml(st.label)}</span>` +
-        `<span class="dist">${d < 10 ? d.toFixed(1) : Math.round(d)} km</span>`;
-      const open = () => actions.selectStation(li.dataset.key, { fly: true });
-      li.addEventListener("click", open);
-      li.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
-      ul.appendChild(li);
-    }
-  }
+  void renderNearestStations(lat, lon, my);
 
   requestCatchment({ point: { lat, lon }, target: "pt" });
   requestBasin(lat, lon, "pt");

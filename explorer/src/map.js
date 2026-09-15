@@ -449,6 +449,9 @@ export function addStationLayers(fc) {
       "icon-size": ["interpolate", ["linear"], ["zoom"], 4, 0.57, 7, 0.77, 10, 1.08, 14, 1.5],
       "icon-allow-overlap": true,
       "icon-ignore-placement": true,
+      "icon-offset": ["get", "offset"],
+      "icon-rotation-alignment": "viewport",
+      "icon-pitch-alignment": "viewport",
     },
     paint: {
       "icon-color": ["get", "color"],
@@ -458,10 +461,18 @@ export function addStationLayers(fc) {
     },
   });
   map.addLayer({
-    id: "selected", type: "circle", source: "stations", filter: ["==", ["get", "key"], "__none__"],
+    id: "selected", type: "symbol", source: "stations", filter: ["==", ["get", "key"], "__none__"],
+    layout: {
+      "icon-image": ["concat", "gauge-", ["get", "shape"]],
+      "icon-size": ["interpolate", ["linear"], ["zoom"], 4, 0.57, 7, 0.77, 10, 1.08, 14, 1.5],
+      "icon-offset": ["get", "offset"],
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+      "icon-rotation-alignment": "viewport",
+      "icon-pitch-alignment": "viewport",
+    },
     paint: {
-      "circle-color": "#ffc400", "circle-radius": 10,
-      "circle-stroke-color": "#10222f", "circle-stroke-width": 2.5, "circle-opacity": 1,
+      "icon-color": "#ffc400", "icon-halo-color": "#10222f", "icon-halo-width": 2.5,
     },
   });
 

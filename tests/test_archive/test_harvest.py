@@ -23,8 +23,8 @@ def _stations():
     return [
         Station(source="ireland_opw", station_id="0000001041", name="Sandy Mills", latitude=54.84, longitude=-7.58,
                 variables=("water_level",), url="https://waterlevel.ie/0001/1041/", country="IRL"),
-        Station(source="pegelonline", station_id="u1", name="CELLE", latitude=52.62, longitude=10.06,
-                variables=("discharge", "water_level"), river="ALLER", country="DEU",
+        Station(source="pegelonline", station_id="u1", site_id="celle-site", name="CELLE",
+                latitude=52.62, longitude=10.06, variables=("discharge", "water_level"), river="ALLER", country="DEU",
                 period_start=date(1990, 1, 1), extra={"number": "48300105"}),
     ]
 
@@ -78,20 +78,46 @@ def test_harvest_writes_files_and_health(tmp_path):
     assert b"geo" in table.schema.metadata
     # sorted by (source, station_id)
     assert table.column("source").to_pylist() == ["ireland_opw", "pegelonline"]
+    assert table.column("site_id").to_pylist() == ["0000001041", "celle-site"]
 
     gj = json.loads((out / "stations.geojson").read_text())
     assert gj["type"] == "FeatureCollection" and len(gj["features"]) == 2
     f0 = gj["features"][0]
     assert f0["geometry"]["coordinates"] == [-7.58, 54.84]
     assert f0["properties"] == {"source": "ireland_opw", "station_id": "0000001041", "name": "Sandy Mills",
+                                "site_id": "0000001041",
                                 "variables": ["water_level"], "url": "https://waterlevel.ie/0001/1041/"}
     assert "extra" not in gj["features"][1]["properties"]  # extras live in the parquet only
     assert gj["features"][1]["properties"]["period_start"] == "1990-01-01"
+    assert gj["features"][1]["properties"]["site_id"] == "celle-site"
 
     card = (out / "README.md").read_text()
     assert card.startswith("---\nlicense: other")
     assert "| `uk_ea` |" in card and "failed: RuntimeError: 503" in card
     assert "resolve/main/stations.parquet" in card
+    assert "Group by `(source, site_id)`" in card
+
+
+def test_catalog_site_ids_round_trip_and_legacy_fallback(tmp_path):
+    from aquascope.archive.catalog import _rows_from_geojson, load_stations
+    from aquascope.archive.harvest import write_stations_geojson
+
+    path = tmp_path / "stations.parquet"
+    table = stations_to_table(_stations())
+    pq.write_table(table, path)
+    assert [r["site_id"] for r in load_stations(path=path)] == ["0000001041", "celle-site"]
+
+    pq.write_table(table.drop(["site_id"]), path)
+    assert [r["site_id"] for r in load_stations(path=path)] == ["0000001041", "u1"]
+
+    geojson_path = tmp_path / "stations.geojson"
+    write_stations_geojson(_stations(), geojson_path)
+    assert [r["site_id"] for r in _rows_from_geojson(geojson_path)] == ["0000001041", "celle-site"]
+    legacy = json.loads(geojson_path.read_text())
+    for feature in legacy["features"]:
+        del feature["properties"]["site_id"]
+    geojson_path.write_text(json.dumps(legacy))
+    assert [r["site_id"] for r in _rows_from_geojson(geojson_path)] == ["0000001041", "u1"]
 
 
 def test_harvest_restricts_sources_and_passes_options(tmp_path):

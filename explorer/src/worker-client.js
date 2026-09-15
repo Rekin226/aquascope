@@ -112,6 +112,7 @@ export async function ensureCatalogInWorker() {
   if (state.ask.catalogSent) return;
   const rows = state.stations.map((r) => ({
     source: r.source, station_id: r.station_id, name: r.name, latitude: r.lat, longitude: r.lon,
+    site_id: r.site_id || r.station_id,
     variables: r.variables || [], period_start: r.period_start, period_end: r.period_end, url: r.url,
     agency: sourceStyle(r.source).label,
   }));

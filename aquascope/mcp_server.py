@@ -111,7 +111,9 @@ def find_stations(
     Kingston). bbox: [west, south, east, north] in degrees.
     near: [lat, lon]; results are ordered nearest-first. variable: one of the registry vocabulary
     (discharge, water_level, precipitation, groundwater_level, ...). Returns at most ``limit`` (<= 200)
-    stations with ids you can pass to get_timeseries / analyze_station.
+    sites with representative ids you can pass to get_timeseries / analyze_station.
+    Each entry includes record_count and all records at the site, retaining their individual ids.
+    The representative satisfies the search filters; other records may measure different variables.
     """
     from aquascope.archive.catalog import load_stations, search_stations
 
@@ -127,12 +129,18 @@ def find_stations(
         sources=sources,
         query=query,
         limit=limit,
+        group_sites=True,
     )
-    slim = [
-        {k: r.get(k) for k in ("source", "station_id", "name", "latitude", "longitude", "variables",
-                               "period_start", "period_end", "river", "country", "agency", "license", "url")}
-        for r in hits
-    ]
+    fields = ("source", "station_id", "site_id", "name", "latitude", "longitude", "variables",
+              "period_start", "period_end", "river", "country", "agency", "license", "url")
+    slim = []
+    for row in hits:
+        entry = {k: row.get(k) for k in fields}
+        entry["record_count"] = row["record_count"]
+        entry["records"] = [{k: record.get(k) for k in fields} for record in row["records"]]
+        if row["record_count"] > 1:
+            entry["site_note"] = f"{row['record_count']} records at this site"
+        slim.append(entry)
     return {"n_catalog": len(rows), "n_returned": len(slim), "limit": limit, "stations": slim}
 
 

@@ -8,6 +8,8 @@ All notable changes to AquaScope are documented here.
 
 ### Changed
 
+- **Group co-located station records by site** (#274, #407). Adds source-scoped `site_id` values to station catalogs, including Hub'Eau site identifiers and compatibility with older catalogs. Search and nearest-gauge results show one entry per site, represented by the longest matching record, with record counts and selectors that preserve access to individual stations. Co-located map markers are offset on screen without changing their geographic coordinates.
+
 ### Fixed
 
 ## [0.17.0] - 2026-09-15

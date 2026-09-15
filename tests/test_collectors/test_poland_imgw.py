@@ -129,6 +129,7 @@ def test_archive_files_monthly_then_yearly_and_clamped_to_1951():
         (_zip("a.csv", LINES_2020_12, "cp1250"), date(2020, 10, 1), "149180020"),
         (_zip("a.csv", LINES_2025, "cp1250"), date(2024, 11, 1), "149180020"),
     ],
+    ids=["2024-wrapped-lines", "2023-semicolon-bom", "2020-cp1250-monthly", "2025-cp1250-yearly"],
 )
 def test_every_archive_format_parses_to_calendar_dates(raw, first_date, first_id):
     with zipfile.ZipFile(io.BytesIO(raw)) as z:

@@ -169,8 +169,15 @@ class TestPenmanMonteith:
     def test_non_negative(self):
         """ET₀ should never be negative."""
         eto = penman_monteith_daily(
-            t_min=5.0, t_max=10.0, rh_min=80.0, rh_max=95.0,
-            u2=0.5, rs=5.0, latitude=50.0, elevation=100.0, doy=15,
+            t_min=5.0,
+            t_max=10.0,
+            rh_min=80.0,
+            rh_max=95.0,
+            u2=0.5,
+            rs=5.0,
+            latitude=50.0,
+            elevation=100.0,
+            doy=15,
         )
         assert eto >= 0.0
 
@@ -585,8 +592,11 @@ class TestAquastatCollector:
         collector = AquastatCollector()
         raw = [
             {
-                "Area": "Egypt", "Area Code": "EGY", "Year": "2020",
-                "Element": "Total water withdrawal", "Value": "77.5",
+                "Area": "Egypt",
+                "Area Code": "EGY",
+                "Year": "2020",
+                "Element": "Total water withdrawal",
+                "Value": "77.5",
                 "Unit": "10^9 m3/year",
             }
         ]
@@ -722,3 +732,232 @@ class TestFao56Revised2025Citations:
             for stage in ("initial", "mid", "late"):
                 assert stage in KC_TABLE[crop], f"Missing Kc stage '{stage}' for '{crop}'"
                 assert stage in KCB_TABLE[crop], f"Missing Kcb stage '{stage}' for '{crop}'"
+
+
+class TestWoodyCropRevisedFao56Parameterization:
+    """Verify woody crops and winter wheat FAO-56 Rev.1 Table 6.3/6.2 parameterization."""
+
+    @pytest.mark.parametrize(
+        ("crop", "expected_mid_kc", "expected_mid_kcb"),
+        [
+            ("olive", 0.50, 0.35),
+            ("grape", 0.80, 0.70),
+            ("citrus", 0.70, 0.65),
+            ("wheat_winter", 1.15, 1.10),
+        ],
+    )
+    def test_default_parameterless_lookup(self, crop, expected_mid_kc, expected_mid_kcb):
+        """Default lookup returns standard documented Rev.1 class without parameters."""
+        kc = get_kc(crop)
+        kcb = get_kcb(crop)
+        assert isinstance(kc, dict)
+        assert isinstance(kcb, dict)
+        assert get_kc(crop, "mid") == pytest.approx(expected_mid_kc)
+        assert get_kcb(crop, "mid") == pytest.approx(expected_mid_kcb)
+
+    def test_pinned_fao56_rev1_table_values(self):
+        """Pin specific classes to exact printed values from FAO-56 Rev.1 (2025)."""
+        # Table 6.3, row a.1.6: Olive, super-intensive high density hedgerow (1500-2000 pl/ha)
+        assert get_kc("olive", class_name="super_intensive_high_density") == {
+            "initial": 0.60,
+            "mid": 0.70,
+            "late": 0.70,
+        }
+        # Table 7.3, row a.1.6: Olive, super-intensive high density Kcb
+        assert get_kcb("olive", class_name="super_intensive_high_density") == {
+            "initial": 0.50,
+            "mid": 0.65,
+            "late": 0.60,
+        }
+        # Table 6.3, row a.1.1: Olive, young (< 7 yrs trad / < 4 yrs int)
+        assert get_kc("olive", class_name="young") == {
+            "initial": 0.40,
+            "mid": 0.35,
+            "late": 0.40,
+        }
+        # Table 7.3, row a.1.1: Olive, young Kcb
+        assert get_kcb("olive", class_name="young") == {
+            "initial": 0.20,
+            "mid": 0.30,
+            "late": 0.20,
+        }
+
+        # Table 6.3, row a.2.3: Table grapes, high cover (overhead / Y-trellis, fc 0.60-0.95)
+        assert get_kc("grape", class_name="table_high_cover") == {
+            "initial": 0.45,
+            "mid": 1.10,
+            "late": 0.80,
+        }
+        # Table 7.3, row a.2.3: Table grapes, high cover Kcb
+        assert get_kcb("grape", class_name="table_high_cover") == {
+            "initial": 0.35,
+            "mid": 1.05,
+            "late": 0.75,
+        }
+
+        # Table 6.3, row a.3.3: Wine grapes, medium cover (VSP / cordon / Guyot, fc 0.35-0.50)
+        assert get_kc("grape", class_name="wine_medium_cover") == {
+            "initial": 0.40,
+            "mid": 0.80,
+            "late": 0.55,
+        }
+        # Table 7.3, row a.3.3: Wine grapes, medium cover Kcb
+        assert get_kcb("grape", class_name="wine_medium_cover") == {
+            "initial": 0.25,
+            "mid": 0.70,
+            "late": 0.45,
+        }
+
+        # Table 6.3, row a.4.2.3: Lemon, medium density (vase, 200-400 pl/ha, fc 0.50-0.70)
+        assert get_kc("citrus", class_name="lemon_medium_density") == {
+            "initial": 0.75,
+            "mid": 0.75,
+            "late": 0.80,
+        }
+        # Table 7.3, row a.4.2.3: Lemon, medium density Kcb
+        assert get_kcb("citrus", class_name="lemon_medium_density") == {
+            "initial": 0.65,
+            "mid": 0.70,
+            "late": 0.70,
+        }
+
+        # Table 6.3, row a.4.3.3: Orange, medium density (vase, 400-600 pl/ha, fc 0.40-0.70)
+        assert get_kc("citrus", class_name="orange_medium_density") == {
+            "initial": 0.70,
+            "mid": 0.70,
+            "late": 0.70,
+        }
+        # Table 7.3, row a.4.3.3: Orange, medium density Kcb
+        assert get_kcb("citrus", class_name="orange_medium_density") == {
+            "initial": 0.60,
+            "mid": 0.65,
+            "late": 0.60,
+        }
+
+        # Table 6.2, row f (Wheat, common): Common winter wheat, low grain moisture at harvest
+        assert get_kc("wheat_winter", class_name="common_winter_low_moisture") == {
+            "initial": 0.70,
+            "mid": 1.15,
+            "late": 0.25,
+        }
+        # Table 7.2, row e (Wheat, common): Common winter wheat, low grain moisture Kcb
+        assert get_kcb("wheat_winter", class_name="common_winter_low_moisture") == {
+            "initial": 0.15,
+            "mid": 1.10,
+            "late": 0.20,
+        }
+
+        # Table 6.2, row f (Wheat, common): Common winter wheat, high grain moisture at harvest
+        assert get_kc("wheat_winter", class_name="common_winter_high_moisture") == {
+            "initial": 0.70,
+            "mid": 1.15,
+            "late": 0.55,
+        }
+
+        # Table 6.2, row f (Wheat, durum): Durum winter wheat, low grain moisture at harvest
+        assert get_kc("wheat_winter", class_name="durum_winter_low_moisture") == {
+            "initial": 0.50,
+            "mid": 1.05,
+            "late": 0.25,
+        }
+        # Table 7.2, row e (Wheat, durum): Durum winter wheat, low grain moisture Kcb
+        assert get_kcb("wheat_winter", class_name="durum_winter_low_moisture") == {
+            "initial": 0.15,
+            "mid": 1.00,
+            "late": 0.20,
+        }
+
+    def test_olive_subclasses(self):
+        """Olive resolves young, traditional medium, intensive, and super-intensive classes."""
+        assert get_kc("olive", "mid", density="young") == 0.35
+        assert get_kc("olive", "mid", density="traditional_low") == 0.45
+        assert get_kc("olive", "mid", density="traditional_medium") == 0.50
+        assert get_kc("olive", "mid", ground_cover=0.25) == 0.50
+        assert get_kc("olive", "mid", density="intensive") == 0.60
+        assert get_kc("olive", "mid", ground_cover=0.35) == 0.60
+        assert get_kc("olive", "mid", density="super_intensive_medium") == 0.65
+        assert get_kc("olive", "mid", density="super_intensive") == 0.70
+        assert get_kc("olive", "mid", ground_cover=0.55) == 0.70
+        assert get_kcb("olive", "mid", density="super_intensive") == 0.65
+
+    def test_grape_subclasses(self):
+        """Grape resolves table grapes and wine grape ground-cover classes."""
+        assert get_kc("grape", "mid", variety="table") == 0.95
+        assert get_kcb("grape", "mid", variety="table") == 0.85
+        assert get_kc("grape", "mid", variety="table", density="high") == 1.10
+        assert get_kcb("grape", "mid", variety="table", density="high") == 1.05
+        assert get_kc("grape", "mid", variety="wine", density="low") == 0.60
+        assert get_kc("grape", "mid", ground_cover=0.25) == 0.60
+        assert get_kc("grape", "mid", ground_cover=0.45) == 0.80
+        assert get_kc("grape", "mid", ground_cover=0.55) == 0.95
+        assert get_kc("grape", "mid", density="high") == 0.95
+
+    def test_citrus_subclasses(self):
+        """Citrus resolves mandarin, lemon, and orange density classes."""
+        assert get_kc("citrus", "mid", variety="mandarin") == 0.75
+        assert get_kc("citrus", "mid", variety="mandarin", density="young") == 0.50
+        assert get_kc("citrus", "mid", variety="lemon") == 0.75
+        assert get_kc("citrus", "mid", variety="lemon", density="young") == 0.40
+        assert get_kc("citrus", "mid", variety="lemon", density="high") == 0.80
+        assert get_kcb("citrus", "mid", variety="lemon") == 0.70
+        assert get_kc("citrus", "mid", variety="orange", density="low") == 0.60
+        assert get_kc("citrus", "mid", variety="orange", density="high") == 0.80
+        assert get_kc("citrus", "mid", ground_cover=0.30) == 0.60
+        assert get_kc("citrus", "mid", ground_cover=0.55) == 0.70
+        assert get_kc("citrus", "mid", ground_cover=0.80) == 0.80
+
+    def test_wheat_winter_subclasses(self):
+        """Winter wheat resolves standard common and durum classes with moisture levels."""
+        assert get_kc("wheat_winter", "late", variety="common", density="low_moisture") == 0.25
+        assert get_kc("wheat_winter", "late", variety="common", density="high_moisture") == 0.55
+        assert get_kc("wheat_winter", "mid", variety="durum") == 1.05
+        assert get_kc("wheat_winter", "late", variety="durum", density="low_moisture") == 0.25
+        assert get_kc("wheat_winter", "late", variety="durum", density="high_moisture") == 0.55
+        assert get_kcb("wheat_winter", "mid", variety="durum") == 1.00
+        assert get_kcb("wheat_winter", "late", variety="durum", density="high_moisture") == 0.45
+
+    def test_explicit_class_name(self):
+        """Explicit class_name parameter resolves target class directly."""
+        assert get_kc("olive", "mid", class_name="super_intensive_high_density") == 0.70
+        assert get_kc("grape", "mid", class_name="table_high_cover") == 1.10
+
+    def test_unknown_class_name_raises(self):
+        """Unknown class_name raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown class_name"):
+            get_kc("olive", class_name="nonexistent_class")
+
+    def test_unrecognised_variety_raises(self):
+        """Unrecognised variety raises ValueError with descriptive message."""
+        with pytest.raises(ValueError, match="Unknown variety 'satsuma'"):
+            get_kc("citrus", "mid", variety="satsuma")
+
+        with pytest.raises(ValueError, match="Unknown variety 'concord'"):
+            get_kc("grape", "mid", variety="concord")
+
+        with pytest.raises(ValueError, match="does not differentiate varieties"):
+            get_kc("olive", "mid", variety="kalamata")
+
+    def test_unrecognised_density_raises(self):
+        """Unrecognised density raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown density"):
+            get_kc("citrus", "mid", variety="orange", density="ultra_dense")
+
+        with pytest.raises(ValueError, match="Unknown density"):
+            get_kc("olive", "mid", density="unknown_density")
+
+    def test_cwr_and_schedule_pass_through(self):
+        """Crop water requirement and irrigation schedule pass planting parameters through."""
+        n_days = sum(DEFAULT_STAGE_LENGTHS["grape"].values())
+        eto = _make_daily_series(n_days + 10, 5.0)
+        precip = _make_daily_series(n_days + 10, 1.0)
+
+        df_table = crop_water_requirement(eto, "grape", date(2024, 1, 1), variety="table")
+        df_wine_low = crop_water_requirement(eto, "grape", date(2024, 1, 1), ground_cover=0.25)
+
+        assert df_table.loc[df_table["stage"] == "mid", "kc"].iloc[0] == 0.95
+        assert df_wine_low.loc[df_wine_low["stage"] == "mid", "kc"].iloc[0] == 0.60
+        assert df_table["etc"].sum() > df_wine_low["etc"].sum()
+
+        sched_table = irrigation_schedule(eto, precip, "grape", date(2024, 1, 1), variety="table")
+        sched_wine_low = irrigation_schedule(eto, precip, "grape", date(2024, 1, 1), ground_cover=0.25)
+        assert sched_table["gross_irrigation"].sum() > sched_wine_low["gross_irrigation"].sum()

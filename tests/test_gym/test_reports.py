@@ -236,7 +236,7 @@ def test_the_cli_reports_verbs(monkeypatch, capsys, tmp_path):
                                       "--study", "toulouse-irrigation", "--out", str(out_file), "--quiet"])
     cli.main()
     printed = capsys.readouterr().out
-    assert "report-quality leaderboard" in printed and len(out_file.read_text().splitlines()) == 2
+    assert "report-quality leaderboard" in printed and len(out_file.read_text(encoding="utf-8").splitlines()) == 2
 
     monkeypatch.setattr(sys, "argv", ["aquascope", "gym", "leaderboard", str(out_file)])
     cli.main()

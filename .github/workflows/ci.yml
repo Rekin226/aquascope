@@ -27,10 +27,14 @@ jobs:
         continue-on-error: true
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
+        os: [ubuntu-latest]
+        include:
+          - python-version: "3.12"
+            os: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -44,7 +48,7 @@ jobs:
       # unchanged, so nothing here depends on test ordering.
       - run: pytest -n auto --cov=aquascope --cov-report=term-missing --cov-report=xml
       - name: Upload coverage artifact
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -80,4 +84,3 @@ jobs:
             echo "::error::The contributors board is missing: $missing. Comment '@all-contributors please add @<username> for <contribution>' on their merged PR (needs the all-contributors GitHub App), or run 'npx all-contributors-cli add <username> <contribution>' locally."
             exit 1
           fi
-

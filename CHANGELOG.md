@@ -23,6 +23,7 @@ All notable changes to AquaScope are documented here.
   [Data Quality Flags](docs/data_sources.md#data-quality-flags).
 
 ### Changed
+- **CONTRIBUTING gains two non-code ways to contribute, and a claim-expiry rule.** Writing a reference plan or reference findings for the benchmark suite (`aquascope/gym/plans/_authoring.yaml`, `aquascope/gym/reports/_authoring.yaml`) and verifying a source's licence or quality vocabulary are now listed alongside the five code paths: both need domain judgement rather than an environment, and both were already scaffolded in the tree with worked examples. A claim with no push and no update for about three weeks goes back on the board, so an issue that has gone quiet stops being a case-by-case judgement call.
 
 ### Fixed
 

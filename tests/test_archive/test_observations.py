@@ -269,3 +269,27 @@ def test_openhi_is_harvestable_because_the_browser_cannot_call_it():
     assert meta.redistributable and not meta.browser_reachable
     assert set(obs.HARVESTABLE["greece_openhi"]) <= set(meta.variables)
     assert all(SOURCES[k].redistributable for k in obs.HARVESTABLE)
+
+def test_csv_gz_roundtrip_with_quality():
+        s = _series(5)
+        quality = pd.Series(
+            ["approved", "approved", "provisional", "suspect", "unknown"],
+            index=s.resample("D").mean().dropna().index,
+        )
+        payload = obs.series_to_csv_gz(s, quality=quality)
+        assert gzip.decompress(payload).decode().startswith("date,value,quality\n")
+        value, back_quality = obs.read_csv_gz(payload, include_quality=True)
+        assert list(back_quality) == ["approved", "approved", "provisional", "suspect", "unknown"]
+        assert len(value) == 5
+
+def test_read_csv_gz_without_quality_arg_is_unchanged():
+    # every pre-existing call site must keep behaving exactly like today
+    s = _series(5)
+    payload = obs.series_to_csv_gz(s)  # no quality passed
+    assert obs.read_csv_gz(payload).shape[0] == 5  # plain Series, as before
+
+def test_read_csv_gz_old_file_without_quality_column_defaults_to_unknown():
+    s = _series(5)
+    payload = obs.series_to_csv_gz(s)  # a file written before this feature existed
+    value, quality = obs.read_csv_gz(payload, include_quality=True)
+    assert list(quality) == ["unknown"] * 5

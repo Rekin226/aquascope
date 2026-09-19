@@ -5,6 +5,18 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
+- **Harmonized data-quality flags across the schema and Archive**
+  (#374). Readings now carry a `Quality` enum (`approved`,
+  `provisional`, `estimated`, `suspect`, `unknown`) plus a verbatim
+  `quality_raw` string on `StreamflowReading`, `WaterLevelReading`,
+  `ClimateReading` and `WaterQualitySample`, defaulting to `unknown`
+  so every existing collector keeps working unchanged. `usgs.py` maps
+  USGS's own `approval_status` and `qualifier` as the reference
+  implementation; every other collector picks this up in its own
+  follow-up issue. Archive CSVs can now carry an optional `quality`
+  column (old files without one still read fine), and `QualityReport`
+  / `print_quality_report` gain a quality-flag breakdown (counts per
+  code, provisional fraction, suspect fraction).
 
 ### Changed
 

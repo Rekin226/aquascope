@@ -24,6 +24,9 @@ class QualityReport:
     completeness_pct: float
     null_counts: dict[str, int] = field(default_factory=dict)
     outlier_counts: dict[str, int] = field(default_factory=dict)
+    quality_counts: dict[str, int] = field(default_factory=dict)
+    provisional_fraction: float = 0.0
+    suspect_fraction: float = 0.0
     temporal_gaps: list[dict] = field(default_factory=list)
     unit_issues: list[str] = field(default_factory=list)
     recommended_steps: list[str] = field(default_factory=list)
@@ -55,6 +58,20 @@ def assess_quality(df: pd.DataFrame) -> QualityReport:
     # Completeness
     total_cells = df.shape[0] * df.shape[1]
     completeness = round((1 - df.isna().sum().sum() / total_cells) * 100, 1) if total_cells > 0 else 0.0
+
+    # Quality-flag breakdown — only populated once a `quality` column
+        # is present (collectors that don't map quality yet leave it out
+        # of the frame entirely, which is fine: everything below stays at
+        # its default).
+    quality_counts: dict[str, int] = {}
+    provisional_fraction = 0.0
+    suspect_fraction = 0.0
+    if "quality" in df.columns and n_records > 0:
+        counts = df["quality"].astype(str).value_counts()
+        quality_counts = {str(k): int(v) for k, v in counts.items()}
+        provisional_fraction = round(quality_counts.get("provisional", 0) / n_records, 3)
+        suspect_fraction = round(quality_counts.get("suspect", 0) / n_records, 3)
+
 
     # Outlier detection (IQR) per parameter
     outlier_counts: dict[str, int] = {}
@@ -122,6 +139,9 @@ def assess_quality(df: pd.DataFrame) -> QualityReport:
         temporal_gaps=temporal_gaps,
         unit_issues=unit_issues,
         recommended_steps=recommended_steps,
+        quality_counts=quality_counts,
+        provisional_fraction=provisional_fraction,
+        suspect_fraction=suspect_fraction,
     )
 
 
@@ -246,5 +266,15 @@ def print_quality_report(report: QualityReport) -> str:
         lines.append("\n  Recommended Preprocessing:")
         for i, step in enumerate(report.recommended_steps, 1):
             lines.append(f"    {i}. {step}")
+
+    if report.quality_counts:
+        lines.append("\n  Quality Flags:")
+        for code, cnt in sorted(report.quality_counts.items(), key=lambda x: -x[1]):
+            pct = cnt / report.n_records * 100
+            lines.append(f"    {code:<25} {cnt:>7} ({pct:.1f}%)")
+        if report.provisional_fraction > 0:
+            lines.append(f"    provisional fraction:     {report.provisional_fraction:.1%}")
+        if report.suspect_fraction > 0:
+            lines.append(f"    suspect fraction:         {report.suspect_fraction:.1%}")
 
     return "\n".join(lines)

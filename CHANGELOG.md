@@ -13,10 +13,14 @@ All notable changes to AquaScope are documented here.
   so every existing collector keeps working unchanged. `usgs.py` maps
   USGS's own `approval_status` and `qualifier` as the reference
   implementation; every other collector picks this up in its own
-  follow-up issue. Archive CSVs can now carry an optional `quality`
-  column (old files without one still read fine), and `QualityReport`
-  / `print_quality_report` gain a quality-flag breakdown (counts per
-  code, provisional fraction, suspect fraction).
+  follow-up issue. Archive CSV helpers (`series_to_csv_gz` /
+  `read_csv_gz`) support an optional `quality` column (old files
+  without one still read fine; weekly harvest still writes
+  `date,value` until `fetch_series` carries per-timestamp quality).
+  `QualityReport` / `print_quality_report` gain a quality-flag
+  breakdown (counts per code, provisional fraction, suspect fraction),
+  normalizing enum members to their string values. Docs:
+  [Data Quality Flags](docs/data_sources.md#data-quality-flags).
 
 ### Changed
 

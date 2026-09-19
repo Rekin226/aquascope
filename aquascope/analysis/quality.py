@@ -60,14 +60,19 @@ def assess_quality(df: pd.DataFrame) -> QualityReport:
     completeness = round((1 - df.isna().sum().sum() / total_cells) * 100, 1) if total_cells > 0 else 0.0
 
     # Quality-flag breakdown — only populated once a `quality` column
-        # is present (collectors that don't map quality yet leave it out
-        # of the frame entirely, which is fine: everything below stays at
-        # its default).
+    # is present (collectors that don't map quality yet leave it out
+    # of the frame entirely, which is fine: everything below stays at
+    # its default).
+    # Prefer ``.value`` over ``str()``: ``str(Quality.APPROVED)`` is
+    # ``"Quality.APPROVED"``, not ``"approved"``.
     quality_counts: dict[str, int] = {}
     provisional_fraction = 0.0
     suspect_fraction = 0.0
     if "quality" in df.columns and n_records > 0:
-        counts = df["quality"].astype(str).value_counts()
+        normalized = df["quality"].map(
+            lambda q: q.value if hasattr(q, "value") else ("unknown" if pd.isna(q) else str(q))
+        )
+        counts = normalized.value_counts()
         quality_counts = {str(k): int(v) for k, v in counts.items()}
         provisional_fraction = round(quality_counts.get("provisional", 0) / n_records, 3)
         suspect_fraction = round(quality_counts.get("suspect", 0) / n_records, 3)

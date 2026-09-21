@@ -2,37 +2,38 @@
  "id": "kingston-flood",
  "question": "What is the 100-year flood of the Thames at Kingston, and how sure can we be?",
  "shows": "Finding a gauge, fitting a flood frequency curve, and quoting the confidence interval.",
- "answer": "**100‑year flood at Kingston (River Thames)**  \n\n| Method | 100‑yr return‑level | 90 % confidence interval* | Record |\n|--------|-------------------|---------------------------|--------|\n| Log‑Pearson III (LP3) | **≈ 520 m³ s⁻¹** | 447 – 604 m³ s⁻¹ | 1986‑08‑21 → 2026‑08‑19 (≈ 40 yr, 39 annual maxima) |\n| Generalised Extreme Value (GEV, bootstrap) | **≈ 495 m³ s⁻¹** | 453 – 525 m³ s⁻¹ | same record |\n\n\\*Confidence intervals are the 90 % bands derived from 1 000 bootstrap resamples of the annual‑maximum series (as returned by the tool).\n\n**Interpretation / certainty**\n\n* The station “Kingston” (UK EA, river Thames) has a 40‑year daily discharge record (≈ 14 500 daily values).  \n* Estimating a 100‑year return level from only 39 annual maxima introduces substantial statistical uncertainty – reflected in the wide confidence bands (≈ ± 30 % of the point estimate).  \n* The two standard hydrological approaches (LP3 and GEV) give broadly consistent central values (≈ 500 m³ s⁻¹), but the LP3 interval is wider (≈ ± 30 %) than the GEV bootstrap interval (≈ ± 15 %).  \n* Hence, while the best estimate of the 100‑yr flood is around **500 m³ s⁻¹**, we can be 90 % confident that the true 100‑yr flood lies somewhere between **≈ 450 m³ s⁻¹ and 600 m³ s⁻¹**.\n\n**Bottom line** – The Thames at Kingston is expected to experience a 100‑year flood of roughly **0.5 × 10³ m³ s⁻¹**, but the limited length of the record means the estimate carries considerable uncertainty (≈ ± 25‑30 %).",
- "markdown": "# What is the 100-year flood of the Thames at Kingston, and how sure can we be?\n\n**100‑year flood at Kingston (River Thames)**  \n\n| Method | 100‑yr return‑level | 90 % confidence interval* | Record |\n|--------|-------------------|---------------------------|--------|\n| Log‑Pearson III (LP3) | **≈ 520 m³ s⁻¹** | 447 – 604 m³ s⁻¹ | 1986‑08‑21 → 2026‑08‑19 (≈ 40 yr, 39 annual maxima) |\n| Generalised Extreme Value (GEV, bootstrap) | **≈ 495 m³ s⁻¹** | 453 – 525 m³ s⁻¹ | same record |\n\n\\*Confidence intervals are the 90 % bands derived from 1 000 bootstrap resamples of the annual‑maximum series (as returned by the tool).\n\n**Interpretation / certainty**\n\n* The station “Kingston” (UK EA, river Thames) has a 40‑year daily discharge record (≈ 14 500 daily values).  \n* Estimating a 100‑year return level from only 39 annual maxima introduces substantial statistical uncertainty – reflected in the wide confidence bands (≈ ± 30 % of the point estimate).  \n* The two standard hydrological approaches (LP3 and GEV) give broadly consistent central values (≈ 500 m³ s⁻¹), but the LP3 interval is wider (≈ ± 30 %) than the GEV bootstrap interval (≈ ± 15 %).  \n* Hence, while the best estimate of the 100‑yr flood is around **500 m³ s⁻¹**, we can be 90 % confident that the true 100‑yr flood lies somewhere between **≈ 450 m³ s⁻¹ and 600 m³ s⁻¹**.\n\n**Bottom line** – The Thames at Kingston is expected to experience a 100‑year flood of roughly **0.5 × 10³ m³ s⁻¹**, but the limited length of the record means the estimate carries considerable uncertainty (≈ ± 25‑30 %).\n\n## What this answer does not establish\n\n- The answer does not say which station or record the numbers come from.\n\n## Data\n\n- **uk_ea / 8496ce69-482c-406a-a2f0-ac418ef8f099** · 1986-08-21 to 2026-08-19 (40.0 years) · licence OGL-UK-3.0 · Environment Agency, Open Government Licence v3.0\n\n## Methods and citations\n\n1. **Flow-duration curve.** Empirical exceedance probabilities of daily flow (Weibull plotting positions); Q95 and Q10 read from the curve. _Vogel, R. M., & Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage., 120(4), 485-504._\n2. **GEV fitted by L-moments.** Annual maxima (calendar years) fitted to a Generalized Extreme Value distribution with L-moment estimators (Hosking 1990); return levels from the fitted quantile function. _Hosking, J. R. M. (1990). L-moments: analysis and estimation of distributions using linear combinations of order statistics. J. R. Stat. Soc. B, 52(1), 105-124._\n3. **Log-Pearson III (Bulletin 17C style).** Log-transformed annual maxima fitted to a Pearson type III distribution; station skew, frequency factors and analytical confidence limits after Bulletin 17C. _England, J. F. Jr. et al. (2018). Guidelines for determining flood flow frequency, Bulletin 17C. USGS Techniques and Methods 4-B5._\n4. **Mann-Kendall trend on annual means.** Non-parametric Mann-Kendall test with Sen's slope on the annual mean series. _Mann, H. B. (1945). Nonparametric tests against trend. Econometrica, 13, 245-259; Sen, P. K. (1968). J. Am. Stat. Assoc., 63, 1379-1389._\n5. **GEV (MLE, L-moment seeded) with bootstrap CI.** Maximum-likelihood GEV seeded from L-moments with the shape bounded to |k| <= 0.5; 90 % confidence bands from 1,000 bootstrap resamples of the annual maxima. _Coles, S. (2001). An Introduction to Statistical Modeling of Extreme Values. Springer._\n\n---\nProduced by aquascope 0.12.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-08-21 04:41 UTC. Tools called: find_stations, flood_frequency. Numbers come from the tool results; the model wrote the prose.",
+ "answer": "**100‑year flood estimate (Kingston‑on‑Thames, UK)**  \n\n- **Station used:** Environment Agency gauge “Kingston Hogsmill” (source uk_ea, station ID 63b6ae06‑60fc‑4e92‑8337‑aa0e5fdd7e79).  \n- **Record length:** 1956‑05‑01 to 2026‑09‑05 (≈ 70 years, 68 annual‑maxima).  \n\n**Return level (T = 100 yr)**  \n\n| Method | 100‑yr flow (m³ s⁻¹) | 90 % confidence interval (m³ s⁻¹) |\n|--------|----------------------|-----------------------------------|\n| Log‑Pearson III (LP‑3) | **13.31** | **11.68 – 15.17** |\n| GEV (bootstrap) | **13.44** | **10.46 – 16.73** |\n\nThe LP‑3 estimate (13.3 m³ s⁻¹) is the primary output of the flood‑frequency analysis; the GEV bootstrap gives a very similar point estimate (13.4 m³ s⁻¹) but with a slightly wider confidence band.  \n\n**How certain are we?**  \n- The 90 % confidence interval from the LP‑3 fit spans **~3.5 m³ s⁻¹** (≈ 26 % of the estimate), reflecting the limited 68‑year record (the theoretical 100‑yr event is extrapolated beyond the observed span).  \n- The bootstrap GEV interval is broader (**~6.3 m³ s⁻¹**, ≈ 47 % of the estimate), indicating greater statistical uncertainty when the shape parameter is estimated via resampling.  \n\n**Context**  \n- The observed record maximum discharge is **15 m³ s⁻¹** (1968), already close to the 100‑yr estimate, which suggests the station has captured near‑extreme events but still requires extrapolation for a true centennial return period.  \n\n**Bottom line**  \n- The best‑estimate 100‑year flood at Kingston is **≈ 13 m³ s⁻¹**.  \n- With 90 % confidence, the true 100‑year flow likely lies between **≈ 12 m³ s⁻¹** and **≈ 15 m³ s⁻¹** (LP‑3) or, more conservatively, **≈ 10 – 17 m³ s⁻¹** (GEV bootstrap).  \n\nThese values come directly from the AquaScope flood‑frequency analysis of the Environment Agency gauge record.",
+ "markdown": "# What is the 100-year flood of the Thames at Kingston, and how sure can we be?\n\n**100‑year flood estimate (Kingston‑on‑Thames, UK)**  \n\n- **Station used:** Environment Agency gauge “Kingston Hogsmill” (source uk_ea, station ID 63b6ae06‑60fc‑4e92‑8337‑aa0e5fdd7e79).  \n- **Record length:** 1956‑05‑01 to 2026‑09‑05 (≈ 70 years, 68 annual‑maxima).  \n\n**Return level (T = 100 yr)**  \n\n| Method | 100‑yr flow (m³ s⁻¹) | 90 % confidence interval (m³ s⁻¹) |\n|--------|----------------------|-----------------------------------|\n| Log‑Pearson III (LP‑3) | **13.31** | **11.68 – 15.17** |\n| GEV (bootstrap) | **13.44** | **10.46 – 16.73** |\n\nThe LP‑3 estimate (13.3 m³ s⁻¹) is the primary output of the flood‑frequency analysis; the GEV bootstrap gives a very similar point estimate (13.4 m³ s⁻¹) but with a slightly wider confidence band.  \n\n**How certain are we?**  \n- The 90 % confidence interval from the LP‑3 fit spans **~3.5 m³ s⁻¹** (≈ 26 % of the estimate), reflecting the limited 68‑year record (the theoretical 100‑yr event is extrapolated beyond the observed span).  \n- The bootstrap GEV interval is broader (**~6.3 m³ s⁻¹**, ≈ 47 % of the estimate), indicating greater statistical uncertainty when the shape parameter is estimated via resampling.  \n\n**Context**  \n- The observed record maximum discharge is **15 m³ s⁻¹** (1968), already close to the 100‑yr estimate, which suggests the station has captured near‑extreme events but still requires extrapolation for a true centennial return period.  \n\n**Bottom line**  \n- The best‑estimate 100‑year flood at Kingston is **≈ 13 m³ s⁻¹**.  \n- With 90 % confidence, the true 100‑year flow likely lies between **≈ 12 m³ s⁻¹** and **≈ 15 m³ s⁻¹** (LP‑3) or, more conservatively, **≈ 10 – 17 m³ s⁻¹** (GEV bootstrap).  \n\nThese values come directly from the AquaScope flood‑frequency analysis of the Environment Agency gauge record.\n\n## What this answer does not establish\n\n- These numbers are not in any tool result: 3.5, 6.3.\n\n## Data\n\n- **uk_ea / 63b6ae06-60fc-4e92-8337-aa0e5fdd7e79** · 1956-05-01 to 2026-09-05 (70.3 years) · licence OGL-UK-3.0 · Environment Agency, Open Government Licence v3.0\n\n## Methods and citations\n\n1. **Flow-duration curve.** Empirical exceedance probabilities of daily flow (Weibull plotting positions); Q95 and Q10 read from the curve. _Vogel, R. M., & Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage., 120(4), 485-504._\n2. **GEV fitted by L-moments.** Annual maxima (calendar years) fitted to a Generalized Extreme Value distribution with L-moment estimators (Hosking 1990); return levels from the fitted quantile function. _Hosking, J. R. M. (1990). L-moments: analysis and estimation of distributions using linear combinations of order statistics. J. R. Stat. Soc. B, 52(1), 105-124._\n3. **Log-Pearson III (Bulletin 17C style).** Log-transformed annual maxima fitted to a Pearson type III distribution; station skew, frequency factors and analytical confidence limits after Bulletin 17C. _England, J. F. Jr. et al. (2018). Guidelines for determining flood flow frequency, Bulletin 17C. USGS Techniques and Methods 4-B5._\n4. **Mann-Kendall trend on annual means.** Non-parametric Mann-Kendall test with Sen's slope on the annual mean series. _Mann, H. B. (1945). Nonparametric tests against trend. Econometrica, 13, 245-259; Sen, P. K. (1968). J. Am. Stat. Assoc., 63, 1379-1389._\n5. **GEV (MLE, L-moment seeded) with bootstrap CI.** Maximum-likelihood GEV seeded from L-moments with the shape bounded to |k| <= 0.5; 90 % confidence bands from 1,000 bootstrap resamples of the annual maxima. _Coles, S. (2001). An Introduction to Statistical Modeling of Extreme Values. Springer._\n\n---\nProduced by aquascope 0.18.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-09-21 10:48 UTC. Tools called: assess_site, flood_frequency. Numbers come from the tool results; the model wrote the prose.",
  "tool_calls": [
   {
-   "name": "find_stations",
+   "name": "assess_site",
    "arguments": {
-    "limit": 5,
-    "near": [
-     51.41,
-     -0.3
-    ],
-    "variable": "discharge"
+    "lat": 51.4095,
+    "lon": -0.306,
+    "problem": "flood_risk",
+    "return_period": 100
    },
    "ok": true,
-   "summary": "{\"n_catalog\": 45919, \"n_returned\": 5, \"limit\": 5, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"63b6ae06-60fc-4e92-8337-aa0e5fdd7e79\", \"name\": \"Kingston Hogsm"
+   "summary": "{\"point\": {\"lat\": 51.4095, \"lon\": -0.306}, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"63b6ae06-60fc-4e92-8337-aa0e5fdd7e79\", \"name\": \"Kingston Hogsmill\", \""
   },
   {
    "name": "flood_frequency",
    "arguments": {
     "bootstrap_ci": true,
+    "return_periods": [
+     100
+    ],
     "source": "uk_ea",
-    "station_id": "8496ce69-482c-406a-a2f0-ac418ef8f099"
+    "station_id": "63b6ae06-60fc-4e92-8337-aa0e5fdd7e79"
    },
    "ok": true,
-   "summary": "{\"source\": \"uk_ea\", \"station_id\": \"8496ce69-482c-406a-a2f0-ac418ef8f099\", \"agency\": \"Environment Agency\", \"license\": \"OGL-UK-3.0\", \"attribution\": \"Environment A"
+   "summary": "{\"source\": \"uk_ea\", \"station_id\": \"63b6ae06-60fc-4e92-8337-aa0e5fdd7e79\", \"agency\": \"Environment Agency\", \"license\": \"OGL-UK-3.0\", \"attribution\": \"Environment A"
   }
  ],
  "data_used": [
   {
-   "label": "uk_ea / 8496ce69-482c-406a-a2f0-ac418ef8f099",
-   "period": "1986-08-21 to 2026-08-19 (40.0 years)",
+   "label": "uk_ea / 63b6ae06-60fc-4e92-8337-aa0e5fdd7e79",
+   "period": "1956-05-01 to 2026-09-05 (70.3 years)",
    "license": "OGL-UK-3.0",
    "attribution": "Environment Agency, Open Government Licence v3.0"
   }
@@ -72,6 +73,11 @@
   },
   {
    "name": "numbers_come_from_tools",
+   "passed": false,
+   "detail": "These numbers are not in any tool result: 3.5, 6.3."
+  },
+  {
+   "name": "years_traceable",
    "passed": true,
    "detail": ""
   },
@@ -87,15 +93,15 @@
   },
   {
    "name": "record_is_named",
-   "passed": false,
-   "detail": "The answer does not say which station or record the numbers come from."
+   "passed": true,
+   "detail": ""
   }
  ],
- "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"What is the 100-year flood of the Thames at Kingston, and how sure can we be?\"\nquestion: \"What is the 100-year flood of the Thames at Kingston, and how sure can we be?\"\ncreated: \"2026-08-21T04:41:20+00:00\"\naquascope_version: \"0.12.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"find_stations\"\n    arguments:\n      limit: 5\n      near: [51.41, -0.3]\n      variable: \"discharge\"\n  - tool: \"flood_frequency\"\n    arguments:\n      bootstrap_ci: true\n      source: \"uk_ea\"\n      station_id: \"8496ce69-482c-406a-a2f0-ac418ef8f099\"\n",
+ "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"What is the 100-year flood of the Thames at Kingston, and how sure can we be?\"\nquestion: \"What is the 100-year flood of the Thames at Kingston, and how sure can we be?\"\ncreated: \"2026-09-21T10:48:51+00:00\"\naquascope_version: \"0.18.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"assess_site\"\n    arguments:\n      lat: 51.4095\n      lon: -0.306\n      problem: \"flood_risk\"\n      return_period: 100\n  - tool: \"flood_frequency\"\n    arguments:\n      bootstrap_ci: true\n      return_periods: [100]\n      source: \"uk_ea\"\n      station_id: \"63b6ae06-60fc-4e92-8337-aa0e5fdd7e79\"\n",
  "steps": 3,
  "model": "openai/gpt-oss-120b",
  "provider": "groq",
- "recorded": "2026-08-21T04:41:20+00:00",
- "aquascope_version": "0.12.0",
+ "recorded": "2026-09-21T10:48:51+00:00",
+ "aquascope_version": "0.18.0",
  "error": null
 }

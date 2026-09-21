@@ -1,89 +1,22 @@
 {
- "generated": "2026-08-22T04:13:42+00:00",
- "aquascope_version": "0.12.0",
+ "generated": "2026-09-21T11:04:23+00:00",
+ "aquascope_version": "0.18.0",
  "note": "Recorded answers: the prose was written once by the model named in each entry. The tools can be re-run live in the page, with no key.",
  "examples": [
-  {
-   "id": "cambridge-groundwater",
-   "question": "Which UK boreholes near Cambridge have the longest groundwater records?",
-   "shows": "Searching the catalog by place and variable rather than by name.",
-   "tools": [
-    "find_stations",
-    "run_python",
-    "run_python"
-   ],
-   "steps": 4,
-   "model": "openai/gpt-oss-120b",
-   "provider": "groq",
-   "recorded": "2026-08-22T03:19:33+00:00",
-   "checks_passed": 1,
-   "checks_total": 2
-  },
-  {
-   "id": "catchment-description",
-   "question": "Describe the catchment upstream of 47.0 N, 68.6 W: area, climate, land cover and people.",
-   "shows": "BasinATLAS attributes for anywhere on land.",
-   "tools": [
-    "describe_catchment"
-   ],
-   "steps": 2,
-   "model": "openai/gpt-oss-120b",
-   "provider": "groq",
-   "recorded": "2026-08-22T03:21:01+00:00",
-   "checks_passed": 1,
-   "checks_total": 2
-  },
-  {
-   "id": "flood-vs-neighbours",
-   "question": "How does the 100-year flood at USGS-01013500 compare with its most similar gauged basins?",
-   "shows": "Chaining donor search into an analysis of each donor.",
-   "tools": [
-    "find_stations",
-    "flood_frequency",
-    "similar_basins",
-    "flood_frequency",
-    "flood_frequency",
-    "flood_frequency"
-   ],
-   "steps": 7,
-   "model": "openai/gpt-oss-120b",
-   "provider": "groq",
-   "recorded": "2026-08-22T03:23:43+00:00",
-   "checks_passed": 4,
-   "checks_total": 5
-  },
   {
    "id": "kingston-flood",
    "question": "What is the 100-year flood of the Thames at Kingston, and how sure can we be?",
    "shows": "Finding a gauge, fitting a flood frequency curve, and quoting the confidence interval.",
    "tools": [
-    "find_stations",
+    "assess_site",
     "flood_frequency"
    ],
    "steps": 3,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-08-21T04:41:20+00:00",
-   "checks_passed": 4,
-   "checks_total": 5
-  },
-  {
-   "id": "potomac-trend",
-   "question": "Is the Potomac at Little Falls getting drier? Use the annual-mean trend.",
-   "shows": "A Mann-Kendall trend, and what a p-value does and does not license you to say.",
-   "tools": [
-    "find_stations",
-    "find_stations",
-    "find_stations",
-    "find_stations",
-    "analyze_station"
-   ],
-   "steps": 6,
-   "model": "openai/gpt-oss-120b",
-   "provider": "groq",
-   "recorded": "2026-08-22T03:17:16+00:00",
-   "checks_passed": 3,
-   "checks_total": 5
+   "recorded": "2026-09-21T10:48:51+00:00",
+   "checks_passed": 5,
+   "checks_total": 6
   },
   {
    "id": "seine-loire-lowflow",
@@ -92,33 +25,33 @@
    "tools": [
     "find_stations",
     "find_stations",
-    "find_stations",
-    "analyze_station",
-    "analyze_station"
+    "assess_site",
+    "low_flow_context",
+    "low_flow_context"
    ],
    "steps": 6,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-08-22T03:45:33+00:00",
-   "checks_passed": 4,
+   "recorded": "2026-09-21T10:52:20+00:00",
+   "checks_passed": 5,
    "checks_total": 5
   },
   {
-   "id": "ungauged-regime",
-   "question": "There is no gauge on my river in central Portugal (40.2 N, 8.0 W). What flow should I expect?",
-   "shows": "Prediction in ungauged basins: similar catchments, transferred signatures, and the skill of that transfer.",
+   "id": "potomac-trend",
+   "question": "Is the Potomac at Little Falls getting drier? Use the annual-mean trend.",
+   "shows": "A Mann-Kendall trend, and what a p-value does and does not license you to say.",
    "tools": [
-    "describe_catchment",
-    "similar_basins",
-    "similar_basins",
-    "regionalize_signatures"
+    "find_stations",
+    "assess_site",
+    "assess_site",
+    "analyze_station"
    ],
    "steps": 5,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-08-22T03:50:15+00:00",
-   "checks_passed": 1,
-   "checks_total": 2
+   "recorded": "2026-09-21T10:55:19+00:00",
+   "checks_passed": 6,
+   "checks_total": 6
   },
   {
    "id": "taipei-london-climate",
@@ -131,9 +64,74 @@
    "steps": 3,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-08-22T04:13:42+00:00",
-   "checks_passed": 1,
-   "checks_total": 2
+   "recorded": "2026-09-21T10:57:15+00:00",
+   "checks_passed": 4,
+   "checks_total": 4
+  },
+  {
+   "id": "cambridge-groundwater",
+   "question": "Which UK boreholes near Cambridge have the longest groundwater records?",
+   "shows": "Searching the catalog by place and variable rather than by name.",
+   "tools": [
+    "assess_site"
+   ],
+   "steps": 2,
+   "model": "openai/gpt-oss-120b",
+   "provider": "groq",
+   "recorded": "2026-09-21T10:58:13+00:00",
+   "checks_passed": 4,
+   "checks_total": 4
+  },
+  {
+   "id": "ungauged-regime",
+   "question": "There is no gauge on my river in central Portugal (40.2 N, 8.0 W). What flow should I expect?",
+   "shows": "Prediction in ungauged basins: similar catchments, transferred signatures, and the skill of that transfer.",
+   "tools": [
+    "assess_site",
+    "regionalize_signatures"
+   ],
+   "steps": 3,
+   "model": "openai/gpt-oss-120b",
+   "provider": "groq",
+   "recorded": "2026-09-21T10:59:35+00:00",
+   "checks_passed": 4,
+   "checks_total": 4
+  },
+  {
+   "id": "catchment-description",
+   "question": "Describe the catchment upstream of 47.0 N, 68.6 W: area, climate, land cover and people.",
+   "shows": "BasinATLAS attributes for anywhere on land.",
+   "tools": [
+    "assess_site",
+    "describe_catchment"
+   ],
+   "steps": 3,
+   "model": "openai/gpt-oss-120b",
+   "provider": "groq",
+   "recorded": "2026-09-21T11:01:24+00:00",
+   "checks_passed": 3,
+   "checks_total": 4
+  },
+  {
+   "id": "flood-vs-neighbours",
+   "question": "How does the 100-year flood at USGS-01013500 compare with its most similar gauged basins?",
+   "shows": "Chaining donor search into an analysis of each donor.",
+   "tools": [
+    "find_stations",
+    "assess_site",
+    "flood_frequency",
+    "similar_basins",
+    "flood_frequency",
+    "run_python",
+    "flood_frequency",
+    "run_python"
+   ],
+   "steps": 8,
+   "model": "openai/gpt-oss-120b",
+   "provider": "groq",
+   "recorded": "2026-09-21T11:04:23+00:00",
+   "checks_passed": 3,
+   "checks_total": 4
   }
  ]
 }

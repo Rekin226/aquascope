@@ -2,8 +2,8 @@
  "id": "potomac-trend",
  "question": "Is the Potomac at Little Falls getting drier? Use the annual-mean trend.",
  "shows": "A Mann-Kendall trend, and what a p-value does and does not license you to say.",
- "answer": "**Potomac River – Little Falls Pump Station (USGS 01646500)**  \n- **Record:** 1986‑08‑22 to 2026‑08‑20 (≈ 40 yr, 14 609 daily values) – discharge in m³ s⁻¹.  \n- **Annual‑mean trend (Mann‑Kendall + Sen’s slope):**  \n\n| Statistic | Value |\n|-----------|-------|\n| Sen’s slope | **‑0.95 m³ s⁻¹ yr⁻¹** |\n| Kendall τ   | **‑0.104** |\n| p‑value      | **0.358** |\n| Trend label  | **no trend** (p > 0.05) |\n\n**Interpretation**  \nThe estimated decline of about 1 m³ s⁻¹ per year is small relative to the mean flow (≈ 332 m³ s⁻¹) and, with a p‑value of 0.36, it is not statistically distinguishable from zero. Therefore, the record does **not provide evidence that the Potomac at Little Falls is getting drier** over the past four decades. Any apparent decrease could be due to natural variability rather than a systematic drying trend.",
- "markdown": "# Is the Potomac at Little Falls getting drier? Use the annual-mean trend.\n\n**Potomac River – Little Falls Pump Station (USGS 01646500)**  \n- **Record:** 1986‑08‑22 to 2026‑08‑20 (≈ 40 yr, 14 609 daily values) – discharge in m³ s⁻¹.  \n- **Annual‑mean trend (Mann‑Kendall + Sen’s slope):**  \n\n| Statistic | Value |\n|-----------|-------|\n| Sen’s slope | **‑0.95 m³ s⁻¹ yr⁻¹** |\n| Kendall τ   | **‑0.104** |\n| p‑value      | **0.358** |\n| Trend label  | **no trend** (p > 0.05) |\n\n**Interpretation**  \nThe estimated decline of about 1 m³ s⁻¹ per year is small relative to the mean flow (≈ 332 m³ s⁻¹) and, with a p‑value of 0.36, it is not statistically distinguishable from zero. Therefore, the record does **not provide evidence that the Potomac at Little Falls is getting drier** over the past four decades. Any apparent decrease could be due to natural variability rather than a systematic drying trend.\n\n## What this answer does not establish\n\n- These numbers are not in any tool result: 0.05.\n- The answer does not say which station or record the numbers come from.\n\n## Data\n\n- **usgs / USGS-01646500** · 1986-08-22 to 2026-08-20 (40.0 years) · licence US-PD · U.S. Geological Survey, National Water Information System (public domain)\n\n## Methods and citations\n\n1. **Flow-duration curve.** Empirical exceedance probabilities of daily flow (Weibull plotting positions); Q95 and Q10 read from the curve. _Vogel, R. M., & Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage., 120(4), 485-504._\n2. **GEV fitted by L-moments.** Annual maxima (calendar years) fitted to a Generalized Extreme Value distribution with L-moment estimators (Hosking 1990); return levels from the fitted quantile function. _Hosking, J. R. M. (1990). L-moments: analysis and estimation of distributions using linear combinations of order statistics. J. R. Stat. Soc. B, 52(1), 105-124._\n3. **Log-Pearson III (Bulletin 17C style).** Log-transformed annual maxima fitted to a Pearson type III distribution; station skew, frequency factors and analytical confidence limits after Bulletin 17C. _England, J. F. Jr. et al. (2018). Guidelines for determining flood flow frequency, Bulletin 17C. USGS Techniques and Methods 4-B5._\n4. **Mann-Kendall trend on annual means.** Non-parametric Mann-Kendall test with Sen's slope on the annual mean series. _Mann, H. B. (1945). Nonparametric tests against trend. Econometrica, 13, 245-259; Sen, P. K. (1968). J. Am. Stat. Assoc., 63, 1379-1389._\n5. **GEV (MLE, L-moment seeded) with bootstrap CI.** Maximum-likelihood GEV seeded from L-moments with the shape bounded to |k| <= 0.5; 90 % confidence bands from 1,000 bootstrap resamples of the annual maxima. _Coles, S. (2001). An Introduction to Statistical Modeling of Extreme Values. Springer._\n\n---\nProduced by aquascope 0.12.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-08-22 03:17 UTC. Tools called: find_stations, find_stations, find_stations, find_stations, analyze_station. Numbers come from the tool results; the model wrote the prose.",
+ "answer": "**Station used** – USGS 01646500 “Potomac River near Wash, DC (Little Falls Pump Sta)”.  \nRecord 1930‑03‑01 to 2026‑09‑20 (≈ 96 years of daily discharge).\n\n**Annual‑mean flow trend** (from the “Mann‑Kendall trend on annual means” computed in `analyze_station`):\n\n| Statistic | Value |\n|-----------|-------|\n| Sen’s slope (trend) | **+0.059 m³ s⁻¹ per year** |\n| Kendall τ | 0.0158 |\n| p‑value | 0.8222 |\n| Record length | 96 years |\n\n**Interpretation**  \n* The positive slope would imply a very small increase in mean discharge (≈ 0.06 m³ s⁻¹ yr⁻¹, or about 0.02 % yr⁻¹ of the long‑term mean of 321 m³ s⁻¹).  \n* The p‑value (0.82) is far above any conventional significance level (e.g., 0.05), and τ is essentially zero.  \n\n**Conclusion** – Statistically, there is **no significant trend** in the annual‑mean flow at Little Falls. The record does not show the river “getting drier”; if anything, the trend is a non‑significant slight increase.",
+ "markdown": "# Is the Potomac at Little Falls getting drier? Use the annual-mean trend.\n\n**Station used** – USGS 01646500 “Potomac River near Wash, DC (Little Falls Pump Sta)”.  \nRecord 1930‑03‑01 to 2026‑09‑20 (≈ 96 years of daily discharge).\n\n**Annual‑mean flow trend** (from the “Mann‑Kendall trend on annual means” computed in `analyze_station`):\n\n| Statistic | Value |\n|-----------|-------|\n| Sen’s slope (trend) | **+0.059 m³ s⁻¹ per year** |\n| Kendall τ | 0.0158 |\n| p‑value | 0.8222 |\n| Record length | 96 years |\n\n**Interpretation**  \n* The positive slope would imply a very small increase in mean discharge (≈ 0.06 m³ s⁻¹ yr⁻¹, or about 0.02 % yr⁻¹ of the long‑term mean of 321 m³ s⁻¹).  \n* The p‑value (0.82) is far above any conventional significance level (e.g., 0.05), and τ is essentially zero.  \n\n**Conclusion** – Statistically, there is **no significant trend** in the annual‑mean flow at Little Falls. The record does not show the river “getting drier”; if anything, the trend is a non‑significant slight increase.\n\n## Data\n\n- **usgs / USGS-01646500** · 1930-03-01 to 2026-09-20 (96.6 years) · licence US-PD · U.S. Geological Survey, National Water Information System (public domain)\n\n## Methods and citations\n\n1. **Flow-duration curve.** Empirical exceedance probabilities of daily flow (Weibull plotting positions); Q95 and Q10 read from the curve. _Vogel, R. M., & Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage., 120(4), 485-504._\n2. **GEV fitted by L-moments.** Annual maxima (calendar years) fitted to a Generalized Extreme Value distribution with L-moment estimators (Hosking 1990); return levels from the fitted quantile function. _Hosking, J. R. M. (1990). L-moments: analysis and estimation of distributions using linear combinations of order statistics. J. R. Stat. Soc. B, 52(1), 105-124._\n3. **Log-Pearson III (Bulletin 17C style).** Log-transformed annual maxima fitted to a Pearson type III distribution; station skew, frequency factors and analytical confidence limits after Bulletin 17C. _England, J. F. Jr. et al. (2018). Guidelines for determining flood flow frequency, Bulletin 17C. USGS Techniques and Methods 4-B5._\n4. **Mann-Kendall trend on annual means.** Non-parametric Mann-Kendall test with Sen's slope on the annual mean series. _Mann, H. B. (1945). Nonparametric tests against trend. Econometrica, 13, 245-259; Sen, P. K. (1968). J. Am. Stat. Assoc., 63, 1379-1389._\n\n---\nProduced by aquascope 0.18.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-09-21 10:55 UTC. Tools called: find_stations, assess_site, assess_site, analyze_station. Numbers come from the tool results; the model wrote the prose.",
  "tool_calls": [
   {
    "name": "find_stations",
@@ -13,48 +13,31 @@
     "variable": "discharge"
    },
    "ok": true,
-   "summary": "{\"n_catalog\": 45919, \"n_returned\": 0, \"limit\": 5, \"stations\": []}"
+   "summary": "{\"n_catalog\": 67912, \"n_returned\": 5, \"limit\": 5, \"stations\": [{\"source\": \"usgs\", \"station_id\": \"USGS-01646500\", \"name\": \"POTOMAC RIVER NEAR WASH, DC LITTLE FAL"
   },
   {
-   "name": "find_stations",
+   "name": "assess_site",
    "arguments": {
-    "limit": 10,
-    "near": [
-     38.9,
-     -77.03
-    ],
-    "variable": "discharge"
+    "lat": 38.949777777777776,
+    "lon": -77.12763888888888,
+    "problem": "trend"
    },
-   "ok": true,
-   "summary": "{\"n_catalog\": 45919, \"n_returned\": 10, \"limit\": 10, \"stations\": [{\"source\": \"usgs\", \"station_id\": \"USGS-01649000\", \"name\": \"ROCK CREEK AT Q STREET, WASHINGTON  "
+   "ok": false,
+   "summary": "{\"error\": \"unknown problem 'trend'; one of ['climate_change', 'drought', 'flood_risk', 'groundwater_decline', 'irrigation', 'supply_reliability', 'ungauged_flow"
   },
   {
-   "name": "find_stations",
+   "name": "assess_site",
    "arguments": {
-    "limit": 5,
-    "query": "Potomac Little Falls",
-    "variable": "discharge"
+    "lat": 38.949777777777776,
+    "lon": -77.12763888888888,
+    "problem": "climate_change"
    },
    "ok": true,
-   "summary": "{\"n_catalog\": 45919, \"n_returned\": 0, \"limit\": 5, \"stations\": []}"
-  },
-  {
-   "name": "find_stations",
-   "arguments": {
-    "limit": 10,
-    "near": [
-     38.927,
-     -77.131
-    ],
-    "variable": "discharge"
-   },
-   "ok": true,
-   "summary": "{\"n_catalog\": 45919, \"n_returned\": 10, \"limit\": 10, \"stations\": [{\"source\": \"usgs\", \"station_id\": \"USGS-01646500\", \"name\": \"POTOMAC RIVER NEAR WASH, DC LITTLE F"
+   "summary": "{\"point\": {\"lat\": 38.94978, \"lon\": -77.12764}, \"stations\": [{\"source\": \"usgs\", \"station_id\": \"USGS-01646500\", \"name\": \"POTOMAC RIVER NEAR WASH, DC LITTLE FALLS "
   },
   {
    "name": "analyze_station",
    "arguments": {
-    "bootstrap_ci": true,
     "source": "usgs",
     "station_id": "USGS-01646500",
     "variable": "discharge"
@@ -66,7 +49,7 @@
  "data_used": [
   {
    "label": "usgs / USGS-01646500",
-   "period": "1986-08-22 to 2026-08-20 (40.0 years)",
+   "period": "1930-03-01 to 2026-09-20 (96.6 years)",
    "license": "US-PD",
    "attribution": "U.S. Geological Survey, National Water Information System (public domain)"
   }
@@ -91,11 +74,6 @@
    "name": "Mann-Kendall trend on annual means",
    "text": "Non-parametric Mann-Kendall test with Sen's slope on the annual mean series.",
    "citation": "Mann, H. B. (1945). Nonparametric tests against trend. Econometrica, 13, 245-259; Sen, P. K. (1968). J. Am. Stat. Assoc., 63, 1379-1389."
-  },
-  {
-   "name": "GEV (MLE, L-moment seeded) with bootstrap CI",
-   "text": "Maximum-likelihood GEV seeded from L-moments with the shape bounded to |k| <= 0.5; 90 % confidence bands from 1,000 bootstrap resamples of the annual maxima.",
-   "citation": "Coles, S. (2001). An Introduction to Statistical Modeling of Extreme Values. Springer."
   }
  ],
  "checks": [
@@ -106,8 +84,13 @@
   },
   {
    "name": "numbers_come_from_tools",
-   "passed": false,
-   "detail": "These numbers are not in any tool result: 0.05."
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "years_traceable",
+   "passed": true,
+   "detail": ""
   },
   {
    "name": "trend_matches_the_test",
@@ -121,15 +104,15 @@
   },
   {
    "name": "record_is_named",
-   "passed": false,
-   "detail": "The answer does not say which station or record the numbers come from."
+   "passed": true,
+   "detail": ""
   }
  ],
- "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"Is the Potomac at Little Falls getting drier? Use the annual-mean trend.\"\nquestion: \"Is the Potomac at Little Falls getting drier? Use the annual-mean trend.\"\ncreated: \"2026-08-22T03:17:16+00:00\"\naquascope_version: \"0.12.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"find_stations\"\n    arguments:\n      limit: 5\n      query: \"Potomac Little Falls\"\n      variable: \"discharge\"\n  - tool: \"find_stations\"\n    arguments:\n      limit: 10\n      near: [38.9, -77.03]\n      variable: \"discharge\"\n  - tool: \"find_stations\"\n    arguments:\n      limit: 5\n      query: \"Potomac Little Falls\"\n      variable: \"discharge\"\n  - tool: \"find_stations\"\n    arguments:\n      limit: 10\n      near: [38.927, -77.131]\n      variable: \"discharge\"\n  - tool: \"analyze_station\"\n    arguments:\n      bootstrap_ci: true\n      source: \"usgs\"\n      station_id: \"USGS-01646500\"\n      variable: \"discharge\"\n",
- "steps": 6,
+ "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"Is the Potomac at Little Falls getting drier? Use the annual-mean trend.\"\nquestion: \"Is the Potomac at Little Falls getting drier? Use the annual-mean trend.\"\ncreated: \"2026-09-21T10:55:19+00:00\"\naquascope_version: \"0.18.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"find_stations\"\n    arguments:\n      limit: 5\n      query: \"Potomac Little Falls\"\n      variable: \"discharge\"\n  - tool: \"assess_site\"\n    arguments:\n      lat: 38.949777777777776\n      lon: -77.12763888888888\n      problem: \"climate_change\"\n  - tool: \"analyze_station\"\n    arguments:\n      source: \"usgs\"\n      station_id: \"USGS-01646500\"\n      variable: \"discharge\"\n",
+ "steps": 5,
  "model": "openai/gpt-oss-120b",
  "provider": "groq",
- "recorded": "2026-08-22T03:17:16+00:00",
- "aquascope_version": "0.12.0",
+ "recorded": "2026-09-21T10:55:19+00:00",
+ "aquascope_version": "0.18.0",
  "error": null
 }

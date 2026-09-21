@@ -2,38 +2,40 @@
  "id": "taipei-london-climate",
  "question": "How wet is Taipei compared with London, and what is the aridity class of each?",
  "shows": "Two points with no gauge: ERA5 rainfall, FAO-56 ET0 and the aridity index.",
- "answer": "**Wetness (mean annual precipitation)**  \n* **Taipei (25.033 N, 121.565 E)** – 733 mm yr⁻¹ (ERA5, 10‑yr average, 2016‑2026)  \n* **London (51.507 N, ‑0.128 E)** – 734 mm yr⁻¹ (ERA5, 10‑yr average, 2016‑2026)\n\nThe two locations receive virtually the same amount of rain on an annual basis (difference ≈ 1 mm yr⁻¹, well within the variability of the 10‑year period).\n\n**Aridity index (AI = P / ET₀)**  \n* **Taipei** – AI = 0.983, **aridity class = humid**  \n* **London** – AI = 0.983, **aridity class = humid**\n\nBoth AI values are > 0.65, which places the sites in the **humid** category under the UNEP aridity‑class scheme (hyper‑arid < 0.05, arid < 0.2, semi‑arid < 0.5, dry sub‑humid < 0.65, humid ≥ 0.65).\n\n**Take‑away**  \nAccording to the ERA5‑derived climate variables (10‑year means), Taipei and London are equally “wet” and share the same humid aridity classification. No other differences in precipitation magnitude or dryness are evident from the available data.",
- "markdown": "# How wet is Taipei compared with London, and what is the aridity class of each?\n\n**Wetness (mean annual precipitation)**  \n* **Taipei (25.033 N, 121.565 E)** – 733 mm yr⁻¹ (ERA5, 10‑yr average, 2016‑2026)  \n* **London (51.507 N, ‑0.128 E)** – 734 mm yr⁻¹ (ERA5, 10‑yr average, 2016‑2026)\n\nThe two locations receive virtually the same amount of rain on an annual basis (difference ≈ 1 mm yr⁻¹, well within the variability of the 10‑year period).\n\n**Aridity index (AI = P / ET₀)**  \n* **Taipei** – AI = 0.983, **aridity class = humid**  \n* **London** – AI = 0.983, **aridity class = humid**\n\nBoth AI values are > 0.65, which places the sites in the **humid** category under the UNEP aridity‑class scheme (hyper‑arid < 0.05, arid < 0.2, semi‑arid < 0.5, dry sub‑humid < 0.65, humid ≥ 0.65).\n\n**Take‑away**  \nAccording to the ERA5‑derived climate variables (10‑year means), Taipei and London are equally “wet” and share the same humid aridity classification. No other differences in precipitation magnitude or dryness are evident from the available data.\n\n## What this answer does not establish\n\n- These numbers are not in any tool result: -1.0, -1.0, -1.0.\n\n## Data\n\n- **point 25.033, 121.5654** · 2016-08-15 to 2026-08-15 · licence CC-BY-4.0 · Open-Meteo.com (CC BY 4.0); ERA5 and GloFAS: Copernicus Climate Change and Emergency Management Services.\n- **point 51.5074, -0.1278** · 2016-08-15 to 2026-08-15 · licence CC-BY-4.0 · Open-Meteo.com (CC BY 4.0); ERA5 and GloFAS: Copernicus Climate Change and Emergency Management Services.\n\n## Methods and citations\n\n1. **ERA5 reanalysis via Open-Meteo.** Daily precipitation, 2 m temperature and FAO-56 reference evapotranspiration for the grid cell (about 9 km) containing the point, from ECMWF's ERA5 reanalysis served by Open-Meteo. _Hersbach, H. et al. (2020). The ERA5 global reanalysis. Q. J. R. Meteorol. Soc., 146, 1999-2049; Open-Meteo.com (CC BY 4.0)._\n2. **FAO-56 reference evapotranspiration and aridity index.** ET0 after Allen et al. (1998); aridity index = mean annual precipitation / mean annual ET0 (UNEP classes: hyper-arid < 0.05, arid < 0.2, semi-arid < 0.5, dry sub-humid < 0.65, humid otherwise). _Allen, R. G., Pereira, L. S., Raes, D., & Smith, M. (1998). Crop evapotranspiration. FAO Irrigation and Drainage Paper 56._\n3. **GloFAS modelled discharge via Open-Meteo.** Daily river discharge simulated by the Global Flood Awareness System (LISFLOOD, ~5 km grid) for the cell containing the point. Modelled, not observed: use it for context, not for design values. _Harrigan, S. et al. (2020). GloFAS-ERA5 operational global river discharge reanalysis 1979-present. Earth Syst. Sci. Data, 12, 2043-2060._\n4. **GEV fitted by L-moments.** Annual maxima (calendar years) fitted to a Generalized Extreme Value distribution with L-moment estimators (Hosking 1990); return levels from the fitted quantile function. _Hosking, J. R. M. (1990). L-moments: analysis and estimation of distributions using linear combinations of order statistics. J. R. Stat. Soc. B, 52(1), 105-124._\n5. **Log-Pearson III (Bulletin 17C style).** Log-transformed annual maxima fitted to a Pearson type III distribution; station skew, frequency factors and analytical confidence limits after Bulletin 17C. _England, J. F. Jr. et al. (2018). Guidelines for determining flood flow frequency, Bulletin 17C. USGS Techniques and Methods 4-B5._\n\n---\nProduced by aquascope 0.12.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-08-22 04:13 UTC. Tools called: anywhere, anywhere. Numbers come from the tool results; the model wrote the prose.",
+ "answer": "**Wetness (mean annual precipitation)**  \n\n| City | Mean annual precipitation (mm yr⁻¹) | Source |\n|------|------------------------------------|--------|\n| Taipei (25.033 ° N, 121.565 E) | **677 mm yr⁻¹** | ERA5 reanalysis via Open‑Meteo (30 yr record) |\n| London (51.507 ° N, ‑0.128 E) | **677 mm yr⁻¹** | ERA5 reanalysis via Open‑Meteo (30 yr record) |\n\nBoth locations receive essentially the same average amount of rain – about **677 mm per year** – according to the 30‑year ERA5 climate series used by AquaScope.\n\n**Aridity index & class**  \n\nThe aridity index (AI) is defined as *mean annual precipitation ÷ mean annual reference evapotranspiration (ET₀)*. UNEP classifies AI < 0.05 as hyper‑arid, < 0.2 arid, < 0.5 semi‑arid, < 0.65 dry sub‑humid, and **≥ 0.65 humid**.\n\n| City | Mean annual ET₀ (mm yr⁻¹) | Aridity index (AI) | UNEP aridity class |\n|------|--------------------------|--------------------|--------------------|\n| Taipei | 718 mm yr⁻¹ | 0.94 | **Humid** |\n| London | 718 mm yr⁻¹ | 0.94 | **Humid** |\n\n**Interpretation**\n\n- **Wetness:** Taipei and London are statistically indistinguishable in terms of average yearly rainfall (≈ 677 mm).  \n- **Aridity class:** Both have AI ≈ 0.94, placing them firmly in the **humid** category (AI ≥ 0.65).  \n\nThus, according to the ERA5 climate data accessed via AquaScope, Taipei is not drier or wetter than London on average; both experience a humid climate.",
+ "markdown": "# How wet is Taipei compared with London, and what is the aridity class of each?\n\n**Wetness (mean annual precipitation)**  \n\n| City | Mean annual precipitation (mm yr⁻¹) | Source |\n|------|------------------------------------|--------|\n| Taipei (25.033 ° N, 121.565 E) | **677 mm yr⁻¹** | ERA5 reanalysis via Open‑Meteo (30 yr record) |\n| London (51.507 ° N, ‑0.128 E) | **677 mm yr⁻¹** | ERA5 reanalysis via Open‑Meteo (30 yr record) |\n\nBoth locations receive essentially the same average amount of rain – about **677 mm per year** – according to the 30‑year ERA5 climate series used by AquaScope.\n\n**Aridity index & class**  \n\nThe aridity index (AI) is defined as *mean annual precipitation ÷ mean annual reference evapotranspiration (ET₀)*. UNEP classifies AI < 0.05 as hyper‑arid, < 0.2 arid, < 0.5 semi‑arid, < 0.65 dry sub‑humid, and **≥ 0.65 humid**.\n\n| City | Mean annual ET₀ (mm yr⁻¹) | Aridity index (AI) | UNEP aridity class |\n|------|--------------------------|--------------------|--------------------|\n| Taipei | 718 mm yr⁻¹ | 0.94 | **Humid** |\n| London | 718 mm yr⁻¹ | 0.94 | **Humid** |\n\n**Interpretation**\n\n- **Wetness:** Taipei and London are statistically indistinguishable in terms of average yearly rainfall (≈ 677 mm).  \n- **Aridity class:** Both have AI ≈ 0.94, placing them firmly in the **humid** category (AI ≥ 0.65).  \n\nThus, according to the ERA5 climate data accessed via AquaScope, Taipei is not drier or wetter than London on average; both experience a humid climate.\n\n## Data\n\n- **point 25.033, 121.5654** · 1996-09-14 to 2026-09-14 · licence CC-BY-4.0 · Open-Meteo.com (CC BY 4.0); ERA5 and GloFAS: Copernicus Climate Change and Emergency Management Services.\n- **point 51.5074, -0.1278** · 1996-09-14 to 2026-09-14 · licence CC-BY-4.0 · Open-Meteo.com (CC BY 4.0); ERA5 and GloFAS: Copernicus Climate Change and Emergency Management Services.\n\n## Methods and citations\n\n1. **ERA5 reanalysis via Open-Meteo.** Daily precipitation, 2 m temperature and FAO-56 reference evapotranspiration for the grid cell (about 9 km) containing the point, from ECMWF's ERA5 reanalysis served by Open-Meteo. _Hersbach, H. et al. (2020). The ERA5 global reanalysis. Q. J. R. Meteorol. Soc., 146, 1999-2049; Open-Meteo.com (CC BY 4.0)._\n2. **FAO-56 reference evapotranspiration and aridity index.** ET0 after Allen et al. (1998); aridity index = mean annual precipitation / mean annual ET0 (UNEP classes: hyper-arid < 0.05, arid < 0.2, semi-arid < 0.5, dry sub-humid < 0.65, humid otherwise). _Allen, R. G., Pereira, L. S., Raes, D., & Smith, M. (1998). Crop evapotranspiration. FAO Irrigation and Drainage Paper 56._\n3. **GloFAS modelled discharge via Open-Meteo.** Daily river discharge simulated by the Global Flood Awareness System (LISFLOOD, ~5 km grid) for the cell containing the point. Modelled, not observed: use it for context, not for design values. _Harrigan, S. et al. (2020). GloFAS-ERA5 operational global river discharge reanalysis 1979-present. Earth Syst. Sci. Data, 12, 2043-2060._\n4. **GEV fitted by L-moments.** Annual maxima (calendar years) fitted to a Generalized Extreme Value distribution with L-moment estimators (Hosking 1990); return levels from the fitted quantile function. _Hosking, J. R. M. (1990). L-moments: analysis and estimation of distributions using linear combinations of order statistics. J. R. Stat. Soc. B, 52(1), 105-124._\n5. **Log-Pearson III (Bulletin 17C style).** Log-transformed annual maxima fitted to a Pearson type III distribution; station skew, frequency factors and analytical confidence limits after Bulletin 17C. _England, J. F. Jr. et al. (2018). Guidelines for determining flood flow frequency, Bulletin 17C. USGS Techniques and Methods 4-B5._\n\n---\nProduced by aquascope 0.18.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-09-21 10:57 UTC. Tools called: anywhere, anywhere. Numbers come from the tool results; the model wrote the prose.",
  "tool_calls": [
   {
    "name": "anywhere",
    "arguments": {
     "lat": 25.033,
-    "lon": 121.5654
+    "lon": 121.5654,
+    "years": 30
    },
    "ok": true,
-   "summary": "{\"latitude\": 25.033, \"longitude\": 121.5654, \"start\": \"2016-08-15\", \"end\": \"2026-08-15\", \"years\": 10, \"methods\": [{\"name\": \"ERA5 reanalysis via Open-Meteo\", \"tex"
+   "summary": "{\"latitude\": 25.033, \"longitude\": 121.5654, \"start\": \"1996-09-14\", \"end\": \"2026-09-14\", \"years\": 30, \"methods\": [{\"name\": \"ERA5 reanalysis via Open-Meteo\", \"tex"
   },
   {
    "name": "anywhere",
    "arguments": {
     "lat": 51.5074,
-    "lon": -0.1278
+    "lon": -0.1278,
+    "years": 30
    },
    "ok": true,
-   "summary": "{\"latitude\": 51.5074, \"longitude\": -0.1278, \"start\": \"2016-08-15\", \"end\": \"2026-08-15\", \"years\": 10, \"methods\": [{\"name\": \"ERA5 reanalysis via Open-Meteo\", \"tex"
+   "summary": "{\"latitude\": 51.5074, \"longitude\": -0.1278, \"start\": \"1996-09-14\", \"end\": \"2026-09-14\", \"years\": 30, \"methods\": [{\"name\": \"ERA5 reanalysis via Open-Meteo\", \"tex"
   }
  ],
  "data_used": [
   {
    "label": "point 25.033, 121.5654",
-   "period": "2016-08-15 to 2026-08-15",
+   "period": "1996-09-14 to 2026-09-14",
    "license": "CC-BY-4.0",
    "attribution": "Open-Meteo.com (CC BY 4.0); ERA5 and GloFAS: Copernicus Climate Change and Emergency Management Services."
   },
   {
    "label": "point 51.5074, -0.1278",
-   "period": "2016-08-15 to 2026-08-15",
+   "period": "1996-09-14 to 2026-09-14",
    "license": "CC-BY-4.0",
    "attribution": "Open-Meteo.com (CC BY 4.0); ERA5 and GloFAS: Copernicus Climate Change and Emergency Management Services."
   }
@@ -73,15 +75,25 @@
   },
   {
    "name": "numbers_come_from_tools",
-   "passed": false,
-   "detail": "These numbers are not in any tool result: -1.0, -1.0, -1.0."
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "years_traceable",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "record_is_named",
+   "passed": true,
+   "detail": ""
   }
  ],
- "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"How wet is Taipei compared with London, and what is the aridity class of each?\"\nquestion: \"How wet is Taipei compared with London, and what is the aridity class of each?\"\ncreated: \"2026-08-22T04:13:42+00:00\"\naquascope_version: \"0.12.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"anywhere\"\n    arguments:\n      lat: 25.033\n      lon: 121.5654\n  - tool: \"anywhere\"\n    arguments:\n      lat: 51.5074\n      lon: -0.1278\n",
+ "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"How wet is Taipei compared with London, and what is the aridity class of each?\"\nquestion: \"How wet is Taipei compared with London, and what is the aridity class of each?\"\ncreated: \"2026-09-21T10:57:15+00:00\"\naquascope_version: \"0.18.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"anywhere\"\n    arguments:\n      lat: 25.033\n      lon: 121.5654\n      years: 30\n  - tool: \"anywhere\"\n    arguments:\n      lat: 51.5074\n      lon: -0.1278\n      years: 30\n",
  "steps": 3,
  "model": "openai/gpt-oss-120b",
  "provider": "groq",
- "recorded": "2026-08-22T04:13:42+00:00",
- "aquascope_version": "0.12.0",
+ "recorded": "2026-09-21T10:57:15+00:00",
+ "aquascope_version": "0.18.0",
  "error": null
 }

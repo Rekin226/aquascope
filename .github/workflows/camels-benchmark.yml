@@ -7,9 +7,9 @@ name: CAMELS Benchmark
 # Markdown/HTML renderings, all uploaded as one artifact. The exit code is
 # deliberately smoke-only: the run hard-fails through the Pydantic models if
 # any result no longer validates, while the recorded numbers live in the
-# artifact for inspection. --strict is not asserted here because the four
-# known standing misses would red-flag a scheduled job from its first night;
-# it comes back with the PR that resolves them (or adds a committed baseline).
+# artifact for inspection. --strict is asserted here against the committed
+# known_misses baseline: known standing misses pass, while any unexpected
+# regression or integrity defect fails the nightly.
 # Timings are recorded in results.json but never asserted on a shared runner.
 
 on:
@@ -36,7 +36,7 @@ jobs:
         run: pip install -e ".[benchmarks]"
 
       - name: Run the CAMELS benchmark
-        run: python -m benchmarks.camels_benchmark --output-dir benchmark-output
+        run: python -m benchmarks.camels_benchmark --output-dir benchmark-output --strict
 
       - uses: actions/upload-artifact@v7
         if: always()

@@ -216,7 +216,13 @@ def _fit_gev_mle(peak_va: np.ndarray) -> tuple[dict[int, float], bool]:
     """
     from scipy.stats import genextreme
 
-    shape, loc, scale = genextreme.fit(peak_va)
+    try:
+        from aquascope.hydrology.flood_frequency import _fit_gev_lmoments_params
+
+        lmom_shape, lmom_loc, lmom_scale = _fit_gev_lmoments_params(peak_va)
+        shape, loc, scale = genextreme.fit(peak_va, lmom_shape, loc=lmom_loc, scale=lmom_scale)
+    except Exception:
+        shape, loc, scale = genextreme.fit(peak_va)
 
     stable = bool(abs(shape) <= 0.5 and scale > 0)
     if not stable:

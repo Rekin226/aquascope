@@ -27,10 +27,14 @@ from aquascope.study import Step, Study, run_study
 from aquascope.trend_series import mark_reported_trend
 
 CASES = [
-    ("fish-river-us", "usgs", "USGS-01013500", "Fish River, Maine", 47.0007, -68.5194),
-    ("kingston-uk", "uk_ea", "8496ce69-482c-406a-a2f0-ac418ef8f099", "Thames at Kingston, England", 51.415, -0.308),
-    ("seine-fr", "hubeau_hydrometrie", "F700000103", "Seine at Paris-Austerlitz, France", 48.846, 2.366),
+    ("fish-river-us", "usgs", "USGS-01013500", "Fish River, Maine", 47.2375, -68.5827777777778),
+    ("kingston-uk", "uk_ea", "8496ce69-482c-406a-a2f0-ac418ef8f099",
+     "Thames at Kingston, England", 51.415482, -0.307629),
+    ("seine-fr", "hubeau_hydrometrie", "F700000103", "Seine at Paris-Austerlitz, France", 48.84468962, 2.365510635),
 ]
+# Positions checked against stations.parquet at this immutable archive revision.
+# Observations came from the separately retained Explorer CSVs, not this catalog.
+POSITION_CATALOG_REVISION = "f1f2fa19996aacb0abf82349b28ac5de16241fc7"
 
 
 def generate(input_dir: Path, out: Path) -> list[dict]:
@@ -93,6 +97,7 @@ def generate(input_dir: Path, out: Path) -> list[dict]:
         (folder / "report.html").write_text(report_html(ws), encoding="utf-8")
         (folder / "observations.csv").write_text(raw, encoding="utf-8")
         provenance = {"source": source, "station_id": station, "agency": SOURCES[source].agency,
+                      "latitude": lat, "longitude": lon, "position_catalog_revision": POSITION_CATALOG_REVISION,
                       "license": SOURCES[source].license, "agency_homepage": SOURCES[source].homepage,
                       "csv_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                       "analysis_snapshot": payload["data_snapshot"], "start": payload["start"], "end": payload["end"],

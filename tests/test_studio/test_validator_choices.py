@@ -78,7 +78,8 @@ def test_a_spread_gate_written_as_one_comma_string_without_a_value_still_evaluat
     gate = {"check": "spread_within", "path": "ffa.fits.gev_lmoments.q, ffa.fits.lp3.q", "return_period": 100}
     out = evaluate([gate], payload)[0]
     assert out["passed"] and "spread 5%" in out["detail"] and "25% allowed" in out["detail"]
-    assert catalogue.get("flood_frequency").gates[2]["paths"] == ["ffa.fits.gev_lmoments.q", "ffa.fits.lp3.q"]
+    declared = next(g for g in catalogue.get("flood_frequency").gates if g["check"] == "spread_within")
+    assert declared["paths"] == ["ffa.fits.gev_lmoments.q", "ffa.fits.lp3.q"]
 
 
 def test_a_cross_check_gate_without_a_reference_is_pointed_at_the_flood_step_or_dropped():

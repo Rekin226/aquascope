@@ -1,0 +1,17 @@
+{
+  "source": "hubeau_hydrometrie",
+  "station_id": "F700000103",
+  "agency": "Eaufrance / SCHAPI (Hub'Eau)",
+  "latitude": 48.84468962,
+  "longitude": 2.365510635,
+  "position_catalog_revision": "f1f2fa19996aacb0abf82349b28ac5de16241fc7",
+  "license": "etalab-2.0",
+  "agency_homepage": "https://hubeau.eaufrance.fr/page/api-hydrometrie",
+  "csv_sha256": "06735536efee67994b0c8f1941aad8c5cf2b721bc4a3cef0788e2df175be9f54",
+  "analysis_snapshot": "sha256:d4d7063849d42170f8436229fdafe83a286f01c37816bd6ab10bdcbb19393e58",
+  "start": "2006-01-28",
+  "end": "2026-09-21",
+  "n": 7542,
+  "review_status": "independent domain review pending",
+  "software_revision": "efe3a0e9f8469011f2f6ad9a8c87967dbf22072a"
+}

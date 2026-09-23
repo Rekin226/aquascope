@@ -1,8 +1,146 @@
 {
- "generated": "2026-09-14T23:33:14+00:00",
- "aquascope_version": "0.16.0",
+ "generated": "2026-09-23T03:43:14+00:00",
+ "aquascope_version": "0.18.0",
  "note": "Recorded studies: the prose was written once by the model named in each entry, on the date given. The plan re-runs live in the page with no key; the recorded numbers are the run's.",
  "studies": [
+  {
+   "id": "reference-fish-river-us",
+   "title": "Daily-mean flood screening: Fish River, Maine",
+   "kind": "flood_risk",
+   "site": {
+    "lat": 47.2375,
+    "lon": -68.5827777777778,
+    "name": "Fish River, Maine"
+   },
+   "shows": "Observed snapshot with estimator-specific uncertainty. Independent domain review pending.",
+   "status": "done",
+   "model": null,
+   "provider": null,
+   "date": "2026-09-23",
+   "recorded": "2026-09-23T03:42:55+00:00",
+   "usd": 0.0,
+   "seconds": null,
+   "steps": 1,
+   "gates": {
+    "passed": 5,
+    "total": 5
+   },
+   "checks": {
+    "passed": 0,
+    "total": 0
+   },
+   "headline": "Screen the 100-year daily-mean flood at Fish River, Maine; identify estimator uncertainty and limitations: 100-year return level, GEV (L-moments) 463.9 m3/s (established).",
+   "files": [
+    "workspace.json",
+    "report.md",
+    "study.yaml",
+    "figures/s1_frequency_curve.png",
+    "figures/s1_annual_maxima.png",
+    "figures/s1_trend.png",
+    "complete.aqstudy.json",
+    "report.html",
+    "observations.csv",
+    "provenance.json"
+   ],
+   "figures": [
+    "s1_frequency_curve.png",
+    "s1_annual_maxima.png",
+    "s1_trend.png"
+   ],
+   "upload": null
+  },
+  {
+   "id": "reference-kingston-uk",
+   "title": "Daily-mean flood screening: Thames at Kingston, England",
+   "kind": "flood_risk",
+   "site": {
+    "lat": 51.415482,
+    "lon": -0.307629,
+    "name": "Thames at Kingston, England"
+   },
+   "shows": "Observed snapshot with estimator-specific uncertainty. Independent domain review pending.",
+   "status": "done",
+   "model": null,
+   "provider": null,
+   "date": "2026-09-23",
+   "recorded": "2026-09-23T03:43:04+00:00",
+   "usd": 0.0,
+   "seconds": null,
+   "steps": 1,
+   "gates": {
+    "passed": 5,
+    "total": 5
+   },
+   "checks": {
+    "passed": 0,
+    "total": 0
+   },
+   "headline": "Screen the 100-year daily-mean flood at Thames at Kingston, England; identify estimator uncertainty and limitations: 100-year return level, GEV (L-moments) 652.5 m3/s (established).",
+   "files": [
+    "workspace.json",
+    "report.md",
+    "study.yaml",
+    "figures/s1_frequency_curve.png",
+    "figures/s1_annual_maxima.png",
+    "figures/s1_trend.png",
+    "complete.aqstudy.json",
+    "report.html",
+    "observations.csv",
+    "provenance.json"
+   ],
+   "figures": [
+    "s1_frequency_curve.png",
+    "s1_annual_maxima.png",
+    "s1_trend.png"
+   ],
+   "upload": null
+  },
+  {
+   "id": "reference-seine-fr",
+   "title": "Daily-mean flood screening: Seine at Paris-Austerlitz, France",
+   "kind": "flood_risk",
+   "site": {
+    "lat": 48.84468962,
+    "lon": 2.365510635,
+    "name": "Seine at Paris-Austerlitz, France"
+   },
+   "shows": "Observed snapshot with estimator-specific uncertainty. Independent domain review pending.",
+   "status": "done",
+   "model": null,
+   "provider": null,
+   "date": "2026-09-23",
+   "recorded": "2026-09-23T03:43:14+00:00",
+   "usd": 0.0,
+   "seconds": null,
+   "steps": 1,
+   "gates": {
+    "passed": 4,
+    "total": 5
+   },
+   "checks": {
+    "passed": 0,
+    "total": 0
+   },
+   "headline": "Screen the 100-year daily-mean flood at Seine at Paris-Austerlitz, France; identify estimator uncertainty and limitations: 100-year return level, GEV (L-moments) 1951 m3/s (not established).",
+   "files": [
+    "workspace.json",
+    "report.md",
+    "study.yaml",
+    "figures/s1_frequency_curve.png",
+    "figures/s1_annual_maxima.png",
+    "figures/s1_trend.png",
+    "complete.aqstudy.json",
+    "report.html",
+    "observations.csv",
+    "provenance.json"
+   ],
+   "figures": [
+    "s1_frequency_curve.png",
+    "s1_annual_maxima.png",
+    "s1_trend.png"
+   ],
+   "upload": null
+  },
   {
    "id": "bamako-ungauged",
    "title": "Flow to expect in the Niger at Bamako",

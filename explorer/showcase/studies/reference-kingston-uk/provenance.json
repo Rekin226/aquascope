@@ -1,0 +1,17 @@
+{
+  "source": "uk_ea",
+  "station_id": "8496ce69-482c-406a-a2f0-ac418ef8f099",
+  "agency": "Environment Agency",
+  "latitude": 51.415482,
+  "longitude": -0.307629,
+  "position_catalog_revision": "f1f2fa19996aacb0abf82349b28ac5de16241fc7",
+  "license": "OGL-UK-3.0",
+  "agency_homepage": "https://environment.data.gov.uk/hydrology/",
+  "csv_sha256": "9bb306f0fe804576bc5591c8f79727dfe0a5078a9c86c2592efb89bdc7b13957",
+  "analysis_snapshot": "sha256:e3773df04c573267b9e8f3f39933c42cbd29a293770226bb02f85963523909ec",
+  "start": "1883-10-01",
+  "end": "2026-09-09",
+  "n": 51947,
+  "review_status": "independent domain review pending",
+  "software_revision": "efe3a0e9f8469011f2f6ad9a8c87967dbf22072a"
+}

@@ -1,0 +1,93 @@
+{
+ "id": "reference-seine-fr",
+ "title": "Daily-mean flood screening: Seine at Paris-Austerlitz, France",
+ "kind": "flood_risk",
+ "shows": "Observed snapshot with estimator-specific uncertainty. Independent domain review pending.",
+ "site": {
+  "lat": 48.84468962,
+  "lon": 2.365510635,
+  "name": "Seine at Paris-Austerlitz, France"
+ },
+ "problem": "Screen the 100-year daily-mean flood at Seine at Paris-Austerlitz, France; identify estimator uncertainty and limitations.",
+ "intake": {
+  "return_period": 100
+ },
+ "upload": null,
+ "status": "done",
+ "declined_reason": null,
+ "error": null,
+ "model": null,
+ "provider": null,
+ "recorded": "2026-09-23T03:43:14+00:00",
+ "seconds": null,
+ "tokens": {
+  "prompt": 0,
+  "completion": 0,
+  "calls": 0,
+  "by_role": {},
+  "total": 0
+ },
+ "usd": 0.0,
+ "usd_per_mtoken": [
+  3.0,
+  15.0
+ ],
+ "playbook": "flood_risk",
+ "branch": null,
+ "plan_author": null,
+ "steps": 1,
+ "gates": {
+  "passed": 4,
+  "total": 5
+ },
+ "checks": {
+  "passed": 0,
+  "total": 0
+ },
+ "replans": 0,
+ "stop_reason": null,
+ "headline": "Screen the 100-year daily-mean flood at Seine at Paris-Austerlitz, France; identify estimator uncertainty and limitations: 100-year return level, GEV (L-moments) 1951 m3/s (not established).",
+ "not_established": [
+  "Step s1, gate max_return_period_factor: T = 100 years against a cap of about 60 years (3 times 20 years of record): beyond the cap, an extrapolation"
+ ],
+ "figures": [
+  {
+   "name": "s1_frequency_curve.png",
+   "id": "fig-s1-frequency_curve",
+   "step": "s1",
+   "caption": "Return levels of annual maximum discharge at Seine at Paris-Austerlitz, France (hubeau_hydrometrie F700000103): GEV (L-moments), Log-Pearson III, GEV (MLE, bootstrap interval) fits with the GEV bootstrap 90 % band, and the observed annual maxima at their Weibull plotting positions.",
+   "bytes": 93149
+  },
+  {
+   "name": "s1_annual_maxima.png",
+   "id": "fig-s1-annual_maxima",
+   "step": "s1",
+   "caption": "Annual maximum discharge at Seine at Paris-Austerlitz, France (hubeau_hydrometrie F700000103), 20 years (2006 to 2025).",
+   "bytes": 54816
+  },
+  {
+   "name": "s1_trend.png",
+   "id": "fig-s1-trend",
+   "step": "s1",
+   "caption": "Annual maximum discharge at Seine at Paris-Austerlitz, France (hubeau_hydrometrie F700000103) with the Sen slope line; the Mann-Kendall test on the annual maxima finds no trend (p = 0.347, 20 years).",
+   "bytes": 80226
+  }
+ ],
+ "files": [
+  "workspace.json",
+  "report.md",
+  "study.yaml",
+  "figures/s1_frequency_curve.png",
+  "figures/s1_annual_maxima.png",
+  "figures/s1_trend.png",
+  "complete.aqstudy.json",
+  "report.html",
+  "observations.csv",
+  "provenance.json"
+ ],
+ "trimmed": [],
+ "aquascope_version": "0.18.0",
+ "review_status": "independent domain review pending",
+ "input_sha256": "06735536efee67994b0c8f1941aad8c5cf2b721bc4a3cef0788e2df175be9f54",
+ "software_revision": "efe3a0e9f8469011f2f6ad9a8c87967dbf22072a"
+}

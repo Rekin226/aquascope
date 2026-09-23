@@ -50,3 +50,34 @@ River observations were reduced to 18,767 exported rows, and 51,947 Kingston
 observations to 17,316. The checker now requires the downloaded row count to equal
 the analyzed observation count. Earlier “passed” logs that checked only for a
 nonempty CSV do not establish export completeness.
+
+## Local baseline: 23 September 2026
+
+Thirty sequential runs (five fresh contexts and five same-context reloads per
+region) used Chromium 153.0.8010.12, Node 25.8.0, macOS, a 1280×900 viewport and
+local preview build `e3b7042`. Live public agencies/archive/CDNs supplied data.
+This was a local workstation run, not an isolated device/network benchmark.
+OS/CDN caches and remote service load were uncontrolled.
+
+| Record | Cold p50 / p75 to CSV | Warm p50 / p75 to CSV | Expected historical coverage |
+| --- | --- | --- | --- |
+| Fish River, US | 24.9s / 26.7s | 12.0s / 16.2s | 9 of 10 |
+| Thames at Kingston, England | 19.5s / 22.1s | 16.8s / 18.6s | 10 of 10 |
+| Seine at Paris, France | 42.3s / 45.1s | 37.2s / 41.8s | 10 of 10 |
+
+Every run downloaded all analyzed observations and handed the same row count to
+the workbench; no uncaught page errors were recorded. **One Fish River cold run
+served 14,607 observations from 1986–2026**, instead of the 37,534-observation
+1903–2026 record. The cold timing includes that fallback and is not a percentile
+for five identical full-history workloads. The raw run status reports export and
+workbench success, not restored historical coverage.
+
+The stricter coverage assertion was added after this baseline exposed the fallback.
+It now fails the daily check when these promoted records lose their known early
+history, while retaining the actual period/count and export evidence. Do not call
+this baseline 30 full-history successes or compare it with another dataset without
+accounting for the input differences.
+
+[Download raw timing and coverage evidence](browser-baseline-2026-09-23.json).
+Later study-provenance/copy/local-retention changes do not change this baseline's
+record-fetch path; the baseline still names the exact preview actually measured.

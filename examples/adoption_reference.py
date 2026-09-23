@@ -88,6 +88,7 @@ def generate(input_dir: Path, out: Path) -> list[dict]:
                     shows="Observed snapshot with estimator-specific uncertainty. Independent domain review pending.")
         folder = out / case.id
         metadata = _write_case(ws, case, folder, seconds=0, price=None, error=None)
+        metadata["seconds"] = None  # generation time was not measured; zero would imply a measured instant result
         (folder / "complete.aqstudy.json").write_text(portable.dumps(ws), encoding="utf-8")
         (folder / "report.html").write_text(report_html(ws), encoding="utf-8")
         (folder / "observations.csv").write_text(raw, encoding="utf-8")

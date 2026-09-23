@@ -13,11 +13,17 @@ export function createMetrics(storage, now = () => new Date()) {
   } catch { /* denied or unavailable storage means off */ }
   const persist = () => { try { storage?.setItem(KEY, JSON.stringify(data)); } catch { /* session only */ } };
   const fresh = () => ({ version: 1, enabled: true, days: [] });
-  function record(event, { kind = "other", durationMs, runtime } = {}) {
-    if (!data || !EVENTS.has(event)) return;
+  function prune() {
+    if (!data) return;
     const today = now().toISOString().slice(0, 10);
     const cutoff = new Date(now().getTime() - 27 * 86400000).toISOString().slice(0, 10);
     data.days = data.days.filter(d => d.day >= cutoff && d.day <= today);
+  }
+  if (data) { prune(); persist(); }
+  function record(event, { kind = "other", durationMs, runtime } = {}) {
+    if (!data || !EVENTS.has(event)) return;
+    const today = now().toISOString().slice(0, 10);
+    prune();
     let day = data.days.find(d => d.day === today);
     if (!day) { day = { day: today, counts: {}, durations: {}, useful: false }; data.days.push(day); }
     const bucket = `${event}:${KINDS.has(kind) ? kind : "other"}`;
@@ -38,6 +44,7 @@ export function createMetrics(storage, now = () => new Date()) {
     clear() { data = null; try { storage?.removeItem(KEY); } catch { /* unavailable */ } },
     snapshot() {
       if (!data) return { version: 1, enabled: false, days: [] };
+      prune(); persist();
       const out = JSON.parse(JSON.stringify(data));
       out.useful_days = out.days.filter(d => d.useful).length;
       out.disclosure = "Opt-in local counters, last 28 calendar days; no visitor identifier. Export handoff is not confirmation of a saved or used file. Cold/warm describes the Python worker, not the HTTP cache.";

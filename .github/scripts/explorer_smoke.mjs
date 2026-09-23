@@ -6,9 +6,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 export const CASES = [
-  { id: "fish-river-us", source: "usgs", station: "USGS-01013500" },
-  { id: "kingston-uk", source: "uk_ea", station: "8496ce69-482c-406a-a2f0-ac418ef8f099" },
-  { id: "seine-fr", source: "hubeau_hydrometrie", station: "F700000103" },
+  { id: "fish-river-us", source: "usgs", station: "USGS-01013500", coverage_start: "1904-01-01" },
+  { id: "kingston-uk", source: "uk_ea", station: "8496ce69-482c-406a-a2f0-ac418ef8f099", coverage_start: "1884-01-01" },
+  { id: "seine-fr", source: "hubeau_hydrometrie", station: "F700000103", coverage_start: "2007-01-01" },
 ];
 
 export async function recordToExport(page, baseURL, entry, { output, phase = "cold" } = {}) {
@@ -18,8 +18,13 @@ export async function recordToExport(page, baseURL, entry, { output, phase = "co
   page.on("pageerror", onError);
   const result = { case: entry.id, phase, status: "failed", timings_ms: {} };
   try {
-    if (phase === "warm") await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
-    else await page.goto(`${baseURL.replace(/\/$/, "")}/#s=${entry.source}/${entry.station}&tab=overview`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    const stationURL = `${baseURL.replace(/\/$/, "")}/#s=${entry.source}/${entry.station}&tab=overview`;
+    if (phase === "warm") {
+      // The preceding workbench check changes the hash. Restore the station
+      // without triggering an in-page fetch, then start a fresh worker by reload.
+      await page.evaluate(url => history.replaceState(null, "", url), stationURL);
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+    } else await page.goto(stationURL, { waitUntil: "domcontentloaded", timeout: 60000 });
     result.timings_ms.dom = Math.round(performance.now() - started);
     await page.waitForFunction(() => globalThis.__aq?.state?.stations?.length > 0, null, { timeout: 90000 });
     result.timings_ms.catalog = Math.round(performance.now() - started);
@@ -28,7 +33,7 @@ export async function recordToExport(page, baseURL, entry, { output, phase = "co
     const evidence = await page.evaluate(() => {
       const r = globalThis.__aq.state.result;
       return { n: r.n, variable: r.variable, unit: r.unit, start: r.start, end: r.end,
-        snapshot: r.data_snapshot, eligibility: r.eligibility };
+        snapshot: r.data_snapshot, eligibility: r.eligibility, fetch_note: r.fetch_note };
     });
     assert.ok(evidence.n > 365, "representative workflow needs more than one year of actual observations");
     assert.equal(evidence.variable, "discharge");
@@ -49,6 +54,8 @@ export async function recordToExport(page, baseURL, entry, { output, phase = "co
     await page.waitForFunction(n => document.querySelector("#wb-meta")?.textContent.startsWith(`${n.toLocaleString()} rows`),
       evidence.n, { timeout: 30000 });
     result.timings_ms.workbench = Math.round(performance.now() - started);
+    assert.ok(evidence.start <= entry.coverage_start,
+      `Historical coverage regressed: record begins ${evidence.start}; reference begins before ${entry.coverage_start}`);
     assert.deepEqual(errors, [], "uncaught browser errors");
     result.status = "passed";
   } catch (error) {

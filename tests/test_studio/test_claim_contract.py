@@ -83,6 +83,16 @@ def test_missing_maxima_never_silently_substitutes_mean_trend():
     assert _trend(payload, "m3/s", None) is None
 
 
+def test_review_caveats_are_limitations_not_scientific_assumptions():
+    ws = _ran()
+    study = ws.study_obj()
+    study.plan["caveats"] = ["Independent hydrologist review pending."]
+    ws.set_study(study)
+    decision = interpreter.rules_findings(ws)["decision"]
+    assert "Independent hydrologist review pending." in decision["limitations"]
+    assert "Independent hydrologist review pending." not in decision["conditions"]
+
+
 def test_opposing_trends_follow_the_flood_quantity():
     payload = {"trend": {"on": "annual mean", "p_value": 0.8, "sens_slope_per_year": -2},
                "ffa": {"amax_trend": {"p_value": 0.001, "sens_slope_per_year": 10}}}

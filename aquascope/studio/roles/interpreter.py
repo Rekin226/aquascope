@@ -502,7 +502,7 @@ def rules_findings(ws: Workspace) -> dict[str, Any]:
     for g in (run.get("failed_gates") or [])[:3]:
         decision["limitations"].append(f"step {g.get('step')} did not pass {g.get('check')}: {g.get('detail')}")
     for c in ((study.plan or {}).get("caveats") or [])[:2] if study else []:
-        decision["conditions"].append(str(c))
+        decision["limitations"].append(str(c))
     for f in (run.get("failed_steps") or []):
         if not f.get("skipped"):
             decision["what_would_change_it"].append(f"{f.get('tool')} ({f.get('id')}) establishing its result: "

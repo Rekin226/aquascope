@@ -20,6 +20,7 @@ test("logging is opt-in, bounded, deletable and excludes unapproved data", () =>
   const reopened = createMetrics(storage, () => today);
   assert.equal(reopened.enabled(), true);
   today = new Date("2026-10-01T12:00:00Z");
+  assert.equal(reopened.snapshot().days.length, 0, "old counters expire on inspection without another event");
   reopened.record("visit");
   assert.equal(reopened.snapshot().days.length, 1);
   assert.equal(reopened.snapshot().useful_days, 0);

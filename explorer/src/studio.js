@@ -225,7 +225,7 @@ function intakeHtml() {
   const cfg = askModelConfig();
   const started = Boolean(S.ws);
   let model;
-  if (!cfg) model = `<p class="study-line muted">No key: the playbook tree plans, templates write.</p>`;
+  if (!cfg) model = `<p class="study-line muted">No API key needed. A predefined workflow runs the analysis and writes the report.</p>`;
   else if (started) model = `<p class="study-line muted">${S.useKey ? escapeHtml(cfg.label) : "no model"}</p>`;
   else model = `<label class="study-line ask-context-toggle"><input type="checkbox" data-opt="key" ${S.useKey ? "checked" : ""}> use ${escapeHtml(cfg.label)} for the prose</label>`;
   const data = started ? fileDropHtml("intake") : `<div class="study-data">` +
@@ -429,7 +429,7 @@ function decisionHtml(report) {
     (changes.length
       ? `<p class="study-line muted">Would change it:</p><ul>${changes.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "") +
     (requests.length
-      ? `<p class="study-line muted">The crew would ask for:</p><ul>${requests.map((r) =>
+      ? `<p class="study-line muted">Additional evidence needed:</p><ul>${requests.map((r) =>
         `<li>${escapeHtml(r.what || "")}${r.effect_on_grade ? `: ${escapeHtml(r.effect_on_grade)}` : ""}</li>`).join("")}</ul>` : "") +
     `</div>`;
 }

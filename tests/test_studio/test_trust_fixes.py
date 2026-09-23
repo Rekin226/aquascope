@@ -302,3 +302,22 @@ def test_the_browser_does_not_call_an_agency_it_cannot_reach(monkeypatch):
             patch.object(explore, "build_collector", return_value=Never()):
         out = explore.fetch_series("greece_openhi", "8425", period_start="1960-01-01")
     assert "From the AquaScope archive" in out["note"]
+
+
+def test_trend_check_reads_the_series_the_report_quotes():
+    """A flood report quotes the annual-maxima test; the check must not hold it to the annual-mean p."""
+    from aquascope.ai_engine.verify import verify
+
+    record = {"trend": {"p_value": 0.01, "on": "annual mean"}}  # the record step: annual means only
+    flood = {"trend": {"p_value": 0.01, "on": "annual mean"},
+             "trend_reported": {"p_value": 0.32, "on": "annual maxima"}}
+    answer = "Mann-Kendall on the annual maxima: not significant at the 5 % level (p = 0.32), no trend in the floods."
+    v = verify(answer, [{"ok": True, "name": "analyze_station", "payload": record},
+                        {"ok": True, "name": "flood_frequency", "payload": flood}])
+    check = next(c for c in v.checks if c.name == "trend_matches_the_test")
+    assert check.passed
+    # and the check still bites: calling the peaks' trend significant at p = 0.32 is caught
+    wrong = "Mann-Kendall on the annual maxima: a significant rising trend in the flood peaks (p = 0.32)."
+    v = verify(wrong, [{"ok": True, "name": "analyze_station", "payload": record},
+                       {"ok": True, "name": "flood_frequency", "payload": flood}])
+    assert not next(c for c in v.checks if c.name == "trend_matches_the_test").passed

@@ -969,6 +969,9 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
 /* steerable steps (src/study-controls.js): the plan's gates in plain words, and the per-step controls after
    the report */
 .study-steps .step-checks { grid-column: 2; margin: .15rem 0 0; padding-left: 1rem; font-size: .74rem; line-height: 1.45; color: var(--ink-2); }
+/* the plain-language gates are bullets, not steps: keep them out of the step counter */
+.study-steps .step-checks li { display: list-item; list-style: disc; }
+.study-steps .step-checks li::before { content: none; counter-increment: none; }
 .study-steps .step-raw { grid-column: 2; font-size: .7rem; }
 .study-steps .step-raw > summary { cursor: pointer; color: var(--blue); list-style: none; font-size: .7rem; }
 .study-steps .step-raw > summary::-webkit-details-marker { display: none; }

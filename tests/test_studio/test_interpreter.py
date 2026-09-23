@@ -23,7 +23,7 @@ def test_the_rules_write_findings_that_point_at_the_results_and_a_decision_with_
     head = next(f for f in out["findings"] if f["claim"].startswith("100-year return level, GEV"))
     assert head["basis"] == ["s3.ffa.fits.gev_lmoments.q.5"] and head["grade"] == "established"
     d = out["decision"]
-    assert d["value"] == 520 and d["unit"] == "m3/s" and d["band"] == [420.0, 650.0] and d["grade"] == "established"
+    assert d["value"] == 520 and d["unit"] == "m3/s" and d["band"] is None and d["grade"] == "established"
     assert d["answer"].startswith("Design flow for a road crossing") and "(established)" in d["answer"]
     assert d["basis"] == ["s3.ffa.fits.gev_lmoments.q.5"]
     kinds = {c["a"].split(": ")[1] for c in out["consistency"]}
@@ -40,7 +40,7 @@ def test_grades_follow_the_run_a_fallback_is_indicative_a_failed_answer_step_is_
     out = interpreter.interpret(ws, None)
     assert interpreter.grade_for_step(ws, "s3") == "indicative", "the fallback carried the step"
     assert out["decision"]["grade"] == "indicative"
-    assert any("spread_within" in c for c in out["decision"]["conditions"])
+    assert any("spread_within" in c for c in out["decision"]["limitations"])
     ws2 = _ran(tools=fake_tools([], flood_frequency=wide, analyze_station=wide,
                                 similar_basins={"k": 1, "stations": []}))
     out2 = interpreter.interpret(ws2, None)
@@ -90,8 +90,8 @@ def test_the_model_is_held_to_the_results_and_may_only_lower_a_grade():
     area = next(f for f in out["findings"] if "Upstream" in f["claim"])
     assert area["grade"] == "screening", "a model may not raise the rule's grade (BasinATLAS is screening)"
     d = out["decision"]
-    assert d["value"] == 520 and d["band"] == [420.0, 650.0] and d["grade"] == "established"
-    assert d["answer"].startswith("Adopt 520") and d["conditions"] == ["the record stays stationary"]
+    assert d["value"] == 520 and d["band"] is None and d["grade"] == "established"
+    assert "band 420 to 650" not in d["answer"] and d["conditions"] == ["the record stays stationary"]
     assert out["data_requests"][0]["what"] == "the agency's peak series"
     assert ws.ledger["interpreter"]["calls"] == 1
 
@@ -127,7 +127,7 @@ def test_the_report_opens_with_the_decision_and_carries_the_findings_sections_an
     ids = [s["id"] for s in report["sections"]]
     assert ids[:3] == ["summary", "decision", "findings"]
     decision = next(s["text"] for s in report["sections"] if s["id"] == "decision")
-    assert "(established)" in decision and "band 420 to 650" in decision
+    assert "(established)" in decision and "band 420 to 650" not in decision
     findings = next(s["text"] for s in report["sections"] if s["id"] == "findings")
     assert "[established] 100-year return level, GEV" in findings and "s3.ffa.fits.gev_lmoments.q.5" in findings
     recs = next(s["text"] for s in report["sections"] if s["id"] == "recommendations")
@@ -155,7 +155,7 @@ def test_a_keyed_author_answer_without_the_grade_gets_the_decision_in_front(stud
                         "kind": "flood_risk", "playbook": "flood_risk", "intake": {"return_period": 100},
                         "assumptions": [], "questions": [], "ready": True}],
         "methodologist": [VALID_PLAN],
-        "author": [{"title": "t", "answer": "About 520 m3/s at uk_ea 3400TH by GEV (90 % band 420 to 650 m3/s).",
+        "author": [{"title": "t", "answer": "About 520 m3/s at uk_ea 3400TH by GEV L-moments.",
                     "sections": {"summary": "The flow is 520 m3/s at uk_ea 3400TH."}}],
         "critic": [{"issues": []}],
     })

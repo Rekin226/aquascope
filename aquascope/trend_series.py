@@ -56,9 +56,7 @@ def reported_trend(payload: dict[str, Any] | None, *, flood: bool | None = None)
     if flood is None and isinstance(payload.get("trend_reported"), dict):
         return payload["trend_reported"]
     if flood:
-        amax = _amax_trend(payload)
-        if amax is not None:
-            return amax
+        return _amax_trend(payload)
     tr = payload.get("trend")
     if isinstance(tr, dict) and tr.get("p_value") is not None:
         return {**tr, "on": tr.get("on") or "annual mean"}
@@ -71,7 +69,7 @@ def mark_reported_trend(payload: dict[str, Any] | None, *, flood: bool) -> bool:
     if not flood or not isinstance(payload, dict):
         return False
     amax = _amax_trend(payload)
-    if amax is None:
-        return False
-    payload["trend_reported"] = amax
-    return True
+    # An unavailable flood trend is not permission to substitute a mean-flow trend.
+    payload["trend_reported"] = amax or {"on": "annual maxima", "unavailable": True,
+                                       "reason": "No annual-maxima trend could be established."}
+    return amax is not None

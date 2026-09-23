@@ -232,7 +232,7 @@ def _frequency_curve(payload: dict[str, Any], unit: str | None, site: dict[str, 
     if rl["lp3"] is not None:
         curves.append(("Log-Pearson III", _floats(rl["lp3"]), DARK, "--"))
     if rl["boot"] is not None:
-        curves.append(("GEV (bootstrap)", _floats(rl["boot"]), SECONDARY, ":"))
+        curves.append(("GEV (MLE, bootstrap interval)", _floats(rl["boot"]), SECONDARY, ":"))
     for label, q, colour, style in curves:
         ax.plot(t, q, style, color=colour, linewidth=1.8, marker="o", markersize=4, label=label)
     emp = rl["empirical"]
@@ -244,7 +244,7 @@ def _frequency_curve(payload: dict[str, Any], unit: str | None, site: dict[str, 
     ax.set_ylabel(_ylabel(variable, u))
     ax.set_title(f"Flood frequency at {record_name(payload, site)}")
     ax.legend(loc="upper left", frameon=False)
-    fits = " and ".join(c[0] for c in curves[:2]) if curves else "the fitted"
+    fits = ", ".join(c[0] for c in curves) if curves else "the fitted"
     caption = f"Return levels of annual maximum {variable} at {record_name(payload, site)}: {fits} fits"
     if rl["band"]:
         caption += f" with the {rl['band']} band"
@@ -292,6 +292,8 @@ def _trend(payload: dict[str, Any], unit: str | None, site: dict[str, Any] | Non
     from aquascope.trend_series import reported_trend
 
     tr = reported_trend(payload)
+    if isinstance(tr, dict) and tr.get("unavailable"):
+        return None
     if isinstance(tr, dict) and tr.get("on") == "annual maxima":
         return _trend_on_maxima(payload, tr, unit, site)
     tr = payload.get("trend")

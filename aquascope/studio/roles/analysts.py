@@ -71,7 +71,8 @@ def analyze_station_full(source: str, station_id: str, years: int | None = None,
         try:
             ci = flood_ci(store["series"], **extra)
             res["ffa"]["fits"]["gev_bootstrap"] = {
-                k: ci[k] for k in ("q", "ci", "params", "n_bootstrap", "n_bootstrap_discarded") if k in ci
+                k: ci[k] for k in ("q", "ci", "params", "n_bootstrap", "n_bootstrap_discarded",
+                                     "estimator", "interval_method", "ci_level") if k in ci
             }
             res.setdefault("methods", []).append(ci["method"])
         except Exception as exc:  # noqa: BLE001 - the band is optional

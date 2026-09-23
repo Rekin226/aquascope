@@ -1,6 +1,6 @@
-site_name: AquaScope
+site_name: AquaScope Hydrology
 site_url: https://rekin226.github.io/aquascope/
-site_description: Hydrology toolkit for Python — flood frequency, baseflow, FAO-56 crop water, AI methodology recommender, 15 data sources
+site_description: Explore river records, inspect usable coverage, and export reproducible water analyses with AquaScope Hydrology.
 site_author: Rekin226
 repo_url: https://github.com/Rekin226/aquascope
 repo_name: Rekin226/aquascope
@@ -103,6 +103,11 @@ extra:
 nav:
   - Home: index.md
   - Getting Started: getting_started.md
+  - Validation scope: validation_scope.md
+  - Observed examples:
+    - Fish River, United States: adoption/fish-river-us.md
+    - Thames at Kingston, England: adoption/kingston-uk.md
+    - Seine at Paris, France: adoption/seine-fr.md
   - User Guide:
     - Features: features.md
     - Methodology matrix: methodology_matrix.md
@@ -112,6 +117,9 @@ nav:
     - Caravan export (large-sample datasets): caravan.md
     - Use the Archive from R, QGIS, DuckDB: readers.md
     - The Explorer (click any gauge): explorer.md
+    - Save and share a study: adoption/sharing.md
+    - Adoption measurement: adoption/measurement.md
+    - Practitioner pilot: adoption/pilot.md
     - MCP server (tools for assistants): mcp.md
     - The Analyst (ask, ingest): analyst.md
     - Solve (a problem at a place, planned first): solve.md

@@ -85,9 +85,11 @@ def build_bundle(out_dir: str | Path, variable: str, source: str) -> BundleInfo 
         sid = f.name[: -len(".csv.gz")]
         try:
             df = _read_station_frame(f)
-        except Exception as exc:  # noqa: BLE001 - one corrupt file must not sink the bundle
-            logger.warning("skipping %s: %s", f, exc)
-            continue
+        except Exception as exc:
+            # A partial replacement would silently delete this station's old
+            # observations. The caller preserves this source's last good bundle
+            # and continues building other sources.
+            raise ValueError(f"Cannot replace bundle with unreadable station file {f.name}") from exc
         if df.empty:
             continue
         df.insert(0, "station_id", sid)
@@ -111,7 +113,9 @@ def build_bundle(out_dir: str | Path, variable: str, source: str) -> BundleInfo 
     })
     path = bundle_path(out, variable, source)
     path.parent.mkdir(parents=True, exist_ok=True)
-    pq.write_table(table, path, compression="snappy", row_group_size=200_000)
+    temporary = path.with_suffix(".parquet.tmp")
+    pq.write_table(table, temporary, compression="snappy", row_group_size=200_000)
+    temporary.replace(path)
     info = BundleInfo(
         variable=variable,
         source=source,
@@ -146,11 +150,27 @@ def build_bundles(
         for src_dir in sorted(p for p in var_dir.iterdir() if p.is_dir()):
             if sources and src_dir.name not in sources:
                 continue
-            info = build_bundle(out, var_dir.name, src_dir.name)
+            key = entry_key(src_dir.name, var_dir.name)
+            attempt = {"attempted_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            try:
+                info = build_bundle(out, var_dir.name, src_dir.name)
+            except Exception as exc:  # noqa: BLE001 - preserve this bundle and continue with independent sources
+                logger.warning("bundle %s failed; keeping previous bundle: %s", key, exc)
+                manifest.setdefault("bundle_status", {})[key] = {
+                    **attempt, "status": "failed", "error": str(exc),
+                    "retained_previous": key in manifest.get("bundles", {}),
+                }
+                save_manifest(out, manifest)
+                continue
             if info is None:
+                manifest.setdefault("bundle_status", {})[key] = {**attempt, "status": "empty",
+                    "retained_previous": key in manifest.get("bundles", {})}
+                save_manifest(out, manifest)
                 continue
             infos.append(info)
-            manifest.setdefault("bundles", {})[entry_key(src_dir.name, var_dir.name)] = asdict(info)
+            manifest.setdefault("bundles", {})[key] = asdict(info)
+            manifest.setdefault("bundle_status", {})[key] = {**attempt, "status": "ok"}
+            save_manifest(out, manifest)
     save_manifest(out, manifest)
     return infos
 

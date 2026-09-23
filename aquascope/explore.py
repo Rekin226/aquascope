@@ -21,6 +21,7 @@ from typing import Any
 
 import pandas as pd
 
+from aquascope.explorer_capabilities import EXPLORER_SOURCES  # noqa: F401 - public capability export
 from aquascope.registry import SOURCES, build_collector
 from aquascope.utils.http_client import IS_EMSCRIPTEN
 
@@ -712,16 +713,30 @@ def analyze_series(s: pd.Series, variable: str, unit: str, *,
     }
     if not len(s):
         return out
+    from aquascope.claims import content_digest
+
+    # Hash every analyzed observation before the plotting series is decimated.
+    out["data_snapshot"] = content_digest({
+        "variable": variable, "unit": unit,
+        "observations": [[t.isoformat(), float(v) if math.isfinite(float(v)) else None] for t, v in s.items()],
+    })
     out["sampling"] = _sampling(int(len(s)), float(out["years"]))
 
     # hydrograph: daily means, capped at ~25k points for the browser
     daily = s.resample("D").mean().dropna()
+    out["series_downsampled"] = len(daily) > 25_000
     if len(daily) > 25_000:
         daily = daily.iloc[:: int(math.ceil(len(daily) / 25_000))]
     out["series"] = {"t": [d.strftime("%Y-%m-%d") for d in daily.index], "v": [_clean(float(v)) for v in daily.values]}
 
     am = _annual_max(s)
     out["annual_max"] = {"year": [int(y) for y in am.index.year], "v": [_clean(float(v)) for v in am.values]}
+    out["eligibility"] = {
+        "flood_frequency": variable == "discharge" and len(am) >= MIN_YEARS_FOR_FFA,
+        "complete_years": len(am), "minimum_years": MIN_YEARS_FOR_FFA,
+        "coverage_rule": "At least 292 observed days in each included year",
+        "scope": "Exploratory daily-mean flood screening, not regulatory design certification",
+    }
 
     if variable == "discharge":
         fdc = flow_duration_curve(daily)
@@ -749,6 +764,7 @@ def analyze_series(s: pd.Series, variable: str, unit: str, *,
             try:
                 g = fit_gev_lmoments(am, return_periods=rps_plus)
                 ffa["fits"]["gev_lmoments"] = {
+                    "estimator": "gev_lmoments",
                     "q": [_clean(float(g.return_periods[rp])) for rp in rps],
                     "q_by_T": {f"{rp:g}": _clean(float(g.return_periods[rp])) for rp in rps},
                     "at_record_max": _clean(float(g.return_periods[t_max])),
@@ -760,6 +776,8 @@ def analyze_series(s: pd.Series, variable: str, unit: str, *,
             try:
                 lp3 = fit_lp3(am, return_periods=rps_plus, ci_level=0.90)
                 ffa["fits"]["lp3"] = {
+                    "estimator": "lp3_log_moments", "ci_level": 0.90,
+                    "interval_method": "variance_of_estimate",
                     "q": [_clean(float(lp3.return_periods[rp])) for rp in rps],
                     "q_by_T": {f"{rp:g}": _clean(float(lp3.return_periods[rp])) for rp in rps},
                     "at_record_max": _clean(float(lp3.return_periods[t_max])),
@@ -865,6 +883,8 @@ def flood_ci(s: pd.Series, *, return_periods: list[float] | None = None) -> dict
     am = _annual_max(s.dropna())
     r = fit_gev(am, return_periods=rps, ci_level=0.90)
     return {
+        "estimator": "gev_mle_with_lmoments_fallback", "ci_level": 0.90,
+        "interval_method": "nonparametric_bootstrap_percentile",
         "q": [_clean(float(r.return_periods[rp])) for rp in rps],
         "ci": [[_clean(float(a)), _clean(float(b))] for a, b in
                (r.confidence_intervals.get(rp, (float("nan"), float("nan"))) for rp in rps)],
@@ -917,6 +937,8 @@ def analyze_station(
         "attribution": meta.attribution,
         "fetch_note": fetched["note"],
         "requested": fetched.get("requested"),
+        "archive_revision": (fetched["series"].attrs.get("archive_revision")
+                             if fetched["series"] is not None else None),
     }
     s = fetched["series"]
     if s is None or s.empty:
@@ -1094,21 +1116,20 @@ def snap_glofas_cell(
     window: int = GLOFAS_SNAP_WINDOW, factor: float = GLOFAS_SNAP_FACTOR, probe_years: int = GLOFAS_SNAP_YEARS,
     area_km2: float | None = None,
 ) -> dict[str, Any]:
-    """The GloFAS cell that stands for a gauge: the one in a small window whose mean flow matches the gauge's.
+    """Find a candidate GloFAS cell by flow magnitude, without claiming catchment equivalence.
 
-    A gauge's coordinates often fall in a grid cell on a tributary or the
-    bank, not on the river it measures: USGS 01013500 (2,320 km2) sits in a
-    cell whose annual maxima run 5 to 13 m3/s. GloFAS practice is to move the
-    point to the cell that drains the same river; Open-Meteo does not serve
-    the upstream area, so the gauge's mean flow stands in for it. All
+    A coordinate or similar mean discharge does not establish that a model cell
+    drains the gauge's catchment. Open-Meteo does not provide the model's upstream
+    area or river topology here, so this diagnostic cannot verify comparability. All
     ``(2 * window + 1) ** 2`` cells are asked for in one request (the flood
     API takes lists of coordinates), each over the last ``probe_years``.
 
     Returns ``{"lat", "lon", "site_lat", "site_lon", "offset_km", "mean_flow",
     "gauge_mean_flow", "ratio", "comparable", "n_probed", "why"}``. The cell
     with the smallest log-ratio to the gauge's mean wins (the nearer one on a
-    tie); ``comparable`` is False when even that one is further than
-    ``factor`` from the gauge, and ``why`` says so in a sentence.
+    tie); ``flow_magnitude_matches`` reports the factor test. ``comparable`` remains
+    False until an independent catchment match is available; fitting and cross-checking
+    an unverified cell would create false corroboration.
     """
     import numpy as np
 
@@ -1157,12 +1178,13 @@ def snap_glofas_cell(
     why = (f"{where} has the mean flow closest to the gauge's ({_fmt_q(best['mean_flow'])} against "
            f"{_fmt_q(target)} m3/s, ratio {ratio:.2f}) among {len(cells)} cells within "
            f"{window * GLOFAS_CELL_DEG:.2f} degrees")
-    why = (why + ".") if ok else (
-        f"no comparable model cell: {why}, outside the factor {factor:g} allowed, so the model's river there "
-        "is not the gauge's river."
-    )
+    why = (f"no comparable model cell verified: {why}. "
+           + ("Similar mean flow does not establish a shared catchment. " if ok else
+              f"The mean-flow ratio is outside the factor {factor:g} allowed. ")
+           + "The model upstream area and river-network match are unavailable; the cross-check is skipped.")
     return {**base, "lat": best["lat"], "lon": best["lon"], "offset_km": round(best["offset_km"], 2),
-            "mean_flow": _clean(round(best["mean_flow"], 4)), "ratio": round(ratio, 3), "comparable": ok,
+            "mean_flow": _clean(round(best["mean_flow"], 4)), "ratio": round(ratio, 3), "comparable": False,
+            "flow_magnitude_matches": ok, "catchment_match": "unverified",
             "n_probed": len(cells), "why": why}
 
 
@@ -1285,10 +1307,21 @@ def anywhere(lat: float, lon: float, *, years: int = 10, match_mean_flow: float 
     return out
 
 
-def to_csv(result: dict[str, Any]) -> str:
-    """CSV of the daily series in a result dict (for the download button)."""
-    series = result.get("series") or {"t": [], "v": []}
+def to_csv(result: dict[str, Any], *, series: pd.Series | None = None) -> str:
+    """Export the full observed series when supplied; never silently export a decimated plot.
+
+    Pass ``store['series']`` from :func:`analyze_station` to retain every original
+    timestamp and value. Small legacy result-only calls export their daily chart series.
+    """
     unit = result.get("unit", "")
+    if series is not None:
+        name = f"{result.get('variable', 'value')}_{unit}".replace("/", "_per_")
+        observed = series.dropna()
+        return pd.DataFrame({"date": [t.isoformat() for t in observed.index],
+                             name: observed.to_numpy()}).to_csv(index=False)
+    if result.get("series_downsampled"):
+        raise ValueError("The plotting series is downsampled. Pass the full stored series to export observations.")
+    series = result.get("series") or {"t": [], "v": []}
     lines = [f"date,{result.get('variable', 'value')}_{unit}".replace("/", "_per_")]
     lines += [f"{t},{'' if v is None else v}" for t, v in zip(series["t"], series["v"])]
     return "\n".join(lines) + "\n"

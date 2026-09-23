@@ -21,7 +21,7 @@ import { initSearch } from "./src/search.js?v=__BUILD__";
 import { initShell, initTabs, selectTab, setStatusEl, showSurface } from "./src/shell.js?v=__BUILD__";
 import { initStationPanel, selectStation } from "./src/panel-station.js?v=__BUILD__";
 import { initPointPanel, selectPoint } from "./src/panel-point.js?v=__BUILD__";
-import { initWorkbench, openWorkbench } from "./src/panel-workbench.js?v=__BUILD__";
+import { initWorkbench, openSampleTable, openWorkbench } from "./src/panel-workbench.js?v=__BUILD__";
 import { initAsk } from "./src/ask.js?v=__BUILD__";
 import { initUrl, readUrl, writeUrl } from "./src/url.js?v=__BUILD__";
 import { ensureWorker } from "./src/worker-client.js?v=__BUILD__";
@@ -30,6 +30,9 @@ import { registerWebMcpTools } from "./src/webmcp.js?v=__BUILD__";
 import { studyUrlParam } from "./src/study-link.js?v=__BUILD__";
 import { initSignatureFilter } from "./src/signature-filter.js?v=__BUILD__";
 import { initPlaces } from "./src/places.js?v=__BUILD__";  // My places + Compare
+import { loadAvailability } from "./src/availability.js?v=__BUILD__";
+
+import { initMetrics } from "./src/metrics-ui.js?v=__BUILD__";
 
 // Study is loaded when it is first used (the Study button, the drawer's radio,
 // "Study this place", a #study=1 link): its modules are the larger part of the
@@ -176,6 +179,7 @@ function goHome() {
   const url = readUrl();
 
   initShell();
+  initMetrics();
   initTabs($("panel-station"));
   initTabs($("panel-point"));
   initTabs($("panel-workbench"));
@@ -186,18 +190,30 @@ function goHome() {
   initAsk();   // async: fills the provider list from providers.json
   initStudyLoader();
   initSearch();
+  void loadAvailability();
   initUrl();
   actions.applyUrl = applyUrl;
   actions.refreshMapData = () => { refreshMapData(); syncRail(); };
   $("btn-home").addEventListener("click", goHome);
   $("btn-cite-top").addEventListener("click", () => openCite([]));
+  $("btn-open-study").addEventListener("click", () => $("open-study-file").click());
+  $("open-study-file").addEventListener("change", async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (file) await loadStudy().then((module) => module.importCompletedStudy(file));
+    event.target.value = "";
+  });
   for (const chip of document.querySelectorAll("[data-try]")) {
     chip.addEventListener("click", () => {
       if (chip.dataset.try === "s") selectStation(chip.dataset.key, { fly: true });
       else if (chip.dataset.try === "p") selectPoint(Number(chip.dataset.lat), Number(chip.dataset.lon), { fly: true });
+      else if (chip.dataset.try === "study") actions.openStudy({ recorded: "reference-fish-river-us" });
+      else if (chip.dataset.try === "table") openSampleTable();
       else actions.openAsk();
     });
   }
+  document.querySelector(".header-tools-menu").addEventListener("click", (event) => {
+    if (event.target.closest("button")) document.querySelector(".header-tools").open = false;
+  });
 
   if (url.hidden) state.hidden = new Set(url.hidden);
   state.date = url.date || defaultDate();

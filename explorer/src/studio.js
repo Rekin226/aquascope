@@ -1,3 +1,4 @@
+import { metrics } from "./metrics.js?v=__BUILD__";
 // Study: a complete study at a place, done by a crew of roles in the Pyodide
 // worker (aquascope.studio, the same Coordinator the CLI and the MCP tools
 // run). The page is a conversation and a board. The conversation is the
@@ -397,8 +398,8 @@ function crewLine() {
 // collapsed (#417, #419). Absent on an older report (a recording made before this shipped): every helper
 // below is a no-op then, so nothing new renders and nothing breaks (studio-recorded.js).
 const GRADE_TITLE = {
-  established: "established: at-site data, every gate passed",
-  indicative: "indicative: a fallback, a donor transfer or a marginal method",
+  established: "established: at-site result supported by its applicable checks; other steps may be unavailable",
+  indicative: "indicative: a fallback, marginal method, or unresolved check limits the answer",
   screening: "screening: regional or reanalysis data only",
   not_established: "not established: no number could be established for the decision",
 };
@@ -413,12 +414,15 @@ function decisionHtml(report) {
   const d = report.decision;
   if (!d) return "";
   const conditions = d.conditions || [];
+  const limitations = d.limitations || [];
   const changes = d.what_would_change_it || [];
   const requests = report.data_requests || [];
   return `<div class="study-decision">` +
     (d.answer ? `<p class="study-decision-answer">${escapeHtml(d.answer)}</p>` : "") +
     (conditions.length
       ? `<p class="study-line muted">Holds if:</p><ul>${conditions.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "") +
+    (limitations.length
+      ? `<p class="study-line muted">Unresolved checks:</p><ul>${limitations.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "") +
     (changes.length
       ? `<p class="study-line muted">Would change it:</p><ul>${changes.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "") +
     (requests.length
@@ -460,9 +464,12 @@ function doneHtml() {
       ? `<div class="ask-checks warn"><strong>Not established</strong><ul>${not.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul></div>`
       : "") +
     `<div class="row-actions"><button type="button" class="btn primary" data-act="bundle">Download bundle</button>` +
-    `<button type="button" class="btn" data-act="copy-link" title="A link to this plan; whoever opens it reruns it keyless">Copy link</button>` +
+    `<button type="button" class="btn" data-file="portable">Save complete study</button>` +
+    `<button type="button" class="btn" data-act="copy-link" title="A link to this plan; whoever opens it reruns it keyless">Copy plan link</button>` +
     `<button type="button" class="btn" data-act="again">New study</button></div>` +
     (docs.length ? `<p class="study-docs muted">${docs.map(([id, label]) => `<a href="#" data-file="${id}">${label}</a>`).join(" · ")}</p>` : "") +
+    `<p class="muted">The complete study file includes your inputs, results and figures. Reopen it here without rerunning. Nothing is published; share the file or HTML report only when you intend to share its data.</p>` +
+    `<p class="study-export-help muted" hidden>Useful in your work? <a href="https://github.com/Rekin226/aquascope" target="_blank" rel="noopener">Star AquaScope on GitHub</a> or <a href="https://github.com/Rekin226/aquascope/issues" target="_blank" rel="noopener">report a problem</a>.</p>` +
     `<p class="study-foot muted">${escapeHtml(footLine())}</p>` +
     `<p class="study-by muted">${escapeHtml(crewLine())}</p>`;
 }
@@ -651,6 +658,7 @@ function applyReply(res, op) {
   if (r.kind === "plan" && p.errors) note(`The edit was not accepted: ${p.errors.join("; ")}`, "warn");
   if (r.kind === "plan") { S.proposal = null; S.planLine = null; S.proseLine = null; }
   if (r.kind === "report" && (op === "approve" || op === "follow_up")) {
+    metrics.record("study_ready", { kind: "study" });
     S.proposal = null;
     if (p.plan_used && S.planSource === "shared") {
       S.planLine = sharedPlanLine({ used: p.plan_used, errors: p.plan_errors || [] });
@@ -1175,8 +1183,7 @@ function resumeWorkspace(obj) {
     if (a && a.data && a.media_type === "image/png") {
       figures.set(a.id, { id: a.id, src: `data:image/png;base64,${a.data}`, caption: a.caption || "", step: a.step, job: null });
     }
-    const { data: _bytes, ...rest } = a || {};
-    return rest;
+    return a;
   });
   S.resume = null;
   openWorkspace(ws, figures);
@@ -1184,6 +1191,12 @@ function resumeWorkspace(obj) {
 }
 
 const looksLikeWorkspace = (obj) => Boolean(obj && typeof obj === "object" && obj.id && obj.status && obj.brief && obj.site);
+
+export async function importCompletedStudy(file) {
+  if (S.busy) { note("Stop the running study before opening another.", "warn"); return; }
+  openDrawer({ mode: "study" });
+  await addFiles([file]);
+}
 
 // ── files in, files out ─────────────────────────────────────────────────────
 
@@ -1202,6 +1215,7 @@ function saveBytes(name, b64, type) {
   a.href = URL.createObjectURL(new Blob([bytes], { type }));
   a.download = name.replace(/[^\w.-]+/g, "_");
   a.click();
+  metrics.record("export_handoff", { kind: "study" });
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
@@ -1216,8 +1230,17 @@ async function addFiles(list) {
     const id = file.name.replace(/\s+/g, "_");
     try {
       if (/\.json$/i.test(file.name)) {
+        if (file.size > 50_000_000) throw new Error("Study files must be under 50 MB");
+        const originalText = await file.text();
         let obj = null;
-        try { obj = JSON.parse(await file.text()); } catch { obj = null; }
+        try { obj = JSON.parse(originalText); } catch { obj = null; }
+        if (obj && obj.format === "aquascope-completed-study") {
+          // Preserve Python's numeric representation (1.0 vs 1) for checksum validation.
+          const restored = await call("studio", { op: "import_portable", text: originalText });
+          if (restored.error) throw new Error(restored.error);
+          resumeWorkspace(restored.workspace);
+          return;
+        }
         if (!looksLikeWorkspace(obj)) throw new Error("not a workspace.json from a study bundle");
         resumeWorkspace(obj);
         return;
@@ -1251,12 +1274,16 @@ async function downloadArtifact(id) {
   if (!S.ws) return;
   note("Preparing the file…");
   try {
-    const res = await call("studio", id === "bundle"
+    const res = await call("studio", id === "portable"
+      ? { op: "portable", workspace: S.ws }
+      : id === "bundle"
       ? { op: "export", workspace: S.ws }
       : { op: "file", workspace: S.ws, artifact_id: id });
     if (!res || res.error) throw new Error((res && res.error) || "no file");
     const name = id === "bundle" ? `study-${S.ws.id}.zip` : String(res.name || id).split("/").pop();
     saveBytes(name, res.data, res.media_type);
+    const help = board().querySelector(".study-export-help");
+    if (help) help.hidden = false;
     note("");
   } catch (err) {
     note(`Could not prepare the file: ${err.message}`, "error");

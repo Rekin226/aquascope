@@ -53,6 +53,7 @@ class SourceHealth:
     license: str
     redistributable: bool
     agency: str
+    retained_stations: int = 0
 
 
 @dataclass
@@ -244,13 +245,26 @@ def harvest_stations(
     stations: list[Station] = []
     for key in sorted(catalogs):
         stations.extend(catalogs[key].stations)
+    health = _health(catalogs)
+    previous_path = out / "stations.parquet"
+    if previous_path.exists():
+        from aquascope.archive.catalog import load_stations
+
+        previous = load_stations(path=previous_path)
+        failed = {key for key, cat in catalogs.items() if not cat.ok}
+        retained = [Station.model_validate(row) for row in previous
+                    if row["source"] in failed or row["source"] not in catalogs]
+        current_ids = {(s.source, s.station_id) for s in stations}
+        stations.extend(s for s in retained if (s.source, s.station_id) not in current_ids)
+        for row in health:
+            row.retained_stations = sum(s.source == row.source for s in retained)
     stations.sort(key=lambda s: (s.source, s.station_id))
 
     report = HarvestReport(
         run_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         aquascope_version=__version__,
         n_stations=len(stations),
-        sources=_health(catalogs),
+        sources=health,
     )
 
     parquet_path = write_stations_parquet(stations, out / "stations.parquet")

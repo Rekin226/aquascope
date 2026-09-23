@@ -7,6 +7,7 @@ import { toFeatureCollection } from "./catalog.js?v=__BUILD__";
 import { TERRAIN_DEM, basemapById, overlayById, tileUrls } from "./layers.js?v=__BUILD__";
 import { SHAPE_NAMES, shapeSdf } from "./shapes.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
+import { availabilityLabel } from "./availability.js?v=__BUILD__";
 
 export let map = null;
 
@@ -487,7 +488,7 @@ export function addStationLayers(fc) {
     map.getCanvas().style.cursor = "pointer";
     const p = e.features[0].properties;
     popup.setLngLat(e.features[0].geometry.coordinates)
-      .setHTML(`<strong>${escapeHtml(p.name || p.key.split("/")[1])}</strong><br><span class="muted">${escapeHtml(sourceStyle(p.source).label)}</span>`)
+      .setHTML(`<strong>${escapeHtml(p.name || p.key.split("/")[1])}</strong><br><span class="muted">${escapeHtml(sourceStyle(p.source).label)}<br>${escapeHtml(availabilityLabel(p.source))}</span>`)
       .addTo(map);
   });
   map.on("mouseleave", "points", () => { map.getCanvas().style.cursor = ""; popup.remove(); });

@@ -140,6 +140,17 @@ header#top {
 .brand-name { font-size: .98rem; font-weight: 680; letter-spacing: -.015em; }
 .tagline { font-size: .72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .controls { display: flex; align-items: center; gap: .35rem; }
+.header-tools { position: relative; }
+.header-tools > summary { cursor: pointer; list-style: none; }
+.header-tools-menu { display: none; }
+.header-tools[open] .header-tools-menu {
+  display: flex; flex-direction: column; align-items: stretch; gap: .4rem;
+  position: absolute; right: 0; top: calc(100% + .6rem); min-width: 180px;
+  padding: .65rem; background: var(--bg); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow-2);
+}
+.entry-routes { display: flex; flex-direction: column; align-items: stretch; gap: .65rem; margin: 1.2rem 0; }
+.entry-routes .btn { text-align: left; white-space: normal; padding: .8rem; }
 
 .search-wrap { position: relative; }
 #search {
@@ -937,9 +948,14 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
 }
 
 @media (max-width: 430px) {
-  /* Keep the wave as the home button and give the row to search. */
-  .brand-text { display: none; }
-  header#top { gap: .35rem; padding: 0 .45rem; }
+  :root { --header-h: 98px; }
+  header#top { flex-wrap: wrap; align-content: center; gap: .35rem; padding: .4rem .6rem; }
+  .brand { flex: 0 0 100%; }
+  .brand-text { display: flex; }
+  .controls { width: 100%; }
+  .search-wrap { flex: 1; min-width: 0; }
+  #search { width: 100%; }
+  .search-results { width: min(360px, calc(100vw - 24px)); left: 0; right: auto; }
 }
 
 @media print {

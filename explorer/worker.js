@@ -35,9 +35,11 @@ async function init({ pyodideIndexURL, wheelsJson }) {
     console.warn("could not pre-fetch the wheel, falling back to the URL:", err);
   }
   await micropip.install(["pyodide-http", wheelSpec]);
+  pyodide.globals.set("_aq_build_revision", String(wheels.build || "unknown"));
 
   await pyodide.runPythonAsync(`
-import json, logging
+import json, logging, os
+os.environ["AQUASCOPE_REVISION"] = _aq_build_revision
 logging.basicConfig(level=logging.WARNING)
 import pyodide_http
 pyodide_http.patch_all()
@@ -89,7 +91,7 @@ json.dumps(analysis.flood_ci(_STORE["series"]))
 
 async function csv({ id }) {
   const out = await pyodide.runPythonAsync(`
-analysis.to_csv(_STORE["result"])
+analysis.to_csv(_STORE["result"], series=_STORE.get("series"))
 `);
   post("result", { id, result: out });
 }
@@ -534,6 +536,12 @@ def studio_call(a, on_event=None, on_artifact=None, store=None):
 
 def _studio_dispatch(a, on_event, on_artifact, store):
     op = a.get("op")
+    if op == "import_portable":
+        from aquascope.studio.portable import loads as _load_portable
+
+        ws = _load_portable(str(a.get("text") or ""))
+        _STUDIO.pop(ws.id, None)
+        return {"workspace": ws.to_dict(with_artifacts=True)}
     if op == "prompts":
         return studio_prompts()
     if op == "start":
@@ -551,6 +559,12 @@ def _studio_dispatch(a, on_event, on_artifact, store):
 
         return _link_op(a)
     s = _studio_open(a, on_event, on_artifact)
+    if op == "portable":
+        from aquascope.studio.portable import dumps as _dump_portable
+
+        data = _dump_portable(s.ws).encode("utf-8")
+        return {"name": f"study-{s.ws.id}.aqstudy.json", "media_type": "application/json",
+                "data": _b64.b64encode(data).decode("ascii"), "size": len(data)}
     if op == "add_table":
         return _studio_reply(s, s.add_table(str(a.get("name") or "table"), str(a.get("csv") or "")))
     if op == "say":
@@ -727,11 +741,13 @@ _args = json.loads(__aqIngest)
 _res = _ingest.ingest_text(_args["text"], _args["filename"], **(_args.get("options") or {}))
 _STORE["frame"] = _res["series"].rename("value").to_frame().reset_index().rename(columns={"index": "date"})
 _STORE["result"] = _res["analysis"]
+_STORE["series"] = _res["series"]
 json.dumps({
     "mapping": _res["mapping"],
     "qa": _res["qa"],
     "analysis": _res["analysis"],
     "n": int(len(_res["series"])),
+    "csv": analysis.to_csv(_res["analysis"], series=_res["series"]),
 })
 `;
   const out = await pyodide.runPythonAsync(code);
@@ -780,10 +796,14 @@ async function frameFromStation({ id }) {
 import json
 import pandas as pd
 _res = _STORE.get("result") or {}
-_series = _res.get("series") or {}
-_STORE["frame"] = pd.DataFrame({"date": pd.to_datetime(_series.get("t", [])), "discharge": _series.get("v", [])})
+_series = _STORE.get("series")
+if _series is None:
+    raise ValueError("The full record is no longer in memory. Reopen the station before sending it to the workbench.")
+_variable = _res.get("variable") or "value"
+_STORE["frame"] = _series.dropna().rename(_variable).rename_axis("date").reset_index()
 from aquascope import workbench as _wb
-json.dumps({"n": int(len(_STORE["frame"])), "columns": ["date", "discharge"],
+json.dumps({"n": int(len(_STORE["frame"])), "columns": ["date", _variable],
+            "csv": _STORE["frame"].to_csv(index=False),
             "insights": _wb.insights(_STORE["frame"])})
 `;
   const out = await pyodide.runPythonAsync(code);

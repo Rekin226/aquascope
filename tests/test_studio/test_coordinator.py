@@ -155,7 +155,7 @@ def test_the_model_crew_end_to_end(studio_factory):
                         "assumptions": ["the gauge is representative"], "questions": [], "ready": True}],
         "methodologist": [VALID_PLAN],
         "author": [{"title": "Design flow at Kingston",
-                    "answer": "About 520 m3/s at uk_ea 3400TH by GEV (90 % band 420 to 650 m3/s).",
+                    "answer": "About 520 m3/s at uk_ea 3400TH by GEV L-moments.",
                     "sections": {"summary": "The 100-year flow at Kingston is 520 m3/s.",
                                  "recommendations": "Adopt 548 m3/s (LP3) as the design value with the band."}}],
         "critic": [{"issues": []}],

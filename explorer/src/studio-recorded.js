@@ -10,7 +10,9 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 export const CHIP_LIMIT = 6;
 
 // The files a recording carries that are worth a link, in this order.
-const LINKED = [["report.md", "Markdown"], ["study.yaml", "study.yaml"], ["workspace.json", "workspace.json"]];
+const LINKED = [["report.md", "Markdown"], ["report.html", "HTML report"], ["study.yaml", "study.yaml"],
+  ["workspace.json", "workspace.json"], ["complete.aqstudy.json", "Complete study"],
+  ["observations.csv", "Input observations"], ["provenance.json", "Provenance"]];
 
 /**
  * One line of label and the chips: at most `limit` visible, a "more" chip
@@ -31,7 +33,8 @@ export function recordedChipsHtml(rows, { limit = CHIP_LIMIT, showAll = false } 
 
 /** The line above a recorded answer: who recorded it, and that the numbers are the recording's. */
 export function recordedNoteHtml(meta) {
-  return `<p class="study-by muted">${esc(recordedLabel(meta))}; the numbers below were computed then; ` +
+  return (meta?.review_status ? `<p class="study-by muted">${esc(meta.review_status)}</p>` : "") +
+    `<p class="study-by muted">${esc(recordedLabel(meta))}; the numbers below were computed then; ` +
     `press Re-run live to compute them again in your browser, keyless.</p>`;
 }
 

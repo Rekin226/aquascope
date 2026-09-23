@@ -97,33 +97,17 @@ jobs:
           print(f"{len(table):,} of {len(catalog):,} stations assigned")
           EOF
 
-      - name: Harvest daily observations (budgeted; the archive fills up over weeks)
+      - name: Harvest daily observations with isolated source deadlines
         id: obs
         if: ${{ !inputs.skip_obs }}
         timeout-minutes: 120
-        run: |
-          set +e
-          B=${{ inputs.obs_budget || 150 }}
-          # Phase 1: discharge for the three long-record sources.
-          aquascope harvest obs --out archive --variable discharge \
-            --source usgs --source uk_ea --source hubeau_hydrometrie --max-stations $B
-          # Phase 2: the other variables, smaller budgets (UK EA: 3.6k boreholes, 1k rain gauges, 2.6k level sites).
-          aquascope harvest obs --out archive --variable groundwater_level --source uk_ea --max-stations $((B / 2))
-          aquascope harvest obs --out archive --variable precipitation --source uk_ea --max-stations $((B / 3))
-          aquascope harvest obs --out archive --variable water_level --source uk_ea --max-stations $((B / 3))
-          aquascope harvest obs --out archive --variable water_level --source usgs --max-stations $((B / 5))
-          aquascope harvest obs --out archive --variable precipitation --source taiwan_cwa --max-stations 15
-          # Greece OpenHi: 65 telemetry stations the browser cannot call (#408); small enough to mirror whole.
-          aquascope harvest obs --out archive --variable discharge --source greece_openhi --max-stations 65
-          aquascope harvest obs --out archive --variable water_level --source greece_openhi --max-stations 65
-          aquascope harvest obs --out archive --variable precipitation --source greece_openhi --max-stations 65
-          # Poland IMGW-PIB: ~900 gauges, daily from 1951; one download of the archive serves every station (#391).
-          aquascope harvest obs --out archive --variable discharge --source poland_imgw --max-stations $B
-          aquascope harvest obs --out archive --variable water_level --source poland_imgw --max-stations $((B / 2))
-          echo "exit=$?" >> "$GITHUB_OUTPUT"
-          set -e
+        continue-on-error: true
+        env:
+          OBS_BUDGET: ${{ inputs.obs_budget || '150' }}
+        run: python -m aquascope.archive.refresh --out archive --budget "$OBS_BUDGET" --timeout 480
 
       - name: Roll the per-station files into Parquet bundles (one per variable and source)
+        id: bundles
         run: aquascope harvest bundles --out archive
 
       - name: Per-station flow signatures (signatures.parquet, the Explorer's map filter)
@@ -148,6 +132,7 @@ jobs:
             --out archive/basins/regionalization_skill.json --max-stations 3000
 
       - name: Publish to the Hugging Face dataset
+        id: publish
         # inputs.publish is a boolean input: compare it as one (a string compare
         # against 'true' is always false and silently skipped the first CI runs).
         if: env.HF_TOKEN != '' && (github.event_name == 'schedule' || inputs.publish == true)
@@ -183,6 +168,22 @@ jobs:
           for s in h["sources"]:
               status = "ok" if s["ok"] else f"FAILED: `{s['error']}`"
               print(f"| `{s['source']}` | {status} | {s['n_stations']:,} | {s['seconds']} |")
+          obs = pathlib.Path("archive/obs/refresh_status.json")
+          if obs.exists():
+              r = json.loads(obs.read_text())
+              print(f"\n## Observation refresh: {r['status']}\n")
+              print("| source | variable | status |\n| --- | --- | --- |")
+              for s in r['sources']:
+                  print(f"| {s['source']} | {s['variable']} | {s['status']} |")
+          else:
+              print("\nObservation refresh did not run; catalog health does not imply fresh observations.")
+          manifest = pathlib.Path("archive/obs/manifest.json")
+          if manifest.exists():
+              bundles = json.loads(manifest.read_text()).get('bundle_status', {})
+              print("\n## Observation bundles\n")
+              print("| source/variable | status | previous bundle retained |\n| --- | --- | --- |")
+              for key, status in sorted(bundles.items()):
+                  print(f"| {key} | {status['status']} | {status.get('retained_previous', False)} |")
           EOF
 
       - name: Open / update / close collector-health issues from health.json

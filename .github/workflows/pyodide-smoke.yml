@@ -11,6 +11,7 @@ on:
       - "explorer/**"
       - "pyproject.toml"
       - ".github/scripts/pyodide_smoke.mjs"
+      - ".github/scripts/pyodide_packages*.mjs"
       - ".github/workflows/pyodide-smoke.yml"
   schedule:
     - cron: "0 0 * * 1"  # 00:00 UTC on Monday — weekly upstream canary
@@ -34,6 +35,9 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+
+      - name: Test package retries
+        run: node --test .github/scripts/pyodide_packages.test.mjs
 
       - name: Get Pyodide version
         id: pyodide-version
@@ -63,12 +67,15 @@ jobs:
             npm install "pyodide@${PYODIDE_VERSION}"
           fi
 
+          INSTALLED_VERSION=$(node -p 'require("pyodide/package.json").version')
+          echo "PYODIDE_INDEX_URL=https://cdn.jsdelivr.net/pyodide/v${INSTALLED_VERSION}/full/" >> "$GITHUB_ENV"
+
       - name: Cache Pyodide packages
         if: github.event_name != 'schedule'
         uses: actions/cache@v5
         with:
           path: /tmp/pyodide-cache
-          key: pyodide-${{ steps.pyodide-version.outputs.version }}--${{ hashFiles('.github/scripts/pyodide_smoke.mjs') }}
+          key: pyodide-${{ steps.pyodide-version.outputs.version }}-${{ hashFiles('.github/scripts/pyodide_smoke.mjs', '.github/scripts/pyodide_packages.mjs', 'package-lock.json', 'pyproject.toml') }}
           restore-keys: pyodide-${{ steps.pyodide-version.outputs.version }}-
 
       - name: Build wheel
@@ -77,6 +84,9 @@ jobs:
           python -m build --wheel
 
       - name: Run Pyodide smoke test
+        env:
+          PYODIDE_INDEX_URL: ${{ env.PYODIDE_INDEX_URL }}
+          PYODIDE_CACHE_DIR: /tmp/pyodide-cache
         run: node .github/scripts/pyodide_smoke.mjs dist/aquascope-*.whl
 
       - name: Assemble Explorer site

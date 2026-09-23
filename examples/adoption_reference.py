@@ -112,6 +112,11 @@ def generate(input_dir: Path, out: Path) -> list[dict]:
         generated.append({"id": case.id, "grade": ws.report["grade"], "input": provenance,
                           "decision": ws.report["decision"]})
     write_index(out)
+    index_path = out / "index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    priority = {row["id"]: i for i, row in enumerate(generated)}
+    index["studies"].sort(key=lambda row: priority.get(row["id"], len(priority)))
+    index_path.write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
     return generated
 
 

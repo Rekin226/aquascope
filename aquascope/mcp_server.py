@@ -272,7 +272,8 @@ def flood_frequency(
         return res
     keep = {k: res.get(k) for k in ("source", "station_id", "agency", "license", "attribution", "unit",
                                     "start", "end", "years", "n", "stats", "ffa", "notes", "methods",
-                                    "fetch_note", "requested")}
+                                    "fetch_note", "requested", "variable", "data_snapshot", "archive_revision",
+                                    "software_revision", "eligibility")}
     if not keep.get("ffa"):
         keep["error"] = "flood frequency not available (see notes)"
     return keep

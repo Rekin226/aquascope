@@ -37,6 +37,30 @@ def test_a_model_cannot_attach_an_unrelated_interval_or_replace_the_claim():
     assert out["decision"]["evidence"]["estimator"] == "gev_lmoments"
 
 
+def test_deduplication_keeps_the_selected_steps_entire_claim():
+    ws = _ran()
+    numbers = author.key_numbers(ws.study_obj(), ws.run["results"])
+    claim = next(k for k in numbers if k["label"] == "100-year return level, GEV (L-moments)")
+    assert claim["evidence"]["result_id"].startswith(claim["step"] + ".")
+    rows = [r for r in ws.run["results"] if isinstance(r.get("result"), dict) and r["result"].get("ffa")]
+    for i, row in enumerate(rows):
+        row["result"]["data_snapshot"] = f"sha256:different-input-{i}"
+    claims = [k for k in author.key_numbers(ws.study_obj(), ws.run["results"])
+              if k["label"] == "100-year return level, GEV (L-moments)"]
+    assert len(claims) == len(rows), "equal values from distinct inputs must remain distinct claims"
+
+
+def test_flood_tool_retains_input_identity_when_reducing_the_analysis_payload(monkeypatch):
+    from aquascope import mcp_server
+
+    payload = {**FLOW, "variable": "discharge", "data_snapshot": "sha256:retained",
+               "archive_revision": "a" * 40, "software_revision": "b" * 40}
+    monkeypatch.setattr(mcp_server, "analyze_station", lambda *args, **kwargs: payload)
+    result = mcp_server.flood_frequency("usgs", "USGS-test")
+    for key in ("variable", "data_snapshot", "archive_revision", "software_revision"):
+        assert result[key] == payload[key]
+
+
 def test_narrated_intervals_must_name_and_match_the_fitted_estimator():
     results = [{"payload": {"ffa": {"fits": {
         "gev_lmoments": {"q": [583.2]},

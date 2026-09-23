@@ -318,12 +318,16 @@ def key_numbers(study: Study, results: list[dict[str, Any]]) -> list[dict[str, A
                 out += _numbers_for(sid, tool, payload, rp)
     # Two steps on the same record quote the same number (analyze_station and flood_frequency both carry the
     # fit): keep one row, attributed to the later step, which is the one the plan names for it.
-    seen: dict[tuple[str, Any], int] = {}
+    seen: dict[tuple[Any, ...], int] = {}
     deduped: list[dict[str, Any]] = []
     for kn in out:
-        k = (kn["label"], kn["value"])
+        data = (kn.get("evidence") or {}).get("dataset") or {}
+        k = (kn["label"], kn["value"], kn.get("unit"), data.get("source"),
+             data.get("station_id"), data.get("snapshot"))
         if k in seen:
-            deduped[seen[k]]["step"] = kn["step"]
+            # The later step owns the whole claim, including its input identity
+            # and interval. Updating only "step" would keep the earlier evidence.
+            deduped[seen[k]] = kn
             continue
         seen[k] = len(deduped)
         deduped.append(kn)

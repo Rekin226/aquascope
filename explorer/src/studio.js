@@ -1,4 +1,5 @@
 import { metrics } from "./metrics.js?v=__BUILD__";
+import { claimEvidenceHtml } from "./claim-view.js?v=__BUILD__";
 // Study: a complete study at a place, done by a crew of roles in the Pyodide
 // worker (aquascope.studio, the same Coordinator the CLI and the MCP tools
 // run). The page is a conversation and a board. The conversation is the
@@ -419,10 +420,12 @@ function decisionHtml(report) {
   const requests = report.data_requests || [];
   return `<div class="study-decision">` +
     (d.answer ? `<p class="study-decision-answer">${escapeHtml(d.answer)}</p>` : "") +
+    (d.grade_scope ? `<p class="study-line muted">Grade applies to ${escapeHtml(d.grade_scope)}.</p>` : "") +
+    claimEvidenceHtml(d.evidence) +
     (conditions.length
       ? `<p class="study-line muted">Holds if:</p><ul>${conditions.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "") +
     (limitations.length
-      ? `<p class="study-line muted">Unresolved checks:</p><ul>${limitations.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "") +
+      ? `<p class="study-line muted">Limitations and unresolved checks:</p><ul>${limitations.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "") +
     (changes.length
       ? `<p class="study-line muted">Would change it:</p><ul>${changes.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "") +
     (requests.length

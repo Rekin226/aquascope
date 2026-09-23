@@ -641,7 +641,10 @@ def _template_sections(ws: Workspace, study: Study, results: list[dict[str, Any]
         if decision.get("conditions"):
             lines.append("It holds under these conditions: " + "; ".join(str(c) for c in decision["conditions"]) + ".")
         if decision.get("limitations"):
-            lines.append("Unresolved checks: " + "; ".join(str(c) for c in decision["limitations"]) + ".")
+            lines.append("Limitations and unresolved checks: "
+                         + "; ".join(str(c) for c in decision["limitations"]) + ".")
+        if decision.get("grade_scope"):
+            lines.append("The grade applies to " + str(decision["grade_scope"]) + ".")
         if decision.get("what_would_change_it"):
             lines.append("What would change it: " + "; ".join(str(c) for c in decision["what_would_change_it"]) + ".")
         for r in findings.get("data_requests") or []:

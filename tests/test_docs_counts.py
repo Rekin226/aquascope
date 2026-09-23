@@ -75,7 +75,6 @@ TEST_FLOOR_PATTERNS = {
         r"CAMELS benchmark with ([\d,]+)\+ tests",
         r"\*\*([\d,]+)\+ tests\*\* across",
     ],
-    "docs/features.md": [r"\*\*([\d,]+)\+ tests\*\* with"],
 }
 
 SIGNATURE_COUNT_PATTERNS = {

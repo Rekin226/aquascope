@@ -125,11 +125,13 @@ async function loadPasted(text) {
 
 export async function openStationInWorkbench() {
   if (!state.selected || !state.result) return;
+  // Opening the workbench clears the station selection. Retain its label
+  // before changing views and before the worker's asynchronous reply.
+  const label = state.selected.name || state.selected.station_id;
   openWorkbench();
   setCard($("wb-load-card"), "loading", { message: "Handing this record to the workbench…" });
   try {
     const loaded = await call("frame_from_station", {});
-    const label = state.selected.name || state.selected.station_id;
     tableCsv = { csv: loaded.csv, label };
     setCard($("wb-load-card"), "ready");
     hideCard($("wb-qa-card"));

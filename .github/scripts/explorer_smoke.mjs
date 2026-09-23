@@ -44,6 +44,11 @@ export async function recordToExport(page, baseURL, entry, { output, phase = "co
     assert.match(csv.split(/\r?\n/)[0], /date|time/i);
     if (output) await download.saveAs(`${output}/${entry.id}-${phase}.csv`);
     result.timings_ms.export = Math.round(performance.now() - started);
+    await page.locator("details").filter({ has: page.locator("#btn-to-workbench") }).locator("summary").click();
+    await page.locator("#btn-to-workbench").click();
+    await page.waitForFunction(n => document.querySelector("#wb-meta")?.textContent.startsWith(`${n.toLocaleString()} rows`),
+      evidence.n, { timeout: 30000 });
+    result.timings_ms.workbench = Math.round(performance.now() - started);
     assert.deepEqual(errors, [], "uncaught browser errors");
     result.status = "passed";
   } catch (error) {
@@ -65,8 +70,10 @@ async function main() {
   const modulePath = process.env.AQ_PLAYWRIGHT_MODULE;
   const { chromium } = await import(modulePath ? pathToFileURL(modulePath).href : "playwright");
   const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+  const browserVersion = browser.version();
   const baseURL = process.env.AQ_BASE_URL || "https://rekin226-aquascope-explorer.static.hf.space";
   const output = process.env.AQ_OUTPUT || "browser-smoke-output";
+  const build = await fetch(`${baseURL.replace(/\/$/, "")}/wheels.json`).then(r => r.json()).catch(() => null);
   const repetitions = Math.max(1, Math.min(20, Number(process.env.AQ_REPETITIONS || 1)));
   await mkdir(output, { recursive: true });
   const results = [];
@@ -89,7 +96,8 @@ async function main() {
     case: entry.id, phase, export_ms: percentiles(results.filter(r => r.case===entry.id && r.phase===phase && r.status==="passed").map(r => r.timings_ms.export)),
   })));
   await writeFile(`${output}/results.json`, JSON.stringify({ baseURL, measured_at: new Date().toISOString(),
-    environment: { node: process.version, platform: process.platform },
+    environment: { node: process.version, platform: process.platform, browser: browserVersion,
+      viewport: { width: 1280, height: 900 }, build },
     protocol: "Fresh browser context vs reload in same context; new Python worker in both; OS and CDN caches uncontrolled.",
     results, timing_summary }, null, 2));
   if (results.some(r => r.status !== "passed")) process.exitCode = 1;

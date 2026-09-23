@@ -7,12 +7,14 @@ the same words.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from aquascope.studio.workspace import Artifact, Workspace
 
 #: The concept DOI of the software (the one CITATION.cff carries), for the "how to cite" line.
 CONCEPT_DOI = "10.5281/zenodo.21903143"
+RELEASE_DOIS = {"0.18.0": "10.5281/zenodo.22787700"}
 
 #: The report's sections in the order the Author writes them; anything else the Author adds goes after ``results``.
 SECTION_ORDER = ("summary", "problem", "site_data", "methodology", "results", "limitations", "recommendations",
@@ -60,8 +62,18 @@ def model_line(ws: Workspace) -> str:
 
 
 def citation() -> str:
-    return (f"AquaScope {version()} [Software]. Zenodo. https://doi.org/{CONCEPT_DOI} "
-            f"(cite the version DOI of the release you used).")
+    release = version()
+    doi = RELEASE_DOIS.get(release)
+    text = f"Rekin226 and contributors. AquaScope Hydrology {release} [Software]. "
+    if doi:
+        text += f"Release DOI: https://doi.org/{doi}. "
+    else:
+        text += "Version DOI not recorded. "
+    text += f"All versions: https://doi.org/{CONCEPT_DOI}."
+    revision = os.environ.get("AQUASCOPE_REVISION")
+    if revision:
+        text += f" Analysis software revision: {revision}; the release DOI does not archive later code changes."
+    return text
 
 
 def key_numbers(ws: Workspace) -> list[dict[str, Any]]:

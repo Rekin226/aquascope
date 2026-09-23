@@ -14,7 +14,7 @@ from tests.test_studio.test_methodologist import VALID_PLAN
 BRIEF = {"decision": "size the crossing", "quantities": ["the 100-year flow with a band"], "kind": "flood_risk",
          "playbook": "flood_risk", "intake": {"return_period": 100}, "assumptions": [], "questions": [],
          "ready": True}
-GOOD = "About 520 m3/s at uk_ea 3400TH by GEV (90 % band 420 to 650 m3/s)."
+GOOD = "About 520 m3/s at uk_ea 3400TH by GEV L-moments."
 
 
 def test_the_keyed_authors_prose_is_sentence_checked_and_the_drop_is_counted(studio_factory):

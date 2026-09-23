@@ -250,7 +250,8 @@ def analyze_station(
         try:
             ci = flood_ci(store["series"], return_periods=return_periods)
             res["ffa"]["fits"]["gev_bootstrap"] = {
-                k: ci[k] for k in ("q", "ci", "params", "n_bootstrap", "n_bootstrap_discarded") if k in ci
+                k: ci[k] for k in ("q", "ci", "params", "n_bootstrap", "n_bootstrap_discarded",
+                                     "estimator", "interval_method", "ci_level") if k in ci
             }
             res.setdefault("methods", []).append(ci["method"])
         except Exception as exc:  # noqa: BLE001
@@ -270,8 +271,9 @@ def flood_frequency(
     if "error" in res:
         return res
     keep = {k: res.get(k) for k in ("source", "station_id", "agency", "license", "attribution", "unit",
-                                    "start", "end", "years", "n", "ffa", "notes", "methods",
-                                    "fetch_note", "requested")}
+                                    "start", "end", "years", "n", "stats", "ffa", "notes", "methods",
+                                    "fetch_note", "requested", "variable", "data_snapshot", "archive_revision",
+                                    "software_revision", "eligibility")}
     if not keep.get("ffa"):
         keep["error"] = "flood frequency not available (see notes)"
     return keep
@@ -298,6 +300,33 @@ def assess_site(
     try:
         return _assess(float(lat), float(lon), radius_km=float(radius_km), problem=problem or None,
                        return_period=float(return_period) if return_period is not None else None)
+    except ValueError as exc:
+        return {"error": str(exc)}
+
+
+def study_area(
+    bbox: list[float] | None = None,
+    stations: list[str] | None = None,
+    question: str | None = None,
+    max_sites: int = 60,
+    max_live: int = 25,
+) -> dict[str, Any]:
+    """Study the gauges of an area together (flood focus). bbox: [west, south, east, north]; or stations: a list of
+    "source/station_id". Reads the AquaScope Archive first and fetches at most max_live gauges live from an agency
+    (keyless rate limits); the rest are listed as skipped. Returns a per-site table (record span, mean, Q100 from a
+    GEV by L-moments, Q100 per km2 where the area is known, Mann-Kendall trend on annual maxima), field
+    significance of the trends (counts up/down/none, Benjamini-Hochberg FDR, Walker test, with the independence
+    caveat), an index-flood regional growth curve (L-moments, discordancy, heterogeneity H), GeoJSON points and a
+    one-line headline. Report the headline and the caveats; do not claim a regional trend the field test rejects.
+    """
+    from aquascope import area_study as _area
+
+    if not bbox and not stations:
+        return {"error": "give bbox [west, south, east, north] or stations ['source/station_id', ...]"}
+    try:
+        return _area.study_area(stations or None, bbox=tuple(bbox) if bbox and not stations else None,
+                                question=question, max_sites=max(1, min(int(max_sites), _area.MAX_SITES)),
+                                max_live=max(0, min(int(max_live), _area.MAX_LIVE_FETCHES)))
     except ValueError as exc:
         return {"error": str(exc)}
 
@@ -395,6 +424,7 @@ def drought_indices(
     source: str | None = None,
     station_id: str | None = None,
     pet: str = "thornthwaite",
+    threshold: float = -1.0,
 ) -> dict[str, Any]:
     """Drought status at a place: SPI and SPEI at several timescales (default 1, 3 and 12 months) with the
     divergence between them. Give source + station_id for a rain gauge (its whole record is the P of both
@@ -402,13 +432,15 @@ def drought_indices(
     thornthwaite (from ERA5 temperature, the PET SPEI was introduced with), fao56 (ERA5 FAO-56 ET0) or none
     (SPI only). Returns current values and classes, the worst month, drought events, the ERA5 temperature
     trend, the thinned series and the citations. SPEI is preferable under warming; a record shorter than 30
-    years is marginal (20 is the floor).
+    years is marginal (20 is the floor). threshold is the index value at or below which a month counts as
+    drought (-1 by default, McKee et al. 1993).
     """
     from aquascope.problems import drought_indices as _run
 
     try:
         return _run(float(lat), float(lon), years=int(years), timescales=timescales or (1, 3, 12),
-                    source=source or None, station_id=station_id or None, pet=pet or "thornthwaite")
+                    source=source or None, station_id=station_id or None, pet=pet or "thornthwaite",
+                    threshold=float(threshold) if threshold is not None else -1.0)
     except Exception as exc:  # noqa: BLE001 - the model gets to see it
         return {"error": f"drought_indices failed: {type(exc).__name__}: {exc}"}
 
@@ -686,8 +718,10 @@ def _with_tables(studio: Any, tables: dict[str, str] | None) -> Any:
 
 
 def _studio_reply(studio: Any, reply: Any) -> dict[str, Any]:
+    from aquascope.study_map import workspace_features
+
     return {"reply": reply.to_dict(), "status": studio.workspace.status, "summary": studio.workspace.summary(),
-            "workspace": studio.to_dict()}
+            "workspace": studio.to_dict(), "map": workspace_features(studio.workspace)}
 
 
 def studio_start(
@@ -898,9 +932,13 @@ def build_server():
     server.tool()(flood_frequency)
     server.tool()(describe_methods)
     server.tool()(assess_site)
+    server.tool()(study_area)
     server.tool()(describe_catchment)
     server.tool()(similar_basins)
     server.tool()(regionalize_signatures)
+    from aquascope.archive.signatures import filter_gauges  # the map's signature filter (signatures.parquet)
+
+    server.tool()(filter_gauges)
     server.tool()(drought_indices)
     server.tool()(drought_propagation)
     server.tool()(low_flow_context)

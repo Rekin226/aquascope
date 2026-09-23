@@ -616,6 +616,9 @@ def cmd_harvest(args: argparse.Namespace) -> None:
     if args.what == "bundles":
         _cmd_harvest_bundles(args)
         return
+    if args.what == "signatures":
+        _cmd_harvest_signatures(args)
+        return
 
     report = harvest_stations(
         args.out,
@@ -624,6 +627,7 @@ def cmd_harvest(args: argparse.Namespace) -> None:
         api_key=args.api_key,
         max_workers=args.workers,
         write_geojson=not args.no_geojson,
+        write_signatures=not args.no_signatures,
     )
     for s in report.sources:
         status = f"{s.n_stations:>6} stations" if s.ok else f"FAILED: {s.error}"
@@ -705,6 +709,25 @@ def _cmd_harvest_bundles(args: argparse.Namespace) -> None:
     print(f"\n  {len(infos)} bundles written")
     if args.publish:
         url = publish_folder(args.out, args.publish, commit_message="harvest bundles")
+        print(f"  published: {url}")
+
+
+def _cmd_harvest_signatures(args: argparse.Namespace) -> None:
+    """`aquascope harvest signatures`: build signatures.parquet from the mirrored discharge files in --out."""
+    from aquascope.archive import publish_folder
+    from aquascope.archive.signatures import build_signatures_file
+
+    summary = build_signatures_file(args.out, sources=args.source or None)
+    if not summary.get("file"):
+        print(f"  {summary.get('note', 'nothing to do')}")
+        return
+    print(
+        f"  {summary['n_stations']:,} stations -> {summary['file']}: flows for {summary['n_with_flows']:,}, "
+        f"flood trend for {summary['n_with_trend']:,} ({summary['n_rising']:,} rising, "
+        f"{summary['n_falling']:,} falling), Q100 for {summary['n_with_q100']:,}"
+    )
+    if args.publish:
+        url = publish_folder(args.out, args.publish, commit_message="harvest signatures")
         print(f"  published: {url}")
 
 
@@ -1088,6 +1111,47 @@ def cmd_assess(args: argparse.Namespace) -> None:
         print(json.dumps(res, indent=2, ensure_ascii=False))
         return
     print(_format_assessment(res, radius_km=args.radius_km))
+
+
+# ── area-study (Study this area) ─────────────────────────────────────────────
+
+
+def cmd_area_study(args: argparse.Namespace) -> None:
+    """`aquascope area-study`: a multi-gauge flood study over a box or a list of stations (thin face)."""
+    from aquascope import area_study
+
+    if not args.bbox and not args.station:
+        logger.error("give --bbox=west,south,east,north or one or more --station source/station_id")
+        sys.exit(2)
+    res = area_study.study_area(
+        args.station or None, bbox=_parse_bbox(args.bbox) if not args.station else None, question=args.question,
+        max_sites=args.max_sites, max_live=args.max_live,
+    )
+    if args.output:
+        out = Path(args.output)
+        if out.suffix == ".xlsx":
+            out.write_bytes(area_study.to_xlsx(res))
+        elif out.suffix == ".csv":
+            out.write_text(area_study.to_csv(res), encoding="utf-8")
+        elif out.suffix == ".geojson":
+            out.write_text(json.dumps(res["geojson"], ensure_ascii=False), encoding="utf-8")
+        else:
+            out.write_text(json.dumps(res, indent=1, ensure_ascii=False), encoding="utf-8")
+        print(f"wrote {out}", file=sys.stderr)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return
+    print(res["headline"])
+    print()
+    for r in res["sites"]:
+        if r["status"] != "studied":
+            print(f"  {r['source']}/{r['station_id']}: {r['status']} ({r['note']})")
+            continue
+        q = f"Q100 {r['q100']:g} {r['unit']}" if r.get("q100") is not None else "no Q100"
+        p = f", p = {r['trend_p']:.3f}" if r.get("trend_p") is not None else ""
+        print(f"  {r['source']}/{r['station_id']}: {r['record_years']} yr, {q}, trend {r['trend']}{p}")
+    for note in res["notes"]:
+        print(f"- {note}")
 
 
 def cmd_gym(args: argparse.Namespace) -> None:
@@ -2469,9 +2533,9 @@ def main() -> None:
     p_harvest = sub.add_parser("harvest", help="Harvest catalogs into GeoParquet for the open archive (#188)")
     p_harvest.add_argument(
         "what",
-        choices=["stations", "obs", "bundles"],
+        choices=["stations", "obs", "bundles", "signatures"],
         help="stations: the catalog; obs: daily series per station; bundles: one Parquet per "
-        "variable and source rolled up from obs/",
+        "variable and source rolled up from obs/; signatures: signatures.parquet from the mirrored discharge",
     )
     p_harvest.add_argument("--out", default="archive", help="Output folder (default: ./archive)")
     p_harvest.add_argument("--source", action="append", choices=source_keys(), help="Restrict to a source (repeatable)")
@@ -2505,6 +2569,9 @@ def main() -> None:
     p_harvest.add_argument("--api-key", default=None)
     p_harvest.add_argument("--workers", type=int, default=4)
     p_harvest.add_argument("--no-geojson", action="store_true", help="Skip stations.geojson")
+    p_harvest.add_argument(
+        "--no-signatures", action="store_true", help="stations: skip rebuilding signatures.parquet from obs/"
+    )
     p_harvest.add_argument(
         "--publish",
         default=None,
@@ -2612,6 +2679,19 @@ def main() -> None:
     p_assess.add_argument("--radius-km", type=float, default=50.0, help="How far a gauge may be to count (default 50)")
     p_assess.add_argument("--return-period", type=float, default=None, help="The T (years) the question asks for")
     p_assess.add_argument("--json", action="store_true")
+
+    p_area = sub.add_parser(
+        "area-study", help="Study the gauges of an area together: per-site floods, trend field, regional growth curve"
+    )
+    p_area.add_argument("--bbox", default=None,
+                        help="west,south,east,north (write --bbox=-77,38,-76,39 when it starts with a minus)")
+    p_area.add_argument("--station", action="append", default=None, help="source/station_id (repeatable)")
+    p_area.add_argument("--question", default=None, help="A title for the study")
+    p_area.add_argument("--max-sites", type=int, default=60, help="Gauges studied at most (default 60)")
+    p_area.add_argument("--max-live", type=int, default=25,
+                        help="Gauges fetched live from an agency at most; the rest come from the Archive (default 25)")
+    p_area.add_argument("--output", "-o", default=None, help="Write .xlsx, .csv, .geojson or .json")
+    p_area.add_argument("--json", action="store_true")
 
     p_gym = sub.add_parser("gym", help="HydroGym: a gym-style calibration environment over real basins (#175)")
     gym_sub = p_gym.add_subparsers(dest="gym_cmd", required=True)
@@ -3023,6 +3103,7 @@ def main() -> None:
         "mcp": cmd_mcp,
         "basins": cmd_basins,
         "assess": cmd_assess,
+        "area-study": cmd_area_study,
         "gym": cmd_gym,
         "caravan": cmd_caravan,
         "ask": cmd_ask,

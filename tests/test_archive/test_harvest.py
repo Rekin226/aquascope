@@ -78,6 +78,7 @@ def test_harvest_writes_files_and_health(tmp_path):
     assert b"geo" in table.schema.metadata
     # sorted by (source, station_id)
     assert table.column("source").to_pylist() == ["ireland_opw", "pegelonline"]
+
     assert table.column("site_id").to_pylist() == ["0000001041", "celle-site"]
 
     gj = json.loads((out / "stations.geojson").read_text(encoding="utf-8"))
@@ -96,6 +97,21 @@ def test_harvest_writes_files_and_health(tmp_path):
     assert "| `uk_ea` |" in card and "failed: RuntimeError: 503" in card
     assert "resolve/main/stations.parquet" in card
     assert "Group by `(source, site_id)`" in card
+
+
+def test_failed_and_unrequested_catalogs_retain_previous_stations(tmp_path):
+    with patch("aquascope.archive.harvest.station_catalogs", side_effect=_fake_catalogs):
+        harvest_stations(tmp_path, write_signatures=False)
+    # A failed requested source and an unrequested source both retain their last good pins.
+    with patch("aquascope.archive.harvest.station_catalogs", return_value={
+        "ireland_opw": StationCatalog(source="ireland_opw", error="offline"),
+    }):
+        report = harvest_stations(tmp_path, sources=["ireland_opw"], write_signatures=False)
+    assert report.n_stations == 2 and report.n_failed == 1
+    assert report.sources[0].retained_stations == 1
+    assert pq.read_table(tmp_path / "stations.parquet").column("source").to_pylist() == [
+        "ireland_opw", "pegelonline",
+    ]
 
 
 def test_catalog_site_ids_round_trip_and_legacy_fallback(tmp_path):

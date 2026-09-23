@@ -37,8 +37,8 @@ branches:
     rationale: >-
       {{ station.years }} years of daily discharge at {{ station.name }} ({{ station.source }}
       {{ station.station_id }}, {{ station.distance_km }} km from the point): an at-site frequency fit is
-      defensible. The plan checks the record for a trend first, fits two distributions (GEV by L-moments and
-      Log-Pearson III) with a bootstrap band, and quotes the spread. The estimate is stationary; climate change
+      a candidate for screening, subject to enough complete annual maxima. Check the maxima for a trend,
+      compare GEV L-moments and Log-Pearson III, and keep each estimator's uncertainty separate. Climate change
       enters as a caveat, not as a nonstationary fit, because design-flood guidance under change is immature.
     steps:
       - id: s1
@@ -79,17 +79,18 @@ branches:
           station_id: "{{ station.station_id }}"
           bootstrap_ci: true
         rationale: >-
-          Return levels from GEV (L-moments) and Log-Pearson III (Bulletin 17C), with a bootstrap band on the
-          GEV. The T = {{ intake.return_period }} year quantile is quoted from both fits with its interval and
-          the spread between them; the fit is also read at the record maximum's own return period, so the
-          report can say whether the largest observed flood sits inside it.
+          Compare the T = {{ intake.return_period }} year daily-mean return levels from GEV L-moments and
+          Log-Pearson III. The LP3 interval belongs to that fit. GEV MLE, with a possible L-moments fallback,
+          has its own bootstrap interval; that interval is not attached to the separate GEV L-moments estimate.
+          This daily-flow screening is not a complete Bulletin 17C procedure. Check fit spread and whether
+          the fitted curve reaches the largest observed daily-mean flood at its empirical return period.
         expects:
           - check: min_years
             value: 20
-            path: years
+            path: ffa.n_years
           - check: max_return_period_factor
             value: 3
-            path: years
+            path: ffa.n_years
             return_period: "{{ intake.return_period }}"
           - check: ci_finite
             path: ffa.fits.gev_bootstrap.ci
@@ -122,9 +123,12 @@ branches:
           lat: "{{ site.lat }}"
           lon: "{{ site.lon }}"
           years: 40
+          match_mean_flow: "{{ result.s3.stats.mean }}"
         rationale: >-
-          GloFAS modelled discharge for the cell, with its own indicative frequency fit, as the independent
-          cross-check on the at-site quantile: the two are compared as a ratio, not only listed.
+          Inspect GloFAS modelled discharge and its own indicative frequency fit. Nearby mean-flow matches
+          are diagnostics only. A ratio can support a cross-check only after independent evidence establishes
+          the same catchment, river topology and comparable upstream area. Without that evidence, mark the
+          comparison unverified and skip it; a similar mean flow cannot establish catchment comparability.
         expects:
           - check: not_empty
             path: glofas
@@ -142,7 +146,7 @@ branches:
     rationale: >-
       {{ station.years }} years of discharge at {{ station.name }} ({{ station.source }} {{ station.station_id }}):
       too short for an at-site estimate to stand alone. The at-site numbers are marginal and are quoted next
-      to a regional estimate from donor gauges, both with their bands.
+      to a regional estimate from donor gauges, with each result's own uncertainty when available.
     steps:
       - id: s1
         tool: describe_catchment
@@ -286,7 +290,8 @@ caveats:
     stationary, and any climate scenario is an overlay on it, not a nonstationary fit.
   - >-
     Rare quantiles move with the distribution and the estimator. Two fits (GEV by L-moments and Log-Pearson
-    III) are quoted with their intervals and the spread between them; a spread above 25 percent is reported
+    III) are compared by their point estimates; intervals are attached only to the estimator that produced
+    them. GEV L-moments has no interval here; GEV MLE has a separate bootstrap interval. A spread above 25 percent is reported
     as disagreement, not averaged away.
   - say: >-
       The catchment has upstream dams (degree of regulation above zero in BasinATLAS): the annual maxima are

@@ -17,6 +17,9 @@ def test_studio_tools_round_trip(tmp_path, no_deliverables):
         assert done["reply"]["kind"] == "report" and done["status"] == "done"
         assert done["workspace"]["study"]["plan"]["edited"] and len(done["workspace"]["run"]["results"]) == 3
         assert "50-year" in str(done["reply"]["payload"]["report"]["key_numbers"])
+        # the study on the map comes back with every reply: the site, then the cells the anywhere step sampled
+        roles = [f["properties"]["role"] for f in done["map"]["features"]]
+        assert done["map"]["type"] == "FeatureCollection" and roles[0] == "site" and "grid_cell" in roles
         q = m.studio_follow_up(done["workspace"], "what is the 50-year flow?")
         assert q["reply"]["kind"] == "answer" and "m3/s" in q["reply"]["text"]
         ch = m.studio_say(q["workspace"], "redo it with a 20-year return period")

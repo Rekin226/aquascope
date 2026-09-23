@@ -1085,8 +1085,12 @@ def _rule_steps(ws: Workspace, request: str, study: Study) -> tuple[list[dict[st
             if st is None:
                 reasons.append(f"no {variable} gauge for a trend test")
                 continue
+            from aquascope.trend_series import is_flood_question
+
+            series = ("annual maxima" if is_flood_question(ws.brief.kind, ws.brief.problem, ws.brief.playbook)
+                      else "annual means")
             add("analyze_station", {"source": st.source, "station_id": st.station_id},
-                f"Mann-Kendall trend test with Sen's slope on the annual means at {st.name or st.station_id}.",
+                f"Mann-Kendall trend test with Sen's slope on the {series} at {st.name or st.station_id}.",
                 [{"check": "not_empty", "path": "trend"}], method="trend_mann_kendall")
         elif rule == "drought":
             if site.get("lat") is None:

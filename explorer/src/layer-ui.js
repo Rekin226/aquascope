@@ -13,6 +13,7 @@ import {
 } from "./map.js?v=__BUILD__";
 import { openModal } from "./shell.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
+import { openAreaStudy } from "./area-study.js?v=__BUILD__";
 
 const anyTimeLayer = () =>
   [...state.overlays].some((id) => (overlayById(id) || {}).time) || Boolean(basemapById(state.basemap).time);
@@ -233,6 +234,13 @@ function showSelection(bbox) {
     downloadBlob(`aquascope-gauges-${bbox.south.toFixed(2)}_${bbox.west.toFixed(2)}.csv`, csv, "text/csv");
   });
   box.appendChild(dl);
+  // Study this area (area-study.js): a multi-gauge flood study over these gauges.
+  const study = document.createElement("button");
+  study.className = "btn tiny primary";
+  study.textContent = "Study this area";
+  study.disabled = rows.length === 0;
+  study.addEventListener("click", () => openAreaStudy(rows, bbox));
+  box.appendChild(study);
   const clear = document.createElement("button");
   clear.className = "btn tiny";
   clear.textContent = "Clear";

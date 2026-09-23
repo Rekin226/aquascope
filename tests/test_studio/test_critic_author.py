@@ -33,8 +33,10 @@ def test_the_template_report_has_every_section_in_order_with_numbers_from_the_re
     assert report["answer"].startswith("The 100-year return level") and "520 m3/s" in report["answer"]
     assert "The record at Kingston (uk_ea 3400TH)" in report["answer"]
     labels = {k["label"]: k for k in report["key_numbers"]}
-    assert labels["100-year return level, GEV (L-moments)"] == {"label": "100-year return level, GEV (L-moments)",
-                                                              "value": 520, "unit": "m3/s", "step": "s3"}
+    quantile = labels["100-year return level, GEV (L-moments)"]
+    assert {k: v for k, v in quantile.items() if k != "evidence"} == {
+        "label": "100-year return level, GEV (L-moments)", "value": 520, "unit": "m3/s", "step": "s3"}
+    assert quantile["evidence"]["estimator"] == "gev_lmoments"
     assert labels["Upstream area"]["value"] == 9948.0 and labels["Q95 (exceeded 95 % of days)"]["step"] == "s2"
     by_id = {s["id"]: s for s in report["sections"]}
     assert "| Quantity |" not in by_id["summary"]["text"] and "4 step(s) ran" in by_id["summary"]["text"]
@@ -90,11 +92,11 @@ def test_the_model_writes_the_prose_and_the_critic_earns_one_rewrite(no_delivera
     ws = _ran()
     client = FakeModel({
         "author": [
-            {"title": "Design flow at Kingston", "answer": "About 520 m3/s at uk_ea 3400TH (GEV), band 420 to 650.",
+            {"title": "Design flow at Kingston", "answer": "About 520 m3/s at uk_ea 3400TH (GEV L-moments).",
              "sections": {"summary": "One paragraph.", "results-s3": "The fit gives 520 m3/s.",
                           "recommendations": "Use 548 m3/s from LP3 as the upper design value.", "nope": "x"}},
-            {"title": "Design flow at Kingston", "answer": "About 520 m3/s at uk_ea 3400TH (GEV), band 420 to 650.",
-             "sections": {"recommendations": "Quote both fits: 520 and 548 m3/s, with the 410 to 690 band."}},
+            {"title": "Design flow at Kingston", "answer": "About 520 m3/s at uk_ea 3400TH (GEV L-moments).",
+             "sections": {"recommendations": "Quote both fits: 520 and 548 m3/s."}},
         ],
         "critic": [{"issues": [{"section": "recommendations", "severity": "fix", "text": "one fit only",
                                 "fix": "quote both fits"},

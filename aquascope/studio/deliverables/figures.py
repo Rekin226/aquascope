@@ -232,7 +232,7 @@ def _frequency_curve(payload: dict[str, Any], unit: str | None, site: dict[str, 
     if rl["lp3"] is not None:
         curves.append(("Log-Pearson III", _floats(rl["lp3"]), DARK, "--"))
     if rl["boot"] is not None:
-        curves.append(("GEV (bootstrap)", _floats(rl["boot"]), SECONDARY, ":"))
+        curves.append(("GEV (MLE, bootstrap interval)", _floats(rl["boot"]), SECONDARY, ":"))
     for label, q, colour, style in curves:
         ax.plot(t, q, style, color=colour, linewidth=1.8, marker="o", markersize=4, label=label)
     emp = rl["empirical"]
@@ -244,7 +244,7 @@ def _frequency_curve(payload: dict[str, Any], unit: str | None, site: dict[str, 
     ax.set_ylabel(_ylabel(variable, u))
     ax.set_title(f"Flood frequency at {record_name(payload, site)}")
     ax.legend(loc="upper left", frameon=False)
-    fits = " and ".join(c[0] for c in curves[:2]) if curves else "the fitted"
+    fits = ", ".join(c[0] for c in curves) if curves else "the fitted"
     caption = f"Return levels of annual maximum {variable} at {record_name(payload, site)}: {fits} fits"
     if rl["band"]:
         caption += f" with the {rl['band']} band"
@@ -289,6 +289,13 @@ def _fdc(payload: dict[str, Any], unit: str | None, site: dict[str, Any] | None)
 
 
 def _trend(payload: dict[str, Any], unit: str | None, site: dict[str, Any] | None) -> Drawn | None:
+    from aquascope.trend_series import reported_trend
+
+    tr = reported_trend(payload)
+    if isinstance(tr, dict) and tr.get("unavailable"):
+        return None
+    if isinstance(tr, dict) and tr.get("on") == "annual maxima":
+        return _trend_on_maxima(payload, tr, unit, site)
     tr = payload.get("trend")
     got = series_of(payload)
     if not isinstance(tr, dict) or not got:
@@ -327,6 +334,42 @@ def _trend(payload: dict[str, Any], unit: str | None, site: dict[str, Any] | Non
     caption = (f"Annual mean {variable} at {record_name(payload, site)} with the Sen slope line; the Mann-Kendall "
                f"test finds {verdict}" + (f" (p = {p:.3f}, {int(tr.get('n_years') or len(xs))} years)"
                                           if p is not None else "") + ".")
+    return fig, caption
+
+
+def _trend_on_maxima(payload: dict[str, Any], tr: dict[str, Any], unit: str | None,
+                     site: dict[str, Any] | None) -> Drawn | None:
+    """The trend figure for a flood question: the annual maxima the Mann-Kendall test ran on, with the Sen
+    slope line."""
+    import numpy as np
+
+    am = payload.get("annual_max") if isinstance(payload.get("annual_max"), dict) else {}
+    xs = _floats(am.get("year") or [])
+    ys = _floats(am.get("v") or [])
+    if len(xs) != len(ys):
+        return None
+    ok = np.isfinite(xs) & np.isfinite(ys)
+    if ok.sum() < 3:
+        return None
+    xs, ys = xs[ok], ys[ok]
+    variable = variable_of(payload)
+    u = unit_of(payload, unit)
+    fig, ax = _figure()
+    ax.plot(xs, ys, "o-", color=PRIMARY, linewidth=1, markersize=4, label=f"annual maximum {variable}")
+    slope = num(tr.get("sens_slope_per_year"))
+    if slope is not None:
+        intercept = float(np.median(ys) - slope * np.median(xs))
+        ax.plot(xs, intercept + slope * xs, "--", color=DANGER, linewidth=1.6,
+                label=f"Sen slope {slope:+.3g} {u}/yr" if u else f"Sen slope {slope:+.3g} per yr")
+    verdict = str(tr.get("trend") or "no trend").replace("_", " ")
+    p = num(tr.get("p_value"))
+    ax.set_title(f"Mann-Kendall on the annual maxima: {verdict}" + (f" (p = {p:.3f})" if p is not None else ""))
+    ax.set_xlabel("Year")
+    ax.set_ylabel(_ylabel(f"annual maximum {variable}", u))
+    ax.legend(loc="best", frameon=False)
+    caption = (f"Annual maximum {variable} at {record_name(payload, site)} with the Sen slope line; the "
+               f"Mann-Kendall test on the annual maxima finds {verdict}"
+               + (f" (p = {p:.3f}, {int(tr.get('n_years') or len(xs))} years)" if p is not None else "") + ".")
     return fig, caption
 
 

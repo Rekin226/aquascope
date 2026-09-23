@@ -1,0 +1,99 @@
+{
+ "id": "reference-kingston-uk",
+ "title": "Daily-mean flood screening: Thames at Kingston, England",
+ "kind": "flood_risk",
+ "shows": "Observed snapshot with estimator-specific uncertainty. Independent domain review pending.",
+ "site": {
+  "lat": 51.415482,
+  "lon": -0.307629,
+  "name": "Thames at Kingston, England"
+ },
+ "problem": "Screen the 100-year daily-mean flood at Thames at Kingston, England; identify estimator uncertainty and limitations.",
+ "intake": {
+  "return_period": 100
+ },
+ "upload": null,
+ "status": "done",
+ "declined_reason": null,
+ "error": null,
+ "model": null,
+ "provider": null,
+ "recorded": "2026-09-23T03:43:04+00:00",
+ "seconds": null,
+ "tokens": {
+  "prompt": 0,
+  "completion": 0,
+  "calls": 0,
+  "by_role": {},
+  "total": 0
+ },
+ "usd": 0.0,
+ "usd_per_mtoken": [
+  3.0,
+  15.0
+ ],
+ "playbook": "flood_risk",
+ "branch": null,
+ "plan_author": null,
+ "steps": 1,
+ "gates": {
+  "passed": 5,
+  "total": 5
+ },
+ "checks": {
+  "passed": 0,
+  "total": 0
+ },
+ "replans": 0,
+ "stop_reason": null,
+ "headline": "Screen the 100-year daily-mean flood at Thames at Kingston, England; identify estimator uncertainty and limitations: 100-year return level, GEV (L-moments) 652.5 m3/s (established).",
+ "not_established": [],
+ "figures": [
+  {
+   "name": "s1_frequency_curve.png",
+   "id": "fig-s1-frequency_curve",
+   "step": "s1",
+   "caption": "Return levels of annual maximum discharge at Thames at Kingston, England (uk_ea 8496ce69-482c-406a-a2f0-ac418ef8f099): GEV (L-moments), Log-Pearson III, GEV (MLE, bootstrap interval) fits with the GEV bootstrap 90 % band, and the observed annual maxima at their Weibull plotting positions.",
+   "bytes": 91305
+  },
+  {
+   "name": "s1_annual_maxima.png",
+   "id": "fig-s1-annual_maxima",
+   "step": "s1",
+   "caption": "Annual maximum discharge at Thames at Kingston, England (uk_ea 8496ce69-482c-406a-a2f0-ac418ef8f099), 140 years (1884 to 2025).",
+   "bytes": 54359
+  },
+  {
+   "name": "s1_trend.png",
+   "id": "fig-s1-trend",
+   "step": "s1",
+   "caption": "Annual maximum discharge at Thames at Kingston, England (uk_ea 8496ce69-482c-406a-a2f0-ac418ef8f099) with the Sen slope line; the Mann-Kendall test on the annual maxima finds no trend (p = 0.178, 140 years).",
+   "bytes": 104376
+  }
+ ],
+ "files": [
+  "workspace.json",
+  "report.md",
+  "study.yaml",
+  "figures/s1_frequency_curve.png",
+  "figures/s1_annual_maxima.png",
+  "figures/s1_trend.png",
+  "complete.aqstudy.json",
+  "report.html",
+  "observations.csv",
+  "provenance.json"
+ ],
+ "trimmed": [
+  "run.results[s1].result.series.t: 17316 entries kept to 50",
+  "run.results[s1].result.series.v: 17316 entries kept to 50",
+  "run.results[s1].result.annual_max.year: 140 entries kept to 50",
+  "run.results[s1].result.annual_max.v: 140 entries kept to 50",
+  "run.results[s1].result.fdc.exceedance: 202 entries kept to 50",
+  "run.results[s1].result.fdc.q: 202 entries kept to 50",
+  "still 1,548,039 bytes after trimming"
+ ],
+ "aquascope_version": "0.18.0",
+ "review_status": "independent domain review pending",
+ "input_sha256": "9bb306f0fe804576bc5591c8f79727dfe0a5078a9c86c2592efb89bdc7b13957",
+ "software_revision": "efe3a0e9f8469011f2f6ad9a8c87967dbf22072a"
+}

@@ -63,7 +63,8 @@ def test_the_run_writes_results_gates_and_the_study_and_skips_figures_without_th
     assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency", "anywhere"]
     kinds = [(e["role"], e["event"]) for e in ws.events]
     assert ("analyst", "figures_skipped") in kinds and ("runner", "done") in kinds and ("reviewer", "gate") in kinds
-    assert ("analyst", "gates") in kinds and ws.artifacts == []
+    # no figures or tables without the makers; the study map is pure Python and is always made
+    assert ("analyst", "gates") in kinds and [a.id for a in ws.artifacts] == ["study-map"]
 
 
 def test_figures_and_tables_are_made_per_step_when_the_makers_exist(monkeypatch):
@@ -94,7 +95,7 @@ def test_figures_and_tables_are_made_per_step_when_the_makers_exist(monkeypatch)
         analysts.run(ws, None, on_artifact=streamed.append)
     assert [m[1] for m in made if m[0] == "fig"] == ["s1", "s2", "s3", "s4"] and made[2][3] == "m3/s"
     assert made[2][4] == {"lat": 51.415, "lon": -0.308}
-    ids = sorted(a.id for a in ws.artifacts)
+    ids = sorted(a.id for a in ws.artifacts if a.id != "study-map")
     assert ids == ["s1_series", "s1_table", "s2_series", "s2_table", "s3_table", "s4_series", "s4_table"], \
         "a maker's error skips one figure"
     assert [a.id for a in streamed] == [a.id for a in ws.artifacts]
@@ -138,8 +139,9 @@ def test_a_failed_gate_runs_the_playbooks_fallback_then_the_specialists_proposal
     assert ws2.study["steps"][2]["fallback"]["step"]["tool"] == "anywhere"
     r3 = ws2.run["results"][2]
     assert r3["fallback"]["tool"] == "anywhere" and r3["fallback"]["ok"] and r3["fallback"]["gates_passed"]
+    # s4 is not called at all: it snaps its GloFAS cell to s3's mean flow, which the replaced fit does not carry
     assert [c[0] for c in calls2] == ["describe_catchment", "analyze_station", "flood_frequency", "similar_basins",
-                                      "flood_frequency", "anywhere", "anywhere"], "passed steps are reused"
+                                      "flood_frequency", "anywhere"], "passed steps are reused"
     assert ws2.ledger["analyst"]["calls"] == 2, "one proposal for s3, one (empty) for the cross-check s4"
     assert client.requests[0]["context"]["failed_step"]["id"] == "s3"
     assert any(e["event"] == "replan" and e["role"] == "analyst" for e in ws2.events)

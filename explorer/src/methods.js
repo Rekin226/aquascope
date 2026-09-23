@@ -3,7 +3,7 @@
 // people how to cite the tool they just used (the repo has had a CITATION.cff
 // and a DOI all along, and the Explorer never showed either).
 
-import { $, copyText, escapeHtml } from "./core.js?v=__BUILD__";
+import { $, copyText, escapeHtml, state } from "./core.js?v=__BUILD__";
 import { openModal } from "./shell.js?v=__BUILD__";
 
 export const NLDI_METHOD = {
@@ -80,6 +80,7 @@ export function methodsOnPage(listId) {
 // ── how to cite AquaScope ───────────────────────────────────────────────────
 
 export const AQUASCOPE_DOI = "10.5281/zenodo.21903143";     // concept DOI, all versions
+export const RELEASE_DOI = "10.5281/zenodo.22787700";       // v0.18.0, from CITATION.cff
 export const ARCHIVE_URL = "https://huggingface.co/datasets/Rekin226/aquascope-gauges";
 
 export const BIBTEX = `@software{aquascope,
@@ -87,27 +88,37 @@ export const BIBTEX = `@software{aquascope,
   title   = {AquaScope: the open record of the world's public water gauges,
              and the tools to analyse them},
   url     = {https://github.com/Rekin226/aquascope},
-  doi     = {${AQUASCOPE_DOI}},
-  note    = {Concept DOI, resolves to the latest release}
+  version = {0.18.0},
+  doi     = {${RELEASE_DOI}},
+  note    = {Base software release; Explorer build __BUILD__. Record this build when it differs from the release.}
 }`;
 
 export function openCite(extraMethods = []) {
+  const record = state.result;
+  const identity = record?.data_snapshot ? `<h3>This analyzed record</h3>
+    <p>${escapeHtml(record.source || "uploaded data")} / ${escapeHtml(record.station_id || "user table")};
+    ${escapeHtml(record.variable)} in ${escapeHtml(record.unit)}; ${escapeHtml(record.start)} to ${escapeHtml(record.end)};
+    ${escapeHtml(record.n)} observations.</p>
+    <p>Content identity: <code>${escapeHtml(record.data_snapshot)}</code>.</p>
+    <p>Archive revision: ${escapeHtml(record.archive_revision || "not recorded; retain the downloaded data")}. A content hash is not a dataset DOI.</p>` : "";
   const list = extraMethods.length
     ? `<h3>Methods used on this page</h3><ol class="cite-methods">${extraMethods.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ol>`
     : "";
   openModal("Cite this", `
-    <p>Cite the software with its concept DOI (it resolves to the version you used), and the agency whose
-    observations you looked at. The data licence is on every result, in Methods and citations.</p>
+    <p>Cite the software release and the agency whose observations you used. The concept DOI identifies
+    the evolving project; it does not pin the version used. This Explorer build is <code>__BUILD__</code>.
+    For an unreleased build, retain that source revision alongside the base release citation.</p>
     <h3>Software</h3>
     <pre id="cite-bibtex">${escapeHtml(BIBTEX)}</pre>
     <p><button class="btn" id="cite-copy">Copy BibTeX</button>
-       <a class="btn" href="https://doi.org/${AQUASCOPE_DOI}" target="_blank" rel="noopener">DOI ↗</a>
+       <a class="btn" href="https://doi.org/${RELEASE_DOI}" target="_blank" rel="noopener">Release DOI ↗</a>
        <a class="btn" href="https://github.com/Rekin226/aquascope/blob/main/CITATION.cff" target="_blank" rel="noopener">CITATION.cff ↗</a></p>
     <h3>The gauge archive</h3>
     <p>The catalog and the daily observations behind this page are published as GeoParquet at
       <a href="${ARCHIVE_URL}" target="_blank" rel="noopener">Rekin226/aquascope-gauges</a>, rebuilt weekly.
-      Each source keeps its own licence and attribution.</p>
-    ${list}
+      Each source keeps its own licence and attribution. Retain the archive commit, downloaded data,
+      actual analysis period and content hash; a link to the latest archive does not pin a snapshot.</p>
+    ${identity}${list}
   `);
   const b = $("cite-copy");
   if (b) b.addEventListener("click", () => copyText(BIBTEX, b, "BibTeX copied"));

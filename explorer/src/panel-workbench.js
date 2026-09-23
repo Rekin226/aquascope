@@ -1,3 +1,4 @@
+import { metrics } from "./metrics.js?v=__BUILD__";
 // The Workbench: your own data, analysed by the same code as everything else.
 //
 // Drop a CSV or an Excel export (aquascope.ingest works out the date and value
@@ -68,6 +69,7 @@ export function tableLabel() { return table ? table.label : null; }
 // ── loading data in ─────────────────────────────────────────────────────────
 
 async function afterLoad(result, label) {
+  metrics.record("table_loaded", { kind: "table" });
   table = { ...result, label };
   $("wb-label").textContent = label;
   $("wb-meta").textContent = `${result.n.toLocaleString()} rows · ${result.columns.length} columns: ${result.columns.slice(0, 8).join(", ")}`;
@@ -87,7 +89,7 @@ async function loadFile(file) {
     const text = await file.text();
     const res = await call("ingest", { text, filename: file.name });
     // The cleaned series is now the worker's table; ask it to describe itself.
-    tableCsv = { csv: seriesToCsv(res), label: file.name };
+    tableCsv = { csv: res.csv, label: file.name };
     const loaded = await call("load_table", tableCsv);
     setCard($("wb-load-card"), "ready");
     renderQa(res);
@@ -97,26 +99,15 @@ async function loadFile(file) {
   }
 }
 
-// The ingest result carries the cleaned series; hand it back as CSV so the
-// workbench sees a plain table with a date and a value column.
-function seriesToCsv(res) {
-  const a = res.analysis || {};
-  const t = (a.series && a.series.t) || [];
-  const v = (a.series && a.series.v) || [];
-  const variable = a.variable || "value";
-  const lines = [`date,${variable}`];
-  for (let i = 0; i < t.length; i++) lines.push(`${t[i]},${v[i]}`);
-  return lines.join("\n");
-}
-
-// The record on screen as the two-column table the worker builds from it, so a
-// restarted worker can be handed the same table.
-function stationCsv(res) {
-  const t = (res && res.series && res.series.t) || [];
-  const v = (res && res.series && res.series.v) || [];
-  const lines = ["date,discharge"];
-  for (let i = 0; i < t.length; i++) lines.push(`${t[i]},${v[i]}`);
-  return lines.join("\n");
+export async function openSampleTable() {
+  openWorkbench();
+  try {
+    const response = await fetch(new URL("../samples/daily-flow.csv", import.meta.url));
+    if (!response.ok) throw new Error(`Sample unavailable (HTTP ${response.status})`);
+    await loadFile(new File([await response.text()], "synthetic-daily-flow.csv", { type: "text/csv" }));
+  } catch (err) {
+    setCard($("wb-load-card"), "error", { message: err.message });
+  }
 }
 
 async function loadPasted(text) {
@@ -134,12 +125,14 @@ async function loadPasted(text) {
 
 export async function openStationInWorkbench() {
   if (!state.selected || !state.result) return;
+  // Opening the workbench clears the station selection. Retain its label
+  // before changing views and before the worker's asynchronous reply.
+  const label = state.selected.name || state.selected.station_id;
   openWorkbench();
   setCard($("wb-load-card"), "loading", { message: "Handing this record to the workbench…" });
   try {
     const loaded = await call("frame_from_station", {});
-    const label = state.selected.name || state.selected.station_id;
-    tableCsv = { csv: stationCsv(state.result), label };
+    tableCsv = { csv: loaded.csv, label };
     setCard($("wb-load-card"), "ready");
     hideCard($("wb-qa-card"));
     await afterLoad(loaded, label);
@@ -372,6 +365,7 @@ export function closeWorkbench() {
 }
 
 export function initWorkbench() {
+  $("wb-sample").addEventListener("click", openSampleTable);
   const r = root();
   r.addEventListener("tabchange", () => {
     for (const el of r.querySelectorAll(".plot")) {

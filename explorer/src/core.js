@@ -3,6 +3,8 @@
 // module (the map, the Ask drawer, a similar-basins list) open a station
 // without importing the panel that owns it.
 
+import { metrics } from "./metrics.js?v=__BUILD__";
+
 export const $ = (id) => document.getElementById(id);
 export const EMPTY_FC = { type: "FeatureCollection", features: [] };
 
@@ -124,6 +126,7 @@ export function downloadBlob(name, text, type = "text/plain") {
   a.href = URL.createObjectURL(new Blob([text], { type }));
   a.download = name.replace(/[^\w.-]+/g, "_");
   a.click();
+  metrics.record("export_handoff", { kind: type === "text/csv" ? "csv" : type === "application/json" ? "json" : "other" });
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 

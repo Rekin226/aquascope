@@ -47,7 +47,7 @@ print(sig.flashiness_index)    # indice de flashiness de Richards-Baker
 22 signatures couvrant l'amplitude, la variabilité, la temporalité, la récession et la flashiness — voir [docs/features.md](../features.md#hydrological-analysis).
 
 ## 💻 CLI
-AquaScope propose une CLI de 29 commandes pour les workflows les plus courants :
+AquaScope propose une CLI de 30 commandes pour les workflows les plus courants :
 ```bash
 # Collecter des données
 aquascope collect --source usgs --days 365

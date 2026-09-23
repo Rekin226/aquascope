@@ -134,6 +134,14 @@ def test_placeholders_resolve_to_typed_values_and_prose():
     assert study.plan["station"]["station_id"] == "3400TH"
 
 
+def test_flood_gates_use_complete_maxima_not_the_calendar_span():
+    step = pbk.plan("flood_risk", LONG, {"return_period": 100}).step_by_id("s3")
+    checks = [g for g in step.expects if g["check"] in {"min_years", "max_return_period_factor"}]
+    outcomes = evaluate(checks, {"years": 120, "ffa": {"n_years": 10}})
+    assert len(outcomes) == 2 and all(not g["passed"] for g in outcomes)
+    assert all(g["passed"] for g in evaluate(checks, {"years": 120, "ffa": {"n_years": 100}}))
+
+
 def test_intake_defaults_and_coercion():
     pb = pbk.load("groundwater_decline")
     filled = pbk.fill_intake(pb, {"horizon": "20", "attribute_cause": "no", "concern": "Supply"})
@@ -231,8 +239,9 @@ def test_a_gauged_branch_without_its_station_is_an_authoring_error():
 def test_the_study_a_playbook_emits_runs_with_no_model():
     study = pbk.plan("flood_risk", LONG, {"return_period": 100})
     payload = {"source": "uk_ea", "station_id": "3400TH", "unit": "m3/s", "years": 39.9, "trend": {"p_value": 0.3},
+               "stats": {"mean": 1.2},
                "sampling": {"n": 14555, "span_years": 39.9, "per_year": 364.8, "inferred_resolution": "daily"},
-               "ffa": {"return_periods": [2, 5, 10, 25, 50, 100],
+               "ffa": {"n_years": 39, "return_periods": [2, 5, 10, 25, 50, 100],
                        "record_max": {"value": 5.5, "year": 2000, "empirical_return_period": 40.0, "n_years": 39},
                        "amax_trend": {"on": "annual maxima", "p_value": 0.5, "tau": 0.0},
                        "fits": {"gev_lmoments": {"q": [1, 2, 3, 4, 5, 6], "at_record_max": 4.8,

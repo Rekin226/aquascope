@@ -1,0 +1,34 @@
+# An AquaScope study (version 3): the plan behind an answer, its gates, and what happened.
+#   aquascope run study.yaml
+version: 3
+title: "Daily-mean flood screening: Seine at Paris-Austerlitz, France"
+question: "Screen the 100-year daily-mean flood at Seine at Paris-Austerlitz, France; identify estimator uncertainty and limitations."
+created: "2026-09-23T03:43:13+00:00"
+aquascope_version: "0.18.0"
+author: "hand"
+problem:
+  kind: "flood_risk"
+  site: {"lat": 48.84468962, "lon": 2.365510635}
+  params: {"return_period": 100}
+plan:
+  playbook: "flood_risk"
+  objective: "Screen the 100-year daily-mean flood at Seine at Paris-Austerlitz, France; identify estimator uncertainty and limitations."
+  caveats: ["Maintainer reproduction; independent hydrologist review pending.", "Daily mean maxima are not instantaneous annual peaks or a certified design flood.", "No catchment regulation, channel topology or model/gauge comparability was established.", "Re-run live uses current observations; use the retained CSV and this script for reproduction."]
+  methodology: ["Compare GEV L-moments, LP3 and GEV MLE quantiles on complete-year daily maxima."]
+  assumptions: ["Independent stationary annual maxima."]
+steps:
+  - tool: "flood_frequency"
+    id: "s1"
+    method: "at_site_flood_frequency"
+    arguments:
+      source: "hubeau_hydrometrie"
+      station_id: "F700000103"
+      bootstrap_ci: true
+    expects:
+      - {"check": "min_years", "path": "ffa.n_years", "value": 20}
+      - {"check": "unit_present", "path": "unit"}
+      - {"check": "max_return_period_factor", "path": "ffa.n_years", "value": 3, "return_period": 100}
+      - {"check": "spread_within", "paths": ["ffa.fits.gev_lmoments.q", "ffa.fits.lp3.q"], "value": 0.25, "return_period": 100}
+      - {"check": "trend_on_series", "path": "ffa.amax_trend", "value": 0.05}
+results:
+  s1: {"ok": true, "gates": [{"check": "min_years", "passed": true, "detail": "20 years of record, 20 needed"}, {"check": "unit_present", "passed": true, "detail": "unit m3/s"}, {"check": "max_return_period_factor", "passed": false, "detail": "T = 100 years against a cap of about 60 years (3 times 20 years of record): beyond the cap, an extrapolation"}, {"check": "spread_within", "passed": true, "detail": "spread 6% between 1,951, 1,828 (25% allowed) at T = 100 years"}, {"check": "trend_on_series", "passed": true, "detail": "Mann-Kendall on the annual maxima: p = 0.347, tau = 0.16: no trend at the 0.05 level"}], "summary": "source=hubeau_hydrometrie, station_id=F700000103, variable=discharge, unit=m3/s, years=20.6, start=2006-01-28, end=2026-09-21", "fallback_used": false, "sha256": "4fdcb3025763345d", "failed_reason": "gate failed: max_return_period_factor (T = 100 years against a cap of about 60 years (3 times 20 years of record): beyond the cap, an extrapolation)"}

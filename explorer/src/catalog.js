@@ -86,7 +86,8 @@ export async function loadCatalog() {
 // drift apart.
 export function toFeatureCollection(rows) {
   const now = new Date();
-  const visible = rows.filter((r) => !state.hidden.has(r.source));
+  const visible = rows.filter((r) => !state.hidden.has(r.source)
+    && (!state.sigMatch || state.sigMatch.has(stationKey(r))));  // signature filter (signature-filter.js)
   const offsets = colocatedOffsets(visible);
   return {
     type: "FeatureCollection",

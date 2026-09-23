@@ -111,6 +111,12 @@ def _run_python_tool(code: str) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
+def _filter_gauges_tool(**kwargs: Any) -> dict[str, Any]:
+    from aquascope.archive.signatures import filter_gauges
+
+    return filter_gauges(**kwargs)
+
+
 def _tool_specs() -> list[ToolSpec]:
     from aquascope import mcp_server as t
     from aquascope.explore import anywhere
@@ -196,10 +202,13 @@ def _tool_specs() -> list[ToolSpec]:
         ToolSpec(
             "anywhere",
             "Climate and modelled discharge for a point with no gauge: ERA5 rainfall/temperature, FAO-56 ET0, "
-            "aridity, GloFAS.",
-            {"type": "object", "properties": {"lat": num, "lon": num, "years": {"type": "integer"}},
+            "aridity, GloFAS. match_mean_flow (a gauge's mean flow, m3/s) snaps the GloFAS cell to the one nearby "
+            "that carries the gauge's river, or says there is no comparable model cell.",
+            {"type": "object", "properties": {"lat": num, "lon": num, "years": {"type": "integer"},
+                                              "match_mean_flow": num, "area_km2": num},
              "required": ["lat", "lon"]},
-            lambda lat, lon, years=10: anywhere(lat, lon, years=years),
+            lambda lat, lon, years=10, match_mean_flow=None, area_km2=None: anywhere(
+                lat, lon, years=years, match_mean_flow=match_mean_flow, area_km2=area_km2),
         ),
         ToolSpec(
             "describe_catchment",
@@ -232,15 +241,28 @@ def _tool_specs() -> list[ToolSpec]:
              "required": ["lat", "lon"]},
             t.regionalize_signatures,
         ),
+        ToolSpec(  # the map's signature filter (aquascope.archive.signatures)
+            "filter_gauges",
+            "Which mirrored gauges meet a condition on their flow signatures, and the filter the map applies: "
+            "min_years (years of daily data), flood_trend (rising | falling | none: Mann-Kendall on annual maxima), "
+            "bfi_min / bfi_max (baseflow index 0 to 1), or question in plain words. Returns the count and the "
+            "longest records first.",
+            {"type": "object", "properties": {"question": {"type": "string"}, "min_years": num,
+                                              "flood_trend": {"type": "string", "enum": ["rising", "falling", "none"]},
+                                              "bfi_min": num, "bfi_max": num, "limit": {"type": "integer"},
+                                              "spec_only": {"type": "boolean"}}},
+            _filter_gauges_tool,
+        ),
         ToolSpec(
             "drought_indices",
             "Drought status at a place: SPI and SPEI at 1, 3 and 12 months (or timescales) with their divergence, "
             "from a rain gauge (source + station_id, its whole record) or the ERA5 cell (lat, lon, last years). "
-            "pet: thornthwaite (default, from ERA5 temperature) | fao56 | none. Prefer SPEI under warming.",
+            "pet: thornthwaite (default, from ERA5 temperature) | fao56 | none. Prefer SPEI under warming. "
+            "threshold: the index value at or below which a month is drought (default -1).",
             {"type": "object", "properties": {"lat": num, "lon": num, "years": {"type": "integer"},
                                               "timescales": {"type": "array", "items": {"type": "integer"}},
                                               "source": {"type": "string"}, "station_id": {"type": "string"},
-                                              "pet": {"type": "string"}},
+                                              "pet": {"type": "string"}, "threshold": num},
              "required": ["lat", "lon"]},
             t.drought_indices,
         ),

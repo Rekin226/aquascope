@@ -1,5 +1,5 @@
 ---
-title: 'AquaScope: An Open-Source Python Toolkit for Unified Water Data Aggregation, Hydrological Analysis, and AI-Powered Research Methodology Recommendations'
+title: 'AquaScope Hydrology: Browser-Based River Data Exploration and Reproducible Python Analyses'
 tags:
   - Python
   - hydrology
@@ -16,16 +16,17 @@ authors:
 affiliations:
   - name: National Central University, Taiwan
     index: 1
-date: 4 August 2026
+date: 23 September 2026
 bibliography: paper.bib
 ---
 
 # Summary
 
-AquaScope is an open-source Python toolkit (v0.9.0, MIT license) that unifies water
-data collection from 26 global sources, comprehensive hydrological and statistical
-analysis, agricultural water management, and AI-powered research methodology
-recommendations into a single, coherent package. It addresses a persistent challenge
+AquaScope Hydrology combines a browser Explorer with an open-source Python toolkit
+(base release v0.18.0, MIT license). Users can find river records, inspect actual
+coverage and units, run analyses, and export results for their own workflows.
+The current implementation also supports local completed-study files, which retain
+inputs and results separately from plan links that rerun against current data. It addresses a persistent challenge
 in water resources research: the fragmentation of data access, analytical methods, and
 tooling across disparate software ecosystems. AquaScope normalises heterogeneous data
 into unified Pydantic schemas, provides over 40 analytical methods spanning conceptual
@@ -38,7 +39,7 @@ collectors span East and South Asia, Europe, South America, and global FAO/UN so
 The toolkit is
 available at <https://github.com/Rekin226/aquascope>, with a zero-install live demo
 that runs entirely in the browser at
-<https://huggingface.co/spaces/Rekin226/aquascope-dashboard>.
+<https://rekin226-aquascope-explorer.static.hf.space/>.
 
 # Statement of Need
 
@@ -68,7 +69,7 @@ Second, no single toolkit couples multi-source data collection with a comprehens
 hydrological analysis suite, agricultural water management, advanced statistical and
 machine-learning methods, and intelligent methodology guidance.
 
-AquaScope addresses both. Its 26 collectors span East and South Asia (Taiwan MOENV and
+AquaScope addresses both. Its collectors span East and South Asia (Taiwan MOENV and
 WRA networks, Japan MLIT, Korea WAMIS, India WRIS), Europe (EU Water Framework
 Directive, France Hub'Eau, Germany PEGELONLINE, Ireland OPW, UK Environment Agency),
 the Americas (USGS, Water Quality Portal, NOAA National Water Prediction Service,
@@ -83,7 +84,7 @@ patchwork of incompatible tools.
 
 # Key Features
 
-**Data aggregation.** AquaScope implements collectors for 26 water data sources, each
+**Data aggregation.** AquaScope implements collectors for water data sources, each
 subclassing a common `BaseCollector` and normalising responses into shared Pydantic
 schemas. Coverage spans Asia (Taiwan MOENV and WRA networks, including a daily
 groundwater-level series reachable only through the WRA HydroInfo portal, Taiwan Civil
@@ -102,9 +103,10 @@ when running under WebAssembly.
 **Analysis.** The hydrology module provides the GR4J conceptual rainfall-runoff model
 [@Perrin2003] with auto-calibration against Nash–Sutcliffe Efficiency [@Nash1970],
 Kling–Gupta Efficiency [@Gupta2009], and log-NSE, and adds calibrated quantile
-prediction intervals so model output is uncertainty-aware. Flood frequency analysis
-follows Bulletin 17C [@England2019] with L-moment estimation [@Hosking1997] and EMA for
-censored data; non-stationary GEV [@Coles2001] and regional frequency analysis are
+prediction intervals so model output is uncertainty-aware. Flood frequency analysis includes GEV L-moment estimation [@Hosking1997], LP3 and
+EMA routines for censored data. A complete Bulletin 17C [@England2019] workflow requires
+appropriate annual peaks, screening and workflow-specific validation; daily mean maxima
+in Explorer are screening inputs, not interchangeable with instantaneous annual peaks; non-stationary GEV [@Coles2001] and regional frequency analysis are
 supported. Baseflow separation offers the Lyne–Hollick [@Lyne1979], Eckhardt
 [@Eckhardt2005], and UKIH methods, alongside flow-duration curves, recession analysis,
 and 22 hydrological signatures. Agricultural water management implements the full FAO-56
@@ -127,9 +129,10 @@ writes OGC WaterML 2.0 [@WaterML2012], HEC-DSS/HEC-RAS, EPA SWMM, NetCDF, HDF5, 
 GeoJSON. A spatial module delineates watersheds from digital elevation models, and an
 interactive multipage Streamlit dashboard supports code-free exploration: it
 auto-profiles whatever dataset is loaded, screens water-quality data against WHO
-guidelines, and suggests appropriate next analyses. The same dashboard compiles to
-WebAssembly and runs fully client-side in a browser, giving a zero-install live demo
-in which the data collectors themselves operate.
+guidelines, and suggests appropriate next analyses. The static Explorer runs shared Python analysis functions through Pyodide.
+Core record and table workflows require no account or API key; agency access,
+licensing, CORS and available observation periods limit which catalog entries
+can supply a usable record. Optional model-assisted workflows have separate requirements.
 
 # Design and Architecture
 
@@ -138,32 +141,21 @@ responses into Pydantic v2 [@Pydantic2024] schemas, which feed analysis modules 
 on pandas [@McKinney2010], NumPy [@Harris2020], and SciPy [@Virtanen2020], an AI
 recommender, and registered pipelines. Lazy imports let users install minimal subsets
 (e.g. `pip install aquascope[interop]`), and a command-line interface exposes the main
-workflows for scripting. The package ships nearly 1,000 tests, including validation
-against the CAMELS large-sample hydrology dataset [@Addor2017], with continuous
-integration on Python 3.10–3.12, linting (Ruff), and type checking (mypy).
+workflows for scripting. The package includes unit, integration and numerical regression checks, with
+continuous integration on Python 3.10–3.12 and Ruff linting. Mypy is informational
+in the current CI configuration. CAMELS-related checks distinguish synthetic
+daily regression fixtures from cached observed USGS annual peaks [@Addor2017];
+neither implies independent validation of every method or an entire study.
 
-# Comparison with Existing Tools
+# Relationship to existing workflows
 
-| Feature                        | AquaScope | HyRiver | dataretrieval | hydrostats | pySTEPS |
-|--------------------------------|:---------:|:-------:|:-------------:|:----------:|:-------:|
-| Multi-source data collection   | 26        | U.S.    | U.S.          | —          | —       |
-| Non-U.S. / global coverage     | ✓         | —       | —             | —          | —       |
-| Unified data schemas           | ✓         | ✓       | —             | —          | —       |
-| Conceptual rainfall-runoff (GR4J)| ✓       | —       | —             | —          | —       |
-| Flood frequency (Bulletin 17C) | ✓         | —       | —             | —          | —       |
-| FAO-56 ET₀ and crop Kc        | ✓         | —       | —             | —          | —       |
-| Copula / change-point analysis | ✓         | —       | —             | —          | —       |
-| ML/ensemble forecasting        | ✓         | —       | —             | —          | ✓       |
-| AI methodology recommendations | ✓         | —       | —             | —          | —       |
-| Scientific I/O (WaterML, HEC)  | ✓         | partial | —             | —          | —       |
-| Interactive dashboard (in-browser demo) | ✓ | —      | —             | —          | —       |
-
-The HyRiver suite is the closest comparator for data access and is more mature for
-United States services; AquaScope interoperates with the same `xarray`/`geopandas`
-objects while extending coverage well beyond the United States and adding a
-comprehensive analytical toolkit and an AI-driven methodology recommender in a single
-package. No existing package provides this integrated, geographically broad workflow
-from data collection through analysis to methodology guidance.
+AquaScope's contribution is the connection between a searchable river-data map,
+explicit observation coverage, shared Python analyses, and portable evidence.
+Its exported CSV and GeoParquet files support downstream statistical and GIS
+workflows rather than requiring users to replace their established tools.
+Coverage and scientific suitability remain source- and task-specific. This paper
+does not claim that AquaScope replaces specialist agency clients, regulatory
+flood-frequency software, groundwater models, or precipitation nowcasting systems.
 
 # Acknowledgements
 
@@ -174,5 +166,19 @@ as well as the data providers—USGS, Taiwan MOENV, FAO, UN Environment Programm
 the Copernicus Climate Data Store—whose open data policies make integrated water
 resources research possible. The groundwater analysis capabilities draw on the
 foundational work of @Theis1935 and @CooperJacob1946.
+
+# Reproducibility and validation scope
+
+Explorer, Python and assistant interfaces share the same analysis functions. Results
+record their actual period and units; flood findings bind an estimator to its own
+interval and retain applicable check outcomes. Model-cell comparisons require
+catchment comparability; proximity or similar mean flow alone is insufficient.
+
+The ten-catchment regression harness combines synthetic daily series calibrated toward
+CAMELS attributes with cached observed USGS annual peaks. Independent SciPy and
+lmoments3 references check selected computations; known misses and limitations are
+reported separately. This is not comprehensive validation against observed CAMELS
+daily records, nor certification for a regulatory design decision. Independent domain
+review and documented practitioner use remain acceptance work, not claimed outcomes.
 
 # References

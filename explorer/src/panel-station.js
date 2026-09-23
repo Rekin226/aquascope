@@ -16,6 +16,9 @@ import { hideCard, selectTab, setCard, setStatusEl, setTab, showSurface } from "
 import { Cancelled, call, callCancelable } from "./worker-client.js?v=__BUILD__";
 import { canonicalUrl, writeUrl } from "./url.js?v=__BUILD__";
 import { siteKey } from "./sites.js?v=__BUILD__";
+import { syncPlaceButton } from "./places.js?v=__BUILD__";  // My places: the ☆ Save button
+import { metrics } from "./metrics.js?v=__BUILD__";
+import { catalogOnly, observationMetadata } from "./availability.js?v=__BUILD__";
 
 let analysisRun = 0;
 let gr4jRun = 0;
@@ -56,6 +59,7 @@ export function selectStation(key, { fly = false, tab = null, push = true } = {}
   badge.style.background = st.color;
   $("st-name").textContent = r.name || r.station_id;
   $("st-id").textContent = r.station_id;
+  syncPlaceButton();  // My places
   const members = state.stations.filter((record) => siteKey(record) === siteKey(r));
   const selector = $("st-site-select");
   selector.replaceChildren();
@@ -108,7 +112,16 @@ function tabExists(name) {
 
 async function requestAnalysis(r, my) {
   const key = stationKey(r);
+  $("st-observation-status").textContent = "Checking archive observation refresh metadata…";
+  $("st-analysis-period").textContent = "No analysis period established yet.";
+  void observationMetadata(r.source, r.station_id, r.variables).then((text) => {
+    if (my === analysisRun) $("st-observation-status").textContent = text;
+  });
   setStatus("");
+  if (catalogOnly(r.source)) {
+    setCard($("st-kpis-card"), "empty", { message: "Catalog-only station: Explorer has no observation retrieval path for this source yet. Open the agency page, or import your own downloaded table." });
+    return;
+  }
   try {
     const result = await call("analyze", {
       source: r.source, station_id: r.station_id, years: CONFIG.years, period_start: r.period_start || null,
@@ -149,6 +162,10 @@ function render(res, r) {
     return;
   }
   $("btn-csv").disabled = false;
+  metrics.record("usable_record", { kind: "station" });
+  const eligibility = res.eligibility;
+  $("st-analysis-period").textContent = `Analyzed ${res.start}–${res.end}: ${res.n} observations, ${res.variable} in ${res.unit}. ` +
+    (eligibility ? `Daily-flow flood screening ${eligibility.flood_frequency ? "eligible" : "not eligible"}: ${eligibility.complete_years} complete years (minimum ${eligibility.minimum_years}).` : "");
 
   // Overview: KPIs + hydrograph
   const k = res.stats || {};
@@ -478,6 +495,7 @@ export function initStationPanel() {
     try {
       const csv = await call("csv", {});
       downloadBlob(`${state.selected.source}_${state.selected.station_id}.csv`, csv, "text/csv");
+      $("st-export-help").hidden = false;
     } catch (err) {
       setStatus(`Could not build the CSV: ${err.message}`, "error");
     } finally {

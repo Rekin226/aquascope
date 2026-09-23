@@ -595,7 +595,11 @@ def _sentences_for(tool: str, payload: dict[str, Any], study: Study) -> list[str
         if stats.get("mean") is not None and tool != "flood_frequency":
             out.append(f"Its mean is {_fmt(stats['mean'])} {unit} (min {_fmt(stats.get('min'))}, "
                        f"max {_fmt(stats.get('max'))} {unit}).")
-        trend = payload.get("trend")
+        from aquascope.trend_series import is_flood_question, reported_trend
+
+        problem = study.problem or {}
+        flood = True if is_flood_question(problem.get("kind"), None, (study.plan or {}).get("playbook")) else None
+        trend = reported_trend(payload, flood=flood)  # a flood question quotes the annual-maxima test
         if isinstance(trend, dict) and trend.get("p_value") is not None:
             p = trend["p_value"]
             verdict = "significant" if p < 0.05 else "not significant"

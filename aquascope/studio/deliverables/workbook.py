@@ -151,14 +151,16 @@ def workbook_bytes(ws: Workspace) -> bytes:
     _fill(wb.create_sheet(sheet_title("Gates", taken)), cols, rows)
     findings = ws.findings or {}
     if findings.get("findings") or findings.get("decision"):
-        frows = [[f.get("id"), f.get("grade"), f.get("claim"), "; ".join(f.get("basis") or [])]
+        frows = [[f.get("id"), f.get("grade"), f.get("claim"), "; ".join(f.get("basis") or []),
+                  f.get("evidence") or {}]
                  for f in findings.get("findings") or []]
         d = findings.get("decision") or {}
         if d:
             band = d.get("band")
             frows.append(["decision", d.get("grade"), d.get("answer"),
-                          f"value {d.get('value')} {d.get('unit') or ''}; band {band}".strip()])
-        _fill(wb.create_sheet(sheet_title("Findings", taken)), ["id", "grade", "claim", "basis"], frows)
+                          f"value {d.get('value')} {d.get('unit') or ''}; band {band}".strip(),
+                          d.get("evidence") or {}])
+        _fill(wb.create_sheet(sheet_title("Findings", taken)), ["id", "grade", "claim", "basis", "evidence"], frows)
 
     for a in ws.artifacts_of("table"):
         stem = a.name.rsplit("/", 1)[-1].removesuffix(".csv") or a.id

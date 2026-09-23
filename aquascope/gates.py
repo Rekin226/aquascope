@@ -24,7 +24,7 @@ import math
 import re
 from typing import Any
 
-__all__ = ["CHECKS", "evaluate", "resolve_path"]
+__all__ = ["CHECKS", "evaluate", "plain", "resolve_path"]
 
 #: The check vocabulary (v1) and one line on each, for docs and the validator.
 CHECKS: dict[str, str] = {
@@ -47,7 +47,7 @@ CHECKS: dict[str, str] = {
     "trend_on_series": "the Mann-Kendall p-value at path (a trend block) is at least value: no significant trend "
                        "in the series the test was run on",
     "cross_check_ratio": "the number at path against reference (a number, or a dict by return period), as a ratio "
-                         "within 1 +/- value",
+                         "within 1 +/- value; skipped when the compared block says comparable: false",
 }
 
 _DEFAULT_PATH = {
@@ -199,7 +199,10 @@ def evaluate(expects: list[dict[str, Any]] | None, payload: Any) -> list[dict[st
             passed, detail = _run_check(name, gate, payload)
         except Exception as exc:  # noqa: BLE001 - a broken gate is a failed gate, said out loud
             passed, detail = False, f"gate could not be evaluated: {type(exc).__name__}: {exc}"
-        row = {"check": name, "passed": bool(passed), "detail": detail}
+        # None is a skip: the check does not apply to this payload (a model cell that is not the gauge's river)
+        row = {"check": name, "passed": True if passed is None else bool(passed), "detail": detail}
+        if passed is None:
+            row["skipped"] = True
         if gate.get("path") is not None:
             row["path"] = gate["path"]
         if gate.get("paths") is not None:
@@ -210,7 +213,22 @@ def evaluate(expects: list[dict[str, Any]] | None, payload: Any) -> list[dict[st
     return out
 
 
-def _run_check(name: str, gate: dict[str, Any], payload: Any) -> tuple[bool, str]:
+def _not_comparable(payload: Any, path: str | None) -> str | None:
+    """The note of the first block along ``path`` that says ``comparable: false``; None when none does."""
+    if not path:
+        return None
+    segs = _segments(str(path))
+    for i in range(1, len(segs) + 1):
+        node = resolve_path(payload, ".".join(segs[:i]))
+        if isinstance(node, dict) and node.get("comparable") is False:
+            why = node.get("note") or (node.get("cell") or {}).get("why")
+            return str(why or "the compared block is marked not comparable")
+        if node is None:
+            return None
+    return None
+
+
+def _run_check(name: str, gate: dict[str, Any], payload: Any) -> tuple[bool | None, str]:
     path = gate.get("path", _DEFAULT_PATH.get(name))
     value = gate.get("value")
     if isinstance(payload, dict) and payload.get("error") and name != "status_is":
@@ -414,6 +432,9 @@ def _run_check(name: str, gate: dict[str, Any], payload: Any) -> tuple[bool, str
         )
 
     if name == "cross_check_ratio":
+        skip = _not_comparable(payload, path)
+        if skip:
+            return None, f"skipped: {skip}"
         got, note = _at_return_period(resolve_path(payload, path), payload, gate)
         ref = gate.get("reference")
         rp = gate.get("return_period")
@@ -441,3 +462,100 @@ def _run_check(name: str, gate: dict[str, Any], payload: Any) -> tuple[bool, str
         )
 
     return False, f"unknown check {name!r}; known: {', '.join(CHECKS)}"
+
+
+# ── the plan in plain words ─────────────────────────────────────────────────
+
+#: What a payload path holds, in words, for ``not_empty`` (the last segment is looked up first).
+_PATH_WORDS = {
+    "points": "observations", "series": "a series", "stations": "at least one gauge", "sub_basin": "a catchment",
+    "indices": "drought indices", "spi": "an SPI value", "spei": "an SPEI value", "n": "some rows",
+    "trend": "a trend test", "percentiles": "flow percentiles", "estimates": "signature estimates",
+    "skill": "a skill score", "reliability": "a reliability figure", "fdc": "a flow-duration curve",
+    "climate": "climate data", "glofas": "GloFAS discharge", "sgi": "a groundwater index", "score": "a score",
+    "gross_irrigation_mm": "an irrigation depth", "peak_month_m3s": "a peak-month flow", "months": "a season",
+    "n_records": "some rows", "k": "donor gauges",
+}
+
+#: The tolerance a check uses when the gate names none (as in :func:`_run_check`).
+_DEFAULT_VALUE = {"spread_within": 0.25, "fit_envelopes_max": 0.25, "trend_on_series": 0.05,
+                  "cross_check_ratio": 0.5}
+
+
+def _words_for(path: Any) -> str:
+    text = str(path or "").strip()
+    if not text:
+        return "a result"
+    last = re.sub(r"\[.*\]$", "", _segments(text)[-1])
+    return _PATH_WORDS.get(last) or last.replace("_", " ")
+
+
+def _num(x: Any) -> str:
+    """A threshold as a person writes it: 20, 0.5, 1,000."""
+    n = _number(x)
+    if n is None:
+        return str(x)
+    return f"{int(n):,}" if float(n).is_integer() else f"{n:g}"
+
+
+def _pct(x: float) -> str:
+    return f"{x * 100:.0f}%" if abs(x * 100 - round(x * 100)) < 1e-9 else f"{x * 100:g}%"
+
+
+def plain(gate: dict[str, Any] | Any) -> str:
+    """One gate as one plain sentence, for a plan a person reads: ``{"check": "min_years", "value": 20}`` reads
+    "needs at least 20 years of record". The raw gate stays the reference; this is only its wording. An
+    unknown check reads as its name and value, so nothing in a plan is hidden by the translation."""
+    if not isinstance(gate, dict) or not gate.get("check"):
+        return str(gate)
+    name = str(gate["check"])
+    value = gate.get("value")
+    if value is None:
+        value = _DEFAULT_VALUE.get(name)
+    rp = _number(gate.get("return_period"))
+    at_t = f" at the {_num(rp)}-year level" if rp is not None else ""
+    v = _number(value)
+
+    if name == "min_years":
+        return f"needs at least {_num(value)} years of record"
+    if name == "max_return_period_factor":
+        if rp is not None:
+            return f"the {_num(rp)}-year estimate may not exceed {_num(value)}x the record length"
+        return f"a return period may not exceed {_num(value)}x the record length"
+    if name == "ci_finite":
+        return "the confidence interval must be a finite range" + at_t
+    if name == "spread_within":
+        return (f"the fitted distributions must agree within {_pct(v)}" if v is not None
+                else "the fitted distributions must agree") + at_t
+    if name == "nse_min":
+        return f"the model must reach a Nash-Sutcliffe efficiency of at least {_num(value)}"
+    if name == "kge_min":
+        return f"the model must reach a Kling-Gupta efficiency of at least {_num(value)}"
+    if name == "not_empty":
+        return f"must return {_words_for(gate.get('path'))}"
+    if name == "unit_present":
+        return "must report its unit"
+    if name == "max_area_km2":
+        return f"the catchment may be at most {_num(value)} km2 for a lumped model"
+    if name == "min_donors":
+        return f"needs at least {_num(value)} donor gauges"
+    if name == "status_is":
+        allowed = [str(x) for x in value] if isinstance(value, (list, tuple)) else [str(value)]
+        return f"the status must be {' or '.join(a.replace('_', ' ') for a in allowed)}"
+    if name == "min_samples":
+        return f"needs at least {_num(value)} samples per parameter"
+    if name == "fit_envelopes_max":
+        return (f"the fitted curve must reach the largest flood on record (within {_pct(v)})" if v is not None
+                else "the fitted curve must reach the largest flood on record")
+    if name == "sampling_density":
+        if isinstance(value, str) and value.strip():
+            return f"needs a record sampled about {value.strip().lower()}"
+        return f"needs at least {_num(value)} observations a year"
+    if name == "trend_on_series":
+        series = "flood peaks" if "amax" in str(gate.get("path") or "ffa.amax_trend") else "series"
+        return (f"the {series} must show no significant trend (at the {_pct(v)} level)" if v is not None
+                else f"the {series} must show no significant trend")
+    if name == "cross_check_ratio":
+        return (f"must agree with the earlier estimate within a factor of {1 + v:g}" if v is not None
+                else "must agree with the earlier estimate") + at_t
+    return f"{name} {_fmt(value)}" if value is not None else name

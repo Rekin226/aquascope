@@ -207,8 +207,8 @@ def gather_evidence(source: str, error: str, diagnosis: str, *, repo_root: str |
         urls = list(extra_urls or []) + _urls_in(module_source)
         for u in urls[:MAX_PROBES]:
             probes.append(probe_url(u))
-    return Evidence(source=source, error=error, diagnosis=diagnosis, module_path=str(module_path.relative_to(root)),
-                    module_source=module_source, test_paths=[str(p.relative_to(root)) for p in tests],
+    return Evidence(source=source, error=error, diagnosis=diagnosis, module_path=module_path.relative_to(root).as_posix(),
+                    module_source=module_source, test_paths=[p.relative_to(root).as_posix() for p in tests],
                     test_source=test_source, registry=registry, git_log=git_log, probes=probes)
 
 

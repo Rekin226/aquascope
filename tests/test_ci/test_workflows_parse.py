@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -100,6 +101,8 @@ def _runs(workflow: dict):
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
 def test_every_run_script_is_valid_shell(path: Path) -> None:
+    if sys.platform != "linux":
+        pytest.skip("workflow run scripts execute on Ubuntu; bash -n is only authoritative on Linux")
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
     for name, script in _runs(loaded):
         # ${{ ... }} is GitHub's, not the shell's; stand it in with a bare word

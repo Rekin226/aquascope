@@ -120,6 +120,7 @@ def _parse_bbox(value: str | None) -> tuple[float, float, float, float] | None:
 
 def cmd_collect(args: argparse.Namespace) -> None:
     """Run a data collector and save results."""
+    from aquascope.collectors.base import CollectorError
     from aquascope.registry import build_collector, source_keys
     from aquascope.utils.storage import save_records
 
@@ -295,7 +296,12 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["end_date"] = args.end_date
         if args.parameter_type:
             kwargs["parameter_type"] = args.parameter_type
-    records = collector.collect(**kwargs)
+    try:
+        records = collector.collect(**kwargs)
+    except CollectorError as exc:
+        logger.error("[%s] Collection failed: %s", source, exc)
+        sys.exit(1)
+
     if not records:
         logger.warning("No records collected.")
         return
@@ -468,7 +474,8 @@ def cmd_run_pipeline(args: argparse.Namespace) -> None:
                 },
                 indent=2,
                 default=str,
-            ), encoding="utf-8"
+            ),
+            encoding="utf-8",
         )
         print(f"\n  ✓ Full results saved → {out_path}")
 
@@ -574,7 +581,8 @@ def cmd_stations(args: argparse.Namespace) -> None:
                 {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props}
             )
         out_path.write_text(
-            json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, indent=2), encoding="utf-8"
+            json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
     elif fmt == "json":
         out_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -616,6 +624,9 @@ def cmd_harvest(args: argparse.Namespace) -> None:
     if args.what == "bundles":
         _cmd_harvest_bundles(args)
         return
+    if args.what == "signatures":
+        _cmd_harvest_signatures(args)
+        return
 
     report = harvest_stations(
         args.out,
@@ -624,6 +635,7 @@ def cmd_harvest(args: argparse.Namespace) -> None:
         api_key=args.api_key,
         max_workers=args.workers,
         write_geojson=not args.no_geojson,
+        write_signatures=not args.no_signatures,
     )
     for s in report.sources:
         status = f"{s.n_stations:>6} stations" if s.ok else f"FAILED: {s.error}"
@@ -672,11 +684,13 @@ def _cmd_harvest_obs(args: argparse.Namespace) -> None:
         max_stations=args.max_stations,
         refresh_days=args.refresh_days,
         only_stations=args.station or None,
+        max_seconds=args.max_seconds,
     )
     for h in report.sources:
         print(
             f"  {h.source:<20} {h.variable:<14} harvested {h.harvested:>4}  empty {h.empty:>4}  "
             f"failed {h.failed:>3}  of {h.attempted:>4} picked  ({h.seconds:.0f}s)"
+            + (f"  stopped: {h.stopped}" if h.stopped else "")
         )
         for err in h.errors[:3]:
             print(f"      {err}")
@@ -705,6 +719,25 @@ def _cmd_harvest_bundles(args: argparse.Namespace) -> None:
     print(f"\n  {len(infos)} bundles written")
     if args.publish:
         url = publish_folder(args.out, args.publish, commit_message="harvest bundles")
+        print(f"  published: {url}")
+
+
+def _cmd_harvest_signatures(args: argparse.Namespace) -> None:
+    """`aquascope harvest signatures`: build signatures.parquet from the mirrored discharge files in --out."""
+    from aquascope.archive import publish_folder
+    from aquascope.archive.signatures import build_signatures_file
+
+    summary = build_signatures_file(args.out, sources=args.source or None)
+    if not summary.get("file"):
+        print(f"  {summary.get('note', 'nothing to do')}")
+        return
+    print(
+        f"  {summary['n_stations']:,} stations -> {summary['file']}: flows for {summary['n_with_flows']:,}, "
+        f"flood trend for {summary['n_with_trend']:,} ({summary['n_rising']:,} rising, "
+        f"{summary['n_falling']:,} falling), Q100 for {summary['n_with_q100']:,}"
+    )
+    if args.publish:
+        url = publish_folder(args.out, args.publish, commit_message="harvest signatures")
         print(f"  published: {url}")
 
 
@@ -850,8 +883,10 @@ def cmd_playbooks(args: argparse.Namespace) -> None:
             print(f"  {r['id']:<22} (broken: {r['error']})")
             continue
         print(f"  {r['id']:<22} {r['title']}  (branches: {', '.join(r['branches'])})")
-    print(f"\n  {len(rows)} playbook(s); `aquascope playbooks show ID` prints one, "
-          "`aquascope solve \"PROBLEM\" --lat LAT --lon LON` runs one.")
+    print(
+        f"\n  {len(rows)} playbook(s); `aquascope playbooks show ID` prints one, "
+        '`aquascope solve "PROBLEM" --lat LAT --lon LON` runs one.'
+    )
 
 
 def cmd_ingest(args: argparse.Namespace) -> None:
@@ -1046,8 +1081,10 @@ def _format_assessment(res: dict, *, radius_km: float) -> str:
     catch = res.get("catchment") or {}
     stations = res.get("stations") or []
     rows = res.get("sufficiency") or []
-    head = [f"{res['point']['lat']:.4f}, {res['point']['lon']:.4f}",
-            f"{len(stations)} gauge{'' if len(stations) == 1 else 's'} within {radius_km:g} km"]
+    head = [
+        f"{res['point']['lat']:.4f}, {res['point']['lon']:.4f}",
+        f"{len(stations)} gauge{'' if len(stations) == 1 else 's'} within {radius_km:g} km",
+    ]
     area = ctx.get("area_km2")
     if area:
         head.append(f"catchment {area:,.0f} km²" + (" (caller)" if catch.get("source") == "caller" else ""))
@@ -1082,12 +1119,54 @@ def cmd_assess(args: argparse.Namespace) -> None:
     """`aquascope assess LAT LON`: what can be answered at a place, from the catalog and BasinATLAS, no agency call."""
     from aquascope.explore import assess_site
 
-    res = assess_site(args.lat, args.lon, radius_km=args.radius_km, problem=args.problem,
-                      return_period=args.return_period)
+    res = assess_site(
+        args.lat, args.lon, radius_km=args.radius_km, problem=args.problem, return_period=args.return_period
+    )
     if args.json:
         print(json.dumps(res, indent=2, ensure_ascii=False))
         return
     print(_format_assessment(res, radius_km=args.radius_km))
+
+
+# ── area-study (Study this area) ─────────────────────────────────────────────
+
+
+def cmd_area_study(args: argparse.Namespace) -> None:
+    """`aquascope area-study`: a multi-gauge flood study over a box or a list of stations (thin face)."""
+    from aquascope import area_study
+
+    if not args.bbox and not args.station:
+        logger.error("give --bbox=west,south,east,north or one or more --station source/station_id")
+        sys.exit(2)
+    res = area_study.study_area(
+        args.station or None, bbox=_parse_bbox(args.bbox) if not args.station else None, question=args.question,
+        max_sites=args.max_sites, max_live=args.max_live,
+    )
+    if args.output:
+        out = Path(args.output)
+        if out.suffix == ".xlsx":
+            out.write_bytes(area_study.to_xlsx(res))
+        elif out.suffix == ".csv":
+            out.write_text(area_study.to_csv(res), encoding="utf-8")
+        elif out.suffix == ".geojson":
+            out.write_text(json.dumps(res["geojson"], ensure_ascii=False), encoding="utf-8")
+        else:
+            out.write_text(json.dumps(res, indent=1, ensure_ascii=False), encoding="utf-8")
+        print(f"wrote {out}", file=sys.stderr)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return
+    print(res["headline"])
+    print()
+    for r in res["sites"]:
+        if r["status"] != "studied":
+            print(f"  {r['source']}/{r['station_id']}: {r['status']} ({r['note']})")
+            continue
+        q = f"Q100 {r['q100']:g} {r['unit']}" if r.get("q100") is not None else "no Q100"
+        p = f", p = {r['trend_p']:.3f}" if r.get("trend_p") is not None else ""
+        print(f"  {r['source']}/{r['station_id']}: {r['record_years']} yr, {q}, trend {r['trend']}{p}")
+    for note in res["notes"]:
+        print(f"- {note}")
 
 
 def cmd_gym(args: argparse.Namespace) -> None:
@@ -1111,8 +1190,11 @@ def cmd_gym(args: argparse.Namespace) -> None:
                 return
             print(f"  {len(rows)} reference plans in {args.plans or gp.PLANS_DIR}")
             for r in rows:
-                what = "decline" if r["decline"] else (f"{r['steps']} step(s)"
-                                                       + (f" + {r['optional']} optional" if r["optional"] else ""))
+                what = (
+                    "decline"
+                    if r["decline"]
+                    else (f"{r['steps']} step(s)" + (f" + {r['optional']} optional" if r["optional"] else ""))
+                )
                 tags = f" [{', '.join(r['tags'])}]" if r["tags"] else ""
                 print(f"  {r['id']:<42} {r['playbook']:<24} {what:<24} {str(r['site'])[:44]}{tags}")
             return
@@ -1141,8 +1223,10 @@ def cmd_gym(args: argparse.Namespace) -> None:
                 rows = gp.rescore_plans(rows, plans_dir=args.plans)
                 target = Path(args.out) if args.out and len(args.results) == 1 else Path(path)
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text("".join(json.dumps(r.to_dict(), ensure_ascii=False, default=str) + "\n"
-                                          for r in rows), encoding="utf-8")
+                target.write_text(
+                    "".join(json.dumps(r.to_dict(), ensure_ascii=False, default=str) + "\n" for r in rows),
+                    encoding="utf-8",
+                )
                 print(f"  {len(rows)} rows re-scored -> {target}")
             return
         if args.plans_cmd == "score":
@@ -1157,10 +1241,12 @@ def cmd_gym(args: argparse.Namespace) -> None:
                 print(json.dumps({"case": ref.id, **scored, "candidate": cand.to_dict()}, indent=2, default=str))
                 return
             pct = lambda x: "-" if x is None else f"{100 * x:.0f} %"  # noqa: E731
-            print(f"  {ref.id} ({'the tree' if not args.candidate else args.candidate}): score {scored['score']:.2f}; "
-                  f"tools {pct(scored['coverage_tools'])}, methods {pct(scored['coverage_methods'])}, gates "
-                  f"{pct(scored['coverage_gates'])}, extraneous {pct(scored['extraneous'])}, forbidden "
-                  f"{scored['forbidden_used']}, decline correct {scored['decline_correct']}")
+            print(
+                f"  {ref.id} ({'the tree' if not args.candidate else args.candidate}): score {scored['score']:.2f}; "
+                f"tools {pct(scored['coverage_tools'])}, methods {pct(scored['coverage_methods'])}, gates "
+                f"{pct(scored['coverage_gates'])}, extraneous {pct(scored['extraneous'])}, forbidden "
+                f"{scored['forbidden_used']}, decline correct {scored['decline_correct']}"
+            )
             for line in scored["explain"]:
                 print(f"    {line}")
             return
@@ -1176,8 +1262,10 @@ def cmd_gym(args: argparse.Namespace) -> None:
             print(f"  {len(rows)} report references in {args.reports or gru.REPORTS_DIR}")
             for r in rows:
                 tags = f" [{', '.join(r['tags'])}]" if r["tags"] else ""
-                print(f"  {r['id']:<28} study {r['study']:<24} must_say {r['must_say']:>2} must_not_say "
-                      f"{r['must_not_say']:>2}{tags}")
+                print(
+                    f"  {r['id']:<28} study {r['study']:<24} must_say {r['must_say']:>2} must_not_say "
+                    f"{r['must_not_say']:>2}{tags}"
+                )
             return
         if args.reports_cmd == "show":
             ref = gru.load_reference(args.id, args.reports)
@@ -1188,8 +1276,11 @@ def cmd_gym(args: argparse.Namespace) -> None:
             return
         if args.reports_cmd == "score":
             study_dir = Path(args.study_dir)
-            ref = gru.load_reference(args.reference, args.reports) if args.reference else next(
-                (r for r in gru.load_references(args.reports) if r.study == study_dir.name), None)
+            ref = (
+                gru.load_reference(args.reference, args.reports)
+                if args.reference
+                else next((r for r in gru.load_references(args.reports) if r.study == study_dir.name), None)
+            )
             scored = gru.score_study_dir(study_dir, reference=ref)
             if args.json:
                 print(json.dumps(scored.to_dict(), indent=2, default=str))
@@ -1230,9 +1321,13 @@ def cmd_gym(args: argparse.Namespace) -> None:
         probes = None if args.probes == "all" else int(args.probes)
         n_probes = sum(len(gt.decline_probes(p)) for p in pbs) if probes is None else probes
         per_site = max(1, len(pbs) + n_probes)
-        sites = gt.suggest_sites(-(-args.n // per_site), seed=args.seed, sources=args.source or None,
-                                 ungauged_share=args.ungauged_share,
-                                 on_land=None if args.no_check_land else gt.on_land_basinatlas)
+        sites = gt.suggest_sites(
+            -(-args.n // per_site),
+            seed=args.seed,
+            sources=args.source or None,
+            ungauged_share=args.ungauged_share,
+            on_land=None if args.no_check_land else gt.on_land_basinatlas,
+        )
         skipped: list[dict] = []
         tasks = gt.tasks_from_playbooks(sites, pbs, probes=probes, on_event=say, skipped=skipped)[: args.n]
         gt.write_tasks(tasks, args.out)
@@ -1242,8 +1337,10 @@ def cmd_gym(args: argparse.Namespace) -> None:
         print(f"  {len(tasks)} tasks from {n_sites} sites ({hard} unsolvable, {test} held out as test) -> {args.out}")
         if skipped:
             sites_lost = sum(1 for e in skipped if "playbook" not in e)
-            print(f"  skipped: {sites_lost} of {len(sites)} sites (reconnaissance unavailable), "
-                  f"{len(skipped) - sites_lost} tasks (no key):")
+            print(
+                f"  skipped: {sites_lost} of {len(sites)} sites (reconnaissance unavailable), "
+                f"{len(skipped) - sites_lost} tasks (no key):"
+            )
             for entry in skipped:
                 what = f" {entry['playbook']}" if entry.get("playbook") else ""
                 print(f"    {gt.site_key(entry['site'])}{what}: {entry['error'][:100]}")
@@ -1265,9 +1362,20 @@ def cmd_gym(args: argparse.Namespace) -> None:
             if args.agent not in gp.AGENTS:
                 sys.exit(f"  --agent {args.agent} plays Phase 1 tasks; pass --tasks, or one of {gp.AGENTS} for Phase 2")
             plan_results = gp.run_plan_bench(
-                args.plans, args.agent, provider=args.provider, model=args.model, api_key=args.api_key,
-                base_url=args.base_url, candidates_dir=args.candidates, limit=args.limit, case_ids=args.case or None,
-                repeats=args.repeats, out=args.out, resume=args.resume, timeout=args.timeout or None, on_event=say,
+                args.plans,
+                args.agent,
+                provider=args.provider,
+                model=args.model,
+                api_key=args.api_key,
+                base_url=args.base_url,
+                candidates_dir=args.candidates,
+                limit=args.limit,
+                case_ids=args.case or None,
+                repeats=args.repeats,
+                out=args.out,
+                resume=args.resume,
+                timeout=args.timeout or None,
+                on_event=say,
             )
             if args.json:
                 print(json.dumps(gp.summarize_plans(plan_results), indent=2, default=str))
@@ -1277,10 +1385,22 @@ def cmd_gym(args: argparse.Namespace) -> None:
                 print(f"  -> {args.out}")
             return
         results = gb.run_bench(
-            args.tasks, args.agent, provider=args.provider, model=args.model, api_key=args.api_key,
-            base_url=args.base_url, limit=args.limit, unsolvable=args.unsolvable, task_ids=args.task or None,
-            timeout=args.timeout or None, out=args.out, max_steps=args.max_steps, context_chars=args.context_chars,
-            on_event=say, spread=args.spread, resume=args.resume,
+            args.tasks,
+            args.agent,
+            provider=args.provider,
+            model=args.model,
+            api_key=args.api_key,
+            base_url=args.base_url,
+            limit=args.limit,
+            unsolvable=args.unsolvable,
+            task_ids=args.task or None,
+            timeout=args.timeout or None,
+            out=args.out,
+            max_steps=args.max_steps,
+            context_chars=args.context_chars,
+            on_event=say,
+            spread=args.spread,
+            resume=args.resume,
         )
         if args.json:
             print(json.dumps(gb.summarize(results), indent=2, default=str))
@@ -1306,8 +1426,7 @@ def cmd_gym(args: argparse.Namespace) -> None:
                 summary["plans"] = gp.summarize_plans(plan_results)
             if report_results:
                 summary["reports"] = gru.summarize_reports(report_results)
-            print(json.dumps(summary if len(summary) > 1 else next(iter(summary.values()), {}), indent=2,
-                             default=str))
+            print(json.dumps(summary if len(summary) > 1 else next(iter(summary.values()), {}), indent=2, default=str))
             return
         parts = []
         if results:
@@ -1315,8 +1434,9 @@ def cmd_gym(args: argparse.Namespace) -> None:
         if plan_results:
             parts.append(gp.plan_leaderboard(plan_results, title=(args.title if not results else None)))
         if report_results:
-            parts.append(gru.report_leaderboard(report_results,
-                                                title=(args.title if not (results or plan_results) else None)))
+            parts.append(
+                gru.report_leaderboard(report_results, title=(args.title if not (results or plan_results) else None))
+            )
         text = "\n".join(parts)
         print(text)
         if args.out:
@@ -1534,9 +1654,17 @@ def cmd_solve_team(args: argparse.Namespace) -> None:
 
     try:
         result = solve(
-            args.query, lat=args.lat, lon=args.lon, playbook=args.playbook, intake=intake,
-            provider=args.provider, model=args.model, api_key=args.api_key, base_url=args.base_url,
-            review=review, on_event=on_event,
+            args.query,
+            lat=args.lat,
+            lon=args.lon,
+            playbook=args.playbook,
+            intake=intake,
+            provider=args.provider,
+            model=args.model,
+            api_key=args.api_key,
+            base_url=args.base_url,
+            review=review,
+            on_event=on_event,
         )
     except (RuntimeError, ValueError, ImportError) as exc:
         logger.error("%s", exc)
@@ -1617,9 +1745,19 @@ def cmd_studio(args: argparse.Namespace) -> None:
             print(f"  · {_format_event(event)}", file=sys.stderr)
 
     try:
-        studio = Studio(args.lat, args.lon, provider=args.provider, model=args.model, api_key=args.api_key,
-                        base_url=args.base_url, data=data, on_event=on_event, workspace=workspace, intake=intake,
-                        max_usd=args.max_usd)
+        studio = Studio(
+            args.lat,
+            args.lon,
+            provider=args.provider,
+            model=args.model,
+            api_key=args.api_key,
+            base_url=args.base_url,
+            data=data,
+            on_event=on_event,
+            workspace=workspace,
+            intake=intake,
+            max_usd=args.max_usd,
+        )
     except (RuntimeError, ValueError, ImportError) as exc:
         logger.error("%s", exc)
         sys.exit(1)
@@ -1733,7 +1871,9 @@ def cmd_studio(args: argparse.Namespace) -> None:
                 for f in findings[:12]:
                     print(f"   · [{str(f.get('grade') or '').replace('_', ' ')}] {f.get('claim')}", file=sys.stderr)
             for r in reply.payload.get("data_requests") or []:
-                print(f"   · data the crew would ask for: {r.get('what')} ({r.get('effect_on_grade')})", file=sys.stderr)
+                print(
+                    f"   · data the crew would ask for: {r.get('what')} ({r.get('effect_on_grade')})", file=sys.stderr
+                )
         missing = reply.payload.get("not_established") or []
         if missing and not args.quiet:
             print("\n  What this study does not establish:", file=sys.stderr)
@@ -1765,8 +1905,16 @@ def cmd_studio_showcase(args: argparse.Namespace) -> None:
         return
     only = [s for s in (args.only or "").split(",") if s.strip()] or None
     say = (lambda m: None) if args.quiet else (lambda m: print(m, flush=True))
-    written = showcase.record(out_dir=args.out, provider=args.provider, model=args.model, api_key=args.api_key,
-                              max_usd=args.max_usd, fresh_for_days=args.refresh_after, only=only, on_event=say)
+    written = showcase.record(
+        out_dir=args.out,
+        provider=args.provider,
+        model=args.model,
+        api_key=args.api_key,
+        max_usd=args.max_usd,
+        fresh_for_days=args.refresh_after,
+        only=only,
+        on_event=say,
+    )
     ok = sum(1 for m in written if m.get("status") in ("done", "declined") and not m.get("error"))
     print(f"recorded {ok}/{len(written)} this run, {sum(float(m.get('usd') or 0) for m in written):.2f} USD")
     print(showcase.diagnose(args.out))
@@ -2313,7 +2461,10 @@ def main() -> None:
     )
     p_collect.add_argument("--api-key", default=None, help="API key (if required)")
     p_collect.add_argument(
-        "--days", type=int, default=None, help="Number of days (USGS/UKEA/PEGELONLINE/BOM/South Africa DWS; PEGELONLINE max: 31)"
+        "--days",
+        type=int,
+        default=None,
+        help="Number of days (USGS/UKEA/PEGELONLINE/BOM/South Africa DWS; PEGELONLINE max: 31)",
     )
     p_collect.add_argument(
         "--parameter-type",
@@ -2469,9 +2620,9 @@ def main() -> None:
     p_harvest = sub.add_parser("harvest", help="Harvest catalogs into GeoParquet for the open archive (#188)")
     p_harvest.add_argument(
         "what",
-        choices=["stations", "obs", "bundles"],
+        choices=["stations", "obs", "bundles", "signatures"],
         help="stations: the catalog; obs: daily series per station; bundles: one Parquet per "
-        "variable and source rolled up from obs/",
+        "variable and source rolled up from obs/; signatures: signatures.parquet from the mirrored discharge",
     )
     p_harvest.add_argument("--out", default="archive", help="Output folder (default: ./archive)")
     p_harvest.add_argument("--source", action="append", choices=source_keys(), help="Restrict to a source (repeatable)")
@@ -2490,11 +2641,17 @@ def main() -> None:
         help="bundles: restrict to these variables (repeatable)",
     )
     p_harvest.add_argument(
-        "--years", type=int, default=None,
+        "--years",
+        type=int,
+        default=None,
         help="obs: cap the record asked for, in years (default: the full record, from the catalog's first date)",
     )
     p_harvest.add_argument("--max-stations", type=int, default=100, help="obs: stations per source per run")
     p_harvest.add_argument("--refresh-days", type=int, default=30, help="obs: re-harvest a station older than this")
+    p_harvest.add_argument(
+        "--max-seconds", type=float, default=None,
+        help="obs: time budget per source and variable; stations not reached wait for the next run",
+    )
     p_harvest.add_argument("--station", action="append", help="obs: only these station ids (repeatable)")
     p_harvest.add_argument(
         "--sync-from",
@@ -2505,6 +2662,9 @@ def main() -> None:
     p_harvest.add_argument("--api-key", default=None)
     p_harvest.add_argument("--workers", type=int, default=4)
     p_harvest.add_argument("--no-geojson", action="store_true", help="Skip stations.geojson")
+    p_harvest.add_argument(
+        "--no-signatures", action="store_true", help="stations: skip rebuilding signatures.parquet from obs/"
+    )
     p_harvest.add_argument(
         "--publish",
         default=None,
@@ -2607,11 +2767,28 @@ def main() -> None:
     )
     p_assess.add_argument("lat", type=float)
     p_assess.add_argument("lon", type=float, help="Longitude (a negative value is fine as a positional)")
-    p_assess.add_argument("--problem", choices=sorted({p for m in _METHODS.values() for p in m.problems}), default=None,
-                          help="Only the methods for this problem kind")
+    p_assess.add_argument(
+        "--problem",
+        choices=sorted({p for m in _METHODS.values() for p in m.problems}),
+        default=None,
+        help="Only the methods for this problem kind",
+    )
     p_assess.add_argument("--radius-km", type=float, default=50.0, help="How far a gauge may be to count (default 50)")
     p_assess.add_argument("--return-period", type=float, default=None, help="The T (years) the question asks for")
     p_assess.add_argument("--json", action="store_true")
+
+    p_area = sub.add_parser(
+        "area-study", help="Study the gauges of an area together: per-site floods, trend field, regional growth curve"
+    )
+    p_area.add_argument("--bbox", default=None,
+                        help="west,south,east,north (write --bbox=-77,38,-76,39 when it starts with a minus)")
+    p_area.add_argument("--station", action="append", default=None, help="source/station_id (repeatable)")
+    p_area.add_argument("--question", default=None, help="A title for the study")
+    p_area.add_argument("--max-sites", type=int, default=60, help="Gauges studied at most (default 60)")
+    p_area.add_argument("--max-live", type=int, default=25,
+                        help="Gauges fetched live from an agency at most; the rest come from the Archive (default 25)")
+    p_area.add_argument("--output", "-o", default=None, help="Write .xlsx, .csv, .geojson or .json")
+    p_area.add_argument("--json", action="store_true")
 
     p_gym = sub.add_parser("gym", help="HydroGym: a gym-style calibration environment over real basins (#175)")
     gym_sub = p_gym.add_subparsers(dest="gym_cmd", required=True)
@@ -2642,27 +2819,40 @@ def main() -> None:
         p_g.add_argument("--out", default=None, help="leaderboard: write the table (CSV; Markdown for bench results)")
         p_g.add_argument("--json", action="store_true")
     p_g_lb = gym_sub.choices["leaderboard"]
-    p_g_lb.add_argument("results", nargs="*", metavar="RESULTS.jsonl",
-                        help="Bench result files (Phase 1): render their leaderboard instead of playing the baselines")
+    p_g_lb.add_argument(
+        "results",
+        nargs="*",
+        metavar="RESULTS.jsonl",
+        help="Bench result files (Phase 1): render their leaderboard instead of playing the baselines",
+    )
     p_g_lb.add_argument("--title", default=None, help="Heading of the Markdown leaderboard")
     p_gt = gym_sub.add_parser("tasks", help="Generate benchmark tasks from the playbooks on catalog sites (Phase 1)")
     p_gt.add_argument("--n", type=int, default=60, help="Number of tasks (default 60)")
     p_gt.add_argument("--seed", type=int, default=0)
     p_gt.add_argument("--source", action="append", help="Restrict sites to these sources (repeatable)")
     p_gt.add_argument("--playbook", action="append", help="Only these playbooks (repeatable; default all)")
-    p_gt.add_argument("--probes", default="1",
-                      help="Decline probes per site: an integer or 'all' (default 1, rotating over the rules)")
+    p_gt.add_argument(
+        "--probes",
+        default="1",
+        help="Decline probes per site: an integer or 'all' (default 1, rotating over the rules)",
+    )
     p_gt.add_argument("--ungauged-share", type=float, default=0.25, help="Share of sites that are bare points")
-    p_gt.add_argument("--no-check-land", action="store_true",
-                      help="Do not ask BasinATLAS whether a bare point is on land (offline; the gauge proxy still applies)")
+    p_gt.add_argument(
+        "--no-check-land",
+        action="store_true",
+        help="Do not ask BasinATLAS whether a bare point is on land (offline; the gauge proxy still applies)",
+    )
     p_gt.add_argument("--out", default="tasks.jsonl")
     p_gt.add_argument("--quiet", action="store_true")
     p_gp = gym_sub.add_parser("plans", help="The reference plans of the plan-quality benchmark (Phase 2)")
     gp_sub = p_gp.add_subparsers(dest="plans_cmd", required=True)
-    for name, help_ in (("list", "List the cases"), ("show", "Print one case"),
-                        ("validate", "Check every case against the catalogue, the registry and its recon"),
-                        ("score", "Score a plan (the tree's, or a JSON file) against one case"),
-                        ("rescore", "Score stored result rows again from the plans they carry (no model run)")):
+    for name, help_ in (
+        ("list", "List the cases"),
+        ("show", "Print one case"),
+        ("validate", "Check every case against the catalogue, the registry and its recon"),
+        ("score", "Score a plan (the tree's, or a JSON file) against one case"),
+        ("rescore", "Score stored result rows again from the plans they carry (no model run)"),
+    ):
         p_gpc = gp_sub.add_parser(name, help=help_)
         if name in ("show", "score"):
             p_gpc.add_argument("id", help="The case id")
@@ -2682,45 +2872,70 @@ def main() -> None:
     p_gr_show.add_argument("id", help="The case id")
     p_gr_score = gr_sub.add_parser("score", help="Score one recorded study's workspace.json")
     p_gr_score.add_argument("study_dir", help="A recorded study's directory (workspace.json sits inside it)")
-    p_gr_score.add_argument("--reference", default=None,
-                            help="A reference case id to score against (default: the reference, if any, whose "
-                                 "study matches the directory name)")
+    p_gr_score.add_argument(
+        "--reference",
+        default=None,
+        help="A reference case id to score against (default: the reference, if any, whose "
+        "study matches the directory name)",
+    )
     p_gr_bench = gr_sub.add_parser("bench", help="Score every recorded study under a directory")
-    p_gr_bench.add_argument("--dir", default=None,
-                            help="A directory of recorded studies (default: the Explorer's showcase, "
-                                 "explorer/showcase/studies)")
+    p_gr_bench.add_argument(
+        "--dir",
+        default=None,
+        help="A directory of recorded studies (default: the Explorer's showcase, explorer/showcase/studies)",
+    )
     p_gr_bench.add_argument("--study", action="append", help="Only these study ids (repeatable)")
     p_gr_bench.add_argument("--out", default=None, help="Append results as JSONL")
     p_gr_bench.add_argument("--quiet", action="store_true")
     for p_grc in (p_gr_list, p_gr_show, p_gr_score, p_gr_bench):
         p_grc.add_argument("--reports", default=None, help="A folder of report references (default: the package's)")
         p_grc.add_argument("--json", action="store_true")
-    p_gbench = gym_sub.add_parser("bench", help="Play an agent on the tasks (Phase 1) or on the reference plans "
-                                  "(Phase 2) and score it")
+    p_gbench = gym_sub.add_parser(
+        "bench", help="Play an agent on the tasks (Phase 1) or on the reference plans (Phase 2) and score it"
+    )
     p_gbench.add_argument("--tasks", default=None, help="Phase 1: tasks.jsonl from `gym tasks`")
-    p_gbench.add_argument("--agent", choices=["tree", "team", "ask", "methodologist", "file"], default="tree",
-                          help="Phase 1: tree, team, ask; Phase 2: tree, methodologist, file")
-    p_gbench.add_argument("--plans", default=None,
-                          help="Phase 2: a folder of reference plans (default: the package's); with --agent "
-                               "methodologist or file, or without --tasks, the bench scores plan quality")
+    p_gbench.add_argument(
+        "--agent",
+        choices=["tree", "team", "ask", "methodologist", "file"],
+        default="tree",
+        help="Phase 1: tree, team, ask; Phase 2: tree, methodologist, file",
+    )
+    p_gbench.add_argument(
+        "--plans",
+        default=None,
+        help="Phase 2: a folder of reference plans (default: the package's); with --agent "
+        "methodologist or file, or without --tasks, the bench scores plan quality",
+    )
     p_gbench.add_argument("--case", action="append", help="Phase 2: play these case ids only (repeatable)")
-    p_gbench.add_argument("--repeats", type=int, default=1,
-                          help="Phase 2: play every case this many times on a model (its spread)")
-    p_gbench.add_argument("--candidates", default=None,
-                          help="Phase 2, --agent file: a folder of <case id>.json plans produced elsewhere")
-    p_gbench.add_argument("--provider", default=None,
-                          help="LLM provider (anthropic, openai, groq, huggingface, ollama, ...); none: keyless team")
+    p_gbench.add_argument(
+        "--repeats", type=int, default=1, help="Phase 2: play every case this many times on a model (its spread)"
+    )
+    p_gbench.add_argument(
+        "--candidates", default=None, help="Phase 2, --agent file: a folder of <case id>.json plans produced elsewhere"
+    )
+    p_gbench.add_argument(
+        "--provider",
+        default=None,
+        help="LLM provider (anthropic, openai, groq, huggingface, ollama, ...); none: keyless team",
+    )
     p_gbench.add_argument("--model", default=None)
     p_gbench.add_argument("--api-key", default=None)
     p_gbench.add_argument("--base-url", default=None)
     p_gbench.add_argument("--limit", type=int, default=None, help="Play the first N tasks")
-    p_gbench.add_argument("--unsolvable", type=int, default=None,
-                          help="With --limit: at most this many unsolvable tasks among the N")
+    p_gbench.add_argument(
+        "--unsolvable", type=int, default=None, help="With --limit: at most this many unsolvable tasks among the N"
+    )
     p_gbench.add_argument("--task", action="append", help="Play these task ids only (repeatable)")
-    p_gbench.add_argument("--spread", action="store_true",
-                          help="With --limit: take tasks round robin over the sites rather than the first N")
-    p_gbench.add_argument("--resume", action="store_true",
-                          help="Skip tasks --out already holds a finished row for (errors and timeouts are replayed)")
+    p_gbench.add_argument(
+        "--spread",
+        action="store_true",
+        help="With --limit: take tasks round robin over the sites rather than the first N",
+    )
+    p_gbench.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip tasks --out already holds a finished row for (errors and timeouts are replayed)",
+    )
     p_gbench.add_argument("--timeout", type=float, default=900.0, help="Seconds per task (0: none)")
     p_gbench.add_argument("--max-steps", type=int, default=8, help="ask: tool-call steps")
     p_gbench.add_argument("--context-chars", type=int, default=40_000, help="ask: conversation budget in characters")
@@ -2777,13 +2992,23 @@ def main() -> None:
     p_solve.add_argument("--lat", type=float, default=None, help="Latitude of the site (with --lon: the team)")
     p_solve.add_argument("--lon", type=float, default=None, help="Longitude of the site")
     p_solve.add_argument("--playbook", default=None, help="Playbook id (see `aquascope playbooks`); else keyword rules")
-    p_solve.add_argument("--intake", action="append", default=[], metavar="KEY=VALUE",
-                         help="An intake field, e.g. --intake return_period=200 (repeatable)")
+    p_solve.add_argument(
+        "--intake",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="An intake field, e.g. --intake return_period=200 (repeatable)",
+    )
     p_solve.add_argument("--yes", "-y", action="store_true", help="Run the plan without asking")
-    p_solve.add_argument("--provider", choices=provider_ids(), default=None,
-                         help="Use a model for the rationale, fallbacks and prose (keyless otherwise)")
-    p_solve.add_argument("--model", default=None,
-                         help="Model name (with --lat/--lon: the LLM; otherwise the legacy forecast model)")
+    p_solve.add_argument(
+        "--provider",
+        choices=provider_ids(),
+        default=None,
+        help="Use a model for the rationale, fallbacks and prose (keyless otherwise)",
+    )
+    p_solve.add_argument(
+        "--model", default=None, help="Model name (with --lat/--lon: the LLM; otherwise the legacy forecast model)"
+    )
     p_solve.add_argument("--api-key", default=None)
     p_solve.add_argument("--base-url", default=None, help="Any OpenAI-compatible endpoint (or Anthropic's)")
     p_solve.add_argument("--out", "-o", default=None, help="Save the Markdown report here")
@@ -2800,22 +3025,44 @@ def main() -> None:
     p_studio.add_argument("query", nargs="?", default=None, help="The problem in plain language")
     p_studio.add_argument("--lat", type=float, default=None, help="Latitude of the site")
     p_studio.add_argument("--lon", type=float, default=None, help="Longitude of the site")
-    p_studio.add_argument("--data", action="append", default=[], metavar="FILE",
-                          help="A table of your own (CSV, Excel, JSON) the crew may use (repeatable)")
-    p_studio.add_argument("--intake", action="append", default=[], metavar="KEY=VALUE",
-                          help="An intake field, e.g. --intake return_period=200 (repeatable)")
-    p_studio.add_argument("--provider", choices=provider_ids(), default=None,
-                          help="Use a model for the brief, the methodology and the prose (keyless otherwise)")
+    p_studio.add_argument(
+        "--data",
+        action="append",
+        default=[],
+        metavar="FILE",
+        help="A table of your own (CSV, Excel, JSON) the crew may use (repeatable)",
+    )
+    p_studio.add_argument(
+        "--intake",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="An intake field, e.g. --intake return_period=200 (repeatable)",
+    )
+    p_studio.add_argument(
+        "--provider",
+        choices=provider_ids(),
+        default=None,
+        help="Use a model for the brief, the methodology and the prose (keyless otherwise)",
+    )
     p_studio.add_argument("--model", default=None, help="Model name")
     p_studio.add_argument("--api-key", default=None)
     p_studio.add_argument("--base-url", default=None, help="Any OpenAI-compatible endpoint (or Anthropic's)")
-    p_studio.add_argument("--max-usd", type=float, default=None, metavar="USD",
-                          help="A spend ceiling for the model calls: past it the roles run keyless and the "
-                               "footer says so (models in the price table only)")
+    p_studio.add_argument(
+        "--max-usd",
+        type=float,
+        default=None,
+        metavar="USD",
+        help="A spend ceiling for the model calls: past it the roles run keyless and the "
+        "footer says so (models in the price table only)",
+    )
     p_studio.add_argument("--out", "-o", default=None, help="The bundle's directory (default ./studio-<id>/)")
     p_studio.add_argument("--yes", "-y", action="store_true", help="Answer the defaults, approve the plan, export")
-    p_studio.add_argument("--continue-without", action="store_true",
-                          help="When the crew asks for data you do not have, go on at the lower grade it names")
+    p_studio.add_argument(
+        "--continue-without",
+        action="store_true",
+        help="When the crew asks for data you do not have, go on at the lower grade it names",
+    )
     p_studio.add_argument("--resume", default=None, metavar="WORKSPACE.JSON", help="Resume a saved workspace")
     p_studio.add_argument("--quiet", "-q", action="store_true", help="Do not print the timeline as it happens")
 
@@ -2833,8 +3080,13 @@ def main() -> None:
     p_show_rec.add_argument("--provider", default="anthropic")
     p_show_rec.add_argument("--model", default="claude-sonnet-5")
     p_show_rec.add_argument("--api-key", default=None)
-    p_show_rec.add_argument("--refresh-after", type=float, default=30.0, metavar="DAYS",
-                            help="Re-record a case only when its recording is older than this (0: every case)")
+    p_show_rec.add_argument(
+        "--refresh-after",
+        type=float,
+        default=30.0,
+        metavar="DAYS",
+        help="Re-record a case only when its recording is older than this (0: every case)",
+    )
     p_show_rec.add_argument("--quiet", "-q", action="store_true", help="Do not print the timeline as it happens")
     p_show_list = show_sub.add_parser("list", help="The recordings on disk, as a table")
     p_show_list.add_argument("--out", default="explorer/showcase/studies", help="The recordings' directory")
@@ -3023,6 +3275,7 @@ def main() -> None:
         "mcp": cmd_mcp,
         "basins": cmd_basins,
         "assess": cmd_assess,
+        "area-study": cmd_area_study,
         "gym": cmd_gym,
         "caravan": cmd_caravan,
         "ask": cmd_ask,

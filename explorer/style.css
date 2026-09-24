@@ -548,6 +548,15 @@ table.regime td:first-child { white-space: nowrap; }
 .nearest li:last-child { border-bottom: 0; }
 .nearest li:hover { background: var(--bg-soft); }
 .nearest .dist { margin-left: auto; color: var(--muted); font-size: .75rem; white-space: nowrap; }
+.nearest li.nearest-site { display: block; cursor: default; }
+.nearest-open { display: flex; align-items: center; gap: .35rem; width: 100%; text-align: left; background: transparent; border: 0; padding: .2rem 0; color: inherit; font: inherit; }
+.nearest-name { min-width: 0; overflow-wrap: anywhere; }
+.nearest-open > .muted { overflow-wrap: anywhere; min-width: 0; }
+.nearest-records { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; color: var(--muted); font-size: .75rem; }
+.nearest-records select { min-width: 0; max-width: 100%; font: inherit; }
+.site-records { margin-top: .5rem; font-size: .8rem; }
+.site-records:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.site-records select { min-width: 0; max-width: 100%; font: inherit; }
 
 /* ── drawer (Ask) ────────────────────────────────────────────────────────── */
 
@@ -822,6 +831,10 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
 .study-timeline .tl-step { font-weight: 620; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .study-timeline li.ok .tl-role { color: var(--ok-ink); }
 .study-timeline li.fail .tl-role { color: var(--warn-ink); }
+/* study map: a step row picks out that step's places on the map */
+.study-timeline li[data-map-step] { cursor: pointer; }
+.study-timeline li[data-map-step]:hover { background: var(--blue-soft); }
+.study-map-steps { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-top: .6rem; font-size: .8rem; }
 .study-figs { display: flex; flex-direction: column; gap: .5rem; margin-top: .6rem; }
 .study-figs:empty { display: none; }
 .study-fig { margin: 0; }
@@ -838,6 +851,11 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
 .study-grade.grade-indicative { color: var(--blue-dark); border-color: var(--blue); background: var(--blue-soft); }
 .study-grade.grade-screening { color: var(--warn-ink); border-color: var(--warn-ink); background: var(--warn-bg); }
 .study-grade.grade-not_established { color: var(--err-ink); border-color: var(--err-ink); background: var(--err-bg); }
+/* a shared study (study-link.js): the label, and the reasons a link was refused */
+.study-shared { outline: none; }
+.study-shared-label { margin: 0 0 .35rem; }
+.study-shared-label .study-grade { cursor: default; }
+.study-shared-errors { font-size: .8rem; line-height: 1.5; color: var(--err-ink); margin: .35rem 0; padding-left: 1.1rem; }
 .study-decision { font-size: .8rem; line-height: 1.5; margin: .4rem 0; }
 .study-decision-answer { margin: 0 0 .3rem; font-weight: 620; }
 .study-decision ul { padding-left: 1.1rem; margin: .1rem 0 .4rem; color: var(--ink-2); }
@@ -931,3 +949,65 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
   [role="tabpanel"][hidden] { display: block !important; }
   .card { break-inside: avoid; }
 }
+
+/* steerable steps (src/study-controls.js): the plan's gates in plain words, and the per-step controls after
+   the report */
+.study-steps .step-checks { grid-column: 2; margin: .15rem 0 0; padding-left: 1rem; font-size: .74rem; line-height: 1.45; color: var(--ink-2); }
+/* the plain-language gates are bullets, not steps: keep them out of the step counter */
+.study-steps .step-checks li { display: list-item; list-style: disc; }
+.study-steps .step-checks li::before { content: none; counter-increment: none; }
+.study-steps .step-raw { grid-column: 2; font-size: .7rem; }
+.study-steps .step-raw > summary { cursor: pointer; color: var(--blue); list-style: none; font-size: .7rem; }
+.study-steps .step-raw > summary::-webkit-details-marker { display: none; }
+.study-steer { margin-top: .6rem; font-size: .78rem; }
+.study-steer > summary { cursor: pointer; color: var(--blue); font-weight: 600; }
+.study-steer .steer-note { font-size: .72rem; margin: .3rem 0; }
+.steer-step { border: 1px solid var(--line-soft); border-radius: var(--radius-xs); padding: .4rem .55rem .5rem; margin: .4rem 0 0; min-width: 0; }
+.steer-step > legend { font-size: .72rem; font-weight: 620; padding: 0 .25rem; }
+.steer-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .3rem .5rem; margin-bottom: .4rem; }
+.steer-field { display: flex; flex-direction: column; gap: .15rem; font-size: .68rem; color: var(--muted); min-width: 0; }
+.steer-field select, .steer-field input[type="number"] {
+  font: inherit; font-size: .78rem; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: var(--radius-xs); padding: .26rem .36rem; width: 100%;
+}
+.steer-field input[type="checkbox"] { align-self: flex-start; }
+/* ── Study this area (area-study.js) ───────────────────────────────────── */
+.area-study {
+  position: absolute; left: var(--gap); bottom: var(--gap); z-index: 6;
+  width: min(760px, calc(100% - var(--panel-w) - 3 * var(--gap))); max-height: 58vh; overflow: auto;
+  background: var(--surface); backdrop-filter: blur(8px); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow-2); padding: .6rem .8rem; font-size: .82rem;
+}
+.area-study[hidden] { display: none; }
+.area-study .as-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .3rem; }
+.area-study .small { font-size: .76rem; }
+.area-study .as-headline { font-weight: 600; margin: .2rem 0 .4rem; }
+.area-study .as-bar { height: 6px; border-radius: 999px; background: var(--bg-sunken); overflow: hidden; margin: .4rem 0; }
+.area-study .as-bar > span { display: block; height: 100%; width: 0; background: var(--blue); transition: width .3s; }
+.area-study .as-controls { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin: .4rem 0; }
+.area-study .as-legend { display: flex; flex-wrap: wrap; gap: .3rem .8rem; margin: .2rem 0 .4rem; color: var(--ink-2); }
+.area-study .as-key i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #0f1c26; margin-right: .3rem; vertical-align: -1px; }
+.area-study table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.area-study th, .area-study td { padding: .2rem .4rem; border-bottom: 1px solid var(--line-soft); text-align: right; white-space: nowrap; }
+.area-study th:first-child, .area-study td:first-child, .area-study th:nth-child(2), .area-study td:nth-child(2) { text-align: left; }
+.area-study .as-sort { background: none; border: 0; font: inherit; font-weight: 620; color: var(--ink-2); cursor: pointer; padding: 0; }
+.area-study .as-site { background: none; border: 0; font: inherit; color: var(--blue); cursor: pointer; padding: 0; text-align: left; }
+.area-study tr.as-skipped td, .area-study tr.as-failed td { color: var(--muted); }
+.area-study .as-notes { margin-top: .4rem; }
+@media (max-width: 1100px) { .area-study { width: calc(100% - 2 * var(--gap)); } }
+/* The signature filter in the rail (signature-filter.js). */
+.sigfilter-body input[type=number] {
+  font: inherit; font-size: .82rem; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: var(--radius-xs); padding: .3rem .4rem; width: 100%; box-sizing: border-box;
+}
+.sigfilter-range { display: flex; align-items: center; gap: .35rem; }
+.sigfilter-range input[type=number] { width: 0; flex: 1; }
+.sigfilter-foot { display: flex; align-items: center; justify-content: space-between; gap: .4rem; padding: .2rem .15rem; font-size: .75rem; min-height: 1.6rem; }
+/* My places + Compare (places.js, compare.js) */
+.places-list { list-style: none; margin: .4rem 0; padding: 0; }
+.place-row { display: flex; align-items: center; gap: .4rem; padding: .35rem 0; border-bottom: 1px solid var(--line); }
+.place-row .place-open { flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 0; color: var(--ink); cursor: pointer; font: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.place-row .place-open:hover .place-name { text-decoration: underline; }
+#btn-place[aria-pressed="true"] { border-color: var(--blue); color: var(--blue); }
+.cmp-swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .35rem; vertical-align: middle; }
+#panel-places .card-body p.muted { font-size: .78rem; margin: 0 0 .4rem; }

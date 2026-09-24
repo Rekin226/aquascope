@@ -532,3 +532,40 @@ class TestUSGSAgencyPrefixedIds:
         c.fetch_raw(station_id="USGS-01646500", days=3, collection="daily", max_items=None)
         params = c.client.get_json.call_args.kwargs["params"]
         assert params["sites"] == "01646500" and "agencyCd" not in params
+
+
+class TestUSGSSharedPacingAndAreaLookup:
+    """The harvest builds one collector per station; pacing and the area cache must span them (#harvest 429s)."""
+
+    def test_collectors_share_one_rate_limiter_under_the_keyed_quota(self):
+        a, b = USGSCollector(api_key="k"), USGSCollector(api_key="k")
+        assert a.client.rate_limiter is b.client.rate_limiter
+        lim = a.client.rate_limiter
+        assert lim.max_calls * 3600 / lim.period < 1000  # a keyed USGS quota is 1,000 requests an hour
+
+    def test_the_area_lookup_is_asked_once_across_collectors(self):
+        first, second = USGSCollector(api_key="k"), USGSCollector(api_key="k")
+        first.client.get_json = Mock(return_value={"properties": {"drainage_area": "12.5"}})
+        second.client.get_json = Mock()
+        assert first._get_monitoring_location_catchment_area("01646500") == pytest.approx(32.4)
+        assert second._get_monitoring_location_catchment_area("01646500") == pytest.approx(32.4)
+        second.client.get_json.assert_not_called()
+
+    def test_a_throttled_area_lookup_is_not_remembered_as_missing(self):
+        from aquascope.utils.http_client import RateLimitedError
+
+        c = USGSCollector(api_key="k")
+        c.client.get_json = Mock(side_effect=RateLimitedError("https://example.test"))
+        assert c._get_monitoring_location_catchment_area("01646500") is None
+        c.client.get_json = Mock(return_value={"properties": {"drainage_area": "12.5"}})
+        assert c._get_monitoring_location_catchment_area("01646500") == pytest.approx(32.4)
+
+    def test_the_series_path_skips_the_area_lookup(self):
+        c = USGSCollector(api_key="k", lookup_catchment_area=False)
+        c._get_monitoring_location_catchment_area = Mock(return_value=99.0)
+        raw = {"features": [{"geometry": {"coordinates": [-77.1, 38.9]}, "properties": {
+            "monitoring_location_id": "USGS-01646500", "parameter_code": "00060", "value": "2960",
+            "time": "2026-07-20", "unit_of_measure": "ft^3/s"}}]}
+        recs = c.normalise(raw["features"])
+        assert recs and recs[0].catchment_area_km2 is None
+        c._get_monitoring_location_catchment_area.assert_not_called()

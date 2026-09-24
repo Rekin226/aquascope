@@ -90,6 +90,8 @@ _COMPASS = re.compile(r"(\d+\.?\d*)\s*°?\s*([NSEW])\b")
 #: low flow" is a statement about something the test never measured.
 _OTHER_SERIES = re.compile(r"\b(low[- ]flow|q95|q05|q90|q10|baseflow|base flow|peak|maxim|minim|"
                            r"groundwater|rainfall|precipitation)\b", re.I)
+_OTHER_SERIES_BUT_PEAKS = re.compile(r"\b(low[- ]flow|q95|q05|q90|q10|baseflow|base flow|minim|"
+                                     r"groundwater|rainfall|precipitation)\b", re.I)
 
 #: Conventional thresholds, not claims about anyone's data. 0.001 is how a
 #: tiny p-value is reported ("p < 0.001"), which the Studio's key numbers and
@@ -335,20 +337,28 @@ def verify(answer: str, tool_results: list[dict[str, Any]], *, question: str = "
     trend_payloads = [r for r in ok_results if isinstance(r.get("payload"), dict) and "trend" in str(r.get("payload"))]
     if trend_payloads and re.search(r"\btrend|increasing|decreasing|drier|wetter\b", answer, re.I):
         significance = None
-        for r in trend_payloads:
-            payload = r["payload"]
-            trend = payload.get("trend") if isinstance(payload, dict) else None
-            if isinstance(trend, dict) and "p_value" in trend:
-                significance = trend
+        # The series the report quotes (trend_reported: the annual maxima for a flood question,
+        # trend_series.py) is the one its significance wording is held to, on whichever step carries it;
+        # the first annual-mean test is the fallback.
+        for key in ("trend_reported", "trend"):
+            for r in trend_payloads:
+                trend = r["payload"].get(key)
+                if isinstance(trend, dict) and "p_value" in trend:
+                    significance = trend
+                    break
+            if significance is not None:
                 break
         if significance is not None:
             p = significance.get("p_value")
+            # A test on the maxima (a flood report's trend_reported) is about the peaks, so sentences on the
+            # peaks are exactly the ones to weigh; the other series stay out.
+            other = _OTHER_SERIES_BUT_PEAKS if "maxim" in str(significance.get("on", "")) else _OTHER_SERIES
             # Only weigh sentences that are about the series the test ran on.
             # An answer that says "no significant trend in low flow" while the
             # tool tested annual means is being precise, not contradictory, and
             # flagging it taught the reader to distrust the checks.
             claims = [s for s in re.split(r"(?<=[.!?])\s+|\n", answer)
-                      if re.search(r"\bsignificant\b", s, re.I) and not _OTHER_SERIES.search(s)]
+                      if re.search(r"\bsignificant\b", s, re.I) and not other.search(s)]
             said = " ".join(claims)
             says_significant = bool(said) and not re.search(r"\bno significant|not significant\b", said, re.I)
             actually = p is not None and p < 0.05

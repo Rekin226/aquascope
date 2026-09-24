@@ -194,6 +194,7 @@ MEDIA_TYPES = {
     "md": "text/markdown",
     "html": "text/html",
     "json": "application/json",
+    "geojson": "application/geo+json",
     "yaml": "application/yaml",
     "ipynb": "application/x-ipynb+json",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

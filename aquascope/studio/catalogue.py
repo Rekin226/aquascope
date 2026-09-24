@@ -55,6 +55,9 @@ class Entry:
     figures: list[str] = field(default_factory=list)
     tables: list[str] = field(default_factory=list)
     citation: str | None = None
+    #: The parameters a reader may change after the result, with type and allowed values
+    #: (:mod:`aquascope.studio.steering`).
+    steer: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -62,6 +65,7 @@ class Entry:
             "arguments": self.arguments, "required": self.required,
             "yields": self.yields, "methods": self.methods, "gates": self.gates,
             "figures": self.figures, "tables": self.tables, "citation": self.citation,
+            "steer": self.steer,
         }
 
     def compact(self) -> dict[str, Any]:
@@ -321,6 +325,11 @@ def _build() -> dict[str, Entry]:
                    "value_column": {"type": "string"}, "datetime_column": {"type": "string"}},
         required=["table"], yields=ann["yields"], tables=ann["tables"], figures=ann["figures"], gates=ann["gates"],
     )
+    # steerable parameters (aquascope.studio.steering)
+    from aquascope.studio.steering import declared
+
+    for e in out.values():
+        e.steer = declared(e.id)
     # citations from the registry, by the first method an entry applies
     for e in out.values():
         for m in e.methods:
@@ -518,6 +527,18 @@ def validate_plan(steps: list[dict[str, Any]], *, sufficiency: list[dict[str, An
 
 
 _PLACEHOLDER = re.compile(r"<[^>]+>")
+_REF_STEP = re.compile(r"\{\{\s*result\.([A-Za-z0-9_]+)\.")
+
+
+def _snap_to_gauge(step: dict[str, Any], reference: Any) -> None:
+    """A GloFAS cross-check (an ``anywhere`` step) is told the gauge's mean flow, so the model cell is snapped
+    to the gauge's river (``aquascope.explore.snap_glofas_cell``) rather than read at the gauge's coordinates."""
+    if str(step.get("tool")) != "anywhere" or not isinstance(reference, str):
+        return
+    m = _REF_STEP.search(reference)
+    args = step.setdefault("arguments", {})
+    if m and isinstance(args, dict) and args.get("match_mean_flow") is None:
+        args["match_mean_flow"] = f"{{{{ result.{m.group(1)}.stats.mean }}}}"
 
 
 def repair_cross_checks(steps: list[dict[str, Any]]) -> list[str]:
@@ -535,6 +556,7 @@ def repair_cross_checks(steps: list[dict[str, Any]]) -> list[str]:
                 continue
             ref = g.get("reference")
             if isinstance(ref, str) and "{{" in ref and not _PLACEHOLDER.search(ref):
+                _snap_to_gauge(step, ref)
                 continue
             if not flood_ids:
                 step["expects"] = [x for x in step["expects"] if x is not g]
@@ -555,6 +577,7 @@ def repair_cross_checks(steps: list[dict[str, Any]]) -> list[str]:
                     g["return_period"] = rp
             if not any(str(d) == target for d in step.get("depends_on") or []):
                 step["depends_on"] = [*(step.get("depends_on") or []), target]
+            _snap_to_gauge(step, g["reference"])
             notes.append(f"step {sid}: cross_check_ratio compares with {target}")
         tool, method = str(step.get("tool")), str(step.get("method") or "")
         if tool == "flood_frequency" or (tool == "analyze_station" and method == "at_site_flood_frequency"):

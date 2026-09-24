@@ -100,6 +100,41 @@ class _EmscriptenClient:
         pass
 
 
+class RateLimitedError(RuntimeError):
+    """The server answered 429 Too Many Requests and kept answering it.
+
+    A ``RuntimeError`` (what callers already catch when retries run out), so it
+    changes nothing for them; a caller that runs many requests in a row, such as
+    the archive harvest, can catch this one and stop asking that host for the rest
+    of the run instead of spending three retries per station on a spent quota.
+    """
+
+    def __init__(self, url: str, retry_after: float | None = None):
+        self.url = url
+        self.retry_after = retry_after
+        wait = f"; the server asks to wait {retry_after:.0f} s" if retry_after else ""
+        super().__init__(f"Rate limited (429) by {url}{wait}")
+
+
+#: Longest Retry-After the client will sleep through; a longer one means the quota is spent for now.
+MAX_RETRY_AFTER_SECONDS = 60.0
+
+
+def _retry_after(exc: Exception) -> float | None:
+    """Seconds from a 429's Retry-After header (seconds form only), or None."""
+    resp = getattr(exc, "response", None)
+    value = resp.headers.get("Retry-After") if resp is not None else None
+    try:
+        return float(value) if value is not None else None
+    except ValueError:
+        return None
+
+
+def _is_429(exc: Exception | None) -> bool:
+    resp = getattr(exc, "response", None)
+    return resp is not None and getattr(resp, "status_code", None) == 429
+
+
 class RateLimiter:
     """Simple sliding-window rate limiter."""
 
@@ -201,6 +236,16 @@ class CachedHTTPClient:
         path = self.cache_dir / f"{key}.json"
         path.write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
 
+    def _format_retry_error(self, url: str, exc: Exception | None, method: str = "GET") -> str:
+        if isinstance(exc, httpx.HTTPStatusError):
+            detail = f"status {exc.response.status_code}"
+        elif exc is not None:
+            detail = f"{type(exc).__name__}: {exc}"
+        else:
+            detail = "unknown error"
+        prefix = f"{method} " if method != "GET" else ""
+        return f"All {self.retries} attempts failed for {prefix}{url} ({detail})"
+
     # ── public API ───────────────────────────────────────────────────
     @staticmethod
     def _parse_response_json(resp: httpx.Response) -> Any:
@@ -243,6 +288,28 @@ class CachedHTTPClient:
                 f"First 200 chars of response: {preview!r}"
             ) from exc
 
+    def _backoff(self, exc: Exception, attempt: int, url: str, label: str = "") -> None:
+        """Sleep before the next attempt, or raise :class:`RateLimitedError` when retrying a 429 is pointless.
+
+        A 429 with a short Retry-After is slept through; a long one, or a second 429 in a row with no header
+        (USGS sends none), means the quota is spent and more retries would only spend the run's time.
+        """
+        if _is_429(exc):
+            after = _retry_after(exc)
+            if after is not None and after > MAX_RETRY_AFTER_SECONDS:
+                raise RateLimitedError(url, after) from exc
+            if after is None and attempt >= 2:
+                raise RateLimitedError(url) from exc
+            if attempt >= self.retries:
+                raise RateLimitedError(url, after) from exc
+            wait = after if after is not None else 2**attempt
+        else:
+            wait = 2**attempt
+        logger.warning(
+            "Attempt %d/%d failed for %s%s: %s — retrying in %ds", attempt, self.retries, label, url, exc, wait,
+        )
+        time.sleep(wait)
+
     def get_json(
         self,
         path: str,
@@ -284,18 +351,10 @@ class CachedHTTPClient:
                 return data
             except (httpx.HTTPStatusError, httpx.TransportError) as exc:
                 last_exc = exc
-                wait = 2**attempt
-                logger.warning(
-                    "Attempt %d/%d failed for %s: %s — retrying in %ds",
-                    attempt,
-                    self.retries,
-                    url,
-                    exc,
-                    wait,
-                )
-                time.sleep(wait)
+                if attempt < self.retries or _is_429(exc):
+                    self._backoff(exc, attempt, url)
 
-        raise RuntimeError(f"All {self.retries} attempts failed for {url}") from last_exc
+        raise RuntimeError(self._format_retry_error(url, last_exc)) from last_exc
 
 
     def get_text(
@@ -342,18 +401,10 @@ class CachedHTTPClient:
                 return text
             except (httpx.HTTPStatusError, httpx.TransportError) as exc:
                 last_exc = exc
-                wait = 2**attempt
-                logger.warning(
-                    "Attempt %d/%d failed for %s: %s — retrying in %ds",
-                    attempt,
-                    self.retries,
-                    url,
-                    exc,
-                    wait,
-                )
-                time.sleep(wait)
+                if attempt < self.retries or _is_429(exc):
+                    self._backoff(exc, attempt, url)
 
-        raise RuntimeError(f"All {self.retries} attempts failed for {url}") from last_exc
+        raise RuntimeError(self._format_retry_error(url, last_exc)) from last_exc
 
     def post_json(
         self,
@@ -406,18 +457,10 @@ class CachedHTTPClient:
                 return data
             except (httpx.HTTPStatusError, httpx.TransportError) as exc:
                 last_exc = exc
-                wait = 2**attempt
-                logger.warning(
-                    "Attempt %d/%d failed for POST %s: %s — retrying in %ds",
-                    attempt,
-                    self.retries,
-                    url,
-                    exc,
-                    wait,
-                )
-                time.sleep(wait)
+                if attempt < self.retries or _is_429(exc):
+                    self._backoff(exc, attempt, url, "POST ")
 
-        raise RuntimeError(f"All {self.retries} attempts failed for POST {url}") from last_exc
+        raise RuntimeError(self._format_retry_error(url, last_exc, method="POST")) from last_exc
 
     def close(self) -> None:
         self._client.close()

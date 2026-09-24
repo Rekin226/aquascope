@@ -20,7 +20,8 @@ transcribes a number the tools did not return.
 
 Grades (#418): ``established`` (at-site data, every gate of the step
 passed), ``indicative`` (a fallback ran, a donor transfer, a method the
-sufficiency table calls marginal, or another required step failed),
+sufficiency table calls marginal, another required step failed, or a gate
+that compares with the headline number failed, a cross-check included),
 ``screening`` (regional or reanalysis data only, no in-situ record),
 ``not_established`` (the step that carries the answer failed).
 """
@@ -35,7 +36,7 @@ from aquascope.studio.model import Model, compact
 from aquascope.studio.prompts import INTERPRETER
 from aquascope.studio.workspace import Workspace
 
-__all__ = ["GRADES", "decision_text", "find_path", "grade_for_step", "grade_for_study", "interpret",
+__all__ = ["GRADES", "decision_text", "find_path", "grade_for_step", "grade_for_study", "headline_gates", "interpret",
            "interpreter_context", "resolve_basis", "rules_findings", "validate_findings"]
 
 #: From the most to the least trusted; a model may move a grade down this list, never up.
@@ -259,10 +260,45 @@ def _primary_step(ws: Workspace, key: list[dict[str, Any]]) -> str | None:
     return None
 
 
+#: Gates that compare one step's number with another's: when one fails against the headline's step, the
+#: headline itself is in question, whichever step the gate sits on.
+_COMPARISON_CHECKS = frozenset({"cross_check_ratio", "spread_within"})
+
+
+def headline_gates(ws: Workspace, primary: str | None) -> list[dict[str, Any]]:
+    """The failed (not skipped) gates that bear on the headline number: every failed gate of the primary step,
+    and a failed comparison gate on any other step that compares with the primary step (its reference reads
+    the primary's result, or the step depends on it). A side step's cross-check is optional, but when it ran
+    and disagreed with the answer, the answer cannot be called established (the live USGS 01013500 study
+    said "established" above a failed GloFAS cross-check and a "Not established" box)."""
+    if not primary:
+        return []
+    steps = {str(s.get("id")): s for s in (ws.study or {}).get("steps") or [] if isinstance(s, dict)}
+    out: list[dict[str, Any]] = []
+    for r in (ws.run or {}).get("results") or []:
+        sid = str(r.get("id"))
+        failed = [g for g in r.get("gates") or [] if isinstance(g, dict) and not g.get("passed")
+                  and not g.get("skipped")]
+        if not failed:
+            continue
+        if sid == primary:
+            out.extend({**g, "step": sid} for g in failed)
+            continue
+        step = steps.get(sid) or {}
+        refs_primary = any(isinstance(e, dict) and f"result.{primary}." in str(e.get("reference") or "")
+                           for e in step.get("expects") or [])
+        depends = primary in [str(d) for d in step.get("depends_on") or []]
+        for g in failed:
+            if str(g.get("check")) in _COMPARISON_CHECKS and (refs_primary or depends):
+                out.append({**g, "step": sid})
+    return out
+
+
 def grade_for_study(ws: Workspace, key: list[dict[str, Any]] | None = None) -> tuple[str, str | None]:
     """The grade of the study's answer and the step it rests on: the primary step's grade, lowered to
-    indicative when another step that carries results failed, and to screening when the whole plan is
-    regional or reanalysis."""
+    indicative when another step that carries results failed, when a gate that bears on the headline failed
+    (:func:`headline_gates`) or when the run stopped early, and to screening when the whole plan is regional
+    or reanalysis. This is the one verdict: the decision, the report's grade and the badge all read it."""
     from aquascope.studio.roles.author import key_numbers
 
     key = key if key is not None else key_numbers(ws.study_obj(), (ws.run or {}).get("results") or [])
@@ -273,6 +309,8 @@ def grade_for_study(ws: Workspace, key: list[dict[str, Any]] | None = None) -> t
     for r in (ws.run or {}).get("results") or []:
         if str(r.get("id")) != primary and not _established(r) and str(r.get("tool")) not in _SIDE_TOOLS:
             grade = _lower(grade, "indicative")
+    if headline_gates(ws, primary) or (ws.run or {}).get("stop_reason"):
+        grade = _lower(grade, "indicative")
     return grade, primary
 
 
@@ -335,7 +373,7 @@ def _consistency(ws: Workspace) -> list[dict[str, Any]]:
         if m:
             ratio = float(m.group(1)) if m.group(1) else round(1 + float(m.group(2)) / 100, 2)
         out.append({"a": f"{g.get('step')}: {check}", "b": str(g.get("path") or g.get("paths") or ""),
-                    "ratio": ratio, "agree": bool(g.get("passed")), "note": detail})
+                    "ratio": ratio, "agree": None if g.get("skipped") else bool(g.get("passed")), "note": detail})
     return out
 
 

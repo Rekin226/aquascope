@@ -1,13 +1,15 @@
 """Guard against count drift between the code and every place a count is
 stated in prose (see issue #117).
 
-Three canonical values, all read from the code, never from the docs:
+Canonical values, all read from the code, never from the docs:
 
 * the data-source registry (``aquascope.registry.SOURCES``) backs every
   source/collector count, and the table in ``docs/data_sources.md`` has to
   list exactly those ids, one row each;
 * ``cli.py`` backs the CLI command count;
-* ``KC_TABLE`` and ``SignatureReport`` back the crop and signature counts.
+* ``KC_TABLE`` and ``SignatureReport`` back the crop and signature counts;
+* ``METHODOLOGIES`` and the ``viz`` exports back the methodology and plot counts;
+* ``PIPELINE_REGISTRY`` backs the auto-executable pipeline count.
 
 The mirrors drift apart on their own: in September 2026 the registry held 33
 sources while the README said 31, docs/index.md said 29, docs/features.md said
@@ -21,8 +23,11 @@ import dataclasses
 import re
 from pathlib import Path
 
+from aquascope import viz
 from aquascope.agri.crop_water import KC_TABLE
+from aquascope.ai_engine.knowledge_base import METHODOLOGIES
 from aquascope.hydrology.signatures import SignatureReport
+from aquascope.pipelines.model_builder import PIPELINE_REGISTRY
 from aquascope.registry import SOURCES
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,7 +74,7 @@ TEST_FLOOR_PATTERNS = {
     "README.md": [
         r"tests-(\d+)%2B%20passing",
         r"CAMELS benchmark with ([\d,]+)\+ tests",
-        r"\*\*([\d,]+)\+ tests\*\* — covering",
+        r"\*\*([\d,]+)\+ tests\*\* covering",
     ],
     "docs/index.md": [
         r"tests-(\d+)%2B%20passing",
@@ -86,6 +91,28 @@ SIGNATURE_COUNT_PATTERNS = {
     "docs/i18n/README.fr.md": [r"(\d+) signatures couvrant"],
 }
 
+METHODOLOGY_COUNT_PATTERNS = {
+    "README.md": [r"(\d+) research methodologies", r"all (\d+) methodologies"],
+    "docs/index.md": [r"(\d+) research methodologies", r"all (\d+) methodologies"],
+    "docs/features.md": [
+        r"(\d+) research methodologies",
+        r"### Built-in Research Methodologies \((\d+)\)",
+    ],
+}
+
+PLOT_COUNT_PATTERNS = {
+    "README.md": [r"(\d+) plot types"],
+    "docs/index.md": [r"(\d+) plot types"],
+    "docs/features.md": [r"(\d+) plot functions"],
+}
+
+PIPELINE_COUNT_PATTERNS = {
+    "README.md": [r"(\d+) analysis pipelines"],
+    "docs/index.md": [r"(\d+) analysis pipelines"],
+    "docs/features.md": [r"(\d+) auto-executable pipelines"],
+    "docs/guides/architecture.md": [r"Pipelines<br/>(\d+) auto-executable"],
+}
+
 
 def _read(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
@@ -96,6 +123,18 @@ def _cli_command_count() -> int:
     return len(re.findall(r"(?<![A-Za-z_])sub\.add_parser\(", text))  # top-level commands only, not sub-subcommands
 
 
+def _methodology_count() -> int:
+    return len(METHODOLOGIES)
+
+
+def _plot_count() -> int:
+    return sum(name.startswith("plot_") for name in viz.__all__)
+
+
+def _pipeline_count() -> int:
+    return len(PIPELINE_REGISTRY)
+
+
 def _check(patterns: dict[str, list[str]], expected: int, label: str) -> None:
     for relative, file_patterns in patterns.items():
         text = _read(relative)
@@ -103,8 +142,7 @@ def _check(patterns: dict[str, list[str]], expected: int, label: str) -> None:
             match = re.search(pattern, text)
             assert match is not None, f"{relative} no longer contains the phrase for {pattern!r}"
             assert int(match.group(1)) == expected, (
-                f"{relative} says {match.group(1)} {label} for {pattern!r}, "
-                f"but the code has {expected}"
+                f"{relative} says {match.group(1)} {label} for {pattern!r}, but the code has {expected}"
             )
 
 
@@ -128,6 +166,18 @@ def test_crop_counts_match_the_kc_table():
 
 def test_signature_counts_match_the_report():
     _check(SIGNATURE_COUNT_PATTERNS, len(dataclasses.fields(SignatureReport)), "signatures")
+
+
+def test_methodology_counts_match_the_knowledge_base():
+    _check(METHODOLOGY_COUNT_PATTERNS, _methodology_count(), "methodologies")
+
+
+def test_plot_counts_match_the_exports():
+    _check(PLOT_COUNT_PATTERNS, _plot_count(), "plot types")
+
+
+def test_pipeline_counts_match_the_registry():
+    _check(PIPELINE_COUNT_PATTERNS, _pipeline_count(), "pipelines")
 
 
 def test_the_test_floor_is_stated_the_same_everywhere():

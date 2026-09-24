@@ -189,6 +189,25 @@ UKEA_PAGE = {
 
 
 class TestUKEAStations:
+    def test_site_guid_groups_distinct_notations_and_normalizes_lists(self):
+        client = MagicMock()
+        client.get_json.return_value = {"items": [
+            {"notation": [notation], "stationGuid": ["shared-guid"], "lat": 51.0, "long": 0.0}
+            for notation in ("flow-record", "level-record")
+        ]}
+        stations = UKEACollector(client=client).stations()
+        assert {s.station_id for s in stations} == {"flow-record", "level-record"}
+        assert {s.site_id for s in stations} == {"shared-guid"}
+
+    @pytest.mark.parametrize("guid", [None, [], ""])
+    def test_missing_site_guid_defaults_to_notation(self, guid):
+        client = MagicMock()
+        client.get_json.return_value = {"items": [
+            {"notation": "record", "stationGuid": guid, "lat": 51.0, "long": 0.0},
+        ]}
+        station = UKEACollector(client=client).stations()[0]
+        assert station.site_id == station.station_id == "record"
+
     def test_parses_and_filters_bbox(self):
         client = MagicMock()
         client.get_json.return_value = UKEA_PAGE
@@ -247,6 +266,42 @@ HUBEAU_PAGE2 = {
 
 
 class TestHubeauStations:
+    @pytest.mark.parametrize("site_code", [None, "", "explicit-site"])
+    def test_site_id_uses_agency_value_or_station_prefix(self, site_code):
+        client = MagicMock()
+        client.get_json.side_effect = [
+            {"next": None, "data": [{"code_station": "A891030101", "code_site": site_code,
+                                     "latitude_station": 48.0, "longitude_station": 7.0}]},
+            {"data": []},
+        ]
+        station = HubeauHydrometrieCollector(client=client).stations()[0]
+        assert station.site_id == (site_code or "A8910301")
+        assert station.station_id == "A891030101"
+
+    def test_substations_share_site_id(self):
+        client = MagicMock()
+        client.get_json.side_effect = [
+            {
+                "next": None,
+                "data": [
+                    {
+                        "code_station": code,
+                        "code_site": "A8910301",
+                        "longitude_station": 7.0,
+                        "latitude_station": 48.0,
+                    }
+                    for code in ("A891030101", "A891030102")
+                ],
+            },
+            {"data": []},
+        ]
+
+        stations = HubeauHydrometrieCollector(client=client).stations()
+
+        assert len(stations) == 2
+        assert {st.station_id for st in stations} == {"A891030101", "A891030102"}
+        assert {st.site_id for st in stations} == {"A8910301"}
+
     def test_paginates_and_filters(self):
         client = MagicMock()
         client.get_json.side_effect = [HUBEAU_PAGE1, HUBEAU_PAGE2]

@@ -368,7 +368,7 @@ class Studio:
         reply.payload.update(extra)
         return reply
 
-    def _run_to_report(self, *, prior: Any = None) -> Reply:
+    def _run_to_report(self, *, prior: Any = None, reuse: list[str] | None = None) -> Reply:
         from aquascope.studio.roles.analysts import run
         from aquascope.studio.roles.author import author_report
         from aquascope.studio.roles.critic import critique, fixes_for
@@ -378,7 +378,7 @@ class Studio:
         ws.set_status("running")
         try:
             run(ws, self.model, tools=self._tools, on_artifact=self.on_artifact, max_replans=self.max_replans,
-                prior=prior)
+                prior=prior, reuse=reuse)
         except Exception as exc:  # noqa: BLE001 - the report says what happened
             reason = f"the run failed: {type(exc).__name__}: {exc}"
             ws.event("analyst", "error", reason)
@@ -486,6 +486,35 @@ class Studio:
         ws.set_status("review")
         ws.event("coordinator", "review", "a follow-up change runs without a second approval")
         return self._run_to_report(prior=prior)
+
+    # ── steering one step (aquascope.studio.steering) ──
+
+    def steer(self, step_id: str, changes: dict[str, Any]) -> Reply:
+        """Change a steerable parameter of one step after the report: validated against the catalogue's
+        declaration, then that step and its dependants rerun (every other result stands as it was), the change
+        is recorded in the plan's ``steering`` list so study.yaml and the notebook reproduce it, and the report
+        is written again. A refused change leaves the study as it was and says why."""
+        from aquascope.studio.roles.analysts import prior_run
+        from aquascope.studio.steering import apply_change
+
+        ws = self.ws
+        if ws.status != "done" or not ws.study:
+            return Reply("answer", f"A step can be adjusted once the report is out (status {ws.status}).",
+                         {"kind": "steer", "status": ws.status})
+        try:
+            out = apply_change(ws.study_obj(), str(step_id), dict(changes or {}))
+        except ValueError as exc:
+            text = f"The change was not accepted: {exc}"
+            ws.say("coordinator", text)
+            return Reply("answer", text, {"kind": "steer", "errors": str(exc).split("; ")})
+        prior = prior_run(ws)
+        keep = [str(r.get("id")) for r in (prior.results if prior else []) if str(r.get("id")) not in out["dirty"]]
+        ws.say("user", out["text"])
+        ws.follow_ups.append({"text": out["text"], "at": now(), "kind": "steer", "steps": out["dirty"],
+                              "change": out["change"]})
+        ws.set_study(out["study"])
+        ws.event("coordinator", "steer", f"{out['text']}; rerunning {', '.join(out['dirty'])}")
+        return self._run_to_report(prior=prior, reuse=keep)
 
     def narrate(self, sections: dict[str, str] | list[dict[str, Any]], *, source: str = "device") -> Reply:
         """Prose a model of the caller's own wrote for the report, after the crew's checks (only after the

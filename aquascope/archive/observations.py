@@ -83,6 +83,9 @@ class ObsHealth:
     failed: int = 0
     seconds: float = 0.0
     errors: list[str] = field(default_factory=list)
+    #: Why the source stopped before its budget of stations: "rate limited" or "time budget", else "".
+    #: The stations it did not reach keep no manifest entry, so the next run picks them first.
+    stopped: str = ""
 
 
 @dataclass
@@ -205,6 +208,20 @@ def _pick_stations(
     return (fresh + stale)[:max_stations]
 
 
+def _rate_limited(exc: BaseException) -> bool:
+    """True when ``exc`` is, or was raised from, a 429 the HTTP client gave up on."""
+    from aquascope.utils.http_client import RateLimitedError
+
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        if isinstance(cur, RateLimitedError):
+            return True
+        seen.add(id(cur))
+        cur = cur.__cause__ or cur.__context__
+    return False
+
+
 def _harvest_one(
     out: Path,
     catalog: list[dict[str, Any]],
@@ -216,13 +233,24 @@ def _harvest_one(
     max_stations: int,
     refresh_days: int,
     only_stations: list[str] | None,
+    max_seconds: float | None = None,
 ) -> ObsHealth:
-    """Harvest one (source, variable) budget; updates ``manifest`` in place."""
+    """Harvest one (source, variable) budget; updates ``manifest`` in place.
+
+    Stops early, and says why in ``health.stopped``, when the agency rate-limits the run (its quota is spent,
+    so every station after would fail too) or when ``max_seconds`` has passed, so one throttled agency costs
+    its own rows and not the whole weekly run.
+    """
     health = ObsHealth(source=key, variable=var)
     t0 = time.perf_counter()
     picked = _pick_stations(catalog, manifest, key, var, max_stations, refresh_days, only_stations, years)
     src_entry = manifest["sources"].setdefault(entry_key(key, var), {"source": key, "variable": var, "stations": {}})
     for row in picked:
+        if max_seconds is not None and time.perf_counter() - t0 > max_seconds:
+            health.stopped = "time budget"
+            logger.warning("[%s/%s] time budget of %.0fs spent after %d stations; the rest wait for the next run",
+                           key, var, max_seconds, health.attempted)
+            break
         sid = row["station_id"]
         health.attempted += 1
         try:
@@ -232,6 +260,11 @@ def _harvest_one(
             if len(health.errors) < 10:
                 health.errors.append(f"{sid}: {type(exc).__name__}: {str(exc)[:160]}")
             logger.warning("[%s/%s] %s failed: %s", key, var, sid, exc)
+            if _rate_limited(exc):
+                health.stopped = "rate limited"
+                logger.warning("[%s/%s] rate limited after %d stations; stopping this source for the run",
+                               key, var, health.attempted)
+                break
             continue
         s = fetched["series"]
         if s is None or s.empty or fetched["variable"] != var:
@@ -257,6 +290,8 @@ def _harvest_one(
             entry["note"] = str(fetched["note"])[:200]
         src_entry["stations"][sid] = entry
         health.harvested += 1
+        if health.harvested % 20 == 0:
+            save_manifest(out, manifest)  # a step killed by its timeout keeps what it fetched
     health.seconds = round(time.perf_counter() - t0, 1)
     src_entry.update({
         "source": key,
@@ -267,8 +302,9 @@ def _harvest_one(
         "n_stations": sum(1 for v in src_entry["stations"].values() if v.get("n")),
     })
     logger.info(
-        "[%s/%s] %d harvested, %d empty, %d failed of %d picked in %.0fs",
+        "[%s/%s] %d harvested, %d empty, %d failed of %d picked in %.0fs%s",
         key, var, health.harvested, health.empty, health.failed, health.attempted, health.seconds,
+        f" (stopped: {health.stopped})" if health.stopped else "",
     )
     return health
 
@@ -283,6 +319,7 @@ def harvest_observations(
     refresh_days: int = 30,
     catalog: list[dict[str, Any]] | None = None,
     only_stations: list[str] | None = None,
+    max_seconds: float | None = None,
 ) -> ObsReport:
     """Harvest up to ``max_stations`` stations per source and variable into ``out_dir/obs``.
 
@@ -290,7 +327,8 @@ def harvest_observations(
     every source given); by default every variable in :data:`HARVESTABLE` is
     harvested for each source, each with its own budget and manifest cursor.
     ``years`` caps the record asked for to the last N years; by default the full
-    record is requested, from the catalog's first date (#270). ``catalog``
+    record is requested, from the catalog's first date (#270). ``max_seconds``
+    caps the time spent on each source and variable. ``catalog``
     defaults to the published station catalog. Failures are recorded per source
     and never raised. Returns an :class:`ObsReport`.
     """
@@ -316,7 +354,7 @@ def harvest_observations(
     for key in keys:
         for var in (variable,) if variable else HARVESTABLE[key]:
             health = _harvest_one(out, catalog, manifest, key, var, fetch_series, years, max_stations,
-                                  refresh_days, only_stations)
+                                  refresh_days, only_stations, max_seconds)
             report.sources.append(health)
 
     save_manifest(out, manifest)

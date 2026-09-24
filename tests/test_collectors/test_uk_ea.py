@@ -65,6 +65,22 @@ def test_extract_observed_property_from_measure_id():
     assert UKEACollector._extract_observed_property_from_measure_id("a" * 36 + "_") is None
 
 
+@pytest.mark.parametrize(("measure", "station", "prop"), [
+    # the ids the 2026-09-23 harvest rejected as "Invalid measure" (sub-sites carry a suffix after the SUID)
+    ("26e91f00-1139-4775-aac4-76c88f1bf1e6_w1-flow-m-86400-m3s-qualified",
+     "26e91f00-1139-4775-aac4-76c88f1bf1e6_w1", "flow"),
+    ("162e2bb4-a4f7-48a7-910b-65a4f5cd0a4f_2879_w2TH-flow-m-86400-m3s-qualified",
+     "162e2bb4-a4f7-48a7-910b-65a4f5cd0a4f_2879_w2TH", "flow"),
+    ("0e7c1a3d-2b4f-4c5e-8a9b-1c2d3e4f5a6b_TL31_181-gw-dipped-i-mAOD-qualified",
+     "0e7c1a3d-2b4f-4c5e-8a9b-1c2d3e4f5a6b_TL31_181", "gw"),
+    ("0e7c1a3d-2b4f-4c5e-8a9b-1c2d3e4f5a6b-level-i-900-m-qualified",
+     "0e7c1a3d-2b4f-4c5e-8a9b-1c2d3e4f5a6b", "level"),
+])
+def test_sub_site_measure_ids_keep_their_suffix(measure, station, prop):
+    assert UKEACollector._extract_observed_property_from_measure_id(measure) == prop
+    assert UKEACollector._extract_station_suid_from_measure_id(measure) == station
+
+
 def test_fetch_raw_with_measure_sets_observed_property_and_supports_normalisation():
     suid = "".join(["s" for _ in range(36)])
     item = {
@@ -352,6 +368,18 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
     # max_items counts the prepended metadata row as well, so the result can contain 3 entries.
     res2 = coll4.fetch_raw(observed_property="waterLevel", limit=2, max_items=2)
     assert len(res2) == 3
+
+
+def test_bbox_readings_normalize_list_station_guid():
+    def behaviour(path, params):
+        if path == "id/stations.json":
+            return {"items": [{"stationGuid": ["shared-guid"], "lat": 51.5, "long": 0.5}]}
+        assert params["station"] == "shared-guid"
+        return {"items": []}
+
+    client = DummyClient(behaviour=behaviour)
+    UKEACollector(client=client).fetch_raw(observed_property="waterLevel", bbox="0,51,1,52")
+    assert any(path == "data/readings.json" for path, _ in client.calls)
 
 
 def test_fetch_raw_bbox_requires_observed_property():

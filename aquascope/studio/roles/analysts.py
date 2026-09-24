@@ -25,6 +25,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from aquascope import study_map
 from aquascope.studio import catalogue
 from aquascope.studio.model import Model, compact
 from aquascope.studio.prompts import SPECIALIST
@@ -99,6 +100,23 @@ def _name_stations(ws: Workspace, run: StudyRun) -> None:
                 p.setdefault("station_name", name)
                 if not p.get("name"):
                     p["name"] = name
+
+
+def _report_the_asked_trend(ws: Workspace, run: StudyRun, study: Study) -> None:
+    """A flood question ("is it getting worse?") is answered with the Mann-Kendall test on the annual maxima,
+    not on the annual means: every station payload is marked with the trend the report quotes
+    (``trend_reported``), so the key numbers, the sentences and the trend figure use the same series."""
+    from aquascope.trend_series import is_flood_question, mark_reported_trend
+
+    plan = study.plan or {}
+    flood = is_flood_question(ws.brief.kind, ws.brief.problem, ws.brief.playbook or plan.get("playbook"))
+    if not flood:
+        return
+    for r in run.results:
+        mark_reported_trend(r.get("result"), flood=True)
+        fb = r.get("fallback")
+        if isinstance(fb, dict):
+            mark_reported_trend(fb.get("result"), flood=True)
 
 
 def _ask_for_the_return_period(ws: Workspace, study: Study) -> None:
@@ -359,7 +377,7 @@ def _carry(old: Study, new: Study) -> Study:
 
 
 def run(ws: Workspace, model: Model | None, *, tools: dict[str, Any] | None = None, on_artifact: Any = None,
-        max_replans: int = 1, prior: StudyRun | None = None) -> StudyRun:
+        max_replans: int = 1, prior: StudyRun | None = None, reuse: list[str] | None = None) -> StudyRun:
     """Run ``ws.study`` with gates, figures and one bounded replan; write ``ws.run`` and the study's results."""
     from aquascope import playbooks as pbk
 
@@ -393,10 +411,12 @@ def run(ws: Workspace, model: Model | None, *, tools: dict[str, Any] | None = No
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
     ws.event("analyst", "start", f"{len(study.steps)} step(s)")
     _ask_for_the_return_period(ws, study)
-    run_ = run_study(study, on_event=say, prior=prior, tools=callables)
+    run_ = run_study(study, on_event=say, prior=prior, tools=callables, reuse=reuse)  # reuse: a steered rerun
     _name_stations(ws, run_)
     _inherit_units(ws, run_, study)
+    _report_the_asked_trend(ws, run_, study)  # study-trust-fixes: flood questions quote the annual-maxima trend
     _draw(ws, run_, drawn, on_artifact, study)
+    study_map.publish(ws, run_.results, on_artifact)  # the study on the map (study_map.geojson)
     replans = 0
     #: Recovery attempts per step id: each failed step gets its branch replan or its Specialist fallback at most
     #: ``max_replans`` times, then it stays not established and the crew moves to the next failed step.
@@ -408,7 +428,9 @@ def run(ws: Workspace, model: Model | None, *, tools: dict[str, Any] | None = No
         out = run_study(study, on_event=say, prior=run_, tools=callables)
         _name_stations(ws, out)
         _inherit_units(ws, out, study)
+        _report_the_asked_trend(ws, out, study)
         _draw(ws, out, drawn, on_artifact, study)
+        study_map.publish(ws, out.results, on_artifact)
         return out
 
     while not run_.stop_reason:

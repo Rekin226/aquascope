@@ -316,6 +316,59 @@ class TestGenerateReport:
 
 
 # ---------------------------------------------------------------------------
+# Budyko framework
+# ---------------------------------------------------------------------------
+
+class TestBudykoAnalysis:
+    """Tests for :func:`aquascope.api.budyko_analysis`."""
+
+    def test_default_curves(self):
+        from aquascope.api import budyko_analysis
+        from aquascope.hydrology.budyko import BudykoResult
+
+        result = budyko_analysis(1000.0, 1200.0)
+
+        assert isinstance(result, BudykoResult)
+        assert set(result.predicted) == {"schreiber", "oldekop", "turc_pike", "fu_zhang"}
+
+    def test_curves_must_not_be_a_bare_string(self):
+        from aquascope.api import budyko_analysis
+
+        with pytest.raises(ValueError, match="sequence"):
+            budyko_analysis(1000.0, 1200.0, curves="schreiber")
+
+    def test_fu_omega_forwarded(self):
+        from aquascope.api import budyko_analysis
+
+        result = budyko_analysis(1000.0, 1200.0, curves=["fu_zhang"], fu_omega=1.0)
+        assert result.predicted["fu_zhang"] == pytest.approx(0.0)  # omega=1 degenerates to the zero line
+
+    def test_observed_et_accepted(self):
+        from aquascope.api import budyko_analysis
+
+        result = budyko_analysis(1000.0, 1200.0, observed_et=500.0)
+        assert result.observed_evaporative_ratio == pytest.approx(0.5)
+
+    def test_observed_runoff_accepted(self):
+        from aquascope.api import budyko_analysis
+
+        result = budyko_analysis(1000.0, 1200.0, observed_runoff=700.0)
+        assert result.observed_evaporative_ratio == pytest.approx(0.3)
+
+    def test_both_observed_inputs_rejected(self):
+        from aquascope.api import budyko_analysis
+
+        with pytest.raises(ValueError, match="only one"):
+            budyko_analysis(1000.0, 1200.0, observed_et=500.0, observed_runoff=400.0)
+
+    def test_invalid_curve(self):
+        from aquascope.api import budyko_analysis
+
+        with pytest.raises(ValueError, match="Unknown Budyko curve"):
+            budyko_analysis(1000.0, 1200.0, curves=["not_a_curve"])
+
+
+# ---------------------------------------------------------------------------
 # Import helper
 # ---------------------------------------------------------------------------
 

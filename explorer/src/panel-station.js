@@ -15,6 +15,8 @@ import { GR4J_METHODS, addMethodOnce, methodsOnPage, openCite, renderMethodList 
 import { hideCard, selectTab, setCard, setStatusEl, setTab, showSurface } from "./shell.js?v=__BUILD__";
 import { Cancelled, call, callCancelable } from "./worker-client.js?v=__BUILD__";
 import { canonicalUrl, writeUrl } from "./url.js?v=__BUILD__";
+import { siteKey } from "./sites.js?v=__BUILD__";
+import { syncPlaceButton } from "./places.js?v=__BUILD__";  // My places: the ☆ Save button
 
 let analysisRun = 0;
 let gr4jRun = 0;
@@ -55,6 +57,20 @@ export function selectStation(key, { fly = false, tab = null, push = true } = {}
   badge.style.background = st.color;
   $("st-name").textContent = r.name || r.station_id;
   $("st-id").textContent = r.station_id;
+  syncPlaceButton();  // My places
+  const members = state.stations.filter((record) => siteKey(record) === siteKey(r));
+  const selector = $("st-site-select");
+  selector.replaceChildren();
+  $("st-site-records").hidden = members.length < 2;
+  if (members.length > 1) {
+    $("st-site-count").textContent = `${members.length} records at this site`;
+    for (const record of members) {
+      const span = record.period_start ? `${record.period_start} to ${record.period_end || "present"}` : "dates unknown";
+      selector.add(new Option(`${record.station_id} (${span})`, stationKey(record)));
+    }
+    selector.value = key;
+    selector.onchange = () => selectStation(selector.value);
+  }
   $("st-vars").textContent = (r.variables || []).map((v) => VAR_LABEL[v] || v).join(", ") || "—";
   $("st-period").textContent = r.period_start ? ` · ${r.period_start} → ${r.period_end || "present"}` : "";
   const agency = $("st-agency");

@@ -13,8 +13,8 @@ flowchart TB
     end
 
     subgraph Intelligence["Intelligence Layer"]
-        AI["AI Engine<br/>26 methodologies"]
-        PIPE["Pipelines<br/>7 auto-executable"]
+        AI["AI Engine<br/>27 methodologies"]
+        PIPE["Pipelines<br/>26 auto-executable"]
         CHAL["Challenges<br/>flood / drought / WQ"]
     end
 
@@ -88,7 +88,7 @@ Each pipeline returns a `PipelineResult` with summary text, structured metrics, 
 
 ### 5. AI Engine (`aquascope/ai_engine/`)
 
-- **Knowledge Base** — 26 research methodologies with metadata: applicable parameters, data requirements, complexity, references, tags.
+- **Knowledge Base**: 27 research methodologies with metadata: applicable parameters, data requirements, complexity, references, tags.
 - **Recommender** — Scores each methodology against a `DatasetProfile` using a multi-criteria rule engine. Optional LLM mode for deeper reasoning via OpenAI-compatible APIs (including local Ollama).
 
 ### 6. CLI (`aquascope/cli.py`)

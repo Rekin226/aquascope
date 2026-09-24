@@ -7,6 +7,7 @@ from unittest import mock
 import httpx
 import pytest
 
+from aquascope.collectors.base import CollectorError
 from aquascope.collectors.gemstat import GEMStatCollector
 from aquascope.collectors.taiwan_civil_iot import TaiwanCivilIoTCollector
 from aquascope.collectors.wqp import WQPCollector
@@ -232,8 +233,10 @@ class TestWQPCollector:
         )
         collector = WQPCollector(client=mock_client)
 
-        with pytest.raises(httpx.ConnectError):
+        with pytest.raises(CollectorError) as exc_info:
             collector.fetch_raw(state_code="US:11")
+        assert exc_info.value.source == "wqp"
+        assert isinstance(exc_info.value.cause, httpx.ConnectError)
 
     def test_fetch_raw_calls_rate_limiter_before_streaming(self):
         csv_lines = ["Location_Identifier,Result_Measure"]

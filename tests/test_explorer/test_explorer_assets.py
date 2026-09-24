@@ -702,7 +702,7 @@ def test_the_node_tests_of_the_pure_modules_pass() -> None:
     files = sorted(str(f) for f in (EXPLORER / "tests").glob("*.test.mjs"))
     assert files, "no node suites under explorer/tests"
     out = subprocess.run(
-        ["node", "--test", *files],
+        ["node", "--test", "--test-reporter=tap", *files],
         capture_output=True,
         text=True,
         encoding="utf-8",

@@ -13,6 +13,7 @@ No API key required (open data, unauthenticated).
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -50,6 +51,8 @@ MAPPED_OBSERVED_PROPERTY_MEASURE_CODE = {
     "rainfall": "rainfall",
     "gw": "groundwaterLevel"
 }
+#: The observed-property token of a measure id, between hyphens after the station part.
+_MEASURE_PROPERTY = re.compile(r"-(" + "|".join(MAPPED_OBSERVED_PROPERTY_MEASURE_CODE) + r")-")
 COLLECTION_PERIOD_VALUES = {
     "15min": 900,
     "daily": 86400
@@ -150,13 +153,15 @@ class UKEACollector(BaseCollector):
                 )
                 if variable and variable not in variables:
                     variables = sorted(set(variables) | {variable})
-                notation = item.get("notation") or item.get("stationGuid")
+                site_id = _first_str(item.get("stationGuid"))
+                notation = _first_str(item.get("notation")) or site_id
                 if not notation:
                     continue
                 stations.append(
                     Station(
                         source="uk_ea",
                         station_id=str(notation),
+                        site_id=site_id or str(notation),
                         name=_first_str(item.get("label")),
                         latitude=lat,
                         longitude=lon,
@@ -355,7 +360,7 @@ class UKEACollector(BaseCollector):
                 params["maxeq-date"] = max_date
 
             for station in station_meta:
-                station_id = station.get("stationGuid", None)
+                station_id = _first_str(station.get("stationGuid"))
                 if not station_id:
                     logger.warning("Station metadata missing stationGuid: %s", station)
                     continue
@@ -695,7 +700,11 @@ class UKEACollector(BaseCollector):
         if not measure:
             return None
 
-        # Since the SUID is based on GUID style identifiers, the SUID is always the first 36 characters of the measure ID.
+        # The SUID is a GUID, the first 36 characters of the measure ID. A sub-site keeps its suffix
+        # ("<suid>_w1"): the station part runs up to the observed-property token.
+        match = _MEASURE_PROPERTY.search(measure, 36)
+        if match:
+            return measure[:match.start()]
         return measure[:36]
 
     @staticmethod
@@ -717,9 +726,14 @@ class UKEACollector(BaseCollector):
         if not measure:
             return None
 
-        # The observedProperty can be extracted from the measure's id. It appears after the station SUID.
-        measure_without_suid = measure[37:]
-        observed_property = measure_without_suid.split("-", 1)[0]
+        # The observedProperty sits after the station part of the id: "<suid>-flow-m-86400-m3s-qualified".
+        # The station part is a 36-character SUID, sometimes with a sub-site suffix ("<suid>_w1",
+        # "<suid>_2879_w2TH", "<suid>_TL31_181"), so find the first known property token after the SUID
+        # rather than cutting at a fixed offset, which read "w1" and rejected those sites' measures.
+        match = _MEASURE_PROPERTY.search(measure, 36)
+        if match:
+            return match.group(1)
+        observed_property = measure[37:].split("-", 1)[0]
         return observed_property or None
 
     @staticmethod
@@ -941,4 +955,3 @@ class UKEACollector(BaseCollector):
                 return GeoLocation(latitude=float(lat), longitude=float(long))
             except (ValueError, TypeError):
                 return None
-

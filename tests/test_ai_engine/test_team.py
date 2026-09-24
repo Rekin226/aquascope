@@ -156,9 +156,10 @@ def test_a_model_run_plans_replans_after_a_failed_gate_and_narrates():
     assert r3["fallback_used"] and r3["fallback"]["tool"] == "anywhere" and r3["fallback"]["ok"]
     assert res.run.stop_reason is None and not res.ok, "the cross-check cannot compare with a replaced at-site fit"
     s4 = [r for r in res.run.results if r["id"] == "s4"][0]
-    assert not s4["gates_passed"] and "did not resolve" in s4["gates"][-1]["detail"]
+    # s4 snaps its GloFAS cell to s3's mean flow, which the replaced fit does not carry: it is not called
+    assert not s4["ok"] and not s4["gates_passed"] and "stats.mean" in s4["error"]
     assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency", "similar_basins",
-                                     "flood_frequency", "anywhere", "anywhere"], "the passed steps were reused"
+                                     "flood_frequency", "anywhere"], "the passed steps were reused"
     kinds = [(e["role"], e["event"]) for e in res.timeline]
     assert ("specialist", "replan") in kinds and ("runner", "reused") in kinds and ("narrator", "template") not in kinds
     assert res.answer.startswith("The 100-year flow")

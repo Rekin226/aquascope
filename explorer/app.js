@@ -27,6 +27,9 @@ import { initUrl, readUrl, writeUrl } from "./src/url.js?v=__BUILD__";
 import { ensureWorker } from "./src/worker-client.js?v=__BUILD__";
 import { openCite } from "./src/methods.js?v=__BUILD__";
 import { registerWebMcpTools } from "./src/webmcp.js?v=__BUILD__";
+import { studyUrlParam } from "./src/study-link.js?v=__BUILD__";
+import { initSignatureFilter } from "./src/signature-filter.js?v=__BUILD__";
+import { initPlaces } from "./src/places.js?v=__BUILD__";  // My places + Compare
 
 // Study is loaded when it is first used (the Study button, the drawer's radio,
 // "Study this place", a #study=1 link): its modules are the larger part of the
@@ -48,6 +51,7 @@ function loadStudy() {
 
 function initStudyLoader() {
   actions.openStudy = (opts) => loadStudy().then((m) => m.openStudy(opts)).catch(() => {});
+  actions.openSharedStudy = (opts) => loadStudy().then((m) => m.openSharedStudy(opts)).catch(() => {});
   $("btn-study").addEventListener("click", () => loadStudy().then((m) => m.toggleStudy()).catch(() => {}));
   $("drawer").addEventListener("drawermode", (e) => { if (e.detail.mode === "study") loadStudy(); });
 }
@@ -55,6 +59,7 @@ function initStudyLoader() {
 // The Study drawer, after the selection it belongs to has been applied (a
 // selection closes the drawer, so the order matters).
 function openStudyIf(url) {
+  if (url.study && url.studyLink) { actions.openSharedStudy({ link: url.studyLink }); return; }   // study links
   if (url.study) actions.openStudy(url.studyId ? { recorded: url.studyId } : {});
 }
 
@@ -177,6 +182,7 @@ function goHome() {
   initStationPanel();
   initPointPanel();
   initWorkbench();
+  initPlaces();  // My places + Compare
   initAsk();   // async: fills the provider list from providers.json
   initStudyLoader();
   initSearch();
@@ -231,11 +237,14 @@ function goHome() {
 
   buildRail();
   updateCount();
+  initSignatureFilter();  // async: shows the rail's signature filter when signatures.parquet exists
   if (mapOk) bringMapOnline(url);
   else if (mapResult && mapResult.reason === "slow") whenMapLoadsLate(() => bringMapOnline(url));
   ensureWorker();  // warm Python in the background so the first click is quicker
 
   applyUrl(url);
+  const studyUrl = studyUrlParam(location.search);   // ?study_url=<https study.yaml> (study-link.js)
+  if (studyUrl && !url.studyLink) actions.openSharedStudy({ studyUrl });
   // Offer the page's tools to an in-browser agent, where the browser has WebMCP.
   registerWebMcpTools({ actions });
   state.booting = false;

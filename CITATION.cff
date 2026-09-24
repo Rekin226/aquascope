@@ -9,14 +9,14 @@ abstract: >-
   aggregation, hydrological analysis, agricultural water management,
   and AI-powered research methodology recommendations. It provides a
   single, coherent interface to 37 global water data sources and
-  implements 26 hydrological, statistical, and agri-water methods.
+  implements 27 hydrological, statistical, and agri-water methods.
 authors:
   - family-names: Ouédraogo
     given-names: Abdoul Rachid
     orcid: "https://orcid.org/0000-0002-4616-4153"
     affiliation: "National Central University, Taiwan"
-version: 0.18.0
-date-released: "2026-09-16"
+version: 0.19.0
+date-released: "2026-09-24"
 doi: 10.5281/zenodo.21903143
 license: MIT
 repository-code: https://github.com/Rekin226/aquascope
@@ -36,6 +36,9 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.21903143
     description: Concept DOI, resolves to the latest archived version
+  - type: doi
+    value: 10.5281/zenodo.22930129
+    description: Version DOI for v0.19.0
   - type: doi
     value: 10.5281/zenodo.22787700
     description: Version DOI for v0.18.0
@@ -83,8 +86,8 @@ preferred-citation:
     - family-names: Ouédraogo
       given-names: Abdoul Rachid
       orcid: "https://orcid.org/0000-0002-4616-4153"
-  version: 0.18.0
-  date-released: "2026-09-16"
+  version: 0.19.0
+  date-released: "2026-09-24"
   doi: 10.5281/zenodo.21903143
   license: MIT
   repository-code: https://github.com/Rekin226/aquascope

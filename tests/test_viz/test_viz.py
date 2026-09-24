@@ -302,3 +302,90 @@ class TestHydroPlots:
         fig = plot_return_periods(rp, observed_max=120.0)
         assert isinstance(fig, plt.Figure)
         plt.close(fig)
+
+
+class TestBudykoPlot:
+    """Tests for :func:`aquascope.viz.plot_budyko`."""
+
+    def test_plot_budyko_returns_figure(self):
+        from aquascope.hydrology.budyko import budyko
+        from aquascope.viz import plot_budyko
+
+        result = budyko(1000.0, 1500.0, observed_et=600.0)
+        fig = plot_budyko(result)
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_plot_budyko_multi_point(self):
+        from aquascope.hydrology.budyko import budyko
+        from aquascope.viz import plot_budyko
+
+        result = budyko(np.array([1000.0, 2000.0]), np.array([1500.0, 1000.0]),
+                        observed_et=np.array([900.0, 500.0]))
+        fig = plot_budyko(result, labels=["A", "B"])
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_plot_budyko_multidimensional_points(self):
+        from aquascope.hydrology.budyko import budyko
+        from aquascope.viz import plot_budyko
+
+        result = budyko(np.ones((2, 2)), np.full((2, 2), 2.0), observed_et=np.ones((2, 2)))
+        fig = plot_budyko(result)
+        assert isinstance(fig, plt.Figure)
+        plt.close(fig)
+
+    def test_plot_budyko_labels_without_observed_raises(self):
+        from aquascope.hydrology.budyko import budyko
+        from aquascope.viz import plot_budyko
+
+        result = budyko(1000.0, 1500.0)
+        with pytest.raises(ValueError, match="no observed"):
+            plot_budyko(result, labels=["A"])
+
+    def test_plot_budyko_includes_observed_aridity_outside_grid(self):
+        from aquascope.hydrology.budyko import budyko
+        from aquascope.viz import plot_budyko
+
+        result = budyko(1.0, 10.0, observed_et=0.5)
+        fig = plot_budyko(result)
+        assert fig.axes[0].get_xlim()[1] >= 10.0
+        plt.close(fig)
+
+    def test_plot_budyko_labels_mismatch(self):
+        from aquascope.hydrology.budyko import budyko
+        from aquascope.viz import plot_budyko
+
+        result = budyko(np.array([1000.0, 2000.0]), np.array([1500.0, 1000.0]),
+                        observed_et=np.array([900.0, 500.0]))
+        with pytest.raises(ValueError, match="one entry"):
+            plot_budyko(result, labels=["only"])
+
+    def test_plot_budyko_follows_observed_beyond_grid(self):
+        from aquascope.hydrology.budyko import budyko
+        from aquascope.viz import plot_budyko
+
+        outside = budyko(1000.0, 8000.0, observed_et=600.0)  # aridity 8.0 > grid max
+        fig = plot_budyko(outside)
+        assert fig.axes[0].get_xlim()[1] >= 8.0 - 1e-9
+        plt.close(fig)
+
+        inside = budyko(1000.0, 1500.0, observed_et=600.0)  # aridity 1.5 within grid
+        fig = plot_budyko(inside)
+        assert fig.axes[0].get_xlim()[1] <= 4.0 + 1e-9
+        plt.close(fig)
+
+    def test_plot_budyko_save(self):
+        from aquascope.hydrology.budyko import budyko
+        from aquascope.viz import plot_budyko
+
+        result = budyko(1000.0, 1200.0)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            path = f.name
+        try:
+            fig = plot_budyko(result, save_path=path)
+            assert isinstance(fig, plt.Figure)
+            assert os.path.exists(path)
+            assert os.path.getsize(path) > 1000
+        finally:
+            os.unlink(path)

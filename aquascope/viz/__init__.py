@@ -28,6 +28,7 @@ from aquascope.viz.diagnostics import (
 
 # Hydrology
 from aquascope.viz.hydro import (
+    plot_budyko,
     plot_fdc,
     plot_hydrograph,
     plot_return_periods,
@@ -81,6 +82,7 @@ __all__ = [
     "plot_station_map",
     "plot_station_scatter",
     # hydrology
+    "plot_budyko",
     "plot_fdc",
     "plot_hydrograph",
     "plot_spi_timeline",

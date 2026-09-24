@@ -35,7 +35,7 @@ def test_keyless_end_to_end_say_plan_approve_report_export(studio_factory, tmp_p
     assert [m.kind for m in ws.messages] == ["text", "brief", "plan", "report"]
     assert any(e["event"] == "deliverables_unavailable" for e in events)
     paths = s.export(tmp_path / "out")
-    assert set(paths) == {"report.md", "study.yaml", "report.json", "workspace.json"}
+    assert set(paths) == {"report.md", "study.yaml", "report.json", "workspace.json", "study_map.geojson"}
     md = (tmp_path / "out" / "report.md").read_text(encoding="utf-8")
     assert "## Methodology" in md and "520 m3/s" in md and "Model calls: 0" in md
     # the study replays with no model and lands on the same results

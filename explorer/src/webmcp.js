@@ -68,6 +68,21 @@ const TOOLS = [
     },
   },
   {
+    name: "aquascope_filter_gauges",
+    description: "Filter the gauges on the map by their flow signatures: years of daily data, flood trend "
+      + "(Mann-Kendall on annual maxima: rising, falling or none) and baseflow index range. Give the fields, "
+      + "or a question in plain words such as '50+ years with a rising flood trend'. Returns how many match.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "The filter in plain words" },
+        min_years: { type: "number" },
+        flood_trend: { type: "string", enum: ["rising", "falling", "none"] },
+        bfi_min: { type: "number" }, bfi_max: { type: "number" },
+      },
+    },
+  },
+  {
     name: "aquascope_show_on_map",
     description: "Show a gauge or a point on the map the reader is looking at, and open its analysis panel.",
     inputSchema: {
@@ -97,6 +112,13 @@ export function registerWebMcpTools({ actions }) {
         description: spec.description,
         inputSchema: spec.inputSchema,
         async execute(args = {}) {
+          if (spec.name === "aquascope_filter_gauges") {  // page-side: signature-filter.js
+            if (!actions.setSignatureFilter) return textResult({ error: "The signature filter is not loaded." });
+            const { question, ...fields } = args;
+            return textResult(question
+              ? await actions.setSignatureFilterFromQuestion(question, fields)
+              : await actions.setSignatureFilter(fields));
+          }
           if (spec.name === "aquascope_show_on_map") {
             if (args.source && args.station_id) {
               actions.selectStation(`${args.source}/${args.station_id}`, { fly: true });

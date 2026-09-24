@@ -41,7 +41,8 @@ export function buildRail() {
 
 export function updateCount() {
   const total = state.stations.length;
-  const visible = state.stations.filter((r) => !state.hidden.has(r.source)).length;
+  const visible = state.stations.filter((r) => !state.hidden.has(r.source)
+    && (!state.sigMatch || state.sigMatch.has(`${r.source}/${r.station_id}`))).length;  // signature filter
   const el = $("count");
   el.textContent = visible === total
     ? `${total.toLocaleString()} shown`

@@ -170,9 +170,11 @@ def _numbers_for(sid: str, tool: str, p: dict[str, Any], rp: Any) -> list[dict[s
         for key, label in (("q95", "Q95 (exceeded 95 % of days)"), ("q50", "Q50 (median flow)"), ("q10", "Q10")):
             if fdc.get(key) is not None:
                 add(label, fdc[key])
-        trend = p.get("trend") or {}
+        from aquascope.trend_series import reported_trend
+
+        trend = reported_trend(p) or {}  # the annual maxima for a flood question, the annual mean otherwise
         if isinstance(trend, dict) and trend.get("p_value") is not None:
-            add("Mann-Kendall p-value (annual mean)", p_text(trend["p_value"]), "")
+            add(f"Mann-Kendall p-value ({trend.get('on') or 'annual mean'})", p_text(trend["p_value"]), "")
             add("Sen's slope", trend.get("sens_slope_per_year"), f"{unit} per year" if unit else "per year")
         out += others
     elif tool == "describe_catchment":

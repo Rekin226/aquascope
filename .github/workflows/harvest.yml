@@ -30,6 +30,10 @@ on:
         description: "Skip the observation harvest (catalog, station catchments and bundles only)"
         type: boolean
         default: false
+      health_issues:
+        description: "Open / update / close collector-health issues, as the Monday run does"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -42,7 +46,7 @@ concurrency:
 jobs:
   harvest:
     runs-on: ubuntu-latest
-    timeout-minutes: 170
+    timeout-minutes: 240
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_DATASET: Rekin226/aquascope-gauges
@@ -97,34 +101,65 @@ jobs:
           print(f"{len(table):,} of {len(catalog):,} stations assigned")
           EOF
 
+      # Poland IMGW's daily archive is ~870 zips (~180 MB), one request each; finished hydrological years never
+      # change. Keeping them between runs turns a 15-minute download into a restore. The key changes every
+      # run so the newest copy is saved; restore-keys picks up the last one.
+      - name: Restore the IMGW archive zips
+        if: ${{ !inputs.skip_obs }}
+        uses: actions/cache@v4
+        with:
+          path: data/cache/poland_imgw
+          key: imgw-archive-${{ github.run_id }}
+          restore-keys: imgw-archive-
+
       - name: Harvest daily observations (budgeted; the archive fills up over weeks)
         id: obs
         if: ${{ !inputs.skip_obs }}
-        timeout-minutes: 120
+        # Every phase below carries --max-seconds (the uk_ea + hubeau line once per source): about 166 min if
+        # every budget were spent, well above a normal run (83 min on 2026-09-24), inside this.
+        timeout-minutes: 180
         run: |
           set +e
           B=${{ inputs.obs_budget || 150 }}
-          # Phase 1: discharge for the three long-record sources.
+          # Phase 1: discharge for the long-record sources. USGS runs last, on its own time budget (below).
           aquascope harvest obs --out archive --variable discharge \
-            --source usgs --source uk_ea --source hubeau_hydrometrie --max-stations $B
+            --source uk_ea --source hubeau_hydrometrie --max-stations $B --max-seconds 1200
           # Phase 2: the other variables, smaller budgets (UK EA: 3.6k boreholes, 1k rain gauges, 2.6k level sites).
-          aquascope harvest obs --out archive --variable groundwater_level --source uk_ea --max-stations $((B / 2))
-          aquascope harvest obs --out archive --variable precipitation --source uk_ea --max-stations $((B / 3))
-          aquascope harvest obs --out archive --variable water_level --source uk_ea --max-stations $((B / 3))
-          aquascope harvest obs --out archive --variable water_level --source usgs --max-stations $((B / 5))
-          aquascope harvest obs --out archive --variable precipitation --source taiwan_cwa --max-stations 15
+          aquascope harvest obs --out archive --variable groundwater_level --source uk_ea --max-stations $((B / 2)) \
+            --max-seconds 600
+          aquascope harvest obs --out archive --variable precipitation --source uk_ea --max-stations $((B / 3)) --max-seconds 400
+          aquascope harvest obs --out archive --variable water_level --source uk_ea --max-stations $((B / 3)) --max-seconds 400
+          aquascope harvest obs --out archive --variable precipitation --source taiwan_cwa --max-stations 15 \
+            --max-seconds 900  # CODIS: one request per year, ~60 s a station
           # Greece OpenHi: 65 telemetry stations the browser cannot call (#408); small enough to mirror whole.
-          aquascope harvest obs --out archive --variable discharge --source greece_openhi --max-stations 65
-          aquascope harvest obs --out archive --variable water_level --source greece_openhi --max-stations 65
-          aquascope harvest obs --out archive --variable precipitation --source greece_openhi --max-stations 65
-          # Poland IMGW-PIB: ~900 gauges, daily from 1951; one download of the archive serves every station (#391).
-          aquascope harvest obs --out archive --variable discharge --source poland_imgw --max-stations $B
-          aquascope harvest obs --out archive --variable water_level --source poland_imgw --max-stations $((B / 2))
+          aquascope harvest obs --out archive --variable discharge --source greece_openhi --max-stations 65 \
+            --max-seconds 300
+          aquascope harvest obs --out archive --variable water_level --source greece_openhi --max-stations 65 \
+            --max-seconds 300
+          aquascope harvest obs --out archive --variable precipitation --source greece_openhi --max-stations 65 \
+            --max-seconds 300
+          # Poland IMGW-PIB: ~900 gauges, daily from 1951; one download of the archive serves every station (#391),
+          # and the parsed files are shared across stations. The discharge budget covers a cold download (~15 min)
+          # when the zip cache above is empty; the stations after it take seconds each.
+          aquascope harvest obs --out archive --variable discharge --source poland_imgw --max-stations $B --max-seconds 1500
+          aquascope harvest obs --out archive --variable water_level --source poland_imgw --max-stations $((B / 2)) \
+            --max-seconds 300
+          # USGS last and time-boxed: a keyed quota is 1,000 requests an hour, a full record is ~4 pages, and
+          # the collector paces itself to 15 a minute. On a 429 it stops for the run instead of burning the step
+          # (the 2026-09-14 and 09-21 runs timed out on retries). Stations not reached go first next week.
+          aquascope harvest obs --out archive --variable discharge --source usgs --max-stations $B --max-seconds 2100
+          aquascope harvest obs --out archive --variable water_level --source usgs --max-stations $((B / 5)) \
+            --max-seconds 480
           echo "exit=$?" >> "$GITHUB_OUTPUT"
           set -e
 
       - name: Roll the per-station files into Parquet bundles (one per variable and source)
         run: aquascope harvest bundles --out archive
+
+      - name: Per-station flow signatures (signatures.parquet, the Explorer's map filter)
+        # The stations step already built it from last week's files; this refresh adds what obs just mirrored.
+        continue-on-error: true
+        run: aquascope harvest signatures --out archive
 
       - name: Donor signatures and leave-one-out skill (basins/station_signatures.parquet, regionalization_skill.json)
         # Flow signatures of every gauged station with 10+ years of archived discharge and a catchment row, then
@@ -181,7 +216,7 @@ jobs:
           EOF
 
       - name: Open / update / close collector-health issues from health.json
-        if: always() && github.event_name == 'schedule'
+        if: always() && (github.event_name == 'schedule' || inputs.health_issues == true)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

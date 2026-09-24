@@ -66,6 +66,7 @@ What's your goal?
 | Low-flow analysis | `7q10` / `30q5` | `hydro --analysis low-flow` | 3 years |
 | Baseflow separation | `lyne_hollick` / `eckhardt` | `hydro --analysis baseflow` | 1 year |
 | Flow duration curve | `fdc` | `hydro --analysis fdc` | 1 year |
+| Water balance partition | `budyko_framework` | `budyko_analysis` | 10 years |
 
 ### Model Selection for Forecasting
 

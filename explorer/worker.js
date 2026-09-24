@@ -122,6 +122,26 @@ json.dumps(analysis.assess_site(
   }
 }
 
+// My places, Compare: aquascope.compare over two to five gauges. The page
+// passes each gauge's catchment area, which it reads from its own table.
+async function compare({ id, stations, years }) {
+  post("progress", { text: "Fetching the records to compare…" });
+  self.__aqCompare = JSON.stringify({ stations: stations || [], years: Number(years) > 0 ? Math.round(Number(years)) : null });
+  const code = `
+import json
+from js import __aqCompare
+import aquascope.compare as _compare
+_a = json.loads(__aqCompare)
+json.dumps(_compare.compare_stations(_a["stations"], years=_a["years"]))
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqCompare = null;
+  }
+}
+
 // The main thread already holds the station catalog (DuckDB-WASM); hand it to
 // Python once so find_stations() answers from memory instead of the Hub
 // (httpx / pyarrow do not run here).
@@ -406,7 +426,19 @@ def _studio_open(a, on_event, on_artifact):
 
 
 def _studio_reply(s, r):
-    return {"reply": r.to_dict(), "workspace": s.to_dict(with_artifacts=False), "status": s.ws.status}
+    return {"reply": r.to_dict(), "workspace": s.to_dict(with_artifacts=False), "status": s.ws.status,
+            "plain": _studio_plain(s)}
+
+
+def _studio_plain(s):
+    """The plan in plain words and each step's controls (aquascope.studio.steering), for the page; None when this
+    engine has no steering or the study cannot be read."""
+    try:
+        from aquascope.studio.steering import plain_plan as _plain_plan
+
+        return _plain_plan(s.ws.study) or None
+    except Exception:  # noqa: BLE001 - the page falls back to the raw gates
+        return None
 
 
 def _studio_file(art):
@@ -495,8 +527,8 @@ def _studio_check_plan(s, a):
 
 
 def studio_call(a, on_event=None, on_artifact=None, store=None):
-    """One message from the page. op is start, say, approve, follow_up, narrate, context, check_plan, prompts,
-    file or export."""
+    """One message from the page. op is start, say, approve, follow_up, steer, narrate, context, check_plan,
+    prompts, file or export."""
     return _with_recon_context(a, lambda: _studio_dispatch(a, on_event, on_artifact, store))
 
 
@@ -514,6 +546,10 @@ def _studio_dispatch(a, on_event, on_artifact, store):
                     **_studio_model(a))
         _STUDIO[s.ws.id] = s
         return _studio_reply(s, _studio_say(s, str(a.get("text") or ""), _proposed(a)))
+    if op in ("link", "open_link"):   # study links: encode a plan, or decode and check one (aquascope.study_link)
+        from aquascope.study_link import studio_op as _link_op
+
+        return _link_op(a)
     s = _studio_open(a, on_event, on_artifact)
     if op == "add_table":
         return _studio_reply(s, s.add_table(str(a.get("name") or "table"), str(a.get("csv") or "")))
@@ -533,6 +569,11 @@ def _studio_dispatch(a, on_event, on_artifact, store):
         return _studio_reply(s, r)
     if op == "follow_up":
         return _studio_reply(s, s.follow_up(str(a.get("text") or "")))
+    if op == "steer":
+        steer = getattr(s, "steer", None)
+        if steer is None:
+            return {"error": "adjusting a step is not available in this engine"}
+        return _studio_reply(s, steer(str(a.get("step_id") or ""), dict(a.get("changes") or {})))
     if op == "narrate":
         narrate = getattr(s, "narrate", None)
         if narrate is None:
@@ -654,8 +695,9 @@ _out = studio_call(
     _a,
     on_event=lambda e: __aqStudioEvent(json.dumps(e, default=str)),
     # PNG figures travel with their bytes so the page can show them as they land; SVG and CSV without.
+    # The study map (study_map.geojson) travels with its bytes too, so the page draws it as the steps land.
     on_artifact=lambda art: __aqStudioArtifact(
-        json.dumps(art.to_dict(with_data=art.media_type == "image/png"), default=str)),
+        json.dumps(art.to_dict(with_data=art.media_type == "image/png" or art.id == "study-map"), default=str)),
     store=_STORE,
 )
 json.dumps(_out, default=str)
@@ -774,6 +816,46 @@ json.dumps(_out, default=str)
   post("result", { id, result: JSON.parse(out) });
 }
 
+// ── Study this area: aquascope.area_study over the gauges the page selected ──
+// op "run" studies them (the Archive first, live fetches capped) and keeps the
+// result; "areas" fills in catchment areas the page read afterwards; "csv" and
+// "xlsx" are the downloads (openpyxl is installed on first use).
+async function areaStudy({ id, op, stations, question, max_live, areas }) {
+  if (op === "xlsx") await ensureDocs(id);
+  self.__aqArea = JSON.stringify({ op, stations: stations || [], question: question || null,
+    max_live: Number.isFinite(Number(max_live)) ? Number(max_live) : null, areas: areas || {} });
+  self.__aqAreaEvent = (text) => post("area_progress", { id, event: JSON.parse(text) });
+  const code = `
+import json, base64
+from js import __aqArea, __aqAreaEvent
+from aquascope import area_study as _area_mod
+_AREA_STORE = globals().setdefault("_AREA_STORE", {})
+_a = json.loads(__aqArea)
+if _a["op"] == "run":
+    _kw = {"max_live": _a["max_live"]} if _a.get("max_live") is not None else {}
+    _AREA_STORE["result"] = _area_mod.study_area(
+        _a["stations"], question=_a.get("question"),
+        on_progress=lambda e: __aqAreaEvent(json.dumps(e, default=str)), **_kw)
+    _out = json.dumps(_AREA_STORE["result"], default=str)
+elif _a["op"] == "areas":
+    _out = json.dumps(_area_mod.apply_areas(_AREA_STORE["result"], _a["areas"]), default=str)
+elif _a["op"] == "csv":
+    _out = json.dumps(_area_mod.to_csv(_AREA_STORE["result"]))
+elif _a["op"] == "xlsx":
+    _out = json.dumps(base64.b64encode(_area_mod.to_xlsx(_AREA_STORE["result"])).decode("ascii"))
+else:
+    _out = json.dumps({"error": "unknown op"})
+_out
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqArea = null;
+    self.__aqAreaEvent = null;
+  }
+}
+
 self.onmessage = async (e) => {
   const m = e.data;
   try {
@@ -782,6 +864,7 @@ self.onmessage = async (e) => {
     if (m.type === "analyze") return await analyze(m);
     if (m.type === "anywhere") return await anywhere(m);
     if (m.type === "assess") return await assess(m);
+    if (m.type === "compare") return await compare(m);
     if (m.type === "flood_ci") return await floodCi(m);
     if (m.type === "csv") return await csv(m);
     if (m.type === "catalog") return await catalog(m);
@@ -795,6 +878,7 @@ self.onmessage = async (e) => {
     if (m.type === "workbench") return await workbench(m);
     if (m.type === "tool") return await runTool(m);
     if (m.type === "frame_from_station") return await frameFromStation(m);
+    if (m.type === "area_study") return await areaStudy(m);
   } catch (err) {
     // Pyodide raises PythonError with the full traceback in .message; keep the
     // exception line (last non-empty) and log the whole thing for debugging.

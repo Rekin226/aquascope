@@ -67,7 +67,7 @@ def test_start_approve_file_and_export_round_trip(face) -> None:
     events: list = []
     out = _run(face, {"op": "start", "lat": 51.415, "lon": -0.308, "text": PROBLEM, "tables": {}}, tools=tools,
                events=events)
-    assert set(out) == {"reply", "workspace", "status"}
+    assert {"reply", "workspace", "status"} <= set(out)
     assert out["reply"]["kind"] == "plan" and out["status"] == "review"
     ws = out["workspace"]
     assert ws["status"] == "review" and ws["site"] == {"lat": 51.415, "lon": -0.308}

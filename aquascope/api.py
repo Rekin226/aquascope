@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from aquascope.analysis.copulas import CopulaResult
     from aquascope.analysis.trends import MannKendallResult, SensSlopeResult
     from aquascope.hydrology.baseflow import BaseflowResult
+    from aquascope.hydrology.budyko import BudykoResult
     from aquascope.hydrology.flood_frequency import FloodFreqResult
     from aquascope.hydrology.flow_duration import FDCResult
     from aquascope.hydrology.signatures import SignatureReport
@@ -675,3 +676,76 @@ def climate_indices(
     if precip is None or pet is None:
         raise ValueError("'precip' and 'pet' are required for PDSI.")
     return palmer_drought_severity_index(precip, pet, **kwargs)
+
+
+def budyko_analysis(
+    precipitation: float | np.ndarray,
+    pet: float | np.ndarray,
+    curves: list[str] | None = None,
+    fu_omega: float = 2.0,
+    observed_et: float | np.ndarray | None = None,
+    observed_runoff: float | np.ndarray | None = None,
+) -> BudykoResult:
+    """Partition long-term precipitation under the Budyko framework.
+
+    The long-term water balance ``P = ET + Q`` (storage change neglected)
+    means a catchment is placed from either of its observed fluxes:
+    actual evapotranspiration (*observed_et*) or runoff (*observed_runoff*,
+    converted via ``ET = P - Q``).  Exactly one may be given.
+
+    Parameters
+    ----------
+    precipitation:
+        Long-term mean annual precipitation (mm/yr), scalar or array.
+    pet:
+        Long-term mean annual potential evapotranspiration (mm/yr).
+    curves:
+        Budyko curves to evaluate.  Any subset of ``"schreiber"``,
+        ``"oldekop"``, ``"turc_pike"``, ``"fu_zhang"``.  Defaults to all four.
+    fu_omega:
+        Fu/Zhang shape parameter ``omega``, ``>= 1``.
+    observed_et:
+        Optional observed long-term evapotranspiration (mm/yr), requiring
+        ``0 <= observed_et <= precipitation``.  Mutually exclusive with
+        *observed_runoff*.
+    observed_runoff:
+        Optional observed long-term runoff (mm/yr), requiring
+        ``0 <= observed_runoff <= precipitation``.  Mutually exclusive with
+        *observed_et*.
+
+    Returns
+    -------
+    BudykoResult
+        Predicted evaporative ratios, the observed position when one observed
+        flux is given, and the curve family over the canonical aridity grid.
+
+    Raises
+    ------
+    ValueError
+        If *curves* is empty or names an unsupported curve, or both observed
+        fluxes are given.
+    """
+    from aquascope.hydrology.budyko import BUDYKO_CURVES, budyko
+
+    if curves is None:
+        curves = list(BUDYKO_CURVES)
+    else:
+        if isinstance(curves, str):
+            raise ValueError("curves must be a sequence of curve names, not a single string.")
+        valid = set(BUDYKO_CURVES)
+        for name in curves:
+            if name not in valid:
+                msg = f"Unknown Budyko curve {name!r}. Choose from {BUDYKO_CURVES}."
+                raise ValueError(msg)
+
+    if observed_et is not None and observed_runoff is not None:
+        raise ValueError("Provide only one of 'observed_et' and 'observed_runoff'.")
+
+    return budyko(
+        precipitation,
+        pet,
+        curves=curves,
+        fu_omega=fu_omega,
+        observed_et=observed_et,
+        observed_runoff=observed_runoff,
+    )

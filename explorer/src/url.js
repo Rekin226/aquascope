@@ -6,6 +6,7 @@
 // #p=<lat>,<lon>&tab=climate&v=...
 // #s=<source>/<id>&study=1            (the Study drawer, open at that place)
 // #study=kingston-flood                (a recorded study, by its id)
+// #study=z1.<token>                    (a shared plan, see study-link.js; ?study_url= carries a study.yaml)
 //
 // The legacy forms (#s=key, #p=lat,lon, #solve=...) still parse, so old links
 // keep working: a Solve link opens Study at the same place.
@@ -32,6 +33,7 @@ export function readUrl(hash = location.hash) {
     out.study = true;
     const v = q.get("study");
     if (v && v !== "1" && /^[A-Za-z0-9_-]+$/.test(v)) out.studyId = v;
+    if (v && /^[zj]1\.[A-Za-z0-9_-]+$/.test(v)) out.studyLink = v;   // a shared plan (study-link.js)
   }
   if (q.has("v")) {
     const m = String(q.get("v")).match(/^([\d.]+)\/(-?[\d.]+)\/(-?[\d.]+)$/);
@@ -59,6 +61,7 @@ function currentHash({ view } = {}) {
   else if (state.point) q.set("p", `${state.point.lat},${state.point.lon}`);
   if (state.activeTab) q.set("tab", state.activeTab);
   if (state.drawerOpen && state.drawerMode === "study") q.set("study", state.study.recorded || "1");
+  if (state.drawerOpen && state.drawerMode === "study" && state.study.link) q.set("study", state.study.link);   // a shared study stays in the address
   if (view) q.set("v", `${view.zoom.toFixed(2)}/${view.lat.toFixed(4)}/${view.lon.toFixed(4)}`);
   if (state.hidden.size) q.set("hide", [...state.hidden].join(","));
   if (state.basinsOn) q.set("basins", "1");

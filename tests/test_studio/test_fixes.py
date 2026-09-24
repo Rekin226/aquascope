@@ -131,7 +131,7 @@ def test_figures_follow_the_steps_method_and_the_series_is_stripped_after(monkey
         ws = _flood_ws()
         with patched(RECON, tools=fake_tools([], analyze_station=FULL_FLOW, flood_frequency=FULL_FLOW)):
             analysts.run(ws, None)
-        ids = sorted(a.id for a in ws.artifacts if not a.id.startswith("fig-s4-"))
+        ids = sorted(a.id for a in ws.artifacts if not a.id.startswith("fig-s4-") and a.id != "study-map")
         assert ids == ["fig-s1-annual_maxima", "fig-s1-fdc", "fig-s1-frequency_curve", "fig-s1-series",
                        "fig-s1-trend", "fig-s2-series", "fig-s2-trend", "fig-s3-annual_maxima",
                        "fig-s3-frequency_curve"], with_kinds

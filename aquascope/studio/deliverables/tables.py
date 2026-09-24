@@ -174,7 +174,9 @@ def _fdc_percentiles(payload: dict[str, Any]) -> Table | None:
 
 
 def _trend(payload: dict[str, Any]) -> Table | None:
-    tr = payload.get("trend")
+    from aquascope.trend_series import reported_trend
+
+    tr = reported_trend(payload) or payload.get("trend")  # the annual maxima for a flood question
     if not isinstance(tr, dict):
         tr = payload.get("temperature")
     return _kv(flatten(tr, depth=1, skip=frozenset())) if isinstance(tr, dict) else None

@@ -13,6 +13,7 @@ import logging
 import os
 import time
 import unicodedata
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +69,7 @@ def load_stations(
 ) -> list[dict[str, Any]]:
     """Return every station in the published catalog as a list of dicts.
 
-    Keys: ``source, station_id, name, latitude, longitude, variables (list),
+    Keys: ``source, station_id, site_id, name, latitude, longitude, variables (list),
     period_start, period_end, url, river, country, agency, license,
     redistributable, extra (dict)``. ``path`` reads a local ``stations.parquet``
     (a fresh harvest) instead of the Hub.
@@ -96,12 +97,16 @@ def load_stations(
 def _rows_from_parquet(dest: Path) -> list[dict[str, Any]]:
     import pyarrow.parquet as pq
 
-    table = pq.read_table(dest, columns=[c for c in [
+    columns = [
         "source", "station_id", "name", "latitude", "longitude", "variables", "period_start", "period_end",
         "url", "river", "country", "agency", "license", "redistributable", "extra",
-    ]])
+    ]
+    if "site_id" in pq.read_schema(dest).names:
+        columns.append("site_id")
+    table = pq.read_table(dest, columns=columns)
     rows = table.to_pylist()
     for r in rows:
+        r["site_id"] = r.get("site_id") or r["station_id"]
         for k in ("period_start", "period_end"):
             if r.get(k) is not None:
                 r[k] = r[k].isoformat()
@@ -115,6 +120,7 @@ def _rows_from_geojson(dest: Path) -> list[dict[str, Any]]:
     rows = []
     for f in gj.get("features", []):
         p = dict(f.get("properties") or {})
+        p["site_id"] = p.get("site_id") or p.get("station_id")
         lon, lat = f["geometry"]["coordinates"]
         p.update({"latitude": lat, "longitude": lon, "variables": list(p.get("variables") or [])})
         rows.append(p)
@@ -202,6 +208,50 @@ def catalog_period(source: str, station_id: str) -> tuple[str | None, str | None
     return _PERIOD_INDEX[1].get((source, station_id), (None, None))
 
 
+def group_station_sites(
+    rows: list[dict[str, Any]], *, all_rows: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
+    """Group matching records by source and site, preserving first-hit site order.
+
+    The longest catalog span represents each site; open ends run to today.
+    Unknown or invalid spans rank last, with station ID breaking ties.
+    Member records remain available in ``records``; input rows are not changed.
+    ``all_rows`` includes nonmatching siblings in the count and member list,
+    while the representative always satisfies the search filters.
+    """
+    today = date.today()
+
+    def record_order(row: dict[str, Any]) -> tuple[int, str]:
+        span = -1
+        try:
+            start = date.fromisoformat(str(row.get("period_start")))
+            end = date.fromisoformat(str(row["period_end"])) if row.get("period_end") else today
+            span = max(-1, (end - start).days)
+        except (TypeError, ValueError):
+            pass
+        return -span, str(row["station_id"])
+
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        key = (row["source"], row.get("site_id") or row["station_id"])
+        groups.setdefault(key, []).append(row)
+    siblings: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    if all_rows is not None:
+        for row in all_rows:
+            key = (row["source"], row.get("site_id") or row["station_id"])
+            if key in groups:
+                siblings.setdefault(key, []).append(row)
+    result = []
+    for key, members in groups.items():
+        site_id = key[1]
+        representative = min(members, key=record_order)
+        entry = dict(representative)
+        ordered = sorted(siblings.get(key, members), key=record_order)
+        entry.update(site_id=site_id, record_count=len(ordered), records=[dict(r) for r in ordered])
+        result.append(entry)
+    return result
+
+
 def search_stations(
     rows: list[dict[str, Any]],
     *,
@@ -211,6 +261,7 @@ def search_stations(
     query: str | None = None,
     near: tuple[float, float] | None = None,
     limit: int = 50,
+    group_sites: bool = False,
 ) -> list[dict[str, Any]]:
     """Filter the catalog: bbox, variable, sources, a name query, and optional nearest-first ordering.
 
@@ -220,6 +271,7 @@ def search_stations(
     the name, the id or the river; when nothing matches every word, the rows
     matching the most words come back first, name matches ahead of river-only
     ones. Connectives ("at", "river", "de", ...) are ignored in a multi-word query.
+    ``group_sites`` combines matching records at each site before applying the limit.
     """
     tokens = query_tokens(query)
     src = set(sources or [])
@@ -254,4 +306,7 @@ def search_stations(
         ))
     elif near:
         scored.sort(key=lambda sr: distance(sr[1]))
-    return [r for _, r in scored][: max(0, limit)]
+    hits = [r for _, r in scored]
+    if group_sites:
+        hits = group_station_sites(hits, all_rows=rows)
+    return hits[: max(0, limit)]

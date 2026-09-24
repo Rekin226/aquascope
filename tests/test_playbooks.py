@@ -231,6 +231,7 @@ def test_a_gauged_branch_without_its_station_is_an_authoring_error():
 def test_the_study_a_playbook_emits_runs_with_no_model():
     study = pbk.plan("flood_risk", LONG, {"return_period": 100})
     payload = {"source": "uk_ea", "station_id": "3400TH", "unit": "m3/s", "years": 39.9, "trend": {"p_value": 0.3},
+               "stats": {"mean": 1.2},
                "sampling": {"n": 14555, "span_years": 39.9, "per_year": 364.8, "inferred_resolution": "daily"},
                "ffa": {"return_periods": [2, 5, 10, 25, 50, 100],
                        "record_max": {"value": 5.5, "year": 2000, "empirical_return_period": 40.0, "n_years": 39},

@@ -122,9 +122,12 @@ branches:
           lat: "{{ site.lat }}"
           lon: "{{ site.lon }}"
           years: 40
+          match_mean_flow: "{{ result.s3.stats.mean }}"
         rationale: >-
           GloFAS modelled discharge for the cell, with its own indicative frequency fit, as the independent
-          cross-check on the at-site quantile: the two are compared as a ratio, not only listed.
+          cross-check on the at-site quantile: the two are compared as a ratio, not only listed. The model cell
+          is snapped to the one around the gauge whose mean flow matches the gauge's, and when none does the
+          cross-check says "no comparable model cell" and is skipped.
         expects:
           - check: not_empty
             path: glofas

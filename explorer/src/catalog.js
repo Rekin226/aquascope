@@ -5,6 +5,7 @@
 import { CONFIG } from "../config.js?v=__BUILD__";
 import { sourceStyle, state, stationKey, trace } from "./core.js?v=__BUILD__";
 import { RECENT_BREAKS, RECORD_BREAKS, breakColor, recordYears, yearsSinceLast } from "./layers.js?v=__BUILD__";
+import { colocatedOffsets } from "./sites.js?v=__BUILD__";
 
 let duckPromise = null;
 
@@ -30,7 +31,10 @@ export function duck() {
 
 async function loadCatalogDuckDB() {
   const { conn } = await duck();
-  const sql = `SELECT source, station_id, name, latitude, longitude, variables,
+  const schema = await conn.query(`DESCRIBE SELECT * FROM read_parquet('${CONFIG.stationsParquet}')`);
+  const hasSiteId = schema.toArray().some((r) => r.column_name === "site_id");
+  const siteColumn = hasSiteId ? "COALESCE(NULLIF(site_id, ''), station_id)" : "station_id";
+  const sql = `SELECT source, station_id, ${siteColumn} AS site_id, name, latitude, longitude, variables,
                       CAST(period_start AS VARCHAR) AS period_start, CAST(period_end AS VARCHAR) AS period_end, url
                FROM read_parquet('${CONFIG.stationsParquet}')`;
   const table = await conn.query(sql);
@@ -38,6 +42,7 @@ async function loadCatalogDuckDB() {
   const rows = table.toArray().map((r) => r.toJSON());
   return rows.map((r) => ({
     source: r.source, station_id: r.station_id, name: r.name ?? null,
+    site_id: r.site_id || r.station_id,
     lat: Number(r.latitude), lon: Number(r.longitude),
     variables: Array.isArray(r.variables) ? r.variables : (r.variables?.toArray?.() ?? []),
     period_start: r.period_start ? String(r.period_start).slice(0, 10) : null,
@@ -52,6 +57,7 @@ async function loadCatalogGeoJSON() {
   const gj = await res.json();
   return gj.features.map((f) => ({
     source: f.properties.source, station_id: f.properties.station_id, name: f.properties.name ?? null,
+    site_id: f.properties.site_id || f.properties.station_id,
     lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1],
     variables: f.properties.variables ?? [], period_start: f.properties.period_start ?? null,
     period_end: f.properties.period_end ?? null, url: f.properties.url ?? null,
@@ -80,9 +86,12 @@ export async function loadCatalog() {
 // drift apart.
 export function toFeatureCollection(rows) {
   const now = new Date();
+  const visible = rows.filter((r) => !state.hidden.has(r.source)
+    && (!state.sigMatch || state.sigMatch.has(stationKey(r))));  // signature filter (signature-filter.js)
+  const offsets = colocatedOffsets(visible);
   return {
     type: "FeatureCollection",
-    features: rows.filter((r) => !state.hidden.has(r.source)).map((r) => {
+    features: visible.map((r) => {
       const years = recordYears(r, now);
       const stale = yearsSinceLast(r, now);
       return {
@@ -90,6 +99,7 @@ export function toFeatureCollection(rows) {
         geometry: { type: "Point", coordinates: [r.lon, r.lat] },
         properties: {
           key: stationKey(r), source: r.source, name: r.name ?? "",
+          offset: offsets.get(stationKey(r)),
           color: sourceStyle(r.source).color,
           shape: sourceStyle(r.source).shape,
           colorRecord: breakColor(RECORD_BREAKS, years),

@@ -22,7 +22,7 @@ import logging
 from collections.abc import Sequence
 from typing import Any
 
-from aquascope.collectors.base import BaseCollector
+from aquascope.collectors.base import BaseCollector, CollectorError
 from aquascope.schemas.water_data import SDG6Indicator
 from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
 
@@ -48,17 +48,63 @@ ALL_SDG6_INDICATORS = list(INDICATOR_TO_SERIES.keys())
 # ISO3 → UN M49 numeric area code for the most common countries the dashboard
 # might query. The UN API only accepts M49 codes; we translate transparently.
 ISO3_TO_M49: dict[str, int] = {
-    "USA": 840, "CAN": 124, "MEX": 484, "BRA": 76, "ARG": 32, "CHL": 152,
-    "GBR": 826, "FRA": 250, "DEU": 276, "ITA": 380, "ESP": 724, "PRT": 620,
-    "NLD": 528, "BEL": 56, "CHE": 756, "AUT": 40, "SWE": 752, "NOR": 578,
-    "FIN": 246, "DNK": 208, "POL": 616, "RUS": 643, "UKR": 804, "TUR": 792,
-    "CHN": 156, "JPN": 392, "KOR": 410, "TWN": 158,  # Taiwan often absent in UN data
-    "IDN": 360, "PHL": 608, "VNM": 704, "THA": 764, "MYS": 458, "SGP": 702,
-    "IND": 356, "PAK": 586, "BGD": 50, "LKA": 144, "NPL": 524,
-    "AUS": 36, "NZL": 554,
-    "ZAF": 710, "EGY": 818, "NGA": 566, "KEN": 404, "ETH": 231, "MAR": 504,
-    "SAU": 682, "ARE": 784, "ISR": 376, "IRN": 364, "IRQ": 368,
-    "BFA": 854, "MLI": 466, "SEN": 686, "GHA": 288, "CIV": 384,
+    "USA": 840,
+    "CAN": 124,
+    "MEX": 484,
+    "BRA": 76,
+    "ARG": 32,
+    "CHL": 152,
+    "GBR": 826,
+    "FRA": 250,
+    "DEU": 276,
+    "ITA": 380,
+    "ESP": 724,
+    "PRT": 620,
+    "NLD": 528,
+    "BEL": 56,
+    "CHE": 756,
+    "AUT": 40,
+    "SWE": 752,
+    "NOR": 578,
+    "FIN": 246,
+    "DNK": 208,
+    "POL": 616,
+    "RUS": 643,
+    "UKR": 804,
+    "TUR": 792,
+    "CHN": 156,
+    "JPN": 392,
+    "KOR": 410,
+    "TWN": 158,  # Taiwan often absent in UN data
+    "IDN": 360,
+    "PHL": 608,
+    "VNM": 704,
+    "THA": 764,
+    "MYS": 458,
+    "SGP": 702,
+    "IND": 356,
+    "PAK": 586,
+    "BGD": 50,
+    "LKA": 144,
+    "NPL": 524,
+    "AUS": 36,
+    "NZL": 554,
+    "ZAF": 710,
+    "EGY": 818,
+    "NGA": 566,
+    "KEN": 404,
+    "ETH": 231,
+    "MAR": 504,
+    "SAU": 682,
+    "ARE": 784,
+    "ISR": 376,
+    "IRN": 364,
+    "IRQ": 368,
+    "BFA": 854,
+    "MLI": 466,
+    "SEN": 686,
+    "GHA": 288,
+    "CIV": 384,
 }
 
 
@@ -131,7 +177,18 @@ class SDG6Collector(BaseCollector):
             page = 1
             while True:
                 params["page"] = page
-                data = self.client.get_json("Series/Data", params=params)
+                try:
+                    data = self.client.get_json("Series/Data", params=params)
+                except CollectorError:
+                    raise
+                except Exception as exc:
+                    target_url = f"{self.client.base_url}/Series/Data" if self.client.base_url else "Series/Data"
+                    raise CollectorError(
+                        f"SDG6 API request failed for indicator {code}: {exc}",
+                        source=self.name,
+                        url=target_url,
+                        cause=exc,
+                    ) from exc
                 items = data.get("data", [])
                 # Tag each record with the SDG indicator code (the API returns
                 # the series code; we keep the human-friendly SDG dotted code).

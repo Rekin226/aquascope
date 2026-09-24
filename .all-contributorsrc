@@ -148,7 +148,8 @@
         "test",
         "doc",
         "bug",
-        "infra"
+        "infra",
+        "ideas"
       ]
     },
     {
@@ -302,6 +303,16 @@
       "contributions": [
         "code",
         "test"
+      ]
+    },
+    {
+      "login": "kudala-bharani",
+      "name": "Kudala Bharani Kumar Reddy",
+      "avatar_url": "https://avatars.githubusercontent.com/u/121555407?v=4",
+      "profile": "https://bharani-kudala.me/",
+      "contributions": [
+        "test",
+        "doc"
       ]
     }
   ],

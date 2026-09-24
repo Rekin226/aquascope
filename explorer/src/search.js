@@ -5,48 +5,28 @@
 
 import { $, actions, escapeHtml, foldText, sourceStyle, state, stationKey } from "./core.js?v=__BUILD__";
 import { shapeSvg } from "./shapes.js?v=__BUILD__";
-
-let index = null;
-
-function buildIndex() {
-  index = state.stations.map((r) => ({
-    r,
-    name: foldText(r.name || ""),
-    id: foldText(r.station_id),
-  }));
-}
-
-// Score: id exact > name starts with > word starts with > contains. Every
-// query token must appear somewhere, so "loire blois" beats "loire".
-function score(entry, tokens, whole) {
-  let total = 0;
-  if (entry.id === whole) return 1000;
-  for (const tok of tokens) {
-    const inName = entry.name.indexOf(tok);
-    const inId = entry.id.indexOf(tok);
-    if (inName < 0 && inId < 0) return -1;
-    if (inName === 0) total += 60;
-    else if (inName > 0 && /[\s,('-]/.test(entry.name[inName - 1])) total += 40;
-    else if (inName > 0) total += 20;
-    if (inId === 0) total += 30;
-    else if (inId > 0) total += 10;
-  }
-  total -= Math.min(20, entry.name.length / 12);   // prefer the shorter of two matches
-  return total;
-}
+import { groupStationSites } from "./sites.js?v=__BUILD__";
 
 export function searchStations(query, limit = 25) {
   const whole = foldText(query).trim();
   if (whole.length < 2) return [];
-  if (!index || index.length !== state.stations.length) buildIndex();
   const tokens = whole.split(/\s+/).filter(Boolean);
   const hits = [];
-  for (const entry of index) {
-    const s = score(entry, tokens, whole);
-    if (s > 0) hits.push([s, entry.r]);
+  for (const row of state.stations) {
+    const name = foldText(row.name || ""), id = foldText(row.station_id);
+    if (!tokens.every((token) => name.includes(token) || id.includes(token))) continue;
+    let score = id === whole ? 1000 : 0;
+    for (const token of tokens) {
+      const at = name.indexOf(token);
+      if (at === 0) score += 60;
+      else if (at > 0) score += /[\s,('-]/.test(name[at - 1]) ? 40 : 20;
+      if (id.startsWith(token)) score += 30;
+      else if (id.includes(token)) score += 10;
+    }
+    hits.push({ row, score: score - Math.min(20, name.length / 12) });
   }
-  hits.sort((a, b) => b[0] - a[0]);
-  return hits.slice(0, limit).map(([, r]) => r);
+  hits.sort((a, b) => b.score - a.score);
+  return groupStationSites(hits.map((hit) => hit.row), state.stations).slice(0, Math.max(0, limit));
 }
 
 
@@ -78,14 +58,21 @@ async function findPlaces(query, limit = 3) {
 
 export function initSearch() {
   const input = $("search"), box = $("search-results");
-  let t, hits = [], places = [], active = -1;
+  let t, hits = [], places = [], active = -1, run = 0, loading = false, error = "";
 
-  const close = () => { box.hidden = true; active = -1; places = []; input.setAttribute("aria-expanded", "false"); };
+  const close = () => {
+    clearTimeout(t);
+    run++;
+    box.hidden = true;
+    active = -1;
+    places = [];
+    input.setAttribute("aria-expanded", "false");
+  };
 
   const paint = () => {
     box.innerHTML = "";
     if (!hits.length && !places.length) {
-      box.innerHTML = `<div class="hit muted">no match</div>`;
+      box.innerHTML = `<div class="hit muted">${escapeHtml(error || (loading ? "Searching gauges..." : "no match"))}</div>`;
     } else {
       hits.forEach((r, i) => {
         const d = document.createElement("div");
@@ -96,7 +83,7 @@ export function initSearch() {
         const st = sourceStyle(r.source);
         const filtered = state.hidden.has(r.source) ? ` <span class="muted">(source hidden)</span>` : "";
         d.innerHTML = `${shapeSvg(st.shape, st.color)}<span class="hit-name">${escapeHtml(r.name || r.station_id)}</span>` +
-          `<span class="muted hit-id">${escapeHtml(r.station_id)}</span>${filtered}`;
+          `<span class="muted hit-id">${escapeHtml(r.station_id)}${r.record_count > 1 ? ` · ${r.record_count} records at this site` : ""}</span>${filtered}`;
         d.addEventListener("mousedown", (e) => { e.preventDefault(); choose(i); });
         box.appendChild(d);
       });
@@ -142,19 +129,34 @@ export function initSearch() {
 
   input.addEventListener("input", () => {
     clearTimeout(t);
+    const my = ++run;
     t = setTimeout(async () => {
+      if (my !== run) return;
       const query = input.value;
-      hits = searchStations(query);
-      active = hits.length ? 0 : -1;
       if (foldText(query).trim().length < 2) { close(); return; }
+      hits = [];
+      active = -1;
+      loading = true;
+      error = "";
       places = [];
       paint();
-      // Places come from a third party, so they arrive second and never block
-      // the gauge results.
+      // Place lookup can finish while the Python search engine starts.
       if (foldText(query).trim().length >= 3) {
-        const found = await findPlaces(query.trim());
-        if (input.value === query) { places = found; paint(); }
+        void findPlaces(query.trim()).then((found) => {
+          if (my === run) { places = found; paint(); }
+        });
       }
+      try {
+        const found = searchStations(query);
+        if (my !== run) return;
+        hits = found;
+        active = hits.length ? 0 : -1;
+      } catch (err) {
+        if (my !== run) return;
+        error = `Could not search gauges: ${err.message}`;
+      }
+      loading = false;
+      paint();
     }, 140);
   });
 

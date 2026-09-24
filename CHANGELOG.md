@@ -23,8 +23,10 @@ All notable changes to AquaScope are documented here.
   [Data Quality Flags](docs/data_sources.md#data-quality-flags).
 
 ### Changed
+- **CONTRIBUTING gains two non-code ways to contribute, and a claim-expiry rule.** Writing a reference plan or reference findings for the benchmark suite (`aquascope/gym/plans/_authoring.yaml`, `aquascope/gym/reports/_authoring.yaml`) and verifying a source's licence or quality vocabulary are now listed alongside the five code paths: both need domain judgement rather than an environment, and both were already scaffolded in the tree with worked examples. A claim with no push and no update for about three weeks goes back on the board, so an issue that has gone quiet stops being a case-by-case judgement call.
 
 ### Fixed
+- **CAMELS benchmark standing misses resolved and `--strict` restored** (#424). Resolved the four standing misses from Phase 2/3: seeded GEV MLE in `benchmarks/fetch_peak_flows.py` and updated `data/camels_benchmark/ffa_reference.json` for gauge `01013500`, correcting an unseeded SciPy local minimum (log-likelihood -623.76 vs -575.76) and matching AquaScope's estimator at 0.00% error. Established a committed baseline in `benchmarks/known_misses.json` for the remaining synthetic series deviations (`06803500` and `09510200` Eckhardt BFI, and `08181500` q5) with written rationales in `metadata.tolerances` and `benchmarks/README.md`. Enabled `--strict` in `.github/workflows/camels-benchmark.yml` and updated `benchmarks/camels_benchmark.py` so known baseline misses pass while unexpected regressions fail.
 
 ## [0.18.0] - 2026-09-16
 

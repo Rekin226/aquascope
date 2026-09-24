@@ -52,6 +52,20 @@ def test_quality_raw_is_kept_verbatim():
     assert "Provisional" in raw and "Estimated" in raw
 
 
+def test_maps_legacy_estimated_qualifier():
+    q, _ = _map_usgs_quality(
+        {"approval_status": "Approved", "qualifier": "e"}
+    )
+    assert q == Quality.ESTIMATED
+
+
+def test_maps_approved_and_legacy_estimated_qualifier():
+    q, _ = _map_usgs_quality(
+        {"approval_status": "Approved", "qualifier": ["A", "e"]}
+    )
+    assert q == Quality.ESTIMATED
+
+
 def test_maps_quality_for_water_quality_sample():
     readings = USGSCollector(api_key="X").normalise(
         [

@@ -207,6 +207,7 @@ class StreamflowReading(BaseModel):
             return None
         return discharge_cms_to_runoff_mm_day(self.discharge_cms, self.catchment_area_km2)
 
+
 def discharge_cms_to_runoff_mm_day(discharge_cms: float, catchment_area_km2: float) -> float:
     """Convert discharge (m3/s) to area-normalized daily runoff (mm/day).
 

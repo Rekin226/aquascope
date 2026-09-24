@@ -389,7 +389,7 @@ def series_to_csv_gz(
                 q = daily_quality.loc[d] if d in daily_quality.index else None
                 # Quality is `str, Enum` — pull .value explicitly rather
                 # than relying on str()/f-string on a live enum member
-                # (see STEP 1's verified gotcha). Accept a plain string too.
+                # str() on a str, Enum member returns "Quality.APPROVED",
                 if q is None or (isinstance(q, float) and pd.isna(q)):
                     q_str = "unknown"
                 else:

@@ -25,9 +25,122 @@ intake:
   - name: decision
     label: What is being decided
     type: choice
-    options: [design flow, risk screening, insurance, inundation extent]
+    options: [flood trend, design flow, risk screening, insurance, inundation extent]
     default: design flow
+  - name: years
+    label: Years of record to use (empty for the whole record)
+    type: int
+    default: null
+    min: 10
+# What the study must know before it plans, asked one at a time and only when the question, the site and the
+# earlier answers leave it open. Each answer changes the plan: the goal picks the branch (a trend test or a
+# frequency fit), the return period the quantile, the window the record the trend is read on.
+checklist:
+  - field: decision
+    ask: What do you need to know about flooding here?
+    why: Each goal takes a different method, a trend test, a design estimate or a quick screen.
+    options:
+      - value: flood trend
+        label: Whether floods are getting bigger (trend)
+        match: \b(worse|bigger|larger|more (often|frequent|severe)|increas\w*|ris(e|es|ing)|trend\w*)\b
+      - value: design flow
+        label: The flow to design for (bridge, culvert, levee)
+        match: \b(design|culvert|bridge|crossing|spillway|levee|embankment|siz(e|ing))\b
+      - value: risk screening
+        label: How exposed this place is (screening)
+        match: \b(screen\w*|how risky|at risk|exposed)\b
+      - value: insurance
+        label: A flood figure for insurance
+        match: \binsur\w*
+  - field: return_period
+    when:
+      - path: intake.decision
+        op: in
+        value: [design flow, risk screening, insurance]
+    ask: Which flood size do you need?
+    why: It sets the quantile the fit is read at, and how far past the record the estimate has to reach.
+    options:
+      - value: 100
+        label: 100-year (a common design standard)
+      - value: 50
+        label: 50-year
+      - value: 200
+        label: 200-year
+      - value: 1000
+        label: 1000-year (dams, critical sites)
+      - value: 10
+        label: 10-year (frequent floods)
+  - field: years
+    when:
+      - path: intake.decision
+        op: "=="
+        value: flood trend
+    ask: Which period should the trend cover?
+    why: A trend over the whole record and one over recent decades can disagree; the test is run on the one you pick.
+    options:
+      - value: null
+        label: The whole record
+        match: \b(whole|entire|full|all)\b
+      - value: 50
+        label: The last 50 years
+      - value: 30
+        label: The last 30 years
 branches:
+  - id: trend
+    when:
+      - path: intake.decision
+        op: "=="
+        value: flood trend
+      - path: context.years_by_variable.discharge
+        op: ">="
+        value: 20
+    station_variable: discharge
+    rationale: >-
+      The question is whether floods at {{ station.name }} are getting bigger. {{ station.years }} years of daily
+      discharge ({{ station.source }} {{ station.station_id }}, {{ station.distance_km }} km from the point) are
+      enough for a trend test on the annual flood peaks: Mann-Kendall for whether there is a trend, Sen's slope
+      for how fast. A frequency fit on the same peaks says how big a 100-year flood is today, for scale.
+    steps:
+      - id: s1
+        tool: describe_catchment
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: Dams upstream change the flood peaks; the catchment says whether a trend is the river's or its operators'.
+      - id: s2
+        tool: analyze_station
+        method: trend_mann_kendall
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          years: "{{ intake.years }}"
+        rationale: >-
+          The answer: Mann-Kendall with Sen's slope on the annual flood peaks. A p-value under 0.05 is a trend,
+          the slope is its size in the gauge's units per year.
+        expects:
+          - check: min_years
+            value: 20
+            path: years
+          - check: not_empty
+            path: ffa.amax_trend
+          - check: unit_present
+            path: unit
+          - check: sampling_density
+            value: daily
+            path: sampling
+      - id: s3
+        tool: flood_frequency
+        method: at_site_flood_frequency
+        optional: true
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          years: "{{ intake.years }}"
+        rationale: For scale, the 100-year flood the same peaks give today (GEV and Log-Pearson III).
+        expects:
+          - check: min_years
+            value: 20
+            path: years
   - id: at_site
     when:
       - path: context.years_by_variable.discharge

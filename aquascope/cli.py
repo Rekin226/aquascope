@@ -1808,6 +1808,50 @@ def _studio_start(args: argparse.Namespace) -> bool:
     return True
 
 
+_OTHER = "Other (type it)"
+
+
+def _choose(q: dict) -> str | None:
+    """One Studio question as a pick list: arrow keys and Enter with ``questionary`` (the ``studio`` extra),
+    numbers otherwise; the last row takes the answer in your own words. None when the person leaves."""
+    options = [str(o) for o in q.get("options") or []]
+    default = str(q["default"]) if q.get("default") is not None and str(q["default"]) in options else None
+    try:
+        import questionary
+    except ImportError:
+        questionary = None
+    print()
+    if questionary is not None:
+        if q.get("why"):
+            questionary.print(f"  {q['why']}", style="italic fg:ansibrightblack")
+        picked = questionary.select(str(q.get("text") or ""), choices=[*options, _OTHER], default=default,
+                                    qmark="?").ask()
+        if picked == _OTHER:
+            picked = questionary.text("Your answer:", qmark="›").ask()
+        return picked
+    print(q.get("text") or "")
+    if q.get("why"):
+        print(f"  ({q['why']})")
+    for i, o in enumerate([*options, _OTHER], 1):
+        print(f"  {i}. {o}" + ("  (default)" if o == default else ""))
+    while True:
+        try:
+            answer = input(f"Pick 1-{len(options) + 1} (Enter for the default): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(file=sys.stderr)
+            return None
+        if not answer:
+            return default or "just go"
+        if answer.isdigit() and 1 <= int(answer) <= len(options):
+            return options[int(answer) - 1]
+        if answer.isdigit() and int(answer) == len(options) + 1:
+            try:
+                return input("Your answer: ")
+            except (EOFError, KeyboardInterrupt):
+                return None
+        return answer
+
+
 def _studio_missing_extras() -> list[str]:
     """The ``studio`` extra's modules this install lacks. Without them the bundle is the Markdown and HTML
     report and the tables only: no Word report, workbook, figures, notebook or bundle.zip."""
@@ -1927,6 +1971,14 @@ def cmd_studio(args: argparse.Namespace) -> None:
         reply = studio._request_reply()
     if reply is not None and reply.kind in ("questions", "data_request"):
         while reply.kind in ("questions", "data_request"):
+            qs = (reply.payload.get("questions") or []) if reply.kind == "questions" else []
+            if interactive and len(qs) == 1 and qs[0].get("options"):
+                answer = _choose(qs[0])
+                if answer is None:
+                    checkpoint()
+                    return
+                reply = studio.say(answer)
+                continue
             print(reply.text)
             if reply.kind == "data_request":
                 if args.continue_without or not interactive:

@@ -121,6 +121,7 @@ studio = [
     "matplotlib>=3.7",
     "openpyxl>=3.1",
     "python-docx>=1.1",
+    "questionary>=2.0",
 ]
 all = [
     "aquascope[ml,forecast,copernicus,viz,llm,scientific,dashboard,spatial,interop,archive,mcp,basins,studio]",

@@ -25,6 +25,22 @@ environment it offers to use it, with a $1 spend ceiling; it never uses one sile
 on the line: `aquascope studio "PROBLEM" --at USGS-01013500 --yes` (or `--lat`/`--lon`). Without the `studio`
 extra the bundle holds only the Markdown and HTML report and the tables, and the CLI says so.
 
+## The questions
+
+A playbook's `checklist` lists what the study must know before it plans. The Consultant reads your first message
+against it, then asks what is still open, one question at a time, each with one line on what the answer changes
+and a short list of options (an arrow-key list in the terminal, chips in the Explorer, always with room for your
+own words). A reply that names no option is asked again; `just go` takes the defaults and lists them as
+assumptions. For flood questions:
+
+| You ask | It asks | The plan |
+|---|---|---|
+| "Is flooding here getting worse?" | Which period should the trend cover? | trend: Mann-Kendall and Sen's slope on the annual peaks |
+| "Design flow for a crossing, 100-year" | nothing | at-site frequency fit, T = 100 |
+| "Tell me about floods here" | What do you need to know? then, for a design, Which flood size? | follows the answers |
+
+With a model, the model reads your replies into the same values; it cannot skip an item or add questions of its own.
+
 ## The flow
 
 1. **Brief.** You say the problem in plain language. The Consultant writes

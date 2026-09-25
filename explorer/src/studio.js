@@ -566,7 +566,9 @@ function questionsHtml(m, live) {
     // With the options as chips and Just go beside Send, the question is the question: the sentence that
     // lists the options and says how to proceed is not repeated in prose.
     const text = opts.length && /\?/.test(q.text) ? q.text.slice(0, q.text.indexOf("?") + 1) : q.text;
-    return `<div class="study-q">${escapeHtml(text)}${chips}</div>`;
+    // A checklist question says in one line what the answer changes in the study.
+    const why = q.why ? `<div class="msg-sub muted">${escapeHtml(q.why)}</div>` : "";
+    return `<div class="study-q">${escapeHtml(text)}${why}${chips}</div>`;
   }).join("");
 }
 

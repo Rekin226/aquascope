@@ -81,6 +81,7 @@
           "type": "choice",
           "default": "design flow",
           "options": [
+            "flood trend",
             "design flow",
             "risk screening",
             "insurance",
@@ -90,9 +91,21 @@
           "help": null,
           "min": null,
           "max": null
+        },
+        {
+          "name": "years",
+          "label": "Years of record to use (empty for the whole record)",
+          "type": "int",
+          "default": null,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": 10.0,
+          "max": null
         }
       ],
       "branches": [
+        "trend",
         "at_site",
         "short_record",
         "regional"

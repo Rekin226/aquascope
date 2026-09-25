@@ -389,24 +389,30 @@ def _agency_record_if_longer(
 
     Mirror files harvested before #270 hold the last 40 years only: USGS
     01013500 is catalogued from 1903 and its archive copy starts in 1986, so a
-    study fitted 39 annual maxima where about 120 exist. When no cap was asked
-    for and the catalog lists the station more than a year before the archive
-    starts, the agency is asked for the full record. Its answer is used only
+    study fitted 39 annual maxima where about 120 exist. When the catalog lists
+    the station more than a year before the archive starts, the agency is asked
+    for the full record; with a "last N years" cap, for that window, when it
+    reaches more than a year before the archive copy does. Its answer is used only
     when it reaches further back than the archive; otherwise (or when the
     agency fails) the caller serves the archive and its note says what the
     catalog lists. ``None`` means: serve the archive.
     """
-    if window.get("years") or source in _SHORT_WINDOW_SOURCES:
+    if source in _SHORT_WINDOW_SOURCES:
         return None
     listed = _parse_date(window.get("catalog_start"))
     first = archived.index.min().date()
-    if listed is None or (first - listed).days <= 366:
+    # The earliest date asked for: the catalog's first date, or the start of a "last N years" window (never
+    # before the catalog's first date). A window the archive copy already covers never calls the agency.
+    target = listed
+    if window.get("years"):
+        target = window["start"] if listed is None or listed < window["start"] else listed
+    if target is None or (first - target).days <= 366:
         return None
     if IS_EMSCRIPTEN and not SOURCES[source].browser_reachable:
         return None
     try:
         agency = fetch_series(source, station_id, prefer_archive=False, variable=var,
-                              period_start=window["catalog_start"])
+                              period_start=window["catalog_start"], years=window.get("years"))
     except Exception as exc:  # noqa: BLE001 - the archive copy is still a record
         logger.info("full-record fetch from the agency failed for %s/%s: %s", source, station_id, exc)
         return None
@@ -415,7 +421,8 @@ def _agency_record_if_longer(
         return None
     agency["note"] = (
         f"{agency['note']} The AquaScope archive holds only {first.isoformat()} to "
-        f"{archived.index.max().date().isoformat()} for this station, so the full record came from the agency."
+        f"{archived.index.max().date().isoformat()} for this station, so the "
+        + ("requested window" if window.get("years") else "full record") + " came from the agency."
     )
     return agency
 

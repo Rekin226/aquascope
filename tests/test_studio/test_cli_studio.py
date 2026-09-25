@@ -174,3 +174,18 @@ def test_without_a_terminal_or_a_place_it_says_how(monkeypatch, capsys):
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
     with pytest.raises(SystemExit):
         cli.main()
+
+
+def test_a_question_is_a_pick_list_by_number_without_questionary(monkeypatch, capsys):
+    import builtins
+
+    monkeypatch.setitem(sys.modules, "questionary", None)
+    q = {"text": "Which period?", "why": "It changes the test.", "options": ["Whole", "Last 50"], "default": "Whole"}
+    for typed, want in [("2", "Last 50"), ("", "Whole"), ("my own words", "my own words")]:
+        monkeypatch.setattr(builtins, "input", lambda prompt="", typed=typed: typed)
+        assert cli._choose(q) == want
+    answers = iter(["3", "since 1990"])
+    monkeypatch.setattr(builtins, "input", lambda prompt="": next(answers))
+    assert cli._choose(q) == "since 1990", "the last row takes the answer in your own words"
+    out = capsys.readouterr().out
+    assert "(It changes the test.)" in out and "1. Whole  (default)" in out and "3. Other (type it)" in out

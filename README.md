@@ -78,8 +78,9 @@ aquascope studio
 ```
 
 That is all. The Studio asks where (a gauge name like `Fish River Fort Kent`, a station id like `USGS-01013500`,
-or `lat, lon`) and what you want to know ("Is flooding here getting worse?"), asks what the question leaves open,
-shows the plan, and runs only when you approve it (`e` edits a step, e.g. `s3.return_period=200`). The bundle lands in
+or `lat, lon`) and what you want to know ("Is flooding here getting worse?"). Then it asks only what the study still
+needs, one pick-list question at a time with the reason (a trend question: which period; a design question: which
+return period), shows the plan, and runs only when you approve it (`e` edits a step, e.g. `s3.return_period=200`). The bundle lands in
 `./studio-<id>/`: `report.docx`, `workbook.xlsx`, `study.ipynb`, `figures/`, `findings.json` and `study.yaml`,
 which re-runs the whole study with `aquascope run study.yaml`. After the report, ask a follow-up (another gauge, a
 trend, the flow duration curve) and the bundle is updated.

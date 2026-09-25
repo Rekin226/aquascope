@@ -16,7 +16,7 @@ pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 
 from aquascope.archive import harvest_stations, publish_folder, write_dataset_card  # noqa: E402
-from aquascope.archive.harvest import HarvestReport, stations_to_table  # noqa: E402
+from aquascope.archive.harvest import HarvestReport, infer_site_ids, stations_to_table  # noqa: E402
 
 
 def _stations():
@@ -221,3 +221,119 @@ def test_an_unrelated_upload_error_is_not_reinterpreted(tmp_path, monkeypatch):
     with patch("aquascope.archive.publish.require", return_value=fake_hub):
         with pytest.raises(ValueError, match="disk full"):
             publish_folder(tmp_path, "me/ds")
+
+
+def test_infer_site_ids_groups_colocated_taiwan_cwa_and_usgs_pairs():
+    from aquascope.archive.catalog import search_stations
+
+    st_taipei_xinyi_old = Station(
+        source="taiwan_cwa", station_id="C0A9H0", name="信義",
+        latitude=25.038094, longitude=121.564639, variables=("precipitation",),
+        period_start=date(1997, 8, 21), period_end=date(2009, 3, 31), country="TWN"
+    )
+    st_taipei_xinyi_new = Station(
+        source="taiwan_cwa", station_id="C0AC70", name="信義",
+        latitude=25.037822, longitude=121.564597, variables=("precipitation",),
+        period_start=date(2009, 3, 31), country="TWN"
+    )
+    st_taipei_wenshan_old = Station(
+        source="taiwan_cwa", station_id="C1AC80", name="文山",
+        latitude=25.002083, longitude=121.575704, variables=("precipitation",),
+        period_start=date(2009, 1, 21), period_end=date(2009, 11, 30), country="TWN"
+    )
+    st_taipei_wenshan_new = Station(
+        source="taiwan_cwa", station_id="C0AC80", name="文山",
+        latitude=25.00235, longitude=121.575728, variables=("precipitation",),
+        period_start=date(2009, 12, 1), country="TWN"
+    )
+    st_nantou_xinyi = Station(
+        source="taiwan_cwa", station_id="C0I080", name="信義",
+        latitude=23.689694, longitude=120.851036, variables=("precipitation",), country="TWN"
+    )
+    st_usgs_well_1 = Station(
+        source="usgs", station_id="USGS-02293346", name="Well 1",
+        latitude=26.678405, longitude=-82.040368, variables=("groundwater_level",), country="USA"
+    )
+    st_usgs_well_2 = Station(
+        source="usgs", station_id="USGS-02293347", name="Well 1",
+        latitude=26.678405, longitude=-82.040368, variables=("groundwater_level",), country="USA"
+    )
+
+    all_stations = [
+        st_taipei_xinyi_old, st_taipei_xinyi_new,
+        st_taipei_wenshan_old, st_taipei_wenshan_new,
+        st_nantou_xinyi,
+        st_usgs_well_1, st_usgs_well_2,
+    ]
+
+    inferred = infer_site_ids(all_stations, precision=3)
+
+    # Taipei 信義 pair shares the same synthetic site_id
+    assert inferred[0].site_id == inferred[1].site_id
+    assert inferred[0].site_id.startswith("syn:taiwan_cwa:")
+
+    # Taipei 文山 pair shares a distinct synthetic site_id
+    assert inferred[2].site_id == inferred[3].site_id
+    assert inferred[2].site_id.startswith("syn:taiwan_cwa:")
+    assert inferred[2].site_id != inferred[0].site_id
+
+    # Nantou 信義 is distinct and retains its default station_id
+    assert inferred[4].site_id == "C0I080"
+    assert inferred[4].site_id != inferred[0].site_id
+
+    # USGS pair shares a synthetic site_id
+    assert inferred[5].site_id == inferred[6].site_id
+    assert inferred[5].site_id.startswith("syn:usgs:")
+
+    # Grouping via catalog produces 1 site each for Taipei 信義 and 文山
+    rows = [s.model_dump(mode="json") for s in inferred]
+    grouped_xinyi = search_stations(rows, sources=["taiwan_cwa"], query="信義", group_sites=True)
+    # 2 sites: Taipei 信義 and Nantou 信義
+    assert len(grouped_xinyi) == 2
+    taipei_hit = next(h for h in grouped_xinyi if h["site_id"] == inferred[0].site_id)
+    assert taipei_hit["record_count"] == 2
+    assert {r["station_id"] for r in taipei_hit["records"]} == {"C0A9H0", "C0AC70"}
+
+    grouped_wenshan = search_stations(rows, sources=["taiwan_cwa"], query="文山", group_sites=True)
+    assert len(grouped_wenshan) == 1
+    assert grouped_wenshan[0]["record_count"] == 2
+    assert {r["station_id"] for r in grouped_wenshan[0]["records"]} == {"C0AC80", "C1AC80"}
+
+
+def test_infer_site_ids_preserves_agency_supplied_site_ids():
+    st1 = Station(
+        source="france_hubeau", station_id="M0010001", site_id="M0010000",
+        name="Station Seine", latitude=48.8566, longitude=2.3522, variables=("discharge",)
+    )
+    st2 = Station(
+        source="france_hubeau", station_id="M0010002", site_id="M0010000",
+        name="Station Seine", latitude=48.8566, longitude=2.3522, variables=("discharge",)
+    )
+    st3 = Station(
+        source="france_hubeau", station_id="M0010003", site_id="",
+        name="Station Seine", latitude=48.8566, longitude=2.3522, variables=("discharge",)
+    )
+    # st3 initialized with site_id defaulting to station_id "M0010003"
+    assert st3.site_id == "M0010003"
+
+    inferred = infer_site_ids([st1, st2, st3], precision=3)
+    # Agency-supplied site_id "M0010000" is never overwritten and adopted by co-located default member
+    assert inferred[0].site_id == "M0010000"
+    assert inferred[1].site_id == "M0010000"
+    assert inferred[2].site_id == "M0010000"
+
+
+def test_infer_site_ids_is_deterministic_and_stable():
+    st1 = Station(
+        source="taiwan_cwa", station_id="C0A9H0", name="信義",
+        latitude=25.038094, longitude=121.564639, variables=("precipitation",)
+    )
+    st2 = Station(
+        source="taiwan_cwa", station_id="C0AC70", name="信義",
+        latitude=25.037822, longitude=121.564597, variables=("precipitation",)
+    )
+    res1 = infer_site_ids([st1.model_copy(), st2.model_copy()], precision=3)
+    res2 = infer_site_ids([st1.model_copy(), st2.model_copy()], precision=3)
+    assert res1[0].site_id == res2[0].site_id
+    assert res1[1].site_id == res2[1].site_id
+    assert res1[0].site_id.startswith("syn:taiwan_cwa:")

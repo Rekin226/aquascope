@@ -151,7 +151,7 @@ def test_bare_studio_asks_where_and_what_then_runs(monkeypatch, capsys, tmp_path
     with patched():
         cli.main()
     captured = capsys.readouterr()
-    assert "Kingston (uk_ea kingston)" in captured.out and "Keyless" in captured.err
+    assert "Kingston (uk_ea kingston)" in captured.out and "Do you have an AI model key?" in captured.out
     ws = json.loads((out / "workspace.json").read_text(encoding="utf-8"))
     assert ws["status"] == "done"
 

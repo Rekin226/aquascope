@@ -20,8 +20,11 @@ aquascope studio
 ```
 
 In a terminal, `aquascope studio` with nothing else asks where (a gauge name or river words from the station
-catalog, a station id such as `USGS-01013500`, or `lat, lon`) and what you want to know. With a model key in the
-environment it offers to use it, with a $1 spend ceiling; it never uses one silently. For scripts, give everything
+catalog, a station id such as `USGS-01013500`, or `lat, lon`) and what you want to know. Then it asks whether you
+have a model key: paste one (hidden; the provider is read off its prefix, and one short request checks it), get a
+free Groq key, or run keyless. A key it may remember is kept in `~/.config/aquascope/keys.json` (mode 600) and
+offered next time; a key already in the environment is offered the same way. It never uses a key silently, and
+the spend ceiling is $1 unless `--max-usd` says otherwise. For scripts, give everything
 on the line: `aquascope studio "PROBLEM" --at USGS-01013500 --yes` (or `--lat`/`--lon`). Without the `studio`
 extra the bundle holds only the Markdown and HTML report and the tables, and the CLI says so.
 

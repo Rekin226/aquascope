@@ -802,9 +802,6 @@ def cmd_run_study(args: argparse.Namespace) -> None:
         logger.error("Could not read %s: %s", args.study, exc)
         sys.exit(1)
 
-    for name in ("httpx", "aquascope.archive", "aquascope.collectors"):
-        logging.getLogger(name).setLevel(logging.WARNING)   # the crew's timeline says what is happening
-
     def on_event(event: dict) -> None:
         if not args.quiet:
             print(f"  · {_format_event(event)}", file=sys.stderr)
@@ -1793,20 +1790,8 @@ def _studio_start(args: argparse.Namespace) -> bool:
             return False
         args.query = text.strip() or None
     if not any((args.provider, args.model, args.api_key, args.base_url)):
-        found = _studio_key_offer()
-        if found:
-            cap = args.max_usd if args.max_usd is not None else 1.0
-            answer = ask(
-                f"\nA {found} key is set. Let the model write the brief, the plan and the prose? "
-                f"The numbers come from the tools either way. Spend ceiling ${cap:g}. [Y/n] "
-            )
-            if answer is None:
-                return False
-            if answer.strip().lower() in ("", "y", "yes"):
-                args.provider, args.max_usd = found, cap
-        else:
-            print("\n  Keyless: the playbooks plan and the templates write. For model-written prose, set "
-                  "ANTHROPIC_API_KEY or GROQ_API_KEY (free) and run again.", file=sys.stderr)
+        if not _studio_key_step(args):
+            return False
     print()
     return True
 
@@ -1857,6 +1842,78 @@ def _choose(q: dict) -> str | None:
             except (EOFError, KeyboardInterrupt):
                 return None
         return answer
+
+
+_NO_KEY, _PASTE, _FREE = "No, run keyless", "Yes, paste a key", "Get a free key first (Groq)"
+
+
+def _studio_key_step(args: argparse.Namespace) -> bool:
+    """Whether a model joins the crew: a key already set (or saved) is offered; otherwise the person is asked
+    if they have one, pastes it (hidden), and it is checked with one tiny request before the study starts.
+    Fills ``args.provider``, ``args.api_key`` and a $1 ``args.max_usd``. False when the person leaves."""
+    import getpass
+
+    from aquascope.ai_engine import keys
+
+    why = "With a key the model writes the brief, the plan and the prose; the numbers come from the tools either way."
+    cap = args.max_usd if args.max_usd is not None else 1.0
+    found = _studio_key_offer()
+    if found:
+        answer = _choose({"text": f"A {found} key is set. Use it?", "why": f"{why} Spend ceiling ${cap:g}.",
+                          "options": ["Yes, use it", "No, run keyless"], "default": "Yes, use it"})
+        if answer is None:
+            return False
+        if answer.strip().lower() in ("yes, use it", "y", "yes"):
+            args.provider, args.max_usd = found, cap
+        return True
+    answer = _choose({"text": "Do you have an AI model key? (optional)", "why": why,
+                      "options": [_NO_KEY, _PASTE, _FREE], "default": _NO_KEY})
+    if answer is None:
+        return False
+    if answer == _FREE:
+        print("  Make one at https://console.groq.com/keys (free tier, no card), then paste it here.")
+    elif answer != _PASTE and answer.strip().lower() not in ("y", "yes"):
+        return True
+    while True:
+        try:
+            key = getpass.getpass("  Paste your key (it stays hidden; Enter to skip): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(file=sys.stderr)
+            return False
+        if not key:
+            print("  Running keyless.")
+            return True
+        provider = keys.guess_provider(key)
+        if provider is None:
+            from aquascope.ai_engine.providers import PROVIDERS
+
+            ids = [p for p in PROVIDERS if PROVIDERS[p].env]
+            picked = _choose({"text": "Which service is this key for?",
+                              "options": [PROVIDERS[p].label for p in ids], "default": PROVIDERS[ids[0]].label})
+            if picked is None:
+                return False
+            provider = next((p for p in ids if PROVIDERS[p].label == picked), None)
+            if provider is None:
+                continue
+        print("  Checking the key with one short request...")
+        works, said = keys.check_key(provider, key, model=args.model)
+        if works:
+            print(f"  OK: {said}. Spend ceiling ${cap:g} (--max-usd changes it).")
+            args.provider, args.api_key, args.max_usd = provider, key, cap
+            keep = _choose({"text": "Remember this key on this computer?",
+                            "why": f"Saved to {keys.keys_path()}, readable only by you; next time the Studio "
+                                   "offers it instead of asking.",
+                            "options": ["No, just this time", "Yes, remember it"], "default": "No, just this time"})
+            if keep == "Yes, remember it":
+                keys.save_key(provider, key)
+                print("  Saved.")
+            return True
+        again = _choose({"text": f"That key did not work: {said}.", "options": ["Paste it again", _NO_KEY],
+                         "default": "Paste it again"})
+        if again is None:
+            return False
+        if again != "Paste it again":
+            return True
 
 
 def _studio_missing_extras() -> list[str]:
@@ -1932,6 +1989,13 @@ def cmd_studio(args: argparse.Namespace) -> None:
         except (OSError, ValueError) as exc:
             logger.error("cannot read %s: %s", path, exc)
             sys.exit(1)
+
+    for name in ("httpx", "aquascope.archive", "aquascope.collectors"):
+        logging.getLogger(name).setLevel(logging.WARNING)   # the crew's timeline says what is happening
+    if not any((args.provider, args.model, args.api_key, args.base_url)):
+        from aquascope.ai_engine.keys import load_saved_keys
+
+        load_saved_keys()      # a key the person asked the Studio to remember; the shell's own wins
 
     def on_event(event: dict) -> None:
         if not args.quiet:

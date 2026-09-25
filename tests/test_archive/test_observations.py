@@ -270,7 +270,7 @@ def test_openhi_is_harvestable_because_the_browser_cannot_call_it():
     assert set(obs.HARVESTABLE["greece_openhi"]) <= set(meta.variables)
     assert all(SOURCES[k].redistributable for k in obs.HARVESTABLE)
 
-    
+
 def test_csv_gz_roundtrip_with_quality():
     s = _series(5)
     quality = pd.Series(
@@ -356,4 +356,4 @@ def test_the_time_budget_stops_a_source(tmp_path):
         report = obs.harvest_observations(tmp_path, sources=["hubeau_hydrometrie"], variable="discharge",
                                           catalog=CATALOG, max_stations=10, max_seconds=0)
     h = report.sources[0]
-    assert fake.call_count == 0 and h.stopped == "time budget"  # a spent budget asks nothing more # a spent budget asks nothing more
+    assert fake.call_count == 0 and h.stopped == "time budget"  # a spent budget asks nothing more

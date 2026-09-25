@@ -9,6 +9,7 @@ All notable changes to AquaScope are documented here.
 ### Changed
 
 ### Fixed
+- **UK EA collector: distinguish 'no data' from 'endpoint failed'** (#463). `_fetch_paginated_items` now propagates failed requests as `CollectorError` with causal HTTP status resolution, rather than returning `None` and masking failed requests as empty stations. Genuinely empty reading pages continue to return empty lists. Station metadata lookup catches only `(RuntimeError, ValueError)` and returns `None` with an explanatory note since metadata enrichment is optional for reading queries.
 
 ## [0.19.0] - 2026-09-24
 

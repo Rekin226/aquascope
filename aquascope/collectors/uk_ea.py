@@ -18,7 +18,7 @@ from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from aquascope.collectors.base import BaseCollector
+from aquascope.collectors.base import BaseCollector, CollectorError
 from aquascope.schemas.station import Station, in_bbox
 from aquascope.schemas.water_data import (
     DataSource,
@@ -349,7 +349,7 @@ class UKEACollector(BaseCollector):
                 limit=limit,
                 max_items=max_items,
             )
-            if station_meta is None:
+            if not station_meta:
                 return []
 
             if collection:
@@ -373,9 +373,6 @@ class UKEACollector(BaseCollector):
                     limit=limit,
                     max_items=max_items,
                 )
-                if paginated_items is None:
-                    return []
-
                 all_items.extend(paginated_items)
 
             return all_items
@@ -405,9 +402,6 @@ class UKEACollector(BaseCollector):
             limit=limit,
             max_items=max_items,
         )
-        if paginated_items is None:
-            return []
-
         all_items.extend(paginated_items)
         if measure:
             all_items[0]["observedProperty"] = observed_property_metadata
@@ -422,7 +416,7 @@ class UKEACollector(BaseCollector):
         station_meta: dict | None,
         limit: int,
         max_items: int | None = None,
-    ) -> list[dict] | None:
+    ) -> list[dict]:
         """Fetch and normalise paginated reading items for the requested query."""
         all_items: list[dict] = []
         offset = 0
@@ -431,9 +425,21 @@ class UKEACollector(BaseCollector):
             params["_offset"] = offset
             try:
                 data = client.get_json(path, params=params)
+            except CollectorError:
+                raise
             except Exception as exc:
-                logger.error("UKEA fetch failed: %s", exc)
-                return None
+                logger.warning("UKEA fetch failed: %s", exc)
+                target_url = (
+                    path
+                    if path.startswith(("http://", "https://"))
+                    else f"{getattr(client, 'base_url', UKEA_BASE).rstrip('/')}/{path.lstrip('/')}"
+                )
+                raise CollectorError(
+                    f"UKEA fetch failed for {target_url}: {exc}",
+                    source="uk_ea",
+                    url=target_url,
+                    cause=exc,
+                ) from exc
 
             page_items = data.get("items", [])
             if not page_items:
@@ -668,7 +674,10 @@ class UKEACollector(BaseCollector):
 
         try:
             data = self.client.get_json("id/stations.json", params=params)
-        except Exception as exc:
+        except (RuntimeError, ValueError) as exc:
+            # Station metadata enriches reading records with station name, river,
+            # and coordinates, but is optional for reading queries: if the metadata
+            # endpoint fails, warn and continue so readings can still be returned.
             logger.warning("Failed to fetch UKEA station metadata: %s", exc)
             return None
 

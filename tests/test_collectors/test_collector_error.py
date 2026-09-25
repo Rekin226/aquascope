@@ -15,6 +15,7 @@ from aquascope.collectors import (
     JapanMLITCollector,
     KoreaWAMISCollector,
     SDG6Collector,
+    UKEACollector,
     WQPCollector,
 )
 from aquascope.utils.http_client import CachedHTTPClient
@@ -216,6 +217,88 @@ class TestWQPCollectorError:
 
         assert exc_info.value.source == "wqp"
         assert isinstance(exc_info.value.cause, httpx.ConnectError)
+
+
+class TestUKEACollectorError:
+    def test_fetch_raw_raises_collector_error_with_cause_status(self):
+        client = MagicMock()
+        client.get_json.side_effect = _make_http_status_runtime_error(
+            "https://environment.data.gov.uk/hydrology/data/readings.json", 503
+        )
+        collector = UKEACollector(client=client)
+
+        with pytest.raises(CollectorError) as exc_info:
+            collector.fetch_raw(observed_property="waterFlow", station="station-guid")
+
+        assert exc_info.value.source == "uk_ea"
+        assert exc_info.value.status_code == 503
+        assert isinstance(exc_info.value.cause, RuntimeError)
+
+    def test_fetch_raw_returns_empty_on_genuinely_empty_readings(self):
+        client = MagicMock()
+        client.get_json.return_value = {"items": []}
+        collector = UKEACollector(client=client)
+        raw = collector.fetch_raw(observed_property="waterFlow", station="station-guid")
+        assert collector.normalise(raw) == []
+
+    def test_fetch_raw_bounding_box_raises_collector_error_on_station_failure(self):
+        client = MagicMock()
+        client.get_json.side_effect = _make_http_status_runtime_error(
+            "https://environment.data.gov.uk/hydrology/id/stations.json", 502
+        )
+        collector = UKEACollector(client=client)
+
+        with pytest.raises(CollectorError) as exc_info:
+            collector.fetch_raw(observed_property="waterFlow", bbox="2.0,51.1,3.3,52.7")
+
+        assert exc_info.value.source == "uk_ea"
+        assert exc_info.value.status_code == 502
+
+    def test_fetch_raw_bounding_box_returns_empty_on_no_stations(self):
+        client = MagicMock()
+        client.get_json.return_value = {"items": []}
+        collector = UKEACollector(client=client)
+        raw = collector.fetch_raw(observed_property="waterFlow", bbox="2.0,51.1,3.3,52.7")
+        assert raw == []
+        assert collector.normalise(raw) == []
+
+    def test_station_metadata_hard_failure_returns_none(self):
+        client = MagicMock()
+        client.get_json.side_effect = _make_http_status_runtime_error(
+            "https://environment.data.gov.uk/hydrology/id/stations.json", 500
+        )
+        collector = UKEACollector(client=client)
+        assert collector._fetch_station_metadata(station="station-guid") is None
+
+    def test_station_metadata_empty_items_returns_none(self):
+        client = MagicMock()
+        client.get_json.return_value = {"items": []}
+        collector = UKEACollector(client=client)
+        assert collector._fetch_station_metadata(station="station-guid") is None
+
+    def test_fetch_raw_succeeds_even_when_station_metadata_fails(self):
+        suid = "s" * 36
+        reading_item = {
+            "measure": {"@id": f"http://measures/{suid}-flow-m-86400-m3s-qualified"},
+            "value": "12.5",
+            "dateTime": "2025-03-01T10:00:00",
+        }
+
+        def mock_get_json(path, params=None):
+            params = params or {}
+            if "stations" in path:
+                raise _make_http_status_runtime_error("https://environment.data.gov.uk/hydrology/id/stations.json", 500)
+            if params.get("_offset", 0) == 0:
+                return {"items": [reading_item]}
+            return {"items": []}
+
+        client = MagicMock()
+        client.get_json.side_effect = mock_get_json
+        collector = UKEACollector(client=client)
+        raw = collector.fetch_raw(observed_property="waterFlow", station=suid)
+        records = collector.normalise(raw)
+        assert len(records) == 1
+        assert records[0].discharge_cms == pytest.approx(12.5)
 
 
 class TestCLICollectorError:

@@ -94,13 +94,13 @@
         },
         {
           "name": "years",
-          "label": "Years of record to use (empty for the whole record)",
+          "label": "Years of record to use (empty for the whole record; a trend needs at least 20)",
           "type": "int",
           "default": null,
           "options": [],
           "required": false,
           "help": null,
-          "min": 10.0,
+          "min": 20.0,
           "max": null
         }
       ],

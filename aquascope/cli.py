@@ -802,6 +802,9 @@ def cmd_run_study(args: argparse.Namespace) -> None:
         logger.error("Could not read %s: %s", args.study, exc)
         sys.exit(1)
 
+    for name in ("httpx", "aquascope.archive", "aquascope.collectors"):
+        logging.getLogger(name).setLevel(logging.WARNING)   # the crew's timeline says what is happening
+
     def on_event(event: dict) -> None:
         if not args.quiet:
             print(f"  · {_format_event(event)}", file=sys.stderr)
@@ -1820,7 +1823,11 @@ def _choose(q: dict) -> str | None:
         import questionary
     except ImportError:
         questionary = None
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        questionary = None      # a pick list needs a terminal on both ends; numbers work anywhere
     print()
+    if q.get("retry"):
+        print(f"  {q['retry']}")
     if questionary is not None:
         if q.get("why"):
             questionary.print(f"  {q['why']}", style="italic fg:ansibrightblack")
@@ -1971,7 +1978,7 @@ def cmd_studio(args: argparse.Namespace) -> None:
         reply = studio._request_reply()
     if reply is not None and reply.kind in ("questions", "data_request"):
         while reply.kind in ("questions", "data_request"):
-            qs = (reply.payload.get("questions") or []) if reply.kind == "questions" else []
+            qs = reply.payload.get("questions") or []     # a question, or a choice the crew offers (a gauge)
             if interactive and len(qs) == 1 and qs[0].get("options"):
                 answer = _choose(qs[0])
                 if answer is None:
@@ -2021,21 +2028,32 @@ def cmd_studio(args: argparse.Namespace) -> None:
         print(reply.text)
         edits = None
         if interactive:
+            run, change, later = "Run it", "Change a step first", "Not now (save it for later)"
             while True:
-                answer = (ask("Run this plan? [y/N/e] ") or "n").strip().lower()
-                if answer in ("y", "yes"):
+                answer = _choose({"text": "Run this plan?", "options": [run, change, later], "default": run})
+                low = (answer or "").strip().lower()
+                if answer is None or answer == later or low in ("n", "no", "not now", "later"):
+                    checkpoint()
+                    print(f"\n  Saved. Pick it up any time: aquascope studio --resume {out_dir / 'workspace.json'}",
+                          file=sys.stderr)
+                    return
+                if answer == run or low in ("y", "yes", "run", "go", "just go"):
                     break
-                if answer == "e":
-                    line = ask("Overrides, STEP.ARG=VALUE separated by commas (blank keeps the plan): ") or ""
+                if answer == change or low == "e":
+                    line = ask("Overrides, STEP.ARG=VALUE separated by commas, e.g. s3.return_period=200 "
+                               "(blank keeps the plan): ") or ""
                     try:
                         edits = _parse_edits(line) or None
                     except ValueError as exc:
                         print(f"  {exc}", file=sys.stderr)
                         continue
                     break
-                print("  Declined at review; the workspace is saved.", file=sys.stderr)
-                checkpoint()
-                return
+                # anything else is a change to the brief in your own words: the crew plans again
+                reply = studio.say(answer)
+                print(reply.text)
+                if reply.kind != "plan":
+                    checkpoint()
+                    return
         elif not args.yes:
             print("  Not a terminal: pass --yes to run the plan.", file=sys.stderr)
             checkpoint()

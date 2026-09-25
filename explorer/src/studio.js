@@ -355,6 +355,13 @@ function figHtml(f) {
 // offered here too, and dropping a table plans again on it (Studio.add_table).
 function waitingHtml() {
   const req = S.ws.pending_request || {};
+  if (req.kind === "gauge") {
+    // The goal needs a longer record than this gauge has: the gauges nearby that do, as chips, then "keep".
+    const opts = [...(req.gauges || []).map((g) => g.label), req.keep].filter(Boolean);
+    return `<div class="study-waiting"><p class="study-line">${escapeHtml(req.ask || "")}</p>` +
+      `<p class="study-line muted">${escapeHtml(req.why || "")}</p>` +
+      `<div class="study-chips">${opts.map((o) => `<button type="button" class="chip" data-answer="${escapeHtml(o)}">${escapeHtml(o)}</button>`).join("")}</div></div>`;
+  }
   return `<div class="study-waiting">` +
     (req.what ? `<p class="study-line">${escapeHtml(req.what)}</p>` : "") +
     (req.why ? `<p class="study-line muted">Why: ${escapeHtml(req.why)}</p>` : "") +
@@ -1380,6 +1387,8 @@ export function toggleStudy() {
 }
 
 function onBoardClick(e) {
+  const answer = e.target.closest("[data-answer]");   // a choice the board offers (a gauge with a long record)
+  if (answer) { send(answer.dataset.answer); return; }
   const act = e.target.closest("[data-act]");
   if (act) {
     const what = act.dataset.act;

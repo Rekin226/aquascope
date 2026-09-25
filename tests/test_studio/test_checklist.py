@@ -97,3 +97,67 @@ def test_a_trend_goal_is_answered_by_the_trend():
     assert interpreter._trend_verdict(key) == ", Mann-Kendall p = 0.32: no significant trend at 5 %"
     assert interpreter._trend_verdict([{"label": "Mann-Kendall p-value", "value": 0.01}]).endswith(
         "a significant trend at 5 %")
+
+
+# ── a goal the gauge cannot answer, and the replies that cannot be used ──
+
+def _trend_ws(here_years: float, here_end: str = "2026-09-01") -> Workspace:
+    from aquascope.studio.workspace import Dataset, Inventory
+
+    ws = _ws()
+    ws.brief.playbook, ws.brief.intake = "flood_risk", {"decision": "flood trend", "years": 30}
+    ws.inventory = Inventory(datasets=[
+        Dataset(id="a", kind="station", variable="discharge", source="usgs", station_id="SHORT", name="Short",
+                distance_km=0.0, start="1906-10-01", end=here_end, years=here_years),
+        Dataset(id="b", kind="station", variable="discharge", source="usgs", station_id="LONG", name="Long",
+                lat=47.2, lon=-68.5, distance_km=2.1, start="1903-07-29", end="2026-09-22", years=123.2),
+        Dataset(id="c", kind="station", variable="water_level", source="usgs", station_id="STAGE", name="Stage",
+                lat=47.3, lon=-68.6, distance_km=1.0, start="2026-01-01", end="2026-09-22", years=0.2)])
+    return ws
+
+
+def test_a_trend_at_a_short_or_stopped_gauge_offers_the_long_records_nearby():
+    from aquascope.studio.coordinator import gauge_offer
+
+    offer = gauge_offer(_trend_ws(9.0, "1915-09-30"))
+    assert offer["kind"] == "gauge" and [g["station_id"] for g in offer["gauges"]] == ["LONG"]
+    assert "9 years of discharge (1906 to 1915)" in offer["why"] and "at least 30 years" in offer["why"]
+    assert offer["keep"].startswith("Keep this gauge")
+    assert gauge_offer(_trend_ws(40.0, "1960-01-01")) is not None, "long but stopped: no recent years"
+    assert gauge_offer(_trend_ws(80.0)) is None, "a gauge that can answer is not questioned"
+    design = _trend_ws(9.0)
+    design.brief.intake = {"decision": "design flow"}
+    assert gauge_offer(design) is None, "only a goal whose branch needs a record asks"
+
+
+def test_the_gauge_choice_moves_the_study_or_keeps_it():
+    from aquascope.studio.coordinator import Studio
+
+    s = Studio(47.0, -68.0)
+    s.ws.pending_request = {"kind": "gauge", "ask": "Use a gauge?", "why": "short", "keep": "Keep this gauge (x)",
+                            "gauges": [{"source": "usgs", "station_id": "LONG", "name": "Long", "lat": 47.2,
+                                        "lon": -68.5, "label": "Long (123 years, 2.1 km away)"}]}
+    s.ws.set_status("waiting")
+    reply = s._request_reply()
+    q = reply.payload["questions"][0]
+    assert q["options"] == ["Long (123 years, 2.1 km away)", "Keep this gauge (x)"] and q["why"] == "short"
+    moved = []
+    s._scout_and_plan = lambda: moved.append(dict(s.ws.site)) or "planned"
+    assert s._answer_request("Long (123 years, 2.1 km away)") == "planned" and moved == [{"lat": 47.2, "lon": -68.5}]
+    assert s.ws.pending_request is None
+    s.ws.pending_request = {"kind": "gauge", "gauges": [], "keep": "Keep this gauge (x)", "ask": "?", "why": "."}
+    s._plan = lambda: "kept"
+    assert s._answer_request("Keep this gauge (x)") == "kept"
+
+
+def test_a_reply_that_cannot_be_used_is_asked_again_with_the_reason():
+    ws = _ws()
+    consultant.consult(ws, None, "Is flooding at this river getting worse?")
+    msg = consultant.consult(ws, None, "the last 10 years")
+    q = ws.brief.open_questions[0]
+    assert q.id == "years" and q.retry == "10 is too few: a trend needs at least 20."
+    assert msg.text.startswith("10 is too few")
+    consultant.consult(ws, None, "something else entirely")
+    assert "could not match" in ws.brief.open_questions[0].retry
+    consultant.consult(ws, None, "The last 30 years")
+    assert ws.brief.ready and ws.brief.questions[-1].retry is None

@@ -52,6 +52,8 @@ class Question:
     answer: Any = None
     #: One line on what the answer changes in the study (a checklist question's ``why``).
     why: str | None = None
+    #: Why the last reply could not be used, said when the question is asked again.
+    retry: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -60,7 +62,8 @@ class Question:
     def from_dict(cls, d: dict[str, Any]) -> Question:
         return cls(id=str(d.get("id") or ""), text=str(d.get("text") or ""),
                    options=list(d["options"]) if d.get("options") else None,
-                   default=d.get("default"), answer=d.get("answer"), why=d.get("why") or None)
+                   default=d.get("default"), answer=d.get("answer"), why=d.get("why") or None,
+                   retry=d.get("retry") or None)
 
 
 @dataclass

@@ -326,10 +326,23 @@ def _checklist_value(item: Any, pb: Any, answer: Any) -> tuple[bool, Any]:
         try:
             return True, pbk._coerce(value, field)   # within the field's own bounds, or asked again
         except (TypeError, ValueError, OverflowError):
-            return False, None
+            return False, _bounds_note(value, field)
     if field.options:
         return value in field.options, value
     return bool(str(value).strip()), value
+
+
+def _bounds_note(value: Any, field: Any) -> str | None:
+    """Why a number cannot be used, in the field's own words ("10 is too short: a trend needs at least 20")."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    # the label's own reason when it gives one ("... ; a trend needs at least 20)")
+    hint = next((part.strip(" )") for part in (field.label or "").split(";") if "need" in part), None)
+    if field.min is not None and value < field.min:
+        return f"{value:g} is too few: {hint or f'the minimum here is {field.min:g}'}."
+    if field.max is not None and value > field.max:
+        return f"{value:g} is too many: the maximum here is {field.max:g}."
+    return None
 
 
 def _next_question(ws: Workspace, pb: Any, tables: dict[str, Any] | None = None) -> None:
@@ -373,9 +386,13 @@ def _take_answer(ws: Workspace, q: Question, known: dict[str, Any]) -> None:
     if item is not None:
         understood, value = _checklist_value(item, pb, q.answer)
         if understood:
+            q.retry = None
             _state(ws, pb, q.id, value, answered=True)
         else:
-            q.answer = None      # asked again: the reply named none of the options
+            # asked again, saying why: out of bounds, or none of the options
+            q.retry = (value if isinstance(value, str) and value else
+                       f"I could not match \"{str(q.answer).strip()}\" to an option; pick one, or say it another way.")
+            q.answer = None
         return
     if q.id == "playbook":
         picked = _match_option(str(q.answer), sorted(known))
@@ -571,7 +588,9 @@ def _open(ws: Workspace, model: Model | None, text: str, tables: dict[str, Any] 
                 if f.default is not None and b.intake.get(f.name) is None and f.name not in asked:
                     b.assumptions.append(f"{f.label or f.name}: {f.default} (the playbook's default)")
         b.ready = not b.questions
-        ws.event("consultant", "brief", f"rules: playbook {playbook or 'none'}, {len(b.questions)} question(s)")
+        pb = known.get(playbook) if playbook else None
+        if pb is None or not pb.checklist:     # a checklist says its own count below
+            ws.event("consultant", "brief", f"rules: playbook {playbook or 'none'}, {len(b.questions)} question(s)")
     pb = known.get(b.playbook) if b.playbook else None
     if pb is not None and pb.checklist:
         # The checklist asks, one question at a time; the text (and a model's reading of it) answers first.
@@ -764,7 +783,7 @@ def _message(ws: Workspace) -> Message:
     where = f"{site.get('lat')}, {site.get('lon')}" if site else "the site"
     if len(b.open_questions) == 1 and (b.open_questions[0].why or b.open_questions[0].options):
         q = b.open_questions[0]
-        lines = [q.text]
+        lines = ([q.retry] if q.retry else []) + [q.text]
         if q.why:
             lines.append(f"({q.why})")
         lines += [f"  {i}. {o}" for i, o in enumerate(q.options or [], 1)]

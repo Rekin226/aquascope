@@ -28,10 +28,10 @@ intake:
     options: [flood trend, design flow, risk screening, insurance, inundation extent]
     default: design flow
   - name: years
-    label: Years of record to use (empty for the whole record)
+    label: Years of record to use (empty for the whole record; a trend needs at least 20)
     type: int
     default: null
-    min: 10
+    min: 20
 # What the study must know before it plans, asked one at a time and only when the question, the site and the
 # earlier answers leave it open. Each answer changes the plan: the goal picks the branch (a trend test or a
 # frequency fit), the return period the quantile, the window the record the trend is read on.

@@ -6,6 +6,7 @@ import pytest
 
 from aquascope.collectors.uk_ea import (
     MAPPED_OBSERVED_PROPERTY_UNITS,
+    CollectorError,
     UKEACollector,
 )
 from aquascope.schemas.water_data import (
@@ -304,14 +305,16 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
     with pytest.raises(ValueError):
         coll.fetch_raw(observed_property="waterLevel", bbox="1,2,3")
 
-    # client.get_json raises -> returns []
+    # client.get_json raises -> raises CollectorError
     def bad_behaviour(path, params):
         raise RuntimeError("network")
 
     bad_client = DummyClient(behaviour=bad_behaviour)
     coll_bad = UKEACollector(client=bad_client)
-    res = coll_bad.fetch_raw(observed_property="waterLevel")
-    assert res == []
+    with pytest.raises(CollectorError) as exc_info:
+        coll_bad.fetch_raw(observed_property="waterLevel")
+    assert exc_info.value.source == "uk_ea"
+    assert "network" in str(exc_info.value)
 
     # pagination and station metadata injection
     suid = "".join(["s" for _ in range(36)])

@@ -1690,6 +1690,132 @@ def cmd_solve_team(args: argparse.Namespace) -> None:
             print(f"   · {line}", file=sys.stderr)
 
 
+_LATLON = r"^\s*(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)\s*$"
+
+
+def _place_matches(text: str, limit: int = 5) -> list[dict]:
+    """Where a study goes, from what a person types: ``lat, lon`` (one match, no catalog read), a station
+    id (``USGS-01013500``), or words of a gauge's name or river ("Fish River Fort Kent"), searched in the
+    Archive's station catalog. Rows carry ``name``, ``latitude``, ``longitude`` and, from the catalog,
+    ``source`` and ``station_id``."""
+    import re
+
+    m = re.match(_LATLON, text or "")
+    if m:
+        lat, lon = float(m.group(1)), float(m.group(2))
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            raise ValueError(f"{lat}, {lon} is not a latitude, longitude")
+        return [{"name": f"{lat:g}, {lon:g}", "latitude": lat, "longitude": lon}]
+    import logging
+
+    from aquascope.archive.catalog import load_stations, search_stations
+
+    quiet = [logging.getLogger(n) for n in ("httpx", "aquascope.archive.catalog")]
+    levels = [lg.level for lg in quiet]
+    for lg in quiet:  # the daily catalog download logs a signed URL a screen wide
+        lg.setLevel(logging.WARNING)
+    try:
+        rows = load_stations()
+    finally:
+        for lg, level in zip(quiet, levels):
+            lg.setLevel(level)
+    wanted = (text or "").strip().lower()
+    exact = [r for r in rows if str(r.get("station_id", "")).lower() == wanted]
+    return exact[:limit] or search_stations(rows, query=text, limit=limit, group_sites=True)
+
+
+def _place_line(row: dict) -> str:
+    where = f"{row['latitude']:.4f}, {row['longitude']:.4f}"
+    if row.get("station_id"):
+        return f"{row.get('name') or row['station_id']} ({row.get('source')} {row['station_id']}) at {where}"
+    return where
+
+
+def _studio_key_offer() -> str | None:
+    """The provider whose key is in the environment, in the CLI's usual scan order, or None."""
+    import os
+
+    from aquascope.ai_engine.providers import ENV_SCAN_ORDER, env_var
+
+    for name in ENV_SCAN_ORDER:
+        env = env_var(name)
+        if env and os.environ.get(env):
+            return name
+    return None
+
+
+def _studio_start(args: argparse.Namespace) -> bool:
+    """``aquascope studio`` with nothing else: ask where, what, and whether to use a key found in the
+    environment, then fill ``args`` as if they had been typed. False when the person leaves."""
+
+    def ask(prompt: str) -> str | None:
+        try:
+            return input(prompt)
+        except (EOFError, KeyboardInterrupt):
+            print(file=sys.stderr)
+            return None
+
+    print("AquaScope Studio: a crew that runs a complete study at a place and hands you the bundle.")
+    print("Nothing runs until you approve the plan.\n")
+    while args.lat is None:
+        text = ask('Where? A gauge name or id ("Fish River Fort Kent", USGS-01013500) or lat, lon: ')
+        if text is None:
+            return False
+        if not text.strip():
+            continue
+        try:
+            rows = _place_matches(text)
+        except Exception as exc:  # noqa: BLE001 - a failed catalog read: coordinates still work
+            print(f"  cannot search the station catalog ({exc}); type lat, lon instead.", file=sys.stderr)
+            continue
+        if not rows:
+            print("  no gauge matches that; try other words, a station id, or lat, lon.", file=sys.stderr)
+            continue
+        pick = rows[0]
+        if len(rows) > 1:
+            for i, row in enumerate(rows, 1):
+                print(f"  {i}. {_place_line(row)}")
+            choice = (ask(f"Which one? [1-{len(rows)}, Enter for 1, or search again]: ") or "").strip()
+            if choice and not choice.isdigit():
+                continue
+            if choice:
+                if not 1 <= int(choice) <= len(rows):
+                    continue
+                pick = rows[int(choice) - 1]
+        print(f"  → {_place_line(pick)}")
+        args.lat, args.lon = pick["latitude"], pick["longitude"]
+    while not args.query:
+        text = ask('\nWhat do you want to know? (e.g. "Is flooding here getting worse?"): ')
+        if text is None:
+            return False
+        args.query = text.strip() or None
+    if not any((args.provider, args.model, args.api_key, args.base_url)):
+        found = _studio_key_offer()
+        if found:
+            cap = args.max_usd if args.max_usd is not None else 1.0
+            answer = ask(
+                f"\nA {found} key is set. Let the model write the brief, the plan and the prose? "
+                f"The numbers come from the tools either way. Spend ceiling ${cap:g}. [Y/n] "
+            )
+            if answer is None:
+                return False
+            if answer.strip().lower() in ("", "y", "yes"):
+                args.provider, args.max_usd = found, cap
+        else:
+            print("\n  Keyless: the playbooks plan and the templates write. For model-written prose, set "
+                  "ANTHROPIC_API_KEY or GROQ_API_KEY (free) and run again.", file=sys.stderr)
+    print()
+    return True
+
+
+def _studio_missing_extras() -> list[str]:
+    """The ``studio`` extra's modules this install lacks. Without them the bundle is the Markdown and HTML
+    report and the tables only: no Word report, workbook, figures, notebook or bundle.zip."""
+    import importlib.util
+
+    return [mod for mod in ("docx", "openpyxl", "matplotlib") if importlib.util.find_spec(mod) is None]
+
+
 def _parse_edits(text: str) -> dict:
     """``s3.return_period=200, s2.k=8`` -> ``{"s3": {"arguments": {"return_period": 200}}, "s2": {...}}``."""
     import re
@@ -1722,9 +1848,25 @@ def cmd_studio(args: argparse.Namespace) -> None:
         except (OSError, ValueError) as exc:
             logger.error("cannot read %s: %s", args.resume, exc)
             sys.exit(1)
-    elif args.lat is None or args.lon is None:
-        logger.error("studio needs --lat and --lon (or --resume workspace.json).")
-        sys.exit(1)
+    else:
+        if args.at and (args.lat is None or args.lon is None):
+            try:
+                rows = _place_matches(args.at)
+            except Exception as exc:  # noqa: BLE001 - a bad place or a failed catalog read
+                logger.error("cannot place %r: %s", args.at, exc)
+                sys.exit(1)
+            if not rows:
+                logger.error("no gauge matches %r; try a station id or lat, lon.", args.at)
+                sys.exit(1)
+            print(f"  Study at {_place_line(rows[0])}", file=sys.stderr)
+            args.lat, args.lon = rows[0]["latitude"], rows[0]["longitude"]
+        if (args.lat is None or args.lon is None or not args.query) and sys.stdin.isatty() and not args.yes:
+            if not _studio_start(args):
+                return
+        if args.lat is None or args.lon is None:
+            logger.error("studio needs a place: --at 'GAUGE, ID or lat,lon', or --lat and --lon "
+                         "(or run `aquascope studio` in a terminal and it asks).")
+            sys.exit(1)
     try:
         intake = _parse_intake(args.intake)
     except ValueError as exc:
@@ -1881,6 +2023,12 @@ def cmd_studio(args: argparse.Namespace) -> None:
                 print(f"   · {line}", file=sys.stderr)
         paths = studio.export(out_dir)
         print(f"\n  Bundle written to {out_dir}: {', '.join(sorted(paths))}")
+        if _studio_missing_extras():
+            print(
+                "  This install writes the Markdown and HTML report and the tables only. For the Word report, "
+                "the Excel workbook, the figures, the notebook and bundle.zip: pip install \"aquascope[studio]\"",
+                file=sys.stderr,
+            )
         if interactive:
             while True:
                 text = ask("Follow-up (or 'done'): ")
@@ -3022,7 +3170,14 @@ def main() -> None:
         help="A complete study at a place by a crew of roles: the brief you agree, the plan you approve, the "
         "run with gates, the report and the bundle (keyless by default)",
     )
-    p_studio.add_argument("query", nargs="?", default=None, help="The problem in plain language")
+    p_studio.add_argument(
+        "query", nargs="?", default=None,
+        help="The problem in plain language (run `aquascope studio` alone in a terminal and it asks)",
+    )
+    p_studio.add_argument(
+        "--at", default=None, metavar="PLACE",
+        help="Where: a gauge name or river words, a station id (USGS-01013500), or 'lat,lon'",
+    )
     p_studio.add_argument("--lat", type=float, default=None, help="Latitude of the site")
     p_studio.add_argument("--lon", type=float, default=None, help="Longitude of the site")
     p_studio.add_argument(

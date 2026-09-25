@@ -12,6 +12,19 @@ contract; this page is the user's guide.
         (the brief)   (inventory)  (the plan)     (approve)  (run, gates)  (review)  (report)
 ```
 
+## Start
+
+```bash
+pip install "aquascope[studio,basins]"
+aquascope studio
+```
+
+In a terminal, `aquascope studio` with nothing else asks where (a gauge name or river words from the station
+catalog, a station id such as `USGS-01013500`, or `lat, lon`) and what you want to know. With a model key in the
+environment it offers to use it, with a $1 spend ceiling; it never uses one silently. For scripts, give everything
+on the line: `aquascope studio "PROBLEM" --at USGS-01013500 --yes` (or `--lat`/`--lon`). Without the `studio`
+extra the bundle holds only the Markdown and HTML report and the tables, and the CLI says so.
+
 ## The flow
 
 1. **Brief.** You say the problem in plain language. The Consultant writes

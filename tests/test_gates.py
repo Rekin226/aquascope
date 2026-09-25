@@ -171,6 +171,8 @@ def test_cross_check_ratio_compares_a_cross_check_with_a_reference_number():
     assert ok["passed"] and "ratio 0.83" in ok["detail"] and "T = 100" in ok["detail"]
     far = evaluate([dict(gate, reference={"100": 2000.0})], payload)[0]
     assert not far["passed"] and "disagrees" in far["detail"]
+    assert "within the allowed factor of 1.50" in ok["detail"]
+    assert "outside the allowed factor of 1.50" in far["detail"] and "within" not in far["detail"]
     scalar = evaluate([{"check": "cross_check_ratio", "path": "glofas.ffa.fits.gev_lmoments.q",
                         "reference": 600.0, "return_period": 100, "value": 0.5}], payload)[0]
     assert scalar["passed"] and "540" in scalar["detail"]

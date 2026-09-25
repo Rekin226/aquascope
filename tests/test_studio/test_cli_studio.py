@@ -151,7 +151,7 @@ def test_bare_studio_asks_where_and_what_then_runs(monkeypatch, capsys, tmp_path
     with patched():
         cli.main()
     captured = capsys.readouterr()
-    assert "Kingston (uk_ea kingston)" in captured.out and "Keyless" in captured.err
+    assert "Kingston (uk_ea kingston)" in captured.out and "Do you have an AI model key?" in captured.out
     ws = json.loads((out / "workspace.json").read_text(encoding="utf-8"))
     assert ws["status"] == "done"
 
@@ -174,3 +174,38 @@ def test_without_a_terminal_or_a_place_it_says_how(monkeypatch, capsys):
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
     with pytest.raises(SystemExit):
         cli.main()
+
+
+def test_a_question_is_a_pick_list_by_number_without_questionary(monkeypatch, capsys):
+    import builtins
+
+    monkeypatch.setitem(sys.modules, "questionary", None)
+    q = {"text": "Which period?", "why": "It changes the test.", "options": ["Whole", "Last 50"], "default": "Whole"}
+    for typed, want in [("2", "Last 50"), ("", "Whole"), ("my own words", "my own words")]:
+        monkeypatch.setattr(builtins, "input", lambda prompt="", typed=typed: typed)
+        assert cli._choose(q) == want
+    answers = iter(["3", "since 1990"])
+    monkeypatch.setattr(builtins, "input", lambda prompt="": next(answers))
+    assert cli._choose(q) == "since 1990", "the last row takes the answer in your own words"
+    out = capsys.readouterr().out
+    assert "(It changes the test.)" in out and "1. Whole  (default)" in out and "3. Other (type it)" in out
+
+
+def test_not_now_at_the_plan_saves_and_says_how_to_resume(monkeypatch, capsys, tmp_path, no_deliverables):
+    out = tmp_path / "later"
+    _argv(monkeypatch, "-q", "--out", str(out), "--intake", "return_period=50")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    answers = iter(["maybe", "3"])    # a reply that is no option is taken as a change and asked again; 3 is later
+
+    def answer(prompt=""):
+        if prompt.startswith("Pick"):
+            return next(answers)
+        return "done" if prompt.startswith("Follow-up") else "just go"
+
+    monkeypatch.setattr("builtins.input", answer)
+    with patched():
+        cli.main()
+    err = capsys.readouterr().err
+    assert "Declined" not in err and "Saved. Pick it up any time: aquascope studio --resume" in err
+    ws = json.loads((out / "workspace.json").read_text(encoding="utf-8"))
+    assert ws["status"] == "review"

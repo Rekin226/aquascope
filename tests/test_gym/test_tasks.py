@@ -54,7 +54,7 @@ def test_tasks_from_three_sites_and_two_playbooks_carry_the_expected_branches():
     assert t.expected["tools"] == ["describe_catchment", "analyze_station", "flood_frequency", "anywhere"]
     assert {(g["step"], g["check"]) for g in t.expected["gates"]} >= {("s2", "min_years"), ("s3", "spread_within")}
     assert t.expected["station"]["station_id"] == "3400TH" and t.intake == {"return_period": 100,
-                                                                             "decision": "design flow"}
+                                                                             "decision": "design flow", "years": None}
     assert t.problem == "Design flow for a road crossing at this point, 100-year return period."
     assert t.recon["context"]["years_by_variable"] == {"discharge": 39.5}, "the reconnaissance is snapshotted"
     assert t.id.startswith("flood_risk-") and t.id == gt._task_id("flood_risk", LONG, t.intake), "ids are stable"

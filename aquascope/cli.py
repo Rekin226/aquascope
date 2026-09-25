@@ -1790,22 +1790,130 @@ def _studio_start(args: argparse.Namespace) -> bool:
             return False
         args.query = text.strip() or None
     if not any((args.provider, args.model, args.api_key, args.base_url)):
-        found = _studio_key_offer()
-        if found:
-            cap = args.max_usd if args.max_usd is not None else 1.0
-            answer = ask(
-                f"\nA {found} key is set. Let the model write the brief, the plan and the prose? "
-                f"The numbers come from the tools either way. Spend ceiling ${cap:g}. [Y/n] "
-            )
-            if answer is None:
-                return False
-            if answer.strip().lower() in ("", "y", "yes"):
-                args.provider, args.max_usd = found, cap
-        else:
-            print("\n  Keyless: the playbooks plan and the templates write. For model-written prose, set "
-                  "ANTHROPIC_API_KEY or GROQ_API_KEY (free) and run again.", file=sys.stderr)
+        if not _studio_key_step(args):
+            return False
     print()
     return True
+
+
+_OTHER = "Other (type it)"
+
+
+def _choose(q: dict) -> str | None:
+    """One Studio question as a pick list: arrow keys and Enter with ``questionary`` (the ``studio`` extra),
+    numbers otherwise; the last row takes the answer in your own words. None when the person leaves."""
+    options = [str(o) for o in q.get("options") or []]
+    default = str(q["default"]) if q.get("default") is not None and str(q["default"]) in options else None
+    try:
+        import questionary
+    except ImportError:
+        questionary = None
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        questionary = None      # a pick list needs a terminal on both ends; numbers work anywhere
+    print()
+    if q.get("retry"):
+        print(f"  {q['retry']}")
+    if questionary is not None:
+        if q.get("why"):
+            questionary.print(f"  {q['why']}", style="italic fg:ansibrightblack")
+        picked = questionary.select(str(q.get("text") or ""), choices=[*options, _OTHER], default=default,
+                                    qmark="?").ask()
+        if picked == _OTHER:
+            picked = questionary.text("Your answer:", qmark="›").ask()
+        return picked
+    print(q.get("text") or "")
+    if q.get("why"):
+        print(f"  ({q['why']})")
+    for i, o in enumerate([*options, _OTHER], 1):
+        print(f"  {i}. {o}" + ("  (default)" if o == default else ""))
+    while True:
+        try:
+            answer = input(f"Pick 1-{len(options) + 1} (Enter for the default): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(file=sys.stderr)
+            return None
+        if not answer:
+            return default or "just go"
+        if answer.isdigit() and 1 <= int(answer) <= len(options):
+            return options[int(answer) - 1]
+        if answer.isdigit() and int(answer) == len(options) + 1:
+            try:
+                return input("Your answer: ")
+            except (EOFError, KeyboardInterrupt):
+                return None
+        return answer
+
+
+_NO_KEY, _PASTE, _FREE = "No, run keyless", "Yes, paste a key", "Get a free key first (Groq)"
+
+
+def _studio_key_step(args: argparse.Namespace) -> bool:
+    """Whether a model joins the crew: a key already set (or saved) is offered; otherwise the person is asked
+    if they have one, pastes it (hidden), and it is checked with one tiny request before the study starts.
+    Fills ``args.provider``, ``args.api_key`` and a $1 ``args.max_usd``. False when the person leaves."""
+    import getpass
+
+    from aquascope.ai_engine import keys
+
+    why = "With a key the model writes the brief, the plan and the prose; the numbers come from the tools either way."
+    cap = args.max_usd if args.max_usd is not None else 1.0
+    found = _studio_key_offer()
+    if found:
+        answer = _choose({"text": f"A {found} key is set. Use it?", "why": f"{why} Spend ceiling ${cap:g}.",
+                          "options": ["Yes, use it", "No, run keyless"], "default": "Yes, use it"})
+        if answer is None:
+            return False
+        if answer.strip().lower() in ("yes, use it", "y", "yes"):
+            args.provider, args.max_usd = found, cap
+        return True
+    answer = _choose({"text": "Do you have an AI model key? (optional)", "why": why,
+                      "options": [_NO_KEY, _PASTE, _FREE], "default": _NO_KEY})
+    if answer is None:
+        return False
+    if answer == _FREE:
+        print("  Make one at https://console.groq.com/keys (free tier, no card), then paste it here.")
+    elif answer != _PASTE and answer.strip().lower() not in ("y", "yes"):
+        return True
+    while True:
+        try:
+            key = getpass.getpass("  Paste your key (it stays hidden; Enter to skip): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(file=sys.stderr)
+            return False
+        if not key:
+            print("  Running keyless.")
+            return True
+        provider = keys.guess_provider(key)
+        if provider is None:
+            from aquascope.ai_engine.providers import PROVIDERS
+
+            ids = [p for p in PROVIDERS if PROVIDERS[p].env]
+            picked = _choose({"text": "Which service is this key for?",
+                              "options": [PROVIDERS[p].label for p in ids], "default": PROVIDERS[ids[0]].label})
+            if picked is None:
+                return False
+            provider = next((p for p in ids if PROVIDERS[p].label == picked), None)
+            if provider is None:
+                continue
+        print("  Checking the key with one short request...")
+        works, said = keys.check_key(provider, key, model=args.model)
+        if works:
+            print(f"  OK: {said}. Spend ceiling ${cap:g} (--max-usd changes it).")
+            args.provider, args.api_key, args.max_usd = provider, key, cap
+            keep = _choose({"text": "Remember this key on this computer?",
+                            "why": f"Saved to {keys.keys_path()}, readable only by you; next time the Studio "
+                                   "offers it instead of asking.",
+                            "options": ["No, just this time", "Yes, remember it"], "default": "No, just this time"})
+            if keep == "Yes, remember it":
+                keys.save_key(provider, key)
+                print("  Saved.")
+            return True
+        again = _choose({"text": f"That key did not work: {said}.", "options": ["Paste it again", _NO_KEY],
+                         "default": "Paste it again"})
+        if again is None:
+            return False
+        if again != "Paste it again":
+            return True
 
 
 def _studio_missing_extras() -> list[str]:
@@ -1882,6 +1990,13 @@ def cmd_studio(args: argparse.Namespace) -> None:
             logger.error("cannot read %s: %s", path, exc)
             sys.exit(1)
 
+    for name in ("httpx", "aquascope.archive", "aquascope.collectors"):
+        logging.getLogger(name).setLevel(logging.WARNING)   # the crew's timeline says what is happening
+    if not any((args.provider, args.model, args.api_key, args.base_url)):
+        from aquascope.ai_engine.keys import load_saved_keys
+
+        load_saved_keys()      # a key the person asked the Studio to remember; the shell's own wins
+
     def on_event(event: dict) -> None:
         if not args.quiet:
             print(f"  · {_format_event(event)}", file=sys.stderr)
@@ -1927,6 +2042,14 @@ def cmd_studio(args: argparse.Namespace) -> None:
         reply = studio._request_reply()
     if reply is not None and reply.kind in ("questions", "data_request"):
         while reply.kind in ("questions", "data_request"):
+            qs = reply.payload.get("questions") or []     # a question, or a choice the crew offers (a gauge)
+            if interactive and len(qs) == 1 and qs[0].get("options"):
+                answer = _choose(qs[0])
+                if answer is None:
+                    checkpoint()
+                    return
+                reply = studio.say(answer)
+                continue
             print(reply.text)
             if reply.kind == "data_request":
                 if args.continue_without or not interactive:
@@ -1969,21 +2092,32 @@ def cmd_studio(args: argparse.Namespace) -> None:
         print(reply.text)
         edits = None
         if interactive:
+            run, change, later = "Run it", "Change a step first", "Not now (save it for later)"
             while True:
-                answer = (ask("Run this plan? [y/N/e] ") or "n").strip().lower()
-                if answer in ("y", "yes"):
+                answer = _choose({"text": "Run this plan?", "options": [run, change, later], "default": run})
+                low = (answer or "").strip().lower()
+                if answer is None or answer == later or low in ("n", "no", "not now", "later"):
+                    checkpoint()
+                    print(f"\n  Saved. Pick it up any time: aquascope studio --resume {out_dir / 'workspace.json'}",
+                          file=sys.stderr)
+                    return
+                if answer == run or low in ("y", "yes", "run", "go", "just go"):
                     break
-                if answer == "e":
-                    line = ask("Overrides, STEP.ARG=VALUE separated by commas (blank keeps the plan): ") or ""
+                if answer == change or low == "e":
+                    line = ask("Overrides, STEP.ARG=VALUE separated by commas, e.g. s3.return_period=200 "
+                               "(blank keeps the plan): ") or ""
                     try:
                         edits = _parse_edits(line) or None
                     except ValueError as exc:
                         print(f"  {exc}", file=sys.stderr)
                         continue
                     break
-                print("  Declined at review; the workspace is saved.", file=sys.stderr)
-                checkpoint()
-                return
+                # anything else is a change to the brief in your own words: the crew plans again
+                reply = studio.say(answer)
+                print(reply.text)
+                if reply.kind != "plan":
+                    checkpoint()
+                    return
         elif not args.yes:
             print("  Not a terminal: pass --yes to run the plan.", file=sys.stderr)
             checkpoint()

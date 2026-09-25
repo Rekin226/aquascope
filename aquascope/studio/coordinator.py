@@ -71,6 +71,85 @@ class Reply:
         return {"kind": self.kind, "text": self.text, "payload": self.payload}
 
 
+def gauge_offer(ws: Workspace) -> dict[str, Any] | None:
+    """When the client's goal picks a branch that needs a longer record than the gauge at the site has (a trend
+    needs 20 years, and a gauge that stopped long ago has no recent ones), the gauges within reach that do,
+    as a request to choose from. None when the goal needs no particular record, or the gauge has it, or no
+    gauge within reach does (the plan then says what it can do at this one)."""
+    from datetime import date
+
+    from aquascope import playbooks as pbk
+
+    b = ws.brief
+    if not b.playbook:
+        return None
+    try:
+        pb = pbk.load(b.playbook)
+    except pbk.PlaybookError:
+        return None
+    ctx = {"intake": dict(b.intake)}
+    need: tuple[str, float] | None = None
+    for branch in pb.branches:
+        goal = [c for c in branch.when if c.path.startswith("intake.")]
+        if goal and pbk._all_hold(goal, ctx):
+            data = [c for c in branch.when if c.path.startswith("context.years_by_variable.") and c.op == ">="]
+            if data:
+                need = (data[0].path.rsplit(".", 1)[-1], float(data[0].value))
+            break
+    if need is None:
+        return None
+    var, years = need
+    window = b.intake.get("years")
+    inv = ws.inventory.to_dict() if hasattr(ws.inventory, "to_dict") else dict(ws.inventory or {})
+    stations = sorted((d for d in inv.get("datasets") or []
+                       if d.get("kind") == "station" and d.get("variable") == var),
+                      key=lambda d: float(d.get("distance_km") or 0))
+    if not stations:
+        return None
+    recent = date.today().year - 2
+
+    def usable(d: dict[str, Any]) -> bool:
+        end = str(d.get("end") or "")[:4]
+        return float(d.get("years") or 0) >= max(years, float(window or 0)) and end.isdigit() and int(end) >= recent
+
+    here = stations[0]
+    if usable(here):
+        return None
+    better = [d for d in stations[1:] if usable(d)][:3]
+    if not better:
+        return None
+    rows: dict[tuple[str, str], dict[str, Any]] = {}
+    if any(d.get("lat") is None or d.get("lon") is None for d in better):
+        from aquascope.archive.catalog import load_stations
+
+        try:
+            rows = {(r["source"], r["station_id"]): r for r in load_stations()}
+        except Exception:  # noqa: BLE001 - no catalog: only the gauges the inventory placed can be offered
+            rows = {}
+    gauges = []
+    for d in better:
+        row = rows.get((d["source"], d["station_id"])) or {}
+        lat, lon = d.get("lat", row.get("latitude")), d.get("lon", row.get("longitude"))
+        if lat is None or lon is None:
+            continue
+        gauges.append({"source": d["source"], "station_id": d["station_id"], "name": d.get("name") or d["station_id"],
+                       "lat": lat, "lon": lon, "years": d.get("years"),
+                       "label": f"{d.get('name') or d['station_id']} ({float(d.get('years') or 0):.0f} years, "
+                                f"{float(d.get('distance_km') or 0):.1f} km away)"})
+    if not gauges:
+        return None
+    span = f"{str(here.get('start') or '')[:4]} to {str(here.get('end') or '')[:4]}"
+    short = float(here.get("years") or 0) < years
+    what = (f"{here.get('name')} has {float(here.get('years') or 0):.0f} years of {var.replace('_', ' ')} ({span})"
+            + ("" if short else ", and its record stops there"))
+    return {"kind": "gauge", "what": what, "can_continue": True,
+            "ask": "Use a gauge with a long enough record?",
+            "why": f"{what}; this question needs at least {max(years, float(window or 0)):g} years up to recent "
+                   "years. These gauges nearby have them.",
+            "effect": "the study moves to the gauge you pick; keeping this one changes the method",
+            "gauges": gauges, "keep": "Keep this gauge (flood estimate instead, no trend test)"}
+
+
 class Studio:
     """A study at a place. See the module docstring and ``docs/studio-design.md``."""
 
@@ -239,8 +318,13 @@ class Studio:
         from aquascope.studio.roles.methodologist import request_text
 
         request = dict(self.ws.pending_request or {})
-        return Reply("data_request", request_text(request) if request else "The crew is waiting for data.",
-                     {"request": request, "brief": self.ws.brief.to_dict(), "status": self.ws.status})
+        payload = {"request": request, "brief": self.ws.brief.to_dict(), "status": self.ws.status}
+        if request.get("kind") == "gauge":
+            # a choice, asked like the Consultant's questions: the options are the gauges, then "keep"
+            payload["questions"] = [{"id": "gauge", "text": request["ask"], "why": request["why"],
+                                     "options": [g["label"] for g in request["gauges"]] + [request["keep"]],
+                                     "default": request["gauges"][0]["label"]}]
+        return Reply("data_request", request_text(request) if request else "The crew is waiting for data.", payload)
 
     def _answer_request(self, text: str) -> Reply:
         """A reply while the study waits for data: "continue without" plans at the lower grade the request
@@ -251,6 +335,8 @@ class Studio:
         ws = self.ws
         request = dict(ws.pending_request or {})
         ws.say("user", text)
+        if request.get("kind") == "gauge":
+            return self._answer_gauge(request, text)
         if not is_continue(text):
             return self._request_reply()
         if not continue_without(ws, request):
@@ -263,6 +349,24 @@ class Studio:
             return self._plan()
         finally:
             ws.brief.intake.pop("_no_request", None)
+
+    def _answer_gauge(self, request: dict[str, Any], text: str) -> Reply:
+        """The reply to a gauge offer: one of the gauges moves the study there and scouts again; "keep" plans at
+        the gauge as it is (the goal's own branch does not apply, and the plan says what it does instead)."""
+        ws = self.ws
+        low = (text or "").strip().lower()
+        pick = next((g for g in request.get("gauges") or [] if low and (low == g["label"].lower()
+                     or low in (g["station_id"].lower(), g["name"].lower()))), None)
+        if pick is None and low and (low == str(request.get("keep", "")).lower() or low.startswith("keep")):
+            ws.pending_request = None
+            ws.event("coordinator", "gauge", "kept the gauge; the goal's branch does not apply")
+            return self._plan()
+        if pick is None:
+            return self._request_reply()
+        ws.pending_request = None
+        ws.site = {"lat": float(pick["lat"]), "lon": float(pick["lon"])}
+        ws.event("coordinator", "gauge", f"moved to {pick['name']} ({pick['source']} {pick['station_id']})")
+        return self._scout_and_plan()
 
     def add_table(self, name: str, frame_or_csv: Any) -> Reply:
         """A table of the user's at any point of the study. At intake it is kept for the brief; while the study
@@ -301,6 +405,12 @@ class Studio:
         except Exception as exc:  # noqa: BLE001
             ws.event("scout", "error", f"{type(exc).__name__}: {exc}")
             return self._decline(f"the Scout could not build the inventory: {exc}", role="scout")
+        offer = gauge_offer(ws)
+        if offer is not None:
+            ws.pending_request = offer
+            ws.set_status("waiting")
+            ws.event("scout", "gauge", offer["what"])
+            return self._request_reply()
         return self._plan()
 
     def _plan(self) -> Reply:

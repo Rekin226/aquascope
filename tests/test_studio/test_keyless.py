@@ -39,7 +39,8 @@ def test_a_flood_question_without_a_return_period_asks_with_the_default():
     ws = _ws()
     msg = consultant.consult(ws, None, "A culvert on the Hogsmill")
     qs = ws.brief.open_questions
-    assert msg.kind == "questions" and [q.id for q in qs] == ["return_period"] and qs[0].default == 100
+    assert msg.kind == "questions" and [q.id for q in qs] == ["return_period"]
+    assert str(qs[0].default).startswith("100-year") and qs[0].why, "one question, with what it changes"
     assert ws.brief.decision == "design flow", "culvert names the decision"
     consultant.consult(ws, None, "200 years")
     assert ws.brief.ready and ws.brief.intake["return_period"] == 200
@@ -49,9 +50,8 @@ def test_no_decision_is_asked_with_the_playbooks_options():
     ws = _ws()
     consultant.consult(ws, None, "What is the 1 in 50 flood here?")
     qs = ws.brief.open_questions
-    assert [q.id for q in qs] == ["decision"] and qs[0].options == ["design flow", "risk screening", "insurance",
-                                                                    "inundation extent"]
-    assert qs[0].default == "design flow" and ws.brief.intake["return_period"] == 50
+    assert [q.id for q in qs] == ["decision"] and len(qs[0].options) == 4 and "trend" in qs[0].options[0]
+    assert qs[0].default.startswith("The flow to design for") and ws.brief.intake["return_period"] == 50
     consultant.consult(ws, None, "insurance")
     assert ws.brief.decision == "insurance" and ws.brief.intake["decision"] == "insurance" and ws.brief.ready
     ws2 = _ws()
@@ -135,7 +135,9 @@ def test_the_model_path_is_unchanged_by_the_gap_rules(monkeypatch):
                                         "intake": {}, "questions": [], "ready": True}]})
     model = Model.resolve(ws, client=client, model="fake", provider="custom")
     msg = consultant.consult(ws, model, "A culvert on the Hogsmill")
-    assert msg.kind == "brief" and ws.brief.ready and ws.brief.source == "model", "the model decides what to ask"
+    assert ws.brief.source == "model" and ws.brief.decision == "size a culvert", "the model's words stay"
+    assert msg.kind == "questions" and [q.id for q in ws.brief.open_questions] == ["return_period"], (
+        "the checklist asks what the study needs even when the model says ready")
 
 
 # ── the key numbers ──

@@ -20,10 +20,29 @@ aquascope studio
 ```
 
 In a terminal, `aquascope studio` with nothing else asks where (a gauge name or river words from the station
-catalog, a station id such as `USGS-01013500`, or `lat, lon`) and what you want to know. With a model key in the
-environment it offers to use it, with a $1 spend ceiling; it never uses one silently. For scripts, give everything
+catalog, a station id such as `USGS-01013500`, or `lat, lon`) and what you want to know. Then it asks whether you
+have a model key: paste one (hidden; the provider is read off its prefix, and one short request checks it), get a
+free Groq key, or run keyless. A key it may remember is kept in `~/.config/aquascope/keys.json` (mode 600) and
+offered next time; a key already in the environment is offered the same way. It never uses a key silently, and
+the spend ceiling is $1 unless `--max-usd` says otherwise. For scripts, give everything
 on the line: `aquascope studio "PROBLEM" --at USGS-01013500 --yes` (or `--lat`/`--lon`). Without the `studio`
 extra the bundle holds only the Markdown and HTML report and the tables, and the CLI says so.
+
+## The questions
+
+A playbook's `checklist` lists what the study must know before it plans. The Consultant reads your first message
+against it, then asks what is still open, one question at a time, each with one line on what the answer changes
+and a short list of options (an arrow-key list in the terminal, chips in the Explorer, always with room for your
+own words). A reply that names no option is asked again; `just go` takes the defaults and lists them as
+assumptions. For flood questions:
+
+| You ask | It asks | The plan |
+|---|---|---|
+| "Is flooding here getting worse?" | Which period should the trend cover? | trend: Mann-Kendall and Sen's slope on the annual peaks |
+| "Design flow for a crossing, 100-year" | nothing | at-site frequency fit, T = 100 |
+| "Tell me about floods here" | What do you need to know? then, for a design, Which flood size? | follows the answers |
+
+With a model, the model reads your replies into the same values; it cannot skip an item or add questions of its own.
 
 ## The flow
 

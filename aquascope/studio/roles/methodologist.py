@@ -595,6 +595,10 @@ def _wait(ws: Workspace, request: dict[str, Any]) -> None:
 
 def request_text(request: dict[str, Any]) -> str:
     """The request as the Consultant says it."""
+    if request.get("kind") == "gauge":
+        options = [g["label"] for g in request.get("gauges") or []] + [request.get("keep") or "Keep this gauge"]
+        return "\n".join([str(request.get("ask")), f"({request.get('why')})",
+                          *[f"  {i}. {o}" for i, o in enumerate(options, 1)]])
     lines = [f"Before this can be planned, the crew needs {request.get('what')}.",
              f"Why: {request.get('why')}.", f"What it changes: {request.get('effect')}."]
     if request.get("can_continue"):

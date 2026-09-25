@@ -32,6 +32,8 @@ from aquascope.studio.prompts import CONSULTANT, CONSULTANT_ANSWERS, CONSULTANT_
 from aquascope.studio.workspace import Message, Question, Workspace
 
 MAX_QUESTIONS = 3
+#: Checklist questions asked, one at a time, before the rest take their defaults as assumptions.
+MAX_TURNS = 4
 RADIUS_KM = 50.0
 
 _PROCEED = re.compile(
@@ -253,7 +255,9 @@ def _rules_questions(pb: Any | None, ws: Workspace, known: dict[str, Any],
 def _rules_quantities(playbook: str | None, intake: dict[str, Any]) -> list[str]:
     rp = intake.get("return_period")
     table = {
-        "flood_risk": [f"the {rp or 100}-year return level with its interval and the spread between fits"],
+        "flood_risk": (["the trend in annual flood peaks: Sen's slope and the Mann-Kendall p-value"]
+                       if intake.get("decision") == "flood trend" else
+                       [f"the {rp or 100}-year return level with its interval and the spread between fits"]),
         "ungauged_flow": [f"the {intake.get('statistic') or 'flow'} statistics transferred from donor gauges, "
                           "with a band"],
         "groundwater_decline": ["the trend in groundwater level with Sen's slope and its significance"],
@@ -265,6 +269,112 @@ def _rules_quantities(playbook: str | None, intake: dict[str, Any]) -> list[str]
     return table.get(playbook or "", [])
 
 
+# ── the checklist: what the study must know, asked one at a time ─────────────
+
+
+def _checklist_item(pb: Any, field: str) -> Any:
+    return next((i for i in getattr(pb, "checklist", None) or [] if i.field == field), None)
+
+
+def _state(ws: Workspace, pb: Any, field: str, value: Any, *, answered: bool = False) -> None:
+    """A checklist field the client stated: into the intake (and the decision), and counted as known. A
+    decision a model already put in words ("size a culvert") stays, unless the client just answered it."""
+    b = ws.brief
+    b.intake[field] = value
+    if field not in b.stated:
+        b.stated.append(field)
+    if field == _DECISION_FIELDS.get(pb.id) and value is not None and (answered or not b.decision
+                                                                         or b.source == "rules"):
+        b.decision = str(value)
+    if field == _DECISION_FIELDS.get(pb.id) and b.source == "rules":
+        b.quantities = _rules_quantities(b.playbook, b.intake)
+
+
+def _checklist_read(ws: Workspace, pb: Any, text: str, given: dict[str, Any]) -> None:
+    """What the client's words already answer, item by item in order (an earlier answer can open or close a
+    later item): a field the intake hints or a model read (``given``), else an option whose words the text
+    uses."""
+    from aquascope import playbooks as pbk
+
+    for item in pb.checklist:
+        if item.field in ws.brief.stated or item not in pbk.checklist_open(pb, ws.brief.intake, ws.brief.stated):
+            continue
+        if given.get(item.field) is not None:
+            understood, value = _checklist_value(item, pb, given[item.field])
+            if understood:
+                _state(ws, pb, item.field, value)
+                continue
+        opt = next((o for o in item.options if o.match and re.search(o.match, text or "", re.I)), None)
+        if opt is not None:
+            _state(ws, pb, item.field, opt.value)
+
+
+def _checklist_value(item: Any, pb: Any, answer: Any) -> tuple[bool, Any]:
+    """``(understood, value)`` for a reply to a checklist question: the option it picks, else a number for a
+    number field or one of the field's own options by their words."""
+    opt = item.pick(answer)
+    if opt is not None:
+        return True, opt.value
+    field = next((f for f in pb.intake if f.name == item.field), None)
+    if field is None:
+        return False, None
+    q = Question(id=item.field, text=item.ask, options=[str(o) for o in field.options] or None)
+    value = _coerce_answer(str(answer), q, field, playbook=pb.id)
+    if field.type in ("int", "float"):
+        from aquascope import playbooks as pbk
+
+        try:
+            return True, pbk._coerce(value, field)   # within the field's own bounds, or asked again
+        except (TypeError, ValueError, OverflowError):
+            return False, _bounds_note(value, field)
+    if field.options:
+        return value in field.options, value
+    return bool(str(value).strip()), value
+
+
+def _bounds_note(value: Any, field: Any) -> str | None:
+    """Why a number cannot be used, in the field's own words ("10 is too short: a trend needs at least 20")."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    # the label's own reason when it gives one ("... ; a trend needs at least 20)")
+    hint = next((part.strip(" )") for part in (field.label or "").split(";") if "need" in part), None)
+    if field.min is not None and value < field.min:
+        return f"{value:g} is too few: {hint or f'the minimum here is {field.min:g}'}."
+    if field.max is not None and value > field.max:
+        return f"{value:g} is too many: the maximum here is {field.max:g}."
+    return None
+
+
+def _next_question(ws: Workspace, pb: Any, tables: dict[str, Any] | None = None) -> None:
+    """Leave exactly one question open: the next checklist item the client has not answered, else a gap the
+    checklist does not cover (an upload's value column). Past :data:`MAX_TURNS` checklist questions, the rest
+    take their defaults and say so."""
+    from aquascope import playbooks as pbk
+
+    b = ws.brief
+    if b.open_questions:
+        return
+    fields = {i.field for i in pb.checklist}
+    asked = sum(1 for q in b.questions if q.id in fields)
+    for item in pbk.checklist_open(pb, b.intake, b.stated):
+        default = next((f.default for f in pb.intake if f.name == item.field), None)
+        if asked >= MAX_TURNS:
+            _state(ws, pb, item.field, default)
+            b.assumptions.append(f"{item.ask} {item.label_of(default) or default} (the default)")
+            continue
+        b.questions.append(Question(id=item.field, text=item.ask, why=item.why,
+                                    options=[o.label or str(o.value) for o in item.options] or None,
+                                    default=item.label_of(default) or default))
+        return
+    done = {q.id for q in b.questions}
+    rest = [q for q in _gap_questions(ws, pb, tables) if q.id not in fields and q.id not in done]
+    if rest:
+        b.questions.append(rest[0])
+        return
+    if b.source == "rules":
+        b.quantities = _rules_quantities(b.playbook, b.intake)
+
+
 def _take_answer(ws: Workspace, q: Question, known: dict[str, Any]) -> None:
     """Where an answered question lands: the playbook, the decision, the period, or the intake."""
     b = ws.brief
@@ -272,6 +382,18 @@ def _take_answer(ws: Workspace, q: Question, known: dict[str, Any]) -> None:
         return
     pb = known.get(b.playbook) if b.playbook else None
     field = _DECISION_FIELDS.get(pb.id) if pb is not None else None
+    item = _checklist_item(pb, q.id) if pb is not None else None
+    if item is not None:
+        understood, value = _checklist_value(item, pb, q.answer)
+        if understood:
+            q.retry = None
+            _state(ws, pb, q.id, value, answered=True)
+        else:
+            # asked again, saying why: out of bounds, or none of the options
+            q.retry = (value if isinstance(value, str) and value else
+                       f"I could not match \"{str(q.answer).strip()}\" to an option; pick one, or say it another way.")
+            q.answer = None
+        return
     if q.id == "playbook":
         picked = _match_option(str(q.answer), sorted(known))
         if picked in known:
@@ -405,7 +527,10 @@ def brief_context(ws: Workspace, text: str, tables: dict[str, Any] | None = None
         "uploads": _columns(ws, tables),
         "intake_given": {**intake_hints(text, playbook), **{k: v for k, v in b.intake.items() if v is not None}},
         "rules_pick": {"playbook": playbook, "ambiguous": ambiguous},
-        "playbooks": [{"id": pb.id, "problem": pb.problem, "title": pb.title, "intake": _intake_schema(pb)}
+        "playbooks": [{"id": pb.id, "problem": pb.problem, "title": pb.title, "intake": _intake_schema(pb),
+                       **({"checklist": [{"field": i.field, "ask": i.ask,
+                                          "values": [o.value for o in i.options]} for i in pb.checklist]}
+                          if pb.checklist else {})}
                       for pb in known.values()],
     }
 
@@ -416,6 +541,7 @@ def _open(ws: Workspace, model: Model | None, text: str, tables: dict[str, Any] 
 
     known = known_playbooks()
     b = ws.brief
+    preset = {k: v for k, v in b.intake.items() if v is not None}    # the caller's own intake (--intake)
     b.problem = text
     playbook, ambiguous = choose_playbook(text)
     playbook = playbook if playbook in known else None
@@ -462,7 +588,28 @@ def _open(ws: Workspace, model: Model | None, text: str, tables: dict[str, Any] 
                 if f.default is not None and b.intake.get(f.name) is None and f.name not in asked:
                     b.assumptions.append(f"{f.label or f.name}: {f.default} (the playbook's default)")
         b.ready = not b.questions
-        ws.event("consultant", "brief", f"rules: playbook {playbook or 'none'}, {len(b.questions)} question(s)")
+        pb = known.get(playbook) if playbook else None
+        if pb is None or not pb.checklist:     # a checklist says its own count below
+            ws.event("consultant", "brief", f"rules: playbook {playbook or 'none'}, {len(b.questions)} question(s)")
+    pb = known.get(b.playbook) if b.playbook else None
+    if pb is not None and pb.checklist:
+        # The checklist asks, one question at a time; the text (and a model's reading of it) answers first.
+        labels = {(f.label or f.name) for f in pb.intake if _checklist_item(pb, f.name) is not None}
+        b.assumptions = [a for a in b.assumptions if a.split(":")[0] not in labels]
+        b.questions = []
+        given = dict(intake_hints(text, b.playbook))
+        if obj and isinstance(obj.get("intake"), dict):
+            given.update({k: v for k, v in obj["intake"].items() if v is not None})
+        given.update(preset)
+        for k, v in preset.items():
+            item = _checklist_item(pb, k)
+            if item is not None and _checklist_value(item, pb, v)[0]:
+                _state(ws, pb, k, _checklist_value(item, pb, v)[1])     # the caller said so: never asked
+        _checklist_read(ws, pb, text, given)
+        _next_question(ws, pb, tables)
+        b.ready = not b.open_questions
+        ws.event("consultant", "checklist", f"{len(b.stated)} known from the text, "
+                 f"{len(b.open_questions)} to ask")
     _note_uploads(ws, text)
     return _message(ws)
 
@@ -475,6 +622,16 @@ def _proceed(ws: Workspace, known: dict[str, Any]) -> None:
         if q.answer != "":
             b.assumptions.append(f"{q.text.split(' (')[0]}: {q.answer} (the default, the client asked to proceed)")
         _take_answer(ws, q, known)
+    pb = known.get(b.playbook) if b.playbook else None
+    if pb is not None and pb.checklist:
+        from aquascope import playbooks as pbk
+
+        for item in pbk.checklist_open(pb, b.intake, b.stated):
+            default = next((f.default for f in pb.intake if f.name == item.field), None)
+            _state(ws, pb, item.field, default)
+            b.assumptions.append(f"{item.ask} {item.label_of(default) or default} (the default)")
+        if b.source == "rules":
+            b.quantities = _rules_quantities(b.playbook, b.intake)
     b.assumptions.append("The client asked to proceed on the defaults.")
     _coerce_all(ws, known, keep_unknown=True)
     b.ready = True
@@ -559,8 +716,22 @@ def _answer(ws: Workspace, model: Model | None, text: str, proposed: dict[str, A
             m = _PERIOD.search(b.problem)
             b.period = m.group(0).lower() if m else None
         b.quantities = b.quantities or _rules_quantities(b.playbook, b.intake)
-        b.questions += _gap_questions(ws, pb, None)
+        if pb.checklist:
+            _checklist_read(ws, pb, b.problem, intake_hints(b.problem, b.playbook))
+        else:
+            b.questions += _gap_questions(ws, pb, None)
     _coerce_all(ws, known, keep_unknown=True)
+    pb = known.get(b.playbook) if b.playbook else None
+    if pb is not None and pb.checklist:
+        if reply and isinstance(reply.get("intake"), dict):
+            for k, v in reply["intake"].items():
+                if v is not None and k not in b.stated and _checklist_item(pb, k) is not None:
+                    understood, value = _checklist_value(_checklist_item(pb, k), pb, v)
+                    if understood:
+                        _state(ws, pb, k, value)
+        # an answer can open an item the first message already answered ("the 1 in 50 flood", then "insurance")
+        _checklist_read(ws, pb, b.problem, intake_hints(b.problem, b.playbook))
+        _next_question(ws, pb)
     b.ready = not b.open_questions
     ws.event("consultant", "answers", f"{len(open_qs) - len(b.open_questions)} answered, "
              f"{len(b.open_questions)} open")
@@ -610,6 +781,16 @@ def _message(ws: Workspace) -> Message:
     b = ws.brief
     site = ws.site or {}
     where = f"{site.get('lat')}, {site.get('lon')}" if site else "the site"
+    if len(b.open_questions) == 1 and (b.open_questions[0].why or b.open_questions[0].options):
+        q = b.open_questions[0]
+        lines = ([q.retry] if q.retry else []) + [q.text]
+        if q.why:
+            lines.append(f"({q.why})")
+        lines += [f"  {i}. {o}" for i, o in enumerate(q.options or [], 1)]
+        dflt = f" ({q.default})" if q.default is not None else ""
+        lines.append(f"Pick one or answer in your own words; 'just go' takes the default{dflt}.")
+        return ws.say("consultant", "\n".join(lines), kind="questions",
+                      payload={"questions": [q.to_dict()], "brief": b.to_dict()})
     if b.open_questions:
         lines = ["Before the crew plans, a few things the text does not say:"]
         for i, q in enumerate(b.open_questions, 1):

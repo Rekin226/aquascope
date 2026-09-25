@@ -25,8 +25,10 @@ You are given the problem text, the site, the data within reach (a catalog recon
  "playbook": "<playbook id or null>", "intake": {{<field>: <value>}}, "assumptions": ["..."],
  "questions": [{{"id": "<intake field or a short key>", "text": "...", "options": [...] or null, "default": ...}}],
  "ready": true or false}}
-Fill intake only with what the text supports. Ask at most three questions, only about what the analysis cannot
-proceed without and the text does not say; a field the playbook has a sound default for is not worth a question.
+Fill intake only with what the text supports. A playbook with a checklist asks its own questions, one at a time:
+fill its fields in intake (with one of its values) only when the text answers them, and ask nothing about them.
+Otherwise ask at most three questions, only about what the analysis cannot proceed without and the text does not
+say; a field the playbook has a sound default for is not worth a question.
 ready is true when no question is open.
 {RULES}"""
 

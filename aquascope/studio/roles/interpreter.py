@@ -212,6 +212,21 @@ _KIND_ANSWERS: dict[str, str] = {
 }
 
 
+def _asks_trend(ws: Workspace) -> bool:
+    """The client's goal is the trend itself (the flood checklist's "flood trend")."""
+    return "flood trend" in (str(ws.brief.intake.get("decision") or ""), str(ws.brief.decision or ""))
+
+
+def _trend_verdict(key: list[dict[str, Any]]) -> str:
+    """", Mann-Kendall p = 0.32: no significant trend at 5 %" from the key numbers, or "" when there is no test."""
+    p = next((kn.get("value") for kn in key if re.search(r"mann-kendall p", str(kn.get("label") or ""), re.I)
+              and _is_number(kn.get("value"))), None)
+    if p is None:
+        return ""
+    return (f", Mann-Kendall p = {float(p):.2g}: "
+            + ("a significant trend at 5 %" if float(p) < 0.05 else "no significant trend at 5 %"))
+
+
 def _headline(ws: Workspace, key: list[dict[str, Any]]) -> dict[str, Any] | None:
     """The key number that answers the brief: the one whose label shares the most words with the brief's
     quantities, then the one the problem kind's answer is called, never a framing number (an area, a record
@@ -231,6 +246,8 @@ def _headline(ws: Workspace, key: list[dict[str, Any]]) -> dict[str, Any] | None
     first = words_of(quantities[0]) if quantities else set()
     rest = {w for q in quantities[1:] for w in words_of(q)}
     kind_pattern = _KIND_ANSWERS.get(str(ws.brief.kind or ""), None) or _KIND_ANSWERS.get(str(ws.brief.playbook or ""))
+    if _asks_trend(ws):
+        kind_pattern = r"sen's slope"     # "are floods getting bigger" is answered by the trend, not a return level
     if kind_pattern:
         # the problem kind says what an answer is called: a flood question is answered by a return level or
         # nothing, never by the record's mean flow because the brief happened to say "flow"
@@ -488,7 +505,8 @@ def rules_findings(ws: Workspace) -> dict[str, Any]:
         band_text = f", band {band[0]:g} to {band[1]:g} {headline.get('unit') or ''}".rstrip() if band else ""
         decision["answer"] = (f"{(what or 'The answer').strip().rstrip('.')}: {headline.get('label')} "
                               f"{float(headline['value']):g} {headline.get('unit') or ''}".rstrip()
-                              + f"{band_text} ({grade.replace('_', ' ')}).")
+                              + f"{band_text}" + (_trend_verdict(key) if _asks_trend(ws) else "")
+                              + f" ({grade.replace('_', ' ')}).")
     else:
         answers = [kn for kn in key if not _FRAMING_LABELS.search(str(kn.get("label") or ""))][:3]
         have = "; ".join(f"{kn.get('label')} {kn.get('value')} {kn.get('unit') or ''}".strip() for kn in answers

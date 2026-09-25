@@ -291,6 +291,15 @@ def test_a_capped_request_or_a_full_archive_copy_never_calls_the_agency():
     assert "last 20 years requested" in capped["note"] and "From the AquaScope archive" in whole["note"]
 
 
+def test_a_window_longer_than_the_archive_copy_comes_from_the_agency():
+    agency = _USGS("1903-10-01")
+    with patch("aquascope.archive.observations.fetch_archived_series", return_value=_archive_copy()), \
+            patch.object(explore, "build_collector", return_value=agency):
+        out = explore.fetch_series("usgs", "USGS-01013500", years=50, period_start="1903-07-29")
+    assert (date.today() - out["series"].index.min().date()).days > int(45 * 365.25), "50 years, not the 40 held"
+    assert "requested window came from the agency" in out["note"]
+
+
 def test_the_browser_does_not_call_an_agency_it_cannot_reach(monkeypatch):
     class Never:
         def __getattr__(self, name):

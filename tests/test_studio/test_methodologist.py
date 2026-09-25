@@ -70,7 +70,8 @@ def test_the_tree_plans_keyless_as_version_3():
     assert "[s3] flood_frequency" in ws.messages[-1].text
     back = loads(study.to_yaml())
     assert back.version == 3 and back.plan["methodology"] == plan["methodology"] and back.steps[2].outputs
-    assert ws.brief.intake == {"return_period": 100, "decision": "design flow"}, "the filled intake is written back"
+    assert ws.brief.intake == {"return_period": 100, "decision": "design flow", "years": None}, (
+        "the filled intake is written back")
 
 
 def test_keyless_declines_are_the_playbooks_words_or_the_missing_playbook():

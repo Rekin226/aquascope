@@ -347,8 +347,8 @@ def infer_branch(playbook: str, tools_called: Iterable[str]) -> str | None:
     best: tuple[float, str] | None = None
     for b in pb.branches:
         mine = {s.tool for s in b.steps}
-        if not mine:
-            continue
+        if not mine or any(c.path.startswith("intake.") for c in b.when):
+            continue      # a branch the client's goal picks (a flood trend) cannot be told from the tools alone
         score = len(mine & called) / len(mine)
         if score > 0 and (best is None or score > best[0]):
             best = (score, b.id)

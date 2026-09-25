@@ -5,10 +5,12 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
+- **`aquascope studio` on its own starts a study.** In a terminal with no place or question, the Studio asks where (a gauge name or river words searched in the station catalog, a station id such as `USGS-01013500`, or `lat, lon`) and what you want to know, then carries on as before: questions, plan, approval, bundle. When a model key is set in the environment it offers to use it, with a $1 spend ceiling, instead of staying silently keyless; the Studio still never uses a key it was not told to. A new `--at PLACE` does the same lookup without questions. When the `studio` extra is missing, the CLI now says the bundle holds only the Markdown and HTML report and the tables, and names `pip install "aquascope[studio]"`. The README gains a "Run a study on your machine" section and lists the `studio` and `basins` extras.
 
 ### Changed
 
 ### Fixed
+- **The cross-check gate no longer says "within" when it failed.** A failing `cross_check_ratio` read "ratio 1.82 (within a factor 1.50 allowed): the cross-check disagrees"; it now reads "ratio 1.82, outside the allowed factor of 1.50: the cross-check disagrees", and a passing one "within the allowed factor". The recorded Kingston study carries the new wording.
 - **UK EA collector: distinguish 'no data' from 'endpoint failed'** (#463). `_fetch_paginated_items` now propagates failed requests as `CollectorError` with causal HTTP status resolution, rather than returning `None` and masking failed requests as empty stations. Genuinely empty reading pages continue to return empty lists. Station metadata lookup catches only `(RuntimeError, ValueError)` and returns `None` with an explanatory note since metadata enrichment is optional for reading queries.
 
 ## [0.19.0] - 2026-09-24

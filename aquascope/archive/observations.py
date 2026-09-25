@@ -151,22 +151,6 @@ def _daily_agg(variable: str, s: pd.Series) -> str:
     step = pd.Series(s.index).diff().dropna().median()
     return "sum" if step < pd.Timedelta(days=1) else "mean"
 
-
-def series_to_csv_gz(s: pd.Series, agg: str = "mean") -> bytes:
-    """Gzipped daily CSV. ``agg`` is ``"mean"`` (flows, levels) or ``"sum"`` (sub-daily rainfall totals)."""
-    daily = s.resample("D").sum(min_count=1).dropna() if agg == "sum" else s.resample("D").mean().dropna()
-    buf = io.StringIO()
-    buf.write("date,value\n")
-    for d, v in daily.items():
-        buf.write(f"{d.strftime('%Y-%m-%d')},{float(v):.6g}\n")
-    return gzip.compress(buf.getvalue().encode("utf-8"), mtime=0)
-
-
-def read_csv_gz(data: bytes) -> pd.Series:
-    df = pd.read_csv(io.BytesIO(data), compression="gzip", parse_dates=["date"])
-    return pd.Series(df["value"].to_numpy(dtype=float), index=pd.DatetimeIndex(df["date"]), name="value")
-
-
 def sync_from_hub(out_dir: str | Path, repo_id: str, *, token: str | None = None) -> Path:
     """Download the current ``obs/`` tree (manifest + files) so a run can be incremental."""
     from aquascope.utils.imports import require
@@ -418,3 +402,65 @@ def fetch_archived_series(source: str, station_id: str, variable: str, *, timeou
         logger.info("archive read failed for %s/%s: %s", source, station_id, exc)
         return None
 
+def series_to_csv_gz(
+        s: pd.Series,
+        agg: str = "mean",
+        quality: pd.Series | None = None,
+    ) -> bytes:
+        """Gzipped daily CSV. ``agg`` is "mean" (flows, levels) or "sum"
+        (sub-daily rainfall totals).
+
+        ``quality``, if given, must already be aligned to the SAME daily
+        DatetimeIndex this function resamples ``s`` onto (i.e. already
+        resolved to one quality value per calendar day) — this function
+        does not itself decide how to collapse multiple same-day readings
+        with different quality flags into one; that policy is the
+        caller's job. Dates in ``s`` with no matching entry in ``quality``
+        get "unknown".
+        """
+        daily = s.resample("D").sum(min_count=1).dropna() if agg == "sum" else s.resample("D").mean().dropna()
+        buf = io.StringIO()
+        if quality is not None:
+            daily_quality = quality.reindex(daily.index)
+            buf.write("date,value,quality\n")
+            for d, v in daily.items():
+                q = daily_quality.loc[d] if d in daily_quality.index else None
+                # Quality is `str, Enum` — pull .value explicitly rather
+                # than relying on str()/f-string on a live enum member
+                # str() on a str, Enum member returns "Quality.APPROVED",
+                if q is None or (isinstance(q, float) and pd.isna(q)):
+                    q_str = "unknown"
+                else:
+                    q_str = q.value if hasattr(q, "value") else str(q)
+                buf.write(f"{d.strftime('%Y-%m-%d')},{float(v):.6g},{q_str}\n")
+        else:
+            buf.write("date,value\n")
+            for d, v in daily.items():
+                buf.write(f"{d.strftime('%Y-%m-%d')},{float(v):.6g}\n")
+        return gzip.compress(buf.getvalue().encode("utf-8"), mtime=0)
+
+def read_csv_gz(
+    data: bytes,
+    include_quality: bool = False,
+) -> pd.Series | tuple[pd.Series, pd.Series]:
+    """Read a gzipped daily CSV back to a value Series.
+
+    With ``include_quality=True``, returns ``(value, quality)`` — the
+    quality Series is all "unknown" when the file predates this
+    column, so old archive files keep reading correctly either way.
+    Default behaviour (a bare value Series) is UNCHANGED from before
+    this column existed — every existing caller keeps working as-is.
+    """
+    df = pd.read_csv(io.BytesIO(data), compression="gzip", parse_dates=["date"])
+    value = pd.Series(df["value"].to_numpy(dtype=float), index=pd.DatetimeIndex(df["date"]), name="value")
+    if not include_quality:
+        return value
+    if "quality" in df.columns:
+        quality = pd.Series(
+            df["quality"].fillna("unknown").to_numpy(dtype=str),
+            index=pd.DatetimeIndex(df["date"]),
+            name="quality",
+        )
+    else:
+        quality = pd.Series("unknown", index=value.index, name="quality")
+    return value, quality

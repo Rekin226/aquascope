@@ -5,6 +5,22 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
+- **Harmonized data-quality flags across the schema and Archive**
+  (#374). Readings now carry a `Quality` enum (`approved`,
+  `provisional`, `estimated`, `suspect`, `unknown`) plus a verbatim
+  `quality_raw` string on `StreamflowReading`, `WaterLevelReading`,
+  `ClimateReading` and `WaterQualitySample`, defaulting to `unknown`
+  so every existing collector keeps working unchanged. `usgs.py` maps
+  USGS's own `approval_status` and `qualifier` as the reference
+  implementation; every other collector picks this up in its own
+  follow-up issue. Archive CSV helpers (`series_to_csv_gz` /
+  `read_csv_gz`) support an optional `quality` column (old files
+  without one still read fine; weekly harvest still writes
+  `date,value` until `fetch_series` carries per-timestamp quality).
+  `QualityReport` / `print_quality_report` gain a quality-flag
+  breakdown (counts per code, provisional fraction, suspect fraction),
+  normalizing enum members to their string values. Docs:
+  [Data Quality Flags](docs/data_sources.md#data-quality-flags).
 - **`aquascope studio` on its own starts a study.** In a terminal with no place or question, the Studio asks where (a gauge name or river words searched in the station catalog, a station id such as `USGS-01013500`, or `lat, lon`) and what you want to know, then carries on as before: questions, plan, approval, bundle. When a model key is set in the environment it offers to use it, with a $1 spend ceiling, instead of staying silently keyless; the Studio still never uses a key it was not told to. A new `--at PLACE` does the same lookup without questions. When the `studio` extra is missing, the CLI now says the bundle holds only the Markdown and HTML report and the tables, and names `pip install "aquascope[studio]"`. The README gains a "Run a study on your machine" section and lists the `studio` and `basins` extras.
 
 ### Changed

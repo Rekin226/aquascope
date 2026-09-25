@@ -86,7 +86,7 @@
  "stop_reason": null,
  "headline": "Notice: the Critic's fix requests on limitations were not all resolved; read the report with the list of what this study does not establish.",
  "not_established": [
-  "Step s4, gate cross_check_ratio: 14.77 against the reference 652.5 at T = 100 years: ratio 0.02 (within a factor 1.50 allowed): the cross-check disagrees"
+  "Step s4, gate cross_check_ratio: 14.77 against the reference 652.5 at T = 100 years: ratio 0.02, outside the allowed factor of 1.50: the cross-check disagrees"
  ],
  "figures": [
   {

@@ -70,6 +70,32 @@ Prefer an assistant? `pip install "aquascope[mcp]"` then `claude mcp add aquasco
 MCP client) `find_stations`, `get_timeseries`, `analyze_station` and `flood_frequency` over the same catalog and methods
 ([docs](docs/mcp.md)).
 
+## 🧑‍🔬 Run a study on your machine
+
+```bash
+pip install "aquascope[studio,basins]"   # the Word report, workbook, figures, notebook and the catchment step
+aquascope studio
+```
+
+That is all. The Studio asks where (a gauge name like `Fish River Fort Kent`, a station id like `USGS-01013500`,
+or `lat, lon`) and what you want to know ("Is flooding here getting worse?"), asks what the question leaves open,
+shows the plan, and runs only when you approve it (`e` edits a step, e.g. `s3.return_period=200`). The bundle lands in
+`./studio-<id>/`: `report.docx`, `workbook.xlsx`, `study.ipynb`, `figures/`, `findings.json` and `study.yaml`,
+which re-runs the whole study with `aquascope run study.yaml`. After the report, ask a follow-up (another gauge, a
+trend, the flow duration curve) and the bundle is updated.
+
+It needs no key: the playbooks plan and the templates write. With a key in your environment
+(`ANTHROPIC_API_KEY`, or `GROQ_API_KEY` on Groq's free tier) the Studio offers to put the model behind the brief,
+the plan and the prose, with a $1 spend ceiling. The numbers are the same either way: they come from the tools, and a
+sentence whose number is in no result is dropped. One line, no questions:
+
+```bash
+aquascope studio "Is flooding getting worse?" --at USGS-01013500 --provider anthropic --max-usd 1 --yes
+```
+
+On macOS with Homebrew or python.org Python, `pip install` may refuse ("externally managed environment"); make a
+virtual environment first: `python3 -m venv .venv && source .venv/bin/activate`. More in [docs/studio.md](docs/studio.md).
+
 ## ✨ What you can do
 
 - 🌊 **Pull water data** from USGS, NOAA NWPS, Colorado DWR/CDSS, US Water Quality Portal, England's Environment Agency, France Hub'Eau, Germany PEGELONLINE, Ireland OPW, Greece Hydroscope and OpenHi.net, Poland IMGW-PIB, EU WFD, Taiwan MOENV/WRA/CWA/Civil IoT/DataGov, Japan MLIT, Korea WAMIS, India WRIS, South Africa DWS, Australia BOM, Brazil ANA Hidroweb, CAMELS-CL and CAMELS-BR, GRDC, GEMStat, Copernicus ERA5, OpenMeteo, FAO AQUASTAT, FAO WaPOR and UN SDG 6 — **one unified Python API**.
@@ -114,6 +140,8 @@ pip install "aquascope[interop]"      # xarray + geopandas (collect as_xarray / 
 pip install "aquascope[spatial]"      # rasterio, geopandas, shapely
 pip install "aquascope[dashboard]"    # streamlit
 pip install "aquascope[forecast]"     # prophet, torch (for LSTM)
+pip install "aquascope[studio]"       # matplotlib, openpyxl, python-docx (the Studio's Word, Excel, figures)
+pip install "aquascope[basins]"       # pyogrio, geopandas (BasinATLAS catchments, similar basins)
 ```
 
 For development:
@@ -308,7 +336,8 @@ aquascope agri plan --crop maize --planting-date 2026-04-01 --lat 30.0 --lon 31.
 # AI recommendation + natural-language problem solving
 aquascope recommend --parameters DO,BOD5,COD --goal "pollution trend detection" -o recommendations.json
 aquascope solve "Design flow for a road crossing, 100-year return period" --lat 51.415 --lon -0.308
-aquascope studio "Design flow for a road crossing, 100-year, and how sure can we be" --lat 51.415 --lon -0.308 --out kingston/   # the crew: brief, plan, run, bundle
+aquascope studio                                     # the crew: asks where and what, then brief, plan, run, bundle
+aquascope studio "Design flow for a road crossing, 100-year, and how sure can we be" --at "Thames Kingston" --out kingston/
 aquascope area-study --bbox=-0.9,51.2,0.3,51.8       # a flood study over every gauge in a box: Q100, flood trends, a regional curve
 
 # Interactive Streamlit dashboard — multipage workspace with 37 live sources,
@@ -477,7 +506,7 @@ If you use AquaScope in your research, please cite:
 Machine-readable metadata lives in [CITATION.cff](CITATION.cff); GitHub's "Cite this
 repository" button renders it in APA and BibTeX. Every tagged release is archived on
 Zenodo; `10.5281/zenodo.21903143` is the concept DOI that always resolves to the latest
-version (v0.18.0 is [10.5281/zenodo.22787700](https://doi.org/10.5281/zenodo.22787700)).
+version (v0.19.0 is [10.5281/zenodo.22930129](https://doi.org/10.5281/zenodo.22930129)).
 
 ## 📄 License
 

@@ -100,3 +100,77 @@ def test_data_files_become_uploads(monkeypatch, capsys, tmp_path, no_deliverable
     ws = json.loads((out / "workspace.json").read_text(encoding="utf-8"))
     assert "upload:flows.csv" in ws["tables"]
     assert any(d["id"] == "upload:flows.csv" and d["variable"] == "discharge" for d in ws["inventory"]["datasets"])
+
+
+# ── `aquascope studio` alone: it asks where and what ─────────────────────────
+
+_CATALOG = [
+    {"source": "usgs", "station_id": "USGS-01013500", "name": "Fish River near Fort Kent, Maine",
+     "latitude": 47.2375, "longitude": -68.5828, "variables": ["discharge"]},
+    {"source": "uk_ea", "station_id": "kingston", "name": "Kingston", "river": "Thames",
+     "latitude": 51.415, "longitude": -0.308, "variables": ["discharge"]},
+]
+
+
+@pytest.fixture
+def catalog():
+    from aquascope.archive import catalog as cat
+
+    cat.set_catalog(_CATALOG)
+    yield
+    cat.set_catalog(None)
+
+
+def test_a_place_is_coordinates_a_station_id_or_words(catalog):
+    assert cli._place_matches("47.2375, -68.5828")[0]["latitude"] == 47.2375
+    assert cli._place_matches("usgs-01013500")[0]["station_id"] == "USGS-01013500"
+    assert cli._place_matches("Thames Kingston")[0]["station_id"] == "kingston"
+    assert cli._place_matches("nowhere at all") == []
+    with pytest.raises(ValueError):
+        cli._place_matches("95, 10")
+
+
+def test_bare_studio_asks_where_and_what_then_runs(monkeypatch, capsys, tmp_path, catalog, no_deliverables):
+    for env in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GROQ_API_KEY", "NVIDIA_API_KEY", "HF_TOKEN",
+                "MISTRAL_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.delenv(env, raising=False)
+    out = tmp_path / "bare"
+    monkeypatch.setattr(sys, "argv", ["aquascope", "studio", "-q", "--out", str(out)])
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+    def answer(prompt=""):
+        if prompt.startswith("Where?"):
+            return "Kingston"
+        if prompt.startswith("\nWhat do you want"):
+            return PROBLEM
+        if prompt.startswith("Run this plan?"):
+            return "y"
+        return "done" if prompt.startswith("Follow-up") else "just go"
+
+    monkeypatch.setattr("builtins.input", answer)
+    with patched():
+        cli.main()
+    captured = capsys.readouterr()
+    assert "Kingston (uk_ea kingston)" in captured.out and "Keyless" in captured.err
+    ws = json.loads((out / "workspace.json").read_text(encoding="utf-8"))
+    assert ws["status"] == "done"
+
+
+def test_a_key_in_the_environment_is_offered_not_taken(monkeypatch):
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    for env in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(env, raising=False)
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+    args = cli.argparse.Namespace(lat=1.0, lon=2.0, query="q", provider=None, model=None, api_key=None,
+                                  base_url=None, max_usd=None)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "n")
+    assert cli._studio_start(args) and args.provider is None
+    monkeypatch.setattr("builtins.input", lambda prompt="": "")
+    assert cli._studio_start(args) and args.provider == "groq" and args.max_usd == 1.0
+
+
+def test_without_a_terminal_or_a_place_it_says_how(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["aquascope", "studio", PROBLEM])
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    with pytest.raises(SystemExit):
+        cli.main()

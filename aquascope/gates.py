@@ -457,8 +457,9 @@ def _run_check(name: str, gate: dict[str, Any], payload: Any) -> tuple[bool | No
         ratio = a / b
         ok = (1.0 / (1.0 + tol)) <= ratio <= (1.0 + tol)
         return ok, (
-            f"{_fmt(a)} against the reference {_fmt(b)}" + (f" {note}" if note else "") + f": ratio {ratio:.2f} "
-            f"(within a factor {1 + tol:.2f} allowed)" + ("" if ok else ": the cross-check disagrees")
+            f"{_fmt(a)} against the reference {_fmt(b)}" + (f" {note}" if note else "") + f": ratio {ratio:.2f}, "
+            + ("within" if ok else "outside") + f" the allowed factor of {1 + tol:.2f}"
+            + ("" if ok else ": the cross-check disagrees")
         )
 
     return False, f"unknown check {name!r}; known: {', '.join(CHECKS)}"

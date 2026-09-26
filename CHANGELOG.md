@@ -26,6 +26,7 @@ All notable changes to AquaScope are documented here.
 ### Changed
 
 ### Fixed
+- **Windows test assumptions:** repair evidence carries POSIX paths, and the workflow shell check skips on Windows (part of #432).
 - **The cross-check gate no longer says "within" when it failed.** A failing `cross_check_ratio` read "ratio 1.82 (within a factor 1.50 allowed): the cross-check disagrees"; it now reads "ratio 1.82, outside the allowed factor of 1.50: the cross-check disagrees", and a passing one "within the allowed factor". The recorded Kingston study carries the new wording.
 - **UK EA collector: distinguish 'no data' from 'endpoint failed'** (#463). `_fetch_paginated_items` now propagates failed requests as `CollectorError` with causal HTTP status resolution, rather than returning `None` and masking failed requests as empty stations. Genuinely empty reading pages continue to return empty lists. Station metadata lookup catches only `(RuntimeError, ValueError)` and returns `None` with an explanatory note since metadata enrichment is optional for reading queries.
 

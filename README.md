@@ -477,6 +477,9 @@ Thanks to these wonderful people who make AquaScope possible ([emoji key](CONTRI
       <td align="center" valign="top" width="20%"><a href="https://github.com/HarshRajSinghania"><img src="https://avatars.githubusercontent.com/u/40535627?v=4?s=100" width="100px;" alt="Harsh Raj Singhania"/><br /><sub><b>Harsh Raj Singhania</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=HarshRajSinghania" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=HarshRajSinghania" title="Tests">⚠️</a></td>
       <td align="center" valign="top" width="20%"><a href="https://bharani-kudala.me/"><img src="https://avatars.githubusercontent.com/u/121555407?v=4?s=100" width="100px;" alt="Kudala Bharani Kumar Reddy"/><br /><sub><b>Kudala Bharani Kumar Reddy</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=kudala-bharani" title="Tests">⚠️</a> <a href="https://github.com/Rekin226/aquascope/commits?author=kudala-bharani" title="Documentation">📖</a></td>
     </tr>
+    <tr>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/Berserker-GM"><img src="https://avatars.githubusercontent.com/u/229895835?v=4?s=100" width="100px;" alt="Berserker-GM"/><br /><sub><b>Berserker-GM</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Berserker-GM" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Berserker-GM" title="Tests">⚠️</a></td>
+    </tr>
   </tbody>
 </table>
 

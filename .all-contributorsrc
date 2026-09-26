@@ -324,6 +324,15 @@
         "code",
         "test"
       ]
+    },
+    {
+      "login": "Galabavamsi",
+      "name": "GALABA VAMSI",
+      "avatar_url": "https://avatars.githubusercontent.com/u/51828882?v=4",
+      "profile": "https://galabavamsi.github.io/portfolio/",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs"

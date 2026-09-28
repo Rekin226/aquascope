@@ -43,7 +43,7 @@ def test_a_failed_cross_check_on_the_headline_is_not_established_anywhere():
     assert primary == "s3" and grade == "indicative"
     assert out["decision"]["grade"] == "indicative" and "(indicative)" in out["decision"]["answer"]
     assert [g["step"] for g in interpreter.headline_gates(ws, primary)] == ["s4"]
-    assert any("cross_check_ratio" in c for c in out["decision"]["conditions"])
+    assert any("cross_check_ratio" in c for c in out["decision"]["limitations"])
     missing = critic.not_established(ws)
     assert any("cross_check_ratio" in m for m in missing), "the box lists it"
     report = author.author_report(ws, None)
@@ -109,7 +109,8 @@ def test_the_cell_is_snapped_to_the_one_whose_mean_flow_matches_the_gauge():
     with patch.object(explore, "build_collector", return_value=fake):
         cell = explore.snap_glofas_cell(46.7, -68.6, 50.0)
     assert len(str(fake.calls[0]["latitude"]).split(",")) == 25, "one request for a 5 x 5 window"
-    assert cell["comparable"] and cell["lat"] == 46.7 and cell["lon"] == pytest.approx(-68.5)
+    assert not cell["comparable"] and cell["flow_magnitude_matches"]
+    assert cell["lat"] == 46.7 and cell["lon"] == pytest.approx(-68.5)
     assert cell["ratio"] == pytest.approx(0.96) and cell["offset_km"] > 5
     assert "closest to the gauge's" in cell["why"] and cell["n_probed"] == 25
 
@@ -120,14 +121,14 @@ def test_no_cell_within_tolerance_says_so():
     assert cell["comparable"] is False and cell["why"].startswith("no comparable model cell")
 
 
-def test_anywhere_reads_the_snapped_cell_and_records_it():
+def test_similar_mean_flow_is_not_evidence_of_catchment_comparability():
     fake = _FakeFlood(main_mean=48.0)
     with patch.object(explore, "build_collector", return_value=fake):
         out = explore.anywhere(46.7, -68.6, years=20, match_mean_flow=50.0, area_km2=2320)
     g = out["glofas"]
-    assert g["comparable"] is True and g["cell"]["lon"] == pytest.approx(-68.5) and g["cell"]["area_km2"] == 2320
-    assert fake.calls[-1]["latitude"] == 46.7 and fake.calls[-1]["longitude"] == pytest.approx(-68.5)
-    assert "ffa" in g and any("Cell snapped to the gauge" in n for n in out["notes"])
+    assert g["comparable"] is False and g["cell"]["lon"] == pytest.approx(-68.5)
+    assert g["cell"]["area_km2"] == 2320 and g["cell"]["flow_magnitude_matches"]
+    assert g["cell"]["catchment_match"] == "unverified" and "ffa" not in g
     json.dumps(out)
 
 

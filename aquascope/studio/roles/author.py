@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aquascope import __version__
+from aquascope.claims import flood_result
 from aquascope.studio.model import Model, compact
 from aquascope.studio.prompts import AUTHOR, AUTHOR_FIX
 from aquascope.studio.workspace import Workspace
@@ -144,13 +145,18 @@ def _numbers_for(sid: str, tool: str, p: dict[str, Any], rp: Any) -> list[dict[s
         others: list[dict[str, Any]] = []
         if fits and idx is not None:
             if gev.get("q"):
-                add(f"{rp}-year return level, GEV (L-moments)", gev["q"][idx])
+                add(f"{rp}-year return level, GEV (L-moments)", gev["q"][idx],
+                    evidence=flood_result(p, sid, "gev_lmoments", idx))
             if lp3.get("q"):
-                add(f"{rp}-year return level, Log-Pearson III", lp3["q"][idx])
+                add(f"{rp}-year return level, Log-Pearson III", lp3["q"][idx],
+                    evidence=flood_result(p, sid, "lp3", idx))
                 ci = (lp3.get("ci") or [None] * (idx + 1))[idx]
                 if isinstance(ci, (list, tuple)) and len(ci) == 2:
                     add(f"{rp}-year LP3 90 % interval, low", ci[0])
                     add(f"{rp}-year LP3 90 % interval, high", ci[1])
+            if boot.get("q"):
+                add(f"{rp}-year return level, GEV (MLE with L-moments fallback)", boot["q"][idx],
+                    evidence=flood_result(p, sid, "gev_bootstrap", idx))
             if boot.get("ci"):
                 ci = (boot.get("ci") or [None] * (idx + 1))[idx]
                 if isinstance(ci, (list, tuple)) and len(ci) == 2:
@@ -161,11 +167,12 @@ def _numbers_for(sid: str, tool: str, p: dict[str, Any], rp: Any) -> list[dict[s
             for i, period in enumerate(periods):
                 if i == idx:
                     continue
-                for name, fit in (("GEV (L-moments)", gev), ("Log-Pearson III", lp3)):
+                for fit_id, name, fit in (("gev_lmoments", "GEV (L-moments)", gev),
+                                          ("lp3", "Log-Pearson III", lp3)):
                     q = fit.get("q") or []
                     if i < len(q) and q[i] is not None:
                         others.append({"label": f"{_t(period)}-year return level, {name}", "value": _sig(q[i]),
-                                       "unit": unit, "step": sid})
+                                       "unit": unit, "step": sid, "evidence": flood_result(p, sid, fit_id, i)})
         fdc = p.get("fdc") or {}
         for key, label in (("q95", "Q95 (exceeded 95 % of days)"), ("q50", "Q50 (median flow)"), ("q10", "Q10")):
             if fdc.get(key) is not None:
@@ -311,12 +318,16 @@ def key_numbers(study: Study, results: list[dict[str, Any]]) -> list[dict[str, A
                 out += _numbers_for(sid, tool, payload, rp)
     # Two steps on the same record quote the same number (analyze_station and flood_frequency both carry the
     # fit): keep one row, attributed to the later step, which is the one the plan names for it.
-    seen: dict[tuple[str, Any], int] = {}
+    seen: dict[tuple[Any, ...], int] = {}
     deduped: list[dict[str, Any]] = []
     for kn in out:
-        k = (kn["label"], kn["value"])
+        data = (kn.get("evidence") or {}).get("dataset") or {}
+        k = (kn["label"], kn["value"], kn.get("unit"), data.get("source"),
+             data.get("station_id"), data.get("snapshot"))
         if k in seen:
-            deduped[seen[k]]["step"] = kn["step"]
+            # The later step owns the whole claim, including its input identity
+            # and interval. Updating only "step" would keep the earlier evidence.
+            deduped[seen[k]] = kn
             continue
         seen[k] = len(deduped)
         deduped.append(kn)
@@ -327,11 +338,9 @@ def key_numbers(study: Study, results: list[dict[str, Any]]) -> list[dict[str, A
 
 
 def software_citation() -> str:
-    from aquascope.reporting.builder import ReportBuilder
+    from aquascope.studio.deliverables._common import citation
 
-    builder = ReportBuilder("AquaScope Studio report", author="Rekin226 and contributors")
-    builder.metadata.doi = SOFTWARE_DOI
-    return builder.software_citation()
+    return citation()
 
 
 _DOI = re.compile(r"10\.\d{4,9}/[^\s,;)\]]+", re.I)
@@ -499,8 +508,11 @@ def _step_prose(sid: str, r: dict[str, Any], study: Study) -> str:
             lines.append(f"{r.get('tool')} returned: {_summarise(payload)}.")
     gates = r.get("gates") or []
     if gates:
-        lines.append("Gates: " + "; ".join(f"{g.get('check')} {'passed' if g.get('passed') else 'FAILED'}"
-                                            f" ({g.get('detail')})" for g in gates) + ".")
+        labels = []
+        for g in gates:
+            status = "skipped" if g.get("skipped") else "passed" if g.get("passed") else "FAILED"
+            labels.append(f"{g.get('check')} {status} ({g.get('detail')})")
+        lines.append("Gates: " + "; ".join(labels) + ".")
     fb = r.get("fallback")
     if r.get("fallback_used") and isinstance(fb, dict):
         state = "passed its gates" if fb.get("ok") and fb.get("gates_passed") else (
@@ -527,13 +539,15 @@ def _summary_paragraph(ws: Workspace, study: Study, results: list[dict[str, Any]
             if label not in records:
                 records.append(label)
     gates = run.get("gates") or []
-    passed = sum(1 for g in gates if g.get("passed"))
+    passed = sum(1 for g in gates if g.get("passed") and not g.get("skipped"))
+    skipped = sum(1 for g in gates if g.get("skipped"))
     bits = [f"{plan.get('objective') or ws.brief.problem}."]
     if records:
         bits.append("The record: " + "; ".join(records[:3]) + ".")
     bits.append(f"{len(results)} step(s) ran" + (f" ({plan.get('author')} plan"
                 + (f", playbook {plan['playbook']}" if plan.get("playbook") else "") + ")")
                 + (f"; {passed} of {len(gates)} gates passed" if gates else "")
+                + (f"; {skipped} skipped" if skipped else "")
                 + (f"; the study stopped at {run.get('stopped_at')}" if run.get("stop_reason") else "") + ".")
     head = [s for s in _SENTENCE.split(answer) if re.search(r"\d", s)]
     if head:
@@ -598,7 +612,8 @@ def _recommendations(ws: Workspace, study: Study, missing: list[str]) -> list[st
             out.append(f"{label} is marginal here ({row.get('reason')}); a longer record would firm it up.")
     for g in run.get("gates") or []:
         if g.get("check") == "spread_within" and g.get("passed") and len(out) < 3:
-            out.append(f"Quote both fits with their intervals: {g.get('detail')}.")
+            out.append(f"Quote both point estimates and only each estimator's own available interval: "
+                       f"{g.get('detail')}.")
             break
     for c in (plan.get("caveats") or []):
         if len(out) >= 5:
@@ -635,6 +650,11 @@ def _template_sections(ws: Workspace, study: Study, results: list[dict[str, Any]
             lines.append(str(decision["answer"]))
         if decision.get("conditions"):
             lines.append("It holds under these conditions: " + "; ".join(str(c) for c in decision["conditions"]) + ".")
+        if decision.get("limitations"):
+            lines.append("Limitations and unresolved checks: "
+                         + "; ".join(str(c) for c in decision["limitations"]) + ".")
+        if decision.get("grade_scope"):
+            lines.append("The grade applies to " + str(decision["grade_scope"]) + ".")
         if decision.get("what_would_change_it"):
             lines.append("What would change it: " + "; ".join(str(c) for c in decision["what_would_change_it"]) + ".")
         for r in findings.get("data_requests") or []:
@@ -643,7 +663,8 @@ def _template_sections(ws: Workspace, study: Study, results: list[dict[str, Any]
         rows = [f"- [{str(f.get('grade') or '').replace('_', ' ')}] {f.get('claim')} "
                 f"(from {', '.join(f.get('basis') or [])})" for f in findings.get("findings") or []]
         for c in findings.get("consistency") or []:
-            rows.append(f"- {'Agrees' if c.get('agree') else 'Disagrees'}: {c.get('note')}")
+            status = "Not compared" if c.get("agree") is None else "Agrees" if c["agree"] else "Disagrees"
+            rows.append(f"- {status}: {c.get('note')}")
         sections["findings"] = "\n".join(rows) if rows else ""
 
     parts = [b.problem]
@@ -696,7 +717,8 @@ def _template_sections(ws: Workspace, study: Study, results: list[dict[str, Any]
     if not results:
         sections["results-none"] = "No step ran."
 
-    lim = ["\n".join(f"- {m}" for m in missing) if missing else "Every gate and check passed."]
+    lim = ["\n".join(f"- {m}" for m in missing) if missing
+           else "No failed or skipped checks are recorded; the scope and caveats below still apply."]
     if plan.get("caveats"):
         lim.append("Caveats, verbatim from the playbook:\n" + "\n".join(f"- {c}" for c in plan["caveats"]))
     if plan.get("limitations_expected"):
@@ -716,6 +738,26 @@ def _template_sections(ws: Workspace, study: Study, results: list[dict[str, Any]
         f"Model: {ws.model or 'none'} via {ws.provider or 'none'}; ledger: {ledger}. aquascope {__version__}.",
         "```yaml\n" + study.to_yaml() + "```",
     ])
+    identities = []
+    for number in key:
+        evidence = number.get("evidence") or {}
+        if not evidence.get("result_id"):
+            continue
+        data = evidence.get("dataset") or {}
+        interval = evidence.get("interval") or {}
+        identities.append(
+            f"- {number['label']}: result {evidence['result_id']}; estimator {evidence.get('estimator')}; "
+            f"{evidence.get('aggregation')}. Input {data.get('source') or 'not recorded'}/"
+            f"{data.get('station_id') or 'not recorded'}, {data.get('variable')}, {data.get('unit')}, "
+            f"{data.get('start')} to {data.get('end')}; content {data.get('snapshot') or 'not recorded'}. "
+            f"Software {data.get('software_version')}; revision {data.get('software_revision') or 'not recorded'}. "
+            f"Archive revision {data.get('archive_revision') or 'not recorded; content hash is not an archive DOI'}. "
+            + (f"Own interval {interval.get('bounds')}, method {interval.get('method') or 'not recorded'}, "
+               f"level {interval.get('level') or 'not recorded'}." if interval else "No interval for this estimator.")
+        )
+    if identities:
+        sections["appendix"] += ("\n\nResult identities (also in findings.json and the Findings worksheet):\n"
+                                + "\n".join(identities))
     return sections
 
 
@@ -758,11 +800,9 @@ def _draft(ws: Workspace) -> dict[str, Any]:
     key = key_numbers(study, results)
     refs = references(ws)
     plan = study.plan or {}
-    missing = list((ws.critique or {}).get("not_established") or [])
-    if not missing:
-        from aquascope.studio.roles.critic import not_established
+    from aquascope.studio.roles.critic import not_established
 
-        missing = not_established(ws)
+    missing = list(dict.fromkeys([*((ws.critique or {}).get("not_established") or []), *not_established(ws)]))
     from aquascope.ai_engine.team import _template_answer
     from aquascope.studio.roles.analysts import prior_run
 
@@ -961,6 +1001,42 @@ def _bullets(text: str) -> list[str]:
 # ── prose from a caller's own model ─────────────────────────────────────────
 
 
+def _interval_claim_supported(sentence: str, results: list[dict[str, Any]]) -> bool:
+    """A model's numeric flood interval must name its estimator and match one fitted result.
+
+    Merely finding all numbers somewhere in the tool output cannot establish this
+    relationship. Ambiguous interval prose is dropped; the structured result remains.
+    """
+    from aquascope.studio.roles.interpreter import _claimed_numbers, _close
+
+    fits = [(r.get("payload") or {}).get("ffa", {}).get("fits", {}) for r in results
+            if isinstance(r.get("payload"), dict) and isinstance(r["payload"].get("ffa"), dict)]
+    if not fits or not re.search(r"\b(band|interval|bounds|CI)\b", sentence, re.I):
+        return True
+    numbers = _claimed_numbers(sentence)
+    if not numbers:
+        return True
+    if re.search(r"L[ -]moments?", sentence, re.I):
+        name = "gev_lmoments"
+    elif re.search(r"\bLP3\b|log[ -]pearson", sentence, re.I):
+        name = "lp3"
+    elif re.search(r"\bMLE\b|maximum[ -]likelihood|bootstrap", sentence, re.I):
+        name = "gev_bootstrap"
+    else:
+        return False
+    levels = [float(p) / 100 for p in re.findall(r"(\d+(?:\.\d+)?)\s*%", sentence)]
+    for candidates in fits:
+        fit = candidates.get(name) or {}
+        if levels and (fit.get("ci_level") is None or any(not _close(p, fit["ci_level"]) for p in levels)):
+            continue
+        for point, bounds in zip(fit.get("q") or [], fit.get("ci") or []):
+            if (isinstance(bounds, (list, tuple)) and len(bounds) == 2
+                    and all(isinstance(v, (float, int)) for v in [point, *bounds])
+                    and all(any(_close(v, n) for n in numbers) for v in [point, *bounds])):
+                return True
+    return False
+
+
 def _checked(text: str, results: list[dict[str, Any]], question: str) -> tuple[str, int]:
     """``text`` with every sentence whose numbers (or years) are in no tool result removed, and the count.
     Paragraphs and bullet lines are kept as they are."""
@@ -980,7 +1056,7 @@ def _checked(text: str, results: list[dict[str, Any]], question: str) -> tuple[s
                 continue
             v = verify(sentence, results, question=question)
             bad = [c for c in v.failed if c.name in ("numbers_come_from_tools", "years_traceable")]
-            if bad:
+            if bad or not _interval_claim_supported(sentence, results):
                 dropped += 1
                 continue
             kept.append(sentence.strip())

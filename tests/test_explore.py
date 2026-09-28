@@ -28,6 +28,30 @@ def _daily_flow(years: int = 30, seed: int = 7) -> pd.Series:
     return pd.Series(np.exp(rng.normal(0, 0.5, len(idx))) * base, index=idx)
 
 
+def test_full_export_preserves_long_records_and_original_precision():
+    import io
+
+    series = _daily_flow(90)
+    out = analysis.analyze_series(series, "discharge", "m3/s")
+    assert len(out["series"]["t"]) < out["n"] and out["series_downsampled"]
+    with pytest.raises(ValueError, match="downsampled"):
+        analysis.to_csv(out)
+    exported = pd.read_csv(io.StringIO(analysis.to_csv(out, series=series)), float_precision="round_trip")
+    assert len(exported) == len(series) == out["n"]
+    np.testing.assert_array_equal(exported["discharge_m3_per_s"], series.to_numpy())
+    pd.testing.assert_index_equal(pd.DatetimeIndex(exported["date"]).rename(None), series.index)
+
+
+def test_snapshot_hash_distinguishes_values_beyond_display_precision():
+    series = _daily_flow(1)
+    changed = series.copy()
+    changed.iloc[0] += 0.0000001
+    before = analysis.analyze_series(series, "discharge", "m3/s")
+    after = analysis.analyze_series(changed, "discharge", "m3/s")
+    assert before["series"] == after["series"]
+    assert before["data_snapshot"] != after["data_snapshot"]
+
+
 def test_analyze_series_full_contract():
     s = _daily_flow(30)
     out = analysis.analyze_series(s, "discharge", "m3/s")

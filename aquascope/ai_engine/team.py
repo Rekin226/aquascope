@@ -688,7 +688,10 @@ def _sentences_for(tool: str, payload: dict[str, Any], study: Study) -> list[str
                        f"reference evapotranspiration {_fmt(cl.get('et0_mm_per_year'))} mm per year, aridity index "
                        f"{_fmt(cl.get('aridity_index'), 2)} ({cl.get('aridity_class')}).")
         g = payload.get("glofas") or {}
-        if g:
+        if g and (g.get("comparable") is False or (g.get("stats") or {}).get("mean") is None):
+            out.append("GloFAS comparison not established: "
+                       + str(g.get("note") or "model discharge statistics unavailable").rstrip(".") + ".")
+        elif g:
             mean = _fmt((g.get("stats") or {}).get("mean"))
             s = f"GloFAS modelled discharge (grid cell, indicative): mean {mean} m3/s"
             fits = (g.get("ffa") or {}).get("fits") or {}

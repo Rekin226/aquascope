@@ -24,6 +24,28 @@ def _write_station(root, variable, source, sid, n, start="2000-01-01"):
     return s
 
 
+def test_failed_bundle_preserves_previous_bytes_and_does_not_block_other_sources(tmp_path):
+    _write_station(tmp_path, "discharge", "usgs", "A", 20)
+    _write_station(tmp_path, "precipitation", "uk_ea", "B", 20)
+    bundles.build_bundles(tmp_path)
+    previous = (tmp_path / "obs/discharge/usgs.parquet").read_bytes()
+    build = bundles.build_bundle
+
+    def fail_one(root, variable, source):
+        if source == "usgs":
+            raise RuntimeError("simulated per-source serialization failure")
+        return build(root, variable, source)
+
+    with patch.object(bundles, "build_bundle", side_effect=fail_one):
+        infos = bundles.build_bundles(tmp_path)
+    assert [i.source for i in infos] == ["uk_ea"]
+    assert (tmp_path / "obs/discharge/usgs.parquet").read_bytes() == previous
+    manifest = obs.load_manifest(tmp_path)
+    assert manifest["bundle_status"]["usgs/discharge"]["retained_previous"] is True
+    assert manifest["bundle_status"]["usgs/discharge"]["status"] == "failed"
+    assert manifest["bundle_status"]["uk_ea/precipitation"]["status"] == "ok"
+
+
 def test_build_bundles_writes_one_parquet_per_pair_and_records_manifest(tmp_path):
     a = _write_station(tmp_path, "discharge", "usgs", "USGS-1", 400)
     b = _write_station(tmp_path, "discharge", "usgs", "USGS-2", 10, start="2010-06-01")
@@ -63,6 +85,18 @@ def test_build_bundles_writes_one_parquet_per_pair_and_records_manifest(tmp_path
 def test_build_bundles_on_empty_tree(tmp_path):
     assert bundles.build_bundles(tmp_path) == []
     assert bundles.build_bundle(tmp_path, "discharge", "usgs") is None
+
+
+def test_corrupt_station_does_not_silently_shrink_existing_bundle(tmp_path):
+    _write_station(tmp_path, "discharge", "usgs", "A", 20)
+    _write_station(tmp_path, "discharge", "usgs", "B", 30)
+    bundles.build_bundles(tmp_path)
+    path = tmp_path / "obs/discharge/usgs.parquet"
+    previous = path.read_bytes()
+    obs.obs_path(tmp_path, "discharge", "usgs", "B").write_bytes(b"broken gzip")
+    assert bundles.build_bundles(tmp_path) == []
+    assert path.read_bytes() == previous
+    assert obs.load_manifest(tmp_path)["bundle_status"]["usgs/discharge"]["status"] == "failed"
 
 
 def test_load_observations_downloads_and_handles_missing(tmp_path, monkeypatch):

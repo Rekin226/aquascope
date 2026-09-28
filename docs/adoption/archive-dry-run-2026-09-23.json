@@ -1,0 +1,262 @@
+{
+  "workflow_url": "https://github.com/Rekin226/aquascope/actions/runs/35817109325",
+  "revision": "3f7c4157c5cd50576ee1437868e1a79429284ddb",
+  "inputs": {
+    "publish": false,
+    "max_items": 20,
+    "obs_budget": 2,
+    "skip_obs": false
+  },
+  "published": false,
+  "refresh": {
+    "run_at": "2026-09-23T04:13:52+00:00",
+    "completed_at": "2026-09-23T04:23:43+00:00",
+    "status": "partial",
+    "sources": [
+      {
+        "source": "usgs",
+        "variable": "discharge",
+        "started_at": "2026-09-23T04:13:52+00:00",
+        "status": "ok",
+        "exit_code": 0,
+        "completed_at": "2026-09-23T04:13:58+00:00"
+      },
+      {
+        "source": "usgs",
+        "variable": "water_level",
+        "started_at": "2026-09-23T04:13:58+00:00",
+        "status": "ok",
+        "exit_code": 0,
+        "completed_at": "2026-09-23T04:14:02+00:00"
+      },
+      {
+        "source": "uk_ea",
+        "variable": "discharge",
+        "started_at": "2026-09-23T04:14:02+00:00",
+        "status": "ok",
+        "exit_code": 0,
+        "completed_at": "2026-09-23T04:14:10+00:00"
+      },
+      {
+        "source": "uk_ea",
+        "variable": "water_level",
+        "started_at": "2026-09-23T04:14:10+00:00",
+        "status": "ok",
+        "exit_code": 0,
+        "completed_at": "2026-09-23T04:14:19+00:00"
+      },
+      {
+        "source": "uk_ea",
+        "variable": "precipitation",
+        "started_at": "2026-09-23T04:14:19+00:00",
+        "status": "ok",
+        "exit_code": 0,
+        "completed_at": "2026-09-23T04:14:19+00:00"
+      },
+      {
+        "source": "uk_ea",
+        "variable": "groundwater_level",
+        "started_at": "2026-09-23T04:14:19+00:00",
+        "status": "ok",
+        "exit_code": 0,
+        "completed_at": "2026-09-23T04:14:20+00:00"
+      },
+      {
+        "source": "hubeau_hydrometrie",
+        "variable": "discharge",
+        "started_at": "2026-09-23T04:14:20+00:00",
+        "status": "ok",
+        "exit_code": 0,
+        "completed_at": "2026-09-23T04:14:21+00:00"
+      },
+      {
+        "source": "taiwan_cwa",
+        "variable": "precipitation",
+        "started_at": "2026-09-23T04:14:21+00:00",
+        "status": "ok",
+        "exit_code": 0,
+        "completed_at": "2026-09-23T04:14:21+00:00"
+      },
+      {
+        "source": "greece_openhi",
+        "variable": "discharge",
+        "started_at": "2026-09-23T04:14:21+00:00",
+        "status": "ok",
+        "exit_code": 0,
+        "completed_at": "2026-09-23T04:14:32+00:00"
+      },
+      {
+        "source": "greece_openhi",
+        "variable": "water_level",
+        "started_at": "2026-09-23T04:14:32+00:00",
+        "status": "ok",
+        "exit_code": 0,
+        "completed_at": "2026-09-23T04:14:44+00:00"
+      },
+      {
+        "source": "greece_openhi",
+        "variable": "precipitation",
+        "started_at": "2026-09-23T04:14:44+00:00",
+        "status": "ok",
+        "exit_code": 0,
+        "completed_at": "2026-09-23T04:15:27+00:00"
+      },
+      {
+        "source": "poland_imgw",
+        "variable": "discharge",
+        "started_at": "2026-09-23T04:15:27+00:00",
+        "status": "ok",
+        "exit_code": 0,
+        "completed_at": "2026-09-23T04:15:28+00:00"
+      },
+      {
+        "source": "poland_imgw",
+        "variable": "water_level",
+        "started_at": "2026-09-23T04:15:28+00:00",
+        "status": "timeout",
+        "completed_at": "2026-09-23T04:23:43+00:00"
+      }
+    ]
+  },
+  "bundle_status": {
+    "greece_openhi/discharge": {
+      "attempted_at": "2026-09-23T04:23:43+00:00",
+      "status": "ok"
+    },
+    "greece_openhi/precipitation": {
+      "attempted_at": "2026-09-23T04:24:02+00:00",
+      "status": "ok"
+    },
+    "greece_openhi/water_level": {
+      "attempted_at": "2026-09-23T04:24:04+00:00",
+      "status": "ok"
+    },
+    "hubeau_hydrometrie/discharge": {
+      "attempted_at": "2026-09-23T04:23:43+00:00",
+      "status": "ok"
+    },
+    "poland_imgw/discharge": {
+      "attempted_at": "2026-09-23T04:23:48+00:00",
+      "status": "ok"
+    },
+    "poland_imgw/water_level": {
+      "attempted_at": "2026-09-23T04:24:04+00:00",
+      "status": "ok"
+    },
+    "taiwan_cwa/precipitation": {
+      "attempted_at": "2026-09-23T04:24:02+00:00",
+      "status": "ok"
+    },
+    "uk_ea/discharge": {
+      "attempted_at": "2026-09-23T04:23:48+00:00",
+      "status": "ok"
+    },
+    "uk_ea/groundwater_level": {
+      "attempted_at": "2026-09-23T04:24:01+00:00",
+      "status": "ok"
+    },
+    "uk_ea/precipitation": {
+      "attempted_at": "2026-09-23T04:24:02+00:00",
+      "status": "ok"
+    },
+    "uk_ea/water_level": {
+      "attempted_at": "2026-09-23T04:24:04+00:00",
+      "status": "ok"
+    },
+    "usgs/discharge": {
+      "attempted_at": "2026-09-23T04:23:57+00:00",
+      "status": "ok"
+    },
+    "usgs/water_level": {
+      "attempted_at": "2026-09-23T04:24:06+00:00",
+      "status": "ok"
+    }
+  },
+  "bundles_verified": [
+    {
+      "source_variable": "greece_openhi/discharge",
+      "rows": 3658,
+      "stations": 1,
+      "sha256": "7dbf56d27b3aef7fa8cdcdc5fa92d6a8f2f8e017f6c692d17567a76a77dd35fd"
+    },
+    {
+      "source_variable": "greece_openhi/precipitation",
+      "rows": 9708,
+      "stations": 3,
+      "sha256": "63953be4f6783a5839d773c42459741a5a317889c9de6debaf6651030f4aa8a5"
+    },
+    {
+      "source_variable": "greece_openhi/water_level",
+      "rows": 4313,
+      "stations": 4,
+      "sha256": "af09d3670c37b5fb2217a932ca00348454fb3bc6f5421589022020cff8c41fa4"
+    },
+    {
+      "source_variable": "hubeau_hydrometrie/discharge",
+      "rows": 3856917,
+      "stations": 456,
+      "sha256": "dd383da6b5e8cf9e68602dde87204efb4cb24a64730488fd17f7da8c7ab88fae"
+    },
+    {
+      "source_variable": "poland_imgw/discharge",
+      "rows": 55068,
+      "stations": 3,
+      "sha256": "2e90e8a419d6af439a79d479a40e9f5fcce5d90e2c2b0788a055829f79dc78ca"
+    },
+    {
+      "source_variable": "poland_imgw/water_level",
+      "rows": 55433,
+      "stations": 3,
+      "sha256": "ee2d8b87ce923726620d7f6fd26f60f7fb12fb822f4b2cc1a927c969416f314a"
+    },
+    {
+      "source_variable": "taiwan_cwa/precipitation",
+      "rows": 99860,
+      "stations": 35,
+      "sha256": "75ca00c44c50e0ce52d33e65fe094dd3d84149db7448e7a65d7068e1ea3ecb7d"
+    },
+    {
+      "source_variable": "uk_ea/discharge",
+      "rows": 7880827,
+      "stations": 546,
+      "sha256": "85dcb566881d2fbc7ff8c92dded2acf833c35da3e7d85f5607b49215a8487f50"
+    },
+    {
+      "source_variable": "uk_ea/groundwater_level",
+      "rows": 189321,
+      "stations": 188,
+      "sha256": "19ecbf724f98aceaf852015bca83afca1dcb43b0e8e5fdc52aa1c4b502fcbbe9"
+    },
+    {
+      "source_variable": "uk_ea/precipitation",
+      "rows": 1631966,
+      "stations": 167,
+      "sha256": "3527efb8619b1fa4e50cf8d4461f80ff126222d2cdadc4fa78d990ba901356bd"
+    },
+    {
+      "source_variable": "uk_ea/water_level",
+      "rows": 1412129,
+      "stations": 186,
+      "sha256": "b24d55c91e5ed68c7cea8efe106b978f88672177543851b733f6a086f8bc8cc6"
+    },
+    {
+      "source_variable": "usgs/discharge",
+      "rows": 3662531,
+      "stations": 501,
+      "sha256": "f7055d43cc2d5ccf7ca9bc3f28ffc903c9af2aedf99eba5e74d0451d33bb235a"
+    },
+    {
+      "source_variable": "usgs/water_level",
+      "rows": 587312,
+      "stations": 103,
+      "sha256": "44862c1e568836c0979a6922101ff6f983c8100eddb280b46172d7c0080b3842"
+    }
+  ],
+  "baseline_revision": "f1f2fa19996aacb0abf82349b28ac5de16241fc7",
+  "retained_baseline_station_files": 2185,
+  "limitations": [
+    "Capped manual run; does not establish full-catalog freshness or scheduled publication reliability.",
+    "Process exit status ok does not imply new observations for every station or variable.",
+    "Retention check confirms file presence and nondecreasing manifest counts; not full bytewise observation equivalence."
+  ]
+}

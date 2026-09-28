@@ -1,0 +1,43 @@
+name: Explorer live record-to-export
+
+on:
+  schedule:
+    - cron: "30 5 * * *"
+  workflow_dispatch:
+    inputs:
+      repetitions:
+        description: "Repetitions per region (5 or more for p50/p75)"
+        default: "1"
+        type: choice
+        options: ["1", "5", "10"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: explorer-live-smoke
+  cancel-in-progress: false
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install browser check dependencies
+        run: |
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Check US, UK and French records and downloads
+        env:
+          AQ_REPETITIONS: ${{ inputs.repetitions || '1' }}
+        run: node .github/scripts/explorer_smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: explorer-live-record-to-export
+          path: browser-smoke-output/
+          retention-days: 30

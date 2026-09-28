@@ -253,3 +253,33 @@ aquascope harvest stations --out archive --publish you/your-dataset   # needs HF
 The scheduled run lives in `.github/workflows/harvest.yml` (Mondays 03:17 UTC,
 or on demand from the Actions tab). It never fails because one agency is down;
 `health.json` and the job summary say which one did.
+
+## Versioned snapshots and citation
+
+The software DOI and the dataset are separate objects. No archive DOI has been
+registered by this implementation. Until one exists, cite the agencies plus the
+immutable Hugging Face dataset commit, downloaded files and their content hashes.
+Do not cite the software concept DOI as if it identified a data snapshot.
+
+The proposed cadence is a **quarterly reviewed archive snapshot**; weekly harvests
+continue as operational updates. Prepare a deposit from a directory downloaded
+at one exact Hugging Face commit:
+
+```bash
+python -m aquascope.archive.snapshot archive \
+  --revision REPLACE_WITH_40_CHARACTER_HUB_COMMIT \
+  --date 2026-09-23 --out archive-deposit
+```
+
+The command packages the GeoParquet catalog, health, manifest and declared
+per-source/variable observation bundles. Its metadata lists file hashes,
+source-specific licences and agency credits, and separates mirrored observations
+from catalog-only sources. It validates paths and refuses unapproved mirrored
+sources. It does not upload, reserve a DOI or claim publication.
+
+Before deposition, verify that the supplied directory actually came from the
+stated commit, inspect its metadata and retain each source's terms. The maintainer
+must create the dataset deposit under their Zenodo account. After publication,
+record the real dataset concept and version DOIs in CITATION.cff, the Explorer
+citation dialog and the dataset card, and test the links. This final registration
+and wiring remains the acceptance gate of [issue 444](https://github.com/Rekin226/aquascope/issues/444).

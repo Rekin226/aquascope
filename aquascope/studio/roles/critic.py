@@ -81,6 +81,9 @@ def not_established(ws: Workspace) -> list[str]:
     run = ws.run or {}
     for g in run.get("failed_gates") or []:
         out.append(f"Step {g.get('step')}, gate {g.get('check')}: {g.get('detail')}")
+    for g in run.get("gates") or []:
+        if g.get("skipped"):
+            out.append(f"Step {g.get('step')}, gate {g.get('check')} skipped: {g.get('detail')}")
     for r in run.get("results") or []:
         if not r.get("ok"):
             out.append(f"Step {r.get('id')} ({r.get('tool')}) did not run: {r.get('error')}")

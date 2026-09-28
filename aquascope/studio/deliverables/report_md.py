@@ -99,7 +99,8 @@ def builder_for(ws: Workspace) -> ReportBuilder:
                 rb.add_dataframe(df, caption=tab.caption or tab.id, max_rows=MAX_TABLE_ROWS)
             except Exception:  # noqa: BLE001 - a table that will not parse is named, not fatal
                 rb.add_paragraph(f"*Table {tab.id} could not be rendered.*")
-    rb.add_software_citation()
+    rb.add_heading("Cite this software", level=2)
+    rb.add_paragraph(c.citation())
     footer = c.footer_of(ws)
     if footer:
         rb.add_separator()

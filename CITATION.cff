@@ -5,18 +5,16 @@ message: >-
 type: software
 title: AquaScope
 abstract: >-
-  AquaScope is an open-source Python toolkit for unified water data
-  aggregation, hydrological analysis, agricultural water management,
-  and AI-powered research methodology recommendations. It provides a
-  single, coherent interface to 37 global water data sources and
-  implements 27 hydrological, statistical, and agri-water methods.
+  AquaScope Hydrology combines a browser river-data Explorer with Python tools
+  for checking observation coverage, analyzing water records and exporting
+  reproducible results. Agency coverage and method suitability vary by task.
 authors:
   - family-names: Ouédraogo
     given-names: Abdoul Rachid
     orcid: "https://orcid.org/0000-0002-4616-4153"
     affiliation: "National Central University, Taiwan"
-version: 0.19.0
-date-released: "2026-09-24"
+version: 0.20.0
+date-released: "2026-09-28"
 doi: 10.5281/zenodo.21903143
 license: MIT
 repository-code: https://github.com/Rekin226/aquascope
@@ -36,6 +34,9 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.21903143
     description: Concept DOI, resolves to the latest archived version
+  - type: doi
+    value: 10.5281/zenodo.23009178
+    description: Version DOI for v0.20.0
   - type: doi
     value: 10.5281/zenodo.22930129
     description: Version DOI for v0.19.0
@@ -86,9 +87,9 @@ preferred-citation:
     - family-names: Ouédraogo
       given-names: Abdoul Rachid
       orcid: "https://orcid.org/0000-0002-4616-4153"
-  version: 0.19.0
-  date-released: "2026-09-24"
-  doi: 10.5281/zenodo.21903143
+  version: 0.20.0
+  date-released: "2026-09-28"
+  doi: 10.5281/zenodo.23009178
   license: MIT
   repository-code: https://github.com/Rekin226/aquascope
   url: https://rekin226.github.io/aquascope

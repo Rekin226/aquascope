@@ -1,0 +1,6 @@
+# Mechanically exported data/workspaces; provenance and Markdown reports stay
+# visible for scientific review. Expand these files to inspect retained inputs.
+explorer/showcase/studies/reference-*/observations.csv linguist-generated=true
+explorer/showcase/studies/reference-*/workspace.json linguist-generated=true
+explorer/showcase/studies/reference-*/complete.aqstudy.json linguist-generated=true
+explorer/showcase/studies/reference-*/report.html linguist-generated=true

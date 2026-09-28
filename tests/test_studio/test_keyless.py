@@ -159,8 +159,9 @@ def test_both_fits_at_every_return_period_after_the_headline(no_deliverables):
     report = author.author_report(ws, None)
     labels = [k["label"] for k in report["key_numbers"]]
     head = labels.index("100-year return level, GEV (L-moments)")
-    assert labels[head:head + 6] == ["100-year return level, GEV (L-moments)", "100-year return level, Log-Pearson III",
+    assert labels[head:head + 7] == ["100-year return level, GEV (L-moments)", "100-year return level, Log-Pearson III",
                                      "100-year LP3 90 % interval, low", "100-year LP3 90 % interval, high",
+                                     "100-year return level, GEV (MLE with L-moments fallback)",
                                      "100-year GEV bootstrap 90 % interval, low",
                                      "100-year GEV bootstrap 90 % interval, high"]
     by = {k["label"]: k for k in report["key_numbers"]}

@@ -1,3 +1,6 @@
+import { metrics } from "./metrics.js?v=__BUILD__";
+import { claimEvidenceHtml } from "./claim-view.js?v=__BUILD__";
+import { studyText, studyWarningHtml } from "./study-language.js?v=__BUILD__";
 // Study: a complete study at a place, done by a crew of roles in the Pyodide
 // worker (aquascope.studio, the same Coordinator the CLI and the MCP tools
 // run). The page is a conversation and a board. The conversation is the
@@ -223,8 +226,8 @@ function intakeHtml() {
   const cfg = askModelConfig();
   const started = Boolean(S.ws);
   let model;
-  if (!cfg) model = `<p class="study-line muted">No key: the playbook tree plans, templates write.</p>`;
-  else if (started) model = `<p class="study-line muted">${S.useKey ? escapeHtml(cfg.label) : "no model"}</p>`;
+  if (!cfg) model = `<p class="study-line muted">No API key needed. A predefined workflow runs the analysis and writes the report.</p>`;
+  else if (started) model = `<p class="study-line muted">${S.useKey ? escapeHtml(cfg.label) : "no AI model used"}</p>`;
   else model = `<label class="study-line ask-context-toggle"><input type="checkbox" data-opt="key" ${S.useKey ? "checked" : ""}> use ${escapeHtml(cfg.label)} for the prose</label>`;
   const data = started ? fileDropHtml("intake") : `<div class="study-data">` +
       `<label class="link" for="study-file">Add a CSV or XLSX</label>` +
@@ -295,7 +298,7 @@ function companionsHtml(plan) {
     const n = (c.steps || []).length;
     return `${String(c.playbook || "").replace(/_/g, " ")} adds ${n} step${n === 1 ? "" : "s"}`;
   });
-  return `<p class="study-line muted">This brief spans two playbooks: ${escapeHtml(bits.join("; "))}</p>`;
+  return `<p class="study-line muted">This brief spans two analysis workflows: ${escapeHtml(bits.join("; "))}</p>`;
 }
 
 function planHtml() {
@@ -310,7 +313,7 @@ function planHtml() {
     (notes.length
       ? `<details class="study-notes"><summary>${notes.length} note${notes.length === 1 ? "" : "s"}</summary><ul>${notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul></details>`
       : "") +
-    (S.planLine ? `<p class="study-by muted">${escapeHtml(S.planLine)}</p>` : "") +
+    (S.planLine ? `<p class="study-by muted">${escapeHtml(studyText(S.planLine))}</p>` : "") +
     fileDropHtml("review") +
     `<div class="row-actions">` +
       `<button type="button" class="btn primary" data-act="approve">Approve</button>` +
@@ -379,10 +382,12 @@ const numValue = (k) => `${typeof k.value === "number" ? fmt(k.value) : String(k
 function footLine() {
   const run = S.ws.run || {};
   const gates = (run.gates || []).length;
-  const failed = (run.failed_gates || []).length;
+  const passed = (run.gates || []).filter(g => g.passed && !g.skipped).length;
+  const skipped = (run.gates || []).filter(g => g.skipped).length;
   const steps = ((S.ws.study || {}).steps || []).length;
   const model = S.ws.model ? `${S.ws.model} via ${S.ws.provider}` : "no model";
-  return `${steps} step${steps === 1 ? "" : "s"} · ${gates - failed} of ${gates} gates passed · ${model}`;
+  return `${steps} step${steps === 1 ? "" : "s"} · ${passed} of ${gates} gates passed` +
+    (skipped ? `; ${skipped} skipped` : "") + ` · ${model}`;
 }
 
 // Who planned and who wrote, from the replies when they said, else from the workspace.
@@ -397,8 +402,8 @@ function crewLine() {
 // collapsed (#417, #419). Absent on an older report (a recording made before this shipped): every helper
 // below is a no-op then, so nothing new renders and nothing breaks (studio-recorded.js).
 const GRADE_TITLE = {
-  established: "established: at-site data, every gate passed",
-  indicative: "indicative: a fallback, a donor transfer or a marginal method",
+  established: "established: at-site result supported by its applicable checks; other steps may be unavailable",
+  indicative: "indicative: a fallback, marginal method, or unresolved check limits the answer",
   screening: "screening: regional or reanalysis data only",
   not_established: "not established: no number could be established for the decision",
 };
@@ -413,16 +418,21 @@ function decisionHtml(report) {
   const d = report.decision;
   if (!d) return "";
   const conditions = d.conditions || [];
+  const limitations = d.limitations || [];
   const changes = d.what_would_change_it || [];
   const requests = report.data_requests || [];
   return `<div class="study-decision">` +
     (d.answer ? `<p class="study-decision-answer">${escapeHtml(d.answer)}</p>` : "") +
+    (d.grade_scope ? `<p class="study-line muted">Grade applies to ${escapeHtml(d.grade_scope)}.</p>` : "") +
+    claimEvidenceHtml(d.evidence) +
     (conditions.length
       ? `<p class="study-line muted">Holds if:</p><ul>${conditions.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "") +
+    (limitations.length
+      ? `<p class="study-line muted">Limitations and unresolved checks:</p><ul>${limitations.map((c) => `<li>${studyWarningHtml(c)}</li>`).join("")}</ul>` : "") +
     (changes.length
       ? `<p class="study-line muted">Would change it:</p><ul>${changes.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "") +
     (requests.length
-      ? `<p class="study-line muted">The crew would ask for:</p><ul>${requests.map((r) =>
+      ? `<p class="study-line muted">Additional evidence needed:</p><ul>${requests.map((r) =>
         `<li>${escapeHtml(r.what || "")}${r.effect_on_grade ? `: ${escapeHtml(r.effect_on_grade)}` : ""}</li>`).join("")}</ul>` : "") +
     `</div>`;
 }
@@ -457,14 +467,17 @@ function doneHtml() {
     stepsOnMapHtml(S.ws, toolLabel) +
     steerHtml(S.ws.study, { label: toolLabel, busy: S.busy }) + // steering: per-step controls
     (not.length
-      ? `<div class="ask-checks warn"><strong>Not established</strong><ul>${not.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul></div>`
+      ? `<div class="ask-checks warn"><strong>Not established</strong><ul>${not.map((t) => `<li>${studyWarningHtml(t)}</li>`).join("")}</ul></div>`
       : "") +
     `<div class="row-actions"><button type="button" class="btn primary" data-act="bundle">Download bundle</button>` +
-    `<button type="button" class="btn" data-act="copy-link" title="A link to this plan; whoever opens it reruns it keyless">Copy link</button>` +
+    `<button type="button" class="btn" data-file="portable">Save complete study</button>` +
+    `<button type="button" class="btn" data-act="copy-link" title="A link to this plan; whoever opens it reruns it keyless">Copy plan link</button>` +
     `<button type="button" class="btn" data-act="again">New study</button></div>` +
     (docs.length ? `<p class="study-docs muted">${docs.map(([id, label]) => `<a href="#" data-file="${id}">${label}</a>`).join(" · ")}</p>` : "") +
-    `<p class="study-foot muted">${escapeHtml(footLine())}</p>` +
-    `<p class="study-by muted">${escapeHtml(crewLine())}</p>`;
+    `<p class="muted">The complete study file includes your inputs, results and figures. Reopen it here without rerunning. Nothing is published; share the file or HTML report only when you intend to share its data.</p>` +
+    `<p class="study-export-help muted" hidden>Useful in your work? <a href="https://github.com/Rekin226/aquascope" target="_blank" rel="noopener">Star AquaScope on GitHub</a> or <a href="https://github.com/Rekin226/aquascope/issues" target="_blank" rel="noopener">report a problem</a>.</p>` +
+    `<p class="study-foot muted">${escapeHtml(studyText(footLine()))}</p>` +
+    `<p class="study-by muted">${escapeHtml(studyText(crewLine()))}</p>`;
 }
 
 // A recording, as recorded: the note first (the numbers are the recording's), the answer, the key numbers,
@@ -482,12 +495,12 @@ function recordedDoneHtml(report, numbers, not) {
     (S.figures.size ? `<div class="study-figs">${[...S.figures.values()].map(figHtml).join("")}</div>` : "") +
     stepsOnMapHtml(S.ws, toolLabel) +
     (not.length
-      ? `<div class="ask-checks warn"><strong>Not established</strong><ul>${not.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul></div>`
+      ? `<div class="ask-checks warn"><strong>Not established</strong><ul>${not.map((t) => `<li>${studyWarningHtml(t)}</li>`).join("")}</ul></div>`
       : "") +
     `<div class="row-actions"><button type="button" class="btn primary" data-act="rerun" title="Run the recorded plan again here, keyless">Re-run live</button>` +
     `<button type="button" class="btn" data-act="again">New study</button></div>` +
     recordedFilesHtml(rec.files) +
-    `<p class="study-foot muted">${escapeHtml(footLine())}</p>`;
+    `<p class="study-foot muted">${escapeHtml(studyText(footLine()))}</p>`;
 }
 
 function declinedHtml() {
@@ -651,6 +664,7 @@ function applyReply(res, op) {
   if (r.kind === "plan" && p.errors) note(`The edit was not accepted: ${p.errors.join("; ")}`, "warn");
   if (r.kind === "plan") { S.proposal = null; S.planLine = null; S.proseLine = null; }
   if (r.kind === "report" && (op === "approve" || op === "follow_up")) {
+    metrics.record("study_ready", { kind: "study" });
     S.proposal = null;
     if (p.plan_used && S.planSource === "shared") {
       S.planLine = sharedPlanLine({ used: p.plan_used, errors: p.plan_errors || [] });
@@ -1175,8 +1189,7 @@ function resumeWorkspace(obj) {
     if (a && a.data && a.media_type === "image/png") {
       figures.set(a.id, { id: a.id, src: `data:image/png;base64,${a.data}`, caption: a.caption || "", step: a.step, job: null });
     }
-    const { data: _bytes, ...rest } = a || {};
-    return rest;
+    return a;
   });
   S.resume = null;
   openWorkspace(ws, figures);
@@ -1184,6 +1197,12 @@ function resumeWorkspace(obj) {
 }
 
 const looksLikeWorkspace = (obj) => Boolean(obj && typeof obj === "object" && obj.id && obj.status && obj.brief && obj.site);
+
+export async function importCompletedStudy(file) {
+  if (S.busy) { note("Stop the running study before opening another.", "warn"); return; }
+  openDrawer({ mode: "study" });
+  await addFiles([file]);
+}
 
 // ── files in, files out ─────────────────────────────────────────────────────
 
@@ -1202,6 +1221,7 @@ function saveBytes(name, b64, type) {
   a.href = URL.createObjectURL(new Blob([bytes], { type }));
   a.download = name.replace(/[^\w.-]+/g, "_");
   a.click();
+  metrics.record("export_handoff", { kind: "study" });
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
@@ -1216,8 +1236,17 @@ async function addFiles(list) {
     const id = file.name.replace(/\s+/g, "_");
     try {
       if (/\.json$/i.test(file.name)) {
+        if (file.size > 50_000_000) throw new Error("Study files must be under 50 MB");
+        const originalText = await file.text();
         let obj = null;
-        try { obj = JSON.parse(await file.text()); } catch { obj = null; }
+        try { obj = JSON.parse(originalText); } catch { obj = null; }
+        if (obj && obj.format === "aquascope-completed-study") {
+          // Preserve Python's numeric representation (1.0 vs 1) for checksum validation.
+          const restored = await call("studio", { op: "import_portable", text: originalText });
+          if (restored.error) throw new Error(restored.error);
+          resumeWorkspace(restored.workspace);
+          return;
+        }
         if (!looksLikeWorkspace(obj)) throw new Error("not a workspace.json from a study bundle");
         resumeWorkspace(obj);
         return;
@@ -1251,12 +1280,16 @@ async function downloadArtifact(id) {
   if (!S.ws) return;
   note("Preparing the file…");
   try {
-    const res = await call("studio", id === "bundle"
+    const res = await call("studio", id === "portable"
+      ? { op: "portable", workspace: S.ws }
+      : id === "bundle"
       ? { op: "export", workspace: S.ws }
       : { op: "file", workspace: S.ws, artifact_id: id });
     if (!res || res.error) throw new Error((res && res.error) || "no file");
     const name = id === "bundle" ? `study-${S.ws.id}.zip` : String(res.name || id).split("/").pop();
     saveBytes(name, res.data, res.media_type);
+    const help = board().querySelector(".study-export-help");
+    if (help) help.hidden = false;
     note("");
   } catch (err) {
     note(`Could not prepare the file: ${err.message}`, "error");

@@ -6,6 +6,7 @@
 import { $, actions, escapeHtml, foldText, sourceStyle, state, stationKey } from "./core.js?v=__BUILD__";
 import { shapeSvg } from "./shapes.js?v=__BUILD__";
 import { groupStationSites } from "./sites.js?v=__BUILD__";
+import { availabilityLabel } from "./availability.js?v=__BUILD__";
 
 export function searchStations(query, limit = 25) {
   const whole = foldText(query).trim();
@@ -83,7 +84,7 @@ export function initSearch() {
         const st = sourceStyle(r.source);
         const filtered = state.hidden.has(r.source) ? ` <span class="muted">(source hidden)</span>` : "";
         d.innerHTML = `${shapeSvg(st.shape, st.color)}<span class="hit-name">${escapeHtml(r.name || r.station_id)}</span>` +
-          `<span class="muted hit-id">${escapeHtml(r.station_id)}${r.record_count > 1 ? ` · ${r.record_count} records at this site` : ""}</span>${filtered}`;
+          `<span class="muted hit-id">${escapeHtml(r.station_id)}${r.record_count > 1 ? ` · ${r.record_count} records at this site` : ""}<br>${escapeHtml(availabilityLabel(r.source))}</span>${filtered}`;
         d.addEventListener("mousedown", (e) => { e.preventDefault(); choose(i); });
         box.appendChild(d);
       });

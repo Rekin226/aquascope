@@ -215,7 +215,7 @@ def test_plan_text_is_a_numbered_checklist():
     text = methodologist.plan_text(ws.study)
     assert text.startswith("Plan (playbook, playbook flood_risk, branch at_site, 4 step(s))")
     assert "2. [s2] analyze_station(source='uk_ea', station_id='3400TH')  method trend_mann_kendall" in text
-    assert "gate max_return_period_factor 3 on years" in text and "fallback: similar_basins" in text
+    assert "gate max_return_period_factor 3 on ffa.n_years" in text and "fallback: similar_basins" in text
     assert "caveat(s) will be printed verbatim" in text
 
 

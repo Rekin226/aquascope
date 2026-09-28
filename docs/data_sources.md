@@ -8,6 +8,41 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 
 ---
 
+## Data Quality Flags
+
+- **Schema:** `aquascope.schemas.water_data.Quality` — a harmonized
+  `approved` / `provisional` / `estimated` / `suspect` / `unknown`
+  enum, plus a verbatim `quality_raw` string, on `StreamflowReading`,
+  `WaterLevelReading`, `ClimateReading` and `WaterQualitySample`.
+  Every collector defaults to `unknown` until it has its own mapping.
+
+- **Mapped so far:** USGS (`aquascope.collectors.usgs`) — reference
+  implementation.
+
+- **Not yet mapped:** every other collector. Each is a good first
+  issue against the USGS mapping as the template — see [#374](https://github.com/Rekin226/aquascope/issues/374).
+
+- **Archive:** `series_to_csv_gz` / `read_csv_gz` in
+  `aquascope.archive.observations` can write and read an optional
+  `quality` column (`date,value,quality`). Callers that omit `quality`
+  still produce legacy `date,value` files; `include_quality=True` on
+  read fills missing columns with `unknown`. The weekly harvest still
+  writes `date,value` only: `fetch_series` does not yet return
+  per-timestamp quality, and mixed-quality daily aggregation is
+  undefined — wiring that through harvest is a follow-up.
+
+| Source | Raw field(s) | Maps to |
+| :--- | :--- | :--- |
+| USGS (OGC API) | `approval_status` ("Approved"/"Provisional"), `qualifier` (free text) | `approved` / `provisional`; a qualifier mentioning ice or estimation overrides to `suspect` / `estimated` |
+| USGS (legacy keyless API) | `qualifiers` (e.g. "A", "P", "P Ice") | same idea, letter-code based — see `usgs.py` |
+| Environment Agency (England) | not yet mapped | `unknown` |
+| BoM Water Data Online | not yet mapped | `unknown` |
+| Hub'Eau | not yet mapped | `unknown` |
+| Taiwan sources | not yet mapped | `unknown` |
+| *(everyone else)* | not yet mapped | `unknown` |
+
+---
+
 ## Sources
 
 | Source | `--source` | Region | Data Types | API | Status |

@@ -25,6 +25,7 @@ from aquascope.schemas.station import Station
 from aquascope.schemas.water_data import (
     DataSource,
     GeoLocation,
+    Quality,
     StreamflowReading,
     WaterLevelReading,
     WaterQualitySample,
@@ -127,6 +128,54 @@ def _max_date(current: date | None, value: str | None) -> date | None:
     if parsed is None:
         return current
     return parsed if current is None or parsed > current else current
+
+
+def _map_usgs_quality(props: dict) -> tuple[Quality, str | None]:
+    approval = props.get("approval_status")
+    qualifier = props.get("qualifier")
+
+    raw_parts = []
+    if approval:
+        raw_parts.append(str(approval))
+    if qualifier:
+        if isinstance(qualifier, (list, tuple)):
+            raw_parts.extend(str(q) for q in qualifier)
+        else:
+            raw_parts.append(str(qualifier))
+    quality_raw = " | ".join(raw_parts) if raw_parts else None
+
+    if isinstance(qualifier, (list, tuple)):
+        qualifiers = [str(q).strip().upper() for q in qualifier]
+    elif qualifier:
+        qualifiers = [q.strip().upper() for q in str(qualifier).split()]
+    else:
+        qualifiers = []
+
+    text = " ".join(raw_parts).lower()
+
+    if "ice" in text:
+        return Quality.SUSPECT, quality_raw
+
+    if "estimat" in text or "E" in qualifiers:
+        return Quality.ESTIMATED, quality_raw
+
+    if str(approval).lower() == "provisional":
+        return Quality.PROVISIONAL, quality_raw
+
+    if str(approval).lower() == "approved":
+        return Quality.APPROVED, quality_raw
+
+    # Legacy USGS-style qualifiers (no approval_status; A/P alone in `qualifier`)
+    if any(q not in {"A", "P"} for q in qualifiers):
+        return Quality.SUSPECT, quality_raw
+
+    if "P" in qualifiers:
+        return Quality.PROVISIONAL, quality_raw
+
+    if "A" in qualifiers:
+        return Quality.APPROVED, quality_raw
+
+    return Quality.UNKNOWN, quality_raw
 
 
 class USGSCollector(BaseCollector):
@@ -614,6 +663,7 @@ class USGSCollector(BaseCollector):
                 props = feat.get("properties", {})
                 geom = feat.get("geometry", {})
                 coords = geom.get("coordinates", [None, None]) if geom else [None, None]
+                quality, quality_raw = _map_usgs_quality(props)
 
                 param_code = props.get("parameter_code", "")
                 param_label = PARAM_LABELS.get(param_code, param_code)
@@ -654,6 +704,8 @@ class USGSCollector(BaseCollector):
                             uncertainty_cms=None,
                             catchment_area_km2=catchment_area_km2,
                             unit="m3/s",
+                            quality=quality,
+                            quality_raw=quality_raw,
                         )
                     )
 
@@ -673,6 +725,8 @@ class USGSCollector(BaseCollector):
                             reading_datetime=dt,
                             water_level=rounded_stage_m,
                             unit="m",
+                            quality=quality,
+                            quality_raw=quality_raw,
                         )
                     )
 
@@ -686,6 +740,8 @@ class USGSCollector(BaseCollector):
                             parameter=param_label,
                             value=float(val),
                             unit=props.get("unit_of_measure", ""),
+                            quality=quality,
+                            quality_raw=quality_raw,
                         )
                     )
 

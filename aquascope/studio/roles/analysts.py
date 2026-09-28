@@ -32,7 +32,7 @@ from aquascope.studio.prompts import SPECIALIST
 from aquascope.studio.workspace import Artifact, Workspace
 from aquascope.study import Study, StudyRun, run_study
 
-__all__ = ["KINDS_BY_METHOD", "analyze_station_full", "load_table", "prior_run", "run"]
+__all__ = ["KINDS_BY_METHOD", "analyze_station_full", "flood_frequency_full", "load_table", "prior_run", "run"]
 
 #: The figure kinds a station step draws when its plan names a method (E); no method draws every kind of the tool.
 KINDS_BY_METHOD: dict[str, list[str]] = {
@@ -43,7 +43,7 @@ KINDS_BY_METHOD: dict[str, list[str]] = {
     "groundwater_trend": ["series", "trend"],
 }
 #: Payload keys stripped before a result goes into the workspace (the figures read them first).
-_BULK_KEYS = ("series",)
+_BULK_KEYS = ("series", "observations")
 
 
 # ── the station analysis with its series kept for the figures ───────────────
@@ -67,16 +67,36 @@ def analyze_station_full(source: str, station_id: str, years: int | None = None,
     store: dict[str, Any] = {}
     extra = {"return_periods": return_periods} if return_periods else {}
     res = _analyze(source, station_id, years=int(years) if years else None, store=store, variable=variable, **extra)
+    if store.get("series") is not None:
+        observed = store["series"].dropna()
+        # Figures may use daily, decimated points. The retained input table must
+        # preserve the observations actually hashed and analyzed, including subdaily timestamps.
+        res["observations"] = {"t": [t.isoformat() for t in observed.index],
+                               "v": [float(v) for v in observed.values]}
     if bootstrap_ci and res.get("ffa") and store.get("series") is not None:
         try:
             ci = flood_ci(store["series"], **extra)
             res["ffa"]["fits"]["gev_bootstrap"] = {
-                k: ci[k] for k in ("q", "ci", "params", "n_bootstrap", "n_bootstrap_discarded") if k in ci
+                k: ci[k] for k in ("q", "ci", "params", "n_bootstrap", "n_bootstrap_discarded",
+                                     "estimator", "interval_method", "ci_level") if k in ci
             }
             res.setdefault("methods", []).append(ci["method"])
         except Exception as exc:  # noqa: BLE001 - the band is optional
             res.setdefault("notes", []).append(f"bootstrap CI failed: {exc}")
     return res
+
+
+def flood_frequency_full(source: str, station_id: str, years: int | None = None, bootstrap_ci: bool = False,
+                         return_periods: list[float] | None = None) -> dict[str, Any]:
+    """Keep the exact observations used by this flood fit, even if an earlier station step differs."""
+    from aquascope.mcp_server import _flood_result
+
+    full = analyze_station_full(source, station_id, years=years, bootstrap_ci=bootstrap_ci,
+                                return_periods=return_periods)
+    result = _flood_result(full)
+    if "observations" in full:
+        result["observations"] = full["observations"]
+    return result
 
 
 def _name_stations(ws: Workspace, run: StudyRun) -> None:
@@ -406,6 +426,14 @@ def run(ws: Workspace, model: Model | None, *, tools: dict[str, Any] | None = No
             registry_analyze = None
         if callables.get("analyze_station") is registry_analyze:
             callables["analyze_station"] = analyze_station_full
+    if "flood_frequency" not in (tools or {}):
+        try:
+            from aquascope.mcp_server import flood_frequency as registry_flood
+        except ImportError:  # pragma: no cover
+            registry_flood = None
+
+        if callables.get("flood_frequency") is registry_flood:
+            callables["flood_frequency"] = flood_frequency_full
     prior = _reusable(prior, study)
     drawn: set[str] = set()
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -516,8 +544,11 @@ def run(ws: Workspace, model: Model | None, *, tools: dict[str, Any] | None = No
         "replans": replans, "failed_steps": run_.failed_steps, "summary": run_.summary,
     }
     summ = run_.summary
-    ws.event("analyst", "gates", f"{len(run_.gates) - len(run_.failed_gates)} of {len(run_.gates)} gates passed; "
-             f"{summ['ok']} of {summ['planned']} step(s) established"
+    passed = sum(bool(g.get("passed")) and not g.get("skipped") for g in run_.gates)
+    skipped = sum(bool(g.get("skipped")) for g in run_.gates)
+    ws.event("analyst", "gates", f"{passed} of {len(run_.gates)} gates passed; "
+             + (f"{skipped} gates skipped; " if skipped else "")
+             + f"{summ['ok']} of {summ['planned']} step(s) established"
              + (f", {summ['failed']} failed" if summ["failed"] else "")
              + (f", {summ['skipped']} skipped" if summ["skipped"] else "")
              + (f"; stopped at {run_.stopped_at}" if run_.stop_reason else ""))

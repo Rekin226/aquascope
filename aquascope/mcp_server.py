@@ -250,7 +250,8 @@ def analyze_station(
         try:
             ci = flood_ci(store["series"], return_periods=return_periods)
             res["ffa"]["fits"]["gev_bootstrap"] = {
-                k: ci[k] for k in ("q", "ci", "params", "n_bootstrap", "n_bootstrap_discarded") if k in ci
+                k: ci[k] for k in ("q", "ci", "params", "n_bootstrap", "n_bootstrap_discarded",
+                                     "estimator", "interval_method", "ci_level") if k in ci
             }
             res.setdefault("methods", []).append(ci["method"])
         except Exception as exc:  # noqa: BLE001
@@ -267,11 +268,17 @@ def flood_frequency(
     full record is requested.
     """
     res = analyze_station(source, station_id, years=years, bootstrap_ci=bootstrap_ci, return_periods=return_periods)
+    return _flood_result(res)
+
+
+def _flood_result(res: dict[str, Any]) -> dict[str, Any]:
+    """The compact flood payload, also used by Studio before retaining its input separately."""
     if "error" in res:
         return res
     keep = {k: res.get(k) for k in ("source", "station_id", "agency", "license", "attribution", "unit",
                                     "start", "end", "years", "n", "stats", "ffa", "notes", "methods",
-                                    "fetch_note", "requested")}
+                                    "fetch_note", "requested", "variable", "data_snapshot", "archive_revision",
+                                    "software_revision", "eligibility")}
     if not keep.get("ffa"):
         keep["error"] = "flood frequency not available (see notes)"
     return keep

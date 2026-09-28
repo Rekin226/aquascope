@@ -49,7 +49,7 @@ def test_solve_prints_the_plan_runs_with_yes_and_writes_the_study(monkeypatch, c
         cli.main()
     printed = capsys.readouterr().out
     assert "Plan: playbook flood_risk, branch at_site, 4 step(s)" in printed
-    assert "gate max_return_period_factor 3 on years" in printed and "Report saved to" in printed
+    assert "gate max_return_period_factor 3 on ffa.n_years" in printed and "Report saved to" in printed
     assert "## Steps and gates" in out.read_text(encoding="utf-8") and "T = 50 years" in out.read_text(encoding="utf-8")
     text = study.read_text(encoding="utf-8")
     assert text.startswith("# An AquaScope study (version 2)") and '"return_period": 50' in text

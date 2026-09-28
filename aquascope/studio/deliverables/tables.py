@@ -110,7 +110,15 @@ def _scalars(payload: dict[str, Any], *, include: tuple[str, ...] = (), depth: i
 
 
 def _series(payload: dict[str, Any]) -> Table | None:
-    got = series_of(payload)
+    observed = payload.get("observations")
+    if isinstance(observed, dict):
+        dates, values = observed.get("t"), observed.get("v")
+        if isinstance(dates, list) and isinstance(values, list) and len(dates) == len(values):
+            return ["datetime", "value"], [[t, v] for t, v in zip(dates, values)]
+        raise ValueError("The retained observation timestamps and values do not match.")
+    if payload.get("series_downsampled"):
+        raise ValueError("The plotting series is downsampled; full observations are required for a record table.")
+    got = series_of(payload, preserve_time=True)
     if got:
         return ["datetime", "value"], [[t, v] for t, v in zip(*got)]
     if isinstance(payload.get("preview"), dict):
@@ -140,6 +148,22 @@ def _annual_maxima(payload: dict[str, Any]) -> Table | None:
 
 
 def _return_levels(payload: dict[str, Any]) -> Table | None:
+    from aquascope.claims import flood_result
+
+    columns = ["T", "estimator", "unit", "estimate", "lower", "upper", "interval_method", "confidence_level"]
+    ffa = payload.get("ffa")
+    if isinstance(ffa, dict) and isinstance(ffa.get("fits"), dict):
+        rows = []
+        for name, fit in ffa["fits"].items():
+            if not isinstance(fit, dict) or not isinstance(fit.get("q"), list):
+                continue
+            for i, (period, value) in enumerate(zip(ffa.get("return_periods", []), fit["q"])):
+                identity = flood_result(payload, "result", name, i)
+                interval = identity["interval"] or {}
+                lo, hi = interval.get("bounds", [None, None])
+                rows.append([period, identity["estimator"], payload.get("unit"), value, lo, hi,
+                             interval.get("method"), interval.get("level")])
+        return (columns, rows) if rows else None
     rl = return_levels_of(payload)
     if not rl:
         return None
@@ -149,9 +173,11 @@ def _return_levels(payload: dict[str, Any]) -> Table | None:
         vals = rl.get(name)
         return list(vals) + [None] * (n - len(vals)) if isinstance(vals, list) else [None] * n
 
-    gev = col("gev") if rl["gev"] is not None else col("boot")
-    rows = [[t, g, lp, lo, hi] for t, g, lp, lo, hi in zip(rl["T"], gev, col("lp3"), col("lower"), col("upper"))]
-    return ["T", "GEV", "LP3", "lower", "upper"], rows
+    levels = col("lp3") if rl["lp3"] is not None else col("gev")
+    estimator = payload.get("estimator") or rl["distribution"] or "reported fit"
+    rows = [[t, estimator, payload.get("unit"), q, lo, hi, payload.get("interval_method"),
+             payload.get("confidence_level")] for t, q, lo, hi in zip(rl["T"], levels, col("lower"), col("upper"))]
+    return columns, rows
 
 
 def _fit_spread(payload: dict[str, Any]) -> Table | None:
@@ -593,6 +619,8 @@ def tables_for(step_id: str, tool: str, payload: dict[str, Any], *, names: list[
     unexpected shape is logged and skipped.
     """
     wanted = list(names) if names is not None else names_of(tool)
+    if names is None and isinstance(payload, dict) and "observations" in payload and "series" not in wanted:
+        wanted.append("series")
     out: list[Artifact] = []
     if not isinstance(payload, dict) or payload.get("error"):
         return out
@@ -618,4 +646,4 @@ def frame_of(artifact: Artifact) -> Any:
     """A table artifact's CSV as a pandas DataFrame."""
     import pandas as pd
 
-    return pd.read_csv(io.BytesIO(artifact.data))
+    return pd.read_csv(io.BytesIO(artifact.data), float_precision="round_trip")

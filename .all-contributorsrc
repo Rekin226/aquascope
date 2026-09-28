@@ -314,6 +314,25 @@
         "test",
         "doc"
       ]
+    },
+    {
+      "login": "Berserker-GM",
+      "name": "Berserker-GM",
+      "avatar_url": "https://avatars.githubusercontent.com/u/229895835?v=4",
+      "profile": "https://github.com/Berserker-GM",
+      "contributions": [
+        "code",
+        "test"
+      ]
+    },
+    {
+      "login": "Galabavamsi",
+      "name": "GALABA VAMSI",
+      "avatar_url": "https://avatars.githubusercontent.com/u/51828882?v=4",
+      "profile": "https://galabavamsi.github.io/portfolio/",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs"

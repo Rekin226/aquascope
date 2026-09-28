@@ -1,7 +1,7 @@
 {
   "upload_type": "software",
-  "title": "AquaScope: Open-Source Python Toolkit for Unified Water Data Aggregation, Hydrological Analysis, and AI-Powered Research Methodology Recommendations",
-  "description": "<p>AquaScope is an open-source Python toolkit for unified water data aggregation, hydrological analysis, agricultural water management, and AI-powered research methodology recommendations. It provides a single, coherent interface to global water data sources and implements hydrological, statistical, and agri-water methods including GR4J rainfall-runoff modelling, flood frequency analysis, baseflow separation, extreme value theory, drought indices, and FAO-56 evapotranspiration.</p><p>Documentation: <a href=\"https://rekin226.github.io/aquascope\">https://rekin226.github.io/aquascope</a></p>",
+  "title": "AquaScope Hydrology: River Data Explorer and Reproducible Python Analyses",
+  "description": "<p>AquaScope Hydrology connects a browser Explorer and Python tools for finding river records, inspecting actual observation coverage, running analyses and exporting reproducible results. Catalog coverage is distinct from accessible observations. Flood screening with daily mean maxima is not a certified regulatory design workflow.</p><p>Explorer: <a href=\"https://rekin226-aquascope-explorer.static.hf.space/\">Open AquaScope Hydrology</a>. Documentation: <a href=\"https://rekin226.github.io/aquascope/\">User guide and validation scope</a>.</p>",
   "creators": [
     {
       "name": "Ouédraogo, Abdoul Rachid",

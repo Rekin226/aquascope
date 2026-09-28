@@ -1,0 +1,916 @@
+{
+  "baseURL": "http://127.0.0.1:18763",
+  "measured_at": "2026-09-23T03:32:08.963Z",
+  "environment": {
+    "node": "v25.8.0",
+    "platform": "darwin",
+    "browser": "153.0.8010.12",
+    "viewport": {
+      "width": 1280,
+      "height": 900
+    },
+    "build": {
+      "wheel": "aquascope-0.18.0-py3-none-any.whl",
+      "build": "e3b7042"
+    }
+  },
+  "protocol": "Fresh browser context vs reload in same context; new Python worker in both; OS and CDN caches uncontrolled.",
+  "results": [
+    {
+      "repetition": 1,
+      "case": "fish-river-us",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 2225,
+        "catalog": 8860,
+        "record": 26481,
+        "export": 26690,
+        "workbench": 26900
+      },
+      "evidence": {
+        "n": 37534,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1903-07-29",
+        "end": "2026-09-21",
+        "snapshot": "sha256:735990f72ac655a5dbd68aae19e42a769abbcf9eb95747702bb582f7ff4d642c",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 100,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 1,
+      "case": "fish-river-us",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 667,
+        "catalog": 4331,
+        "record": 11774,
+        "export": 11975,
+        "workbench": 12113
+      },
+      "evidence": {
+        "n": 37534,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1903-07-29",
+        "end": "2026-09-21",
+        "snapshot": "sha256:735990f72ac655a5dbd68aae19e42a769abbcf9eb95747702bb582f7ff4d642c",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 100,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 2,
+      "case": "fish-river-us",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 475,
+        "catalog": 6129,
+        "record": 24847,
+        "export": 24925,
+        "workbench": 25065
+      },
+      "evidence": {
+        "n": 14607,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1986-08-24",
+        "end": "2026-08-22",
+        "snapshot": "sha256:b295b4d5bedc5c63620ad46201a056af83e222ec222c07f6d4fd6c988c2887ec",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 39,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 2,
+      "case": "fish-river-us",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 293,
+        "catalog": 3868,
+        "record": 18488,
+        "export": 18693,
+        "workbench": 18868
+      },
+      "evidence": {
+        "n": 37534,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1903-07-29",
+        "end": "2026-09-21",
+        "snapshot": "sha256:735990f72ac655a5dbd68aae19e42a769abbcf9eb95747702bb582f7ff4d642c",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 100,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 3,
+      "case": "fish-river-us",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 711,
+        "catalog": 5972,
+        "record": 21356,
+        "export": 21582,
+        "workbench": 21815
+      },
+      "evidence": {
+        "n": 37534,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1903-07-29",
+        "end": "2026-09-21",
+        "snapshot": "sha256:735990f72ac655a5dbd68aae19e42a769abbcf9eb95747702bb582f7ff4d642c",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 100,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 3,
+      "case": "fish-river-us",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 396,
+        "catalog": 3668,
+        "record": 10391,
+        "export": 10982,
+        "workbench": 11183
+      },
+      "evidence": {
+        "n": 37534,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1903-07-29",
+        "end": "2026-09-21",
+        "snapshot": "sha256:735990f72ac655a5dbd68aae19e42a769abbcf9eb95747702bb582f7ff4d642c",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 100,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 4,
+      "case": "fish-river-us",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 542,
+        "catalog": 6055,
+        "record": 32199,
+        "export": 32416,
+        "workbench": 32595
+      },
+      "evidence": {
+        "n": 37534,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1903-07-29",
+        "end": "2026-09-21",
+        "snapshot": "sha256:735990f72ac655a5dbd68aae19e42a769abbcf9eb95747702bb582f7ff4d642c",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 100,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 4,
+      "case": "fish-river-us",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 366,
+        "catalog": 3896,
+        "record": 11699,
+        "export": 11981,
+        "workbench": 12209
+      },
+      "evidence": {
+        "n": 37534,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1903-07-29",
+        "end": "2026-09-21",
+        "snapshot": "sha256:735990f72ac655a5dbd68aae19e42a769abbcf9eb95747702bb582f7ff4d642c",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 100,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 5,
+      "case": "fish-river-us",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 509,
+        "catalog": 5852,
+        "record": 20354,
+        "export": 20645,
+        "workbench": 20894
+      },
+      "evidence": {
+        "n": 37534,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1903-07-29",
+        "end": "2026-09-21",
+        "snapshot": "sha256:735990f72ac655a5dbd68aae19e42a769abbcf9eb95747702bb582f7ff4d642c",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 100,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 5,
+      "case": "fish-river-us",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 531,
+        "catalog": 4774,
+        "record": 15893,
+        "export": 16197,
+        "workbench": 16386
+      },
+      "evidence": {
+        "n": 37534,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1903-07-29",
+        "end": "2026-09-21",
+        "snapshot": "sha256:735990f72ac655a5dbd68aae19e42a769abbcf9eb95747702bb582f7ff4d642c",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 100,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 1,
+      "case": "kingston-uk",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 616,
+        "catalog": 5584,
+        "record": 16752,
+        "export": 17149,
+        "workbench": 17579
+      },
+      "evidence": {
+        "n": 51947,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1883-10-01",
+        "end": "2026-09-09",
+        "snapshot": "sha256:e3773df04c573267b9e8f3f39933c42cbd29a293770226bb02f85963523909ec",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 140,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 1,
+      "case": "kingston-uk",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 1155,
+        "catalog": 5815,
+        "record": 14991,
+        "export": 15293,
+        "workbench": 15857
+      },
+      "evidence": {
+        "n": 51947,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1883-10-01",
+        "end": "2026-09-09",
+        "snapshot": "sha256:e3773df04c573267b9e8f3f39933c42cbd29a293770226bb02f85963523909ec",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 140,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 2,
+      "case": "kingston-uk",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 985,
+        "catalog": 6481,
+        "record": 21856,
+        "export": 22127,
+        "workbench": 22337
+      },
+      "evidence": {
+        "n": 51947,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1883-10-01",
+        "end": "2026-09-09",
+        "snapshot": "sha256:e3773df04c573267b9e8f3f39933c42cbd29a293770226bb02f85963523909ec",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 140,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 2,
+      "case": "kingston-uk",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 400,
+        "catalog": 8234,
+        "record": 17871,
+        "export": 18568,
+        "workbench": 18955
+      },
+      "evidence": {
+        "n": 51947,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1883-10-01",
+        "end": "2026-09-09",
+        "snapshot": "sha256:e3773df04c573267b9e8f3f39933c42cbd29a293770226bb02f85963523909ec",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 140,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 3,
+      "case": "kingston-uk",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 935,
+        "catalog": 6612,
+        "record": 19251,
+        "export": 19465,
+        "workbench": 19651
+      },
+      "evidence": {
+        "n": 51947,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1883-10-01",
+        "end": "2026-09-09",
+        "snapshot": "sha256:e3773df04c573267b9e8f3f39933c42cbd29a293770226bb02f85963523909ec",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 140,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 3,
+      "case": "kingston-uk",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 333,
+        "catalog": 5846,
+        "record": 18392,
+        "export": 18646,
+        "workbench": 18883
+      },
+      "evidence": {
+        "n": 51947,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1883-10-01",
+        "end": "2026-09-09",
+        "snapshot": "sha256:e3773df04c573267b9e8f3f39933c42cbd29a293770226bb02f85963523909ec",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 140,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 4,
+      "case": "kingston-uk",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 837,
+        "catalog": 6680,
+        "record": 27315,
+        "export": 27518,
+        "workbench": 27736
+      },
+      "evidence": {
+        "n": 51947,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1883-10-01",
+        "end": "2026-09-09",
+        "snapshot": "sha256:e3773df04c573267b9e8f3f39933c42cbd29a293770226bb02f85963523909ec",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 140,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 4,
+      "case": "kingston-uk",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 346,
+        "catalog": 4987,
+        "record": 12639,
+        "export": 12834,
+        "workbench": 13006
+      },
+      "evidence": {
+        "n": 51947,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1883-10-01",
+        "end": "2026-09-09",
+        "snapshot": "sha256:e3773df04c573267b9e8f3f39933c42cbd29a293770226bb02f85963523909ec",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 140,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 5,
+      "case": "kingston-uk",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 1140,
+        "catalog": 6915,
+        "record": 18194,
+        "export": 18405,
+        "workbench": 19474
+      },
+      "evidence": {
+        "n": 51947,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1883-10-01",
+        "end": "2026-09-09",
+        "snapshot": "sha256:e3773df04c573267b9e8f3f39933c42cbd29a293770226bb02f85963523909ec",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 140,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 5,
+      "case": "kingston-uk",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 505,
+        "catalog": 5625,
+        "record": 16331,
+        "export": 16833,
+        "workbench": 17195
+      },
+      "evidence": {
+        "n": 51947,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "1883-10-01",
+        "end": "2026-09-09",
+        "snapshot": "sha256:e3773df04c573267b9e8f3f39933c42cbd29a293770226bb02f85963523909ec",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 140,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 1,
+      "case": "seine-fr",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 841,
+        "catalog": 7039,
+        "record": 59723,
+        "export": 59848,
+        "workbench": 59985
+      },
+      "evidence": {
+        "n": 7542,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "2006-01-28",
+        "end": "2026-09-21",
+        "snapshot": "sha256:d4d7063849d42170f8436229fdafe83a286f01c37816bd6ab10bdcbb19393e58",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 20,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 1,
+      "case": "seine-fr",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 302,
+        "catalog": 4964,
+        "record": 59935,
+        "export": 60045,
+        "workbench": 60210
+      },
+      "evidence": {
+        "n": 7542,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "2006-01-28",
+        "end": "2026-09-21",
+        "snapshot": "sha256:d4d7063849d42170f8436229fdafe83a286f01c37816bd6ab10bdcbb19393e58",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 20,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 2,
+      "case": "seine-fr",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 855,
+        "catalog": 6262,
+        "record": 40129,
+        "export": 40270,
+        "workbench": 40422
+      },
+      "evidence": {
+        "n": 7542,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "2006-01-28",
+        "end": "2026-09-21",
+        "snapshot": "sha256:d4d7063849d42170f8436229fdafe83a286f01c37816bd6ab10bdcbb19393e58",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 20,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 2,
+      "case": "seine-fr",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 303,
+        "catalog": 8707,
+        "record": 41678,
+        "export": 41808,
+        "workbench": 41940
+      },
+      "evidence": {
+        "n": 7542,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "2006-01-28",
+        "end": "2026-09-21",
+        "snapshot": "sha256:d4d7063849d42170f8436229fdafe83a286f01c37816bd6ab10bdcbb19393e58",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 20,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 3,
+      "case": "seine-fr",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 622,
+        "catalog": 5663,
+        "record": 39801,
+        "export": 39938,
+        "workbench": 40099
+      },
+      "evidence": {
+        "n": 7542,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "2006-01-28",
+        "end": "2026-09-21",
+        "snapshot": "sha256:d4d7063849d42170f8436229fdafe83a286f01c37816bd6ab10bdcbb19393e58",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 20,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 3,
+      "case": "seine-fr",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 281,
+        "catalog": 4384,
+        "record": 31922,
+        "export": 32049,
+        "workbench": 32203
+      },
+      "evidence": {
+        "n": 7542,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "2006-01-28",
+        "end": "2026-09-21",
+        "snapshot": "sha256:d4d7063849d42170f8436229fdafe83a286f01c37816bd6ab10bdcbb19393e58",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 20,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 4,
+      "case": "seine-fr",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 475,
+        "catalog": 6148,
+        "record": 42181,
+        "export": 42304,
+        "workbench": 42446
+      },
+      "evidence": {
+        "n": 7542,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "2006-01-28",
+        "end": "2026-09-21",
+        "snapshot": "sha256:d4d7063849d42170f8436229fdafe83a286f01c37816bd6ab10bdcbb19393e58",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 20,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 4,
+      "case": "seine-fr",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 254,
+        "catalog": 4304,
+        "record": 34533,
+        "export": 34660,
+        "workbench": 34807
+      },
+      "evidence": {
+        "n": 7542,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "2006-01-28",
+        "end": "2026-09-21",
+        "snapshot": "sha256:d4d7063849d42170f8436229fdafe83a286f01c37816bd6ab10bdcbb19393e58",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 20,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 5,
+      "case": "seine-fr",
+      "phase": "cold",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 687,
+        "catalog": 7300,
+        "record": 44939,
+        "export": 45068,
+        "workbench": 45171
+      },
+      "evidence": {
+        "n": 7542,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "2006-01-28",
+        "end": "2026-09-21",
+        "snapshot": "sha256:d4d7063849d42170f8436229fdafe83a286f01c37816bd6ab10bdcbb19393e58",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 20,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    },
+    {
+      "repetition": 5,
+      "case": "seine-fr",
+      "phase": "warm",
+      "status": "passed",
+      "timings_ms": {
+        "dom": 313,
+        "catalog": 4932,
+        "record": 37036,
+        "export": 37168,
+        "workbench": 37321
+      },
+      "evidence": {
+        "n": 7542,
+        "variable": "discharge",
+        "unit": "m3/s",
+        "start": "2006-01-28",
+        "end": "2026-09-21",
+        "snapshot": "sha256:d4d7063849d42170f8436229fdafe83a286f01c37816bd6ab10bdcbb19393e58",
+        "eligibility": {
+          "flood_frequency": true,
+          "complete_years": 20,
+          "minimum_years": 10,
+          "coverage_rule": "At least 292 observed days in each included year",
+          "scope": "Exploratory daily-mean flood screening, not regulatory design certification"
+        }
+      }
+    }
+  ],
+  "timing_summary": [
+    {
+      "case": "fish-river-us",
+      "phase": "cold",
+      "export_ms": {
+        "n": 5,
+        "p50": 24925,
+        "p75": 26690
+      }
+    },
+    {
+      "case": "fish-river-us",
+      "phase": "warm",
+      "export_ms": {
+        "n": 5,
+        "p50": 11981,
+        "p75": 16197
+      }
+    },
+    {
+      "case": "kingston-uk",
+      "phase": "cold",
+      "export_ms": {
+        "n": 5,
+        "p50": 19465,
+        "p75": 22127
+      }
+    },
+    {
+      "case": "kingston-uk",
+      "phase": "warm",
+      "export_ms": {
+        "n": 5,
+        "p50": 16833,
+        "p75": 18568
+      }
+    },
+    {
+      "case": "seine-fr",
+      "phase": "cold",
+      "export_ms": {
+        "n": 5,
+        "p50": 42304,
+        "p75": 45068
+      }
+    },
+    {
+      "case": "seine-fr",
+      "phase": "warm",
+      "export_ms": {
+        "n": 5,
+        "p50": 37168,
+        "p75": 41808
+      }
+    }
+  ]
+}

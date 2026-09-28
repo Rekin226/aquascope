@@ -33,8 +33,10 @@ def test_the_template_report_has_every_section_in_order_with_numbers_from_the_re
     assert report["answer"].startswith("The 100-year return level") and "520 m3/s" in report["answer"]
     assert "The record at Kingston (uk_ea 3400TH)" in report["answer"]
     labels = {k["label"]: k for k in report["key_numbers"]}
-    assert labels["100-year return level, GEV (L-moments)"] == {"label": "100-year return level, GEV (L-moments)",
-                                                              "value": 520, "unit": "m3/s", "step": "s3"}
+    quantile = labels["100-year return level, GEV (L-moments)"]
+    assert {k: v for k, v in quantile.items() if k != "evidence"} == {
+        "label": "100-year return level, GEV (L-moments)", "value": 520, "unit": "m3/s", "step": "s3"}
+    assert quantile["evidence"]["estimator"] == "gev_lmoments"
     assert labels["Upstream area"]["value"] == 9948.0 and labels["Q95 (exceeded 95 % of days)"]["step"] == "s2"
     by_id = {s["id"]: s for s in report["sections"]}
     assert "| Quantity |" not in by_id["summary"]["text"] and "4 step(s) ran" in by_id["summary"]["text"]
@@ -90,11 +92,11 @@ def test_the_model_writes_the_prose_and_the_critic_earns_one_rewrite(no_delivera
     ws = _ran()
     client = FakeModel({
         "author": [
-            {"title": "Design flow at Kingston", "answer": "About 520 m3/s at uk_ea 3400TH (GEV), band 420 to 650.",
+            {"title": "Design flow at Kingston", "answer": "About 520 m3/s at uk_ea 3400TH (GEV L-moments).",
              "sections": {"summary": "One paragraph.", "results-s3": "The fit gives 520 m3/s.",
                           "recommendations": "Use 548 m3/s from LP3 as the upper design value.", "nope": "x"}},
-            {"title": "Design flow at Kingston", "answer": "About 520 m3/s at uk_ea 3400TH (GEV), band 420 to 650.",
-             "sections": {"recommendations": "Quote both fits: 520 and 548 m3/s, with the 410 to 690 band."}},
+            {"title": "Design flow at Kingston", "answer": "About 520 m3/s at uk_ea 3400TH (GEV L-moments).",
+             "sections": {"recommendations": "Quote both fits: 520 and 548 m3/s."}},
         ],
         "critic": [{"issues": [{"section": "recommendations", "severity": "fix", "text": "one fit only",
                                 "fix": "quote both fits"},
@@ -128,3 +130,24 @@ def test_a_drought_report_quotes_the_indices(no_deliverables):
     assert "SPI -0.42 at 1 month" in report["answer"] or "SPEI" in report["answer"]
     out = critic.critique(ws, None)
     assert all(c["passed"] for c in out["checks"]), out["checks"]
+
+
+def test_skipped_comparison_is_not_reported_as_passed(no_deliverables):
+    ws = _ran()
+    rec = ws.run['results'][-1]
+    rec['result'] = {'glofas': {'comparable': False, 'note': 'Catchment match unverified.'}}
+    gate = {'step': rec['id'], 'check': 'cross_check_ratio', 'passed': True,
+            'skipped': True, 'detail': 'Catchment match unverified.'}
+    rec['gates'] = [gate]
+    ws.run['gates'] = [gate]
+    ws.critique = {'not_established': ['An earlier limitation.']}
+    report = author.author_report(ws, None)
+    sections = {s['id']: s['text'] for s in report['sections']}
+    assert '0 of 1 gates passed; 1 skipped' in sections['summary']
+    assert 'cross_check_ratio skipped' in sections[f"results-{rec['id']}"]
+    assert 'comparison not established' in sections[f"results-{rec['id']}"]
+    assert 'mean None' not in sections[f"results-{rec['id']}"]
+    assert 'cross_check_ratio skipped' in sections['limitations']
+    assert 'Every gate and check passed' not in sections['limitations']
+    assert 'An earlier limitation.' in report['not_established']
+    assert any('skipped' in s for s in critic.not_established(ws))

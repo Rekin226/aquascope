@@ -18,7 +18,7 @@ from typing import Any
 
 #: Keys that are never a scalar worth tabulating (bulk data, prose, provenance).
 BULK_KEYS = frozenset({
-    "series", "points", "samples", "methods", "notes", "attribution", "license", "indices", "stations",
+    "series", "observations", "points", "samples", "methods", "notes", "attribution", "license", "indices", "stations",
     "schedule", "per_season", "annual_max", "annual_maxima", "ffa", "fdc", "estimates", "similarity",
     "regression", "attributes", "sufficiency", "recon", "era5", "requested", "correlations", "parameters",
     "preview", "frame", "rows", "segments", "events", "propagation", "sgi", "eto", "features", "target",
@@ -137,17 +137,19 @@ def period_of(payload: dict[str, Any], dates: list[str] | None = None) -> str:
 # ── series and maxima ─────────────────────────────────────────────────────
 
 
-def series_of(payload: dict[str, Any], key: str = "series") -> tuple[list[str], list[float | None]] | None:
+def series_of(payload: dict[str, Any], key: str = "series", *,
+              preserve_time: bool = False) -> tuple[list[str], list[float | None]] | None:
     """The record as ``(dates, values)`` from ``{"t","v"}``, ``{"index","values"}`` or ``points`` pairs."""
+    stamp = (lambda x: x.isoformat() if hasattr(x, "isoformat") else str(x)) if preserve_time else date_key
     s = payload.get(key)
     if isinstance(s, dict):
         t = s.get("t", s.get("index"))
         v = s.get("v", s.get("values"))
         if isinstance(t, list) and isinstance(v, list) and t and len(t) == len(v):
-            return [date_key(x) for x in t], numbers(v)
+            return [stamp(x) for x in t], numbers(v)
     pts = payload.get("points")
     if isinstance(pts, list) and pts and all(isinstance(p, (list, tuple)) and len(p) >= 2 for p in pts):
-        return [date_key(p[0]) for p in pts], [num(p[1]) for p in pts]
+        return [stamp(p[0]) for p in pts], [num(p[1]) for p in pts]
     return None
 
 
@@ -218,12 +220,13 @@ def return_levels_of(payload: dict[str, Any]) -> dict[str, Any] | None:
             out["lp3"] = numbers(lp3["q"])
         if isinstance(boot, dict) and isinstance(boot.get("q"), list):
             out["boot"] = numbers(boot["q"])
-        for name, fit in (("GEV bootstrap 90 %", boot), ("Log-Pearson III 90 %", lp3)):
+        for name, fit in (("GEV MLE/L-moments bootstrap", boot), ("Log-Pearson III", lp3)):
             ci = fit.get("ci") if isinstance(fit, dict) else None
             if isinstance(ci, list) and ci and all(isinstance(c, (list, tuple)) and len(c) == 2 for c in ci):
                 out["lower"] = [num(c[0]) for c in ci]
                 out["upper"] = [num(c[1]) for c in ci]
-                out["band"] = name
+                level = num(fit.get("ci_level"))
+                out["band"] = name + (f" {level * 100:g} %" if level is not None else " (confidence level unrecorded)")
                 break
     elif isinstance(src.get("return_periods"), list) and isinstance(src.get("return_levels"), list):
         # workbench return_periods: one distribution with bootstrap bounds and the empirical points

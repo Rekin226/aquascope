@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AquaScope Explorer: click any gauge on Earth</title>
+  <title>AquaScope Hydrology — Explorer</title>
   <meta name="description" content="Every public water gauge AquaScope can reach, on one map. Click a station for the observed record, flood frequency, flow duration and trend, computed in your browser." />
-  <meta property="og:title" content="AquaScope Explorer" />
+  <meta property="og:title" content="AquaScope Hydrology — Explorer" />
   <meta property="og:description" content="Click any public water gauge on Earth: the observed record, flood frequency with confidence limits, flow duration, trend and a rainfall-runoff model, computed in your browser. Nothing to install." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://rekin226-aquascope-explorer.static.hf.space/" />
@@ -32,8 +32,8 @@
       <button id="btn-home" class="brand-btn" title="Back to the start">
         <span class="logo" aria-hidden="true">🌊</span>
         <span class="brand-text">
-          <span class="brand-name">AquaScope Explorer</span>
-          <span class="tagline">Every public gauge we can reach, on one map.</span>
+          <span class="brand-name">AquaScope Hydrology</span>
+          <span class="tagline">Explorer · river records and reproducible analyses</span>
         </span>
       </button>
     </div>
@@ -43,13 +43,21 @@
                role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list" />
         <div id="search-results" class="search-results" role="listbox" aria-label="Search results" hidden></div>
       </div>
+      <details class="header-tools">
+      <summary class="btn">Tools</summary>
+      <div class="header-tools-menu">
       <button id="btn-workbench" class="btn" title="Analyse your own data with the same tools">My data</button>
+      <button id="btn-open-study" class="btn">Open saved study</button>
+      <input id="open-study-file" type="file" accept=".json" hidden />
       <button id="btn-places" class="btn" title="Gauges you saved in this browser; compare two to five of them">My places<span id="places-count" class="tab-badge" hidden></span></button>
+      <button id="btn-usage" class="btn">Optional usage log</button>
       <button id="btn-cite-top" class="btn" title="How to cite AquaScope and the data">Cite</button>
       <button id="btn-ask" class="btn ask-toggle" aria-expanded="false" aria-controls="drawer"
               title="Ask a question in plain language; answered from real gauges by aquascope's tools, in your browser">Ask ✨</button>
       <button id="btn-study" class="btn ask-toggle" aria-expanded="false" aria-controls="drawer"
               title="A complete study at the selected place: the brief agreed with you, the plan approved by you, a report with figures and a bundle">Study</button>
+      </div>
+      </details>
     </div>
   </header>
 
@@ -154,18 +162,19 @@
     <aside id="panel" class="panel">
       <!-- welcome -->
       <div id="panel-empty" class="panel-empty">
-        <h2>Pick a gauge</h2>
-        <p>Click a dot for its record, floods, flows and trend. Click anywhere else for the
-          hydrology of that spot.</p>
-        <div class="try">
-          <button class="chip" data-try="s" data-key="usgs/USGS-01013500">A US gauge</button>
-          <button class="chip" data-try="p" data-lat="25.05" data-lon="121.55">Climate of Taipei</button>
-          <button class="chip" data-try="ask">Ask the Analyst</button>
+        <h2>Find a usable river record</h2>
+        <p>Search a river or gauge. Check the available period and units, then export the data or start a study.</p>
+        <div class="entry-routes">
+          <button class="btn primary" data-try="s" data-key="usgs/USGS-01013500">Find river data · Fish River</button>
+          <button class="btn" data-try="study">Explore a worked analysis</button>
+          <button class="btn" data-try="table">Analyse my table · try a sample</button>
         </div>
+        <p class="muted">No installation or API key for these workflows. Coverage varies by agency.
+          Recorded analyses show their original version and limitations.</p>
         <details class="tips">
           <summary>What works today</summary>
           <ul>
-            <li><strong>USGS</strong>, <strong>UK EA</strong>, <strong>Hub'Eau</strong>: full daily records, so flood frequency, flow duration and trend.</li>
+            <li><strong>USGS</strong>, <strong>UK EA</strong>, <strong>Hub'Eau</strong>: daily records where available. The returned period determines which analyses can run.</li>
             <li><strong>PEGELONLINE</strong>, <strong>OPW</strong>: the last month only. <strong>Taiwan CWA</strong>: daily rainfall.</li>
             <li>Anywhere on land: ERA5 climate, GloFAS modelled discharge, and the upstream catchment.</li>
             <li>The first analysis loads Python here (about 15 MB, once).</li>
@@ -200,7 +209,12 @@
               </div>
             </details>
           </div>
+          <p id="st-export-help" class="muted" hidden>Useful in your work? <a href="https://github.com/Rekin226/aquascope" target="_blank" rel="noopener">Star AquaScope on GitHub</a> or <a href="https://github.com/Rekin226/aquascope/issues" target="_blank" rel="noopener">report a problem</a>.</p>
           <div id="status" class="status" hidden></div>
+          <details class="record-availability"><summary>Data coverage and freshness</summary>
+            <p id="st-observation-status" class="muted">Observation coverage is checked when the record opens.</p>
+            <p id="st-analysis-period" class="muted"></p>
+          </details>
         </div>
 
         <div class="tabs" role="tablist" aria-label="Station analyses">
@@ -487,6 +501,9 @@
         <div class="panes">
           <section id="wb-tab-data" role="tabpanel" aria-labelledby="wb-t-data" tabindex="0">
             <div id="wb-empty">
+              <p><button id="wb-sample" class="btn">Try a sample CSV</button>
+                <a href="./samples/daily-flow.csv" download>Download sample</a></p>
+              <p class="muted">The sample is synthetic daily discharge for learning the workflow, not observed river data.</p>
               <div id="wb-drop" class="wb-drop">
                 <p><strong>Drop a file here</strong>, or <label class="link" for="wb-file">choose one</label>.</p>
                 <input type="file" id="wb-file" accept=".csv,.txt,.xlsx,.xls" hidden />

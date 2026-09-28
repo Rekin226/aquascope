@@ -3,6 +3,7 @@
 // call can be abandoned: Python keeps running to completion in the worker, but
 // a cancelled call never lands on the page.
 
+import { metrics } from "./metrics.js?v=__BUILD__";
 import { CONFIG } from "../config.js?v=__BUILD__";
 import { sourceStyle, state } from "./core.js?v=__BUILD__";
 import { bootDone, bootProgress } from "./shell.js?v=__BUILD__";
@@ -89,6 +90,8 @@ export function restartWorker() {
 
 // Returns a promise plus a cancel() that rejects it and forgets the reply.
 export function callCancelable(type, payload = {}) {
+  const started = performance.now(), runtime = state.workerReady ? "warm" : "cold";
+  const kind = { analyze: "station", ingest: "table", load_table: "table", studio: "study" }[type];
   ensureWorker();
   const id = ++state.reqId;
   let reject_;
@@ -103,7 +106,14 @@ export function callCancelable(type, payload = {}) {
     reject_(new Cancelled());
     return true;
   };
-  return { promise, cancel, id };
+  const measured = promise.then(result => {
+    if (kind) metrics.record(result?.error ? "operation_error" : "operation_ok", { kind, runtime, durationMs: performance.now() - started });
+    return result;
+  }, error => {
+    if (kind && !(error instanceof Cancelled)) metrics.record("operation_error", { kind, runtime, durationMs: performance.now() - started });
+    throw error;
+  });
+  return { promise: measured, cancel, id };
 }
 
 export function call(type, payload = {}) {

@@ -337,3 +337,21 @@ def test_infer_site_ids_is_deterministic_and_stable():
     assert res1[0].site_id == res2[0].site_id
     assert res1[1].site_id == res2[1].site_id
     assert res1[0].site_id.startswith("syn:taiwan_cwa:")
+
+def test_infer_site_ids_skips_nameless_stations():
+    st1 = Station(
+        source="usgs", station_id="USGS-092359167282201", name=None,
+        latitude=8.716, longitude=167.733, variables=("water_quality",)
+    )
+    st2 = Station(
+        source="usgs", station_id="USGS-092359167282206", name="",
+        latitude=8.716, longitude=167.733, variables=("water_quality",)
+    )
+    st3 = Station(
+        source="usgs", station_id="USGS-092359167282209", name="   ",
+        latitude=8.716, longitude=167.733, variables=("water_quality",)
+    )
+    inferred = infer_site_ids([st1, st2, st3], precision=3)
+    assert inferred[0].site_id == "USGS-092359167282201"
+    assert inferred[1].site_id == "USGS-092359167282206"
+    assert inferred[2].site_id == "USGS-092359167282209"

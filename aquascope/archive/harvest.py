@@ -101,15 +101,23 @@ def infer_site_ids(stations: list[Station], precision: int = 3) -> list[Station]
 
     Only updates records where ``site_id == station_id`` (or empty) so that
     collector-supplied agency site IDs (such as Hub'Eau code_site or UK EA
-    stationGuid) are never overwritten.
+    stationGuid) are never overwritten. Stations without a name (or with an
+    empty folded name) are skipped so coordinates alone do not fuse distinct
+    nameless sensors.
+
+    Note: rounding coordinates can split pairs that straddle a cell boundary,
+    so nearby pairs group in practice rather than by guarantee.
     """
     groups: dict[tuple[str, str, float, float], list[Station]] = defaultdict(list)
     for st in stations:
         if st.latitude is None or st.longitude is None:
             continue
+        fname = fold_text(st.name)
+        if not fname:
+            continue
         key = (
             st.source,
-            fold_text(st.name),
+            fname,
             round(st.latitude, precision),
             round(st.longitude, precision),
         )

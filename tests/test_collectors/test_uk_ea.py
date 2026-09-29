@@ -8,10 +8,12 @@ from aquascope.collectors.uk_ea import (
     MAPPED_OBSERVED_PROPERTY_UNITS,
     CollectorError,
     UKEACollector,
+    _map_uk_ea_quality,
 )
 from aquascope.schemas.water_data import (
     DataSource,
     GeoLocation,
+    Quality,
     StreamflowReading,
     WaterLevelReading,
     WaterQualitySample,
@@ -66,17 +68,32 @@ def test_extract_observed_property_from_measure_id():
     assert UKEACollector._extract_observed_property_from_measure_id("a" * 36 + "_") is None
 
 
-@pytest.mark.parametrize(("measure", "station", "prop"), [
-    # the ids the 2026-09-23 harvest rejected as "Invalid measure" (sub-sites carry a suffix after the SUID)
-    ("26e91f00-1139-4775-aac4-76c88f1bf1e6_w1-flow-m-86400-m3s-qualified",
-     "26e91f00-1139-4775-aac4-76c88f1bf1e6_w1", "flow"),
-    ("162e2bb4-a4f7-48a7-910b-65a4f5cd0a4f_2879_w2TH-flow-m-86400-m3s-qualified",
-     "162e2bb4-a4f7-48a7-910b-65a4f5cd0a4f_2879_w2TH", "flow"),
-    ("0e7c1a3d-2b4f-4c5e-8a9b-1c2d3e4f5a6b_TL31_181-gw-dipped-i-mAOD-qualified",
-     "0e7c1a3d-2b4f-4c5e-8a9b-1c2d3e4f5a6b_TL31_181", "gw"),
-    ("0e7c1a3d-2b4f-4c5e-8a9b-1c2d3e4f5a6b-level-i-900-m-qualified",
-     "0e7c1a3d-2b4f-4c5e-8a9b-1c2d3e4f5a6b", "level"),
-])
+@pytest.mark.parametrize(
+    ("measure", "station", "prop"),
+    [
+        # the ids the 2026-09-23 harvest rejected as "Invalid measure" (sub-sites carry a suffix after the SUID)
+        (
+            "26e91f00-1139-4775-aac4-76c88f1bf1e6_w1-flow-m-86400-m3s-qualified",
+            "26e91f00-1139-4775-aac4-76c88f1bf1e6_w1",
+            "flow",
+        ),
+        (
+            "162e2bb4-a4f7-48a7-910b-65a4f5cd0a4f_2879_w2TH-flow-m-86400-m3s-qualified",
+            "162e2bb4-a4f7-48a7-910b-65a4f5cd0a4f_2879_w2TH",
+            "flow",
+        ),
+        (
+            "0e7c1a3d-2b4f-4c5e-8a9b-1c2d3e4f5a6b_TL31_181-gw-dipped-i-mAOD-qualified",
+            "0e7c1a3d-2b4f-4c5e-8a9b-1c2d3e4f5a6b_TL31_181",
+            "gw",
+        ),
+        (
+            "0e7c1a3d-2b4f-4c5e-8a9b-1c2d3e4f5a6b-level-i-900-m-qualified",
+            "0e7c1a3d-2b4f-4c5e-8a9b-1c2d3e4f5a6b",
+            "level",
+        ),
+    ],
+)
 def test_sub_site_measure_ids_keep_their_suffix(measure, station, prop):
     assert UKEACollector._extract_observed_property_from_measure_id(measure) == prop
     assert UKEACollector._extract_station_suid_from_measure_id(measure) == station
@@ -165,7 +182,7 @@ def test_extract_water_quality_and_water_level_metadata():
         "riverName": "River C",
         "lat": "51.7",
         "long": "-0.14",
-        "catchmentArea": "123.4"
+        "catchmentArea": "123.4",
     }
     stn_name3, river3, location3, catchment_area = UKEACollector._extract_streamflow_reading_metadata(
         streamflow_metadata
@@ -321,12 +338,12 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
     item1 = {
         "measure": {"@id": f"http://measures/{suid}-measure-info"},
         "value": "1.1",
-        "dateTime": "2025-01-01T01:00:00"
+        "dateTime": "2025-01-01T01:00:00",
     }
     item2 = {
-        "measure":{"@id": f"http://measures/{suid}-measure-info"},
+        "measure": {"@id": f"http://measures/{suid}-measure-info"},
         "value": "2.2",
-        "dateTime": "2025-01-02T01:00:00"
+        "dateTime": "2025-01-02T01:00:00",
     }
 
     def behaviour(path, params):
@@ -352,11 +369,7 @@ def test_fetch_raw_errors_and_behaviour(monkeypatch):
 
     cli = DummyClient(behaviour=behaviour2)
     coll3 = UKEACollector(client=cli)
-    out = coll3.fetch_raw(
-        observed_property="waterLevel",
-        measure=f"{suid}-flow-123",
-        collection="15min"
-    )
+    out = coll3.fetch_raw(observed_property="waterLevel", measure=f"{suid}-flow-123", collection="15min")
     # first entry contains params, should NOT include 'period' because collection ignored when measure present
     assert "period" not in out[0]
     assert "measure" in out[0]
@@ -517,12 +530,12 @@ def test_fetch_raw_max_items_none_returns_all_items():
     item1 = {
         "measure": {"@id": f"http://measures/{suid}-measure-info"},
         "value": "1.1",
-        "dateTime": "2025-01-01T01:00:00"
+        "dateTime": "2025-01-01T01:00:00",
     }
     item2 = {
         "measure": {"@id": f"http://measures/{suid}-measure-info"},
         "value": "2.2",
-        "dateTime": "2025-01-02T01:00:00"
+        "dateTime": "2025-01-02T01:00:00",
     }
 
     def behaviour(path, params):
@@ -617,3 +630,179 @@ def test_normalise_streamflow_and_water_quality_and_level_and_skipping():
     item_rain.update({"value": "0.5"})
     item_rain["_station"] = {"label": "RStn", "lat": "51.1", "long": "-0.11"}
     rain_samples = coll.normalise([request_meta_rain, item_rain])
+    assert len(rain_samples) == 1
+    assert isinstance(rain_samples[0], WaterQualitySample)
+
+
+class TestUKEAQuality:
+    """Test UK Environment Agency quality, completeness, and sub-daily count mapping."""
+
+    def test_recorded_good_complete_day_maps_to_approved(self):
+        # Measure 052d0819-2a32-47df-9b99-c243c9c8235b-flow-m-86400-m3s-qualified: 2010-01-01
+        item = {
+            "date": "2010-01-01",
+            "value": 12.34,
+            "quality": "Good",
+            "completeness": "Complete",
+        }
+        quality, quality_raw = _map_uk_ea_quality(item)
+        assert quality == Quality.APPROVED
+        assert quality_raw == "quality=Good | completeness=Complete"
+
+    def test_recorded_good_incomplete_day_maps_to_approved(self):
+        # Measure 052d0819-2a32-47df-9b99-c243c9c8235b-flow-m-86400-m3s-qualified: 2010-06-27
+        # Harmonized code is taken from quality alone; completeness and counts stay in quality_raw.
+        item = {
+            "date": "2010-06-27",
+            "value": 1.048,
+            "quality": "Good",
+            "completeness": "Incomplete",
+            "valid": "8021",
+            "invalid": "0",
+            "missing": "1979",
+        }
+        quality, quality_raw = _map_uk_ea_quality(item)
+        assert quality == Quality.APPROVED
+        assert "quality=Good" in quality_raw
+        assert "completeness=Incomplete" in quality_raw
+        assert "valid=8021" in quality_raw
+        assert "missing=1979" in quality_raw
+
+    def test_recorded_unchecked_incomplete_day_maps_to_provisional(self):
+        # Measure 052d0819-2a32-47df-9b99-c243c9c8235b-flow-m-86400-m3s-qualified: 2008-10-31
+        item = {
+            "date": "2008-10-31",
+            "value": 3.45,
+            "quality": "Unchecked",
+            "completeness": "Incomplete",
+        }
+        quality, quality_raw = _map_uk_ea_quality(item)
+        assert quality == Quality.PROVISIONAL
+        assert quality_raw == "quality=Unchecked | completeness=Incomplete"
+
+    def test_recorded_suspect_day_maps_to_suspect(self):
+        # Measure 052d0819-2a32-47df-9b99-c243c9c8235b-flow-m-86400-m3s-qualified: 2010-07-15
+        item = {
+            "date": "2010-07-15",
+            "value": 0.85,
+            "quality": "Suspect",
+        }
+        quality, quality_raw = _map_uk_ea_quality(item)
+        assert quality == Quality.SUSPECT
+        assert quality_raw == "quality=Suspect"
+
+    def test_estimated_quality_maps_to_estimated(self):
+        item = {
+            "date": "2010-08-01",
+            "value": 7.89,
+            "quality": "Estimated",
+            "completeness": "Complete",
+        }
+        quality, quality_raw = _map_uk_ea_quality(item)
+        assert quality == Quality.ESTIMATED
+        assert quality_raw == "quality=Estimated | completeness=Complete"
+
+    def test_missing_quality_maps_to_unknown(self):
+        item = {
+            "date": "2010-09-01",
+            "value": None,
+            "quality": "Missing",
+        }
+        quality, quality_raw = _map_uk_ea_quality(item)
+        assert quality == Quality.UNKNOWN
+        assert quality_raw == "quality=Missing"
+
+    def test_synthetic_invalid_sub_daily_retains_raw_count(self):
+        item = {
+            "date": "2024-05-01",
+            "value": 8.90,
+            "quality": "Good",
+            "completeness": "Complete",
+            "valid": "9500",
+            "invalid": "500",
+            "missing": "0",
+        }
+        quality, quality_raw = _map_uk_ea_quality(item)
+        assert quality == Quality.APPROVED
+        assert "invalid=500" in quality_raw
+
+    def test_empty_and_na_quality_metadata_maps_to_unknown(self):
+        item_empty = {"date": "2024-05-01", "value": 1.0}
+        q, raw = _map_uk_ea_quality(item_empty)
+        assert q == Quality.UNKNOWN
+        assert raw is None
+
+        item_na = {"date": "2024-05-01", "value": 1.0, "quality": "N/A", "completeness": "N/A"}
+        q, raw = _map_uk_ea_quality(item_na)
+        assert q == Quality.UNKNOWN
+        assert raw is None
+
+    def test_list_wrapped_api_fields(self):
+        item = {
+            "date": "2024-05-01",
+            "value": 4.56,
+            "quality": ["Good", "AlternativeLabel"],
+            "completeness": ["Complete"],
+        }
+        quality, quality_raw = _map_uk_ea_quality(item)
+        assert quality == Quality.APPROVED
+        assert quality_raw == "quality=Good | completeness=Complete"
+
+    def test_normalise_streamflow_populates_quality_and_raw(self):
+        suid = "052d0819-2a32-47df-9b99-c243c9c8235b"
+        request_meta = {"observedProperty": "waterFlow"}
+        item = {
+            "measure": {"@id": f"http://measures/{suid}-flow-m-86400-m3s-qualified"},
+            "value": "10.5",
+            "date": "2010-01-01",
+            "quality": "Good",
+            "completeness": "Complete",
+            "valid": "10000",
+            "invalid": "0",
+            "missing": "0",
+            "_station": {"label": "Recorded Gauge", "riverName": "River", "lat": "51.41", "long": "-0.31"},
+        }
+        collector = UKEACollector(client=DummyClient())
+        readings = collector.normalise([request_meta, item])
+        assert len(readings) == 1
+        r = readings[0]
+        assert isinstance(r, StreamflowReading)
+        assert r.discharge_cms == pytest.approx(10.5)
+        assert r.quality == Quality.APPROVED
+        assert r.quality_raw == "quality=Good | completeness=Complete | valid=10000 | invalid=0 | missing=0"
+
+    def test_normalise_water_level_and_rainfall_populates_quality(self):
+        suid = "b" * 36
+        collector = UKEACollector(client=DummyClient())
+
+        # Water level
+        lvl_meta = {"observedProperty": "waterLevel"}
+        lvl_item = {
+            "measure": {"@id": f"http://measures/{suid}-level-i-900-m-qualified"},
+            "value": "2.45",
+            "date": "2008-10-31",
+            "quality": "Unchecked",
+            "completeness": "Incomplete",
+            "_station": {"label": "Level Stn", "lat": "51.5", "long": "-0.1"},
+        }
+        lvls = collector.normalise([lvl_meta, lvl_item])
+        assert len(lvls) == 1
+        assert isinstance(lvls[0], WaterLevelReading)
+        assert lvls[0].quality == Quality.PROVISIONAL
+        assert lvls[0].quality_raw == "quality=Unchecked | completeness=Incomplete"
+
+        # Rainfall
+        rain_meta = {"observedProperty": "rainfall"}
+        rain_item = {
+            "measure": {"@id": f"http://measures/{suid}-rainfall-ti-24h-mm-qualified"},
+            "value": "15.0",
+            "date": "2010-08-01",
+            "quality": "Estimated",
+            "completeness": "Complete",
+            "_station": {"label": "Rain Stn", "lat": "51.6", "long": "-0.2"},
+        }
+        rains = collector.normalise([rain_meta, rain_item])
+        assert len(rains) == 1
+        assert isinstance(rains[0], WaterQualitySample)
+        assert rains[0].quality == Quality.ESTIMATED
+        assert rains[0].quality_raw == "quality=Estimated | completeness=Complete"

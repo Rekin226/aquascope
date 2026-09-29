@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Added
+- **UK EA daily reading quality mapping** (#439). Parsed agency `quality`, `completeness`, and sub-daily counts (`valid`, `invalid`, `missing`) in `UKEACollector`. Mapped `quality` codes to harmonized `Quality` enum (`Good` -> `approved`, `Unchecked` -> `provisional`, `Estimated` -> `estimated`, `Suspect` -> `suspect`, `Missing` -> `unknown`), while preserving completeness and raw telemetry counts in `quality_raw`. Documented the mapping in `docs/data_sources.md`.
+
 ### Fixed
 - Stale counts outside the count guard (#453). `docs/api.md` and `docs/faq.md` state the registry's source count and are now guarded; the banner, the architecture guide and the troubleshooting page no longer carry decorative counts; the dashboard's AI page reads the methodology count from the knowledge base; and `.github/copilot-instructions.md` describes the current repo. Counts in `paper.md`, `ROADMAP.md` and past CHANGELOG entries are snapshots and stay as written, with a comment saying so.
 - Record the verified v0.21.0 Zenodo DOI (`10.5281/zenodo.23048856`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.

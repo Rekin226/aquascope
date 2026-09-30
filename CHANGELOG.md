@@ -4,6 +4,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **Windows test assumptions:** repair evidence carries POSIX paths, and the workflow shell check skips on Windows (part of #432).
+
 ## [0.21.0] - 2026-09-30
 
 ### Added

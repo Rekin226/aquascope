@@ -17,7 +17,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
   Every collector defaults to `unknown` until it has its own mapping.
 
 - **Mapped so far:** USGS (`aquascope.collectors.usgs`) — reference
-  implementation.
+  implementation; Environment Agency (`aquascope.collectors.uk_ea`).
 
 - **Not yet mapped:** every other collector. Each is a good first
   issue against the USGS mapping as the template — see [#374](https://github.com/Rekin226/aquascope/issues/374).
@@ -35,7 +35,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | :--- | :--- | :--- |
 | USGS (OGC API) | `approval_status` ("Approved"/"Provisional"), `qualifier` (free text) | `approved` / `provisional`; a qualifier mentioning ice or estimation overrides to `suspect` / `estimated` |
 | USGS (legacy keyless API) | `qualifiers` (e.g. "A", "P", "P Ice") | same idea, letter-code based — see `usgs.py` |
-| Environment Agency (England) | not yet mapped | `unknown` |
+| Environment Agency (England) | `quality` ("Good", "Unchecked", "Estimated", "Suspect", "Missing"), `completeness`, sub-daily counts (`valid`, `invalid`, `missing`) | `quality` maps to `approved` ("Good"), `provisional` ("Unchecked"), `estimated` ("Estimated"), `suspect` ("Suspect"), `unknown` ("Missing"); `completeness` and sub-daily counts are preserved in `quality_raw` |
 | BoM Water Data Online | not yet mapped | `unknown` |
 | Hub'Eau | not yet mapped | `unknown` |
 | Taiwan sources | not yet mapped | `unknown` |

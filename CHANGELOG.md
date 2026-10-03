@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Changed
+- **The design-flow study checks the annual maxima for a step change too** (#376). The flood fit that `analyze_station` and `flood_frequency` run now carries Pettitt's test on the same maxima (`ffa.amax_change`), next to the Mann-Kendall trend it already had. A significant shift keeps the estimate and grades it indicative, with the year named and a pointer to the flood change study. There is no new plan step, so every recorded study and HydroGym score stays as it was.
+
 ### Fixed
 - Stale counts outside the count guard (#453). `docs/api.md` and `docs/faq.md` state the registry's source count and are now guarded; the banner, the architecture guide and the troubleshooting page no longer carry decorative counts; the dashboard's AI page reads the methodology count from the knowledge base; and `.github/copilot-instructions.md` describes the current repo. Counts in `paper.md`, `ROADMAP.md` and past CHANGELOG entries are snapshots and stay as written, with a comment saying so.
 - Record the verified v0.21.0 Zenodo DOI (`10.5281/zenodo.23048856`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.

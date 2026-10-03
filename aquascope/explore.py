@@ -816,6 +816,24 @@ def analyze_series(s: pd.Series, variable: str, unit: str, *,
                     }
                 except Exception as exc:  # noqa: BLE001
                     logger.info("amax trend skipped: %s", exc)
+            # A stationary fit also assumes no step change (a dam, a new rating, a shift in regime): Pettitt's
+            # test on the same maxima (#376). A shift does not stop the fit; the Interpreter grades it indicative.
+            if n_am >= 10:
+                try:
+                    from aquascope.advanced import _pettitt
+
+                    x = am.to_numpy(dtype=float)
+                    t, _k, p_shift = _pettitt(x)
+                    years = [int(getattr(d, "year", d)) for d in am.index]
+                    before, after = x[: t + 1], x[t + 1:]
+                    ffa["amax_change"] = {
+                        "on": "annual maxima", "test": "Pettitt", "n_years": int(len(x)),
+                        "change_year": years[t + 1], "p_value": _clean(float(p_shift)),
+                        "significant": bool(p_shift < 0.05),
+                        "mean_before": _clean(float(before.mean())), "mean_after": _clean(float(after.mean())),
+                    }
+                except Exception as exc:  # noqa: BLE001
+                    logger.info("amax change test skipped: %s", exc)
             out["ffa"] = ffa
         else:
             out["notes"].append(

@@ -165,3 +165,45 @@ def test_a_skipped_step_with_no_fallback_stays_skipped():
     ])
     run = run_study(study, tools=tools)
     assert run.results[1]["skipped"] and not run.results[1]["fallback_used"]
+
+
+# ── #376 in the core flood fit: Pettitt on the annual maxima the stationary fit uses ──
+
+
+def _flows(years: int, shift_at: int | None, seed: int) -> object:
+    import numpy as np
+    import pandas as pd
+
+    rng = np.random.default_rng(seed)
+    idx = pd.date_range("1960-01-01", periods=int(years * 365.25), freq="D")
+    q = 20 * rng.lognormal(0, 0.3, len(idx))
+    for y in sorted(set(idx.year)):
+        k = idx.get_loc(pd.Timestamp(f"{y}-04-20"))
+        bump = 2.0 if shift_at is not None and y >= 1960 + shift_at else 1.0
+        q[k] += bump * (80 + 20 * rng.gumbel())
+    return pd.Series(q, index=idx)
+
+
+def test_the_flood_fit_reports_a_step_change_in_its_maxima():
+    from aquascope.explore import analyze_series
+
+    shifted = analyze_series(_flows(50, 25, 3), "discharge", "m3/s")["ffa"]["amax_change"]
+    assert shifted["significant"] and abs(shifted["change_year"] - 1985) <= 3 and shifted["mean_after"] > \
+        shifted["mean_before"]
+    clean = analyze_series(_flows(50, None, 4), "discharge", "m3/s")["ffa"]["amax_change"]
+    assert clean["significant"] is False and clean["test"] == "Pettitt"
+
+
+def test_a_regime_shift_behind_the_headline_makes_the_answer_indicative():
+    from aquascope.studio.roles import interpreter
+    from aquascope.studio.workspace import Workspace
+
+    ws = Workspace()
+    ws.run = {"results": [{"id": "s3", "tool": "flood_frequency", "ok": True, "gates_passed": True, "gates": [],
+                           "result": {"ffa": {"amax_change": {"significant": True, "change_year": 1991,
+                                                              "p_value": 0.01}}}}]}
+    assert interpreter.regime_shift(ws, "s3")["change_year"] == 1991
+    ws.run["results"][0]["result"]["ffa"]["amax_change"]["significant"] = False
+    assert interpreter.regime_shift(ws, "s3") is None
+    ws.run["results"][0]["result"] = {"ffa": {}}
+    assert interpreter.regime_shift(ws, "s3") is None, "a payload without the test changes nothing"

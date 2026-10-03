@@ -291,6 +291,10 @@ def _numbers_for(sid: str, tool: str, p: dict[str, Any], rp: Any) -> list[dict[s
         if isinstance(trend, dict) and trend.get("p_value") is not None:
             add(f"Mann-Kendall p-value ({trend.get('on') or 'annual mean'})", p_text(trend["p_value"]), "")
             add("Sen's slope", trend.get("sens_slope_per_year"), f"{unit} per year" if unit else "per year")
+        shift = (p.get("ffa") or {}).get("amax_change") or {}
+        if shift.get("significant"):  # a stationary fit across a regime shift (#376)
+            add("Step change in the annual maxima (Pettitt), year", shift.get("change_year"), "",
+                evidence={"basis": "ffa.amax_change.change_year"})
         out += others
     elif tool == "describe_catchment":
         attrs = p.get("attributes") or {}

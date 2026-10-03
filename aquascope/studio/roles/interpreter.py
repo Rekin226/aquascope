@@ -332,7 +332,20 @@ def grade_for_study(ws: Workspace, key: list[dict[str, Any]] | None = None) -> t
             grade = _lower(grade, "indicative")
     if headline_gates(ws, primary) or (ws.run or {}).get("stop_reason"):
         grade = _lower(grade, "indicative")
+    if regime_shift(ws, primary):
+        grade = _lower(grade, "indicative")
     return grade, primary
+
+
+def regime_shift(ws: Workspace, primary: str | None) -> dict[str, Any] | None:
+    """The step change Pettitt's test found in the annual maxima behind the headline (``ffa.amax_change`` of the
+    primary step's payload), or None. A stationary fit across a shift spans two regimes: the answer stands, graded
+    indicative, with the year named (#376)."""
+    if not primary:
+        return None
+    payload = _result_of(ws, primary)
+    change = ((payload or {}).get("ffa") or {}).get("amax_change") if isinstance(payload, dict) else None
+    return change if isinstance(change, dict) and change.get("significant") else None
 
 
 # ── the rules ──
@@ -548,6 +561,12 @@ def rules_findings(ws: Workspace) -> dict[str, Any]:
         decision["evidence"].update({"grade": grade, "grade_scope": decision["grade_scope"],
                                      "checks": run.get("gates") or [],
                                      "failed_checks": run.get("failed_gates") or []})
+    shift = regime_shift(ws, primary)
+    if shift:
+        decision["limitations"].append(
+            f"Pettitt's test finds a step change in the annual maxima around {shift.get('change_year')} (p = "
+            f"{shift.get('p_value')}): the stationary fit spans two regimes. Ask whether the flood is changing for "
+            "the change study.")
     for g in (run.get("failed_gates") or [])[:3]:
         decision["limitations"].append(f"step {g.get('step')} did not pass {g.get('check')}: {g.get('detail')}")
     for c in ((study.plan or {}).get("caveats") or [])[:2] if study else []:

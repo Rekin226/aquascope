@@ -97,6 +97,10 @@ substantial regulation. So does a snowy one, at least 10 % mean snow cover.
 Nothing is blocked. A stationary fit across a shift answers a narrower
 question, and the point is to say which.
 
+The plain design-flow study applies the same idea. Its flood fit runs Pettitt's
+test on the annual maxima it already holds. When that finds a significant shift,
+the answer is graded indicative and names the year.
+
 ## References
 
 - Pettitt, A. N. (1979). A non-parametric approach to the change-point problem. *J. R. Stat. Soc. C*, 28(2), 126-135.

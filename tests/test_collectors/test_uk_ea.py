@@ -641,20 +641,23 @@ class TestUKEAQuality:
         # Measure 052d0819-2a32-47df-9b99-c243c9c8235b-flow-m-86400-m3s-qualified: 2010-01-01
         item = {
             "date": "2010-01-01",
-            "value": 12.34,
+            "value": 9.758,
             "quality": "Good",
             "completeness": "Complete",
+            "valid": "10000",
+            "invalid": "0",
+            "missing": "0",
         }
         quality, quality_raw = _map_uk_ea_quality(item)
         assert quality == Quality.APPROVED
-        assert quality_raw == "quality=Good | completeness=Complete"
+        assert quality_raw == "quality=Good | completeness=Complete | valid=10000 | invalid=0 | missing=0"
 
     def test_recorded_good_incomplete_day_maps_to_approved(self):
         # Measure 052d0819-2a32-47df-9b99-c243c9c8235b-flow-m-86400-m3s-qualified: 2010-06-27
         # Harmonized code is taken from quality alone; completeness and counts stay in quality_raw.
         item = {
             "date": "2010-06-27",
-            "value": 1.048,
+            "value": 0.602,
             "quality": "Good",
             "completeness": "Incomplete",
             "valid": "8021",
@@ -672,24 +675,36 @@ class TestUKEAQuality:
         # Measure 052d0819-2a32-47df-9b99-c243c9c8235b-flow-m-86400-m3s-qualified: 2008-10-31
         item = {
             "date": "2008-10-31",
-            "value": 3.45,
+            "value": 1.048,
             "quality": "Unchecked",
             "completeness": "Incomplete",
+            "valid": "3646",
+            "invalid": "0",
+            "missing": "6354",
         }
         quality, quality_raw = _map_uk_ea_quality(item)
         assert quality == Quality.PROVISIONAL
-        assert quality_raw == "quality=Unchecked | completeness=Incomplete"
+        assert "quality=Unchecked" in quality_raw
+        assert "completeness=Incomplete" in quality_raw
+        assert "valid=3646" in quality_raw
+        assert "missing=6354" in quality_raw
 
     def test_recorded_suspect_day_maps_to_suspect(self):
         # Measure 052d0819-2a32-47df-9b99-c243c9c8235b-flow-m-86400-m3s-qualified: 2010-07-15
         item = {
             "date": "2010-07-15",
-            "value": 0.85,
+            "value": 1.005,
             "quality": "Suspect",
+            "completeness": "Complete",
+            "valid": "10000",
+            "invalid": "0",
+            "missing": "0",
         }
         quality, quality_raw = _map_uk_ea_quality(item)
         assert quality == Quality.SUSPECT
-        assert quality_raw == "quality=Suspect"
+        assert "quality=Suspect" in quality_raw
+        assert "completeness=Complete" in quality_raw
+        assert "valid=10000" in quality_raw
 
     def test_estimated_quality_maps_to_estimated(self):
         item = {

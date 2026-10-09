@@ -187,7 +187,7 @@ SOURCES: dict[str, SourceMeta] = {
         supports_bbox=True, supports_station_lookup=True,
         output_model="StreamflowReading | WaterLevelReading | WaterQualitySample",
         license="OGL-UK-3.0", redistributable=True,
-        attribution="Environment Agency, Open Government Licence v3.0",
+        attribution="© Environment Agency copyright and/or database right 2015. All rights reserved.",
     ),
     "hubeau_hydrometrie": _s(
         key="hubeau_hydrometrie", label="Hub'Eau hydrométrie", region="France",

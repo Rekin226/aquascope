@@ -9,6 +9,7 @@ All notable changes to AquaScope are documented here.
 
 ### Fixed
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
+- **`uk_ea` attribution** (#473): use the Environment Agency Hydrological Open Data attribution statement from [data.gov.uk](https://www.data.gov.uk/dataset/98a4d46e-23e7-4430-883c-9e5f14645e8f/hydrological-open-data) (OGL v3.0 requires the provider-specified wording).
 
 ## [0.26.0] - 2026-10-09
 

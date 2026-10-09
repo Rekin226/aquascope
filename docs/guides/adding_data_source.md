@@ -2,6 +2,25 @@
 
 This guide walks you through adding a new water data API as an AquaScope collector. Contributions from all countries and regions are welcome.
 
+## Step 0: Verify the source terms
+
+Different data sources offer different levels of permission for data collection, storage, and redistribution, with limitations or even restrictions on automated collection, data caching, and redistributing data from third-party sources like our own. The first step to adding a new collector is to read the publisher's terms and conditions and clarify what functions of AquaScope can be performed on the data.
+
+Here's a checklist for steps to take before adding a data source:
+
+- [ ] Find the first-party terms or licence page covering the dataset or API you are calling.
+- [ ] Record the licence name or identifier exactly as the publisher writes it.
+- [ ] If the provider requires an exact attribution statement, note it down verbatim. If the provider doesn't provide an exact statement but requires attribution, write a statement that is accurate and concise. If the provider doesn't require attribution, write "none stated".
+- [ ] Record the terms URL and the date you checked them in the body of a new issue or pull request.
+
+This information is used in Step 3 to populate the `license`, `attribution`, and `redistributable` fields in the registry entry for the new collector.
+
+If both collection and redistribution are permitted according to the terms, set `redistributable=True`.
+
+If collection is permitted but redistribution is not permitted, or the terms for redistribution are unclear, document the restriction and leave `redistributable=False`; the source can still be added and a collector can be built, but it is not mirrored into the Archive.
+
+If collection is not permitted, or if the terms are unclear, do not add the source. Instead, open an issue to discuss with the maintainers.
+
 ## Step 1: Add the DataSource Enum
 
 Edit `aquascope/schemas/water_data.py` and add your source to the `DataSource` enum:
@@ -107,7 +126,7 @@ Two things to add:
     variables=("discharge", "water_level"),                # from schemas/station.py VARIABLES
     supports_bbox=False, supports_station_lookup=False,   # flip when the collector supports them
     output_model="StreamflowReading",
-    license="unknown", redistributable=False,              # only True after you have read the terms
+    license="unknown", redistributable=False,              # see Step 0 for how to decide
     attribution="Your Agency (licence name)",
 ),
 ```

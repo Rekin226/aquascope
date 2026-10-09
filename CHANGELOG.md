@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Changed
+- **Source terms are verified before a collector is written** (#474). `docs/guides/adding_data_source.md` gains a Step 0 checklist: the first-party terms covering the dataset or API being called, the terms of any third-party platform that hosts, proxies or wraps it, the licence name or identifier exactly as the publisher writes it, the required attribution, whether the terms permit automated collection, browser requests, caching, derived outputs, downloads and redistribution, and the terms URL and date checked recorded in a new issue or pull request. Attribution has three outcomes: copy the publisher's wording verbatim when an exact statement is given, write a short accurate statement when attribution is required without exact wording, or write "none stated" when it is not required. The findings then land in the registry's `license`, `attribution` and `redistributable` fields; a source whose redistribution permission is unclear is documented as restricted and left `redistributable=False`, so it still works everywhere but never reaches the Archive. `.github/ISSUE_TEMPLATE/new_data_source.md` asks requesters for the terms URL, licence, attribution statement and date checked, and `CONTRIBUTING.md` makes the check a pre-step, advising that unclear terms be clarified before implementation.
+
 ### Fixed
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
 

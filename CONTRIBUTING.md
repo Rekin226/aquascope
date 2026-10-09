@@ -25,6 +25,9 @@ Every merged PR is also credited in [CONTRIBUTORS.md](CONTRIBUTORS.md) and the R
 
 We want to cover water APIs from every country. To add a new collector:
 
+**Before you start, verify the source terms.** To be sure that we are allowed to store and/or redistribute the data, we should check the publisher's terms and record the licence and the required attribution while verifying what the terms allow us to do with the data we collect. Guidance can be found in
+[Step 0 of the adding-a-data-source guide](https://rekin226.github.io/aquascope/guides/adding_data_source/#step-0-verify-the-source-terms); if the data source's terms are unclear, look for clarity before implementation.
+
 1. Create a new file in `aquascope/collectors/` (e.g., `japan_mlit.py`).
 2. Subclass `BaseCollector` and implement `fetch_raw()` and `normalise()`.
 3. Map raw API fields to our unified schemas in `aquascope/schemas/water_data.py`.

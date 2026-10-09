@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Added
+- `explorer/demo/record_demo.mjs`: records the Explorer's release demo video (map, search, record, flood frequency, flow duration, GR4J, a recorded study) with Playwright, cuts the loading waits and encodes a 1080p MP4 for social posts.
+
 ### Fixed
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
 

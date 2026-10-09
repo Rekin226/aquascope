@@ -113,19 +113,18 @@ const OVERLAY = () => {
 // --- the edit list ----------------------------------------------------------------------------------
 // Every stretch of the recording is kept unless it falls inside a cut(). Times are seconds since the
 // page (and so the video) was created.
-const t0 = Date.now();
+let t0 = Date.now();   // reset when the page (and so the video) starts
 const now = () => (Date.now() - t0) / 1000;
 const cuts = [];
 const log = (...a) => console.log(`[${now().toFixed(1).padStart(6)}s]`, ...a);
 
+// A wait for the app (Python, agency data, a fit). Throws when it gives up, which fails the scene.
 async function waiting(label, fn, { keep = 1.0, timeout = 120000 } = {}) {
   const start = now();
   try {
     await fn(timeout);
-    return true;
   } catch (e) {
-    log(`  ${label}: gave up (${e.message.split("\n")[0]})`);
-    return false;
+    throw new Error(`${label}: gave up (${e.message.split("\n")[0]})`);
   } finally {
     const end = now();
     if (end - start > keep + 0.5) cuts.push([start + keep, end - 0.2]);
@@ -147,6 +146,8 @@ const context = await browser.newContext({
 });
 await context.addInitScript(OVERLAY);
 const page = await context.newPage();
+page.setDefaultTimeout(15000);
+t0 = Date.now();
 page.on("pageerror", (e) => log("page error:", e.message));
 
 const caption = (title, sub = "") =>
@@ -170,6 +171,7 @@ async function clickEl(locator, { pause = 450 } = {}) {
 // A tab in the station panel: click it, then wait for its card to fill.
 async function showTab(tab, cardSel, title, sub, { hold = 6000, ready } = {}) {
   log(`scene: ${tab}`);
+  await needStation();
   await clickEl(page.locator(`#t-${tab}`));
   await caption(title, sub);
   await waiting(`${tab} ready`, (t) => (ready
@@ -180,8 +182,21 @@ async function showTab(tab, cardSel, title, sub, { hold = 6000, ready } = {}) {
   await sleep(hold);
 }
 
+// A scene that fails is cut from the video whole, and leaves no caption or card behind.
 async function scene(name, fn) {
-  try { await fn(); } catch (e) { log(`scene ${name} skipped: ${e.message.split("\n")[0]}`); await caption(""); }
+  const start = now();
+  try { await fn(); } catch (e) {
+    log(`scene ${name} skipped: ${e.message.split("\n")[0]}`);
+    await caption("").catch(() => {});
+    await card("").catch(() => {});
+    await sleep(400);
+    cuts.push([start, now()]);
+  }
+}
+
+// The station tabs need an open station; without one, fail at once rather than waiting on a hidden tab.
+async function needStation() {
+  if (!(await page.locator("#panel-station").isVisible())) throw new Error("no station open");
 }
 
 // --- the take ---------------------------------------------------------------------------------------
@@ -249,6 +264,7 @@ await scene("flows", () => showTab("flows", "#st-fdc-card", "Flow duration and t
 
 await scene("model", async () => {
   log("scene: model");
+  await needStation();
   await clickEl(page.locator("#t-model"));
   await caption("Calibrate a GR4J rainfall-runoff model", "Gauge record plus reanalysis climate, fitted in the tab");
   await sleep(1200);
@@ -307,10 +323,10 @@ for (const [a, b] of cuts) {
 keep.push([at, total + 5]);
 writeFileSync(join(OUT, "edit.json"), JSON.stringify({ url: URL_, total, cuts, keep }, null, 1));
 
-const parts = keep.map(([a, b], i) =>
-  `[0:v]trim=start=${a.toFixed(2)}:end=${b.toFixed(2)},setpts=PTS-STARTPTS[v${i}]`);
-const filter = `${parts.join(";")};${keep.map((_, i) => `[v${i}]`).join("")}concat=n=${keep.length}:v=1:a=0,fps=30,format=yuv420p[out]`;
+// One pass: constant frame rate first, keep the frames inside the kept stretches, then renumber them.
+const between = keep.map(([a, b]) => `between(t,${a.toFixed(2)},${b.toFixed(2)})`).join("+");
+const filter = `[0:v]fps=30,select='${between}',setpts=N/(30*TB),format=yuv420p[out]`;
 const mp4 = join(OUT, `aquascope-explorer-demo${VERSION ? `-v${VERSION}` : ""}.mp4`);
 execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", raw, "-filter_complex", filter, "-map", "[out]",
-  "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-movflags", "+faststart", mp4], { stdio: "inherit" });
+  "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-movflags", "+faststart", mp4], { stdio: "inherit" });
 log(`done: ${mp4}`);

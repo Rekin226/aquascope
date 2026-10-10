@@ -176,7 +176,10 @@ def models(monkeypatch):
     return seen
 
 
-def test_forecast_reads_both_models_daily_with_the_reachs_thresholds(models):
+def test_forecast_reads_both_models_daily_with_the_reachs_thresholds(models, monkeypatch):
+    # The status is for the first forecast day (7 October 2026); pin "today" to the fixture's run date so the
+    # sentence reads "is" rather than "was" whatever the calendar says.
+    monkeypatch.setattr(nownext, "_today", lambda: date(2026, 10, 8))
     fc = nownext.forecast(46.95, 7.45, river_id=RID)
     g = fc["geoglows"]
     assert g["date"] == ["2026-10-07", "2026-10-08"] and g["mean"] == [100.0, 200.0]

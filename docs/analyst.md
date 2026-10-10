@@ -36,6 +36,27 @@ An identity-linked key that can act in several workspaces also needs
 as the `anthropic-workspace-id` header; a key created for one workspace does
 not.
 
+On Claude, aquascope uses four features of the Messages API:
+
+- **Prompt caching.** The system prompt and tool list are cached, and so is
+  the growing conversation in a tool loop. Later calls read them back at a
+  tenth of the input price or less (a twentieth on Opus 5.5), and the cost
+  ledgers count cache reads and writes at their own rates.
+- **Effort per role.** Each Studio and Solve role asks for its own effort:
+  low for the Consultant, high for the Methodologist, Interpreter and Critic.
+  `AQUASCOPE_LLM_EFFORT` overrides every role.
+- **Server-side fallback.** On Opus 5.5, Opus 5, Sonnet 5.5 and Fable 5.1, a
+  request declined on safety grounds is run again on another model inside the
+  same call. `AQUASCOPE_LLM_FALLBACKS=0` turns it off.
+- **Streaming.** On the desktop the SDK streams, so a long reply cannot trip
+  an idle timeout. In the browser the call waits up to ten minutes.
+
+Set `AQUASCOPE_LLM_LOG=calls.jsonl` and every model call, on any provider,
+appends one line to that file. Each line records the role, model, effort,
+uncached input, output, cache-read and cache-write tokens, latency, how the
+reply ended, a refusal's category, any error, and the USD estimate. Prompts
+and replies are never written.
+
 This is deliberately not an autonomous agent: no memory, no planning beyond
 the tool loop, no writes. It is the "ask, get the work done, see the work"
 surface from the direction review, and its numbers are exactly what

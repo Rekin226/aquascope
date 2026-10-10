@@ -250,7 +250,7 @@ def propose_repair(evidence: Evidence, *, client: Any = None, model: str | None 
                    api_key: str | None = None, base_url: str | None = None) -> Proposal:
     """One model call over the evidence; returns a parsed :class:`Proposal` (``no_fix`` on any parse trouble)."""
     from aquascope.ai_engine.analyst import resolve_llm
-    from aquascope.ai_engine.llm_transport import make_client
+    from aquascope.ai_engine.llm_transport import make_client, with_options
 
     cfg = {"model": model or "unknown"}
     if client is None:
@@ -260,6 +260,7 @@ def propose_repair(evidence: Evidence, *, client: Any = None, model: str | None 
         model=cfg["model"],
         messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": evidence.to_prompt()}],
         temperature=0,
+        **with_options(client, role="repair", effort="high"),
     )
     text = response.choices[0].message.content or ""
     prop = _parse_proposal(text)

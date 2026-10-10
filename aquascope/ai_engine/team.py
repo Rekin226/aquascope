@@ -348,6 +348,16 @@ class SolveResult:
 # ── the model, when there is one ────────────────────────────────────────────
 
 
+#: How hard a Claude model thinks for each role (``output_config.effort``): low where the call reads or routes,
+#: high where it plans, interprets or reviews. ``AQUASCOPE_LLM_EFFORT`` overrides every role (an effort sweep);
+#: other providers ignore it.
+ROLE_EFFORT: dict[str, str] = {
+    "consultant": "low", "coordinator": "low",
+    "analyst": "medium", "specialist": "medium", "author": "medium", "narrator": "medium",
+    "methodologist": "high", "interpreter": "high", "critic": "high",
+}
+
+
 class _Model:
     """A stateless subcall per role: fresh messages, compact JSON context, tokens counted per role."""
 
@@ -367,18 +377,25 @@ class _Model:
         if len(user) > self.max_context_chars:
             user = user[:self.max_context_chars] + '... [truncated]"}'
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        from aquascope.ai_engine.llm_transport import with_options
+
         try:
-            response = self.client.chat.completions.create(model=self.model, messages=messages)
+            response = self.client.chat.completions.create(
+                model=self.model, messages=messages,
+                **with_options(self.client, role=role, effort=ROLE_EFFORT.get(role)),
+            )
         except Exception as exc:  # noqa: BLE001 - the role falls back to its keyless behaviour
             self._event(role, step, "model_error", f"{type(exc).__name__}: {exc}")
             return None
         usage = getattr(response, "usage", None)
+        from aquascope.ai_engine.analyst import USAGE_KEYS
+
         entry = self.cost.setdefault(role, {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0})
         entry["calls"] += 1
-        for key in ("prompt_tokens", "completion_tokens"):
+        for key, name in USAGE_KEYS.items():
             n = _usage_field(usage, key)
             if n:
-                entry[key] += int(n)
+                entry[name] = int(entry.get(name, 0)) + int(n)
         try:
             choice = response.choices[0]
             text = choice.message.content or ""

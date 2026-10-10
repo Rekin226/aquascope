@@ -269,10 +269,17 @@ def load_index(out_dir: str | Path) -> dict[str, Any]:
 
 def usd_for(ledger: dict[str, dict[str, int]], model: str | None, price: tuple[float, float] | None = None) -> float:
     """The estimate for a workspace's ledger at the model's rate (USD per million prompt and completion tokens)."""
+    from aquascope.ai_engine.providers import CACHE_READ_PRICES, CACHE_WRITE_MULTIPLIER
+
     rate = price or PRICES.get(str(model or ""), DEFAULT_PRICE)
-    prompt = sum(int(v.get("prompt_tokens") or 0) for v in ledger.values())
-    completion = sum(int(v.get("completion_tokens") or 0) for v in ledger.values())
-    return round(prompt * rate[0] / 1e6 + completion * rate[1] / 1e6, 4)
+
+    def total(key: str) -> int:
+        return sum(int(v.get(key) or 0) for v in ledger.values())
+
+    read_rate = CACHE_READ_PRICES.get(str(model or ""), rate[0] * 0.1) if price is None else rate[0] * 0.1
+    usd = (total("prompt_tokens") * rate[0] + total("completion_tokens") * rate[1]
+           + total("cache_read_tokens") * read_rate + total("cache_write_tokens") * rate[0] * CACHE_WRITE_MULTIPLIER)
+    return round(usd / 1e6, 4)
 
 
 def headline(text: str | None, *, limit: int = 240) -> str:

@@ -39,14 +39,15 @@ def check_key(provider: str, key: str, *, model: str | None = None) -> tuple[boo
     """``(works, sentence)``: one request of a few tokens with the key. The sentence names the model on
     success, and the provider's refusal (a 401, a quota) on failure, never the key."""
     from aquascope.ai_engine.analyst import resolve_llm
-    from aquascope.ai_engine.llm_transport import make_client
+    from aquascope.ai_engine.llm_transport import make_client, with_options
     from aquascope.ai_engine.providers import PROVIDERS
 
     try:
         cfg = resolve_llm(provider, model, key.strip(), None)
         client = make_client(cfg["api_key"], cfg["base_url"], provider=cfg["provider"])
         client.chat.completions.create(model=cfg["model"], max_tokens=5,
-                                       messages=[{"role": "user", "content": "Reply with the word OK."}])
+                                       messages=[{"role": "user", "content": "Reply with the word OK."}],
+                                       **with_options(client, role="key_check", effort="low"))
     except Exception as exc:  # noqa: BLE001 - any failure is the answer: the key does not work here
         text = str(exc).replace(key.strip(), "***")
         status = re.search(r"\b(401|403|404|429)\b", text)

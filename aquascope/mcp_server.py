@@ -570,6 +570,17 @@ def layer_frames(layer: str, start: str, end: str, step: str = "day", max_frames
     return _frames(layer, start, end, step=step, max_frames=max_frames)
 
 
+def river_status_month(month: str | None = None) -> dict[str, Any]:
+    """The world river status map for one month (YYYY-MM; default the newest): GEOGLOWS v2's monthly
+    HydroSOS map, every HydroBASINS level-4 basin in one of five classes (much below normal to much above
+    normal, the month's modelled flow against the 10th, 25th, 75th and 90th percentiles of that calendar
+    month). Gives the GeoTIFF's URL, the legend with the file's colours, the months that exist (1990 to the
+    newest, with gaps), the method and the licence (CC BY 4.0)."""
+    from aquascope.map_layers import river_status_month as _status
+
+    return _status(month)
+
+
 def archive_health() -> dict[str, Any]:
     """Status of the last catalog harvest per source (health.json from the Archive)."""
     import httpx
@@ -1272,6 +1283,7 @@ def build_server():
     server.tool()(archive_health)
     server.tool()(dated_layers)
     server.tool()(layer_frames)
+    server.tool()(river_status_month)
     server.tool()(list_analyses)
     server.tool()(analyse_table)
     server.tool()(station_view)

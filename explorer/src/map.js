@@ -338,8 +338,21 @@ export function applyDate(date, activeOverlays, basemapId) {
 
 // ── time (#522) ─────────────────────────────────────────────────────────────
 
+// Work outside the tile pipeline that a frame has to wait for: the world
+// river status decodes its own image for each month (status-layer.js, #544).
+const holds = new Set();
+export function holdSettle(promise) {
+  holds.add(promise);
+  const drop = () => holds.delete(promise);
+  promise.then(drop, drop);
+  return promise;
+}
+
 /** Resolves once the map has drawn every tile it asked for (true), or after `timeoutMs` (false). */
-export function whenSettled(timeoutMs = 4000) {
+export async function whenSettled(timeoutMs = 4000) {
+  if (holds.size) {
+    await Promise.race([Promise.allSettled([...holds]), new Promise((r) => setTimeout(r, timeoutMs))]);
+  }
   return new Promise((resolve) => {
     if (!state.mapOk || !map) { resolve(false); return; }
     let timer = null;
@@ -424,6 +437,11 @@ const COLOR_FIELD = {
 export function setGaugeStyle(mode) {
   if (!state.mapOk || !map.getLayer("points")) return;
   map.setPaintProperty("points", "icon-color", ["get", COLOR_FIELD[mode] || "color"]);
+  // Under "Today vs normal" the gauges with a status today stand out, drawn on top; the rest keep their
+  // agency colour and step back (#544).
+  const now = mode === "now";
+  map.setPaintProperty("points", "icon-opacity", now ? ["case", ["get", "hasNow"], 0.98, 0.35] : 0.98);
+  map.setLayoutProperty("points", "symbol-sort-key", now ? ["case", ["get", "hasNow"], 1, 0] : 0);
 }
 
 export function setHeatmap(on) {

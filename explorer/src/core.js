@@ -62,8 +62,12 @@ export const LAYER_DEFAULTS = {
   hillshade: true,
   // Sparse worldwide coverage, so the world view is a globe (#281).
   globe: true,
-  gaugeStyle: "source",
+  // Today against normal where the daily snapshot covers a gauge, its agency
+  // colour elsewhere (#544): the map opens on the state of the rivers.
+  gaugeStyle: "now",
   heat: false,
+  // The world river status under the gauges, month by month (status-layer.js, #544).
+  status: true,
 };
 
 export const state = {
@@ -138,6 +142,7 @@ export const actions = {
   setOverlay: () => {},       // layer-ui.js: turn an overlay on or off as if from the rail
   setBasemap: () => {},       // layer-ui.js: switch the basemap as if from the rail
   showArea: () => {},         // layer-ui.js: show a box's result in the rail, as if just drawn
+  setStatus: () => {},        // status-layer.js: the world river status on or off (#544)
 };
 
 export function escapeHtml(s) {

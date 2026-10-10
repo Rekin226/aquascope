@@ -135,7 +135,8 @@ def test_a_forecast_reach_gets_its_map_tiles_and_depth(web):
     assert res["reach"]["forecast_class"] == 100 and res["reach"]["strahler_order"] == 6
     assert res["wording"] == "may flood in the next 15 days, model estimate"
     assert [t["name"] for t in res["tiles"]] == [TILE]
-    assert res["tiles"][0]["gdal"].startswith("gdal_translate -projwin ") and "/vsicurl/https://" in res["tiles"][0]["gdal"]
+    gdal = res["tiles"][0]["gdal"]
+    assert gdal.startswith("gdal_translate -projwin ") and "/vsicurl/https://" in gdal
     assert res["extent"]["clip"]["radius_km"] == 4.5 and res["extent"]["clip"]["along"] == "point"
     d = res["depth"]
     assert d["at_point_m"] == pytest.approx(2.4) and d["max_m"] == pytest.approx(5.5), "9 m is outside the circle"

@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="./style.css?v=__BUILD__" />
   <link rel="stylesheet" href="./floods-past.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./flood-depth.css?v=__BUILD__" />
 </head>
 <body class="panel-collapsed">
   <a class="skip" href="#panel">Skip to the results panel</a>
@@ -143,6 +144,11 @@
             <input type="checkbox" id="toggle-floods" checked />
             <i style="background:linear-gradient(90deg,#f2c94c,#e2553f,#8e24aa);border-radius:2px;height:3px"></i>
             <span class="rail-label">Floods ahead (15 days)</span>
+          </label>
+          <label class="rail-row" title="Where Floods ahead expects a 10-year flow or more: the JRC flood depth map around the reach (CC BY 4.0). May flood in the next 15 days, model estimate.">
+            <input type="checkbox" id="toggle-depth" checked />
+            <i style="background:linear-gradient(90deg,#bfe0f7,#2f7ccc,#173f99);border-radius:2px"></i>
+            <span class="rail-label">Flood depth where floods are forecast</span>
           </label>
         </div>
         <p class="rail-note muted">Rivers: wider is bigger (stream order). Click one to light what drains to it and its way to the sea.</p>

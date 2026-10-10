@@ -221,8 +221,8 @@ def ramp_color(depth_m: float) -> tuple[int, int, int, float] | None:
     for (d0, c0, a0), (d1, c1, a1) in zip(stops, stops[1:]):
         if depth_m <= d1:
             t = max(0.0, (depth_m - d0) / (d1 - d0))
-            rgb = tuple(round(c0[i] + (c1[i] - c0[i]) * t) for i in range(3))
-            return (*rgb, round(a0 + (a1 - a0) * t, 3))
+            rgb = tuple(int(math.floor(c0[i] + (c1[i] - c0[i]) * t + 0.5)) for i in range(3))  # as JS rounds
+            return (*rgb, math.floor((a0 + (a1 - a0) * t) * 1000 + 0.5) / 1000)
     return None  # pragma: no cover - the loop always returns
 
 

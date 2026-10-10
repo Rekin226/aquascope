@@ -24,9 +24,11 @@ and responses on the way back, and the loop never knows. It uses the
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from aquascope import __version__
@@ -122,6 +124,40 @@ def retry_after(body: str, attempt: int = 0) -> float:
     return min(2.0 ** attempt, MAX_BACKOFF_SECONDS)
 
 
+#: The keyword a caller passes to ``chat.completions.create`` for aquascope's own options, which never go on the
+#: wire: ``{"role": "critic", "effort": "high"}``. ``role`` names the call in the telemetry; ``effort`` is how hard
+#: a Claude model should think (``low`` to ``max``) and is ignored by OpenAI-compatible providers. Only pass it to
+#: this module's clients: an SDK client of a caller's own would reject the keyword.
+OPTIONS_KEY = "aquascope"
+
+#: Set this to a file path and every model call appends one JSON line to it: role, model, effort, tokens (uncached
+#: input, output, cache read, cache write), latency, how the reply ended, a refusal's category, the error if any,
+#: and the USD estimate. Prompts and replies are never written.
+LOG_ENV = "AQUASCOPE_LLM_LOG"
+
+
+def accepts_options(client: Any) -> bool:
+    """Whether ``client`` is one of this module's clients, which take the :data:`OPTIONS_KEY` keyword."""
+    return isinstance(client, UrllibChatClient)
+
+
+def with_options(client: Any, **options: Any) -> dict[str, Any]:
+    """The extra ``create`` keyword for ``client``: ``{OPTIONS_KEY: options}`` for ours, nothing for anyone else's."""
+    opts = {k: v for k, v in options.items() if v is not None}
+    return {OPTIONS_KEY: opts} if opts and accepts_options(client) else {}
+
+
+def _log_call(row: dict[str, Any] | None) -> None:
+    path = os.environ.get(LOG_ENV)
+    if not path or row is None:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+    except OSError:  # telemetry never breaks a call
+        pass
+
+
 class _Completions:
     def __init__(self, client: UrllibChatClient):
         self._client = client
@@ -162,6 +198,58 @@ class UrllibChatClient:
         self.chat = _Chat(self)
 
     def request(self, payload: dict[str, Any]) -> Any:
+        """One completion: aquascope's options taken off the payload, the call made, one telemetry row written."""
+        payload = dict(payload)
+        opts = dict(payload.pop(OPTIONS_KEY, None) or {})
+        started = time.monotonic()
+        try:
+            response = self._call(payload, opts)
+        except Exception as exc:
+            if os.environ.get(LOG_ENV):
+                _log_call(self._log_row(payload, opts, started, None, exc))
+            raise
+        if os.environ.get(LOG_ENV):
+            _log_call(self._log_row(payload, opts, started, response, None))
+        return response
+
+    def _call(self, payload: dict[str, Any], opts: dict[str, Any]) -> Any:
+        """The call itself; OpenAI-compatible endpoints take no effort setting, so the options stop here."""
+        return self._with_retries(payload)
+
+    def _log_row(self, payload: dict[str, Any], opts: dict[str, Any], started: float, response: Any,
+                 error: BaseException | None) -> dict[str, Any]:
+        from aquascope.ai_engine.providers import usd_for
+
+        data = response.to_dict() if isinstance(response, _Attr) else {}
+        usage = data.get("usage") or {}
+        choice = (data.get("choices") or [{}])[0] or {}
+
+        def n(key: str) -> int:
+            v = usage.get(key)
+            return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0
+
+        tokens = {
+            "input_tokens": n("prompt_tokens"), "output_tokens": n("completion_tokens"),
+            "cache_read_tokens": n("cache_read_input_tokens"), "cache_write_tokens": n("cache_creation_input_tokens"),
+        }
+        model = payload.get("model")
+        return {
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "role": opts.get("role"),
+            "endpoint": self.base_url,
+            "model": model,
+            "served_model": data.get("model"),
+            "effort": opts.get("effort_sent"),
+            **tokens,
+            "latency_s": round(time.monotonic() - started, 2),
+            "finish_reason": choice.get("finish_reason"),
+            "refusal": (data.get("stop_details") or {}).get("category") if data.get("stop_details") else None,
+            "error": f"{type(error).__name__}: {error}"[:300] if error is not None else None,
+            "usd": usd_for(tokens["input_tokens"], tokens["output_tokens"], model,
+                           cache_read=tokens["cache_read_tokens"], cache_write=tokens["cache_write_tokens"]),
+        }
+
+    def _with_retries(self, payload: dict[str, Any]) -> Any:
         """One completion, waiting out a rate limit rather than failing on it.
 
         Free tiers are per minute as much as per day, and a tool-calling loop
@@ -237,6 +325,23 @@ class UrllibChatClient:
 
 ANTHROPIC_VERSION = "2023-06-01"
 ANTHROPIC_DEFAULT_MAX_TOKENS = 16_000
+#: A browser cannot stream a synchronous request, so a long reply needs a long wait; the SDK streams instead.
+ANTHROPIC_URLLIB_TIMEOUT = 600
+
+#: The models that take ``fallbacks: "default"``: when one declines a request on safety grounds, the API runs it
+#: again on a model Anthropic picks for that kind of refusal, inside the same call. Not on the Batch API.
+FALLBACK_MODELS = frozenset({"claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"})
+FALLBACK_BETA = "server-side-fallback-2026-07-01"
+
+#: Effort levels the API knows. Claude Haiku 4.5, Sonnet 4.5 and older reject the parameter outright.
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+_NO_EFFORT = ("claude-haiku-4", "claude-sonnet-4-5", "claude-opus-4-1", "claude-opus-4-0", "claude-3")
+
+
+def supports_effort(model: str | None) -> bool:
+    """Whether ``model`` takes ``output_config.effort`` (every current Claude model does; the oldest do not)."""
+    m = str(model or "")
+    return m.startswith("claude-") and not m.startswith(_NO_EFFORT)
 
 _FINISH_REASONS = {
     "end_turn": "stop", "stop_sequence": "stop", "tool_use": "tool_calls",
@@ -354,11 +459,15 @@ def _from_anthropic(data: dict[str, Any]) -> dict[str, Any]:
             "finish_reason": _FINISH_REASONS.get(stop, stop),
             "message": {"role": "assistant", "content": text or None, "tool_calls": calls or None},
         }],
+        # prompt_tokens is the input billed at the full rate; what the cache served or stored is counted apart,
+        # because it is billed apart (a read at a tenth of the rate or less, a write at 1.25 times).
         "usage": {
             "prompt_tokens": usage.get("input_tokens"),
             "completion_tokens": usage.get("output_tokens"),
             "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
+            "cache_creation_input_tokens": usage.get("cache_creation_input_tokens"),
         },
+        "stop_details": data.get("stop_details") if stop == "refusal" else None,
     }
 
 
@@ -389,6 +498,7 @@ class AnthropicChatClient(UrllibChatClient):
         base = (base_url or "https://api.anthropic.com").rstrip("/")
         if base.endswith("/v1"):  # an OpenAI-style root, given by habit
             base = base[:-3]
+        kwargs.setdefault("timeout", ANTHROPIC_URLLIB_TIMEOUT)
         super().__init__(api_key, base, **kwargs)
         if workspace_id:
             self.extra_headers["anthropic-workspace-id"] = workspace_id
@@ -399,24 +509,37 @@ class AnthropicChatClient(UrllibChatClient):
         #: The content blocks of every assistant turn that called a tool, by tool-use id.
         self._turns: dict[str, list[dict[str, Any]]] = {}
 
-    def request(self, payload: dict[str, Any]) -> Any:
+    def _call(self, payload: dict[str, Any], opts: dict[str, Any]) -> Any:
         system, messages = _anthropic_messages(payload.get("messages") or [], self._turns)
+        model = payload.get("model")
         body: dict[str, Any] = {
-            "model": payload.get("model"),
+            "model": model,
             "max_tokens": int(payload.get("max_tokens") or self.max_tokens),
             "messages": messages,
         }
         if system:
-            body["system"] = system
+            # The system prompt (with the tools, which come before it) is the part every call of a role or every
+            # step of a loop shares, so the cache breakpoint goes on its last block: the next call reads it back
+            # at a tenth of the input price or less instead of paying for it again.
+            body["system"] = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
         tools = _anthropic_tools(payload.get("tools"))
         if tools:
             body["tools"] = tools
             choice = _anthropic_tool_choice(payload.get("tool_choice"))
             if choice:
                 body["tool_choice"] = choice
-        if self.effort:
-            body["output_config"] = {"effort": self.effort}
-        data = super().request(body)  # the same 429 / 5xx patience as every other provider
+            # A tool loop resends the whole conversation each step, so the growing tail is cached too (automatic
+            # caching moves the breakpoint forward as it grows). A one-off call's tail is unique to it, and caching
+            # it would only pay the write premium, so it is not.
+            body["cache_control"] = {"type": "ephemeral"}
+        effort = os.environ.get("AQUASCOPE_LLM_EFFORT") or opts.get("effort") or self.effort
+        if effort in EFFORT_LEVELS and supports_effort(model):
+            body["output_config"] = {"effort": effort}
+            opts["effort_sent"] = effort
+        if model in FALLBACK_MODELS and os.environ.get("AQUASCOPE_LLM_FALLBACKS", "1") != "0":
+            body["fallbacks"] = "default"
+            body["_betas"] = [FALLBACK_BETA]
+        data = self._with_retries(body)  # the same 429 / 5xx patience as every other provider
         blocks = data.get("content") or []
         for b in blocks:
             if b.get("type") == "tool_use" and b.get("id"):
@@ -425,8 +548,10 @@ class AnthropicChatClient(UrllibChatClient):
 
     def _request_once(self, payload: dict[str, Any]) -> Any:
         url = f"{self.base_url}/v1/messages"
+        payload = dict(payload)
+        betas = payload.pop("_betas", None) or []
         if self._sdk is not None:
-            return self._sdk_request(payload, url)
+            return self._sdk_request(payload, url, betas)
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -435,15 +560,24 @@ class AnthropicChatClient(UrllibChatClient):
             "anthropic-version": ANTHROPIC_VERSION,
             **self.extra_headers,
         }
+        if betas:
+            headers["anthropic-beta"] = ",".join(betas)
         if in_pyodide():
             headers["anthropic-dangerous-direct-browser-access"] = "true"
         return self._post_json(url, payload, headers)
 
-    def _sdk_request(self, payload: dict[str, Any], url: str) -> dict[str, Any]:
+    def _sdk_request(self, payload: dict[str, Any], url: str, betas: list[str] | None = None) -> dict[str, Any]:
+        """One call through the SDK, streamed: a long reply arrives as it is written instead of tripping an idle
+        timeout, and ``get_final_message`` hands back the same message ``create`` would have."""
         import anthropic
 
         try:
-            response = self._sdk.messages.create(**payload)
+            if betas:
+                stream = self._sdk.beta.messages.stream(**payload, betas=betas)
+            else:
+                stream = self._sdk.messages.stream(**payload)
+            with stream as events:
+                response = events.get_final_message()
         except anthropic.APIStatusError as exc:
             body = exc.body if isinstance(exc.body, str) else json.dumps(exc.body, default=str)
             raise LLMHTTPError(exc.status_code, body or str(exc), url) from None
@@ -488,8 +622,6 @@ def make_client(api_key: str | None, base_url: str | None, provider: str | None 
     ``provider`` is looked up in the registry for its wire protocol; unknown
     or missing means OpenAI-compatible, which every provider but Anthropic is.
     """
-    import os
-
     from aquascope.ai_engine.providers import PROVIDERS
 
     spec = PROVIDERS.get(provider or "")
@@ -525,6 +657,6 @@ def make_client(api_key: str | None, base_url: str | None, provider: str | None 
 
 
 __all__ = [
-    "AnthropicChatClient", "LLMConnectionError", "LLMHTTPError", "OpenAISDKChatClient", "UrllibChatClient",
-    "in_pyodide", "make_client",
+    "OPTIONS_KEY", "AnthropicChatClient", "LLMConnectionError", "LLMHTTPError", "OpenAISDKChatClient",
+    "UrllibChatClient", "accepts_options", "in_pyodide", "make_client", "supports_effort", "with_options",
 ]

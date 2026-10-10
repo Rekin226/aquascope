@@ -744,6 +744,8 @@ class PlanResult:
     calls: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
     cost_usd: float | None = None
     seconds: float = 0.0
     error: str | None = None
@@ -753,7 +755,7 @@ class PlanResult:
 
     @property
     def tokens(self) -> int:
-        return self.prompt_tokens + self.completion_tokens
+        return self.prompt_tokens + self.completion_tokens + self.cache_read_tokens + self.cache_write_tokens
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -820,7 +822,10 @@ def _result(ref: Reference, agent: str, cfg: _Config, repeat: int, cand: Candida
         completion_tokens=int(usage.get("completion_tokens", 0) or 0), seconds=round(seconds, 2), finished=_now(),
         detail={k: v for k, v in detail.items() if k not in ("usage", "model", "provider")},
     )
-    res.cost_usd = estimate_cost(res.model, res.prompt_tokens, res.completion_tokens)
+    res.cache_read_tokens = int(usage.get("cache_read_tokens", 0) or 0)
+    res.cache_write_tokens = int(usage.get("cache_write_tokens", 0) or 0)
+    res.cost_usd = estimate_cost(res.model, res.prompt_tokens, res.completion_tokens,
+                                 cache_read=res.cache_read_tokens, cache_write=res.cache_write_tokens)
     return res
 
 

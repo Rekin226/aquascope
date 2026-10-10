@@ -643,13 +643,21 @@ def _harvest_provenance(name: str, args: dict[str, Any], result: Any, res: AskRe
             })
 
 
+#: A response's usage fields and the names a ledger keeps them under. The cache fields are Claude's: what the
+#: prompt cache served and stored, billed apart from ``prompt_tokens`` (the input billed at the full rate).
+USAGE_KEYS = {
+    "prompt_tokens": "prompt_tokens", "completion_tokens": "completion_tokens",
+    "cache_read_input_tokens": "cache_read_tokens", "cache_creation_input_tokens": "cache_write_tokens",
+}
+
+
 def _add_usage(total: dict[str, int], usage: Any) -> None:
     """Add one response's usage (an object or a dict, fields missing on some providers) to ``total``."""
     total["calls"] = total.get("calls", 0) + 1
-    for key in ("prompt_tokens", "completion_tokens"):
+    for key, name in USAGE_KEYS.items():
         v = usage.get(key) if isinstance(usage, dict) else getattr(usage, key, None)
         if isinstance(v, (int, float)) and not isinstance(v, bool):
-            total[key] = total.get(key, 0) + int(v)
+            total[name] = total.get(name, 0) + int(v)
 
 
 def _truncate(text: str, limit: int = MAX_TOOL_RESULT_CHARS) -> str:
@@ -769,12 +777,13 @@ def ask(
         # A 413 is the provider saying this request cannot fit its window, at
         # any speed, so retrying it unchanged is pointless. Halve the budget and
         # go again: the window belongs to the provider and is not ours to guess.
-        from aquascope.ai_engine.llm_transport import LLMHTTPError
+        from aquascope.ai_engine.llm_transport import LLMHTTPError, with_options
         malformed = 0
         for attempt in range(6):
             try:
                 response = client.chat.completions.create(
-                    model=cfg["model"], messages=messages, tools=tools, tool_choice="auto"
+                    model=cfg["model"], messages=messages, tools=tools, tool_choice="auto",
+                    **with_options(client, role="ask"),
                 )
                 break
             except LLMHTTPError as exc:

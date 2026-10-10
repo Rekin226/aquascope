@@ -175,12 +175,27 @@ def price_for(model: str | None) -> tuple[float, float] | None:
     return PRICES.get(str(model or "").strip())
 
 
-def usd_for(prompt_tokens: int, completion_tokens: int, model: str | None) -> float | None:
-    """The cost of one call (or a ledger's worth of tokens) at the model's rate; None for an unpriced model."""
+#: USD per million cache-read tokens where it is not a tenth of the input price: Claude Opus 5.5 reads at 0.05 times
+#: and Claude Fable 5.1 at 0.025 times. Every other Claude model reads at 0.1 times its input price.
+CACHE_READ_PRICES: dict[str, float] = {"claude-opus-5-5": 0.20, "claude-fable-5-1": 0.25}
+#: A five-minute cache write costs 1.25 times the input price (the only cache lifetime aquascope asks for).
+CACHE_WRITE_MULTIPLIER = 1.25
+
+
+def usd_for(prompt_tokens: int, completion_tokens: int, model: str | None, *, cache_read: int = 0,
+            cache_write: int = 0) -> float | None:
+    """The cost of one call (or a ledger's worth of tokens) at the model's rate; None for an unpriced model.
+
+    ``prompt_tokens`` is the input billed at the full rate; ``cache_read`` and ``cache_write`` are the input
+    tokens the prompt cache served and stored, billed at their own rates.
+    """
     rate = price_for(model)
     if rate is None:
         return None
-    return round(int(prompt_tokens or 0) * rate[0] / 1e6 + int(completion_tokens or 0) * rate[1] / 1e6, 6)
+    read_rate = CACHE_READ_PRICES.get(str(model or "").strip(), rate[0] * 0.1)
+    usd = (int(prompt_tokens or 0) * rate[0] + int(completion_tokens or 0) * rate[1]
+           + int(cache_read or 0) * read_rate + int(cache_write or 0) * rate[0] * CACHE_WRITE_MULTIPLIER) / 1e6
+    return round(usd, 6)
 
 
 def provider_ids(*, browser_only: bool = False) -> list[str]:

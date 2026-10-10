@@ -951,10 +951,40 @@ def cmd_mcp(args: argparse.Namespace) -> None:
     mcp_main(transport=args.transport)
 
 
+def _print_river_status(res: dict) -> None:
+    """`aquascope layers status`: one month of the world river status map (#544)."""
+    rng = res.get("valid_range") or {}
+    if res.get("live_error"):
+        print(f"  Could not list the bucket ({res['live_error']}); showing what it held on {res.get('checked')}.")
+    if res.get("available"):
+        print(f"  World river status, {res['month']}: {res['url']}")
+    else:
+        print(f"  {res.get('error', 'no map')}")
+    if rng:
+        gaps = f"; no map for {', '.join(res['missing'])}" if res.get("missing") else ""
+        print(f"  {rng['months']} months, {rng['first']} to {rng['latest']}{gaps}.")
+    for c in res.get("legend") or []:
+        print(f"  {c['hex']}  {c['label']:<18} {c['range']}")
+    if res.get("method"):
+        print(f"\n  {res['method']}")
+        print(f"  {res['attribution']} ({res['licence']})")
+
+
 def cmd_layers(args: argparse.Namespace) -> None:
     """`aquascope layers`: the dated map layers and their valid dates, or the frames of a time-lapse (#522)."""
     from aquascope.map_time import dated_layers, layer_frames
 
+    if args.layers_cmd == "status":
+        from aquascope.map_layers import river_status_month
+
+        res = river_status_month(args.month, live=not args.offline)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+            return
+        _print_river_status(res)
+        if not res.get("available"):
+            sys.exit(1)
+        return
     if args.layers_cmd == "frames":
         res = layer_frames(args.layer, args.start, args.end, step=args.step, max_frames=args.max_frames)
         if args.json:
@@ -1602,6 +1632,9 @@ def cmd_context(args: argparse.Namespace) -> None:
     actual ET and soil at a place, from open global data, each line with its source (thin face)."""
     from aquascope import context
 
+    if args.floods_past or args.month or args.start or args.end:
+        cmd_floods_past(args)
+        return
     layers = args.layers or None
     try:
         if args.bbox:
@@ -1618,6 +1651,50 @@ def cmd_context(args: argparse.Namespace) -> None:
         print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
         return
     print(_format_context(res))
+
+
+def _format_floods_past(res: dict[str, Any]) -> str:
+    lines = [res.get("summary") or ""]
+    if res.get("available") is False:
+        return "\n".join(lines)
+    news, radar = res.get("news") or {}, res.get("radar") or {}
+    for label, part, key in (("Most news", news, "news"), ("Most radar", radar, "radar")):
+        spots = part.get("hotspots") or []
+        if spots and res.get("bbox") is None:
+            lines.append(f"{label}:")
+            for h in spots:
+                lines.append(f"  {h['lat']:7.2f}, {h['lon']:8.2f}   news {h['news']:>7,}   radar {h['radar']:>12,}")
+    if news.get("events"):
+        lines.append("News events (latest first):")
+        for e in news["events"]:
+            dates = e["start"] if not e.get("end") or e["end"] == e["start"] else f"{e['start']} to {e['end']}"
+            area = f"  {e['area_km2']:,.0f} km2" if e.get("area_km2") else ""
+            lines.append(f"  {dates}{area}")
+        more = (news.get("events_found") or 0) - len(news["events"])
+        if more > 0:
+            lines.append(f"  and {more:,} more")
+    if res.get("bbox") is not None and radar.get("by_month"):
+        lines.append("Radar detections by month: " + ", ".join(f"{m} {n:,}" for m, n in radar["by_month"].items()))
+    lines.append("")
+    lines.append("Data: " + (res.get("attribution") or ""))
+    return "\n".join(lines)
+
+
+def cmd_floods_past(args: argparse.Namespace) -> None:
+    """`aquascope context --floods-past [--month YYYY-MM | --from --to] [--bbox]`: flood events in the news and
+    floods seen by radar, per month, worldwide or in a box (#547, thin face over aquascope.context.floods_past)."""
+    from aquascope.context.floods_past import flood_events_month
+
+    try:
+        res = flood_events_month(args.month, start=args.start, end=args.end,
+                                 bbox=_parse_bbox(args.bbox), limit=args.limit)
+    except ValueError as exc:
+        logger.error("%s", exc)
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    print(_format_floods_past(res))
 
 
 # ── export (engineering tools, #519) ─────────────────────────────────────────
@@ -3974,6 +4051,11 @@ def main() -> None:
     p_lframes.add_argument("--step", choices=["day", "week", "month"], default="day")
     p_lframes.add_argument("--max-frames", type=int, default=60)
     p_lframes.add_argument("--json", action="store_true")
+    p_lstatus = layers_sub.add_parser("status", help="The world river status map for a month (GEOGLOWS HydroSOS, "
+                                      "1990 on): its URL, legend, licence and the months that exist")
+    p_lstatus.add_argument("month", nargs="?", default=None, help="YYYY-MM (default: the newest month)")
+    p_lstatus.add_argument("--offline", action="store_true", help="Do not list the bucket; use the recorded range")
+    p_lstatus.add_argument("--json", action="store_true")
     # ── basins ───────────────────────────────────────────────────────
     p_bul = sub.add_parser("bulletin", help="The month's state of the rivers: every Archive gauge against normal, "
                            "HydroSOS classes")
@@ -4165,6 +4247,15 @@ def main() -> None:
     p_ctx.add_argument("--layers", default=None,
                        help="Comma-separated: flood_history, surface_water, flood_hazard, dams, rain_gauge, "
                             "actual_et, soil (default all)")
+    p_ctx.add_argument("--floods-past", action="store_true",
+                       help="Floods past (#547): flood events in the news and floods seen by radar by month, "
+                            "worldwide or in --bbox; the latest 12 months on record unless --month or --from/--to")
+    p_ctx.add_argument("--month", default=None, help="With --floods-past: one month, YYYY-MM")
+    p_ctx.add_argument("--from", dest="start", default=None, help="With --floods-past: first month, YYYY-MM")
+    p_ctx.add_argument("--to", dest="end", default=None,
+                       help="With --floods-past: last month, YYYY-MM (at most 60 months)")
+    p_ctx.add_argument("--limit", type=int, default=20,
+                       help="With --floods-past: news events listed for a small box (default 20)")
     p_ctx.add_argument("--json", action="store_true")
 
     p_area = sub.add_parser(

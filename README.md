@@ -78,10 +78,16 @@ of accessible observations or a sufficiently long record. Explorer fetches the f
 by default (or the last 40 or 20 years, your choice) and shows the period it actually
 analyzes; modelled discharge is distinguished from gauge observations.
 
-**Time on the map:** one date drives the NASA satellite, rain, soil moisture, snow and
-water storage layers. Play a range, click a day on a hydrograph to see the map on that
-day, swipe-compare two dates, and save the range as a GIF. The date is in the link
-([details](docs/explorer.md#time-on-the-map)).
+**The state of the world's rivers, on the globe:** the map opens on every river basin
+coloured from much below to much above normal for the newest month (GEOGLOWS v2's
+monthly HydroSOS map), with the gauges coloured by today against normal where they
+report. Press play to watch droughts and floods move across continents, month by
+month back to 1990 ([details](docs/explorer.md#world-river-status)).
+
+**Time on the map:** one date drives the river status and the NASA satellite, rain, soil
+moisture, snow and water storage layers. Play a range, click a day on a hydrograph to see
+the map on that day, swipe-compare two dates, and save the range as a GIF. The date is in
+the link ([details](docs/explorer.md#time-on-the-map)).
 
 **Study** guides you from a question through a plan you approve to a report and export
 bundle: Word, Excel, figures, notebook, findings and study YAML. Core studies run without
@@ -145,7 +151,7 @@ virtual environment first: `python3 -m venv .venv && source .venv/bin/activate`.
 - 🌾 **Plan agricultural water** — FAO-56 Penman-Monteith ET₀, crop water requirements for 26 crops (olive, grape, citrus and winter wheat resolved by variety and canopy), irrigation scheduling, soil water balance with auto-irrigation.
 - 🤖 **Ask the AI engine** — describe your goal in plain English and get a recommended methodology, scored against your dataset profile and auto-executed. LLM enhancement via OpenAI, Groq (free), HuggingFace (free), or local Ollama.
 - 🧑‍🔬 **Hand a study to the crew** — `aquascope studio "PROBLEM" --lat --lon`: a Consultant, a Scout, a Methodologist, Analysts, an Interpreter, a Critic and an Author over one workspace, the plan shown before it runs, every step gated (a failed gate fails its step, not the study), every answer graded (established, indicative, screening, not established) with findings that point at the result they rest on, a request for the data that would unlock a question instead of a decline, and the bundle at the end: a technical report and a memo (Word and print-ready HTML) that lead with the answer and its grade, the Excel workbook, publication figures, the notebook, findings.json and study.yaml. Also in the Explorer and over MCP. The [advanced studies](docs/advanced_studies.md) go past the design flow: change points and a nonstationary flood fit, GR4J with a snow store validated on years it never saw, "what if" scenarios, and CMIP6 change factors through the calibrated model.
-- 🧭 **Read the context of any place**: `aquascope context LAT LON` (also over MCP and in the Explorer): flood events in the news (Groundsource) and Sentinel-1 radar floods 2014-2024, surface water since 1984 (JRC), modelled flood depth at the 10 to 500-year floods (JRC GloFAS), dams (Global Dam Watch), soil texture and available water (SoilGrids), actual ET (FAO WaPOR) and the nearest NOAA GHCN-Daily rain gauge. Keyless, each line with its licence; rasters are read pixel by pixel from Cloud-Optimized GeoTIFFs in pure Python.
+- 🧭 **Read the context of any place**: `aquascope context LAT LON` (also over MCP and in the Explorer): flood events in the news (Groundsource) and Sentinel-1 radar floods 2014-2024, surface water since 1984 (JRC), modelled flood depth at the 10 to 500-year floods (JRC GloFAS), dams (Global Dam Watch), soil texture and available water (SoilGrids), actual ET (FAO WaPOR) and the nearest NOAA GHCN-Daily rain gauge. Keyless, each line with its licence; rasters are read pixel by pixel from Cloud-Optimized GeoTIFFs in pure Python. The news and radar floods are also rolled into a monthly half-degree grid that the Explorer's globe shows from the start and replays with the time bar (`aquascope context --floods-past`, MCP `flood_events_month`).
 - 🛠️ **Hand a record to the engineering tools**: `aquascope export --to hec-ssp` (or `hec-hms`, `hec-ras`, `dss`, `swmm`, `modflow6`, `fews`, `raven`) writes ready inputs from any gauge or CSV, real `.dss` through HEC's own `hecdss`; the same files come from the Explorer, the MCP server and every Studio bundle. Our Bulletin 17C is checked against the published Bulletin 17C examples, honestly: it matches on a plain record and does not yet on one with low outliers ([engineering exports](docs/engineering_exports.md)).
 - 📊 **Visualise + report** — 17 plot types, Q-Q / P-P diagnostics, Markdown / HTML reports with embedded figures, threshold alerts (WHO / EPA / EU WFD).
 - 🗺️ **Spatial hydrology** — DEM processing, D8 flow direction, watershed delineation, Strahler ordering.

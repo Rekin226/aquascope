@@ -323,6 +323,59 @@ body.workbench-mode .maplibregl-ctrl-top-left { margin-top: 0; }
 .tb-seg input:checked + span { background: var(--blue); color: #fff; }
 .tb-seg input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: -2px; }
 
+/* ── the world river status's legend (#544): one small card, bottom left ── */
+
+/* It sits in the shared legend stack (.map-legends, floods-past.css), which places it and follows the rail. */
+.status-legend {
+  width: 16.5rem; max-width: calc(100vw - 24px);
+  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-1);
+  padding: .45rem .6rem .5rem; font-size: .72rem; color: var(--ink);
+}
+.status-legend[hidden] { display: none; }
+.status-legend header { display: flex; align-items: center; gap: .4rem; margin-bottom: .35rem; }
+.status-legend header b { font-size: .76rem; font-weight: 650; white-space: nowrap; }
+.status-legend .sl-when { font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }
+.status-legend .sl-tag {
+  font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 650; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px; padding: 0 .35rem;
+}
+.status-legend .sl-busy {
+  width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--line); border-top-color: var(--ink-2);
+  animation: sl-spin .8s linear infinite;
+}
+@keyframes sl-spin { to { transform: rotate(360deg); } }
+.status-legend .sl-btn {
+  font: inherit; font-size: .72rem; line-height: 1; width: 20px; height: 20px; display: grid; place-items: center;
+  border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; padding: 0;
+}
+.status-legend .sl-btn[data-act="info"] { margin-left: auto; font-weight: 650; font-style: italic; font-family: Georgia, serif; }
+.status-legend .sl-btn:hover { background: var(--bg-soft); border-color: var(--line); color: var(--ink); }
+.status-legend .sl-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; height: 9px; }
+.status-legend .sl-bar i { background: var(--c); border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(127, 140, 153, .18); }
+.status-legend .sl-bar i:first-child { border-radius: 4px 2px 2px 4px; }
+.status-legend .sl-bar i:last-child { border-radius: 2px 4px 4px 2px; }
+.status-legend .sl-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: .64rem; margin-top: .15rem; }
+.status-legend p { margin: .35rem 0 0; line-height: 1.35; }
+.status-legend .sl-dots { color: var(--ink-2); display: flex; gap: .4rem; align-items: baseline; }
+.status-legend .sl-dots i {
+  flex: none; width: 8px; height: 8px; border-radius: 50%; transform: translateY(1px);
+  background: conic-gradient(#a6611a 0 25%, #dfc27d 0 50%, #80cdc1 0 75%, #018571 0); box-shadow: 0 0 0 1.5px #fff;
+}
+.status-legend .sl-src { color: var(--muted); font-size: .64rem; }
+.status-legend .sl-credit { display: none; color: var(--muted); font-size: .6rem; margin-top: .2rem; }
+.status-legend .sl-err { color: var(--warn-ink); }
+@media (prefers-reduced-motion: reduce) {
+  .status-legend .sl-busy { animation: none; border-top-color: var(--line); }
+}
+/* On a phone the map is the strip above the bottom sheet: the legend keeps the bar and its ends. */
+@media (max-width: 860px) {
+  .status-legend { width: auto; max-width: min(14rem, calc(100vw - 72px)); padding: .35rem .5rem .4rem; }
+  .status-legend header { margin-bottom: .25rem; }
+  .status-legend .sl-tag, .status-legend .sl-src, .status-legend .sl-dots { display: none; }
+  .status-legend .sl-credit { display: block; }
+}
+
 /* swipe compare: the right-hand map, clipped at the handle */
 .compare { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .compare[hidden] { display: none; }
@@ -1218,15 +1271,14 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
 
 /* ── Floods ahead (#546): the legend on the map and the card on a reach ──── */
 
-/* Top left, beside the map tools: clear of the time bar, the attribution and the bottom sheet on a phone. */
+/* In the shared legend stack (.map-legends, floods-past.css), on top: it places it clear of the time bar. */
 .fa-legend {
-  position: absolute; left: 56px; top: 10px; z-index: 6; width: 272px;
+  width: 272px; max-width: calc(100vw - 24px);
   background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-2);
-  padding: .55rem .7rem .5rem; font-size: .76rem; color: var(--ink); transition: left .16s ease;
+  padding: .55rem .7rem .5rem; font-size: .76rem; color: var(--ink);
 }
 .fa-legend[hidden] { display: none; }
-body.rail-open .fa-legend { left: calc(var(--rail-w) + var(--gap) + 56px); }
 body.workbench-mode .fa-legend { display: none; }
 .fa-head { display: flex; align-items: baseline; gap: .45rem; }
 .fa-title { font-weight: 650; font-size: .84rem; letter-spacing: -.01em; }
@@ -1276,6 +1328,5 @@ body.workbench-mode .fa-legend { display: none; }
 .fa-card .fa-foot { font-size: .68rem; }
 
 @media (max-width: 860px) {
-  .fa-legend { left: 54px; width: min(272px, calc(100% - 64px)); }
-  body.rail-open .fa-legend { left: 54px; }
+  .fa-legend { width: min(272px, calc(100vw - 72px)); }
 }

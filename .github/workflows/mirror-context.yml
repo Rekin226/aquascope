@@ -7,6 +7,8 @@ name: Mirror place-context data
 #                            so it is read in parallel shards and merged)
 #   dams                     Global Dam Watch v1.0 barriers (CC BY 4.0, figshare 25988293)
 #   ghcn                     the NOAA GHCN-Daily stations that record precipitation (CC0)
+#   floods/monthly           Floods past (#547): both flood sources per half-degree cell and month (a few MB),
+#                            built from the two flood mirrors for the Explorer's globe
 # Each dataset is a cell-sorted Parquet (DuckDB-WASM and range reads fetch a box) plus one small gzipped CSV
 # per 2-degree cell for the Explorer's Python worker, and context/manifest.json says what is published.
 # Global Water Watch is not mirrored: its data licence is not confirmed.
@@ -33,6 +35,10 @@ on:
         description: "Groundsource rows, for a smoke run that never publishes (empty = all)"
         type: string
         default: ""
+      floods_monthly_only:
+        description: "Only rebuild the Floods past monthly grid from the published flood mirrors (minutes, not hours)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -47,6 +53,7 @@ env:
 jobs:
   small:
     name: Groundsource, dams and rain gauges
+    if: ${{ !inputs.floods_monthly_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -80,7 +87,7 @@ jobs:
 
   microsoft:
     name: Microsoft floods, shard ${{ matrix.shard }}
-    if: inputs.microsoft
+    if: inputs.microsoft && !inputs.floods_monthly_only
     runs-on: ubuntu-latest
     timeout-minutes: 350
     strategy:
@@ -118,7 +125,8 @@ jobs:
     name: Merge, write the manifest and publish
     needs: [small, microsoft]
     # The small datasets publish even when a Microsoft shard failed; the Microsoft merge only runs on a full set.
-    if: always() && needs.small.result == 'success'
+    # floods_monthly_only skips both and rebuilds just the monthly grid from what is already published.
+    if: always() && (needs.small.result == 'success' || inputs.floods_monthly_only)
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -135,6 +143,7 @@ jobs:
         run: python -m pip install -q ".[archive]"
 
       - uses: actions/download-artifact@v4
+        if: ${{ !inputs.floods_monthly_only }}
         with:
           name: context-small
           path: build/context
@@ -149,6 +158,14 @@ jobs:
       - name: Merge the Microsoft shards
         if: needs.microsoft.result == 'success'
         run: python -m aquascope.archive.context_mirror microsoft-merge --out build --parts parts
+
+      # Floods past (#547): reads this run's flood parquets, or the published ones it did not rebuild, and writes
+      # only build/context/floods/monthly/ (grid.parquet, index.json, months/YYYY-MM.json.gz).
+      # A failure here must not hold back the mirrors this run rebuilt: the grid is built aside and swapped in
+      # whole, so a failed step leaves the published grid as it was. floods_monthly_only still shows it red.
+      - name: Floods past, the monthly grid
+        continue-on-error: ${{ !inputs.floods_monthly_only }}
+        run: python -m aquascope.archive.context_mirror floods-monthly --out build --repo "$HF_DATASET"
 
       - name: Write the manifest
         run: python -m aquascope.archive.context_mirror manifest --out build --repo "$HF_DATASET"

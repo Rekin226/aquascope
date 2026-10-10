@@ -11,9 +11,9 @@
 // otherwise the 15-day peak. Clicking a reach opens a small card on the map.
 
 import { CONFIG } from "../config.js?v=__BUILD__";
-import { $, actions, escapeHtml, onTime, setTime, sourceStyle, state } from "./core.js?v=__BUILD__";
+import { $, actions, clickLayers, escapeHtml, onTime, setTime, sourceStyle, state } from "./core.js?v=__BUILD__";
 import { renderCredits } from "./layer-ui.js?v=__BUILD__";
-import { clickClaims, map } from "./map.js?v=__BUILD__";
+import { map } from "./map.js?v=__BUILD__";
 import { STREAMS_PMTILES } from "./river-core.js?v=__BUILD__";
 import {
   FLOODS_CREDIT, FLOOD_CLASSES, FORECAST_DAYS, NONE, addDays, classColor, countsFor, dayIndex, gaugesFor, idsByClass,
@@ -176,7 +176,7 @@ function ensureLayers() {
     });
     for (const id of CLICKABLE) {
       if (!map.getLayer(id)) continue;
-      clickClaims.add(id);
+      clickLayers.add(id);   // its own handler answers; the map-wide one leaves it alone
       map.on("click", id, onClick);
       map.on("mouseenter", id, () => { map.getCanvas().style.cursor = "pointer"; });
       map.on("mouseleave", id, () => { map.getCanvas().style.cursor = ""; });
@@ -256,14 +256,16 @@ function pulse() {
 // ── the legend card ─────────────────────────────────────────────────────────
 
 function buildLegend() {
-  const wrap = document.querySelector(".map-wrap");
+  // The shared legend stack (#543), Floods ahead on top as its layer is above the others.
+  const stack = document.getElementById("map-legends");
+  const wrap = stack || document.querySelector(".map-wrap");
   if (!wrap || legend) return;
   legend = document.createElement("section");
   legend.className = "fa-legend";
   // On a phone the map is half the screen: the legend starts folded to one line.
   if (globalThis.matchMedia && globalThis.matchMedia("(max-width: 860px)").matches) legend.classList.add("min");
   legend.setAttribute("aria-label", "Floods ahead");
-  wrap.appendChild(legend);
+  if (stack) wrap.prepend(legend); else wrap.appendChild(legend);
   legend.addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-act]");
     if (!btn) return;

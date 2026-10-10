@@ -304,3 +304,24 @@ def test_place_and_area_context_tools_wrap_the_engine(monkeypatch):
     assert "west, south, east, north" in m.area_context(6, 44, 4, 46)["error"]
     names = {t.name for t in asyncio.run(m.build_server().list_tools())}
     assert {"place_context", "area_context"} <= names
+
+
+def test_flood_events_month_tool_wraps_the_engine(monkeypatch):
+    seen = {}
+
+    def fake(month=None, *, start=None, end=None, bbox=None, limit=20):
+        seen.update(month=month, start=start, end=end, bbox=bbox, limit=limit)
+        return {"summary": "ok"}
+
+    monkeypatch.setattr("aquascope.context.floods_past.flood_events_month", fake)
+    assert m.flood_events_month("2021-07", west=5.5, south=50.5, east=6, north=51) == {"summary": "ok"}
+    assert seen == {"month": "2021-07", "start": None, "end": None, "bbox": (5.5, 50.5, 6.0, 51.0), "limit": 20}
+    assert "west, south, east and north" in m.flood_events_month("2021-07", west=5.5)["error"]
+
+    def bad(*a, **kw):
+        raise ValueError("120 months is too long a window (at most 60)")
+
+    monkeypatch.setattr("aquascope.context.floods_past.flood_events_month", bad)
+    assert "at most 60" in m.flood_events_month(start="2000-01", end="2010-01")["error"]
+    names = {t.name for t in asyncio.run(m.build_server().list_tools())}
+    assert "flood_events_month" in names

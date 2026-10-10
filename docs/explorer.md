@@ -96,6 +96,45 @@ surface temperature, GRACE water storage anomaly, ESA WorldCover land cover, and
 JRC Global Surface Water (how often each 30 m pixel was water from 1984 to 2024).
 The time-driven ones follow one date, set in the time bar (below).
 
+## World river status
+
+The map opens on the state of the world's rivers. Every river basin is coloured by
+how its flow that month compares with the same month in other years, from much
+below normal (brown) through normal (a light wash) to much above normal (teal), at
+the newest month GEOGLOWS has published. A small card on the map names the month
+and the five classes; its **i** says how the map is made and **×** hides it (the
+rail's **Overlays** has it too, with an opacity slider). `ws=0` in a link opens
+without it.
+
+The time bar drives it. With no date in the link the map opens in the middle of the
+newest month with a monthly step, so **Play** walks the months, and **‹ ›** step one
+at a time back to January 1990. The next month is read while the current one shows,
+so frames do not flash. A month with no map (before 1990, after the newest, and
+March 2026, which is missing from the series) draws nothing and the card says so.
+While it replays the past, the card says the gauges still show today.
+
+It is GEOGLOWS v2's monthly HydroSOS map: one GeoTIFF a month in GEOGLOWS's public
+bucket (`hydrosos/cogs/YYYY-MM.tif`, 7200 x 3600 cells of 0.05 degree, about
+500 kB, CC BY 4.0). Each HydroBASINS level-4 basin takes the class of its outlets'
+modelled monthly mean flow in the GEOGLOWS retrospective simulation against the
+10th, 25th, 75th and 90th percentiles of that calendar month
+(`hydrosos/thresholds.parquet`), as GEOGLOWS's `monthly_products.py` writes it.
+Modelled, not measured, and one colour per basin, so a small river inside a large
+basin can differ. The page reads the file in a worker with geotiff.js, turns its
+colours back into the five classes and lays them on a Web Mercator image, which
+MapLibre draws on the globe and on the flat map alike. It sits under the
+basemap's water and labels and under the gauges, and fades as you zoom in.
+
+The colours are the gauges' own: the same five as **Today vs normal**, which is
+how the gauges are coloured by default. A gauge the daily snapshot covers takes
+its class colour; every other gauge keeps its agency colour, and the legend says
+which. GEOGLOWS draws the classes in the WMO HydroSOS red-to-blue; the info panel
+says so.
+
+`aquascope layers status [YYYY-MM]` and the MCP tool `river_status_month` give the
+month's file, its legend with the file's colours, the months that exist (the
+bucket is listed live) and the licence.
+
 ## Time on the map
 
 The **time bar** sits at the bottom of the map whenever a dated layer is on (the
@@ -147,6 +186,58 @@ the gauges inside it as CSV; its **Context** button lists what the box holds
 
 The whole state (basemap, overlays, opacity, date, terrain, globe, colouring)
 lives in the URL, so a view is a link.
+
+## Floods past
+
+![July 2019 replayed: radar sees the monsoon floods along the Ganges and the Brahmaputra](img/globe/floods-past-frame.png)
+
+Where floods actually happened, on the globe, from the moment the page opens.
+**Floods past** is on by default and shows two things, kept apart:
+
+- **Reported in the news** (orange dots): flood events Google's
+  [Groundsource](https://doi.org/10.5281/zenodo.18647054) extracted from news
+  articles, from 2000 (CC BY 4.0). Each counts once, in the month it began, at
+  the centre of the area it affected. A report says a flood happened; it does
+  not measure it, and places with more news coverage have more reports.
+- **Seen by radar** (violet squares): 20 m Sentinel-1 pixels the
+  [Microsoft AI for Good Lab](https://huggingface.co/datasets/ai-for-good-lab/ai4g-flood-dataset)
+  classified as flood water, after the dataset's own false-alarm filters,
+  October 2014 to September 2024 only (MIT).
+
+Both are summed per half-degree cell (about 55 km) and month. At the world view
+they are two heat maps, radar over news; from zoom 4.5 each cell is a circle
+(news) and a shaded square (radar). Sizes and shades grow with the logarithm of
+the count, so one very reported city does not drown out a region, and small
+counts stay quiet: a cell with a single report is a faint dot, and radar cells
+with fewer than 200 detections (a few hectares) are left clear.
+
+The layer follows the time bar, like every dated layer:
+
+- with no range set it shows the **twelve months up to the map date**. The page
+  opens after the last month on record, so it shows the latest twelve and says
+  "latest on record";
+- **playing**, or stepping by month, shows **one month at a time**, so a flood
+  season replays. The ▶ in the legend sets this up for the months on screen and
+  plays them;
+- a **range** set behind ⋯ (and not playing) shows all its months together, up
+  to 60.
+
+**Click a cell** (from zoom 4.5) for its counts, its news events with their
+dates and areas, and the months radar saw flooding there; **Open this place**
+takes it to the point panel. The legend's ⓘ explains the two sources, ⌃ folds
+it to one line (how it starts on a phone), and × or the rail's **Floods past**
+row turns it off (`fp=0` in the link).
+
+The data is a few small files in the Archive under `context/floods/monthly/`
+(`index.json`, one gzipped JSON per month, and `grid.parquet` with every month),
+rolled up from the Groundsource and Microsoft mirrors by the `mirror-context`
+workflow (`python -m aquascope.archive.context_mirror floods-monthly`; the
+workflow's `floods_monthly_only` input rebuilds just this from the published
+mirrors). Until it is published the layer stays off the map and the rail says
+so. The counts and the event lists come from
+`aquascope.context.floods_past.flood_events_month`, which is also
+`aquascope context --floods-past [--month YYYY-MM | --from --to] [--bbox]` and
+the MCP tool `flood_events_month`.
 
 Google Maps and Google Earth tiles are deliberately absent: their terms forbid
 this use. Esri's legacy imagery answers without a token but Esri's own
@@ -324,10 +415,10 @@ beside the main worker, and a browser that cannot start them sends those calls
 to the main worker as before. Forecasts and Context lines already read are kept
 for the session.
 
-**Today vs normal** in the gauge colouring of the layers panel colours the gauges
-from the daily status snapshot, with a legend that names the sources it covers and
-when it was made; gauges without a fresh record are grey. Until the first snapshot
-is published the gauges keep their agency colours and the legend says so.
+**Today vs normal**, the default gauge colouring, colours the gauges from the daily
+status snapshot, with a legend that names the sources it covers and when it was
+made; gauges without a fresh record keep their agency colour. Until the first
+snapshot is published every gauge keeps its agency colour and the legend says so.
 
 Both forecasts are model output under CC BY 4.0 (GEOGLOWS v2; Open-Meteo, free for
 non-commercial use). The same functions are `aquascope now` and the MCP tools

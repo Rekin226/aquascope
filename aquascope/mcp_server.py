@@ -585,6 +585,17 @@ def layer_frames(layer: str, start: str, end: str, step: str = "day", max_frames
     return _frames(layer, start, end, step=step, max_frames=max_frames)
 
 
+def river_status_month(month: str | None = None) -> dict[str, Any]:
+    """The world river status map for one month (YYYY-MM; default the newest): GEOGLOWS v2's monthly
+    HydroSOS map, every HydroBASINS level-4 basin in one of five classes (much below normal to much above
+    normal, the month's modelled flow against the 10th, 25th, 75th and 90th percentiles of that calendar
+    month). Gives the GeoTIFF's URL, the legend with the file's colours, the months that exist (1990 to the
+    newest, with gaps), the method and the licence (CC BY 4.0)."""
+    from aquascope.map_layers import river_status_month as _status
+
+    return _status(month)
+
+
 def archive_health() -> dict[str, Any]:
     """Status of the last catalog harvest per source (health.json from the Archive)."""
     import httpx
@@ -645,6 +656,30 @@ def area_context(west: float, south: float, east: float, north: float,
         return context.area_context(float(west), float(south), float(east), float(north), layers=layers)
     except Exception as exc:  # noqa: BLE001 - the model gets to see it
         return {"error": f"area context failed: {type(exc).__name__}: {exc}"}
+
+
+def flood_events_month(month: str | None = None, start: str | None = None, end: str | None = None,
+                       west: float | None = None, south: float | None = None, east: float | None = None,
+                       north: float | None = None, limit: int = 20) -> dict[str, Any]:
+    """Where floods happened in a month or a range of months (at most 60), worldwide or in a box: flood events
+    reported in the news (Google Groundsource, CC BY 4.0, 2000 onwards) and flood detections by Sentinel-1 radar
+    (Microsoft AI for Good, MIT, October 2014 to September 2024), counted separately on a half-degree grid.
+    month is "YYYY-MM"; or give start and end; with none, the latest 12 months on record. A box (west, south,
+    east, north) narrows it; a small box also lists the news events with their dates and the radar months.
+    News says a flood was reported, radar says water was seen: quote them as such, with the attribution.
+    """
+    from aquascope.context.floods_past import flood_events_month as _run
+
+    box = (west, south, east, north)
+    if any(v is not None for v in box) and not all(v is not None for v in box):
+        return {"error": "give all of west, south, east and north, or none"}
+    try:
+        return _run(month, start=start, end=end, limit=int(limit),
+                    bbox=tuple(float(v) for v in box) if all(v is not None for v in box) else None)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001 - the model gets to see it
+        return {"error": f"flood events failed: {type(exc).__name__}: {exc}"}
 
 
 def similar_basins(
@@ -1269,6 +1304,7 @@ def build_server():
     server.tool()(watch_digest)
     server.tool()(place_context)
     server.tool()(area_context)
+    server.tool()(flood_events_month)
     server.tool()(similar_basins)
     server.tool()(regionalize_signatures)
     from aquascope.archive.signatures import filter_gauges  # the map's signature filter (signatures.parquet)
@@ -1288,6 +1324,7 @@ def build_server():
     server.tool()(archive_health)
     server.tool()(dated_layers)
     server.tool()(layer_frames)
+    server.tool()(river_status_month)
     server.tool()(list_analyses)
     server.tool()(analyse_table)
     server.tool()(station_view)

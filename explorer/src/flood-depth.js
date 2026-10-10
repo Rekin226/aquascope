@@ -290,6 +290,8 @@ function onClick(e) {
 // Until then it is a small card in the legend stack (#map-legends), under Floods ahead. Both show the same key.
 
 let legendRow = null;     // map-legend.js's refreshLegend, once the depth is a row there
+// The shared legend's element: optional on purpose (the page may not have it yet), so it is looked up by name.
+const SHARED_LEGEND = "map-legend";
 
 function viewCounts() {
   const zoom = state.mapOk && map ? map.getZoom() : 0;
@@ -338,7 +340,7 @@ const ROW = {
 };
 
 function buildLegend() {
-  if (document.getElementById("map-legend")) {
+  if (document.getElementById(SHARED_LEGEND)) {
     import("./map-legend.js?v=__BUILD__").then((m) => {
       m.registerLegendRow(ROW);
       legendRow = () => m.refreshLegend(ROW.id);

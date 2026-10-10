@@ -2,7 +2,7 @@
 // the URL state. Layer choice (basemaps, imagery, terrain, climate rasters)
 // is #232; this module keeps the seams for it (setBasemap, overlay helpers).
 
-import { EMPTY_FC, actions, dbg, escapeHtml, sourceStyle, state, trace } from "./core.js?v=__BUILD__";
+import { EMPTY_FC, actions, clickLayers, dbg, escapeHtml, sourceStyle, state, trace } from "./core.js?v=__BUILD__";
 import { toFeatureCollection } from "./catalog.js?v=__BUILD__";
 import { TERRAIN_DEM, basemapById, overlayById, tileUrls } from "./layers.js?v=__BUILD__";
 import { SHAPE_NAMES, shapeSdf } from "./shapes.js?v=__BUILD__";
@@ -350,8 +350,21 @@ function onceIdle(fn) {
   map.once("idle", () => { idleWaits = Math.max(0, idleWaits - 1); fn(); });
 }
 
+// Work outside the tile pipeline that a frame has to wait for: the world
+// river status decodes its own image for each month (status-layer.js, #544).
+const holds = new Set();
+export function holdSettle(promise) {
+  holds.add(promise);
+  const drop = () => holds.delete(promise);
+  promise.then(drop, drop);
+  return promise;
+}
+
 /** Resolves once the map has drawn every tile it asked for (true), or after `timeoutMs` (false). */
-export function whenSettled(timeoutMs = 4000) {
+export async function whenSettled(timeoutMs = 4000) {
+  if (holds.size) {
+    await Promise.race([Promise.allSettled([...holds]), new Promise((r) => setTimeout(r, timeoutMs))]);
+  }
   return new Promise((resolve) => {
     if (!state.mapOk || !map) { resolve(false); return; }
     let timer = null;
@@ -442,6 +455,11 @@ const COLOR_FIELD = {
 export function setGaugeStyle(mode) {
   if (!state.mapOk || !map.getLayer("points")) return;
   map.setPaintProperty("points", "icon-color", ["get", COLOR_FIELD[mode] || "color"]);
+  // Under "Today vs normal" the gauges with a status today stand out, drawn on top; the rest keep their
+  // agency colour and step back (#544).
+  const now = mode === "now";
+  map.setPaintProperty("points", "icon-opacity", now ? ["case", ["get", "hasNow"], 0.98, 0.35] : 0.98);
+  map.setLayoutProperty("points", "symbol-sort-key", now ? ["case", ["get", "hasNow"], 1, 0] : 0);
 }
 
 export function setHeatmap(on) {
@@ -546,7 +564,8 @@ export function addStationLayers(fc) {
   });
   map.on("mouseleave", "points", () => { map.getCanvas().style.cursor = ""; popup.remove(); });
   map.on("click", (e) => {
-    const hit = map.queryRenderedFeatures(e.point, { layers: ["points", "clusters"] });
+    const taken = [...clickLayers].filter((id) => map.getLayer(id));
+    const hit = map.queryRenderedFeatures(e.point, { layers: ["points", "clusters", ...taken] });
     if (hit.length) return; // handled by the layer handlers
     actions.selectPoint(e.lngLat.lat, e.lngLat.lng);
   });

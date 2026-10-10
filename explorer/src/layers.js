@@ -336,7 +336,18 @@ export function layerDate(layer, date) {
   return layer.since && first < layer.since && date >= layer.since ? layer.since : first;
 }
 
-// Every dated layer on screen: the dated basemap and the dated overlays.
+// Dated layers a module draws itself rather than as tiles (the world river
+// status, #544). Each registers a function that returns its layer, shaped like
+// an overlay ({ id, label, time, monthly, since, until, periods }), while it is
+// on, and null while it is off; the time bar and the link then treat it like
+// any other dated layer.
+const datedExtras = new Set();
+export function registerDatedLayer(fn) {
+  datedExtras.add(fn);
+  return () => datedExtras.delete(fn);
+}
+
+// Every dated layer on screen: the dated basemap, the dated overlays and the registered ones.
 export function datedLayersOn(basemapId, overlayIds) {
   const out = [];
   const base = basemapById(basemapId);
@@ -344,6 +355,10 @@ export function datedLayersOn(basemapId, overlayIds) {
   for (const id of overlayIds || []) {
     const o = overlayById(id);
     if (o && o.time) out.push(o);
+  }
+  for (const fn of datedExtras) {
+    const l = fn();
+    if (l && l.time) out.push(l);
   }
   return out;
 }

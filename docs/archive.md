@@ -234,6 +234,28 @@ then recorded; the skill the Explorer shows today is the correction's skill on t
 `python -m aquascope.archive.forecasts run|publish --out build`. A run with `max_items` set is a smoke run and
 never publishes.
 
+### Floods ahead (`forecasts/warnings/`)
+
+Once a day the `flood-warnings` workflow (#546) reads the whole GEOGLOWS v2 global forecast
+(`s3://geoglows-v2-forecasts/YYYYMMDD00.zarr`: 51 ensemble members, 15 days, 6.8 million reaches) and, for every reach
+of Strahler order 5 and up and every reach an Archive gauge sits on, compares the ensemble-mean daily flow with the
+reach's own 2-, 5-, 10-, 25-, 50- and 100-year flows (GEOGLOWS's retrospective return periods: a Gumbel fit to the
+annual maxima of daily flow since 1940). It writes only under `forecasts/warnings/`.
+
+| path | what | licence |
+| --- | --- | --- |
+| `forecasts/warnings/latest.parquet` | every reach expected to reach its 2-year flow in the 15 days: `river_id`, `lat`, `lon`, `strahler_order`, `area_km2`, `peak_cms`, `peak_date`, `rp` (the class, in years), `share` (members that agree), `q2` to `q100`, `daily` (one class per day) and `gauges` | CC BY-NC-SA 4.0 (the forecast is CC BY 4.0; the return periods' own metadata says CC BY-NC-SA 4.0) |
+| `forecasts/warnings/latest.geojson` | the same reaches as slim points for the Explorer, at most 10,000, highest class first | as above |
+| `forecasts/warnings/<date>.parquet` | the same table, kept by the forecast's start date | as above |
+| `forecasts/warnings/manifest.json` | the issue date, counts by class, reaches checked, the method, the thresholds, what it is not, the licences and the issue history | |
+
+Reaches whose 2-year flow is under 5 m3/s (mostly dry desert channels) are not classed, unless a gauge is on them. The cost: the forecast's
+chunks hold 686 reaches each, all members and steps together, about 16 MB compressed; the bigger rivers sit together,
+so order 5 and up is 3,401 of the 9,970 chunks (about 54 GB a day, streamed and dropped, nothing kept on disk). A
+time budget stops reading at 4.5 hours and counts what it skipped. Model output, not an official warning. Every step
+is also `python -m aquascope.archive.warnings run|publish --out build`; `--max-chunks N` is a smoke run that reads N
+chunks spread over the globe, is marked so, and is never published.
+
 ## Monthly bulletins (`bulletins/`)
 
 On the 3rd of every month the `bulletin` workflow (#523) writes last month's state of

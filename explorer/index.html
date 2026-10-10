@@ -20,6 +20,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌊</text></svg>" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="./style.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./floods-past.css?v=__BUILD__" />
 </head>
 <body>
   <a class="skip" href="#panel">Skip to the results panel</a>
@@ -107,12 +108,26 @@
 
       <details class="rail-group">
         <summary>Overlays</summary>
+        <!-- the world river status (#544): wired by status-layer.js -->
+        <div id="rail-status" class="rail-list">
+          <div class="overlay-row">
+            <label class="rail-row"><input type="checkbox" id="toggle-status" />
+              <span class="rail-label">World river status (monthly)</span>
+              <button id="status-info" class="icon-btn tiny info" type="button" title="About this layer" aria-label="About World river status">i</button></label>
+            <div class="overlay-controls"><input type="range" id="status-opacity" min="0" max="1" step="0.05" aria-label="World river status opacity" /></div>
+          </div>
+        </div>
         <div id="rail-overlays" class="rail-list"></div>
         <div class="rail-list">
           <label class="rail-row">
             <input type="checkbox" id="toggle-basins" />
             <i style="background:#6a3ab2;border-radius:2px"></i>
             <span class="rail-label">Catchments (BasinATLAS)</span>
+          </label>
+          <label class="rail-row" title="Flood events in the news (Groundsource, CC BY 4.0) and floods seen by Sentinel-1 radar (Microsoft, MIT), following the time bar">
+            <input type="checkbox" id="toggle-floods-past" checked />
+            <i style="background:#e8820c;border-radius:50%"></i>
+            <span class="rail-label">Floods past (news and radar)</span>
           </label>
           <label class="rail-row" title="GEOGLOWS v2 stream network (TDX-Hydro, CC BY-SA 4.0): wider for bigger rivers, small streams as you zoom in">
             <input type="checkbox" id="toggle-rivers" checked />
@@ -123,6 +138,11 @@
             <input type="checkbox" id="toggle-flow" />
             <i class="rail-flow-sw" aria-hidden="true"></i>
             <span class="rail-label">Flow direction (animated)</span>
+          </label>
+          <label class="rail-row" title="River reaches the GEOGLOWS forecast expects to reach their 2-year flow in the next 15 days. Model output, not an official warning.">
+            <input type="checkbox" id="toggle-floods" checked />
+            <i style="background:linear-gradient(90deg,#f2c94c,#e2553f,#8e24aa);border-radius:2px;height:3px"></i>
+            <span class="rail-label">Floods ahead (15 days)</span>
           </label>
         </div>
         <p class="rail-note muted">Rivers: wider is bigger (stream order). Click one to light what drains to it and its way to the sea.</p>
@@ -168,6 +188,14 @@
         <div id="compare-handle" class="compare-handle" role="slider" tabindex="0" aria-label="Compare divider"
              aria-valuemin="5" aria-valuemax="95" aria-valuenow="50"><span aria-hidden="true">‹ ›</span></div>
       </div>
+      <!-- legends of the map layers (#543), stacked bottom left: Floods ahead (#546, added by its module) above Floods past (#547) above the world river status (#544) -->
+      <div id="map-legends" class="map-legends">
+        <!-- living rivers (#545): what the lit network's colours mean, on top while a river is lit -->
+        <div id="river-key" class="river-key" role="status" aria-label="Lit river network" hidden></div>
+        <section id="fp-legend" class="fp-legend" aria-label="Floods past legend" hidden></section>
+        <!-- the world river status's legend (#544), filled by status-layer.js -->
+        <section id="status-legend" class="status-legend" aria-label="World river status legend" hidden></section>
+      </div>
       <!-- the map date (#522): one control that every dated layer follows -->
       <div id="timebar-wrap" class="timebar-wrap">
         <div id="timebar" class="timebar" role="group" aria-label="Map date" hidden>
@@ -211,8 +239,6 @@
         </div>
       </div>
       <section id="area-study" class="area-study" aria-label="Study this area" hidden></section>
-      <!-- living rivers (#545): what the lit network's colours mean -->
-      <div id="river-key" class="river-key" role="status" aria-label="Lit river network" hidden></div>
       <div id="map-fallback" class="map-fallback" hidden>
         <div id="map-fallback-text" class="status warn"></div>
       </div>

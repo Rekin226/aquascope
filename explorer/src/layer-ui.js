@@ -14,6 +14,9 @@ import {
 import { syncTimeBar } from "./time-ui.js?v=__BUILD__";
 import { openModal } from "./shell.js?v=__BUILD__";
 import { RIVERS_CREDIT } from "./river-core.js?v=__BUILD__";
+import { FLOODS_CREDIT } from "./floods-ahead-core.js?v=__BUILD__";
+import { NEWS_CREDIT, RADAR_CREDIT } from "./floods-past-core.js?v=__BUILD__";
+import { STATUS_CREDIT } from "./status-core.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
 import { openAreaStudy } from "./area-study.js?v=__BUILD__";
 import { cancelAreaContext, openAreaContext } from "./context.js?v=__BUILD__";
@@ -187,7 +190,7 @@ function buildGaugeStyle() {
     setGaugeStyle(state.gaugeStyle);
     $("gauge-legend").innerHTML = gaugeLegendHtml(state.gaugeStyle);
     $("gauge-legend").hidden = state.gaugeStyle === "source";
-    $("rail-sources").classList.toggle("dimmed", state.gaugeStyle !== "source");
+    $("rail-sources").classList.toggle("dimmed", !["source", "now"].includes(state.gaugeStyle));
     ensureSkillColours();
     // Today vs normal reads the daily snapshot the first time it is picked, then colours the dots.
     if (state.gaugeStyle === "now" && !state.nowStatus) {
@@ -293,6 +296,9 @@ function buildAreaSelect() {
 export function renderCredits() {
   const lines = creditLines(state.basemap, [...state.overlays], { terrain: state.terrain || state.hillshade });
   if (state.riversOn) lines.push(RIVERS_CREDIT);
+  if (state.floodsOn) lines.push(FLOODS_CREDIT);
+  if (state.floodsPast) lines.push(NEWS_CREDIT, RADAR_CREDIT);
+  if (state.status) lines.push(STATUS_CREDIT);
   $("rail-credits").innerHTML = lines
     .map((l) => `<div><b>${escapeHtml(l.label)}</b>: ${l.attribution} <span class="muted">(${escapeHtml(l.licence)})</span></div>`)
     .join("");
@@ -350,6 +356,7 @@ export function applyLayerState() {
     if (state.globe) state.globe = setGlobe(true); else setGlobe(false);
     setHeatmap(state.heat);
     setGaugeStyle(state.gaugeStyle);
+    actions.setStatus(state.status);
     ensureSkillColours();
     syncRailControls();
     renderCredits();

@@ -62,8 +62,14 @@ export const LAYER_DEFAULTS = {
   hillshade: true,
   // Sparse worldwide coverage, so the world view is a globe (#281).
   globe: true,
-  gaugeStyle: "source",
+  // Today against normal where the daily snapshot covers a gauge, its agency
+  // colour elsewhere (#544): the map opens on the state of the rivers.
+  gaugeStyle: "now",
   heat: false,
+  // Floods past (#547): news and radar flood events, on from the start.
+  floodsPast: true,
+  // The world river status under the gauges, month by month (status-layer.js, #544).
+  status: true,
 };
 
 export const state = {
@@ -129,6 +135,14 @@ export function setTime(patch = {}, { source = "bar" } = {}) {
   return true;
 }
 
+// Map layers outside the overlay catalogue that follow the map date while they
+// are on (#543), by id: { label, time: true, monthly, since, until }, the shape
+// of a dated overlay. The time bar shows itself for them as for an overlay.
+export const datedExtras = new Map();
+// Map layers whose features take a click before the map's own "select this
+// point" does (#543). The module that owns the layer handles the click.
+export const clickLayers = new Set();
+
 // Filled in by the modules that own each behaviour (breaks import cycles).
 export const actions = {
   selectStation: () => {},
@@ -140,6 +154,7 @@ export const actions = {
   setOverlay: () => {},       // layer-ui.js: turn an overlay on or off as if from the rail
   setBasemap: () => {},       // layer-ui.js: switch the basemap as if from the rail
   showArea: () => {},         // layer-ui.js: show a box's result in the rail, as if just drawn
+  setStatus: () => {},        // status-layer.js: the world river status on or off (#544)
 };
 
 export function escapeHtml(s) {

@@ -5,7 +5,7 @@
 // the click to the outlet, with the dams on it as small squares.
 
 import { $, EMPTY_FC, state } from "./core.js?v=__BUILD__";
-import { currentBasemap, ensureShapeImages, fitBoundsTo, map, panelPadding, waitingForIdle } from "./map.js?v=__BUILD__";
+import { currentBasemap, ensureShapeImages, fitBoundsTo, map, waitingForIdle } from "./map.js?v=__BUILD__";
 import {
   FLOW_FPS, FLOW_STEPS, RIVERS_ATTRIBUTION, STREAMS_PMTILES, cumulativeKm, damsGeoJSON, flowDash, flowOpacity,
   highlightColor, highlightOpacity, highlightWidth, lineBounds, lineUpTo, networkStates, networkSummary, riverOpacity,
@@ -30,9 +30,12 @@ const reducedMotion = () => Boolean(globalThis.matchMedia && globalThis.matchMed
 // The flow animation is on unless the reader asked for less motion; the layer menu turns it either way.
 if (state.flowOn === undefined) state.flowOn = !reducedMotion();
 
+// Under Floods ahead (river-fa-*) and the gauges: the order on the map is basemap, river status,
+// Floods past, rivers, Floods ahead, gauges (#543).
 function beforeGauges() {
-  for (const id of ["catchment-fill", "gauge-heat", "clusters", "points"]) if (map.getLayer(id)) return id;
-  return undefined;
+  const layers = (map.getStyle() && map.getStyle().layers) || [];
+  const hit = layers.find((l) => /^river-fa-/.test(l.id) || ["catchment-fill", "gauge-heat", "clusters", "points"].includes(l.id));
+  return hit ? hit.id : undefined;
 }
 
 function theme() { return riverTheme(currentBasemap() || state.basemap); }
@@ -258,7 +261,6 @@ function showKey(what) {
       `<span class="rk-src muted">GEOGLOWS v2 routing, modelled${s.cut ? `; ${s.cut}` : ""}</span>${close}`;
   }
   el.querySelector(".river-key-x").addEventListener("click", () => clearRiverNetwork());
-  el.style.right = `${Math.round(panelPadding().right)}px`;
   el.hidden = false;
 }
 

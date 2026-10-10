@@ -1035,10 +1035,12 @@ _out
 // fills line by line as each answers. op "point" reads a layer at (lat, lon),
 // op "area" over bbox [west, south, east, north]. Every layer reads open data
 // hosts that answer CORS (COG range reads, the Archive's context/ mirror).
-async function placeContext({ id, op, name, lat, lon, bbox }) {
+// op "floods_month" is Floods past (#547): a clicked cell's news events and
+// radar months from start to end (aquascope.context.floods_past).
+async function placeContext({ id, op, name, lat, lon, bbox, start, end }) {
   self.__aqContext = JSON.stringify({
     op: op || "point", name: String(name || ""), lat: Number(lat), lon: Number(lon),
-    bbox: Array.isArray(bbox) ? bbox.map(Number) : null,
+    bbox: Array.isArray(bbox) ? bbox.map(Number) : null, start: start || null, end: end || null,
   });
   const code = `
 import json
@@ -1050,6 +1052,9 @@ try:
         _out = _ctx.layer(_a["name"], _a["lat"], _a["lon"])
     elif _a["op"] == "area":
         _out = _ctx.area_layer(_a["name"], *_a["bbox"])
+    elif _a["op"] == "floods_month":
+        from aquascope.context.floods_past import flood_events_month
+        _out = flood_events_month(start=_a["start"], end=_a["end"], bbox=_a["bbox"], limit=12)
     else:
         _out = {"error": "unknown op"}
 except ValueError as exc:

@@ -16,12 +16,15 @@ import {
 import { defaultDate } from "./src/layers.js?v=__BUILD__";
 import { applyLayerState, initLayerUI, renderCredits, syncRailControls } from "./src/layer-ui.js?v=__BUILD__";
 import { initTimeBar } from "./src/time-ui.js?v=__BUILD__";
+import { initFloodsPast } from "./src/floods-past.js?v=__BUILD__";  // Floods past (#547)
+import { initStatusLayer } from "./src/status-layer.js?v=__BUILD__";
 import { buildRail, syncRail, updateCount } from "./src/rail.js?v=__BUILD__";
 import { setBasinsVisible } from "./src/basins.js?v=__BUILD__";
 import { setRiversVisible } from "./src/river-map.js?v=__BUILD__";
 import { clearRiver, initRiver } from "./src/river.js?v=__BUILD__";
 import { initNow } from "./src/now.js?v=__BUILD__";
 import { initBulletin } from "./src/bulletin.js?v=__BUILD__";
+import { initFloodsAhead } from "./src/floods-ahead.js?v=__BUILD__";  // Floods ahead (#546), on by default
 import { initSearch } from "./src/search.js?v=__BUILD__";
 import { initShell, initTabs, selectTab, setStatusEl, showSurface } from "./src/shell.js?v=__BUILD__";
 import { initStationPanel, reanalyze, selectStation, setPeriod } from "./src/panel-station.js?v=__BUILD__";
@@ -134,6 +137,7 @@ function readLayerState(url) {
   set("globe", url.globe);
   set("gaugeStyle", url.gaugeStyle);
   set("heat", url.heat);
+  set("status", url.status);
   if (url.overlays) {
     const next = new Set(url.overlays);
     if (next.size !== state.overlays.size || [...next].some((o) => !state.overlays.has(o))) {
@@ -167,11 +171,14 @@ function bringMapOnline(url) {
   }
   initLayerUI();
   initTimeBar();
+  initStatusLayer(url);   // the world river status (#544), before the layers are applied
   applyLayerState();
   syncRailControls();
   if (state.basinsOn || url.basins) setBasinsVisible(true);
   if (url.rivers === false) state.riversOn = false;   // on by default (#545); a link can say rivers=0
   if (state.riversOn) { setRiversVisible(true); renderCredits(); }
+  initFloodsAhead();
+  initFloodsPast();
   // A selection made while the map was still dark has nothing on the map yet.
   if (state.selected) {
     highlightStation(`${state.selected.source}/${state.selected.station_id}`);

@@ -524,8 +524,8 @@ Where Floods ahead expects a reach to pass its 10-, 25-, 50- or 100-year flow, t
 also shows how deep the water could get around it: the JRC CEMS-GloFAS flood depth map
 (v2.1.2, 3 arc-seconds, about 90 m) for the nearest return period at or below the
 forecast class, so 10, 20, 50 or 100 years (JRC has no 2- or 5-year maps). It is drawn
-in blues, light for a few centimetres to deep blue past 10 m, with a card in the legend
-stack that always says **may flood in the next 15 days, model estimate**.
+in blues, light for a few centimetres to deep blue past 10 m, with a key in the map's
+legend that always says **may flood in the next 15 days, model estimate**.
 
 ![Flood depth along the Republican River in Kansas, where the forecast passes the 10- and 25-year flows](img/globe/depth-forecast.png)
 

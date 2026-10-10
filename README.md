@@ -392,6 +392,7 @@ aquascope export --to hec-ssp --station usgs/01134500   # inputs for HEC-HMS/RAS
 aquascope gym run --basin uk_ea/013054a3-670e-49ee-afda-e0865a449197   # HydroGym: calibrate GR4J on a real basin as a gym episode
 aquascope layers frames precip --start 2024-05-01 --end 2024-05-20   # a time-lapse of a dated map layer: dates and tile URLs
 aquascope map "trace the Nile to the sea" --resolve   # plain words to the Explorer's map actions (keyless rules)
+aquascope layers scout --bbox -10 35 30 60           # what stands out on the map, each with its reason (the Explorer's Scout)
 aquascope mcp                                     # serve the same tools to Claude / Cursor over MCP
 aquascope ask "100-year flood of the Seine at Paris?"   # the analyst: tools + a cited Markdown report
 aquascope ingest agency_export.csv --unit cfs     # any CSV/Excel -> clean daily series + QA report

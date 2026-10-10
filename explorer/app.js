@@ -40,6 +40,7 @@ import { initSignatureFilter } from "./src/signature-filter.js?v=__BUILD__";
 import { initPlaces } from "./src/places.js?v=__BUILD__";  // My places + Compare
 import { greetOnLoad, initWatch } from "./src/watch.js?v=__BUILD__";  // Watch: since you were here (#521)
 import { loadAvailability } from "./src/availability.js?v=__BUILD__";
+import { initMapCard } from "./src/map-card.js?v=__BUILD__";  // map first (#548): a click answers on the map
 
 import { initMetrics } from "./src/metrics-ui.js?v=__BUILD__";
 
@@ -115,10 +116,11 @@ function applyUrl(url, { fromHistory = false } = {}) {
     openStudyIf(url);
     return;
   }
-  if (fromHistory) {           // back to the start: show the welcome surface again
+  if (fromHistory) {           // back to the start: the welcome surface again, the panel left as it was (#548)
     state.selected = null;
     state.point = null;
-    showSurface("panel-empty");
+    state.activeTab = null;
+    showSurface("panel-empty", { reveal: false });
   }
   openStudyIf(url);
 }
@@ -214,6 +216,7 @@ function goHome() {
   initWorkbench();
   initPlaces();  // My places + Compare
   initWatch();   // Watch (#521)
+  initMapCard(); // after Watch: the card mirrors its buttons
   initAsk();   // async: fills the provider list from providers.json
   initStudyLoader();
   initSearch();

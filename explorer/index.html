@@ -22,7 +22,7 @@
   <link rel="stylesheet" href="./style.css?v=__BUILD__" />
   <link rel="stylesheet" href="./floods-past.css?v=__BUILD__" />
 </head>
-<body>
+<body class="panel-collapsed">
   <a class="skip" href="#panel">Skip to the results panel</a>
   <!-- What the cards say on screen ("loading", "failed, retry"), said once,
        politely, for a screen reader. Written by src/a11y.js. -->
@@ -239,13 +239,16 @@
         </div>
       </div>
       <section id="area-study" class="area-study" aria-label="Study this area" hidden></section>
+      <!-- map first (#548): what was clicked, answered on the map; filled by src/map-card.js -->
+      <section id="map-card" class="map-card" role="dialog" aria-modal="false" aria-labelledby="mc-title" tabindex="-1" hidden></section>
+      <p id="map-hint" class="map-hint" hidden>Click a gauge, a river or anywhere on the map</p>
       <div id="map-fallback" class="map-fallback" hidden>
         <div id="map-fallback-text" class="status warn"></div>
       </div>
     </div>
 
-    <button id="btn-panel" class="map-tool" type="button" aria-expanded="true" aria-controls="panel"
-            title="Hide the panel and see the whole map" aria-label="Hide the panel and see the whole map">
+    <button id="btn-panel" class="map-tool" type="button" aria-expanded="false" aria-controls="panel"
+            title="Show the panel" aria-label="Show the panel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="m9 6 6 6-6 6" />
       </svg>

@@ -1269,6 +1269,109 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
 /* the monthly bulletin (#523): "Read it" under the legend; the reader reuses .study-reader */
 .link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--blue); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
+/* ── the map card (#548): a click answers on the map ─────────────────────────
+   Anchored to what was clicked, above it when there is room, with a tail that
+   points at it. The sparkline is ink, not a hue: colour on the card means one
+   thing, the today-against-normal class, the same brown-to-teal the gauges use. */
+.map-card {
+  --mc-spark: #33475a;
+  --mc-spark-fill: rgba(51, 71, 90, .11);
+  position: absolute; left: 0; top: 0; z-index: 6; width: 332px; max-width: calc(100% - 20px);
+  padding: 10px 14px 11px; background: var(--surface-solid); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-2);
+  outline: none; transition: opacity .15s ease;
+}
+@media (prefers-color-scheme: dark) {
+  .map-card { --mc-spark: #c9d6e2; --mc-spark-fill: rgba(201, 214, 226, .14); }
+}
+.map-card.on { animation: mc-in .18s ease-out; }
+@keyframes mc-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.map-card.detached { opacity: .94; }
+.map-card.detached .mc-tail { display: none; }
+.mc-tail {
+  position: absolute; left: var(--tail, 50%); bottom: -7px; width: 12px; height: 12px; margin-left: -6px;
+  background: var(--surface-solid); border: 1px solid var(--line); border-top: 0; border-left: 0;
+  transform: rotate(45deg); pointer-events: none;
+}
+.map-card[data-side="below"] .mc-tail { bottom: auto; top: -7px; transform: rotate(225deg); }
+.mc-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 24px; }
+.mc-what {
+  margin: 0; display: inline-flex; align-items: center; gap: .35rem; min-width: 0;
+  font-size: .68rem; font-weight: 600; letter-spacing: .02em; color: var(--muted);
+}
+.mc-what svg { flex: none; }
+.mc-close {
+  flex: none; width: 26px; height: 26px; margin-right: -6px; border: 0; border-radius: 50%; background: none;
+  color: var(--muted); font: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer;
+}
+.mc-close:hover { background: var(--bg-soft); color: var(--ink); }
+.mc-title { font-size: 1rem; line-height: 1.25; margin: .05rem 0 .1rem; overflow-wrap: anywhere; }
+.mc-sub { margin: 0; font-size: .71rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mc-status { display: flex; align-items: baseline; gap: .45rem; margin: .55rem 0 .45rem; font-size: .81rem; line-height: 1.42; color: var(--ink-2); }
+.mc-status.muted { color: var(--muted); }
+.mc-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; transform: translateY(1px); box-shadow: 0 0 0 1px rgba(0, 0, 0, .14); }
+.mc-pending { color: var(--muted); align-items: center; }
+.mc-row { display: flex; align-items: flex-end; gap: .8rem; margin: .1rem 0 .55rem; }
+.mc-spark-wrap { flex: 1; min-width: 0; }
+.mc-spark { height: 40px; }
+.mc-spark svg { display: block; overflow: visible; }
+.mc-line { fill: none; stroke: var(--mc-spark); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.mc-area, .mc-band { fill: var(--mc-spark-fill); stroke: none; }
+.mc-end { fill: var(--mc-spark); stroke: var(--surface-solid); stroke-width: 1.5; }
+.mc-spark-label { display: block; margin-top: 2px; font-size: .64rem; color: var(--muted); }
+.mc-spark-empty { margin: 0; font-size: .74rem; line-height: 1.4; }
+.mc-figure { flex: none; display: flex; flex-direction: column; align-items: flex-end; text-align: right; max-width: 128px; }
+.mc-num { font-size: 1.28rem; font-weight: 660; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mc-num small { font-size: .7rem; font-weight: 520; color: var(--muted); letter-spacing: 0; }
+.mc-fig-label { margin-top: 2px; font-size: .64rem; line-height: 1.3; color: var(--muted); }
+.mc-note { margin: 0 0 .5rem; padding: .35rem .5rem; font-size: .74rem; line-height: 1.4; color: var(--ink-2); background: var(--bg-soft); border-radius: var(--radius-xs); }
+.mc-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
+.mc-actions .btn.small { padding: .32rem .55rem; }
+.mc-credit { margin: .5rem 0 0; font-size: .63rem; line-height: 1.4; color: var(--muted); }
+/* Waiting, said in a word and a soft bar, never a wall of spinners. */
+.mc-skel {
+  display: inline-block; flex: none; width: 34px; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--bg-sunken) 0%, var(--line-soft) 50%, var(--bg-sunken) 100%);
+  background-size: 200% 100%; animation: mc-shimmer 1.3s linear infinite;
+}
+.mc-skel.wide { display: block; width: 100%; height: 26px; margin-top: 10px; border-radius: 6px; }
+.mc-skel.short { width: 70px; height: 20px; border-radius: 5px; }
+@keyframes mc-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* One line before anything is chosen, then gone. */
+.map-hint {
+  position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 5; margin: 0;
+  max-width: calc(100% - 140px); padding: .38rem .85rem; text-align: center;
+  font-size: .76rem; line-height: 1.35; color: var(--ink-2); background: var(--surface);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow-1); pointer-events: none;
+}
+
+/* A phone: a short sheet over the bottom of the map, not a bubble over a thumb. */
+.map-card.sheet {
+  left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto; max-width: none;
+  max-height: 50vh; overflow: auto; overscroll-behavior: contain; z-index: 10;
+  border-radius: var(--radius) var(--radius) 0 0; border-bottom: 0;
+  padding: 4px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+}
+.map-card.sheet::before {
+  content: ""; display: block; width: 38px; height: 4px; margin: 4px auto 4px; border-radius: 999px; background: var(--line);
+}
+.map-card.sheet .mc-tail { display: none; }
+.map-card.sheet.on { animation: mc-up .2s ease-out; }
+@keyframes mc-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.map-card.sheet .btn.small { padding: .45rem .7rem; font-size: .78rem; }
+@media (max-width: 640px) {
+  .map-hint { top: auto; bottom: 120px; max-width: calc(100% - 32px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-card.on, .map-card.sheet.on { animation: none; }
+  .mc-skel { animation: none; }
+}
+@media print { .map-card, .map-hint { display: none !important; } }
+/* Nothing in the map area scrolls sideways: the folded panel waits just off its right edge. */
+main { overflow: clip; }
+
 /* ── living rivers (#545): the key for a lit river network, on top of the legend stack (.map-legends) ── */
 .river-key {
   position: relative; width: max-content; max-width: min(440px, calc(100vw - 24px));

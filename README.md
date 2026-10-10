@@ -50,6 +50,8 @@ See [validation scope](docs/validation_scope.md) for comparators and limitations
 **[Open AquaScope Explorer](https://rekin226-aquascope-explorer.static.hf.space/)**.
 Start with one task:
 
+- **Click the map:** a gauge, a river or any place answers in a small card right there: what it is, today
+  against normal, the last year (or the next 15 days on a river), one number, and Details for the full panel.
 - **Find river data:** search a gauge, inspect its actual available period and units, then download CSV,
   or the inputs for HEC-HMS, HEC-RAS, HEC-SSP, SWMM, MODFLOW 6, Delft-FEWS or Raven (**Export for…**).
 - **Explore a worked analysis:** open a recorded study, read its limits and reproduce its plan at another gauge.

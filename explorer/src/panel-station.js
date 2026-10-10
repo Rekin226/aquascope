@@ -61,7 +61,8 @@ export function selectStation(key, { fly = false, tab = null, push = true } = {}
   clearPointMarker();
   if (fly) flyToStation(r);
 
-  showSurface("panel-station");
+  // Map first (#548): the panel unfolds for a link that names a tab; a click answers in the map card.
+  showSurface("panel-station", { reveal: Boolean(tab) });
   const st = sourceStyle(r.source);
   const badge = $("st-source");
   badge.textContent = st.label;
@@ -177,6 +178,12 @@ export function reanalyze() {
   requestAnalysis(r, my);
 }
 
+// The record's arrival, as an event on the panel ("analysis", detail { key, result } or { key, message }):
+// the map card (#548) draws its sparkline from it without importing this module.
+function told(key, detail) {
+  root().dispatchEvent(new CustomEvent("analysis", { detail: { key, ...detail } }));
+}
+
 function tabExists(name) {
   return Boolean(root().querySelector(`[role="tab"][data-tab="${name}"]`));
 }
@@ -191,6 +198,7 @@ async function requestAnalysis(r, my) {
   setStatus("");
   $("st-period-pick").hidden = catalogOnly(r.source);
   if (catalogOnly(r.source)) {
+    told(key, { message: "The Explorer has no way to fetch this source's observations yet." });
     resetNow("st", "No record here to compare with.");
     setCard($("st-kpis-card"), "empty", { message: "Catalog-only station: Explorer has no observation retrieval path for this source yet. Open the agency page, or import your own downloaded table." });
     return;
@@ -203,6 +211,7 @@ async function requestAnalysis(r, my) {
     state.result = result;
     syncWatchButtons();  // the threshold menu follows the record's variable
     render(result, r);
+    told(key, { result });
     startNow("st", { station: r, result, snap: stationSnap });
   } catch (err) {
     if (my !== analysisRun) return;
@@ -211,6 +220,7 @@ async function requestAnalysis(r, my) {
     // A refused cross-origin call reaches here as a bare NetworkError from the
     // worker's XHR. Say what it means rather than echo it (#408).
     const refused = /NetworkError|Failed to fetch|XMLHttpRequest|cross-origin|CORS/i.test(msg);
+    told(key, { message: refused ? "This agency's API cannot be reached from a browser." : "The record did not load." });
     setCard($("st-kpis-card"), "error", {
       message: refused
         ? "This agency's API could not be reached from your browser: it does not allow cross-origin requests from web pages. The record is still reachable from the Python package (pip install aquascope)."

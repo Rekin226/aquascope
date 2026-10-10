@@ -197,6 +197,14 @@ export function initMap(initialView, { basemap = "light", date = null, globe = f
   // Bottom left, both of them: the inspector floats over the bottom right.
   map.addControl(new maplibregl.ScaleControl(), "bottom-left");
   map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
+  // On a phone the open attribution runs under the time bar, now that a dated layer is on from the start
+  // (#543): it starts folded to its (i) there, a tap opens it, and the legends carry their own credits.
+  if (globalThis.matchMedia && globalThis.matchMedia("(max-width: 640px)").matches) {
+    map.once("load", () => {
+      const el = map.getContainer().querySelector(".maplibregl-ctrl-attrib.maplibregl-compact");
+      if (el) { el.classList.remove("maplibregl-compact-show"); el.removeAttribute("open"); }
+    });
+  }
   return new Promise((resolve) => {
     let settled = false;
     let timer = null;
@@ -553,8 +561,9 @@ export function addStationLayers(fc) {
     const zoom = await map.getSource("stations").getClusterExpansionZoom(f.properties.cluster_id);
     map.easeTo({ center: f.geometry.coordinates, zoom });
   });
-  map.on("click", "points", (e) => actions.selectStation(e.features[0].properties.key, { fly: false }));
   const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 8 });
+  // The hover label gives way to the map card (#548) once the gauge is clicked.
+  map.on("click", "points", (e) => { popup.remove(); actions.selectStation(e.features[0].properties.key, { fly: false }); });
   map.on("mouseenter", "points", (e) => {
     map.getCanvas().style.cursor = "pointer";
     const p = e.features[0].properties;

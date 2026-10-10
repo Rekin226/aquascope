@@ -92,7 +92,7 @@ export async function selectPoint(lat, lon, { tab = null, push = true, fly = fal
   setPointMarker(lat, lon);
   if (fly) flyToPoint(lat, lon);
 
-  showSurface("panel-point");
+  showSurface("panel-point", { reveal: Boolean(tab) });   // map first (#548): the card answers a click
   $("pt-title").textContent = `${lat.toFixed(3)}°, ${lon.toFixed(3)}°`;
   $("pt-coords").textContent = `lat ${lat}, lon ${lon}`;
   for (const id of ["pt-climate-card", "pt-glofas-card", "pt-notes-card", "pt-assess-card"]) hideCard($(id));

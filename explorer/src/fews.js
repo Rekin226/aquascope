@@ -13,14 +13,15 @@
 // Both follow the Floods ahead switch and the map's date.
 
 import { CONFIG } from "../config.js?v=__BUILD__";
-import { actions, clickLayers, onTime, sourceStyle, state } from "./core.js?v=__BUILD__";
+import { actions, clickLayers, escapeHtml, onTime, sourceStyle, state } from "./core.js?v=__BUILD__";
 import { map } from "./map.js?v=__BUILD__";
 import { duck } from "./catalog.js?v=__BUILD__";
 import { callLight } from "./worker-client.js?v=__BUILD__";
 import { classColor, reachFacts } from "./floods-ahead-core.js?v=__BUILD__";
+import { refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
 import {
   BELOW, FEWS_CLASSES, dayLabel, dayOf, fewsColor, membersShort, obsBefore, plumeHead, plumeLabel, pointsGeoJSON,
-  pointsLine, recordEnd,
+  pointsLine, pointsSummary, recordEnd,
 } from "./fews-core.js?v=__BUILD__";
 
 const L = { src: "fews-pts", casing: "fews-ring-casing", ring: "fews-ring", dot: "fews-dot" };
@@ -39,7 +40,7 @@ let points = null;       // aquascope.nownext.forecast_points: { issue_date, poi
 let byKey = new Map();
 let loading = null;
 let day = -1;
-let key = null;          // the legend line
+let near = false;        // forecast gauges' rings in sight: their row in the legend shows
 let retry = 0;
 let shown = [];          // [lon, lat] of the forecast gauges on the map now
 
@@ -163,6 +164,7 @@ function draw() {
   const fc = pointsGeoJSON(points.points, (k) => state.byKey.get(k), { day });
   shown = fc.features.map((f) => f.geometry.coordinates);
   map.getSource(L.src).setData(fc);
+  renderKey.force = true;
   renderKey();
 }
 
@@ -172,32 +174,37 @@ function onClick(e) {
   actions.selectStation(f.properties.key, { fly: false });
 }
 
-// One quiet line in the legend stack, only while forecast gauges' rings are in sight.
+// A row in "On the map" (map-legend.js), listed only while forecast gauges' rings are in sight.
 function renderKey() {
-  const stack = document.getElementById("map-legends");
-  if (!stack) return;
-  if (!key) {
-    key = document.createElement("p");
-    key.className = "fews-key";
-    stack.appendChild(key);
-  }
-  const line = pointsLine(points);
-  let near = false;
-  if (map && state.mapOk && map.getZoom() >= KEY_ZOOM) {
+  let now = false;
+  if (points && map && state.mapOk && map.getZoom() >= KEY_ZOOM) {
     const box = map.getBounds();
-    near = shown.some((c) => box.contains(c));
+    now = shown.some((c) => box.contains(c));
   }
-  key.hidden = !visible || !line || !near;
-  if (key.hidden) return;
-  key.innerHTML = `<i class="fews-ring-sw" aria-hidden="true"></i><span>${line.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</span>`;
-  key.title = "Archive gauges with a forecast that day, corrected to each gauge's record and classed against its own " +
-    "return-period flows. Solid ring: the class colour reached; thin slate ring: below the 2-year flow.";
+  if (now === near && !renderKey.force) return;
+  renderKey.force = false;
+  near = now;
+  refreshLegend("forecast-points");
+}
+
+function registerRow() {
+  registerLegendRow({
+    id: "forecast-points", title: "Forecast gauges",
+    mark: () => '<i class="fews-ring-sw"></i>',
+    summary: () => pointsSummary(points),
+    shown: () => near && Boolean(pointsLine(points)),
+    on: () => visible,
+    toggle: (on) => setFewsVisible(on),
+    body: () => `<p class="ml-when">${escapeHtml(pointsLine(points))}</p>` +
+      '<p class="ml-src">Solid ring: the class colour its forecast reaches. Thin slate ring: below the 2-year flow. ' +
+      "GEOGLOWS v2 corrected to each gauge's record, against its own return-period flows. Model output.</p>",
+  });
 }
 
 export function setFewsVisible(on) {
   visible = Boolean(on);
   if (state.mapOk && map) for (const id of ALL) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis());
-  renderKey();
+  refreshLegend("forecast-points");
   if (visible) void forecastPoints();
 }
 
@@ -269,6 +276,7 @@ export function openReachCard(f, lngLat, { day: d = -1, manifest = {} } = {}) {
 export function initFews() {
   if (!state.mapOk || !map) return;
   visible = state.floodsOn !== false;
+  registerRow();
   onTime((t) => {
     if (t.date === t.prev.date || !points) return;
     const next = (points.points || []).length ? dayOf(points.points[0].date, t.date) : -1;

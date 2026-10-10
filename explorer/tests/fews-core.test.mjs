@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { FLOOD_CLASSES } from "../src/floods-ahead-core.js";
 import {
   BELOW, FEWS_CLASSES, classWords, colourDistances, dayOf, fewsColor, flowText, labOf, membersShort, obsBefore, plumeAlt, recordEnd,
-  plumeHead, plumeKey, plumeLabel, plumeScale, plumeSvg, pointsGeoJSON, pointsLine,
+  plumeHead, plumeKey, plumeLabel, plumeScale, plumeSvg, pointsGeoJSON, pointsLine, pointsSummary,
 } from "../src/fews-core.js";
 
 // What aquascope.nownext.plume returns, cut down.
@@ -113,6 +113,9 @@ test("forecast gauges on the map: classed ones only, with the day's class or the
   assert.equal(pointsLine({ issue_date: "2026-10-09", points: pts }), "3 forecast gauges, Fri 9 Oct: 2 expected to reach the 2-year flow or more.");
   assert.equal(pointsLine({ issue_date: "2026-10-09", points: [pts[1]] }), "1 forecast gauge, Fri 9 Oct: none expected to reach the 2-year flow.");
   assert.equal(pointsLine({ points: [pts[2]] }), "");
+  assert.equal(pointsSummary({ points: pts }), "2 past 2-yr");
+  assert.equal(pointsSummary({ points: [pts[1]] }), "all below 2-yr");
+  assert.equal(pointsSummary({ points: [pts[2]] }), "");
 });
 
 test("the gauge's record before the run", () => {

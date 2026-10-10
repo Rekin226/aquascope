@@ -155,7 +155,8 @@ komoot, OpenStreetMap data, ODbL); a name it does not hold is tried as a gauge i
 the catalogue. A river is lit from the point the gazetteer gives for it ("the Nile"
 starts at Lake Nasser), so "what drains to the Nile at Khartoum" or a click picks a
 better start. "Where are rivers much above normal" turns the world river status on
-and paints only those basins; the legend says what is left out and has **show all**.
+and paints only those basins; the River status row in **On the map** opens to say what
+is left out, with **show all**.
 
 The actions (`fly_to`, `set_time`, `set_layer`, `focus_status`, `set_basemap`,
 `highlight_river`, `draw_area`, `add_pin`) are the same everywhere:
@@ -187,14 +188,48 @@ surface temperature, GRACE water storage anomaly, ESA WorldCover land cover, and
 JRC Global Surface Water (how often each 30 m pixel was water from 1984 to 2024).
 The time-driven ones follow one date, set in the time bar (below).
 
+## On the map: one legend, one line
+
+Every layer on the globe has one row in a single legend, **On the map**, bottom
+left (top right on a phone), in the order the layers are drawn: gauges, Floods
+ahead, rivers, Floods past, then the river status underneath. A row is a
+visibility toggle, the layer's mark, its name and a few words (the month, a
+count); click the name to open its key, with the colours, the counts, **About**
+and, for the dated layers, a replay. A layer with nothing to draw (Floods ahead
+before its first daily issue, say) is one muted line, and a layer turned off
+stays listed so it can come back. While a river is lit, a **This river** row on
+top says what the blue and the orange mean, and its × clears it. On a wide
+screen the river status's row starts open; on a phone the whole legend starts
+as one small chip, and opened it stays inside a quarter of the screen.
+
+Above the globe, one line says what the map shows this month, made from the
+river status file itself: for a few regions a reader knows by name (rough boxes
+such as the Amazon, the Sahel or South Asia, not basins), the share of the mapped
+area below and above normal, weighted by latitude, and the regions where at
+least half is one or the other: *River status, September 2026: much of the
+Sahel and the Amazon below normal, much of southern Africa above*. It follows
+the time bar, so a replay narrates itself, and it shows on the world view only:
+zoomed in on a region, a world headline would only talk over the map. It sits
+under the **Ask the map** pill, and steps aside while the box is open. The same line and the shares are
+`aquascope layers status [YYYY-MM] --summary` and the MCP tool
+`river_status_summary` (`aquascope.map_layers.river_status_summary`); the page
+makes them from the file its worker has already decoded, and a test keeps the
+two equal.
+
+The gauges stay quiet on the globe: the clusters are small, light and
+see-through with a small count, so the river status and the rivers read first,
+and the gauges with a status today (912 when this was written) show as small
+dots in their today-vs-normal colour while the rest are still clustered. A click
+on a cluster zooms in; from zoom 7 every gauge has its own mark.
+
 ## World river status
 
 The map opens on the state of the world's rivers. Every river basin is coloured by
 how its flow that month compares with the same month in other years, from much
 below normal (brown) through normal (a light wash) to much above normal (teal), at
-the newest month GEOGLOWS has published. A small card on the map names the month
-and the five classes; its **i** says how the map is made and **×** hides it (the
-rail's **Overlays** has it too, with an opacity slider). `ws=0` in a link opens
+the newest month GEOGLOWS has published. Its row in **On the map** names the month
+and opens on the five classes; **About** says how the map is made and the toggle
+hides it (the rail's **Overlays** has it too, with an opacity slider). `ws=0` in a link opens
 without it.
 
 The time bar drives it. With no date in the link the map opens in the middle of the
@@ -219,7 +254,8 @@ basemap's water and labels and under the gauges, and fades as you zoom in.
 The colours are the gauges' own: the same five as **Today vs normal**, which is
 how the gauges are coloured by default. A gauge the daily snapshot covers takes
 its class colour; every other gauge keeps its agency colour, and the legend says
-which. GEOGLOWS draws the classes in the WMO HydroSOS red-to-blue; the info panel
+which. While the time bar replays a past month, the Gauges row says the dots
+still show today. GEOGLOWS draws the classes in the WMO HydroSOS red-to-blue; the info panel
 says so.
 
 `aquascope layers status [YYYY-MM]` and the MCP tool `river_status_month` give the
@@ -295,12 +331,17 @@ Where floods actually happened, on the globe, from the moment the page opens.
   classified as flood water, after the dataset's own false-alarm filters,
   October 2014 to September 2024 only (MIT).
 
-Both are summed per half-degree cell (about 55 km) and month. At the world view
-they are two heat maps, radar over news; from zoom 4.5 each cell is a circle
-(news) and a shaded square (radar). Sizes and shades grow with the logarithm of
-the count, so one very reported city does not drown out a region, and small
-counts stay quiet: a cell with a single report is a faint dot, and radar cells
-with fewer than 200 detections (a few hectares) are left clear.
+Both are summed per half-degree cell (about 55 km) and month. Twelve months of
+reports touch nearly every inhabited cell somewhere wet, so drawing them all
+would be a grid of equal dots; only the cells that **stand out from the region
+on screen** are drawn: about the top eighth of the cells with any count there,
+never under a small floor (2 reports, 2,000 radar detections), worked out again
+when the map moves. Up to the regional view (zoom 6) they are two soft heat
+maps, radar and news; from zoom 6 to 7 these hand over to small translucent
+circles (news) and shaded squares (radar). Sizes and shades grow with the
+logarithm of the count, so one very reported city does not drown out a region,
+radar cells with fewer than 200 detections (a few hectares) are left clear, and
+the river status and the rivers stay visible through them.
 
 The layer follows the time bar, like every dated layer:
 
@@ -308,16 +349,16 @@ The layer follows the time bar, like every dated layer:
   opens after the last month on record, so it shows the latest twelve and says
   "latest on record";
 - **playing**, or stepping by month, shows **one month at a time**, so a flood
-  season replays. The ▶ in the legend sets this up for the months on screen and
-  plays them;
+  season replays. **Replay month by month** in its legend row sets this up for
+  the months on screen and plays them;
 - a **range** set behind ⋯ (and not playing) shows all its months together, up
   to 60.
 
-**Click a cell** (from zoom 4.5) for its counts, its news events with their
+**Click a cell** (from zoom 6) for its counts, its news events with their
 dates and areas, and the months radar saw flooding there; **Open this place**
-takes it to the point panel. The legend's ⓘ explains the two sources, ⌃ folds
-it to one line (how it starts on a phone), and × or the rail's **Floods past**
-row turns it off (`fp=0` in the link).
+takes it to the point panel. **About** in its legend row explains the two
+sources, and its toggle or the rail's **Floods past** row turns it off (`fp=0`
+in the link).
 
 The data is a few small files in the Archive under `context/floods/monthly/`
 (`index.json`, one gzipped JSON per month, and `grid.parquet` with every month),
@@ -452,9 +493,10 @@ above the raster overlays and below the gauges, in a calm blue that changes
 shade with the basemap. **Rivers (GEOGLOWS)** in the rail turns it off, and a
 link can carry `rivers=0`.
 
-**Flow direction (animated)** moves a short dash along each line the way the
-water goes (TDX-Hydro draws every reach from its downstream end). It steps 20
-times a second, stops while the tab is hidden, holds still while the map
+**Flow direction (animated)** moves a light glint along each line the way the
+water goes (TDX-Hydro draws every reach from its downstream end): you see the
+water move without a dark dash marching over every river. It steps 16 times a
+second, stops while the tab is hidden, holds still while the map
 settles (a basemap change, a frame of the time bar's play or of a GIF), and
 starts off when the system asks for reduced motion; the rail turns it either way.
 
@@ -462,7 +504,7 @@ A click lights the river up on the map. As soon as the point snaps, its reach is
 ringed; then the reaches that drain to it turn a stronger blue and its way to
 the sea turns orange, each on a casing of the basemap's own background, and the
 rest of the network fades back. Blue against orange is the pair no common colour
-blindness merges. A small key at the top of the map says what the colours mean,
+blindness merges. A **This river** row on top of the legend says what the colours mean,
 how many reaches drain there and how much area, and how many reaches it is to the
 outlet; while the basin's routing tables load (a few MB, up to about 30 MB for
 the largest basins) it says so. A big basin has hundreds of thousands of
@@ -552,20 +594,20 @@ up along the GEOGLOWS stream tiles. Zoomed in past the gauge clusters (zoom 7), 
 Archive gauges on those reaches pulse gently (a still ring when the reader prefers less
 motion).
 
-The legend card at the top left gives the classes, how many reaches, the day and the
+Its row in **On the map** says how many reaches and, opened, gives the classes, the day and the
 forecast run, and always says it is a model forecast, not an official warning (and,
 if the daily job could not read every river in time, how much it read). The
 map's date (the time bar) picks what is drawn: inside the forecast's 15 days each
 reach shows its class on that day; outside them, its 15-day peak. **Play the 15
 days** walks the map's date through them and back. **About** gives the method and
-what it is not; **Hide** (or the Overlays row) turns it off. On a phone the legend
-starts folded to one line.
+what it is not; the row's toggle (or the Overlays row) turns it off. On the globe the glows
+are small and soft, so the river status reads through them.
 
 Clicking a reach opens the map card with its class, the peak and its day against the
 2-year flow, and the ensemble plume ([the FEWS view](#forecast-points-and-the-plume-the-fews-view));
 **Details** opens the place's Now tab, and a button per gauge on that reach opens the
-gauge. Before the first daily issue is published, the legend says so and nothing else
-changes.
+gauge. Before the first daily issue is published, its legend row is one muted line that
+says so and nothing else changes.
 
 The numbers come from the daily `flood-warnings` workflow (`aquascope.archive.warnings`,
 [details](archive.md#floods-ahead-forecastswarnings)): Strahler order 5 and up plus
@@ -588,8 +630,9 @@ The Explorer does the same with two kinds of point, in the Floods ahead colours.
   against the gauge's own 2- to 100-year flows. Past the gauge clusters (zoom 7) each
   gets a ring: solid in the class colour when its forecast reaches the 2-year flow or
   more, a thin slate ring when it stays below. Further out only the gauges that reach a
-  threshold show, as small solid marks. A one-line note in the legend stack says how
-  many there are while their rings are in view. Their card shows the corrected plume,
+  threshold show, as small solid marks. While their rings are in view, a **Forecast
+  gauges** row in "On the map" says how many there are and how many pass the 2-year
+  flow; its toggle hides them. Their card shows the corrected plume,
   with the gauge's own record before the run. A record that stops more than a week
   before the run is left out, and the card says the day it stops.
 

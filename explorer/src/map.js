@@ -17,9 +17,9 @@ export function whenMapLoadsLate(cb) { onLate = cb; }
 
 // Our own sources and layers, which must survive a basemap change: setStyle
 // replaces the whole style, so they are carried across explicitly.
-const OUR_SOURCES = ["stations", "catchment", "basins6", "basins12", "terrain-dem"];
+const OUR_SOURCES = ["stations", "stations-now", "catchment", "basins6", "basins12", "terrain-dem"];
 const OUR_LAYERS = ["catchment-fill", "catchment-line", "basins6-line", "basins12-line", "basins12-up",
-  "gauge-heat", "clusters", "cluster-count", "points", "selected", "hillshade"];
+  "gauge-heat", "clusters", "now-dots", "cluster-count", "points", "selected", "hillshade"];
 // river- is the stream network and the trace to the sea (river-map.js, #516).
 const isOurs = (id) => OUR_SOURCES.includes(id) || id.startsWith("ov-") || id.startsWith("study-") || id.startsWith("river-");
 const isOurLayer = (id) => OUR_LAYERS.includes(id) || id.startsWith("ov-") || id.startsWith("study-") || id.startsWith("river-");
@@ -468,6 +468,7 @@ export function setGaugeStyle(mode) {
   const now = mode === "now";
   map.setPaintProperty("points", "icon-opacity", now ? ["case", ["get", "hasNow"], 0.98, 0.35] : 0.98);
   map.setLayoutProperty("points", "symbol-sort-key", now ? ["case", ["get", "hasNow"], 1, 0] : 0);
+  if (map.getSource("stations-now")) map.getSource("stations-now").setData(nowDotsFC(toFeatureCollection(state.stations)));
 }
 
 export function setHeatmap(on) {
@@ -496,22 +497,42 @@ export function addStationLayers(fc) {
   // separated circles, and handing over to real dots at zoom 6 means you are
   // looking at gauges as soon as you are looking at a river basin.
   map.addSource("stations", { type: "geojson", data: fc, cluster: true, clusterMaxZoom: 6, clusterRadius: 92 });
+  // Quiet clusters (#543 design pass): small, light and see-through, with a small count, so the river status
+  // under them and the rivers read first. A dark bubble per region was the loudest thing on the globe.
   map.addLayer({
     id: "clusters", type: "circle", source: "stations", filter: ["has", "point_count"],
     paint: {
-      "circle-color": ["interpolate", ["linear"], ["get", "point_count"],
-        1, "#4d9fe0", 100, "#2b7fc4", 1000, "#125ea3", 10000, "#0b3f76"],
-      "circle-opacity": 0.92,
-      "circle-stroke-color": "rgba(255,255,255,.85)",
-      "circle-stroke-width": ["step", ["get", "point_count"], 1.5, 250, 2],
-      "circle-radius": ["interpolate", ["linear"], ["sqrt", ["get", "point_count"]],
-        1, 11, 10, 17, 40, 23, 130, 29],
+      "circle-color": "rgba(248,251,255,0.5)",
+      "circle-stroke-color": "rgba(29,58,85,0.38)",
+      "circle-stroke-width": 1,
+      "circle-radius": ["interpolate", ["linear"], ["zoom"],
+        1, ["interpolate", ["linear"], ["sqrt", ["get", "point_count"]], 1, 4.5, 10, 6, 40, 7.5, 130, 9],
+        6, ["interpolate", ["linear"], ["sqrt", ["get", "point_count"]], 1, 8, 10, 10, 40, 12, 130, 14]],
+    },
+  });
+  // The gauges with a status today, as small dots in their today-vs-normal colour while the rest are still
+  // clustered: the globe shows where the measured rivers are low or high (#544), not how many gauges a
+  // country has. Past the cluster zoom the gauges' own marks take over.
+  map.addSource("stations-now", { type: "geojson", data: nowDotsFC(fc) });
+  map.addLayer({
+    id: "now-dots", type: "circle", source: "stations-now", maxzoom: 7,
+    paint: {
+      "circle-color": ["get", "colorNow"],
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 2.1, 4, 3, 6.9, 4],
+      "circle-stroke-color": "rgba(16,34,47,0.45)",
+      "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 1, 0.3, 5, 0.6],
+      "circle-opacity": 0.95,
     },
   });
   map.addLayer({
     id: "cluster-count", type: "symbol", source: "stations", filter: ["has", "point_count"],
-    layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": ["step", ["get", "point_count"], 11, 250, 12.5], "text-font": LABEL_FONT },
-    paint: { "text-color": "#fff", "text-halo-color": "rgba(10,45,80,.35)", "text-halo-width": 0.6 },
+    layout: {
+      "text-field": ["get", "point_count_abbreviated"], "text-font": LABEL_FONT,
+      "text-size": ["interpolate", ["linear"], ["zoom"], 1, 8.5, 6, 10.5],
+      "text-allow-overlap": false,
+    },
+    paint: { "text-color": "#1d3a55", "text-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.7, 4, 0.85],
+      "text-halo-color": "rgba(255,255,255,.8)", "text-halo-width": 1 },
   });
   // A symbol layer rather than a circle, so which agency a gauge belongs to is
   // carried by outline as well as by hue (#283). SDF icons keep the colour
@@ -564,6 +585,12 @@ export function addStationLayers(fc) {
   const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 8 });
   // The hover label gives way to the map card (#548) once the gauge is clicked.
   map.on("click", "points", (e) => { popup.remove(); actions.selectStation(e.features[0].properties.key, { fly: false }); });
+  map.on("click", "now-dots", (e) => {
+    if (map.queryRenderedFeatures(e.point, { layers: ["points"] }).length) return;
+    actions.selectStation(e.features[0].properties.key, { fly: false });
+  });
+  map.on("mouseenter", "now-dots", () => (map.getCanvas().style.cursor = "pointer"));
+  map.on("mouseleave", "now-dots", () => (map.getCanvas().style.cursor = ""));
   map.on("mouseenter", "points", (e) => {
     map.getCanvas().style.cursor = "pointer";
     const p = e.features[0].properties;
@@ -574,7 +601,7 @@ export function addStationLayers(fc) {
   map.on("mouseleave", "points", () => { map.getCanvas().style.cursor = ""; popup.remove(); });
   map.on("click", (e) => {
     const taken = [...clickLayers].filter((id) => map.getLayer(id));
-    const hit = map.queryRenderedFeatures(e.point, { layers: ["points", "clusters", ...taken] });
+    const hit = map.queryRenderedFeatures(e.point, { layers: ["points", "clusters", "now-dots", ...taken] });
     if (hit.length) return; // handled by the layer handlers
     actions.selectPoint(e.lngLat.lat, e.lngLat.lng);
   });
@@ -594,7 +621,27 @@ export function addStationLayers(fc) {
 }
 
 export function refreshMapData() {
-  if (state.mapOk && map.getSource("stations")) map.getSource("stations").setData(toFeatureCollection(state.stations));
+  if (!state.mapOk || !map.getSource("stations")) return;
+  const fc = toFeatureCollection(state.stations);
+  map.getSource("stations").setData(fc);
+  if (map.getSource("stations-now")) map.getSource("stations-now").setData(nowDotsFC(fc));
+}
+
+// The gauges with a status today, while the map is coloured by today vs normal and the snapshot has loaded.
+function nowDotsFC(fc) {
+  if (state.gaugeStyle !== "now" || !state.nowStatus) return EMPTY_FC;
+  return { type: "FeatureCollection",
+    features: fc.features.filter((f) => f.properties.hasNow).map((f) => ({ type: "Feature", geometry: f.geometry,
+      properties: { key: f.properties.key, colorNow: f.properties.colorNow } })) };
+}
+
+/** Show or hide every gauge mark (the legend's Gauges row); a selected gauge keeps its ring. */
+export function setGaugesVisible(on) {
+  state.gaugesOn = Boolean(on);
+  if (!state.mapOk) return;
+  for (const id of ["clusters", "now-dots", "cluster-count", "points", "gauge-heat"]) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", state.gaugesOn ? "visible" : "none");
+  }
 }
 
 export function highlightStation(key) {

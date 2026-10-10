@@ -323,62 +323,6 @@ body.workbench-mode .maplibregl-ctrl-top-left { margin-top: 0; }
 .tb-seg input:checked + span { background: var(--blue); color: #fff; }
 .tb-seg input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: -2px; }
 
-/* ── the world river status's legend (#544): one small card, bottom left ── */
-
-/* It sits in the shared legend stack (.map-legends, floods-past.css), which places it and follows the rail. */
-.status-legend {
-  width: 16.5rem; max-width: calc(100vw - 24px);
-  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-1);
-  padding: .45rem .6rem .5rem; font-size: .72rem; color: var(--ink);
-}
-.status-legend[hidden] { display: none; }
-.status-legend header { display: flex; align-items: center; gap: .4rem; margin-bottom: .35rem; }
-.status-legend header b { font-size: .76rem; font-weight: 650; white-space: nowrap; }
-.status-legend .sl-when { font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }
-.status-legend .sl-tag {
-  font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 650; color: var(--muted);
-  border: 1px solid var(--line); border-radius: 999px; padding: 0 .35rem;
-}
-.status-legend .sl-busy {
-  width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--line); border-top-color: var(--ink-2);
-  animation: sl-spin .8s linear infinite;
-}
-@keyframes sl-spin { to { transform: rotate(360deg); } }
-.status-legend .sl-btn {
-  font: inherit; font-size: .72rem; line-height: 1; width: 20px; height: 20px; display: grid; place-items: center;
-  border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; padding: 0;
-}
-.status-legend .sl-btn[data-act="info"] { margin-left: auto; font-weight: 650; font-style: italic; font-family: Georgia, serif; }
-.status-legend .sl-btn:hover { background: var(--bg-soft); border-color: var(--line); color: var(--ink); }
-.status-legend .sl-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; height: 9px; }
-.status-legend .sl-bar i { background: var(--c); border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(127, 140, 153, .18); }
-.status-legend .sl-bar i:first-child { border-radius: 4px 2px 2px 4px; }
-.status-legend .sl-bar i:last-child { border-radius: 2px 4px 4px 2px; }
-.status-legend .sl-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: .64rem; margin-top: .15rem; }
-.status-legend p { margin: .35rem 0 0; line-height: 1.35; }
-.status-legend .sl-dots { color: var(--ink-2); display: flex; gap: .4rem; align-items: baseline; }
-.status-legend .sl-dots i {
-  flex: none; width: 8px; height: 8px; border-radius: 50%; transform: translateY(1px);
-  background: conic-gradient(#a6611a 0 25%, #dfc27d 0 50%, #80cdc1 0 75%, #018571 0); box-shadow: 0 0 0 1.5px #fff;
-}
-.status-legend .sl-bar i.off { opacity: .22; }
-.status-legend .sl-focus { color: var(--ink-2); }
-.status-legend .sl-focus .link-btn { font-size: .68rem; margin-left: .2rem; }
-.status-legend .sl-src { color: var(--muted); font-size: .64rem; }
-.status-legend .sl-credit { display: none; color: var(--muted); font-size: .6rem; margin-top: .2rem; }
-.status-legend .sl-err { color: var(--warn-ink); }
-@media (prefers-reduced-motion: reduce) {
-  .status-legend .sl-busy { animation: none; border-top-color: var(--line); }
-}
-/* On a phone the map is the strip above the bottom sheet: the legend keeps the bar and its ends. */
-@media (max-width: 860px) {
-  .status-legend { width: auto; max-width: min(14rem, calc(100vw - 72px)); padding: .35rem .5rem .4rem; }
-  .status-legend header { margin-bottom: .25rem; }
-  .status-legend .sl-tag, .status-legend .sl-src, .status-legend .sl-dots { display: none; }
-  .status-legend .sl-credit { display: block; }
-}
-
 /* swipe compare: the right-hand map, clipped at the handle */
 .compare { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .compare[hidden] { display: none; }
@@ -1341,14 +1285,24 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
 .mc-skel.short { width: 70px; height: 20px; border-radius: 5px; }
 @keyframes mc-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
-/* One line before anything is chosen, then gone. */
-.map-hint {
-  position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 5; margin: 0;
-  max-width: calc(100% - 140px); padding: .38rem .85rem; text-align: center;
-  font-size: .76rem; line-height: 1.35; color: var(--ink-2); background: var(--surface);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow-1); pointer-events: none;
+/* The first view's one line (the month's river status, in words) and, until the first click, how to ask the
+   map: one quiet pill at the top of the map, the caption over a smaller hint. */
+.map-lead {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 5;
+  max-width: min(46rem, calc(100% - 160px)); width: max-content; display: flex; flex-direction: column; align-items: center; gap: .1rem;
+  padding: .36rem .9rem .38rem; text-align: center; pointer-events: none;
+  border-radius: 14px; border: 1px solid transparent;
 }
+.map-lead:has(> p:not([hidden])) {
+  background: var(--surface); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-color: var(--line); box-shadow: var(--shadow-1);
+}
+.map-lead p { margin: 0; }
+.map-caption { font-size: .78rem; line-height: 1.4; color: var(--ink-2); font-weight: 400; }
+.map-caption b { color: var(--ink); font-weight: 620; }
+.map-hint { font-size: .72rem; line-height: 1.35; color: var(--muted); }
+.map-caption[hidden], .map-hint[hidden] { display: none; }
+body.workbench-mode .map-lead { display: none; }
 
 /* A phone: a short sheet over the bottom of the map, not a bubble over a thumb. */
 .map-card.sheet {
@@ -1365,38 +1319,18 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
 @keyframes mc-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 .map-card.sheet .btn.small { padding: .45rem .7rem; font-size: .78rem; }
 @media (max-width: 640px) {
-  .map-hint { top: auto; bottom: 120px; max-width: calc(100% - 32px); }
+  /* clear of the round Ask the map button on its right (#561) */
+  .map-lead { top: auto; bottom: 118px; left: 10px; right: 60px; transform: none; width: auto; max-width: none; padding: .3rem .7rem; }
+  .map-caption { font-size: .74rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .map-card.on, .map-card.sheet.on { animation: none; }
   .mc-skel { animation: none; }
 }
-@media print { .map-card, .map-hint { display: none !important; } }
+@media print { .map-card, .map-lead { display: none !important; } }
 /* Nothing in the map area scrolls sideways: the folded panel waits just off its right edge. */
 main { overflow: clip; }
 
-/* ── living rivers (#545): the key for a lit river network, on top of the legend stack (.map-legends) ── */
-.river-key {
-  position: relative; width: max-content; max-width: min(440px, calc(100vw - 24px));
-  display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .7rem; padding: .4rem 2rem .4rem .7rem;
-  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-2);
-  font-size: .78rem; color: var(--ink); line-height: 1.35;
-}
-.river-key[hidden] { display: none; }
-.river-key .rk-row { display: inline-flex; align-items: center; gap: .35rem; }
-.river-key .rk-row b { font-weight: 620; white-space: nowrap; }
-.river-key .rk-sw { width: 16px; height: 4px; border-radius: 2px; flex: none; display: inline-block; }
-.river-key .rk-src { flex-basis: 100%; font-size: .7rem; }
-.river-key .spinner { margin-right: .1rem; }
-.river-key-x {
-  position: absolute; top: .25rem; right: .3rem; width: 22px; height: 22px; border: 0; border-radius: 50%;
-  background: transparent; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer;
-}
-.river-key-x:hover { background: var(--bg-soft); color: var(--ink); }
-@media (max-width: 640px) {
-  .river-key { max-width: min(20rem, calc(100vw - 72px)); font-size: .74rem; }
-}
 .rail-row i.rail-flow-sw {
   width: 14px; height: 3px; border-radius: 0;
   background: repeating-linear-gradient(90deg, #3b7fc4 0 6px, #cfe6fb 6px 8px);
@@ -1404,23 +1338,6 @@ main { overflow: clip; }
 
 /* ── Floods ahead (#546): the legend on the map and the card on a reach ──── */
 
-/* In the shared legend stack (.map-legends, floods-past.css), on top: it places it clear of the time bar. */
-.fa-legend {
-  width: 272px; max-width: calc(100vw - 24px);
-  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-2);
-  padding: .55rem .7rem .5rem; font-size: .76rem; color: var(--ink);
-}
-.fa-legend[hidden] { display: none; }
-body.workbench-mode .fa-legend { display: none; }
-.fa-head { display: flex; align-items: baseline; gap: .45rem; }
-.fa-title { font-weight: 650; font-size: .84rem; letter-spacing: -.01em; }
-.fa-when { color: var(--muted); font-variant-numeric: tabular-nums; }
-.fa-x {
-  margin-left: auto; border: 0; background: none; color: var(--muted); font: inherit; font-size: 1rem;
-  line-height: 1; cursor: pointer; padding: .05rem .3rem; border-radius: 6px;
-}
-.fa-x:hover { background: var(--bg-soft); color: var(--ink); }
 .fa-scale { display: flex; align-items: flex-end; gap: 3px; margin: .5rem 0 .35rem; }
 .fa-chip {
   display: inline-flex; flex-direction: column; align-items: center; gap: 3px; flex: 1;
@@ -1429,27 +1346,10 @@ body.workbench-mode .fa-legend { display: none; }
 .fa-chip i { display: block; width: 100%; height: 8px; border-radius: 4px; }
 .fa-chip.zero { opacity: .4; }
 .fa-unit { font-size: .66rem; color: var(--muted); margin-left: .25rem; white-space: nowrap; }
-.fa-line { margin: .15rem 0 .4rem; line-height: 1.35; }
-.fa-actions { display: flex; gap: .3rem; flex-wrap: wrap; }
-.fa-btn {
-  font: inherit; font-size: .74rem; padding: .22rem .6rem; border-radius: 999px; cursor: pointer;
-  border: 1px solid var(--blue); background: var(--blue); color: #fff;
-}
-.fa-btn:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
-.fa-btn.quiet { background: transparent; color: var(--ink-2); border-color: var(--line); }
-.fa-btn.quiet:hover { background: var(--bg-soft); }
 .fa-foot { margin: .45rem 0 0; color: var(--muted); font-size: .68rem; line-height: 1.3; }
-.fa-legend.fa-empty { width: auto; max-width: 272px; }
-.fa-legend.fa-empty .fa-line { margin-bottom: 0; color: var(--muted); }
-.fa-legend.min { width: auto; padding: .4rem .45rem .4rem .7rem; }
-.fa-legend.min .fa-head { align-items: center; }
 .fa-mini { display: inline-flex; gap: 1px; }
 .fa-mini i { width: 7px; height: 7px; border-radius: 2px; }
-.fa-count { font-weight: 600; font-variant-numeric: tabular-nums; }
 
-@media (max-width: 860px) {
-  .fa-legend { width: min(272px, calc(100vw - 72px)); }
-}
 
 /* ── Ask the map (#561): one line at the top of the map, the action log under it ──
    Closed, it is a quiet pill; open, a search-like bar with the log of what the AI did,
@@ -1568,8 +1468,9 @@ body.workbench-mode .fa-legend { display: none; }
   font-size: .68rem; font-weight: 600; color: var(--blue-dark); background: var(--surface-solid);
   border: 1px solid var(--blue); border-radius: 999px; padding: .05rem .5rem; white-space: nowrap; pointer-events: none;
 }
-/* the hint that greets a first visit steps below the pill */
-@media (min-width: 641px) { .map-hint { top: 54px; } }
+/* The caption and the first-visit hint (.map-lead) step below the pill, and step aside while the box is open. */
+@media (min-width: 641px) { .map-lead { top: 52px; } }
+.map-ask.open ~ .map-lead { visibility: hidden; }
 @media (max-width: 1100px) {
   .map-ask { width: min(420px, calc(100% - 340px)); }
   .map-ask.open { width: min(460px, calc(100% - 120px)); }

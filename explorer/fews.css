@@ -1,5 +1,5 @@
 /* The FEWS view (#556): the ensemble plume in the map card and the forecast
-   gauges' line in the legend stack. Its own file so the look lives next to
+   gauges' row in the legend. Its own file so the look lives next to
    src/fews.js. The plume is ink, not hue: colour on it means one thing, the
    return-period class (the dashed lines, the strip under the days), in the
    Floods ahead colours. */
@@ -59,19 +59,8 @@
 .pl-run { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 2; }
 .pl-today { fill: var(--blue); opacity: .1; }
 
-/* the forecast gauges, one quiet line in the legend stack when their rings are in sight */
-.fews-key {
-  display: flex; align-items: center; gap: .45rem; margin: 0; max-width: min(27rem, calc(100vw - 24px));
-  padding: .3rem .6rem; font-size: .72rem; line-height: 1.3; color: var(--ink-2);
-  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow-1);
-}
-.fews-key[hidden] { display: none; }
-body.workbench-mode .fews-key { display: none; }
+/* the forecast gauges' row in "On the map" (map-legend.js): a hollow slate ring, as on the map */
 .fews-ring-sw {
-  flex: none; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box;
+  display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box;
   border: 1.5px solid #7d8fa1;
-}
-@media (max-width: 640px) {
-  .fews-key { font-size: .68rem; }
 }

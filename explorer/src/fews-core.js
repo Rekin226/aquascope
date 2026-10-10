@@ -339,6 +339,14 @@ export function dayOf(dates, mapDate) {
 }
 
 /** The legend's one line about the forecast gauges. */
+/** The legend row's few words, short enough for the row ("Forecast gauges  4 past 2-yr"); the count is in its key. */
+export function pointsSummary(res) {
+  const classed = ((res && res.points) || []).filter((p) => p.classed);
+  if (!classed.length) return "";
+  const up = classed.filter((p) => Number(p.rp) > 0).length;
+  return up ? `${up.toLocaleString("en-GB")} past 2-yr` : "all below 2-yr";
+}
+
 export function pointsLine(res) {
   if (!res || !res.points) return "";
   const classed = res.points.filter((p) => p.classed);

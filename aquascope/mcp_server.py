@@ -633,6 +633,17 @@ def river_status_month(month: str | None = None) -> dict[str, Any]:
     return _status(month)
 
 
+def river_status_summary(month: str | None = None) -> dict[str, Any]:
+    """Where the rivers are low or high in one month of the world river status map (YYYY-MM; default the
+    newest), in one line: reads the month's GeoTIFF and gives, for a few named regions (rough boxes such as
+    the Amazon, the Sahel, South Asia), the share of the mapped area below normal and above normal, and a
+    headline naming the regions that are mostly one or the other. The same line the Explorer shows over the
+    globe. Modelled (GEOGLOWS v2), CC BY 4.0."""
+    from aquascope.map_layers import river_status_summary as _summary
+
+    return _summary(month)
+
+
 def map_command(text: str, resolve: bool = False) -> dict[str, Any]:
     """Read a plain-English request about the AquaScope Explorer's map ("trace the Nile to the sea",
     "September 2023", "turn on floods past", "where are rivers much above normal in South Asia last July")
@@ -1382,6 +1393,7 @@ def build_server():
     server.tool()(dated_layers)
     server.tool()(layer_frames)
     server.tool()(river_status_month)
+    server.tool()(river_status_summary)
     server.tool()(map_command)
     server.tool()(list_analyses)
     server.tool()(analyse_table)

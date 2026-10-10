@@ -1461,6 +1461,25 @@ main { overflow: clip; }
 .ma-pin svg path { fill: #22313f; stroke: #fff; stroke-width: 1.6; }
 .ma-pin svg circle { fill: #fff; }
 .ma-pin:hover svg path, .ma-pin:focus-visible svg path { fill: var(--blue); }
+/* Scout (#563): the pins are numbered, most worth a look first; the number is the pin's dot. */
+.ma-pin.ranked svg { width: 28px; height: 37px; }
+.ma-pin.ranked svg text {
+  fill: #fff; font: 700 10.5px/1 system-ui, -apple-system, "Segoe UI", sans-serif; font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.ma-pin.ranked:hover svg text, .ma-pin.ranked:focus-visible svg text { fill: #fff; }
+.ma-scout svg { color: var(--ink-2); }
+.ma-scout.busy svg { animation: ma-scan 1.1s ease-in-out infinite; }
+.ma-scout.busy { cursor: progress; }
+@keyframes ma-scan { 0%, 100% { transform: translateX(-1.5px); } 50% { transform: translateX(1.5px); } }
+@media (prefers-reduced-motion: reduce) { .ma-scout.busy svg { animation: none; opacity: .55; } }
+.map-ask.open .ma-scout { display: none; }
+/* The scout's line takes the caption's place while it shows. */
+.map-ask:has(> .ma-status:not([hidden])) ~ .map-lead { visibility: hidden; }
+.ma-open-pin {
+  font: inherit; color: inherit; background: none; border: 0; padding: 0; text-align: left; cursor: pointer;
+}
+.ma-open-pin:hover { color: var(--blue-dark); text-decoration: underline; text-underline-offset: 2px; }
 .ma-pin-mini svg { width: 11px; height: 14px; display: block; }
 .ma-pin-mini svg path { fill: currentColor; }
 .ma-pin-mini svg circle { fill: var(--surface-solid); }

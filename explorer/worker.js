@@ -9,7 +9,7 @@ let ready = null;
 // network without them: a place's context layers, a click's river snap and the quick forecast. Several run at
 // once, so those reads no longer queue behind the main worker's record, one sync request after another.
 let lite = false;
-const LITE_TYPES = new Set(["context", "river", "now", "map_command"]);
+const LITE_TYPES = new Set(["context", "river", "now", "map_command", "scout"]);
 
 function post(type, extra = {}) { self.postMessage({ type, ...extra }); }
 
@@ -1155,6 +1155,53 @@ json.dumps(_out, default=str)
   }
 }
 
+// ── Scout (#563): aquascope.map_scout, the same functions as `aquascope layers scout` and the MCP tool map_scout.
+// op "view" scouts the view on screen (the daily file when it can answer, a live scan otherwise; the page hands
+// in the gauge snapshot and the evidence rows it read with DuckDB); "places" names the findings from the
+// gazetteer answers the page fetched in parallel (a worker's requests run one at a time); "prompt" is what a
+// model is asked; "words" holds a model's reply to the claim lock; "llm" asks the reader's own model with their
+// key (main worker only).
+async function scoutOp({ id, op, view, month, gauges, skill, extra, places, findings, reply, answers, by, context,
+                         max_pins, provider, model, api_key, base_url }) {
+  self.__aqScout = JSON.stringify({
+    op: String(op || "view"), view: view || null, month: month || null, gauges: gauges || null, skill: skill || null,
+    extra: Number(extra) || 0, places: places === undefined ? true : places, findings: findings || [],
+    reply: reply === undefined ? null : reply, answers: answers || [],
+    by: by || "model", context: String(context || ""), max_pins: Number(max_pins) || 10,
+    llm: { provider: provider || null, model: model || null, api_key: api_key || null, base_url: base_url || null },
+  });
+  const code = `
+import json
+from js import __aqScout
+from aquascope import map_scout as _sc
+_a = json.loads(__aqScout)
+try:
+    if _a["op"] == "view":
+        _out = _sc.scout_view(_a["view"], _a["month"], doc=_sc.published(), gauges=_a["gauges"], skill=_a["skill"],
+                              extra=_a["extra"], places=_a["places"], max_pins=_a["max_pins"])
+    elif _a["op"] == "places":
+        _sc.apply_places(_a["findings"], _a["answers"])
+        _out = {"findings": _a["findings"]}
+    elif _a["op"] == "prompt":
+        _out = _sc.wording_prompt(_a["findings"], _a["max_pins"], _a["context"])
+    elif _a["op"] == "words":
+        _out = _sc.apply_wording(_a["findings"], _a["reply"], max_pins=_a["max_pins"], by=_a["by"])
+    elif _a["op"] == "llm":
+        _out = _sc.model_wording(_a["findings"], context=_a["context"], max_pins=_a["max_pins"], **_a["llm"])
+    else:
+        _out = {"error": "unknown op"}
+except (ValueError, RuntimeError) as exc:
+    _out = {"error": str(exc)}
+json.dumps(_out, default=str)
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqScout = null;
+  }
+}
+
 self.onmessage = async (e) => {
   const m = e.data;
   try {
@@ -1186,6 +1233,7 @@ self.onmessage = async (e) => {
     if (m.type === "context") return await placeContext(m);
     if (m.type === "watch") return await watchDigest(m);
     if (m.type === "map_command") return await mapCommand(m);
+    if (m.type === "scout") return await scoutOp(m);
   } catch (err) {
     // Pyodide raises PythonError with the full traceback in .message; keep the
     // exception line (last non-empty) and log the whole thing for debugging.

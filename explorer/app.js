@@ -44,6 +44,7 @@ import { loadAvailability } from "./src/availability.js?v=__BUILD__";
 import { initMapCard } from "./src/map-card.js?v=__BUILD__";  // map first (#548): a click answers on the map
 import { initMapActions } from "./src/map-actions.js?v=__BUILD__";  // the AI's action log with undo (#561)
 import { initMapCommand } from "./src/map-command.js?v=__BUILD__";  // Ask the map (#561)
+import { initScout } from "./src/scout.js?v=__BUILD__";  // Scout (#563): pins on what stands out
 
 import { initMetrics } from "./src/metrics-ui.js?v=__BUILD__";
 
@@ -227,6 +228,7 @@ function goHome() {
   initStudyLoader();
   initSearch();
   initMapCommand();   // Ask the map (#561): the box and the / key
+  initScout();        // Scout (#563): the button beside Ask the map
   void loadAvailability();
   initUrl();
   actions.applyUrl = applyUrl;

@@ -318,7 +318,8 @@ function registerRow() {
     summary: () => {
       if (busy > 0) return "reading…";
       const { zoom, inView } = viewCounts();
-      return zoom < DEPTH_MINZOOM || !inView ? "model estimate, zoom in" : "model estimate";
+      if (zoom < DEPTH_MINZOOM) return "zoom in to see";
+      return inView ? "model estimate" : "none in view";
     },
     on: () => visible,
     empty: () => !data || Boolean(data.manifest.missing) || !reaches.length,
@@ -348,9 +349,9 @@ function about() {
     <p>When Floods ahead says a river reach will pass its 10-, 25-, 50- or 100-year flow in the next 15 days, the map
     shows the JRC flood depth map for the nearest return period at or below it (10, 20, 50 or 100 years; JRC has no
     2- or 5-year maps), within a few kilometres of the reach: 3 km on a Strahler order 5 river, 1.5 km more for each
-    order up, fading at the edge. Near a confluence the circle also takes in the other river, which may not be
-    forecast to flood. Move the time bar through the forecast, or press Play the 15 days, and the depth
-    steps up and down with the forecast.</p>
+    order up, fading at the edge. Near a confluence the pixels nearer to a river at least as large are left to it,
+    but a smaller river close by can still show, though it may not be forecast to flood. Press Play the 15 days,
+    under Floods ahead in the legend, and the depth steps up and down with the forecast.</p>
     <p><strong>What it is not.</strong> A precomputed hazard map chosen by a forecast, not a flood simulation of
     this event: a model estimate twice over. The forecast (GEOGLOWS) and the hazard map (JRC, made with LISFLOOD
     and LISFLOOD-FP) are different models, and their return periods are not the same floods. The maps cover large

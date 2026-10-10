@@ -633,7 +633,7 @@ legend that always says **may flood in the next 15 days, model estimate**.
   shows the map of its class on that day, so **Play the 15 days** steps the depth up and
   down with the forecast; outside them, the 15-day peak.
 
-  ![Three forecast days on the Republican River, Kansas: the depth shrinks as the forecast falls](img/globe/depth-steps.png)
+  ![Three forecast days on the Republican River, Kansas: past the 25-year flow, then the 10-year, then below it and the depth is gone](img/globe/depth-steps.png)
 - **A click** on the depth opens the map card with the reach, its forecast class and
   day, the map shown and the depth at that spot. **Details** opens the reach's 15-day
   forecast.

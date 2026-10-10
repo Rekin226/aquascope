@@ -457,6 +457,6 @@ export function depthFacts(reach, depth, rp, { day = -1, when = "" } = {}) {
     sub: `${DEPTH_LABEL[0].toUpperCase()}${DEPTH_LABEL.slice(1)}`,
     status: `Forecast to pass its ${cls}-year flow${when ? ` ${when}` : ""}. Shown: ${map}.`,
     figure: { value: fmtDepth(depth), unit: "m", label: `deep here, ${rp}-year map` },
-    note: day >= 0 ? "" : "The 15-day peak. Move the time bar into the forecast to step through the days.",
+    note: day >= 0 ? "" : "The 15-day peak. Play the 15 days, under Floods ahead in the legend, to step through the days.",
   };
 }

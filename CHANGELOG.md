@@ -71,6 +71,7 @@ All notable changes to AquaScope are documented here.
 - **Ask the map on reasoning models.** The model reader's output ceiling rose from 700 to 4,000 tokens, because Claude's current models and gpt-oss spend part of it reasoning before they reply.
 - **Sonnet 5 costs.** The Studio showcase priced Claude Sonnet 5 at $3/$15 per million tokens; its list price is $2/$10. Recordings already made keep the rate they were written with.
 - The "No LLM configured" message names `ANTHROPIC_API_KEY`, which is the first key the CLI looks for.
+- **Floods ahead counted only what the browser draws.** When the daily file keeps only the strongest 10,000 reaches, the legend row and its class chips now give the published totals (for example "20,071 reaches, strongest 10,000 drawn") instead of the cut count.
 - The docs build again: pymdown-extensions 12.2 (released 2026-10-10) changed `Highlight.__init__` and broke mkdocstrings 0.29, so every docs build failed. The docs extra now asks for `pymdown-extensions<12.2`.
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
 

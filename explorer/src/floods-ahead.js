@@ -19,7 +19,7 @@ import { refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
 import { map } from "./map.js?v=__BUILD__";
 import { STREAMS_PMTILES } from "./river-core.js?v=__BUILD__";
 import {
-  FLOODS_CREDIT, FLOOD_CLASSES, FORECAST_DAYS, NONE, addDays, countsFor, dayIndex, gaugesFor, idsByClass,
+  FLOODS_CREDIT, FLOOD_CLASSES, FORECAST_DAYS, NONE, addDays, dayIndex, totalsFor, gaugesFor, idsByClass,
   issueLine, legendLine, lineColorExpr, lineFilterExpr, pointsFor, shortDay,
 } from "./floods-ahead-core.js?v=__BUILD__";
 
@@ -261,22 +261,25 @@ const classesMark = () => `<span class="fa-mini">${FLOOD_CLASSES.map((c) => `<i 
 
 function reachCount() {
   if (!data || data.manifest.missing) return 0;
-  return [...countsFor(data.features, day).values()].reduce((a, b) => a + b, 0);
+  return totalsFor(data.manifest, data.features, day).n;
 }
 
 function rowSummary() {
   if (!data) return "loading";
   if (data.manifest.missing) return "nothing published yet";
-  const n = reachCount();
-  const reaches = `${n.toLocaleString("en-GB")} reach${n === 1 ? "" : "es"}`;
+  const t = totalsFor(data.manifest, data.features, day);
+  const n = t.n;
+  const reaches = `${n.toLocaleString("en-GB")} reach${n === 1 ? "" : "es"}` +
+    (t.shown != null && t.shown < n ? `, strongest ${t.shown.toLocaleString("en-GB")} drawn` : "");
   if (day >= 0) return `${n ? n.toLocaleString("en-GB") : "none"} on ${shortDay(addDays(data.manifest.issue_date, day))}`;
   return n ? reaches : "none in 15 days";
 }
 
 function rowBody() {
   const m = data.manifest;
-  const counts = countsFor(data.features, day);
-  const n = reachCount();
+  const t = totalsFor(m, data.features, day);
+  const counts = t.counts;
+  const n = t.shown != null ? t.shown : t.n;
   const chips = FLOOD_CLASSES.map((c) => {
     const k = counts.get(c.rp) || 0;
     return `<span class="fa-chip${k ? "" : " zero"}" title="${k.toLocaleString("en-GB")} reach${k === 1 ? "" : "es"} at or above the ${c.label} flow">` +

@@ -303,7 +303,7 @@ function act(name) {
   if (name === "hide") setDepthVisible(false);
   else if (name === "about") about();
   else if (name === "go") goToOne();
-  else if (name === "min" && legend) { legend.classList.toggle("min"); renderLegend(); }
+  else if (name === "min" && legend) { userFold = !folded(); renderLegend(); }
 }
 
 // The key: the honest label, the ramp, what is drawn, where it comes from.
@@ -352,7 +352,6 @@ function buildLegend() {
   legend = document.createElement("section");
   legend.className = "fd-legend";
   legend.setAttribute("aria-label", "Flood depth legend");
-  if (globalThis.matchMedia && globalThis.matchMedia("(max-width: 860px)").matches) legend.classList.add("min");
   // Under Floods ahead, which chooses where it is drawn.
   const fa = stack.querySelector(".fa-legend");
   if (fa) fa.after(legend); else stack.prepend(legend);
@@ -362,13 +361,22 @@ function buildLegend() {
   });
 }
 
+// Folded to one line on a phone and while the depth cannot be seen (under zoom 7), unless the reader chose.
+let userFold = null;
+function folded() {
+  if (userFold !== null) return userFold;
+  const phone = Boolean(globalThis.matchMedia && globalThis.matchMedia("(max-width: 860px)").matches);
+  return phone || viewCounts().zoom < DEPTH_MINZOOM;
+}
+
 function renderLegend() {
   if (legendRow) { legendRow(); return; }
   if (!legend) return;
   // Before the first issue Floods ahead's own legend says so; this one stays out of the way.
   legend.hidden = !visible || !data || Boolean(data.manifest.missing);
   if (legend.hidden) return;
-  const min = legend.classList.contains("min");
+  const min = folded();
+  legend.classList.toggle("min", min);
   const reading = busy > 0 ? '<span class="fd-busy" aria-hidden="true"></span>' : "";
   legend.innerHTML =
     `<header><b>Flood depth</b>${reading}` +

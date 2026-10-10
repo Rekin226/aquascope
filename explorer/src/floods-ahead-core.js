@@ -123,6 +123,20 @@ export function countsFor(features, i) {
   return counts;
 }
 
+/** Reaches per class for the legend. Over the whole 15 days (i < 0) the published totals are used when the
+ * browser file was cut to its strongest reaches, so the chips and the count never undercount; a single day is
+ * counted from the drawn reaches, which is all the file can say. */
+export function totalsFor(manifest, features, i) {
+  const drawn = countsFor(features, i);
+  const all = manifest && manifest.counts;
+  if (!(i < 0 && manifest && manifest.geojson_truncated && all)) {
+    return { counts: drawn, n: [...drawn.values()].reduce((a, b) => a + b, 0), shown: null };
+  }
+  const counts = new Map(FLOOD_CLASSES.map((c) => [c.rp, Number(all[String(c.rp)] || 0)]));
+  const n = Number(manifest.n) || [...counts.values()].reduce((a, b) => a + b, 0);
+  return { counts, n, shown: (features || []).length };
+}
+
 /** The legend's one line: what is drawn, for which day, from which run. */
 export function legendLine(manifest, i, n) {
   if (!manifest || manifest.missing) return "Nothing published yet. It appears after the first daily run.";

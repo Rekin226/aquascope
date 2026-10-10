@@ -183,3 +183,74 @@ def test_a_smoke_run_of_the_workflow_never_publishes():
     cond = publish["if"]
     assert "HF_TOKEN" in cond and "inputs.publish" in cond
     assert "inputs.max_files == ''" in cond and "inputs.groundsource_max_rows == ''" in cond
+
+
+def test_floods_monthly_rolls_both_flood_mirrors_into_the_grid(tmp_path):
+    """Floods past (#547): the grid, the index and one gzipped JSON per month, all under context/floods/monthly/."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    src = tmp_path / "src"
+    src.mkdir()
+    pq.write_table(pa.table({"start_date": ["2021-07-14", "2021-07-15", "2024-01-02"], "lat": [50.61, 50.62, -6.2],
+                             "lon": [5.61, 5.70, 106.8]}), src / "gs.parquet")
+    pq.write_table(pa.table({"lat": [50.625, 10.025], "lon": [5.625, 10.025], "year": [2021, 2019],
+                             "month": [7, 12], "n": [120, 5]}), src / "ms.parquet")
+    stale = tmp_path / "context" / "floods" / "monthly" / "months" / "1999-01.json.gz"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"old")
+    info = cm.build_floods_monthly(tmp_path, groundsource=src / "gs.parquet", microsoft=src / "ms.parquet")
+    root = tmp_path / "context" / "floods" / "monthly"
+    assert info["rows"] == 3 and info["months"] == 3 and info["first"] == "2019-12" and info["last"] == "2024-01"
+    assert info["licence"] == "CC-BY-4.0 (news), MIT (radar)" and info["folder"] == "floods/monthly"
+    assert not stale.exists()  # a rebuilt grid has no months left over from the last one
+    assert sorted(p.name for p in (root / "months").iterdir()) == ["2019-12.json.gz", "2021-07.json.gz",
+                                                                   "2024-01.json.gz"]
+    july = json.loads(gzip.decompress((root / "months" / "2021-07.json.gz").read_bytes()))
+    assert july["cells"] == [[281, 371, 2, 120]] and july["deg"] == 0.5
+    index = json.loads((root / "index.json").read_text())
+    assert index["news"] == {"first": "2021-07-14", "last": "2024-01-02"}
+    assert pq.read_table(root / "grid.parquet").num_rows == 3
+    assert info["bytes"]["months"] > 0 and (tmp_path / "context" / "_floods_monthly.json").exists()
+    # every file it wrote is one the context publish uploads
+    from fnmatch import fnmatch
+
+    for p in root.rglob("*"):
+        if p.is_file():
+            assert any(fnmatch(p.name, pat) for pat in cm.PUBLISH_PATTERNS), p.name
+
+
+def test_floods_monthly_reads_what_this_run_built_before_the_archive(tmp_path, monkeypatch):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    floods = tmp_path / "context" / "floods"
+    floods.mkdir(parents=True)
+    pq.write_table(pa.table({"start_date": ["2021-07-14"], "lat": [1.0], "lon": [1.0]}),
+                   floods / "groundsource.parquet")
+    fetched = []
+
+    def fake_download(url, dest, **kw):
+        fetched.append(url)
+        pq.write_table(pa.table({"lat": [1.0], "lon": [1.0], "year": [2021], "month": [7], "n": [4]}), dest)
+        return dest
+
+    monkeypatch.setattr(cm, "download", fake_download)
+    info = cm.build_floods_monthly(tmp_path, repo_id="me/test")
+    assert fetched == ["https://huggingface.co/datasets/me/test/resolve/main/context/floods/microsoft.parquet"]
+    assert info["rows"] == 1
+
+
+def test_the_workflow_builds_the_monthly_grid_and_can_build_only_it():
+    yaml = pytest.importorskip("yaml")
+    path = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "mirror-context.yml"
+    wf = yaml.safe_load(path.read_text())
+    trigger = wf.get("on") or wf.get(True)
+    assert trigger["workflow_dispatch"]["inputs"]["floods_monthly_only"]["default"] is False
+    steps = wf["jobs"]["publish"]["steps"]
+    runs = [str(s.get("run", "")) for s in steps]
+    grid = next(i for i, r in enumerate(runs) if "context_mirror floods-monthly" in r)
+    assert grid < next(i for i, r in enumerate(runs) if "context_mirror manifest" in r)
+    assert grid > next(i for i, r in enumerate(runs) if "microsoft-merge" in r)
+    assert "floods_monthly_only" in wf["jobs"]["small"]["if"] and "floods_monthly_only" in wf["jobs"]["microsoft"]["if"]
+    assert "inputs.floods_monthly_only" in wf["jobs"]["publish"]["if"]

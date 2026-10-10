@@ -20,12 +20,15 @@ Layout under ``<out>/context/`` (the folder the Archive dataset publishes):
     dams/gdw_barriers.parquet
     dams/cells/<cell>.csv.gz
     ghcn/prcp_stations.csv.gz                   id, lat, lon, elev_m, name, first_year, last_year
+    floods/monthly/                             both flood sources per half-degree cell and month (#547):
+                                                grid.parquet, index.json, months/YYYY-MM.json.gz
 
 Run by ``.github/workflows/mirror-context.yml``; every step is also a CLI subcommand:
 
     python -m aquascope.archive.context_mirror groundsource --out build
     python -m aquascope.archive.context_mirror microsoft-shard --out build --shard 0 --shards 16
     python -m aquascope.archive.context_mirror microsoft-merge --out build --parts parts/
+    python -m aquascope.archive.context_mirror floods-monthly --out build
     python -m aquascope.archive.context_mirror dams --out build
     python -m aquascope.archive.context_mirror ghcn --out build
     python -m aquascope.archive.context_mirror manifest --out build
@@ -65,6 +68,8 @@ MS_FILTERS = ("dem_metric_2 < 10", "soil_moisture_sca > 1", "soil_moisture_zscor
               "temp > 0", "land_cover != 60", "edge_false_positives == 0")
 MS_GRID = 0.05
 ROW_GROUP = 50_000
+#: What the context publish uploads: the Archive's usual files plus the monthly flood grid's gzipped JSON.
+PUBLISH_PATTERNS = ("*.parquet", "*.json", "*.json.gz", "*.csv.gz", "README.md")
 
 DATASET_LAYER = {"groundsource": "groundsource", "microsoft_floods": "microsoft_floods", "dams": "dams",
                  "ghcn": "rain_gauge"}
@@ -427,6 +432,69 @@ def build_ghcn(out: str | Path, *, stations_txt: str | None = None, inventory_tx
     return _save_info(root, "ghcn", _info("ghcn", rows, [], "ghcn", file="ghcn/prcp_stations.csv.gz"))
 
 
+# ── Floods past: the monthly grid (#547) ─────────────────────────────────────
+
+
+def _mirror_parquet(root: Path, rel: str, repo_id: str, tmp: Path, given: str | Path | None) -> Path:
+    """A flood parquet: the one given, the one this run just built, or the published one."""
+    if given:
+        return Path(given)
+    local = root / rel
+    if local.exists():
+        return local
+    return download(mirror_url(rel, repo_id), tmp / Path(rel).name)
+
+
+def build_floods_monthly(out: str | Path, *, repo_id: str = "Rekin226/aquascope-gauges",
+                         groundsource: str | Path | None = None, microsoft: str | Path | None = None) -> dict:
+    """Roll the two flood mirrors into the monthly half-degree grid under ``floods/monthly/`` (#547).
+
+    Reads ``floods/groundsource.parquet`` and ``floods/microsoft.parquet`` from this run's build when they are
+    there and from the published Archive otherwise, so it also runs on its own. Writes only under
+    ``<out>/context/floods/monthly/``.
+    """
+    import shutil
+
+    import pyarrow.parquet as pq
+
+    from aquascope.context import floods_past as fp
+
+    root = _root(out)
+    with tempfile.TemporaryDirectory() as tmp:
+        gs = _mirror_parquet(root, "floods/groundsource.parquet", repo_id, Path(tmp), groundsource)
+        ms = _mirror_parquet(root, "floods/microsoft.parquet", repo_id, Path(tmp), microsoft)
+        news = pq.read_table(gs, columns=["start_date", "lat", "lon"]).to_pandas()
+        radar = pq.read_table(ms, columns=["lat", "lon", "year", "month", "n"]).to_pandas()
+    frame = fp.grid_frame(news, radar)
+    dates = news["start_date"].dropna().astype(str)
+    del news, radar
+    folder = root / "floods" / "monthly"
+    if folder.exists():  # a month that has gone from the source must not linger
+        shutil.rmtree(folder)
+    (folder / "months").mkdir(parents=True)
+    _write_parquet(frame, folder / "grid.parquet")
+    payloads = fp.month_payloads(frame)
+    for month, payload in payloads.items():
+        (folder / "months" / f"{month}.json.gz").write_bytes(fp.encode_month(payload))
+    built = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    index = fp.index_payload(frame, news_first=dates.min() if len(dates) else None,
+                             news_last=dates.max() if len(dates) else None, built=built)
+    (folder / "index.json").write_text(json.dumps(index, separators=(",", ":")))
+    sizes = {"grid.parquet": (folder / "grid.parquet").stat().st_size,
+             "index.json": (folder / "index.json").stat().st_size,
+             "months": sum(p.stat().st_size for p in (folder / "months").glob("*.json.gz"))}
+    gs_meta, ms_meta = CONTEXT_LAYERS["groundsource"], CONTEXT_LAYERS["microsoft_floods"]
+    info = {"rows": int(len(frame)), "cells": [], "folder": "floods/monthly", "grid_deg": fp.GRID_DEG,
+            "licence": f"{gs_meta.license} (news), {ms_meta.license} (radar)",
+            "attribution": f"{gs_meta.attribution}; {ms_meta.attribution}",
+            "source": gs_meta.homepage, "built": built, "parquet": "floods/monthly/grid.parquet",
+            "index": "floods/monthly/index.json", "months": len(payloads),
+            "first": index["first"], "last": index["last"], "bytes": sizes,
+            "note": "news = Groundsource events that started in the month, centred in the cell; radar = filtered "
+                    "Sentinel-1 20 m flood detections in the cell that month"}
+    return _save_info(root, "floods_monthly", info)
+
+
 # ── manifest and publish ─────────────────────────────────────────────────────
 
 
@@ -478,7 +546,8 @@ def publish(out: str | Path, *, repo_id: str = "Rekin226/aquascope-gauges", toke
         except OSError:
             shutil.rmtree(stage, ignore_errors=True)
             shutil.copytree(src, stage)
-        return publish_folder(Path(tmp), repo_id, token=token, commit_message=f"context mirrors: {names}")
+        return publish_folder(Path(tmp), repo_id, token=token, commit_message=f"context mirrors: {names}",
+                              allow_patterns=PUBLISH_PATTERNS)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -501,6 +570,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("microsoft-merge")
     p.add_argument("--out", required=True)
     p.add_argument("--parts", required=True)
+    p = sub.add_parser("floods-monthly", help="the monthly half-degree flood grid (#547)")
+    p.add_argument("--out", required=True)
+    p.add_argument("--repo", default=os.environ.get("HF_DATASET", "Rekin226/aquascope-gauges"))
+    p.add_argument("--groundsource", default=None, help="a local groundsource.parquet instead of the mirror's")
+    p.add_argument("--microsoft", default=None, help="a local microsoft.parquet instead of the mirror's")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     if a.cmd == "groundsource":
@@ -513,6 +587,8 @@ def main(argv: list[str] | None = None) -> int:
         info = {"part": str(build_microsoft_shard(a.out, shard=a.shard, shards=a.shards, max_files=a.max_files))}
     elif a.cmd == "microsoft-merge":
         info = merge_microsoft(a.out, a.parts)
+    elif a.cmd == "floods-monthly":
+        info = build_floods_monthly(a.out, repo_id=a.repo, groundsource=a.groundsource, microsoft=a.microsoft)
     elif a.cmd == "manifest":
         info = write_manifest(a.out, repo_id=a.repo)
     else:

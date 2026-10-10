@@ -6,6 +6,8 @@ import {
   FLOODS_PAST_BASE, MAX_MONTHS, NEWS_CREDIT, RADAR_CREDIT, addMonths, cellBbox, cellsGeoJSON, eventDates, fmtCount,
   legendLines, monthLabel, monthOf, monthsBetween, monthsOnRecord, newsWeight, placeLabel, radarCovers, radarWeight,
   readFloodsParam, windowFor, windowLabel, windowTotals, areaLabel, radarFill, newsFill,
+  CELL_MINZOOM, HEAT_FADE, HEAT_MAXZOOM, STANDOUT_FLOOR, STANDOUT_SHARE, inBox, shortWhen, standoutFilters,
+  standoutThresholds,
 } from "../src/floods-past-core.js";
 
 const INDEX = {
@@ -128,9 +130,53 @@ test("small counts stay quiet: radar cells clear below 200 detections, a lone ne
     assert.match(ramp[4], /,0\)$/);
     assert.match(ramp[ramp.length - 1], dark ? /^rgba\(205,190,254/ : /^rgba\(76,29,149/);
   }
+  // translucent all the way up (#543 design pass): a report never hides the basins or the rivers under it
   const news = newsFill();
-  assert.match(news[4], /0\.28\)$/);
-  assert.match(news[news.length - 1], /,1\)$/);
+  assert.match(news[4], /0\.38\)$/);
+  const alphas = news.filter((v) => typeof v === "string" && v.startsWith("rgba")).map((c) => Number(/,([\d.]+)\)$/.exec(c)[1]));
+  assert.ok(alphas.every((a) => a < 0.8) && alphas[0] < alphas[alphas.length - 1]);
+});
+
+// ── what stands out (#543 design pass) ───────────────────────────────────────
+
+test("the legend row says the window in a few words", () => {
+  assert.equal(shortWhen({ months: ["2024-07"] }), "Jul 2024");
+  assert.equal(shortWhen({ months: monthsBetween("2025-03", "2026-02") }), "year to Feb 2026");
+  assert.equal(shortWhen({ months: monthsBetween("2024-03", "2024-07") }), "5 months to Jul 2024");
+  assert.equal(shortWhen({ months: [] }), "");
+});
+
+test("a box across the antimeridian still holds its cells", () => {
+  assert.ok(inBox(10, 5, [0, 0, 20, 10]));
+  assert.ok(!inBox(30, 5, [0, 0, 20, 10]));
+  assert.ok(inBox(179, 5, [170, 0, -170, 10]) && inBox(-175, 5, [170, 0, -170, 10]));
+  assert.ok(!inBox(0, 5, [170, 0, -170, 10]));
+  assert.ok(inBox(0, 0, null));
+});
+
+test("only the cells that stand out from the region on screen are drawn", () => {
+  // a region where every cell has reports (the Ganges plain): 100 cells with 1 to 100 news events
+  const cells = Array.from({ length: 100 }, (_, i) => ({ lon: 80 + (i % 10) * 0.5, lat: 24 + Math.floor(i / 10) * 0.5,
+    news: i + 1, radar: i < 50 ? 0 : (i + 1) * 1000 }));
+  const t = standoutThresholds(cells, [79, 23, 86, 30]);
+  const drawn = cells.filter((c) => c.news >= t.news).length;
+  assert.ok(drawn <= Math.ceil(STANDOUT_SHARE * 100) && drawn >= 10, `drew ${drawn} of 100`);
+  assert.ok(cells.filter((c) => c.radar >= t.radar).length <= Math.ceil(STANDOUT_SHARE * 50));
+  // the same cells elsewhere on the map are not the region on screen
+  assert.deepEqual(standoutThresholds(cells, [0, 0, 10, 10]), { ...STANDOUT_FLOOR });
+  // a quiet month: a few single reports stay under the floor
+  const quiet = [{ lon: 1, lat: 1, news: 1, radar: 0 }, { lon: 2, lat: 1, news: 1, radar: 300 }];
+  const q = standoutThresholds(quiet);
+  assert.equal(q.news, STANDOUT_FLOOR.news);
+  assert.equal(q.radar, STANDOUT_FLOOR.radar);
+  const f = standoutFilters(t);
+  assert.deepEqual(f.news[2], [">=", ["get", "news"], t.news]);
+  assert.deepEqual(f.radarCells[2], [">=", ["get", "radar"], t.radar]);
+});
+
+test("a soft heat up to the regional view hands over to small marks close in", () => {
+  assert.ok(CELL_MINZOOM <= HEAT_FADE[0] && HEAT_FADE[1] <= HEAT_MAXZOOM);
+  assert.ok(CELL_MINZOOM >= 6, "Bangladesh at zoom 5.5 is a density, not a grid of dots");
 });
 
 test("an event's area reads plainly, small ones included", () => {

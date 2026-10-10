@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import {
   CLASS_ALPHA, FILE_RGB, MERC_MAX_LAT, STATUS_CORNERS, classGrid, classOfRed, hexRgb, latestDay, mercatorRowLat,
   missingMonths, monthLabel, monthsToPeriods, paintGrid, parseListing, statusDatedLayer, statusMonthFor,
-  statusPalette, statusUrl,
+  statusPalette, statusUrl, STATUS_REGIONS, regionShares, statusHeadline,
 } from "../src/status-core.js";
 import { STATUS_CLASSES } from "../src/now-core.js";
 import { datedLayersOn, imageFor, registerDatedLayer } from "../src/layers.js";
@@ -101,4 +101,28 @@ test("the palette is the gauges' five colours, normal painted lightest", () => {
   assert.deepEqual([...rgba.slice(0, 4)], [0, 0, 0, 0]);
   assert.deepEqual([...rgba.slice(4, 8)], p[1]);
   assert.deepEqual([...rgba.slice(8, 12)], p[5]);
+});
+
+// ── the caption over the globe (#543 design pass) ────────────────────────────
+
+test("the caption names the regions that are mostly low or high, from the file's red band", () => {
+  const w = 360, h = 180;          // a one-degree world
+  const red = new Uint8Array(w * h).fill(FILE_RGB[2][0]);   // normal everywhere
+  const paint = ([west, south, east, north], cls) => {
+    for (let r = 90 - north; r < 90 - south; r++) for (let c = west + 180; c < east + 180; c++) red[r * w + c] = FILE_RGB[cls - 1][0];
+  };
+  paint([-80, -15, -44, 5], 1);     // the Amazon much below
+  paint([66, 6, 92, 36], 5);        // South Asia much above
+  const regions = regionShares(red, w, h);
+  assert.deepEqual(regions.map((r) => r.name), STATUS_REGIONS.map((r) => r.name));
+  const amazon = regions.find((r) => r.name === "the Amazon");
+  assert.equal(amazon.below, 1);
+  assert.equal(amazon.cover, 1);
+  assert.equal(statusHeadline("2026-09", regions),
+    "River status, September 2026: much of the Amazon below normal, much of South Asia above");
+  assert.equal(statusHeadline("2001-07", regions.map((r) => ({ ...r, below: 0.2, above: 0.1 }))),
+    "River status, July 2001: no large region mostly above or below normal");
+  // a region that is mostly sea or desert with no basins is left out
+  assert.equal(statusHeadline("2001-07", regions.map((r) => ({ ...r, below: 0.9, above: 0, cover: 0.1 }))),
+    "River status, July 2001: no large region mostly above or below normal");
 });

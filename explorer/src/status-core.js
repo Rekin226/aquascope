@@ -178,12 +178,98 @@ export function paintGrid(grid, rgba, palette = statusPalette()) {
 /**
  * Decode one month's file into a class grid, with geotiff.js handed in (the
  * worker loads it; so does the page when it has no worker). Only the red band.
+ * With `withRegions`, also the named regions' shares (regionShares), for the
+ * caption over the globe: { grid, regions }.
  */
-export async function decodeStatus(geotiff, buffer, w, h) {
+export async function decodeStatus(geotiff, buffer, w, h, { withRegions = false } = {}) {
   const tiff = await geotiff.fromArrayBuffer(buffer);
   const image = await tiff.getImage();
   const [red] = await image.readRasters({ samples: [0] });
-  return classGrid(red, image.getWidth(), image.getHeight(), w, h);
+  const grid = classGrid(red, image.getWidth(), image.getHeight(), w, h);
+  return withRegions ? { grid, regions: regionShares(red, image.getWidth(), image.getHeight()) } : grid;
+}
+
+// ── the one-line summary (#543 design pass) ─────────────────────────────────
+//
+// aquascope/map_layers.py (region_shares, status_headline) is the package side, which the CLI and the MCP tool
+// use; a test keeps the regions, the shares and the sentence the same here, made from the file the worker has
+// already decoded. The regions are rough named boxes [west, south, east, north], not basins.
+
+export const STATUS_REGIONS = [
+  { name: "the Amazon", bbox: [-80, -15, -44, 5] },
+  { name: "the La Plata basin", bbox: [-66, -35, -43, -15] },
+  { name: "Mexico and Central America", bbox: [-118, 7, -77, 32] },
+  { name: "the western US", bbox: [-125, 31, -102, 49] },
+  { name: "the eastern US", bbox: [-102, 25, -67, 49] },
+  { name: "Canada", bbox: [-141, 49, -52, 70] },
+  { name: "Europe", bbox: [-10, 36, 40, 71] },
+  { name: "the Sahel", bbox: [-17, 11, 38, 18] },
+  { name: "the Congo basin", bbox: [12, -13, 32, 8] },
+  { name: "East Africa", bbox: [29, -12, 52, 11] },
+  { name: "southern Africa", bbox: [10, -35, 41, -13] },
+  { name: "the Middle East", bbox: [34, 12, 63, 42] },
+  { name: "Central Asia", bbox: [50, 36, 90, 55] },
+  { name: "Siberia", bbox: [60, 50, 180, 75] },
+  { name: "South Asia", bbox: [66, 6, 92, 36] },
+  { name: "Southeast Asia", bbox: [92, -10, 141, 22] },
+  { name: "China", bbox: [98, 22, 123, 45] },
+  { name: "Australia", bbox: [112, -44, 154, -10] },
+];
+export const HEADLINE_SHARE = 0.5;
+export const MIN_COVER = 0.2;
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September",
+  "October", "November", "December"];
+const r3 = (x) => Math.round(x * 1000) / 1000;
+
+/**
+ * For each named region, from the file's red band (srcW x srcH, 90 N to 90 S): the share of its mapped area
+ * below normal and above normal, and how much of its box is mapped. Area-weighted by latitude.
+ */
+export function regionShares(red, srcW, srcH) {
+  const deg = 180 / srcH;
+  const weight = new Float64Array(srcH);
+  for (let r = 0; r < srcH; r++) weight[r] = Math.cos(((90 - (r + 0.5) * deg) * Math.PI) / 180);
+  return STATUS_REGIONS.map(({ name, bbox: [w, s, e, n] }) => {
+    const r0 = Math.max(0, Math.ceil((90 - n) / deg - 0.5)), r1 = Math.min(srcH, Math.floor((90 - s) / deg - 0.5) + 1);
+    const c0 = Math.max(0, Math.ceil((w + 180) / deg - 0.5)), c1 = Math.min(srcW, Math.floor((e + 180) / deg - 0.5) + 1);
+    const per = new Float64Array(6);
+    let box = 0;
+    for (let r = r0; r < r1; r++) {
+      const counts = new Float64Array(6);
+      const base = r * srcW;
+      for (let c = c0; c < c1; c++) counts[RED_TO_CLASS[red[base + c]]] += 1;
+      for (let k = 0; k < 6; k++) per[k] += counts[k] * weight[r];
+      box += weight[r] * (c1 - c0);
+    }
+    const mapped = per[1] + per[2] + per[3] + per[4] + per[5];
+    return {
+      name,
+      below: mapped ? r3((per[1] + per[2]) / mapped) : 0,
+      above: mapped ? r3((per[4] + per[5]) / mapped) : 0,
+      cover: box ? r3(mapped / box) : 0,
+    };
+  });
+}
+
+const names = (list) => (list.length === 1 ? list[0] : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`);
+
+/** One line for a month from regionShares: aquascope.map_layers.status_headline, word for word. */
+export function statusHeadline(month, regions) {
+  const label = `${MONTH_NAMES[+month.slice(5, 7) - 1]} ${month.slice(0, 4)}`;
+  const sides = { below: [], above: [] };
+  (regions || []).forEach((r, i) => {
+    if (r.cover < MIN_COVER) return;
+    for (const [side, other] of [["below", "above"], ["above", "below"]]) {
+      if (r[side] >= HEADLINE_SHARE && r[side] > r[other]) sides[side].push([-r[side], i, r.name]);
+    }
+  });
+  const byShare = (a, b) => a[0] - b[0] || a[1] - b[1];
+  if (!sides.below.length && !sides.above.length) return `River status, ${label}: no large region mostly above or below normal`;
+  const first = sides.below.length >= sides.above.length ? "below" : "above";
+  const second = first === "below" ? "above" : "below";
+  const parts = [`much of ${names(sides[first].sort(byShare).slice(0, 2).map((x) => x[2]))} ${first} normal`];
+  if (sides[second].length) parts.push(`much of ${sides[second].sort(byShare)[0][2]} ${second}`);
+  return `River status, ${label}: ${parts.join(", ")}`;
 }
 
 /**

@@ -13,7 +13,7 @@
 // Other layers open a card with their own content through openCard() (also
 // actions.openMapCard): a flood cell, a warning reach. See openCard below.
 
-import { $, VAR_LABEL, actions, escapeHtml, haversineKm, sourceStyle, state, stationKey } from "./core.js?v=__BUILD__";
+import { $, VAR_LABEL, actions, escapeHtml, haversineKm, onTime, sourceStyle, state, stationKey } from "./core.js?v=__BUILD__";
 import { map } from "./map.js?v=__BUILD__";
 import { announce } from "./a11y.js?v=__BUILD__";
 import { selectTab, togglePanel } from "./shell.js?v=__BUILD__";
@@ -23,6 +23,8 @@ import { statusClass } from "./now-core.js?v=__BUILD__";
 import { snapLine } from "./river-core.js?v=__BUILD__";
 import { takeOfferedReach, traceRiver } from "./river.js?v=__BUILD__";
 import { shapeSvg } from "./shapes.js?v=__BUILD__";
+import { forecastPoints, gaugePlume } from "./fews.js?v=__BUILD__";
+import { plumeAlt, plumeKey, plumeSvg } from "./fews-core.js?v=__BUILD__";
 import {
   cardNumber, dayMonth, forecastPeak, lastDays, latestValue, placeCard, prettyUnit, snapshotSentence, sparkPaths,
 } from "./map-card-core.js?v=__BUILD__";
@@ -62,6 +64,8 @@ const el = () => $("map-card");
  *   spark: { v, band: {lo, hi}, label, fromZero } | { pending, label } | { empty: "why" } | null
  *                             (fromZero: false scales a forecast to its own range; a record starts at zero)
  *   figure: { value, unit, label } | { pending } | null           the one key number
+ *   plume: { data, head, color, label, line } | { pending } | { empty }   an ensemble plume (#556,
+ *                             fews.js); it takes the place of the sparkline and the number
  *   note,                     an extra line (for example what a trace found)
  *   credit,                   where the numbers come from, with the licence
  *   details: () => void,      the Details button (omitted: no button)
@@ -156,13 +160,30 @@ function figureHtml(f) {
     `<span class="mc-fig-label">${escapeHtml(f.label || "")}</span></div>`;
 }
 
+// The FEWS view (#556): the class line (a forecast gauge's), a quiet label, the plume (drawn once the card has a
+// width), its key and one line under it.
+function plumeHtml(pl) {
+  if (!pl) return "";
+  if (pl.pending) {
+    return `<p class="mc-pl-label mc-pending"><span class="mc-skel" aria-hidden="true"></span>${escapeHtml(pl.pending)}</p>` +
+      `<div class="mc-plume mc-wait" aria-hidden="true"><span class="mc-skel wide tall"></span></div>`;
+  }
+  if (pl.empty) return `<p class="mc-spark-empty muted">${escapeHtml(pl.empty)}</p>`;
+  const dot = pl.color ? `<i class="mc-dot" style="background:${escapeHtml(pl.color)}" aria-hidden="true"></i>` : "";
+  return (pl.head ? `<p class="mc-status mc-pl-head">${dot}<span>${escapeHtml(pl.head)}</span></p>` : "") +
+    (pl.label ? `<p class="mc-pl-label">${escapeHtml(pl.label)}</p>` : "") +
+    `<div class="mc-plume" role="img" aria-label="${escapeHtml(plumeAlt(pl.data))}"></div>` +
+    `<p class="mc-pl-key" aria-hidden="true">${plumeKey(pl.data)}</p>` +
+    (pl.line ? `<p class="mc-pl-line">${escapeHtml(pl.line)}</p>` : "");
+}
+
 function render() {
   const card = el();
   if (!card || !spec) return;
   const active = document.activeElement && card.contains(document.activeElement) ? document.activeElement.dataset.act : null;
   const s = spec;
   const buttons = (s.buttons || []).filter((b) => !b.hidden);
-  const middle = (s.spark || s.figure)
+  const middle = s.plume ? plumeHtml(s.plume) : (s.spark || s.figure)
     ? `<div class="mc-row"><div class="mc-spark-wrap">${sparkHtml(s.spark)}</div>${figureHtml(s.figure)}</div>` : "";
   card.innerHTML = `
     <div class="mc-head">
@@ -192,6 +213,7 @@ function render() {
     if (btn && b.onClick) btn.addEventListener("click", () => b.onClick(btn));
   }
   drawSpark();
+  drawPlume();
   if (active) {
     const again = card.querySelector(`[data-act="${CSS.escape(active)}"]`);
     if (again && !again.disabled) again.focus({ preventScroll: true });
@@ -214,6 +236,14 @@ function drawSpark() {
     `<path class="mc-line" d="${p.line}"/>` +
     (p.end ? `<circle class="mc-end" cx="${p.end.x}" cy="${p.end.y}" r="2.6"/>` : "") +
     "</svg>";
+}
+
+function drawPlume() {
+  const pl = spec && spec.plume;
+  const box = el() && el().querySelector(".mc-plume:not(.mc-wait)");
+  if (!pl || !pl.data || !box) return;
+  const w = Math.max(200, Math.round(box.clientWidth || 300));
+  box.innerHTML = plumeSvg(pl.data, { w, h: 124, mapDate: state.date });
 }
 
 // ── anchoring ───────────────────────────────────────────────────────────────
@@ -413,6 +443,11 @@ function fillGauge(m) {
       updateCard(m.id, patch);
     });
   }
+  // A forecast gauge (#556): the plume corrected to it takes the sparkline's place.
+  void forecastPoints().then(() => {
+    const fp = live() ? gaugePlume(m.key, m.series || null) : null;
+    if (fp) updateCard(m.id, { plume: fp });
+  });
   // The analysis may already be there (the card reopened after the panel was folded).
   if (state.result && state.selected && stationKey(state.selected) === m.key) onAnalysis(m, { result: state.result });
   else if (m.analysis) onAnalysis(m, m.analysis);
@@ -429,6 +464,8 @@ function onAnalysis(m, detail) {
     return;
   }
   const unit = prettyUnit(res.unit);
+  m.series = res.series;
+  const fp = gaugePlume(m.key, res.series);
   const year = lastDays(res.series, 365);
   const last = latestValue(res.series);
   const patch = {
@@ -440,6 +477,7 @@ function onAnalysis(m, detail) {
     m.figureFrom = "record";
     m.figureDate = String(last.date);
   }
+  if (fp) patch.plume = fp;   // with the gauge's own record drawn before the run
   updateCard(m.id, patch);
   if (!m.snapshot && STATUS_VARIABLES.has(res.variable)) void statusFromRecord(m);
   else if (!STATUS_VARIABLES.has(res.variable) && m.spec.status && m.spec.status.pending) updateCard(m.id, { status: null });
@@ -664,6 +702,8 @@ export function initMapCard() {
     closeCard();
   });
   actions.openMapCard = openCard;
+  // A plume marks the map's date: follow the time bar.
+  onTime((t) => { if (shown && spec && spec.plume && spec.plume.data && t.date !== t.prev.date) drawPlume(); });
   actions.closeMapCard = closeCard;
   // Nothing chosen yet and the panel folded: one line says what to do.
   hint(!state.selected && !state.point && !panelOpen());

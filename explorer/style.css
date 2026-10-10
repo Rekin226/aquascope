@@ -1444,19 +1444,6 @@ body.workbench-mode .fa-legend { display: none; }
 .fa-mini i { width: 7px; height: 7px; border-radius: 2px; }
 .fa-count { font-weight: 600; font-variant-numeric: tabular-nums; }
 
-.fa-popup .maplibregl-popup-content { padding: .6rem .8rem .55rem; min-width: 220px; }
-.fa-card p { margin: .22rem 0; line-height: 1.38; }
-.fa-card-head { display: flex; align-items: center; gap: .5rem; font-size: .88rem; margin: 0 1.1rem .3rem 0; }
-.fa-card-head i {
-  flex: none; width: 12px; height: 12px; border-radius: 50%;
-  box-shadow: 0 0 0 2px var(--surface-solid), 0 0 0 3px var(--line);
-}
-.fa-gauges { display: flex; flex-direction: column; align-items: flex-start; gap: .15rem; margin: .4rem 0 .2rem; }
-.fa-gauge { font: inherit; border: 0; background: none; padding: 0; color: var(--blue); cursor: pointer; text-align: left; }
-.fa-gauge:hover { text-decoration: underline; }
-.fa-card-actions { margin: .5rem 0 .25rem; }
-.fa-card .fa-foot { font-size: .68rem; }
-
 @media (max-width: 860px) {
   .fa-legend { width: min(272px, calc(100vw - 72px)); }
 }

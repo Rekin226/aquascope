@@ -184,6 +184,14 @@ elif _op == "forecast":
                         match_mean_flow=_k.get("match_mean_flow"), snap=False,
                         history=_k.get("history", True), glofas=_k.get("glofas", True),
                         known_geoglows=_k.get("known_geoglows"))
+elif _op == "plume":
+    # The FEWS view of a reach (#556): the 51 members day by day, classed against the thresholds the page passes
+    # (the Floods ahead layer's), with a gauge's record when the page has one. No pandas: a light worker answers.
+    _res = _nn.plume(_k.get("river_id"), thresholds=_k.get("thresholds"), obs=_k.get("obs"),
+                     days=_k.get("days", 15), run=_k.get("run"), look_up=False)
+elif _op == "points":
+    # The Archive's forecast gauges, classed against their own return-period flows, from one issued file's rows.
+    _res = _nn.forecast_points(_k.get("rows") or [])
 else:
     raise ValueError(f"unknown now operation {_op!r}")
 json.dumps(_res, default=str)

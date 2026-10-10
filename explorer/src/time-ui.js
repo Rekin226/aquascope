@@ -208,8 +208,10 @@ async function gif() {
   try {
     const { makeGif } = await import("./gif.js?v=__BUILD__");
     const label = datedOn().map((l) => l.label).join(" + ");
+    // Who to credit on each frame: NASA GIBS for the satellite layers, a layer's own `credit` otherwise.
+    const credit = [...new Set(datedOn().map((l) => l.credit || "NASA GIBS"))].join(" · ");
     const done = await makeGif({
-      dates, label, step: state.timeStep, isCancelled: () => run.cancelled,
+      dates, label, credit, step: state.timeStep, isCancelled: () => run.cancelled,
       setDate: (d) => setTime({ date: d }, { source: "gif" }),
       onProgress: (i, n) => { status.textContent = `Frame ${i} of ${n}${truncated ? ` (first ${n})` : ""}`; },
     });

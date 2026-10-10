@@ -41,6 +41,11 @@ test("the window follows the time bar: twelve months, a played or stepped month,
   // playing, or stepping a month at a time, shows the month of the frame
   assert.deepEqual(windowFor({ date: "2019-07-01", playing: true, range: { from: "2019-01-01", to: "2019-12-01" } }, "2026-02").months, ["2019-07"]);
   assert.deepEqual(windowFor({ date: "2019-07-01", step: "month" }, "2026-02").months, ["2019-07"]);
+  // stepping by month after the record (the river status opens on its newest month): the latest twelve
+  assert.deepEqual(windowFor({ date: "2026-09-15", step: "month" }, "2026-02"),
+    { months: monthsBetween("2025-03", "2026-02"), mode: "window", latest: true });
+  // playing past the record shows that (empty) month
+  assert.deepEqual(windowFor({ date: "2026-09-15", step: "month", playing: true }, "2026-02").months, ["2026-09"]);
   // a range set and not playing: all its months, at most sixty
   const r = windowFor({ date: "2019-07-01", range: { from: "2019-06-01", to: "2019-08-20" } }, "2026-02");
   assert.deepEqual(r.months, ["2019-06", "2019-07", "2019-08"]);

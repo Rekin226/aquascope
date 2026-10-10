@@ -76,11 +76,16 @@ export function windowLabel(months) {
  * record. Playing, or stepping by month: the month of the date, so a season
  * replays (or is walked) month by month. A range set: its months (the last 60
  * at most). Otherwise the 12 months that end at the map date, or at the last
- * month on record when the date is later, which is what the page opens on.
+ * month on record when the date is later, which is what the page opens on
+ * (also when stepping by month, but not while playing).
  */
 export function windowFor({ date, range, playing, step } = {}, last) {
   const at = monthOf(date);
-  if ((playing || step === "month") && at) return { months: [at], mode: "frame", latest: false };
+  // Stepping by month to a date after the record (the world river status opens
+  // the map on its newest month, #544) falls through to the latest twelve, so
+  // the layer is not blank on the first view; playing still shows that month.
+  const afterRecord = Boolean(!playing && last && at && at > last);
+  if ((playing || step === "month") && at && !afterRecord) return { months: [at], mode: "frame", latest: false };
   const r = range && monthOf(range.from) && monthOf(range.to) ? monthsBetween(range.from, range.to) : null;
   if (r && r.length) {
     const months = r.slice(-MAX_MONTHS);

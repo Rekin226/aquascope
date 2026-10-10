@@ -951,10 +951,40 @@ def cmd_mcp(args: argparse.Namespace) -> None:
     mcp_main(transport=args.transport)
 
 
+def _print_river_status(res: dict) -> None:
+    """`aquascope layers status`: one month of the world river status map (#544)."""
+    rng = res.get("valid_range") or {}
+    if res.get("live_error"):
+        print(f"  Could not list the bucket ({res['live_error']}); showing what it held on {res.get('checked')}.")
+    if res.get("available"):
+        print(f"  World river status, {res['month']}: {res['url']}")
+    else:
+        print(f"  {res.get('error', 'no map')}")
+    if rng:
+        gaps = f"; no map for {', '.join(res['missing'])}" if res.get("missing") else ""
+        print(f"  {rng['months']} months, {rng['first']} to {rng['latest']}{gaps}.")
+    for c in res.get("legend") or []:
+        print(f"  {c['hex']}  {c['label']:<18} {c['range']}")
+    if res.get("method"):
+        print(f"\n  {res['method']}")
+        print(f"  {res['attribution']} ({res['licence']})")
+
+
 def cmd_layers(args: argparse.Namespace) -> None:
     """`aquascope layers`: the dated map layers and their valid dates, or the frames of a time-lapse (#522)."""
     from aquascope.map_time import dated_layers, layer_frames
 
+    if args.layers_cmd == "status":
+        from aquascope.map_layers import river_status_month
+
+        res = river_status_month(args.month, live=not args.offline)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+            return
+        _print_river_status(res)
+        if not res.get("available"):
+            sys.exit(1)
+        return
     if args.layers_cmd == "frames":
         res = layer_frames(args.layer, args.start, args.end, step=args.step, max_frames=args.max_frames)
         if args.json:
@@ -3990,6 +4020,11 @@ def main() -> None:
     p_lframes.add_argument("--step", choices=["day", "week", "month"], default="day")
     p_lframes.add_argument("--max-frames", type=int, default=60)
     p_lframes.add_argument("--json", action="store_true")
+    p_lstatus = layers_sub.add_parser("status", help="The world river status map for a month (GEOGLOWS HydroSOS, "
+                                      "1990 on): its URL, legend, licence and the months that exist")
+    p_lstatus.add_argument("month", nargs="?", default=None, help="YYYY-MM (default: the newest month)")
+    p_lstatus.add_argument("--offline", action="store_true", help="Do not list the bucket; use the recorded range")
+    p_lstatus.add_argument("--json", action="store_true")
     # ── basins ───────────────────────────────────────────────────────
     p_bul = sub.add_parser("bulletin", help="The month's state of the rivers: every Archive gauge against normal, "
                            "HydroSOS classes")

@@ -10,6 +10,10 @@
 }
 body.rail-open .map-legends { left: calc(var(--rail-w) + var(--gap) + 10px); }
 .map-legends > * { pointer-events: auto; }
+/* Where the time bar would run into the stack, it goes to the top, beside the map tools. */
+@media (max-width: 1100px) {
+  .map-legends { top: 10px; bottom: auto; left: 56px; }
+}
 
 .fp-legend {
   width: 16.5rem; max-width: calc(100vw - 24px);

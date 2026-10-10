@@ -96,6 +96,45 @@ surface temperature, GRACE water storage anomaly, ESA WorldCover land cover, and
 JRC Global Surface Water (how often each 30 m pixel was water from 1984 to 2024).
 The time-driven ones follow one date, set in the time bar (below).
 
+## World river status
+
+The map opens on the state of the world's rivers. Every river basin is coloured by
+how its flow that month compares with the same month in other years, from much
+below normal (brown) through normal (a light wash) to much above normal (teal), at
+the newest month GEOGLOWS has published. A small card on the map names the month
+and the five classes; its **i** says how the map is made and **×** hides it (the
+rail's **Overlays** has it too, with an opacity slider). `ws=0` in a link opens
+without it.
+
+The time bar drives it. With no date in the link the map opens in the middle of the
+newest month with a monthly step, so **Play** walks the months, and **‹ ›** step one
+at a time back to January 1990. The next month is read while the current one shows,
+so frames do not flash. A month with no map (before 1990, after the newest, and
+March 2026, which is missing from the series) draws nothing and the card says so.
+While it replays the past, the card says the gauges still show today.
+
+It is GEOGLOWS v2's monthly HydroSOS map: one GeoTIFF a month in GEOGLOWS's public
+bucket (`hydrosos/cogs/YYYY-MM.tif`, 7200 x 3600 cells of 0.05 degree, about
+500 kB, CC BY 4.0). Each HydroBASINS level-4 basin takes the class of its outlets'
+modelled monthly mean flow in the GEOGLOWS retrospective simulation against the
+10th, 25th, 75th and 90th percentiles of that calendar month
+(`hydrosos/thresholds.parquet`), as GEOGLOWS's `monthly_products.py` writes it.
+Modelled, not measured, and one colour per basin, so a small river inside a large
+basin can differ. The page reads the file in a worker with geotiff.js, turns its
+colours back into the five classes and lays them on a Web Mercator image, which
+MapLibre draws on the globe and on the flat map alike. It sits under the
+basemap's water and labels and under the gauges, and fades as you zoom in.
+
+The colours are the gauges' own: the same five as **Today vs normal**, which is
+how the gauges are coloured by default. A gauge the daily snapshot covers takes
+its class colour; every other gauge keeps its agency colour, and the legend says
+which. GEOGLOWS draws the classes in the WMO HydroSOS red-to-blue; the info panel
+says so.
+
+`aquascope layers status [YYYY-MM]` and the MCP tool `river_status_month` give the
+month's file, its legend with the file's colours, the months that exist (the
+bucket is listed live) and the licence.
+
 ## Time on the map
 
 The **time bar** sits at the bottom of the map whenever a dated layer is on (the
@@ -376,10 +415,10 @@ beside the main worker, and a browser that cannot start them sends those calls
 to the main worker as before. Forecasts and Context lines already read are kept
 for the session.
 
-**Today vs normal** in the gauge colouring of the layers panel colours the gauges
-from the daily status snapshot, with a legend that names the sources it covers and
-when it was made; gauges without a fresh record are grey. Until the first snapshot
-is published the gauges keep their agency colours and the legend says so.
+**Today vs normal**, the default gauge colouring, colours the gauges from the daily
+status snapshot, with a legend that names the sources it covers and when it was
+made; gauges without a fresh record keep their agency colour. Until the first
+snapshot is published every gauge keeps its agency colour and the legend says so.
 
 Both forecasts are model output under CC BY 4.0 (GEOGLOWS v2; Open-Meteo, free for
 non-commercial use). The same functions are `aquascope now` and the MCP tools

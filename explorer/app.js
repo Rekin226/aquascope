@@ -42,6 +42,8 @@ import { initPlaces } from "./src/places.js?v=__BUILD__";  // My places + Compar
 import { greetOnLoad, initWatch } from "./src/watch.js?v=__BUILD__";  // Watch: since you were here (#521)
 import { loadAvailability } from "./src/availability.js?v=__BUILD__";
 import { initMapCard } from "./src/map-card.js?v=__BUILD__";  // map first (#548): a click answers on the map
+import { initMapActions } from "./src/map-actions.js?v=__BUILD__";  // the AI's action log with undo (#561)
+import { initMapCommand } from "./src/map-command.js?v=__BUILD__";  // Ask the map (#561)
 
 import { initMetrics } from "./src/metrics-ui.js?v=__BUILD__";
 
@@ -183,6 +185,7 @@ function bringMapOnline(url) {
   initFloodsAhead();
   initFloodDepth();
   initFloodsPast();
+  initMapActions();   // after every layer it can switch (#561)
   // A selection made while the map was still dark has nothing on the map yet.
   if (state.selected) {
     highlightStation(`${state.selected.source}/${state.selected.station_id}`);
@@ -222,6 +225,7 @@ function goHome() {
   initAsk();   // async: fills the provider list from providers.json
   initStudyLoader();
   initSearch();
+  initMapCommand();   // Ask the map (#561): the box and the / key
   void loadAvailability();
   initUrl();
   actions.applyUrl = applyUrl;

@@ -113,6 +113,59 @@ pass `id`, `lngLat`, `what`, `title`, and any of `sub`, `status`, `spark`, `figu
 `credit`, `details` and `buttons`; it returns a handle with `update(patch)` and
 `close()`.
 
+## Ask the map
+
+Tell the map what to show, in plain words. Press **/** or the **Ask the map** pill at
+the top of the map and type, for example:
+
+- "trace the Nile to the sea", "what drains to the Danube", "show the Rhine"
+- "go to Bangladesh", "show the whole world", "zoom in"
+- "September 2023", "last July", "play the last 5 years", "stop"
+- "turn on floods past", "hide the flood forecast", "satellite view", "flat map"
+- "where are rivers much above normal in South Asia last July"
+- "draw an area around Bangladesh", "drop a pin here saying Dhaka: check the gauges"
+- "undo", "undo all"
+
+The map does it at once, and every change is listed under the box in the **action
+log**, newest first, with an undo for each and **Undo all**. Undoing an older action
+leaves the screen alone if a later one has changed the same thing since, and a later
+undo of that one goes all the way back. With the box closed, the log folds into a
+count beside the pill.
+
+![Ask the map: rivers much above normal in South Asia, July 2026](img/globe/561-ask-status-focus.png)
+
+![Ask the map: the Nile traced to the sea, each action in the log](img/globe/561-trace-nile.png)
+
+Who reads the words, in order, and the line under the box says which one did:
+
+1. **The rules**, always, with no model and no key: a phrase grammar in the package
+   (`aquascope.map_commands.parse_command`) that understands the common requests
+   above. It answers only when it understood every word, and passes the rest on.
+2. **The model on your device**, where the browser already has one ready: Chrome's
+   built-in model, or a WebLLM model Ask has loaded in this tab. It never starts a
+   download by itself.
+3. **Your own model**, with the key you gave Ask ✨ (any provider in its list). The
+   maintainer's keys and credits are never used for visitors.
+
+Whatever answers, the actions are checked by the package before they run (a model's
+reply that names an unknown layer or a future date is refused, and the line says
+so), and place names are looked up in the same gazetteer as the search (Photon by
+komoot, OpenStreetMap data, ODbL); a name it does not hold is tried as a gauge in
+the catalogue. A river is lit from the point the gazetteer gives for it ("the Nile"
+starts at Lake Nasser), so "what drains to the Nile at Khartoum" or a click picks a
+better start. "Where are rivers much above normal" turns the world river status on
+and paints only those basins; the legend says what is left out and has **show all**.
+
+The actions (`fly_to`, `set_time`, `set_layer`, `focus_status`, `set_basemap`,
+`highlight_river`, `draw_area`, `add_pin`) are the same everywhere:
+`aquascope map "trace the Nile to the sea" [--resolve] [--llm]` prints them, the
+MCP tool `map_command` returns them with their JSON Schema, and an assistant in the
+browser can run them through the WebMCP tool `aquascope_map_actions`, into the same
+log. Pins are an API for the page's own roles: `addPin({lat, lon, title, text,
+facts, source})` in `explorer/src/map-actions.js` (also `actions.addPin`) drops a
+pin that opens a map card with its note, facts and source, listed in the log like
+any action; `pins()` lists them.
+
 ## Map layers
 
 The rail is a layer stack, and every layer in it is keyless and free to use.
@@ -686,7 +739,8 @@ first use, never on a visit that runs no study. See
 
 Where the browser supports [WebMCP](https://github.com/webmachinelearning/webmcp)
 (`navigator.modelContext`), the Explorer registers `find_stations`,
-`analyze_station`, `anywhere`, `describe_catchment` and `show_on_map` as tools,
+`analyze_station`, `anywhere`, `describe_catchment`, `show_on_map` and
+`map_actions` ([Ask the map](#ask-the-map)) as tools,
 so an assistant in the same browser can query every gauge in the archive with
 aquascope installed nowhere. It is entirely feature-detected: where the API is
 absent, which is most browsers today, nothing changes. For assistants outside

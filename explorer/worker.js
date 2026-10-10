@@ -9,7 +9,7 @@ let ready = null;
 // network without them: a place's context layers, a click's river snap and the quick forecast. Several run at
 // once, so those reads no longer queue behind the main worker's record, one sync request after another.
 let lite = false;
-const LITE_TYPES = new Set(["context", "river", "now"]);
+const LITE_TYPES = new Set(["context", "river", "now", "map_command"]);
 
 function post(type, extra = {}) { self.postMessage({ type, ...extra }); }
 
@@ -1104,6 +1104,49 @@ json.dumps(_out, default=str)
   }
 }
 
+// ── Talk to the map (#561): aquascope.map_commands, the same functions as `aquascope map` and the MCP tool.
+// op "parse" reads a request with the keyless grammar; "prompt" is the system prompt and schema for a model;
+// "reply" checks a model's reply; "validate" checks actions from anywhere (an agent over WebMCP); "resolve"
+// looks place names up in the gazetteer (Photon); "llm" asks the reader's own model with their key (the main
+// worker only: the provider client lives beside the Analyst).
+async function mapCommand({ id, op, text, today, context, reply, actions, provider, model, api_key, base_url }) {
+  self.__aqMap = JSON.stringify({
+    op: String(op || "parse"), text: String(text || ""), today: today || null, context: String(context || ""),
+    reply: reply === undefined ? null : reply, actions: actions || [],
+    llm: { provider: provider || null, model: model || null, api_key: api_key || null, base_url: base_url || null },
+  });
+  const code = `
+import json
+from js import __aqMap
+from aquascope import map_commands as _mc
+_a = json.loads(__aqMap)
+try:
+    if _a["op"] == "parse":
+        _out = _mc.parse_command(_a["text"], today=_a["today"])
+    elif _a["op"] == "prompt":
+        _out = _mc.model_prompt(_a["context"], today=_a["today"])
+    elif _a["op"] == "reply":
+        _out = _mc.parse_model_reply(_a["reply"], today=_a["today"])
+    elif _a["op"] == "validate":
+        _out = _mc.parse_model_reply({"actions": _a["actions"]}, today=_a["today"])
+    elif _a["op"] == "resolve":
+        _out = _mc.resolve_actions(_a["actions"])
+    elif _a["op"] == "llm":
+        _out = _mc.model_command(_a["text"], context=_a["context"], today=_a["today"], **_a["llm"])
+    else:
+        _out = {"error": "unknown op"}
+except (ValueError, RuntimeError) as exc:
+    _out = {"error": str(exc)}
+json.dumps(_out, default=str)
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqMap = null;
+  }
+}
+
 self.onmessage = async (e) => {
   const m = e.data;
   try {
@@ -1134,6 +1177,7 @@ self.onmessage = async (e) => {
     if (m.type === "area_study") return await areaStudy(m);
     if (m.type === "context") return await placeContext(m);
     if (m.type === "watch") return await watchDigest(m);
+    if (m.type === "map_command") return await mapCommand(m);
   } catch (err) {
     // Pyodide raises PythonError with the full traceback in .message; keep the
     // exception line (last non-empty) and log the whole thing for debugging.

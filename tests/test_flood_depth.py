@@ -226,6 +226,16 @@ def test_cli_prints_the_map_and_exits_non_zero_on_an_error(monkeypatch, capsys):
     assert exc.value.code == 1
 
 
+def test_ask_the_map_can_turn_it_on_and_off():
+    from aquascope import map_commands as mc
+
+    on = mc.parse_command("show the flood depth")
+    assert on["matched"] and {"type": "set_layer", "layer": "flood_depth", "on": True} in on["actions"]
+    off = mc.parse_command("hide inundation")
+    assert {"type": "set_layer", "layer": "flood_depth", "on": False} in off["actions"]
+    assert mc.parse_command("show floods ahead")["actions"][0]["layer"] == "floods_ahead"
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 def test_the_explorer_keeps_the_same_tiles_radius_and_ramp():
     script = f"""

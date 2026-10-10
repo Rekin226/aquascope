@@ -255,9 +255,10 @@ function showKey(what) {
     el.innerHTML = `<span>${what.error}</span>${close}`;
   } else {
     const s = networkSummary(what.net);
-    el.innerHTML =
-      `<span class="rk-row"><i class="rk-sw" style="background:${th.up}"></i><b>Drains here</b> <span class="muted">${s.up}</span></span>` +
-      `<span class="rk-row"><i class="rk-sw" style="background:${th.down}"></i><b>To the sea</b> <span class="muted">${s.down}</span></span>` +
+    // A network lit one way only (Ask the map, #561) has no numbers for the other way: that row is left out.
+    const up = what.net && what.net.upstream === null ? "" : `<span class="rk-row"><i class="rk-sw" style="background:${th.up}"></i><b>Drains here</b> <span class="muted">${s.up}</span></span>`;
+    const down = what.net && what.net.downstream === null ? "" : `<span class="rk-row"><i class="rk-sw" style="background:${th.down}"></i><b>To the sea</b> <span class="muted">${s.down}</span></span>`;
+    el.innerHTML = up + down +
       `<span class="rk-src muted">GEOGLOWS v2 routing, modelled${s.cut ? `; ${s.cut}` : ""}</span>${close}`;
   }
   el.querySelector(".river-key-x").addEventListener("click", () => clearRiverNetwork());

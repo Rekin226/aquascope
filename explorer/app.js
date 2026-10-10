@@ -26,6 +26,7 @@ import { clearRiver, initRiver } from "./src/river.js?v=__BUILD__";
 import { initNow } from "./src/now.js?v=__BUILD__";
 import { initBulletin } from "./src/bulletin.js?v=__BUILD__";
 import { initFloodsAhead } from "./src/floods-ahead.js?v=__BUILD__";  // Floods ahead (#546), on by default
+import { initFloodDepth } from "./src/flood-depth.js?v=__BUILD__";  // flood depth where floods are forecast (#554)
 import { initSearch } from "./src/search.js?v=__BUILD__";
 import { initShell, initTabs, selectTab, setStatusEl, showSurface } from "./src/shell.js?v=__BUILD__";
 import { initStationPanel, reanalyze, selectStation, setPeriod } from "./src/panel-station.js?v=__BUILD__";
@@ -186,6 +187,7 @@ function bringMapOnline(url) {
   if (url.rivers === false) state.riversOn = false;   // on by default (#545); a link can say rivers=0
   if (state.riversOn) { setRiversVisible(true); renderCredits(); }
   initFloodsAhead();
+  initFloodDepth();
   initFloodsPast();
   initMapActions();   // after every layer it can switch (#561)
   // A selection made while the map was still dark has nothing on the map yet.

@@ -568,8 +568,9 @@ CONTEXT_LAYERS: dict[str, ContextLayerMeta] = {
         label="Modelled flood depth by return period (JRC GloFAS)",
         provider="European Commission JRC (CEMS-GloFAS)",
         description="River flood depth at about 90 m for the 10 to 500-year floods, from the CEMS-GloFAS "
-                    "global flood hazard maps v2.1.2 (JRC: no restrictions, a free and open Copernicus product), "
-                    "read from a community Cloud-Optimized GeoTIFF mirror that lists CC BY 4.0",
+                    "global flood hazard maps v2.1.2, read from a community Cloud-Optimized GeoTIFF mirror. JRC's "
+                    "copyright notice licenses the dataset under CC BY 4.0 (credit given, changes indicated); its "
+                    "README says no restrictions, a free and open Copernicus product (both read 2026-10-10)",
         license="CC-BY-4.0",
         attribution="European Union, 2016-2021, GloFAS: global river flood hazard maps v2.1.2 (CEMS); COG mirror "
                     "by N. Lebovits on Source Cooperative",

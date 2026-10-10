@@ -615,6 +615,57 @@ every reach a gauge sits on, the ensemble mean's daily peak against GEOGLOWS's o
 return periods. The same issue is `aquascope warnings [--bbox W S E N]` and the MCP
 tool `flood_warnings`.
 
+### Flood depth where floods are forecast
+
+Where Floods ahead expects a reach to pass its 10-, 25-, 50- or 100-year flow, the map
+also shows how deep the water could get around it: the JRC CEMS-GloFAS flood depth map
+(v2.1.2, 3 arc-seconds, about 90 m) for the nearest return period at or below the
+forecast class, so 10, 20, 50 or 100 years (JRC has no 2- or 5-year maps). It is drawn
+in blues, light for a few centimetres to deep blue past 10 m, with a key in the map's
+legend that always says **may flood in the next 15 days, model estimate**.
+
+![Flood depth along the Republican River in Kansas, where the forecast passes the 10- and 25-year flows](img/globe/depth-forecast.png)
+
+- **Where.** From zoom 7, around each forecast reach: within 3 km of it on a Strahler
+  order 5 river, 1.5 km more for each order up (10 km at most), fading at the edge.
+  Where another river at least as large is nearer, the pixel is left to it, so a
+  tributary's forecast does not paint the main river's flood plain. Under zoom 7 the
+  legend gives the count and **Show one** flies to the strongest reach of the day.
+- **When.** The time bar picks the day, like Floods ahead: inside the 15 days each reach
+  shows the map of its class on that day, so **Play the 15 days** steps the depth up and
+  down with the forecast; outside them, the 15-day peak.
+
+  ![Three forecast days on the Republican River, Kansas: past the 25-year flow, then the 10-year, then below it and the depth is gone](img/globe/depth-steps.png)
+- **A click** on the depth opens the map card with the reach, its forecast class and
+  day, the map shown and the depth at that spot. **Details** opens the reach's 15-day
+  forecast.
+
+![The map card on the depth](img/globe/depth-card.png)
+
+How it is read: the map is cut into half-degree cells; for the cells in view (16 at
+most, nearest the middle first) a worker reads the depth windows with byte ranges from
+the [Source Cooperative mirror](https://source.coop/nlebovits/jrc-glofas) of the
+JRC files (CORS open, 271 tiles of 10 degrees per return period, 17 to 180 MB each, of
+which a cell reads a few hundred kB), paints them with geotiff.js and keeps them, so
+stepping through the days repaints from memory. The cut by larger rivers uses the
+GEOGLOWS stream tiles the rivers layer already loaded.
+
+What it is not: a flood simulation of this event. It is a precomputed hazard map chosen
+by a forecast, a model estimate twice over: the GEOGLOWS forecast and the JRC map are
+different models, and their return periods are not the same floods. JRC also warns that
+some depths are unrealistic (very deep water on small channels, at the edges between its
+model tiles, in sinks of the elevation model).
+
+Licence: CC BY 4.0. JRC's own [copyright notice](https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/copyright.txt)
+licenses the dataset under CC BY 4.0 (credit given, changes indicated), and its
+[README](https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/CEMS-GLOFAS/flood_hazard/README.txt)
+says "no restrictions, free and open Copernicus product" (both read on 2026-10-10).
+
+The same in Python: `aquascope layers depth RIVER_ID [--day YYYY-MM-DD] [--rp N]` or
+`aquascope layers depth --bbox W S E N --rp N`, and the MCP tool `flood_depth_overlay`:
+the map chosen, the tiles with their windows and a GDAL command for each, the extent and
+its clip, and the depth at the reach, the deepest pixel and the wet share around it.
+
 ## Forecast points and the plume (the FEWS view)
 
 Forecasters read Delft-FEWS and the GloFAS and EFAS viewers this way: forecast points

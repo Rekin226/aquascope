@@ -323,7 +323,7 @@ function renderLegend() {
     ? ' <button type="button" class="fd-go" data-act="go">Show one</button>' : "";
   legend.innerHTML =
     `<header><b>Flood depth</b>${reading}` +
-    (min ? `<span class="fd-mini" style="background:${rampCss()}" aria-hidden="true"></span>` : "") +
+    (min ? `<span class="fd-mini" style="background:${rampCss()}" aria-hidden="true"></span><span class="fd-est">model estimate</span>` : "") +
     '<button class="fd-btn info" type="button" data-act="about" aria-label="About the flood depth map" title="About this map">i</button>' +
     `<button class="fd-btn" type="button" data-act="min" aria-expanded="${min ? "false" : "true"}" ` +
     `aria-label="${min ? "Show" : "Fold"} the flood depth legend" title="${min ? "Show" : "Fold"}">${min ? "+" : "–"}</button>` +

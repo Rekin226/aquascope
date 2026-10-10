@@ -40,7 +40,8 @@ body.workbench-mode .fd-legend { display: none; }
 @keyframes fd-spin { to { transform: rotate(360deg); } }
 .fd-legend.min { width: auto; }
 .fd-legend.min .fd-btn.info { margin-left: .2rem; }
-.fd-mini { display: inline-block; width: 46px; height: 7px; border-radius: 3px; }
+.fd-mini { display: inline-block; width: 40px; height: 7px; border-radius: 3px; }
+.fd-est { color: var(--muted); font-size: .66rem; white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {
   .fd-busy { animation: none; }

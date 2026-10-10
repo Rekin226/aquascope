@@ -119,7 +119,7 @@ function beforeId() {
 function ensureHit() {
   if (map.getSource(HIT)) return;
   map.addSource(HIT, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-  // Invisible circles around the reaches: the depth pictures cannot be queried, these can.
+  // Invisible rectangles over the drawn cells: the pictures cannot be queried, these can.
   map.addLayer({ id: HIT, type: "fill", source: HIT, minzoom: DEPTH_MINZOOM, layout: { visibility: vis() },
     paint: { "fill-color": "#000", "fill-opacity": 0 } }, beforeId());
   if (hitBound) return;
@@ -128,15 +128,15 @@ function ensureHit() {
   map.on("click", HIT, onClick);
 }
 
-function circle(r) {
-  const [w, s, e, n] = diskBox(r.lon, r.lat, r.r);
-  const rx = (e - w) / 2, ry = (n - s) / 2;
-  const ring = [];
-  for (let k = 0; k <= 32; k++) {
-    const a = (k / 32) * 2 * Math.PI;
-    ring.push([r.lon + rx * Math.cos(a), r.lat + ry * Math.sin(a)]);
-  }
-  return { type: "Feature", properties: { id: r.id }, geometry: { type: "Polygon", coordinates: [ring] } };
+// The drawn cells as rectangles: a click inside one is checked against the picture (probeCell); a dry pixel goes
+// on to the map's own answer.
+function syncHit() {
+  const src = map.getSource(HIT);
+  if (!src) return;
+  src.setData({ type: "FeatureCollection", features: [...onMap.values()].map(({ cell }) => {
+    const [w, s, e, n] = cell.box;
+    return { type: "Feature", properties: { key: cell.key }, geometry: { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] } };
+  }) });
 }
 
 function drawCell(cell, pic) {
@@ -164,7 +164,7 @@ function removeCell(key) {
   const id = PREFIX + key;
   if (map.getLayer(id)) map.removeLayer(id);
   if (map.getSource(id)) map.removeSource(id);
-  onMap.delete(key);
+  if (onMap.delete(key)) syncHit();
 }
 
 // ── what to draw ────────────────────────────────────────────────────────────
@@ -236,7 +236,7 @@ function update() {
     const job = picture(cell, sig, cl).then((pic) => {
       if (!visible || wantedSig.get(cell.key) !== sig) return;
       drawCell(cell, pic);
-      if (pic.url) onMap.set(cell.key, { sig, painted: pic.painted, cell });
+      if (pic.url) { onMap.set(cell.key, { sig, painted: pic.painted, cell }); syncHit(); }
       failed = false;
     }).catch((err) => {
       console.info(`flood depth ${cell.key}:`, err && err.message);
@@ -252,18 +252,14 @@ function setDay(next) {
   day = next;
   reaches = data && !data.manifest.missing ? activeReaches(data.features, day) : [];
   cells = cellsFor(reaches);
-  if (state.mapOk && map && map.getSource(HIT)) {
-    map.getSource(HIT).setData({ type: "FeatureCollection", features: reaches.map(circle) });
-  }
   update();
 }
 
 // ── the click ───────────────────────────────────────────────────────────────
 
 function onClick(e) {
-  // A gauge or a Floods ahead reach under the pointer answers for itself.
-  const others = ["points", "clusters", ...((map.getStyle() && map.getStyle().layers) || [])
-    .map((l) => l.id).filter((id) => /^river-fa-/.test(id))].filter((id) => map.getLayer(id));
+  // Anything else that takes a click here (a gauge, a Floods ahead reach, a flood cell) answers for itself.
+  const others = ["points", "clusters", ...[...clickLayers].filter((id) => id !== HIT)].filter((id) => map.getLayer(id));
   if (others.length && map.queryRenderedFeatures(e.point, { layers: others }).length) return;
   const { lng, lat } = e.lngLat;
   let hit = null;
@@ -280,7 +276,7 @@ function onClick(e) {
   const c = rampColor(hit.depth);
   openCard({
     id: `depth:${reach.id}:${hit.rp}:${lng.toFixed(3)},${lat.toFixed(3)}`, lngLat: [lng, lat], lift: 8,
-    what: "Flood depth, model estimate", title: f.title, sub: "May flood in the next 15 days",
+    what: "Flood depth", title: f.title, sub: f.sub,
     status: { text: f.status, color: c ? `rgb(${c[0]},${c[1]},${c[2]})` : null },
     figure: f.figure, note: f.note,
     credit: "JRC CEMS-GloFAS hazard map v2.1.2, © European Union, CC BY 4.0. Forecast: GEOGLOWS, CC BY 4.0.",

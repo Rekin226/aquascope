@@ -448,14 +448,15 @@ export function depthLegendLine({ n, inView, zoom }) {
   return `${inView.toLocaleString("en-GB")} in view, of ${of}.`;
 }
 
-/** The card's words for a click on the depth. */
+/** The card's words for a click on the depth: the reach, the forecast behind the map, the depth there. */
 export function depthFacts(reach, depth, rp, { day = -1, when = "" } = {}) {
   const cls = reach.cls;
   const map = rp === cls ? `the ${rp}-year depth map` : `the ${rp}-year depth map, the nearest at or below it`;
   return {
-    title: `About ${fmtDepth(depth)} m deep`,
-    status: `Reach ${reach.id} is forecast to pass its ${cls}-year flow${when ? ` ${when}` : ""}; this is ${map}.`,
-    figure: { value: fmtDepth(depth), unit: "m", label: `${rp}-year depth here` },
-    note: day >= 0 ? "" : "Shown for the 15-day peak; move the time bar into the forecast to step through the days.",
+    title: `River reach ${reach.id}`,
+    sub: `${DEPTH_LABEL[0].toUpperCase()}${DEPTH_LABEL.slice(1)}`,
+    status: `Forecast to pass its ${cls}-year flow${when ? ` ${when}` : ""}. Shown: ${map}.`,
+    figure: { value: fmtDepth(depth), unit: "m", label: `deep here, ${rp}-year map` },
+    note: day >= 0 ? "" : "The 15-day peak. Move the time bar into the forecast to step through the days.",
   };
 }

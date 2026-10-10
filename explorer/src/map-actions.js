@@ -153,6 +153,8 @@ function openPinCard(id) {
   const [first, ...rest] = p.facts || [];
   const v = first && (typeof first.value === "number" ? first.value.toLocaleString(undefined, { maximumFractionDigits: 3 }) : String(first.value));
   const note = [p.text, ...rest.map(factLine)].filter(Boolean).join(" · ");
+  // The pin's card is what was asked for now: the log folds so the two do not stack (its count reopens it).
+  if (logOpen) setLogOpen(false);
   actions.openMapCard({
     id: `pin:${id}`, lngLat: [p.lon, p.lat], lift: 30,
     what: `Note, ${BY_LABEL[e.by] || e.by}`, whatIcon: `<span class="ma-pin-mini" aria-hidden="true">${PIN_SVG}</span>`,

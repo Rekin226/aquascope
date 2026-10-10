@@ -725,7 +725,8 @@ def _status_phrase(c: _Clause) -> None:
             c.add("status", {"type": "set_layer", "layer": "status", "on": True},
                   {"type": "focus_status", "classes": classes})
             return
-        if c.take(r"\b(?:where\s+(?:are|is)\s+)?(?:" + words + r")\s+(?:rivers?|flows?|streams?|basins?)\b"):
+        if c.take(r"\b(?:where\s+(?:are|is)\s+)?(?:" + words + r")\s+(?:rivers?|flows?|streams?|basins?)\b") or \
+                c.take(r"\bwhere\s+(?:is it|are things|is the water)\s+(?:" + words + r")\b"):
             c.add("status", {"type": "set_layer", "layer": "status", "on": True},
                   {"type": "focus_status", "classes": classes})
             return
@@ -781,10 +782,10 @@ def _zoom_phrase(c: _Clause) -> None:
 
 def _river_phrase(c: _Clause) -> None:
     patterns = [
-        (r"^(?:trace|follow|show(?: me)?)\s+(?:the\s+)?(?P<p>.+?)(?:\s+river)?\s+(?:down\s+)?(?:all the way\s+)?"
-         r"(?:to|into|out to)\s+the\s+(?:sea|ocean|coast|mouth|outlet|delta)$", "downstream"),
         (r"^(?:show(?: me)?\s+)?(?:the\s+)?(?:way|path|route)\s+(?:of|from)\s+(?:the\s+)?(?P<p>.+?)"
          r"\s+to\s+the\s+(?:sea|ocean)$", "downstream"),
+        (r"^(?:trace|follow|show(?: me)?)\s+(?:the\s+)?(?P<p>.+?)(?:\s+river)?\s+(?:down\s+)?(?:all the way\s+)?"
+         r"(?:to|into|out to)\s+the\s+(?:sea|ocean|coast|mouth|outlet|delta)$", "downstream"),
         (r"^(?:show(?: me)?\s+|light up\s+|highlight\s+)?(?:what|everything that|all that)\s+(?:drains|flows)\s+"
          r"(?:in)?to\s+(?:the\s+)?(?P<p>.+)$", "upstream"),
         (r"^(?:show(?: me)?\s+|light up\s+|highlight\s+)?(?:the\s+)?"
@@ -862,7 +863,8 @@ def _pin_phrase(c: _Clause) -> None:
     c.add("pin", action)
 
 
-_NOT_IN_NAMES = frozenset("a an my your our some something anything way how why what which clever please".split())
+_NOT_IN_NAMES = frozenset("""a an my your our some something anything everything nothing way how why what which clever
+please it things stuff help more weather forecast data""".split())
 
 
 def _plausible_place(place: str) -> bool:
@@ -891,7 +893,8 @@ def _place_phrase(c: _Clause) -> None:
         m = re.search(p, c.text)
         if not m:
             continue
-        words = m.group("p").strip()
+        # "show in Europe" (what is left of "show high rivers in Europe"): the place, not "in Europe".
+        words = re.sub(r"^(?:in|over|across|around|near|for|of)\s+(?:the\s+)?", "", m.group("p").strip())
         region = _region(words)
         if region:
             c.take(re.escape(m.group(0)))
@@ -1019,12 +1022,15 @@ def _names_match(asked: str, found: Any) -> bool:
     if not found:
         return False
     a = [w for w in re.findall(r"[a-z0-9]+", _fold(asked)) if w not in _NAME_NOISE]
-    f = set(re.findall(r"[a-z0-9]+", _fold(str(found))))
-    if a and all(w in f for w in a):
+    f = [w for w in re.findall(r"[a-z0-9]+", _fold(str(found))) if w not in _NAME_NOISE]
+    # Every word asked, in a name not much longer ("in Europe" is not "The Leuven Institute for Ireland In Europe").
+    if a and all(w in f for w in a) and len(f) <= len(a) + 2:
         return True
     import difflib
 
-    return difflib.SequenceMatcher(None, _fold(asked), _fold(str(found))).ratio() >= 0.8
+    # A spelling slip ("Bangaldesh"), not a longer word that starts the same ("weather" is not "Weatherby").
+    x, y = _fold(asked), _fold(str(found))
+    return abs(len(x) - len(y)) <= 1 and difflib.SequenceMatcher(None, x, y).ratio() >= 0.8
 
 
 #: Short names the gazetteer does not know by themselves ("USA" finds Usa in Japan).
@@ -1100,14 +1106,19 @@ def resolve_place(name: str, want: str = "any", fetch: Any = None) -> dict[str, 
     kind = p.get("type") or p.get("osm_value") or "place"
     lat = round(float(lat), 5) if _finite(lat) else None
     lon = round(float(lon), 5) if _finite(lon) else None
+    stub = False
     if not is_river(pick):   # a river's extent is the river: it is never cut back
         bbox = _frame(bbox, lat, lon)
+    elif bbox and max(bbox[2] - bbox[0], bbox[3] - bbox[1]) < 0.5:
+        # Only one stretch of the river (the Amazon's is a few km at its mouth): frame its point, not the stub.
+        bbox, stub = None, True
+    zoom = 8.0 if stub else 4.0 if kind == "country" and not bbox else _ZOOM_BY_KIND.get(str(kind), 9.0)
     return {
         "name": p.get("name") or name,
         "detail": ", ".join(x for x in (p.get("state"), p.get("country")) if x and x != p.get("name")),
         "lat": lat, "lon": lon,
         "bbox": bbox, "kind": kind, "is_river": is_river(pick),
-        "zoom": 4.0 if kind == "country" and not bbox else _ZOOM_BY_KIND.get(str(kind), 9.0),
+        "zoom": zoom,
         "credit": PLACE_CREDIT,
     }
 

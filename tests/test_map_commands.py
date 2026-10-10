@@ -84,6 +84,16 @@ PHRASES = [
     ("drop a pin here saying Dhaka: check the Buriganga gauges", [
         {"type": "add_pin", "at": "center", "title": "Dhaka", "text": "check the Buriganga gauges"}]),
     ("put a pin at 23.7, 90.4", [{"type": "add_pin", "lat": 23.7, "lon": 90.4, "title": "Note"}]),
+    ("show high rivers in Europe", [
+        {"type": "set_layer", "layer": "status", "on": True},
+        {"type": "focus_status", "classes": ["above", "much_above"]},
+        {"type": "fly_to", "region": "europe", "bbox": mc.REGIONS["europe"]["bbox"]}]),
+    ("where is it dry", [
+        {"type": "set_layer", "layer": "status", "on": True},
+        {"type": "focus_status", "classes": ["much_below", "below"]}]),
+    ("show me the way of the Nile to the sea", [
+        {"type": "fly_to", "place": "Nile", "river": True},
+        {"type": "highlight_river", "place": "Nile", "direction": "downstream"}]),
 ]
 
 
@@ -120,6 +130,7 @@ def test_undo_all():
 @pytest.mark.parametrize("text", [
     "what is the hundred year flood here",   # a question for Ask, not the map
     "show me the Rhine flooding in a clever way",
+    "show me the weather",                    # not a place, though a gazetteer has a Weatherby
     "",
 ])
 def test_words_the_rules_do_not_understand_are_left_to_a_model(text):
@@ -221,6 +232,12 @@ FEATURES = {
     "Taipei": [photon("Taipei", kind="city", osm_value="city", extent=[121.46, 25.21, 121.67, 24.96],
                       point=(121.56, 25.04), country="Taiwan")],
     "something clever": [photon("Something Fishy", kind="house", osm_value="restaurant", point=(-81.7, 41.4))],
+    "in Europe": [photon("The Leuven Institute for Ireland In Europe", kind="house", osm_value="college",
+                         point=(4.7, 50.9))],
+    "Bangaldesh": [photon("Bangladesh", extent=[88.0, 26.6, 92.7, 20.4], point=(90.3, 23.8))],
+    "weather": [photon("Weatherby", kind="city", osm_value="village", point=(-94.2, 39.9))],
+    "Amazon": [photon("Amazon River", osm_key="waterway", osm_value="river", kind="other", country="Brazil",
+                      extent=[-50.23, 0.69, -50.15, 0.68], point=(-50.19, 0.68))],
 }
 
 
@@ -243,6 +260,17 @@ def test_far_territories_do_not_drag_the_camera_across_the_ocean():
 
 def test_a_fuzzy_neighbour_is_not_the_place_asked_for():
     assert mc.resolve_place("something clever", fetch=fetch)["error"].startswith("no place called")
+
+
+def test_a_long_name_holding_the_words_is_not_the_place():
+    assert mc.resolve_place("in Europe", fetch=fetch)["error"].startswith("no place called")
+    assert mc.resolve_place("weather", fetch=fetch)["error"].startswith("no place called")
+    assert mc.resolve_place("Bangaldesh", fetch=fetch)["name"] == "Bangladesh"   # a spelling slip still finds it
+
+
+def test_a_river_known_by_one_short_stretch_is_framed_from_its_point():
+    hit = mc.resolve_place("Amazon", want="river", fetch=fetch)
+    assert hit["is_river"] and hit["bbox"] is None and hit["zoom"] == 8.0
 
 
 def test_regions_need_no_lookup():

@@ -48,7 +48,7 @@ function showTries(on) {
   }
 }
 
-export function openMapAsk({ text = "" } = {}) {
+export function openMapAsk({ text = "", tries = true } = {}) {
   open = true;
   box().classList.add("open");
   $("ma-form").hidden = false;
@@ -58,7 +58,7 @@ export function openMapAsk({ text = "" } = {}) {
   if (hint) hint.hidden = true;
   const input = $("ma-input");
   if (text) input.value = text;
-  showTries(!input.value && !$("ma-status").innerHTML);
+  showTries(tries && !input.value && !$("ma-status").innerHTML);
   setLogOpen(true);
   input.focus();
   input.select();
@@ -196,7 +196,7 @@ export function initMapCommand() {
   $("ma-log-toggle").addEventListener("click", (e) => {
     if (!narrow() || open) return;
     e.stopImmediatePropagation();
-    openMapAsk();
+    openMapAsk({ tries: false });   // the log was asked for, not the examples
   }, true);
   $("ma-form").addEventListener("submit", (e) => { e.preventDefault(); void runCommand($("ma-input").value); });
   root.querySelector(".ma-x").addEventListener("click", closeMapAsk);

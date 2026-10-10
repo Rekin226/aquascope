@@ -1513,7 +1513,7 @@ body.workbench-mode .fa-legend { display: none; }
 .ma-x:hover { background: var(--bg-soft); color: var(--ink); }
 /* the bar is wide only while open; the count sits beside the pill when closed and under the bar when open */
 .map-ask.open .ma-bar { flex-wrap: nowrap; }
-.map-ask.open .ma-count { display: none; }
+.map-ask.open .ma-count[aria-expanded="true"] { display: none; }   /* folded (a pin card took its place), it stays a tap away */
 .ma-status {
   margin: 0; width: 100%; padding: .38rem .7rem; font-size: .74rem; line-height: 1.45; color: var(--ink-2);
   background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
@@ -1529,7 +1529,11 @@ body.workbench-mode .fa-legend { display: none; }
 .ma-status .ma-how::after { content: "·"; margin-left: .45rem; color: var(--line); }
 .ma-status .ma-note { color: var(--warn-ink); flex-basis: 100%; }
 .ma-status .ma-credit { flex-basis: 100%; color: var(--muted); font-size: .66rem; }
-.ma-tries { display: flex; flex-wrap: wrap; justify-content: center; gap: .3rem; width: 100%; }
+.ma-tries {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: .3rem; width: 100%; padding: .4rem;
+  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-1);
+}
 .ma-tries[hidden] { display: none; }
 .ma-tries .chip { background: var(--surface-solid); box-shadow: var(--shadow-1); font-size: .72rem; }
 .ma-log {
@@ -1594,6 +1598,8 @@ body.workbench-mode .fa-legend { display: none; }
   .map-ask.open .ma-bar { flex-direction: row; }
   .ma-form input { font-size: 16px; }   /* no zoom on focus in iOS Safari */
   .ma-log { max-height: 38vh; }
+  /* solid on a phone: the legends sit right under the open box and must not show through it */
+  .ma-log, .ma-status, .ma-tries { background: var(--surface-solid); }
   .ma-row { padding-top: .32rem; padding-bottom: .32rem; }
 }
 @media print { .map-ask, .ma-pin, .ma-area-tag { display: none !important; } }

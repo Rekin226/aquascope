@@ -161,7 +161,10 @@ jobs:
 
       # Floods past (#547): reads this run's flood parquets, or the published ones it did not rebuild, and writes
       # only build/context/floods/monthly/ (grid.parquet, index.json, months/YYYY-MM.json.gz).
+      # A failure here must not hold back the mirrors this run rebuilt: the grid is built aside and swapped in
+      # whole, so a failed step leaves the published grid as it was. floods_monthly_only still shows it red.
       - name: Floods past, the monthly grid
+        continue-on-error: ${{ !inputs.floods_monthly_only }}
         run: python -m aquascope.archive.context_mirror floods-monthly --out build --repo "$HF_DATASET"
 
       - name: Write the manifest

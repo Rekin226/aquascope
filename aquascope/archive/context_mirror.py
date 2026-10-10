@@ -469,17 +469,25 @@ def build_floods_monthly(out: str | Path, *, repo_id: str = "Rekin226/aquascope-
     dates = news["start_date"].dropna().astype(str)
     del news, radar
     folder = root / "floods" / "monthly"
+    # Written beside the folder and swapped in whole, so a failure part way leaves nothing half-built to publish.
+    stage = folder.with_name("monthly.partial")
+    shutil.rmtree(stage, ignore_errors=True)
+    try:
+        (stage / "months").mkdir(parents=True)
+        _write_parquet(frame, stage / "grid.parquet")
+        payloads = fp.month_payloads(frame)
+        for month, payload in payloads.items():
+            (stage / "months" / f"{month}.json.gz").write_bytes(fp.encode_month(payload))
+        built = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        index = fp.index_payload(frame, news_first=dates.min() if len(dates) else None,
+                                 news_last=dates.max() if len(dates) else None, built=built)
+        (stage / "index.json").write_text(json.dumps(index, separators=(",", ":")))
+    except BaseException:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise
     if folder.exists():  # a month that has gone from the source must not linger
         shutil.rmtree(folder)
-    (folder / "months").mkdir(parents=True)
-    _write_parquet(frame, folder / "grid.parquet")
-    payloads = fp.month_payloads(frame)
-    for month, payload in payloads.items():
-        (folder / "months" / f"{month}.json.gz").write_bytes(fp.encode_month(payload))
-    built = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    index = fp.index_payload(frame, news_first=dates.min() if len(dates) else None,
-                             news_last=dates.max() if len(dates) else None, built=built)
-    (folder / "index.json").write_text(json.dumps(index, separators=(",", ":")))
+    stage.rename(folder)
     sizes = {"grid.parquet": (folder / "grid.parquet").stat().st_size,
              "index.json": (folder / "index.json").stat().st_size,
              "months": sum(p.stat().st_size for p in (folder / "months").glob("*.json.gz"))}

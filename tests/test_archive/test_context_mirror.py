@@ -241,6 +241,30 @@ def test_floods_monthly_reads_what_this_run_built_before_the_archive(tmp_path, m
     assert info["rows"] == 1
 
 
+def test_floods_monthly_leaves_nothing_half_built_when_it_fails(tmp_path, monkeypatch):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from aquascope.context import floods_past as fp
+
+    src = tmp_path / "src"
+    src.mkdir()
+    pq.write_table(pa.table({"start_date": ["2021-07-14"], "lat": [1.0], "lon": [1.0]}), src / "gs.parquet")
+    pq.write_table(pa.table({"lat": [1.0], "lon": [1.0], "year": [2021], "month": [7], "n": [4]}), src / "ms.parquet")
+    cm.build_floods_monthly(tmp_path, groundsource=src / "gs.parquet", microsoft=src / "ms.parquet")
+    before = (tmp_path / "context" / "floods" / "monthly" / "index.json").read_text()
+
+    def boom(payload):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(fp, "encode_month", boom)
+    with pytest.raises(OSError):
+        cm.build_floods_monthly(tmp_path, groundsource=src / "gs.parquet", microsoft=src / "ms.parquet")
+    floods = tmp_path / "context" / "floods"
+    assert sorted(p.name for p in floods.iterdir()) == ["monthly"]  # no partial folder to publish
+    assert (floods / "monthly" / "index.json").read_text() == before
+
+
 def test_the_workflow_builds_the_monthly_grid_and_can_build_only_it():
     yaml = pytest.importorskip("yaml")
     path = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "mirror-context.yml"

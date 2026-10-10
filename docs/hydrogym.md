@@ -118,9 +118,12 @@ respected, tokens and seconds per task, the total cost, errors and timeouts
 (each in its own column; both count as wrong), and
 correct-per-expected-branch.
 
-**Cost.** `PRICES_USD_PER_MTOK` in `aquascope/gym/bench.py` is a small
-table of list prices (USD per million input and output tokens; mid-2026:
-Claude Sonnet 5 at 2 and 10, Opus 5 at 5 and 25, Haiku 4.5 at 1 and 5).
+**Cost.** `PRICES_USD_PER_MTOK` in `aquascope/gym/bench.py` holds the Claude
+rows of the package's one price table, `aquascope.ai_engine.providers.PRICES`
+(USD per million input and output tokens). As of October 2026: Opus 5.5 at 4
+and 20, Sonnet 5.5 at 2 and 10, Haiku 5.5 at 0.10 and 0.50. The older ids the
+results below were run on keep their rates: Sonnet 5 at 2 and 10, Opus 5 at 5
+and 25, Haiku 4.5 at 1 and 5.
 Prices change, cache and batch discounts are not modelled, and a model that
 is not in the table gets no estimate rather than a guess.
 

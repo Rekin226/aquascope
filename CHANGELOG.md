@@ -40,8 +40,19 @@ All notable changes to AquaScope are documented here.
 - A GIF of the time bar credits the layers on it (GEOGLOWS for the river status), not NASA GIBS alone.
 - The map's legends stack in one place (Floods ahead, the lit river's key, Floods past, then the river status), the layers keep one order (river status, Floods past, rivers, Floods ahead, gauges), and Floods past shows the latest twelve months on record when the river status opens the map on a month after them.
 - On a phone the map's attribution starts folded to its (i), so the time bar never sits on it.
+- **Current Claude models.** `--provider anthropic` now defaults to `claude-opus-5-5`, and the picker offers `claude-opus-5-5`, `claude-sonnet-5-5` and `claude-haiku-5-5`. The Studio showcase records on `claude-sonnet-5-5` by default.
+- **One price table.** `aquascope.ai_engine.providers.PRICES` lists the current Claude models and the older ids that recorded results ran on. The gym and the Studio showcase now read it instead of keeping their own copies.
 
 ### Fixed
+- **Claude in `aquascope ingest` and the repair bot.** An Anthropic key no longer goes to an OpenAI-style `/chat/completions` URL: both now build the client for the provider they resolved.
+- **Timeouts and dropped connections are retried.** They are now retried twice with backoff, instead of failing a role on the first try. A Studio role whose reply never arrived used to fall back to keyless without saying why.
+- **The `openai` SDK's errors reach the Analyst's recovery.** A 413 now shrinks the context and a 429 waits, as they already did over urllib. Its own retries are off, so the waits are not doubled.
+- **A reply cut off at its output limit is no longer used as if it were complete.**
+  - A Studio or Solve role whose reply was cut off runs keyless, and the timeline records `model_truncated`.
+  - In Ask, a tool call cut off mid-arguments is not run, and a cut-off answer says it was cut off.
+- **Ask the map on reasoning models.** The model reader's output ceiling rose from 700 to 4,000 tokens, because Claude's current models and gpt-oss spend part of it reasoning before they reply.
+- **Sonnet 5 costs.** The Studio showcase priced Claude Sonnet 5 at $3/$15 per million tokens; its list price is $2/$10. Recordings already made keep the rate they were written with.
+- The "No LLM configured" message names `ANTHROPIC_API_KEY`, which is the first key the CLI looks for.
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
 
 ## [0.26.0] - 2026-10-09

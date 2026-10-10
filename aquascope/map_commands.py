@@ -1267,6 +1267,10 @@ def parse_model_reply(reply: Any, today: str | date | None = None) -> dict[str, 
     return checked
 
 
+#: The output ceiling for one map-command call (reasoning plus the JSON reply).
+MODEL_MAX_TOKENS = 4000
+
+
 def model_command(text: str, *, provider: str | None = None, model: str | None = None, api_key: str | None = None,
                   base_url: str | None = None, context: str = "", today: str | date | None = None,
                   client: Any = None) -> dict[str, Any]:
@@ -1283,8 +1287,10 @@ def model_command(text: str, *, provider: str | None = None, model: str | None =
         client = make_client(cfg["api_key"], cfg["base_url"], provider=cfg["provider"])
         model, provider = cfg["model"], cfg["provider"]
     prompt = model_prompt(context, today)
+    # The ceiling counts reasoning as well as the reply on models that think before answering (Claude's current
+    # models always do, as does gpt-oss on Groq), so it is set well above the few hundred tokens a reply needs.
     resp = client.chat.completions.create(
-        model=model, temperature=0, max_tokens=700,
+        model=model, temperature=0, max_tokens=MODEL_MAX_TOKENS,
         messages=[{"role": "system", "content": prompt["system"]}, {"role": "user", "content": str(text)}],
     )
     content = resp.choices[0].message.content or ""

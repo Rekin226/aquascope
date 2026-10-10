@@ -483,6 +483,21 @@ def status_bulletin(month: str | None = None, sources: list[str] | None = None,
     return res
 
 
+def flood_warnings(bbox: list[float] | None = None, min_rp: int = 2, limit: int = 50) -> dict[str, Any]:
+    """Floods ahead: the river reaches the GEOGLOWS v2 global forecast expects to reach their 2-year flow in the next
+    15 days, from the daily published issue (Strahler order 5 and up, ensemble-mean daily peak against the reach's
+    own 2- to 100-year flows). bbox is [west, south, east, north] in degrees; min_rp keeps only reaches at or above
+    that return period (2, 5, 10, 25, 50 or 100). Returns the issue date, counts by class, the reaches (highest class
+    first, at most limit) with peak flow, peak day, class and the share of members that agree, and the method. MODEL
+    OUTPUT, not an official warning: always say so when you quote it."""
+    from aquascope.archive import warnings
+
+    try:
+        return warnings.flood_warnings(bbox, min_rp=min_rp, limit=limit)
+    except ValueError as exc:
+        return {"error": str(exc)}
+
+
 def flow_forecast(lat: float | None = None, lon: float | None = None, river_id: int | None = None,
                   station: str | None = None, days: int = 15, quick: bool = False) -> dict[str, Any]:
     """The next 15 days of river flow from two global models, MODELLED: GEOGLOWS v2 (ECMWF 51-member ensemble
@@ -1249,6 +1264,7 @@ def build_server():
     server.tool()(flow_status)
     server.tool()(flow_forecast)
     server.tool()(status_bulletin)
+    server.tool()(flood_warnings)
     server.tool()(correct_to_gauge)
     server.tool()(watch_digest)
     server.tool()(place_context)

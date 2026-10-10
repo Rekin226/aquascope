@@ -12,6 +12,9 @@ export const RIVERS_CREDIT = {
   attribution: 'GEOGLOWS v2 stream network from <a href="https://registry.opendata.aws/geoglows-v2/">TDX-Hydro</a> (NGA)',
   licence: "CC BY-SA 4.0, shown and not republished",
 };
+// The same credit, short, for the map's attribution line (the network is on by default since #545).
+export const RIVERS_ATTRIBUTION =
+  'Rivers: <a href="https://registry.opendata.aws/geoglows-v2/">GEOGLOWS v2, TDX-Hydro (NGA)</a>, CC BY-SA 4.0';
 export const RECORD_CREDIT = "GEOGLOWS v2 retrospective simulation (GEOGloWS ECMWF Streamflow Service), CC BY 4.0";
 
 // The network on the globe (#545). The tiles hold orders 6 and up at every

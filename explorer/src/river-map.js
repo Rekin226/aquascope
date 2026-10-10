@@ -5,11 +5,11 @@
 // the click to the outlet, with the dams on it as small squares.
 
 import { $, EMPTY_FC, state } from "./core.js?v=__BUILD__";
-import { currentBasemap, ensureShapeImages, fitBoundsTo, map, panelPadding } from "./map.js?v=__BUILD__";
+import { currentBasemap, ensureShapeImages, fitBoundsTo, map, panelPadding, waitingForIdle } from "./map.js?v=__BUILD__";
 import {
-  FLOW_FPS, FLOW_STEPS, STREAMS_PMTILES, cumulativeKm, damsGeoJSON, flowDash, flowOpacity, highlightColor,
-  highlightOpacity, highlightWidth, lineBounds, lineUpTo, networkStates, networkSummary, riverOpacity, riverTheme,
-  riverWidth,
+  FLOW_FPS, FLOW_STEPS, RIVERS_ATTRIBUTION, STREAMS_PMTILES, cumulativeKm, damsGeoJSON, flowDash, flowOpacity,
+  highlightColor, highlightOpacity, highlightWidth, lineBounds, lineUpTo, networkStates, networkSummary, riverOpacity,
+  riverTheme, riverWidth,
 } from "./river-core.js?v=__BUILD__";
 
 let added = false;
@@ -20,7 +20,11 @@ const NET = { source: "river-net", sourceLayer: "streams" };
 // The plain network, the moving dash, then the lit network: all one source and one layout, so MapLibre
 // cuts each tile once for the lot. Butt caps, because a round cap turns a zero-length dash into a dot.
 const LAYOUT = { "line-cap": "butt", "line-join": "round" };
-const NET_LAYERS = ["river-net-line", "river-flow", "river-hl-casing", "river-hl-line"];
+// No transitions on the dash layer, for any of its properties: a paint change restarts MapLibre's default
+// 300 ms transition on every transitionable property of the layer, not only the one changed. (The style's sky
+// and projection transitions restart too and cannot be turned off per layer; map.js waitingForIdle covers them.)
+const FLOW_STILL = Object.fromEntries(["color", "opacity", "width", "gap-width", "offset", "blur", "translate", "dasharray"]
+  .map((p) => [`line-${p}-transition`, { duration: 0, delay: 0 }]));
 
 const reducedMotion = () => Boolean(globalThis.matchMedia && globalThis.matchMedia("(prefers-reduced-motion: reduce)").matches);
 // The flow animation is on unless the reader asked for less motion; the layer menu turns it either way.
@@ -45,16 +49,17 @@ export function ensureRiverLayers() {
     const th = theme();
     if (globalThis.pmtiles && !map.getSource("river-net")) {
       // promoteId: the tiles carry riverId as a property, and feature-state needs it as the feature's id.
-      map.addSource("river-net", { type: "vector", url: `pmtiles://${STREAMS_PMTILES}`, promoteId: "riverId" });
+      // attribution: the network is on every visitor's screen now, so its CC BY-SA credit sits in the map's own
+      // attribution line, not only in the layer rail's credits.
+      map.addSource("river-net", { type: "vector", url: `pmtiles://${STREAMS_PMTILES}`, promoteId: "riverId",
+        attribution: RIVERS_ATTRIBUTION });
       const line = (id, paint) => map.addLayer({
         id, type: "line", source: "river-net", "source-layer": "streams",
         layout: { ...LAYOUT, visibility: "none" }, paint,
       }, before);
       line("river-net-line", { "line-color": th.line, "line-opacity": riverOpacity(), "line-width": riverWidth() });
-      // No transition on the dash: MapLibre's default 300 ms one would keep the map repainting at full frame
-      // rate (and never "idle") while the phase steps at FLOW_FPS.
       line("river-flow", { "line-color": th.flow, "line-opacity": flowOpacity(), "line-width": riverWidth(),
-        "line-dasharray": flowDash(0), "line-dasharray-transition": { duration: 0, delay: 0 } });
+        "line-dasharray": flowDash(0), ...FLOW_STILL });
       line("river-hl-casing", { "line-color": th.casing, "line-opacity": highlightOpacity(0.85),
         "line-width": highlightWidth(2) });
       line("river-hl-line", { "line-color": highlightColor(th), "line-opacity": highlightOpacity(1),
@@ -117,7 +122,7 @@ function restyle() {
   const paint = (id, prop, v) => { if (map.getLayer(id)) map.setPaintProperty(id, prop, v); };
   paint("river-net-line", "line-color", th.line);
   paint("river-flow", "line-color", th.flow);
-  paint("river-flow", "line-dasharray-transition", { duration: 0, delay: 0 });
+  for (const [prop, v] of Object.entries(FLOW_STILL)) paint("river-flow", prop, v);
   paint("river-hl-casing", "line-color", th.casing);
   paint("river-hl-line", "line-color", highlightColor(th));
   paint("river-trace-casing", "line-color", th.casing);
@@ -170,7 +175,9 @@ function syncFlow() {
   if (flowFrame) return;
   const tick = (now) => {
     flowFrame = requestAnimationFrame(tick);
-    if (now - flowLast < 1000 / FLOW_FPS) return;
+    // The dash holds still while anything waits for the map to settle (map.js waitingForIdle): the basemap swap,
+    // the time bar's play, a GIF frame. Each step is a style change, and the map is never idle while they come.
+    if (now - flowLast < 1000 / FLOW_FPS || waitingForIdle()) return;
     flowLast = now;
     flowStep = (flowStep + 1) % FLOW_STEPS;
     try { map.setPaintProperty("river-flow", "line-dasharray", flowDash(flowStep)); } catch { /* style swapping */ }

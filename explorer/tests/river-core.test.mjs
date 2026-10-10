@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import {
   FLOW_PERIOD, FLOW_STEPS, HL, RIVER_THEMES, cumulativeKm, damFacts, damName, damsGeoJSON, flowDash, flowOpacity,
   highlightColor, highlightOpacity, highlightWidth, lineBounds, lineUpTo, networkStates, networkSummary, notableDams,
-  riverOpacity, riverTheme, riverWidth, snapLine, STREAMS_PMTILES,
+  RIVERS_ATTRIBUTION, riverOpacity, riverTheme, riverWidth, snapLine, STREAMS_PMTILES,
 } from "../src/river-core.js";
 
 test("snapLine says where the click landed, or that no stream is near", () => {
@@ -172,4 +172,10 @@ test("networkSummary says Python's numbers in a few words", () => {
   assert.equal(small.down, "5,000 reaches and on");
   assert.equal(small.cut, "");
   assert.deepEqual(networkSummary(null), { up: "", down: "", cut: "" });
+});
+
+test("the map's own attribution line credits the river network and its licence", () => {
+  assert.match(RIVERS_ATTRIBUTION, /TDX-Hydro/);
+  assert.match(RIVERS_ATTRIBUTION, /CC BY-SA 4\.0/);
+  assert.match(RIVERS_ATTRIBUTION, /href="https:\/\/registry\.opendata\.aws\/geoglows-v2\/"/);
 });

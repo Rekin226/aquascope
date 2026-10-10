@@ -271,9 +271,10 @@ shade with the basemap. **Rivers (GEOGLOWS)** in the rail turns it off, and a
 link can carry `rivers=0`.
 
 **Flow direction (animated)** moves a short dash along each line the way the
-water goes (TDX-Hydro draws every reach from its downstream end). It steps at a
-steady 20 frames a second, stops while the tab is hidden, and starts off when
-the system asks for reduced motion; the rail turns it either way.
+water goes (TDX-Hydro draws every reach from its downstream end). It steps 20
+times a second, stops while the tab is hidden, holds still while the map
+settles (a basemap change, a frame of the time bar's play or of a GIF), and
+starts off when the system asks for reduced motion; the rail turns it either way.
 
 A click lights the river up on the map. As soon as the point snaps, its reach is
 ringed; then the reaches that drain to it turn a stronger blue and its way to
@@ -287,7 +288,7 @@ reaches, so the 20,000 that drain the most are lit (the trunk and the big
 tributaries) and the key says where that cut fell. The ids come from
 `aquascope.rivers.upstream_ids` and `downstream_ids`, drawn with MapLibre
 feature-state on `riverId`. The network geometry is CC BY-SA 4.0: shown here,
-never republished.
+never republished, and credited in the map's own attribution line.
 
 The same functions are `aquascope river snap|record|area|trace|dams|upstream|downstream`
 and the MCP tools `snap_to_river`, `reach_record`, `upstream_area`,

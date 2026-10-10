@@ -1421,6 +1421,9 @@ def cmd_now(args: argparse.Namespace) -> None:
     if lat is None and not args.station and args.river_id is None:
         print("  Give LAT LON, --station SOURCE/ID or --river-id ID.")
         sys.exit(2)
+    if getattr(args, "plume", False):
+        _now_plume(args, lat, lon)
+        return
     try:
         res = nownext.now(lat, lon, station=args.station, river_id=args.river_id, days=args.days, date=args.date,
                           with_forecast=not args.status_only, correct=not args.raw, history=not args.quick)
@@ -1522,6 +1525,47 @@ def cmd_watch(args: argparse.Namespace) -> None:
     for err in res.get("errors") or []:
         print(f"  Skipped {err['item']}: {err['error']}")
     print("  Forecasts are model output (GEOGLOWS v2, CC BY 4.0). Flood events: Groundsource (CC BY 4.0).")
+
+
+def _now_plume(args: argparse.Namespace, lat: float | None, lon: float | None) -> None:
+    """`aquascope now --plume`: the reach's ensemble plume and its threshold classes (#556)."""
+    from aquascope import nownext
+
+    if args.station:
+        print("  --plume is for a river reach: give LAT LON or --river-id ID.")
+        sys.exit(2)
+    try:
+        res = nownext.plume(args.river_id, lat=lat, lon=lon, days=args.days, history=True)
+    except ValueError as exc:
+        print(f"  {exc}")
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    if res.get("error"):
+        print(f"  {res['error']}")
+        return
+    print(f"  River reach {res['river_id']}, GEOGLOWS run of {res.get('issued')} ({res.get('n_members')} members, "
+          "modelled)")
+    print(f"  {'day':<10}  {'median':>9}  {'middle half':>19}  {'full range':>19}  class")
+    for i, day in enumerate(res["date"]):
+        def cell(k: str, i: int = i) -> str:
+            v = (res.get(k) or [None] * (i + 1))[i]
+            return "-" if v is None else f"{v:,.4g}"
+
+        rp = res["class_daily"][i]
+        print(f"  {day:<10}  {cell('median'):>9}  {cell('p25') + ' - ' + cell('p75'):>19}  "
+              f"{cell('min') + ' - ' + cell('max'):>19}  {f'{rp}-yr' if rp else '-'}")
+    thr = res.get("thresholds") or {}
+    if thr.get("q"):
+        pairs = ", ".join(f"{t}-yr {q:,.4g}" for t, q in zip(thr["return_periods"], thr["q"]))
+        print(f"  Thresholds from {thr.get('source')}: {pairs}")
+    else:
+        print("  No return-period flows for this reach, so no classes.")
+    print(f"  {res.get('sentence')}")
+    if res.get("members_line"):
+        print(f"  {res['members_line']}")
+    print(f"  {res.get('attribution')}. Model output, not an official warning.")
 
 
 def _now_table(fc: dict) -> list[tuple]:
@@ -4164,6 +4208,9 @@ def main() -> None:
     p_now.add_argument("--status-only", action="store_true", help="Only today against normal, no forecast")
     p_now.add_argument("--quick", action="store_true",
                        help="Only the two forecasts: no thresholds or correction (skips the simulated record)")
+    p_now.add_argument("--plume", action="store_true",
+                       help="The FEWS view of the reach: the 51-member plume day by day, its return-period classes "
+                       "and the members past each")
     p_now.add_argument("--csv", default=None, help="Write the forecast to this CSV")
     p_now.add_argument("--json", action="store_true")
     p_watch = sub.add_parser("watch", help="What changed at watched gauges, reaches and areas since a date")

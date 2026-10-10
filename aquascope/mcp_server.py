@@ -535,6 +535,23 @@ def flow_forecast(lat: float | None = None, lon: float | None = None, river_id: 
         return {"error": str(exc)}
 
 
+def forecast_plume(river_id: int | None = None, lat: float | None = None, lon: float | None = None,
+                   days: int = 15) -> dict[str, Any]:
+    """The FEWS view of a river reach, MODELLED (#556): the GEOGLOWS v2 ensemble plume for the next 15 days, day
+    by day from the 51 members (median, middle half 25-75 %, full range, ensemble mean), each day's return-period
+    class (2 to 100 years, the Floods ahead rule: the ensemble mean against the reach's own return-period flows),
+    the peak and its class, and how many members reach each return-period flow. Give a river_id, or a point
+    (snapped to the main river there). Quote the members_line with the class, and say it is a model forecast."""
+    from aquascope import nownext
+
+    try:
+        res = nownext.plume(river_id, lat=lat, lon=lon, days=days, history=True)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    res.pop("members_at", None)
+    return res
+
+
 def correct_to_gauge(source: str, station_id: str, river_id: int | None = None, days: int = 15) -> dict[str, Any]:
     """The GEOGLOWS forecast at a gauge's river reach corrected to the gauge's own record (flow-duration quantile
     mapping per calendar month, the MFDC-QM / SABER family), and how much to trust it: KGE (with r, alpha, beta),
@@ -1348,6 +1365,7 @@ def build_server():
     server.tool()(model_to_lean_on)
     server.tool()(flow_status)
     server.tool()(flow_forecast)
+    server.tool()(forecast_plume)
     server.tool()(status_bulletin)
     server.tool()(flood_warnings)
     server.tool()(correct_to_gauge)

@@ -110,8 +110,9 @@ opens the panel on that tab as before; a link without one opens the card.
 Other layers can open a card with their own content (a flood cell, a warning reach)
 through `openCard()` in `explorer/src/map-card.js` (also `actions.openMapCard`):
 pass `id`, `lngLat`, `what`, `title`, and any of `sub`, `status`, `spark`, `figure`,
-`credit`, `details` and `buttons`; it returns a handle with `update(patch)` and
-`close()`.
+`plume` (an ensemble forecast, in place of the sparkline and the number; see
+[the FEWS view](#forecast-points-and-the-plume-the-fews-view)), `credit`, `details`
+and `buttons`; it returns a handle with `update(patch)` and `close()`.
 
 ## Ask the map
 
@@ -602,16 +603,85 @@ days** walks the map's date through them and back. **About** gives the method an
 what it is not; the row's toggle (or the Overlays row) turns it off. On the globe the glows
 are small and soft, so the river status reads through them.
 
-Clicking a reach opens a card on the map: the class, the peak and its day against the
-2-year flow, how many of the 51 members agree, the gauges on that reach, and **The
-15-day forecast**, which opens the place's Now tab. Before the first daily issue is
-published, its legend row is one muted line that says so and nothing else changes.
+Clicking a reach opens the map card with its class, the peak and its day against the
+2-year flow, and the ensemble plume ([the FEWS view](#forecast-points-and-the-plume-the-fews-view));
+**Details** opens the place's Now tab, and a button per gauge on that reach opens the
+gauge. Before the first daily issue is published, its legend row is one muted line that
+says so and nothing else changes.
 
 The numbers come from the daily `flood-warnings` workflow (`aquascope.archive.warnings`,
 [details](archive.md#floods-ahead-forecastswarnings)): Strahler order 5 and up plus
 every reach a gauge sits on, the ensemble mean's daily peak against GEOGLOWS's own
 return periods. The same issue is `aquascope warnings [--bbox W S E N]` and the MCP
 tool `flood_warnings`.
+
+## Forecast points and the plume (the FEWS view)
+
+Forecasters read Delft-FEWS and the GloFAS and EFAS viewers this way: forecast points
+that change colour as thresholds are passed, and one click for the ensemble hydrograph.
+The Explorer does the same with two kinds of point, in the Floods ahead colours.
+
+![The plume for a river reach in Paraná, Brazil, expected to reach its 25-year flow](img/globe/fews-reach-card.png)
+
+- **Floods ahead reaches** keep their glow and their lines. A click opens the map card
+  with the plume for that reach.
+- **Forecast gauges**: the Archive gauges in the daily forecast job's latest issue
+  (about 200 a day, corrected to each gauge's record). Each is classed by its forecast
+  against the gauge's own 2- to 100-year flows. Past the gauge clusters (zoom 7) each
+  gets a ring: solid in the class colour when its forecast reaches the 2-year flow or
+  more, a thin slate ring when it stays below. Further out only the gauges that reach a
+  threshold show, as small solid marks. While their rings are in view, a **Forecast
+  gauges** row in "On the map" says how many there are and how many pass the 2-year
+  flow; its toggle hides them. Their card shows the corrected plume,
+  with the gauge's own record before the run. A record that stops more than a week
+  before the run is left out, and the card says the day it stops.
+
+![A forecast gauge's card: the plume corrected to the gauge](img/globe/fews-gauge-card.png)
+
+**The plume** shows the next 15 days from the 51 members of the GEOGLOWS ensemble
+(the high-resolution run left out), averaged to UTC days:
+
+- the median (the line), the middle half (25th to 75th percentile, darker shading) and
+  the full range (lowest to highest member, lighter shading),
+- the return-period flows as dashed lines in their class colours, labelled on the
+  right. Every line under the forecast is drawn, and the next one above when it is
+  near. A line far above is named at the top right instead ("2-yr ↑ 51.5"),
+- a strip under the days in each day's class colour (the ensemble mean against the
+  thresholds, the Floods ahead rule),
+- the gauge's record as a blue line with a dot a day, for a gauge,
+- the run's first day in bold under a dotted line, and the map's date as a pale band
+  when it falls inside.
+
+The axis follows the bulk of the ensemble. When one wet member runs far above the
+rest, the full range is cut at the top and its real top is named ("range runs to
+146 ↑"). Under the chart, one line says how many members reach the 2-year flow, the
+reach's class and the highest flow any member reaches (the CLI and the MCP tool list
+every return period). At a gauge it says how well the correction scored on the
+hindcast, and plainly when it scored worse than the raw model.
+
+A reach's card reads the same run the map shows, against the layer's own thresholds,
+so the card and the colours agree. If that run does not answer, the newest one is
+used, and the card says the map's colours come from the older run. The plume fills
+within a few seconds: a light worker reads the members (about 70 kB) from the
+GEOGLOWS API.
+
+**The colours.** The classes are Floods ahead's: 2, 5, 10, 25, 50 and 100-year flow,
+yellow to deep purple, getting darker with the class. "Below the 2-year flow" is a
+quiet slate (`#7d8fa1`), and on the map it is a hollow ring, so it differs by shape as
+well as by colour. `explorer/tests/fews-core.test.mjs` checks the palette by
+simulating protanopia, deuteranopia and tritanopia (Machado, Oliveira and Fernandes
+2009, full severity). Neighbouring classes stay at least 10 CIE76 units apart under
+each, and the slate at least 20 from every class. Lightness falls with the class for
+normal vision. Under protanopia only the 25- and 50-year pair swap lightness, and they
+stay far apart in hue.
+
+The numbers come from `aquascope.nownext`: `plume()` for a reach (the members by
+`aquascope.rivers.forecast_ensemble`, reduced day by day by `ensemble_daily()`) and
+`forecast_points()` for the gauges (from `forecasts/issued/<date>.parquet`).
+`threshold_class()` applies the Floods ahead rule. The same plume is
+`aquascope now --river-id ID --plume` (or `LAT LON --plume`) and the MCP tool
+`forecast_plume`. Model output, under CC BY 4.0 (the forecast) and CC BY-NC-SA 4.0
+(GEOGLOWS's return periods), and not an official warning.
 
 ## The monthly bulletin
 

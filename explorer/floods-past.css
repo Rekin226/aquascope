@@ -1,8 +1,7 @@
-/* Floods past (#547): the legend card on the map and the popup a clicked cell
-   opens. Its own file so the layer's look lives next to its module. */
+/* "On the map" (#543): the one legend for every layer (map-legend.js), and
+   the popup a clicked Floods past cell opens (#547). */
 
-/* Legend cards for map layers stack in the bottom-left corner, above the scale
-   and the attribution, and move right with the rail like the map controls. */
+/* Bottom left, above the scale and the attribution; it moves right with the rail like the map controls. */
 .map-legends {
   position: absolute; left: 10px; bottom: 70px; z-index: 5;
   display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
@@ -10,44 +9,110 @@
 }
 body.rail-open .map-legends { left: calc(var(--rail-w) + var(--gap) + 10px); }
 .map-legends > * { pointer-events: auto; }
-/* Where the time bar would run into the stack, it goes to the top, beside the map tools. */
+body.workbench-mode .map-legends { display: none; }
+/* Where the time bar would run into it, it goes to the top, beside the map tools. */
 @media (max-width: 1100px) {
   .map-legends { top: 10px; bottom: auto; left: 56px; }
 }
 
-.fp-legend {
-  width: 16.5rem; max-width: calc(100vw - 24px);
+.map-legend {
+  width: 17rem; max-width: calc(100vw - 24px); max-height: calc(100vh - 220px); overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-1);
-  padding: .45rem .55rem .4rem; font-size: .76rem; color: var(--ink);
+  font-size: .74rem; color: var(--ink); padding: .2rem .3rem .3rem;
 }
-.fp-legend[hidden] { display: none; }
-.fp-head { display: flex; align-items: center; gap: .15rem; }
-.fp-head h3 { margin: 0 auto 0 0; font-size: .8rem; font-weight: 680; letter-spacing: .01em; }
-.fp-sub { margin: .05rem 0 .3rem; font-size: .72rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.fp-legend.busy .fp-sub::after {
-  content: ""; display: inline-block; width: .5rem; height: .5rem; margin-left: .35rem; border-radius: 50%;
-  border: 1.5px solid var(--muted); border-right-color: transparent; vertical-align: -1px;
-  animation: fp-spin .8s linear infinite;
+.map-legend[hidden] { display: none; }
+.map-legend.folded { width: auto; padding: 0; border-radius: 999px; }
+
+/* the head: a chip that folds the legend away and brings it back */
+.ml-chip {
+  font: inherit; display: flex; align-items: center; gap: .35rem; width: 100%;
+  padding: .28rem .35rem; border: 0; background: none; color: var(--ink-2); cursor: pointer;
+  font-size: .7rem; font-weight: 620; letter-spacing: .02em; text-transform: uppercase; border-radius: var(--radius-xs);
 }
-@keyframes fp-spin { to { transform: rotate(360deg); } }
-.fp-row { display: flex; align-items: center; gap: .4rem; padding: .08rem 0; }
+.ml-chip:hover { color: var(--ink); }
+.ml-chip > svg { width: 13px; height: 13px; flex: none; }
+.ml-chip-text { flex: 1 1 auto; text-align: left; white-space: nowrap; }
+.ml-chev { display: inline-grid; place-items: center; width: 14px; height: 14px; flex: none; color: var(--muted);
+  transition: transform .15s ease; }
+.ml-chev svg { width: 12px; height: 12px; }
+.ml-chip[aria-expanded="true"] .ml-chev { transform: rotate(90deg); }
+.map-legend.folded .ml-chip { padding: .32rem .6rem .32rem .5rem; text-transform: none; letter-spacing: 0; font-size: .74rem; }
+
+/* a row: toggle, mark, name and a few words; open, its key */
+.ml-rows { display: flex; flex-direction: column; }
+.ml-row { border-top: 1px solid var(--line-soft); }
+.ml-line { display: flex; align-items: center; gap: .4rem; min-height: 26px; padding: 0 .2rem 0 .3rem; }
+.ml-toggle { margin: 0; width: 13px; height: 13px; flex: none; accent-color: var(--blue); cursor: pointer; }
+.ml-clear {
+  font: inherit; width: 13px; height: 13px; padding: 0; flex: none; display: grid; place-items: center;
+  border: 0; background: none; color: var(--muted); cursor: pointer; font-size: .9rem; line-height: 1;
+}
+.ml-clear:hover { color: var(--ink); }
+.ml-mark { width: 22px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.ml-name {
+  font: inherit; color: inherit; flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: .4rem;
+  padding: .25rem 0; border: 0; background: none; text-align: left; cursor: pointer;
+}
+.ml-name.static { cursor: default; }
+.ml-title { font-weight: 600; white-space: nowrap; }
+.ml-sum { color: var(--muted); font-size: .7rem; font-variant-numeric: tabular-nums; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
+.ml-name .ml-chev { align-self: center; margin-left: auto; }
+.ml-name[aria-expanded="true"] .ml-chev { transform: rotate(90deg); }
+.ml-name:hover .ml-title { color: var(--blue); }
+.ml-row.off .ml-title, .ml-row.empty .ml-title { font-weight: 500; color: var(--muted); }
+.ml-row.off .ml-mark, .ml-row.empty .ml-mark { opacity: .4; filter: grayscale(1); }
+
+.ml-body { padding: .1rem .45rem .5rem calc(13px + 22px + 1.1rem); }
+.ml-body p { margin: .3rem 0 0; line-height: 1.38; }
+.ml-when { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.ml-src { color: var(--muted); font-size: .66rem; }
+.ml-link { font: inherit; padding: 0; border: 0; background: none; color: var(--blue); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px; }
+.ml-actions { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: .4rem; }
+.ml-btn {
+  font: inherit; font-size: .7rem; padding: .16rem .55rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--blue);
+}
+.ml-btn:hover { background: var(--bg-soft); }
+.ml-btn[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.ml-btn.quiet { color: var(--ink-2); }
+.ml-check { display: flex; align-items: center; gap: .35rem; margin-top: .35rem; color: var(--ink-2); cursor: pointer; }
+.ml-check input { margin: 0; accent-color: var(--blue); }
+
+/* the marks */
+.sl-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; height: 8px; }
+.sl-bar i { background: var(--c); border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(127, 140, 153, .18); }
+.sl-bar i:first-child { border-radius: 4px 2px 2px 4px; }
+.sl-bar i:last-child { border-radius: 2px 4px 4px 2px; }
+.sl-bar.mini { width: 22px; height: 7px; gap: 1px; }
+.sl-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: .64rem; margin-top: .15rem; }
+.ml-dot { width: 8px; height: 8px; border-radius: 50%; background: #2b7fc4; box-shadow: 0 0 0 1.5px #fff, 0 0 0 2.2px rgba(29,58,85,.25); }
+.ml-dot.now { background: conic-gradient(#a6611a 0 25%, #dfc27d 0 50%, #80cdc1 0 75%, #018571 0); }
+.ml-dots { display: grid; grid-template-columns: repeat(5, 1fr); justify-items: center; }
+.ml-dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1.5px #fff; }
+.ml-line-mark { display: block; width: 20px; height: 3px; border-radius: 2px;
+  background: repeating-linear-gradient(90deg, var(--c) 0 7px, color-mix(in srgb, var(--c) 35%, #fff) 7px 9px); }
+.rk-pair { display: inline-flex; gap: 2px; }
+.rk-pair i { width: 9px; height: 3px; border-radius: 2px; }
+.rk-row { display: flex; align-items: center; gap: .35rem; }
+.rk-row b { font-weight: 600; white-space: nowrap; }
+.rk-sw { width: 16px; height: 4px; border-radius: 2px; flex: none; display: inline-block; }
 .fp-key { width: 15px; height: 15px; flex: none; }
+.ml-mark .fp-key { width: 21px; height: 15px; }
+.fp-row { display: flex; align-items: center; gap: .4rem; padding: .1rem 0; margin-top: .25rem; }
 .fp-what { flex: 1 1 auto; white-space: nowrap; }
-.fp-n { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .72rem; }
-.fp-note { margin: .25rem 0 0; font-size: .7rem; color: var(--warn-ink); }
-.fp-foot { margin: .3rem 0 0; font-size: .66rem; }
-.fp-btn {
-  font: inherit; width: 24px; height: 24px; display: grid; place-items: center; padding: 0;
-  border: 1px solid transparent; border-radius: var(--radius-xs); background: transparent; color: var(--ink-2); cursor: pointer;
-}
-.fp-btn:hover { background: var(--bg-soft); border-color: var(--line); color: var(--ink); }
-.fp-btn svg { width: 13px; height: 13px; }
-.fp-play { color: var(--blue); }
-.fp-play[aria-pressed="true"] { background: var(--blue); color: #fff; border-color: var(--blue); }
-.fp-link {
-  font: inherit; padding: 0; border: 0; background: none; color: var(--blue); cursor: pointer; text-decoration: underline;
-  text-underline-offset: 2px;
+.fp-n { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .7rem; }
+.fp-note { color: var(--warn-ink); }
+.ml-body .fa-scale { margin: .3rem 0 .1rem; }
+.ml-mark .fa-mini { display: inline-flex; gap: 0; border-radius: 3px; overflow: hidden; }
+.ml-mark .fa-mini i { width: 4px; height: 7px; border-radius: 0; }
+.ml-body .swatches { margin-top: .2rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .map-legends, .ml-chev { transition: none; }
 }
 
 /* the popup of a clicked cell, above the time bar and the legend */
@@ -66,28 +131,14 @@ body.rail-open .map-legends { left: calc(var(--rail-w) + var(--gap) + 10px); }
 .fp-pop-note { margin: .25rem 0; font-size: .72rem; }
 .fp-pop-src { margin: .3rem 0 .35rem; font-size: .66rem; }
 
-/* A phone: the inspector is a bottom sheet and the time bar sits above it, so
-   the legend moves up under the map tools, and says less. */
+/* A phone: the map is a strip above the sheet, so the legend starts as one small chip at the top right and,
+   opened, stays inside a quarter of the screen. */
 @media (max-width: 520px) {
   .map-legends { top: 10px; bottom: auto; left: auto; right: 10px; align-items: flex-end; }
   body.rail-open .map-legends { left: auto; }
-  .fp-legend { width: 12.6rem; padding: .35rem .45rem .3rem; font-size: .72rem; }
-  .fp-foot { font-size: .62rem; }
+  .map-legend { width: min(15rem, calc(100vw - 72px)); max-height: 34vh; }
   .fp-events { max-height: 3.7rem; }
   /* the map is a strip here: while a cell's card is open, the legend steps aside for it */
   body.fp-pop-open .map-legends { visibility: hidden; }
   .fp-pop-src { display: none; }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .map-legends { transition: none; }
-  .fp-legend.busy .fp-sub::after { animation: none; }
-}
-
-/* Folded: the two marks and the months on one line. */
-.fp-mini { display: none; margin: .1rem 0 0; align-items: center; gap: .3rem; flex-wrap: wrap; font-size: .72rem; color: var(--ink-2); }
-.fp-mini .fp-key { width: 12px; height: 12px; }
-.fp-mini-when { flex-basis: 100%; font-variant-numeric: tabular-nums; }
-.fp-legend.folded { width: max-content; min-width: 11rem; max-width: min(16rem, calc(100vw - 72px)); }
-.fp-legend.folded .fp-mini { display: flex; }
-.fp-legend.folded .fp-sub, .fp-legend.folded .fp-row, .fp-legend.folded .fp-foot, .fp-legend.folded .fp-note { display: none; }

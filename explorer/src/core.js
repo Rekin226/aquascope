@@ -81,6 +81,7 @@ export const state = {
   mapOk: false, marker: null, basinsOn: false,
   // the river network is on from the start (#545); flowOn (river-map.js) follows prefers-reduced-motion
   riversOn: true,
+  gaugesOn: true,      // the legend's Gauges row can hide every gauge mark (map.js setGaugesVisible)
   // layers (#232)
   overlays: new Set(), opacity: {}, date: null,
   // time (#522): the map date above is the one every dated layer follows; these

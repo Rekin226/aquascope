@@ -8,7 +8,7 @@ import {
   basemapById, creditLines, defaultDate, overlayById, recordYears, yearsSinceLast,
 } from "./layers.js?v=__BUILD__";
 import {
-  areaSelectActive, currentBasemap, globeSupported, refreshMapData, setBasemap, setGaugeStyle, setGlobe,
+  areaSelectActive, currentBasemap, globeSupported, refreshMapData, setBasemap, setGaugeStyle, setGaugesVisible, setGlobe,
   setHeatmap, setHillshade, setOverlay, setOverlayOpacity, setTerrain, startAreaSelect,
 } from "./map.js?v=__BUILD__";
 import { syncTimeBar } from "./time-ui.js?v=__BUILD__";
@@ -24,6 +24,8 @@ import { loadSkillGrades, skillLegendHtml } from "./evidence.js?v=__BUILD__";
 import { ensureNowStatus, nowLegendHtml } from "./now-map.js?v=__BUILD__";
 import { bulletinLegendHtml, ensureBulletinStatus } from "./bulletin.js?v=__BUILD__";
 import { areaWatchButton } from "./watch.js?v=__BUILD__";
+import { refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
+import { STATUS_CLASSES } from "./now-core.js?v=__BUILD__";
 
 // A tiny swatch standing in for each basemap, so eight radio rows become two
 // columns of chips you can pick from at a glance.
@@ -172,6 +174,49 @@ function gaugeLegendHtml(mode) {
   return "";
 }
 
+// ── the Gauges row in "On the map" (map-legend.js) ──────────────────────────
+
+const fmtK = (n) => (n >= 10000 ? `${Math.round(n / 1000)}k` : n.toLocaleString("en-GB"));
+const nowReady = () => state.gaugeStyle === "now" && state.nowStatus && state.nowMeta && !state.nowMeta.missing;
+
+function gaugesMark() {
+  if (nowReady()) return '<i class="ml-dot now" aria-hidden="true"></i>';
+  return '<i class="ml-dot" aria-hidden="true"></i>';
+}
+
+function gaugesSummary() {
+  if (nowReady()) return `${fmtK(state.nowStatus.size)} today vs normal`;
+  const style = GAUGE_STYLES.find((g) => g.id === state.gaugeStyle);
+  const n = state.stations.length;
+  return `${n ? `${fmtK(n)}, ` : ""}by ${(style ? style.label : "agency").toLowerCase()}`;
+}
+
+function gaugesBody() {
+  if (nowReady()) {
+    const dots = STATUS_CLASSES.map((c) => `<i style="--c:${c.color}" title="${escapeHtml(c.label)}"></i>`).join("");
+    return `<span class="ml-dots">${dots}</span>` +
+      '<div class="sl-ends"><span>much below</span><span>normal</span><span>much above</span></div>' +
+      `<p class="ml-when">Measured flow today against the same day in other years, at ${state.nowStatus.size.toLocaleString("en-GB")} ` +
+      "gauges with a fresh record. The rest wait in the light clusters; zoom in to see them.</p>" +
+      '<p class="ml-src">Colour the gauges another way in Layers.</p>';
+  }
+  const html = gaugeLegendHtml(state.gaugeStyle);
+  return (html ? `<div class="swatches">${html}</div>` : "") +
+    '<p class="ml-when">The light circles are groups of gauges: click one to zoom in.</p>' +
+    '<p class="ml-src">Colour the gauges another way in Layers.</p>';
+}
+
+function registerGaugesRow() {
+  registerLegendRow({
+    id: "gauges", title: "Gauges",
+    mark: gaugesMark,
+    summary: gaugesSummary,
+    on: () => state.gaugesOn !== false,
+    toggle: (on) => { setGaugesVisible(on); refreshLegend("gauges"); },
+    body: gaugesBody,
+  });
+}
+
 // "Best model skill" (#518) reads skill/model_skill.parquet on first use; the dots are grey until it has
 // loaded, and stay grey (with a legend that says why) when the table is not published yet.
 function ensureSkillColours() {
@@ -188,6 +233,7 @@ function buildGaugeStyle() {
   select.value = state.gaugeStyle;
   const apply = () => {
     setGaugeStyle(state.gaugeStyle);
+    refreshLegend("gauges");
     $("gauge-legend").innerHTML = gaugeLegendHtml(state.gaugeStyle);
     $("gauge-legend").hidden = state.gaugeStyle === "source";
     $("rail-sources").classList.toggle("dimmed", !["source", "now"].includes(state.gaugeStyle));
@@ -199,6 +245,7 @@ function buildGaugeStyle() {
         refreshMapData();
         setGaugeStyle("now");
         $("gauge-legend").innerHTML = gaugeLegendHtml("now");
+        refreshLegend("gauges");
       });
     }
     // Last month's status reads the latest bulletin the first time it is picked (#523).
@@ -337,6 +384,7 @@ export function initLayerUI() {
   buildOverlays();
   actions.setOverlay = toggleOverlay;
   actions.setBasemap = chooseBasemap;
+  registerGaugesRow();
   buildGaugeStyle();
   buildAreaSelect();
   renderCredits();

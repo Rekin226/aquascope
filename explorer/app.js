@@ -20,7 +20,8 @@ import { initFloodsPast } from "./src/floods-past.js?v=__BUILD__";  // Floods pa
 import { initStatusLayer } from "./src/status-layer.js?v=__BUILD__";
 import { buildRail, syncRail, updateCount } from "./src/rail.js?v=__BUILD__";
 import { setBasinsVisible } from "./src/basins.js?v=__BUILD__";
-import { setRiversVisible } from "./src/river-map.js?v=__BUILD__";
+import { registerRiverRows, setRiversVisible } from "./src/river-map.js?v=__BUILD__";
+import { initMapLegend } from "./src/map-legend.js?v=__BUILD__";  // "On the map": one legend for every layer (#543)
 import { clearRiver, initRiver } from "./src/river.js?v=__BUILD__";
 import { initNow } from "./src/now.js?v=__BUILD__";
 import { initBulletin } from "./src/bulletin.js?v=__BUILD__";
@@ -171,6 +172,8 @@ function bringMapOnline(url) {
   } else if (url.view) {
     setView(url.view);
   }
+  initMapLegend();
+  registerRiverRows();
   initLayerUI();
   initTimeBar();
   initStatusLayer(url);   // the world river status (#544), before the layers are applied

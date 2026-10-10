@@ -4,7 +4,8 @@
 // way to the sea (feature-state on riverId); the trace to the sea grows from
 // the click to the outlet, with the dams on it as small squares.
 
-import { $, EMPTY_FC, state } from "./core.js?v=__BUILD__";
+import { $, EMPTY_FC, escapeHtml, state } from "./core.js?v=__BUILD__";
+import { openLegendRow, refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
 import { currentBasemap, ensureShapeImages, fitBoundsTo, map, waitingForIdle } from "./map.js?v=__BUILD__";
 import {
   FLOW_FPS, FLOW_STEPS, RIVERS_ATTRIBUTION, STREAMS_PMTILES, cumulativeKm, damsGeoJSON, flowDash, flowOpacity,
@@ -146,6 +147,7 @@ function syncVisibility() {
 
 export function setRiversVisible(on) {
   state.riversOn = Boolean(on);
+  refreshLegend("rivers");
   const toggle = $("toggle-rivers");
   if (toggle) toggle.checked = state.riversOn;
   if (!ensureRiverLayers() || !map.getLayer("river-net-line")) return;
@@ -160,6 +162,7 @@ let flowLast = 0;
 
 export function setFlowOn(on) {
   state.flowOn = Boolean(on);
+  refreshLegend("rivers");
   const toggle = $("toggle-flow");
   if (toggle) toggle.checked = state.flowOn;
   syncVisibility();
@@ -239,29 +242,59 @@ export function lightRiverNetwork(reach, load) {
   });
 }
 
-// The key on the map: while the routing table loads, a progress line; then what the colours mean, in a few
-// words, with where the network comes from; a close button clears it.
+// ── the rows in "On the map" (map-legend.js) ───────────────────────────────
+
+// The lit river's key: while the routing table loads, a progress line; then what the colours mean, in a few
+// words, with where the network comes from. Its row only shows while a river is lit; × clears it.
+let keyState = null;
 function showKey(what) {
-  const el = $("river-key");
-  if (!el) return;
-  if (!what) { el.hidden = true; el.replaceChildren(); return; }
+  keyState = what || null;
+  if (keyState) openLegendRow("river-lit", true);
+  else refreshLegend("river-lit");
+}
+
+function litBody() {
   const th = theme();
-  const close = `<button type="button" class="river-key-x" aria-label="Clear the lit river" title="Clear">×</button>`;
-  if (what.loading) {
+  if (!keyState || keyState.loading) {
     const first = state.workerReady ? "" : "Starting the engine, then ";
-    el.innerHTML = `<span class="spinner" aria-hidden="true"></span>` +
-      `<span>${first}${first ? "finding" : "Finding"} what drains here and the way to the sea…</span>${close}`;
-  } else if (what.error) {
-    el.innerHTML = `<span>${what.error}</span>${close}`;
-  } else {
-    const s = networkSummary(what.net);
-    el.innerHTML =
-      `<span class="rk-row"><i class="rk-sw" style="background:${th.up}"></i><b>Drains here</b> <span class="muted">${s.up}</span></span>` +
-      `<span class="rk-row"><i class="rk-sw" style="background:${th.down}"></i><b>To the sea</b> <span class="muted">${s.down}</span></span>` +
-      `<span class="rk-src muted">GEOGLOWS v2 routing, modelled${s.cut ? `; ${s.cut}` : ""}</span>${close}`;
+    return `<p class="ml-when"><span class="spinner" aria-hidden="true"></span> ${first}${first ? "finding" : "Finding"} what drains here and the way to the sea…</p>`;
   }
-  el.querySelector(".river-key-x").addEventListener("click", () => clearRiverNetwork());
-  el.hidden = false;
+  if (keyState.error) return `<p class="ml-when">${escapeHtml(keyState.error)}</p>`;
+  const s = networkSummary(keyState.net);
+  return `<p class="rk-row"><i class="rk-sw" style="background:${th.up}"></i><b>Drains here</b> <span class="muted">${escapeHtml(s.up)}</span></p>` +
+    `<p class="rk-row"><i class="rk-sw" style="background:${th.down}"></i><b>To the sea</b> <span class="muted">${escapeHtml(s.down)}</span></p>` +
+    `<p class="ml-src">GEOGLOWS v2 routing, modelled${s.cut ? `; ${escapeHtml(s.cut)}` : ""}</p>`;
+}
+
+function railToggle(id, on) {
+  const t = $(id);
+  if (!t) return;
+  t.checked = Boolean(on);
+  t.dispatchEvent(new Event("change"));
+}
+
+export function registerRiverRows() {
+  const th = () => theme();
+  registerLegendRow({
+    id: "river-lit", title: "This river",
+    shown: () => Boolean(keyState),
+    mark: () => `<span class="rk-pair"><i style="background:${th().up}"></i><i style="background:${th().down}"></i></span>`,
+    summary: () => (keyState && keyState.loading ? "finding its network" : "drains here, to the sea"),
+    body: litBody,
+    act: (name) => { if (name === "clear") clearRiverNetwork(); },
+  });
+  registerLegendRow({
+    id: "rivers", title: "Rivers",
+    mark: () => `<i class="ml-line-mark" style="--c:${th().line}"></i>`,
+    summary: () => (state.flowOn ? "by size, flowing" : "by size"),
+    on: () => Boolean(state.riversOn),
+    toggle: (on) => railToggle("toggle-rivers", on),
+    body: () => '<p class="ml-when">The GEOGLOWS v2 network: wider for bigger rivers, small streams as you zoom in. ' +
+      "Click one to light what drains to it and its way to the sea.</p>" +
+      `<label class="ml-check"><input type="checkbox" data-act="flow" ${state.flowOn ? "checked" : ""}> The water's direction, moving</label>` +
+      '<p class="ml-src">TDX-Hydro (NGA), CC BY-SA 4.0, shown and not republished.</p>',
+    act: (name, el) => { if (name === "flow") railToggle("toggle-flow", el.checked); },
+  });
 }
 
 // ── the trace to the sea ─────────────────────────────────────────────────────

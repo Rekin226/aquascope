@@ -644,6 +644,33 @@ def river_status_summary(month: str | None = None) -> dict[str, Any]:
     return _summary(month)
 
 
+def map_scout(west: float | None = None, south: float | None = None, east: float | None = None,
+              north: float | None = None, month: str | None = None, published: bool = False,
+              pins: int = 10) -> dict[str, Any]:
+    """What stands out on the world's rivers, found by fixed rules over the AquaScope map layers (the Explorer's
+    Scout, #563): the largest connected areas much above or much below normal in the GEOGLOWS monthly river
+    status map, the reaches the daily Floods ahead issue expects to pass their highest return-period flows, the
+    month's strongest groups of floods in the news (Groundsource) and seen by radar, groups of Archive gauges
+    much above or below normal today, and gauges where no scored model beats the gauge's mean flow. Each
+    finding has a title, a reason, its numbers (formatted by code), lat and lon, and its source. Optional box
+    (west, south, east, north in degrees) and month (YYYY-MM). published=True reads the daily scout file
+    instead of scanning, which adds record checks against the same calendar month since 1990 (status) and
+    2000 (floods in the news). Model output and news reports, not warnings."""
+    from aquascope import map_scout as ms
+
+    box = [west, south, east, north]
+    view = {"bbox": box} if all(v is not None for v in box) else None
+    pins = max(1, min(int(pins), 25))
+    if published:
+        doc = ms.published()
+        if not doc:
+            return {"available": False, "error": "No scout file is published yet (scout/latest.json)."}
+        return {"available": True, "mode": "daily", **ms.from_published(doc, view, max_pins=pins)}
+    res = ms.scan(view, month, max_pins=pins)
+    res.pop("findings", None)   # the picks are the answer; the full candidate list is large
+    return {"available": True, "mode": "live", **res}
+
+
 def map_command(text: str, resolve: bool = False) -> dict[str, Any]:
     """Read a plain-English request about the AquaScope Explorer's map ("trace the Nile to the sea",
     "September 2023", "turn on floods past", "where are rivers much above normal in South Asia last July")
@@ -1395,6 +1422,7 @@ def build_server():
     server.tool()(river_status_month)
     server.tool()(river_status_summary)
     server.tool()(map_command)
+    server.tool()(map_scout)
     server.tool()(list_analyses)
     server.tool()(analyse_table)
     server.tool()(station_view)

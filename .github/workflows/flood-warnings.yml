@@ -8,6 +8,8 @@ name: Flood warnings
 #   forecasts/warnings/<date>.parquet    the same, kept by the forecast's start date
 #   forecasts/warnings/manifest.json     issue date, counts by class, method, thresholds, what it is not
 # It writes ONLY under forecasts/warnings/ in the Archive dataset. Model output, not an official warning.
+# After it, the Explorer's Scout (#563) is run over the world (aquascope.map_scout daily) and published under scout/
+# only: scout/latest.json and scout/<date>.json, what stands out today with its reasons and record checks.
 # Same HF_TOKEN secret as the harvest. Locally:
 #   python -m aquascope.archive.warnings run --out build --max-chunks 40
 
@@ -92,6 +94,19 @@ jobs:
         if: env.HF_TOKEN != '' && inputs.smoke == '' && (github.event_name == 'schedule' || inputs.publish == true)
         run: python -m aquascope.archive.warnings publish --out build
 
+      # Scout (#563): what stands out today, from this issue and the other published layers (river status since 1990
+      # for the record checks, Floods past, today's gauges, the evidence table). Runs even when the issue failed,
+      # on the published one; never on a smoke run. Writes and publishes scout/ only.
+      - name: Today's scout
+        if: always() && inputs.smoke == ''
+        run: python -m aquascope.map_scout daily --out build --warnings build
+
+      - name: Publish scout/ to Hugging Face
+        if: >-
+          always() && env.HF_TOKEN != '' && inputs.smoke == '' && hashFiles('build/scout/latest.json') != '' &&
+          (github.event_name == 'schedule' || inputs.publish == true)
+        run: python -m aquascope.map_scout publish --out build
+
       - name: Say why a smoke run was not published
         if: inputs.smoke != ''
         run: echo "::notice::A smoke run builds and summarises but does not publish."
@@ -108,5 +123,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: flood-warnings-${{ github.run_id }}
-          path: build/forecasts/warnings/
+          path: |
+            build/forecasts/warnings/
+            build/scout/
           retention-days: 7

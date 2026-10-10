@@ -978,6 +978,37 @@ def _print_river_status(res: dict) -> None:
         print(f"  {res['attribution']} ({res['licence']})")
 
 
+def _layers_scout(args: argparse.Namespace) -> None:
+    """`aquascope layers scout`: what stands out on the map, by the Explorer's Scout rules (#563)."""
+    from aquascope import map_scout
+
+    view = {"bbox": list(args.bbox)} if args.bbox else None
+    if args.published:
+        doc = map_scout.published()
+        if not doc:
+            print("  No scout file is published yet; the daily flood-warnings workflow writes scout/latest.json.")
+            sys.exit(1)
+        res = map_scout.from_published(doc, view, max_pins=args.pins)
+        res["mode"] = "daily"
+    else:
+        res = map_scout.scan(view, args.month, max_pins=args.pins, places=not args.no_places)
+        res["mode"] = "live"
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    when = ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in (res.get("inputs") or {}).items() if v)
+    print(f"  Scout ({'the published daily file' if res['mode'] == 'daily' else 'scanned now'}; {when})\n")
+    for f in res["picks"]:
+        print(f"  {f['rank']:>2}. {f['title']}  [{f['lat']:.2f}, {f['lon']:.2f}]")
+        print(f"      {f['reason']}")
+        print(f"      Source: {f['source']}")
+    for note in res.get("notes") or []:
+        print(f"  Note: {note}")
+    if not res["picks"]:
+        print("  Nothing stands out in this view.")
+    print("\n  Rules, no model: every number formatted by aquascope.map_scout. Not a warning.")
+
+
 def cmd_layers(args: argparse.Namespace) -> None:
     """`aquascope layers`: the dated map layers and their valid dates, or the frames of a time-lapse (#522)."""
     from aquascope.map_time import dated_layers, layer_frames
@@ -995,6 +1026,9 @@ def cmd_layers(args: argparse.Namespace) -> None:
         _print_river_status(res)
         if not res.get("available"):
             sys.exit(1)
+        return
+    if args.layers_cmd == "scout":
+        _layers_scout(args)
         return
     if args.layers_cmd == "frames":
         res = layer_frames(args.layer, args.start, args.end, step=args.step, max_frames=args.max_frames)
@@ -4166,6 +4200,16 @@ def main() -> None:
                            help="Read the month's map and say in one line where the rivers are low or high, "
                                 "with each named region's share below and above normal")
     p_lstatus.add_argument("--json", action="store_true")
+    p_lscout = layers_sub.add_parser("scout", help="What stands out on the map: the largest areas much above or "
+                                     "below normal, the strongest floods ahead and past, gauges at extremes, and "
+                                     "gauges no model matches, each with its reason and source (the Explorer's Scout)")
+    p_lscout.add_argument("--bbox", nargs=4, type=float, default=None, metavar=("WEST", "SOUTH", "EAST", "NORTH"))
+    p_lscout.add_argument("--month", default=None, help="YYYY-MM for the status and Floods past layers (default: newest)")
+    p_lscout.add_argument("--pins", type=int, default=10, help="How many findings (default 10)")
+    p_lscout.add_argument("--published", action="store_true",
+                          help="Read the daily scout file (with its record checks) instead of scanning now")
+    p_lscout.add_argument("--no-places", action="store_true", help="Do not name places with the gazetteer (Photon)")
+    p_lscout.add_argument("--json", action="store_true")
     # ── map (#561) ───────────────────────────────────────────────────
     p_map = sub.add_parser("map", help="Read a plain-English request about the Explorer's map into map actions "
                            "(the keyless phrase grammar, or --llm with your own key)")

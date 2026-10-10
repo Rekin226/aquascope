@@ -8,17 +8,19 @@
 // up along the GEOGLOWS stream tiles, and the Archive gauges on those reaches
 // pulse gently. The map's date (the time bar, core.js setTime) picks the day:
 // inside the forecast's 15 days the reaches show their class on that day,
-// otherwise the 15-day peak. Clicking a reach opens a small card on the map.
+// otherwise the 15-day peak. Clicking a reach opens the map card with its
+// ensemble plume (the FEWS view, fews.js).
 
 import { CONFIG } from "../config.js?v=__BUILD__";
-import { $, actions, clickLayers, escapeHtml, onTime, setTime, sourceStyle, state } from "./core.js?v=__BUILD__";
+import { $, clickLayers, escapeHtml, onTime, setTime, state } from "./core.js?v=__BUILD__";
 import { renderCredits } from "./layer-ui.js?v=__BUILD__";
+import { initFews, openReachCard, setFewsVisible } from "./fews.js?v=__BUILD__";
 import { refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
 import { map } from "./map.js?v=__BUILD__";
 import { STREAMS_PMTILES } from "./river-core.js?v=__BUILD__";
 import {
-  FLOODS_CREDIT, FLOOD_CLASSES, FORECAST_DAYS, NONE, addDays, classColor, countsFor, dayIndex, gaugesFor, idsByClass,
-  issueLine, legendLine, lineColorExpr, lineFilterExpr, pointsFor, reachFacts, shortDay,
+  FLOODS_CREDIT, FLOOD_CLASSES, FORECAST_DAYS, NONE, addDays, countsFor, dayIndex, gaugesFor, idsByClass,
+  issueLine, legendLine, lineColorExpr, lineFilterExpr, pointsFor, shortDay,
 } from "./floods-ahead-core.js?v=__BUILD__";
 
 export { FLOODS_CREDIT };
@@ -43,7 +45,6 @@ let data = null;          // { manifest, features, byId }
 let loading = null;
 let visible = true;
 let day = -1;             // the forecast day on show, -1 for the 15-day peak
-let popup = null;
 let pulseFrame = 0;
 let playToken = 0;
 let gaugeRetry = 0;
@@ -365,36 +366,9 @@ function onClick(e) {
   openCard(hit, e.lngLat);
 }
 
+// The map card (#548) answers, with the reach's ensemble plume (the FEWS view, #556, fews.js).
 function openCard(f, lngLat) {
-  const p = f.properties;
-  const facts = reachFacts(p, day, (data.manifest && data.manifest.members) || 51);
-  const [lon, lat] = f.geometry.coordinates;
-  const gauges = String(p.gauges || "").split(";").filter(Boolean).map((key) => {
-    const r = state.byKey.get(key);
-    const name = r ? r.name || key.split("/")[1] : key;
-    const who = r ? sourceStyle(r.source).label : key.split("/")[0];
-    return `<button type="button" class="fa-gauge" data-key="${escapeHtml(key)}">${escapeHtml(name)} <span class="muted">${escapeHtml(who)}</span></button>`;
-  });
-  const html = `<div class="fa-card">
-    <div class="fa-card-head"><i style="background:${classColor(p.rp)}"></i><strong>${escapeHtml(facts.title)}</strong></div>
-    <p>${escapeHtml(facts.peak)}</p>
-    ${facts.today ? `<p>${escapeHtml(facts.today)}</p>` : ""}
-    ${facts.agree ? `<p class="muted">${escapeHtml(facts.agree)}</p>` : ""}
-    ${gauges.length ? `<div class="fa-gauges"><span class="muted">Gauge${gauges.length > 1 ? "s" : ""} here</span>${gauges.join("")}</div>` : ""}
-    <div class="fa-card-actions"><button type="button" class="btn tiny primary fa-open">The 15-day forecast</button></div>
-    <p class="fa-foot muted">${escapeHtml(facts.reach)} GEOGLOWS model forecast, not an official warning.</p>
-  </div>`;
-  if (popup) popup.remove();
-  popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "300px", offset: 10, className: "fa-popup" })
-    .setLngLat(lngLat || [lon, lat]).setHTML(html).addTo(map);
-  const el = popup.getElement();
-  el.querySelector(".fa-open").addEventListener("click", () => {
-    popup.remove();
-    actions.selectPoint(lat, lon, { tab: "now" });
-  });
-  for (const b of el.querySelectorAll(".fa-gauge")) {
-    b.addEventListener("click", () => { popup.remove(); actions.selectStation(b.dataset.key, { fly: false }); });
-  }
+  openReachCard(f, lngLat, { day, manifest: data.manifest });
 }
 
 // ── on and off ──────────────────────────────────────────────────────────────
@@ -410,7 +384,8 @@ export function setFloodsVisible(on) {
   renderCredits();
   const toggle = $("toggle-floods");
   if (toggle) toggle.checked = visible;
-  if (!visible) { stopPlay(); if (popup) popup.remove(); }
+  if (!visible) stopPlay();
+  setFewsVisible(visible);
   if (state.mapOk && map) {
     for (const id of ALL) {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis());
@@ -426,6 +401,7 @@ export function initFloodsAhead() {
   registerRow();
   state.floodsOn = visible;
   renderCredits();
+  initFews();   // the forecast gauges and the plume card (#556)
   const toggle = $("toggle-floods");
   if (toggle) {
     toggle.checked = visible;

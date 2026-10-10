@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import {
   FLOODS_PAST_BASE, MAX_MONTHS, NEWS_CREDIT, RADAR_CREDIT, addMonths, cellBbox, cellsGeoJSON, eventDates, fmtCount,
   legendLines, monthLabel, monthOf, monthsBetween, monthsOnRecord, newsWeight, placeLabel, radarCovers, radarWeight,
-  readFloodsParam, windowFor, windowLabel, windowTotals,
+  readFloodsParam, windowFor, windowLabel, windowTotals, areaLabel, radarFill, newsFill,
 } from "../src/floods-past-core.js";
 
 const INDEX = {
@@ -114,4 +114,23 @@ test("the layer is on unless the link says fp=0, and credits its two sources wit
   assert.equal(NEWS_CREDIT.licence, "CC BY 4.0");
   assert.equal(RADAR_CREDIT.licence, "MIT");
   assert.ok(FLOODS_PAST_BASE.startsWith("https://huggingface.co/datasets/Rekin226/aquascope-gauges/resolve/main/context/"));
+});
+
+test("small counts stay quiet: radar cells clear below 200 detections, a lone news report faint", () => {
+  for (const dark of [false, true]) {
+    const ramp = radarFill(dark);
+    assert.equal(ramp[3], Math.log(201));
+    assert.match(ramp[4], /,0\)$/);
+    assert.match(ramp[ramp.length - 1], dark ? /^rgba\(205,190,254/ : /^rgba\(76,29,149/);
+  }
+  const news = newsFill();
+  assert.match(news[4], /0\.28\)$/);
+  assert.match(news[news.length - 1], /,1\)$/);
+});
+
+test("an event's area reads plainly, small ones included", () => {
+  assert.equal(areaLabel(120.4), "120 km²");
+  assert.equal(areaLabel(0.72), "under 1 km²");
+  assert.equal(areaLabel(null), "");
+  assert.equal(areaLabel(""), "");
 });

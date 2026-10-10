@@ -408,7 +408,14 @@ def flood_events_month(month: Any = None, *, start: Any = None, end: Any = None,
         return failed("floods_past", sources, exc)
     where = "in this box" if box is not None else "worldwide"
     when = span_label(months)
-    bits = [f"{_plural(n_news, 'flood event')} in the news {where}, {when}"]
+    news_first = str(news_span.get("first") or "")[:7]
+    news_last = str(news_span.get("last") or "")[:7]
+    if news_first and news_last and not any(news_first <= m <= news_last for m in months):
+        # Nothing in the news here is not the same as no floods: the record does not reach these months.
+        bits = [f"No news record {where} for {when}: news runs from {month_label(news_first)} to "
+                f"{month_label(news_last)} only"]
+    else:
+        bits = [f"{_plural(n_news, 'flood event')} in the news {where}, {when}"]
     if not radar_months:
         bits.append(f"radar covers {month_label(RADAR_PERIOD[0])} to {month_label(RADAR_PERIOD[1])} only")
     elif n_radar:

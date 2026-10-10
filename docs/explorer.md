@@ -168,7 +168,9 @@ Where floods actually happened, on the globe, from the moment the page opens.
 Both are summed per half-degree cell (about 55 km) and month. At the world view
 they are two heat maps, radar over news; from zoom 4.5 each cell is a circle
 (news) and a shaded square (radar). Sizes and shades grow with the logarithm of
-the count, so one very reported city does not drown out a region.
+the count, so one very reported city does not drown out a region, and small
+counts stay quiet: a cell with a single report is a faint dot, and radar cells
+with fewer than 200 detections (a few hectares) are left clear.
 
 The layer follows the time bar, like every dated layer:
 

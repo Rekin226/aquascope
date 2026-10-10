@@ -4,7 +4,7 @@
 /* Legend cards for map layers stack in the bottom-left corner, above the scale
    and the attribution, and move right with the rail like the map controls. */
 .map-legends {
-  position: absolute; left: 10px; bottom: 58px; z-index: 5;
+  position: absolute; left: 10px; bottom: 70px; z-index: 5;
   display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
   pointer-events: none; transition: left .16s ease;
 }
@@ -46,7 +46,8 @@ body.rail-open .map-legends { left: calc(var(--rail-w) + var(--gap) + 10px); }
   text-underline-offset: 2px;
 }
 
-/* the popup of a clicked cell */
+/* the popup of a clicked cell, above the time bar and the legend */
+.fp-popup { z-index: 7; }
 .fp-popup .maplibregl-popup-content { padding: .55rem .7rem .5rem; }
 .fp-pop { font-size: .76rem; line-height: 1.4; color: var(--ink); min-width: 13rem; }
 .fp-pop-head { display: flex; flex-direction: column; gap: .05rem; margin: 0 1rem .3rem 0; }
@@ -68,6 +69,10 @@ body.rail-open .map-legends { left: calc(var(--rail-w) + var(--gap) + 10px); }
   body.rail-open .map-legends { left: auto; }
   .fp-legend { width: 12.6rem; padding: .35rem .45rem .3rem; font-size: .72rem; }
   .fp-foot { font-size: .62rem; }
+  .fp-events { max-height: 3.7rem; }
+  /* the map is a strip here: while a cell's card is open, the legend steps aside for it */
+  body.fp-pop-open .map-legends { visibility: hidden; }
+  .fp-pop-src { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

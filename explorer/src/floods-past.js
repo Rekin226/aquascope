@@ -18,16 +18,16 @@ import { renderCredits } from "./layer-ui.js?v=__BUILD__";
 import { openModal } from "./shell.js?v=__BUILD__";
 import { callLight } from "./worker-client.js?v=__BUILD__";
 import {
-  CELLS, CELL_MINZOOM, FLOODS_PAST_BASE, HEAT_MAXZOOM, MAX_MONTHS, NEWS_COLOR, NEWS_STROKE, POINTS, RADAR_COLOR,
+  CELLS, CELL_MINZOOM, DARK_BASEMAPS, FLOODS_PAST_BASE, HEAT_MAXZOOM, MAX_MONTHS, NEWS_COLOR, NEWS_STROKE, POINTS, RADAR_COLOR,
   RADAR_PERIOD, cellBbox, cellsGeoJSON, eventDates, fmtCount, legendLines, monthLabel, monthsBetween,
-  monthsOnRecord, newsHeat, newsRadius, newsWeight, placeLabel, radarFill, radarHeat, radarWeight,
-  readFloodsParam, windowFor, windowLabel,
+  monthsOnRecord, newsFill, newsHeat, newsRadius, newsStroke, newsWeight, placeLabel, radarFill, radarHeat, radarWeight,
+  readFloodsParam, windowFor, windowLabel, areaLabel,
 } from "./floods-past-core.js?v=__BUILD__";
 
 const SLOTS = ["a", "b"];
 const LAYER_IDS = [...SLOTS.flatMap((s) => [`fp-heat-radar-${s}`, `fp-heat-news-${s}`, `fp-radar-${s}`, `fp-news-${s}`]),
   "fp-sel-line"];
-const OPACITY = { news: 0.85, stroke: 0.6, newsHeat: 0.85, radarHeat: 0.8 };
+const OPACITY = { news: 0.9, stroke: 1, newsHeat: 0.85, radarHeat: 0.8 };
 const EMPTY = { type: "FeatureCollection", features: [] };
 
 let index;                 // undefined: not read yet; null: not published; else index.json
@@ -41,6 +41,7 @@ let shown = null;          // the GeoJSON on the front slot, re-added after a ba
 let popup = null;
 let popupRun = 0;
 
+const narrow = () => Boolean(globalThis.matchMedia && matchMedia("(max-width: 520px)").matches);
 const still = () => Boolean(globalThis.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 const fadeMs = () => (still() ? 0 : 480);
 
@@ -106,7 +107,7 @@ function ensureLayers() {
     // closer in, radar shades its half-degree cells and news is a circle per cell, and a click lands on either.
     map.addLayer({
       id: `fp-radar-${s}`, type: "fill", source: `fp-${s}`, minzoom: CELL_MINZOOM, filter: CELLS,
-      paint: { "fill-color": radarFill(), "fill-opacity": k, "fill-opacity-transition": t, "fill-antialias": false },
+      paint: { "fill-color": radarFill(DARK_BASEMAPS.has(state.basemap)), "fill-opacity": k, "fill-opacity-transition": t, "fill-antialias": false },
     }, belowLabels() || before);
     // News under radar at the world view: the reports are everywhere people are, the radar glow is where
     // the water was, and it should not be buried under the reports.
@@ -122,9 +123,9 @@ function ensureLayers() {
       filter: ["all", POINTS, [">", ["get", "news"], 0]],
       layout: { "circle-sort-key": ["-", 0, ["get", "news"]] },
       paint: {
-        "circle-color": NEWS_COLOR, "circle-radius": newsRadius(),
+        "circle-color": newsFill(), "circle-radius": newsRadius(),
         "circle-opacity": OPACITY.news * k, "circle-opacity-transition": t,
-        "circle-stroke-color": NEWS_STROKE, "circle-stroke-width": 0.8,
+        "circle-stroke-color": newsStroke(), "circle-stroke-width": 0.8,
         "circle-stroke-opacity": OPACITY.stroke * k, "circle-stroke-opacity-transition": t,
       },
     }, before);
@@ -194,9 +195,9 @@ async function redraw() {
   if (!state.floodsPast) { renderLegend(); return; }
   const idx = await loadIndex();
   if (!state.floodsPast) return;
-  syncDated(idx);
   const win = windowFor(timeState(), idx ? (idx.news && idx.news.last ? idx.news.last.slice(0, 7) : idx.last) : null);
   current = win;
+  syncDated(idx);
   renderLegend();
   if (!idx) return;
   const months = monthsOnRecord(idx, win.months);
@@ -219,17 +220,21 @@ async function redraw() {
 }
 
 // The time bar shows itself for a dated layer; Floods past is one while it is on.
+// A date after the record shows the latest twelve months, which the legend says,
+// so the bar's "only" note is kept for when the layer really has nothing to show.
 function syncDated(idx) {
-  const had = datedExtras.has("floods-past");
+  const had = datedExtras.get("floods-past");
   if (state.floodsPast && idx) {
     datedExtras.set("floods-past", {
       id: "floods-past", label: "Floods past", time: true, monthly: true,
-      since: `${idx.first}-01`, until: `${idx.last}-01`,
+      since: `${idx.first}-01`, until: current.latest ? undefined : `${idx.last}-01`,
     });
   } else {
     datedExtras.delete("floods-past");
   }
-  if (had !== datedExtras.has("floods-past")) syncTimeBar({ layersChanged: true });
+  const now = datedExtras.get("floods-past");
+  if (Boolean(had) !== Boolean(now)) syncTimeBar({ layersChanged: true });
+  else if (now && had.until !== now.until) syncTimeBar();
 }
 
 export function setFloodsPast(on, { write = true } = {}) {
@@ -251,7 +256,7 @@ export function setFloodsPast(on, { write = true } = {}) {
 const legendHost = () => $("fp-legend");
 
 // Folded, the legend is one line (the two marks and the months): how it starts on a phone, where the map is small.
-let folded = Boolean(globalThis.matchMedia && matchMedia("(max-width: 520px)").matches);
+let folded = narrow();
 let noteText = "";
 function setNote(text) { noteText = text || ""; renderLegend(); }
 function setBusy(on) { const c = $("fp-legend"); if (c) c.classList.toggle("busy", Boolean(on)); }
@@ -388,7 +393,7 @@ function eventsHtml(res, months) {
   if (events.length) {
     const more = (news.events_found || 0) - events.length;
     html += `<ul class="fp-events">${events.map((e) => `<li><span>${escapeHtml(eventDates(e.start, e.end))}</span>` +
-      `<span class="muted">${e.area_km2 ? `${fmtCount(Math.round(e.area_km2))} km²` : ""}</span></li>`).join("")}</ul>`;
+      `<span class="muted">${areaLabel(e.area_km2)}</span></li>`).join("")}</ul>`;
     if (more > 0) html += `<p class="fp-pop-note muted">and ${fmtCount(more)} more news events</p>`;
   }
   const byMonth = (res.radar && res.radar.by_month) || {};
@@ -401,7 +406,11 @@ function eventsHtml(res, months) {
   return html;
 }
 
+let lastClick = null;
 async function onCellClick(e) {
+  // A cell with both marks hears one click twice (once per layer): answer it once.
+  if (e.originalEvent && e.originalEvent === lastClick) return;
+  lastClick = e.originalEvent || null;
   // A gauge under the click wins: it has its own handler.
   if (map.queryRenderedFeatures(e.point, { layers: ["points", "clusters"].filter((id) => map.getLayer(id)) }).length) return;
   const f = (e.features || [])[0];
@@ -414,12 +423,20 @@ async function onCellClick(e) {
   const deg = (index && index.deg) || 0.5;
   const [w0, s0] = cellBbox(p.row, p.col, deg);
   const coords = [w0 + deg / 2, s0 + deg / 2];
-  popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "300px", className: "fp-popup", offset: 6 })
+  // On a phone the map is a strip above the sheet: bring the cell up near its top and open the card below it.
+  const phone = narrow();
+  if (phone) map.panBy([0, e.point.y - 18], { duration: still() ? 0 : 300 });
+  popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: phone ? "min(300px, calc(100vw - 32px))" : "300px",
+    className: "fp-popup", offset: 6, ...(phone ? { anchor: "top" } : {}) })
     .setLngLat(coords)
     .setHTML(cellCard(p, months, '<p class="fp-pop-note muted" role="status">Reading the events…</p>'))
     .addTo(map);
   const opened = popup;
-  popup.on("close", () => { if (popup === opened) { popup = null; popupRun++; outlineCell(null); } });
+  document.body.classList.add("fp-pop-open");
+  popup.on("close", () => {
+    document.body.classList.remove("fp-pop-open");
+    if (popup === opened) { popup = null; popupRun++; outlineCell(null); }
+  });
   const bbox = cellBbox(p.row, p.col, (index && index.deg) || 0.5);
   outlineCell(bbox);
   let res;

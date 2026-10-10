@@ -220,12 +220,33 @@ export function newsRadius() {
   ];
 }
 
-// The radar cell's colour: transparent for a handful of detections, deep violet for a million (the
-// fill's own opacity is left free for the crossfade between months).
-export function radarFill() {
-  return ["interpolate", ["linear"], ln1p("radar"),
-    0, "rgba(167,139,250,0)", Math.log(1 + 10), "rgba(167,139,250,0.1)", Math.log(1 + 1000), "rgba(139,92,246,0.26)",
-    Math.log(1 + 100000), "rgba(109,40,217,0.5)", Math.log(1 + 1000000), "rgba(76,29,149,0.66)"];
+// The radar cell's colour: clear below 200 detections (a few hectares of 20 m pixels, which three cells in
+// four have in any month and which would otherwise tint whole countries), deepening to violet by two million
+// (some 800 km² of water). On a dark basemap the ramp climbs to a lighter violet instead, so the wettest
+// cells stand out rather than sink. The fill's own opacity is left free for the crossfade between months.
+export const DARK_BASEMAPS = new Set(["dark", "satellite", "satellite-recent", "daily"]);
+
+export function radarFill(dark = false) {
+  const stops = dark
+    ? ["rgba(196,181,253,0)", "rgba(167,139,250,0.12)", "rgba(167,139,250,0.24)", "rgba(180,158,252,0.4)",
+      "rgba(205,190,254,0.55)"]
+    : ["rgba(167,139,250,0)", "rgba(167,139,250,0.16)", "rgba(139,92,246,0.32)", "rgba(109,40,217,0.5)",
+      "rgba(76,29,149,0.68)"];
+  const at = [200, 2000, 20000, 200000, 2000000];
+  return ["interpolate", ["linear"], ln1p("radar"), ...at.flatMap((n, i) => [Math.log(1 + n), stops[i]])];
+}
+
+// A news circle fades with a small count, so a cell with one report is a whisper and a cell with fifty is
+// solid: closer in, every inhabited cell has a report or two, and equal dots would be confetti. The colour
+// carries this, not circle-opacity, which the crossfade between months uses.
+export function newsFill() {
+  return ["interpolate", ["linear"], ln1p("news"),
+    Math.log(2), "rgba(232,130,12,0.28)", Math.log(1 + 10), "rgba(232,130,12,0.7)", Math.log(1 + 50), "rgba(232,130,12,1)"];
+}
+
+export function newsStroke() {
+  return ["interpolate", ["linear"], ln1p("news"),
+    Math.log(2), "rgba(122,60,0,0.15)", Math.log(1 + 10), "rgba(122,60,0,0.5)", Math.log(1 + 50), "rgba(122,60,0,0.8)"];
 }
 
 export function fmtCount(n) {
@@ -251,6 +272,13 @@ export function legendLines(index, win) {
     newsCount: totals.news,
     radarCount: covered ? totals.radar : null,
   };
+}
+
+/** An event's affected area: "120 km²", "under 1 km²", or nothing when the source has none. */
+export function areaLabel(km2) {
+  const v = Number(km2);
+  if (!Number.isFinite(v) || v <= 0) return "";
+  return v < 1 ? "under 1 km²" : `${fmtCount(Math.round(v))} km²`;
 }
 
 /** "29 Jul 2021" or "29 to 31 Jul 2021" for a news event. */

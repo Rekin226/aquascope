@@ -136,6 +136,9 @@ def test_the_default_is_the_latest_twelve_months_and_says_radar_stopped(web):
     assert "radar covers Oct 2014 to Sep 2024 only" in res["summary"] and not res["radar"]["covered"]
     # a month with no file is never requested
     assert web.requested("months/2025-06") == 0
+    # past the end of the news record, the answer says the record stops rather than "0 flood events"
+    after = fp.flood_events_month("2026-05")
+    assert after["summary"].startswith("No news record worldwide for May 2026: news runs from Jan 2026 to Feb 2026")
 
 
 def test_a_clicked_cell_lists_its_events_and_agrees_with_the_grid(web):

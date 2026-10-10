@@ -928,8 +928,21 @@ def place_words(props: dict[str, Any] | None) -> str | None:
     return country or region
 
 
+#: Rough continent boxes [west, south, east, north], tried in order after the named regions, for a pin the
+#: gazetteer could not name. Only ever a fallback for a title, never used in a number.
+CONTINENTS = [
+    ("Europe", [-25, 35, 45, 72]),
+    ("Africa", [-18, -35, 52, 12]), ("Africa", [-18, 12, 34, 37]),
+    ("Asia", [34, -11, 180, 78]),
+    ("Oceania", [110, -48, 180, -11]),
+    ("North America", [-170, 7, -50, 84]),
+    ("South America", [-82, -56, -34, 7]),
+]
+
+
 def region_words(lat: float, lon: float) -> str | None:
-    """The named status region (aquascope.map_layers.STATUS_REGIONS) a point falls in, if any."""
+    """The named status region (aquascope.map_layers.STATUS_REGIONS) a point falls in, else its continent (a
+    rough box), if any."""
     from aquascope.map_layers import STATUS_REGIONS
 
     for reg in STATUS_REGIONS:
@@ -937,6 +950,9 @@ def region_words(lat: float, lon: float) -> str | None:
         if s <= lat <= n and w <= lon <= e:
             name = reg["name"]
             return name[0].upper() + name[1:]
+    for name, (w, s, e, n) in CONTINENTS:
+        if s <= lat <= n and w <= lon <= e:
+            return name
     return None
 
 
@@ -959,8 +975,9 @@ def apply_places(findings: list[dict[str, Any]], answers: list[Any]) -> int:
 
 def name_places(findings: list[dict[str, Any]], fetch: Any = None, budget_s: float = 20.0) -> int:
     """Look each finding's point up in the gazetteer (Photon reverse) and fill its ``place`` slot
-    (:func:`apply_places`). In CPython the lookups run eight at a time; the browser's worker cannot, so the
-    Explorer fetches them from the page instead (``places="page"`` in :func:`scan`)."""
+    (:func:`apply_places`). Photon asks to be used fairly and answers one request at a time, so CPython asks two
+    at a time and stops after ``budget_s``; in the browser the page asks instead (``places="page"`` in
+    :func:`scan`), one at a time."""
     import sys
     from concurrent.futures import ThreadPoolExecutor
 
@@ -979,7 +996,7 @@ def name_places(findings: list[dict[str, Any]], fetch: Any = None, budget_s: flo
     if sys.platform == "emscripten" or len(findings) < 2:
         answers = [one(f) for f in findings]
     else:
-        with ThreadPoolExecutor(max_workers=8) as pool:
+        with ThreadPoolExecutor(max_workers=2) as pool:
             answers = list(pool.map(one, findings))
     return apply_places(findings, answers)
 

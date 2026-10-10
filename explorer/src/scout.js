@@ -121,15 +121,15 @@ async function evidenceRows() {
 
 // ── place names: the page asks the gazetteer for all of them at once, the package names them ──
 
-// Photon answers one request at a time (about a second each, measured 2026-10-11), so without a model the pins
-// drop at once under a region's name or their coordinates and take their place names as they come.
+// Photon answers one request at a time (about a second each, measured 2026-10-11) and asks to be used fairly,
+// so the names are asked for one after another, and not at all once it has failed twice in a row. Without a
+// model the pins drop at once under a region's name or their coordinates and take their names afterwards.
 async function namePlaces(res) {
   const cands = res.candidates || res.picks || [];
   if (!cands.some((f) => f.place_url)) return false;
   const ask = async (url) => {
-    if (!url) return null;
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 12000);
+    const timer = setTimeout(() => ctl.abort(), 8000);
     try {
       const r = await fetch(url, { signal: ctl.signal });
       return r.ok ? await r.json() : null;
@@ -139,7 +139,14 @@ async function namePlaces(res) {
       clearTimeout(timer);
     }
   };
-  const answers = await Promise.all(cands.map((f) => ask(f.place_url)));
+  const answers = [];
+  let misses = 0;
+  for (const f of cands) {
+    const a = f.place_url && misses < 2 ? await ask(f.place_url) : null;
+    if (f.place_url) misses = a ? 0 : misses + 1;
+    answers.push(a);
+  }
+  if (!answers.some(Boolean)) return false;
   const named = await callLight("scout", { op: "places", findings: cands, answers }, { priority: 2 });
   if (!named || !named.findings) return false;
   const byId = new Map(named.findings.map((f) => [f.id, f]));

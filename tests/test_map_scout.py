@@ -298,6 +298,7 @@ def test_places_name_from_the_gazetteer_then_regions_then_coordinates():
     assert places[1] == "Meghalaya, India" and feats[0]["title"].startswith("Meghalaya, India: ")
     assert places[2] == "South Asia"                 # the named region
     assert places[3] == "60.0°S, 150.0°W"            # the coordinates
+    assert ms.region_words(10.4, 19.9) == "Africa" and ms.region_words(47.0, 105.0) == "Asia"   # continents last
 
 
 # ── the claim lock ───────────────────────────────────────────────────────────
@@ -497,3 +498,15 @@ def test_daily_workflow_writes_and_publishes_scout_only():
     assert steps["Publish scout/ to Hugging Face"]["run"].strip() == "python -m aquascope.map_scout publish --out build"
     src = (ROOT / "aquascope" / "map_scout.py").read_text()
     assert 'allow_patterns=[f"{FOLDER}/*"]' in src and 'FOLDER = "scout"' in src
+
+
+def test_the_page_fetches_the_names_and_the_package_applies_them(offline):
+    res = ms.scan(None, None, gauges=[], skill=[], places="page")
+    cands = res["candidates"]
+    assert cands and all(f["place_url"].startswith(ms.PHOTON_REVERSE + "?lat=") for f in cands)
+    amazon = next(f for f in cands if f["kind"] == "status" and f["side"] == "much_below")
+    assert amazon["slots"]["place"] == "The Amazon" and amazon["title"].startswith("The Amazon: ")   # meanwhile
+    answers = [{"features": [{"properties": {"state": "Amazonas", "country": "Brazil"}}]}] + [None] * len(cands)
+    assert ms.apply_places(cands, answers) == 1
+    assert cands[0]["slots"]["place"] == "Amazonas, Brazil" and cands[0]["placed_by"] == "photon"
+    assert not any("place_url" in f for f in cands)

@@ -154,6 +154,16 @@ export function statusPalette() {
   return [[0, 0, 0, 0], ...STATUS_CLASSES.map((c, i) => [...hexRgb(c.color), CLASS_ALPHA[i + 1]])];
 }
 
+/**
+ * The palette with only the `focus` classes painted (ids such as "much_above"), the others left off the
+ * map: "where are rivers much above normal" answered by the map itself (#561). Empty or null paints all.
+ */
+export function focusPalette(focus) {
+  const base = statusPalette();
+  if (!focus || !focus.length) return base;
+  return base.map((c, i) => (i === 0 || focus.includes(STATUS_CLASSES[i - 1].id) ? c : [c[0], c[1], c[2], 0]));
+}
+
 /** Fill RGBA pixels (a canvas ImageData's data) from a class grid. */
 export function paintGrid(grid, rgba, palette = statusPalette()) {
   const p32 = new Uint32Array(palette.length);

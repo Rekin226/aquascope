@@ -261,8 +261,13 @@ function litBody() {
   }
   if (keyState.error) return `<p class="ml-when">${escapeHtml(keyState.error)}</p>`;
   const s = networkSummary(keyState.net);
-  return `<p class="rk-row"><i class="rk-sw" style="background:${th.up}"></i><b>Drains here</b> <span class="muted">${escapeHtml(s.up)}</span></p>` +
-    `<p class="rk-row"><i class="rk-sw" style="background:${th.down}"></i><b>To the sea</b> <span class="muted">${escapeHtml(s.down)}</span></p>` +
+  // A network lit one way only (Ask the map, #561) has no numbers for the other way: that line is left out.
+  const net = keyState.net || {};
+  const up = net.upstream === null ? "" :
+    `<p class="rk-row"><i class="rk-sw" style="background:${th.up}"></i><b>Drains here</b> <span class="muted">${escapeHtml(s.up)}</span></p>`;
+  const down = net.downstream === null ? "" :
+    `<p class="rk-row"><i class="rk-sw" style="background:${th.down}"></i><b>To the sea</b> <span class="muted">${escapeHtml(s.down)}</span></p>`;
+  return up + down +
     `<p class="ml-src">GEOGLOWS v2 routing, modelled${s.cut ? `; ${escapeHtml(s.cut)}` : ""}</p>`;
 }
 
@@ -279,7 +284,13 @@ export function registerRiverRows() {
     id: "river-lit", title: "This river",
     shown: () => Boolean(keyState),
     mark: () => `<span class="rk-pair"><i style="background:${th().up}"></i><i style="background:${th().down}"></i></span>`,
-    summary: () => (keyState && keyState.loading ? "finding its network" : "drains here, to the sea"),
+    summary: () => {
+      if (keyState && keyState.loading) return "finding its network";
+      const net = (keyState && keyState.net) || {};
+      if (net.upstream === null) return "to the sea";
+      if (net.downstream === null) return "what drains here";
+      return "drains here, to the sea";
+    },
     body: litBody,
     act: (name) => { if (name === "clear") clearRiverNetwork(); },
   });

@@ -13,14 +13,15 @@ import { registerDatedLayer } from "./layers.js?v=__BUILD__";
 import { holdSettle, map } from "./map.js?v=__BUILD__";
 import { STATUS_CLASSES } from "./now-core.js?v=__BUILD__";
 import { renderCredits } from "./layer-ui.js?v=__BUILD__";
-import { refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
+import { openLegendRow, refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
 import { syncTimeBar } from "./time-ui.js?v=__BUILD__";
 import { openModal } from "./shell.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
 import { defaultRange, frameDates, nextFrame, normaliseRange } from "./timeline.js?v=__BUILD__";
 import {
   GEOTIFF_MODULE, STATUS_CORNERS, STATUS_CREDIT, STATUS_LIST_URL, decodeStatus, gridToPng, latestDay, missingMonths,
-  CLASS_ALPHA, hexRgb, monthLabel, parseListing, statusDatedLayer, statusHeadline, statusMonthFor, statusUrl,
+  CLASS_ALPHA, focusPalette, hexRgb, monthLabel, parseListing, statusDatedLayer, statusHeadline, statusMonthFor,
+  statusUrl,
 } from "./status-core.js?v=__BUILD__";
 
 const SOURCE_ID = "status-src";
@@ -39,7 +40,12 @@ let side = 2048;            // the picture's width and height
 let worker = null;          // a Worker, or false once it has failed
 let reqId = 0;
 const waiting = new Map();  // worker request id -> { resolve, reject }
-const pictures = new Map(); // month -> object URL of its PNG (most recent last)
+const pictures = new Map(); // month (with the focus, #561) -> object URL of its PNG (most recent last)
+// Only some classes painted (#561, "where are rivers much above normal"): ids from STATUS_CLASSES; [] is all.
+let focus = [];
+let shownFocus = "";        // the focus the picture on the map was painted with
+const focusKey = () => focus.join(",");
+const keyOf = (month, f = focusKey()) => (f ? `${month}|${f}` : month);
 const loading = new Map();  // month -> promise of an object URL
 const headlines = new Map(); // month -> the caption's one line (status-core.js statusHeadline)
 
@@ -77,7 +83,7 @@ function listMonths() {
 
 // ── making a month's picture ────────────────────────────────────────────────
 
-function inWorker(url) {
+function inWorker(url, classes) {
   if (!worker) {
     worker = new Worker(new URL("./status-worker.js?v=__BUILD__", import.meta.url), { type: "module" });
     worker.onmessage = (e) => {
@@ -97,24 +103,25 @@ function inWorker(url) {
   const id = ++reqId;
   return new Promise((resolve, reject) => {
     waiting.set(id, { resolve, reject });
-    worker.postMessage({ id, url, width: side, height: side });
+    worker.postMessage({ id, url, width: side, height: side, focus: classes });
   });
 }
 
-async function onPage(url) {
+async function onPage(url, classes) {
   const geotiff = await import(GEOTIFF_MODULE);
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const { grid, regions } = await decodeStatus(geotiff, await res.arrayBuffer(), side, side, { withRegions: true });
-  const png = await gridToPng(grid, side, side, (w, h) => Object.assign(document.createElement("canvas"), { width: w, height: h }));
+  const png = await gridToPng(grid, side, side, (w, h) => Object.assign(document.createElement("canvas"), { width: w, height: h }),
+    focusPalette(classes));
   return { png, regions };
 }
 
-function keep(month, objectUrl) {
-  pictures.set(month, objectUrl);
+function keep(key, objectUrl) {
+  pictures.set(key, objectUrl);
   for (const old of [...pictures.keys()]) {
     if (pictures.size <= KEEP) break;
-    if (old === shown || old === wanted) continue;
+    if (old === keyOf(shown, shownFocus) || old === keyOf(wanted)) continue;
     URL.revokeObjectURL(pictures.get(old));
     pictures.delete(old);
   }
@@ -122,21 +129,23 @@ function keep(month, objectUrl) {
 }
 
 function load(month) {
-  if (pictures.has(month)) {
-    const u = pictures.get(month);
-    pictures.delete(month);
-    pictures.set(month, u);    // most recent last
+  const key = keyOf(month), classes = focus.slice();
+  if (pictures.has(key)) {
+    const u = pictures.get(key);
+    pictures.delete(key);
+    pictures.set(key, u);    // most recent last
     return Promise.resolve(u);
   }
-  if (loading.has(month)) return loading.get(month);
+  if (loading.has(key)) return loading.get(key);
   const url = statusUrl(month);
-  const make = worker === false ? onPage(url)
-    : inWorker(url).catch((err) => { if (worker === false) return onPage(url); throw err; });
+  const make = worker === false ? onPage(url, classes)
+    : inWorker(url, classes).catch((err) => { if (worker === false) return onPage(url, classes); throw err; });
+  // The caption reads every class, whatever the focus paints (#561): the regions come from the whole grid.
   const p = make.then(({ png, regions }) => {
     if (regions) headlines.set(month, statusHeadline(month, regions));
-    return keep(month, URL.createObjectURL(png));
-  }).finally(() => loading.delete(month));
-  loading.set(month, p);
+    return keep(key, URL.createObjectURL(png));
+  }).finally(() => loading.delete(key));
+  loading.set(key, p);
   return p;
 }
 
@@ -211,11 +220,13 @@ function update() {
     caption();
     return;
   }
-  if (month === shown && map.getSource(SOURCE_ID)) { renderLegend(); preload(); return; }
+  if (month === shown && shownFocus === focusKey() && map.getSource(SOURCE_ID)) { renderLegend(); preload(); return; }
   renderLegend();
+  const painted = focusKey();
   const job = load(month).then((objectUrl) => {
-    if (wanted !== month || !state.status) return;
+    if (wanted !== month || !state.status || painted !== focusKey()) return;
     shown = month;
+    shownFocus = painted;
     draw(objectUrl);
     renderLegend();
     caption();
@@ -246,8 +257,9 @@ function swatchColor(c, i) {
 }
 
 // The five classes, much below to much above: the row's mark (small) and its key (wide).
+// A class left off by a focus (#561) is a faint swatch.
 const statusBar = (cls) => `<span class="${cls}">${STATUS_CLASSES.map((c, i) =>
-  `<i style="--c:${swatchColor(c, i)}" title="${escapeHtml(c.label)}"></i>`).join("")}</span>`;
+  `<i style="--c:${swatchColor(c, i)}" title="${escapeHtml(c.label)}"${focus.length && !focus.includes(c.id) ? ' class="off"' : ""}></i>`).join("")}</span>`;
 
 function rowMonth() {
   return wanted || shown;
@@ -260,16 +272,26 @@ function rowSummary() {
   const month = rowMonth();
   if (month) {
     const busy = month !== shown && !failed;
-    return `${monthLabel(month)}${busy ? ", loading" : ""}${failed && failed.month === month ? ", could not read" : ""}`;
+    const only = focus.length ? `, only ${STATUS_CLASSES.filter((c) => focus.includes(c.id)).map((c) => c.label.toLowerCase()).join(" or ")}` : "";
+    return `${monthLabel(month)}${only}${busy ? ", loading" : ""}` +
+      `${failed && failed.month === month ? ", could not read" : ""}`;
   }
   const ym = String(state.date || "").slice(0, 7);
   const gap = months.length && ym > months[0] && ym < latest && missingMonths(months).includes(ym);
   return gap ? `no map for ${monthLabel(ym)}` : `${monthLabel(months[0])} to ${monthLabel(latest)} only`;
 }
 
+// Only some classes painted (Ask the map, #561): which, and a way to put the rest back.
+function focusLine() {
+  if (!focus.length) return "";
+  const names = STATUS_CLASSES.filter((c) => focus.includes(c.id)).map((c) => c.label).join(" or ");
+  return `<p class="sl-focus">Only ${escapeHtml(names)} ` +
+    '<button type="button" class="ml-link" data-act="all">show all</button></p>';
+}
+
 function rowBody() {
   return statusBar("sl-bar") +
-    '<div class="sl-ends"><span>much below</span><span>normal</span><span>much above</span></div>' +
+    '<div class="sl-ends"><span>much below</span><span>normal</span><span>much above</span></div>' + focusLine() +
     '<p class="ml-src">Each basin\'s monthly flow against its normal. Modelled: GEOGLOWS, CC BY 4.0. ' +
     '<button type="button" class="ml-link" data-act="info">About</button></p>';
 }
@@ -299,7 +321,10 @@ function registerRow() {
     empty: () => Boolean(months && !rowMonth()),
     toggle: (on) => chooseStatus(on),
     body: rowBody,
-    act: (name) => { if (name === "info") openAbout(); },
+    act: (name) => {
+      if (name === "info") openAbout();
+      else if (name === "all") setStatusFocus([]);
+    },
   });
 }
 
@@ -359,7 +384,7 @@ export function setStatusVisible(on) {
   state.status = Boolean(on);
   if (!state.mapOk || !map) return;
   if (state.status) {
-    if (shown && pictures.has(shown)) draw(pictures.get(shown));
+    if (shown && pictures.has(keyOf(shown, shownFocus))) draw(pictures.get(keyOf(shown, shownFocus)));
     listMonths().then(() => { syncTimeBar({ layersChanged: true }); update(); }).catch(() => renderLegend());
   } else {
     removeLayer();
@@ -379,6 +404,21 @@ function chooseStatus(on) {
   writeUrl();
 }
 
+/**
+ * Paint only some classes (ids from STATUS_CLASSES, such as ["much_above"]); [] paints them all again (#561).
+ * The map answers "where are rivers much above normal" by itself; the legend says what is left out.
+ */
+export function setStatusFocus(classes = []) {
+  const ids = new Set(STATUS_CLASSES.map((c) => c.id));
+  focus = STATUS_CLASSES.map((c) => c.id).filter((id) => (classes || []).includes(id) && ids.has(id));
+  update();
+  renderLegend();
+  if (focus.length) openLegendRow("status", true);   // the key says what is left out, with "show all"
+  return focus.slice();
+}
+
+export const getStatusFocus = () => focus.slice();
+
 export function initStatusLayer(url = {}) {
   side = pictureSize();
   actions.setStatus = setStatusVisible;
@@ -393,7 +433,10 @@ export function initStatusLayer(url = {}) {
     draw(next);
   });
   // A basemap change replaces the whole style; put the layer back on the new one.
-  map.on("style.load", () => { if (state.status && shown && pictures.has(shown)) draw(pictures.get(shown)); });
+  map.on("style.load", () => {
+    const key = shown && keyOf(shown, shownFocus);
+    if (state.status && key && pictures.has(key)) draw(pictures.get(key));
+  });
   onTime((t) => {
     if (t.date !== t.prev.date || t.playing !== t.prev.playing) update();
   });

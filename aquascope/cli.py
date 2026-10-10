@@ -1026,6 +1026,47 @@ def cmd_layers(args: argparse.Namespace) -> None:
     print(f"\n  Steps: {', '.join(res['steps'])}. {res['note']}")
 
 
+def cmd_map(args: argparse.Namespace) -> None:
+    """`aquascope map "<request>"`: a plain-English request about the Explorer's map, read into map actions (#561)."""
+    from aquascope import map_commands as mc
+
+    text = " ".join(args.request)
+    if args.llm:
+        try:
+            res = mc.model_command(text, provider=args.provider, model=args.model, api_key=args.api_key, today=args.today)
+        except (RuntimeError, ValueError) as exc:
+            print(f"  {exc}")
+            sys.exit(1)
+        res["by"] = res.pop("model")
+    else:
+        res = mc.parse_command(text, today=args.today)
+        res["by"] = "rules"
+    if args.resolve and res.get("actions"):
+        resolved = mc.resolve_actions(res["actions"])
+        res.update(actions=resolved["actions"], said=resolved["said"], notes=resolved["notes"],
+                   credit=resolved["credit"])
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return
+    if res.get("control"):
+        print(f"  {res['control'].replace('_', ' ')}: the Explorer's action log does this")
+        return
+    if not res.get("actions"):
+        unknown = ", ".join(res.get("unknown") or [])
+        print("  Not understood by the rules" + (f" (unknown words: {unknown})" if unknown else "")
+              + ". Try --llm with your own key, or rephrase.")
+        for e in res.get("errors") or []:
+            print(f"  {e}")
+        sys.exit(1)
+    print(f"  Understood by {res['by']}:")
+    for said, action in zip(res["said"], res["actions"]):
+        print(f"  - {said:<44} {json.dumps(action, ensure_ascii=False)}")
+    for note in res.get("notes") or []:
+        print(f"  note: {note}")
+    if res.get("credit"):
+        print(f"\n  {res['credit']}")
+
+
 def cmd_basins(args: argparse.Namespace) -> None:
     """`aquascope basins`: catchments from BasinATLAS in the Archive (at LAT LON | upstream HYBAS_ID | build GDB)."""
     from aquascope.archive import basins
@@ -4081,6 +4122,17 @@ def main() -> None:
                            help="Read the month's map and say in one line where the rivers are low or high, "
                                 "with each named region's share below and above normal")
     p_lstatus.add_argument("--json", action="store_true")
+    # ── map (#561) ───────────────────────────────────────────────────
+    p_map = sub.add_parser("map", help="Read a plain-English request about the Explorer's map into map actions "
+                           "(the keyless phrase grammar, or --llm with your own key)")
+    p_map.add_argument("request", nargs="+", help='For example: "trace the Nile to the sea"')
+    p_map.add_argument("--resolve", action="store_true", help="Look place names up in the gazetteer (Photon, OSM)")
+    p_map.add_argument("--llm", action="store_true", help="Ask your own model instead of the rules")
+    p_map.add_argument("--provider", choices=provider_ids(), default=None)
+    p_map.add_argument("--model", default=None)
+    p_map.add_argument("--api-key", default=None)
+    p_map.add_argument("--today", default=None, help="Read dates as if today were YYYY-MM-DD")
+    p_map.add_argument("--json", action="store_true")
     # ── basins ───────────────────────────────────────────────────────
     p_bul = sub.add_parser("bulletin", help="The month's state of the rivers: every Archive gauge against normal, "
                            "HydroSOS classes")
@@ -4868,6 +4920,7 @@ def main() -> None:
         "mcp": cmd_mcp,
         "basins": cmd_basins,
         "layers": cmd_layers,
+        "map": cmd_map,
         "river": cmd_river,
         "evidence": cmd_evidence,
         "now": cmd_now,

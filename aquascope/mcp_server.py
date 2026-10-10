@@ -627,6 +627,23 @@ def river_status_summary(month: str | None = None) -> dict[str, Any]:
     return _summary(month)
 
 
+def map_command(text: str, resolve: bool = False) -> dict[str, Any]:
+    """Read a plain-English request about the AquaScope Explorer's map ("trace the Nile to the sea",
+    "September 2023", "turn on floods past", "where are rivers much above normal in South Asia last July")
+    into checked map actions: fly_to, set_time, set_layer, focus_status, set_basemap, highlight_river,
+    draw_area, add_pin. The keyless phrase grammar, no model; matched is false when a word was not understood.
+    resolve=True looks place names up in the gazetteer (Photon, OpenStreetMap data, ODbL)."""
+    from aquascope import map_commands as mc
+
+    res = mc.parse_command(text)
+    if resolve and res.get("actions"):
+        resolved = mc.resolve_actions(res["actions"])
+        res.update(actions=resolved["actions"], said=resolved["said"], notes=resolved["notes"],
+                   credit=resolved["credit"])
+    res["schema"] = mc.action_schema()
+    return res
+
+
 def archive_health() -> dict[str, Any]:
     """Status of the last catalog harvest per source (health.json from the Archive)."""
     import httpx
@@ -1359,6 +1376,7 @@ def build_server():
     server.tool()(layer_frames)
     server.tool()(river_status_month)
     server.tool()(river_status_summary)
+    server.tool()(map_command)
     server.tool()(list_analyses)
     server.tool()(analyse_table)
     server.tool()(station_view)

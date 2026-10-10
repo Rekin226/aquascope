@@ -88,6 +88,8 @@ body.workbench-mode .map-legends { display: none; }
 .sl-bar i:first-child { border-radius: 4px 2px 2px 4px; }
 .sl-bar i:last-child { border-radius: 2px 4px 4px 2px; }
 .sl-bar.mini { width: 22px; height: 7px; gap: 1px; }
+.sl-bar i.off { opacity: .22; }   /* a class Ask the map left off (#561) */
+.sl-focus { color: var(--ink-2); margin: .3rem 0 0; }
 .sl-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: .64rem; margin-top: .15rem; }
 .ml-dot { width: 8px; height: 8px; border-radius: 50%; background: #2b7fc4; box-shadow: 0 0 0 1.5px #fff, 0 0 0 2.2px rgba(29,58,85,.25); }
 .ml-dot.now { background: conic-gradient(#a6611a 0 25%, #dfc27d 0 50%, #80cdc1 0 75%, #018571 0); }

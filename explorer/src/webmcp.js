@@ -12,7 +12,7 @@
 
 import { setTime, state } from "./core.js?v=__BUILD__";
 import { STEPS, isIsoDate, normaliseRange, todayIso } from "./timeline.js?v=__BUILD__";
-import { call } from "./worker-client.js?v=__BUILD__";
+import { call, callLight } from "./worker-client.js?v=__BUILD__";
 
 const TOOLS = [
   {
@@ -109,6 +109,21 @@ const TOOLS = [
       required: ["date"],
     },
   },
+  {
+    name: "aquascope_map_actions",
+    description: "Act on the map the reader is looking at, with every action listed in the page's action log "
+      + "where the reader can undo it. Actions (aquascope.map_commands): fly_to {place | bbox [w,s,e,n] | "
+      + "center [lat,lon], zoom | zoom_by}, set_time {date YYYY-MM-DD, step day|week|month, range {from,to}, "
+      + "playing}, set_layer {layer, on}, focus_status {classes: much_below, below, normal, above, much_above}, "
+      + "set_basemap {basemap}, highlight_river {place | lat, lon, direction upstream|downstream|both}, "
+      + "draw_area {bbox | place, label}, add_pin {lat, lon, title, text, facts [{label, value, unit}], source}. "
+      + "Each is checked before it runs; place names are looked up in the gazetteer.",
+    inputSchema: {
+      type: "object",
+      properties: { actions: { type: "array", items: { type: "object" }, maxItems: 8 } },
+      required: ["actions"],
+    },
+  },
 ];
 
 export function webmcpAvailable() {
@@ -143,6 +158,14 @@ export function registerWebMcpTools({ actions }) {
             if (range) patch.range = range;
             setTime(patch, { source: "agent" });
             return textResult({ date: state.date, step: state.timeStep, range: state.timeRange });
+          }
+          if (spec.name === "aquascope_map_actions") {  // page-side: map-actions.js (#561), checked by the package
+            if (!actions.applyMapActions) return textResult({ error: "The map is not ready." });
+            const checked = await callLight("map_command", { op: "validate", actions: args.actions || [], today: todayIso() });
+            const resolved = await callLight("map_command", { op: "resolve", actions: checked.actions || [] });
+            const done = await actions.applyMapActions(resolved.actions, { by: "agent", said: resolved.said || [] });
+            return textResult({ applied: done.applied.map((e) => ({ id: e.id, label: e.label })),
+              failed: done.failed, rejected: checked.errors || [], notes: resolved.notes || [], credit: resolved.credit });
           }
           if (spec.name === "aquascope_show_on_map") {
             if (args.source && args.station_id) {

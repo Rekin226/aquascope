@@ -1362,3 +1362,143 @@ main { overflow: clip; }
 .fa-card-actions { margin: .5rem 0 .25rem; }
 .fa-card .fa-foot { font-size: .68rem; }
 
+/* ── Ask the map (#561): one line at the top of the map, the action log under it ──
+   Closed, it is a quiet pill; open, a search-like bar with the log of what the AI did,
+   newest first, each with an undo. Pins and drawn areas are the AI's own marks: ink,
+   not a data colour, so they never read as a gauge or a status class. */
+.map-ask {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 8;
+  width: min(460px, calc(100% - 150px)); display: flex; flex-direction: column; align-items: center; gap: 6px;
+  pointer-events: none;
+}
+.map-ask > * { pointer-events: auto; }
+.ma-bar { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; }
+.ma-open {
+  font: inherit; font-size: .8rem; font-weight: 560; color: var(--ink-2); display: inline-flex; align-items: center; gap: .45rem;
+  height: 34px; padding: 0 .55rem 0 .7rem; border-radius: 999px; border: 1px solid var(--line); cursor: pointer;
+  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: var(--shadow-1);
+}
+.ma-open:hover { color: var(--ink); background: var(--surface-solid); }
+.ma-open svg, .ma-form > svg { width: 16px; height: 16px; flex: none; color: var(--blue); }
+.ma-open kbd, .ma-form kbd {
+  font: inherit; font-size: .66rem; color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: 5px; padding: 0 .3rem; line-height: 1.35; background: var(--bg);
+}
+.ma-count {
+  font: inherit; font-size: .72rem; color: var(--ink-2); height: 28px; padding: 0 .65rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-1); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.ma-count[aria-expanded="true"] { background: var(--blue-soft); border-color: var(--blue); color: var(--blue-dark); }
+.ma-count[hidden], .ma-open[hidden] { display: none; }
+.ma-form {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: .4rem; height: 42px; padding: 0 .35rem 0 .75rem;
+  background: var(--surface-solid); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-2);
+}
+.ma-form[hidden] { display: none; }
+.ma-form:focus-within { border-color: var(--blue); box-shadow: var(--shadow-2), 0 0 0 3px var(--blue-soft); }
+.ma-form input {
+  flex: 1; min-width: 0; font: inherit; font-size: .88rem; color: var(--ink); background: transparent; border: 0; outline: none; padding: 0;
+}
+.ma-form input::placeholder { color: var(--muted); }
+.ma-go, .ma-x {
+  flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--radius-xs); cursor: pointer;
+  border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 1.1rem; line-height: 1;
+}
+.ma-go { background: var(--blue); color: #fff; }
+.ma-go:hover { background: var(--blue-dark); }
+.ma-go svg { width: 15px; height: 15px; }
+.ma-x:hover { background: var(--bg-soft); color: var(--ink); }
+/* the bar is wide only while open; the count sits beside the pill when closed and under the bar when open */
+.map-ask.open .ma-bar { flex-wrap: nowrap; }
+.map-ask.open .ma-count[aria-expanded="true"] { display: none; }   /* folded (a pin card took its place), it stays a tap away */
+.ma-status {
+  margin: 0; width: 100%; padding: .38rem .7rem; font-size: .74rem; line-height: 1.45; color: var(--ink-2);
+  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-1);
+  display: flex; flex-wrap: wrap; align-items: center; gap: .15rem .45rem;
+}
+.ma-status[hidden] { display: none; }
+.ma-status.warn { color: var(--warn-ink); }
+.ma-status.error { color: var(--err-ink); }
+.ma-status .spinner { width: 11px; height: 11px; border-width: 1.5px; }
+.ma-status .ma-who { font-weight: 650; color: var(--ink); }
+.ma-status .ma-how { color: var(--muted); }
+.ma-status .ma-how::after { content: "·"; margin-left: .45rem; color: var(--line); }
+.ma-status .ma-note { color: var(--warn-ink); flex-basis: 100%; }
+.ma-status .ma-credit { flex-basis: 100%; color: var(--muted); font-size: .66rem; }
+.ma-tries {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: .3rem; width: 100%; padding: .4rem;
+  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-1);
+}
+.ma-tries[hidden] { display: none; }
+.ma-tries .chip { background: var(--surface-solid); box-shadow: var(--shadow-1); font-size: .72rem; }
+.ma-log {
+  width: 100%; max-height: min(40vh, 218px); display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-2);
+}
+.ma-log[hidden] { display: none; }
+.ma-log-head {
+  display: flex; align-items: baseline; gap: .5rem; padding: .4rem .7rem .3rem; border-bottom: 1px solid var(--line-soft);
+  font-size: .72rem;
+}
+.ma-log-head b { font-weight: 650; font-size: .74rem; }
+.ma-log-head .muted { font-size: .66rem; }
+.ma-undo-all { margin-left: auto; font-size: .72rem; }
+.ma-rows { list-style: none; margin: 0; padding: .2rem 0; overflow-y: auto; overscroll-behavior: contain; }
+.ma-row { display: flex; align-items: center; gap: .5rem; padding: .22rem .45rem .22rem .7rem; font-size: .78rem; color: var(--ink); }
+.ma-row + .ma-row { border-top: 1px solid var(--line-soft); }
+.ma-ico { width: 15px; height: 15px; flex: none; color: var(--ink-2); }
+.ma-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ma-by {
+  flex: none; font-size: .62rem; letter-spacing: .02em; color: var(--muted); border: 1px solid var(--line);
+  border-radius: 999px; padding: 0 .4rem; line-height: 1.5; white-space: nowrap;
+}
+.ma-by-device, .ma-by-key { color: var(--purple); border-color: color-mix(in srgb, var(--purple) 35%, transparent); }
+.ma-undo {
+  flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: var(--radius-xs); cursor: pointer;
+  border: 1px solid transparent; background: transparent; color: var(--muted);
+}
+.ma-undo:hover { background: var(--bg-soft); border-color: var(--line); color: var(--ink); }
+.ma-undo svg { width: 14px; height: 14px; }
+/* the AI's own marks on the map */
+.ma-pin {
+  width: 26px; height: 34px; padding: 0; border: 0; background: none; cursor: pointer; display: block;
+  filter: drop-shadow(0 2px 3px rgba(13, 38, 59, .35));
+}
+.ma-pin svg { width: 26px; height: 34px; display: block; }
+.ma-pin svg path { fill: #22313f; stroke: #fff; stroke-width: 1.6; }
+.ma-pin svg circle { fill: #fff; }
+.ma-pin:hover svg path, .ma-pin:focus-visible svg path { fill: var(--blue); }
+.ma-pin-mini svg { width: 11px; height: 14px; display: block; }
+.ma-pin-mini svg path { fill: currentColor; }
+.ma-pin-mini svg circle { fill: var(--surface-solid); }
+.ma-area-tag {
+  font-size: .68rem; font-weight: 600; color: var(--blue-dark); background: var(--surface-solid);
+  border: 1px solid var(--blue); border-radius: 999px; padding: .05rem .5rem; white-space: nowrap; pointer-events: none;
+}
+/* The caption and the first-visit hint (.map-lead) step below the pill, and step aside while the box is open. */
+@media (min-width: 641px) { .map-lead { top: 52px; } }
+.map-ask.open ~ .map-lead { visibility: hidden; }
+@media (max-width: 1100px) {
+  .map-ask { width: min(420px, calc(100% - 340px)); }
+  .map-ask.open { width: min(460px, calc(100% - 120px)); }
+}
+/* A phone: a round button bottom right, above the panel handle; open, the bar takes the top of the map. */
+@media (max-width: 640px) {
+  .map-ask { top: auto; bottom: 118px; left: auto; right: 10px; transform: none; width: auto; align-items: flex-end; }
+  .map-ask .ma-open { width: 40px; height: 40px; padding: 0; justify-content: center; box-shadow: var(--shadow-2); background: var(--surface-solid); }
+  .map-ask .ma-open svg { width: 18px; height: 18px; }
+  .ma-open-label, .ma-open kbd { display: none; }
+  .ma-bar { flex-direction: column-reverse; align-items: flex-end; }
+  .map-ask.open { top: 8px; bottom: auto; left: 8px; right: 8px; width: auto; align-items: stretch; z-index: 11; }
+  .map-ask.open .ma-bar { flex-direction: row; }
+  .ma-form input { font-size: 16px; }   /* no zoom on focus in iOS Safari */
+  .ma-log { max-height: 38vh; }
+  /* solid on a phone: the legends sit right under the open box and must not show through it */
+  .ma-log, .ma-status, .ma-tries { background: var(--surface-solid); }
+  .ma-row { padding-top: .32rem; padding-bottom: .32rem; }
+}
+@media print { .map-ask, .ma-pin, .ma-area-tag { display: none !important; } }

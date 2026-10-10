@@ -1215,3 +1215,67 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
 .now-legend-note { flex-basis: 100%; margin: .2rem 0 0; font-size: .68rem; line-height: 1.35; }
 /* the monthly bulletin (#523): "Read it" under the legend; the reader reuses .study-reader */
 .link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--blue); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── Floods ahead (#546): the legend on the map and the card on a reach ──── */
+
+/* Top left, beside the map tools: clear of the time bar, the attribution and the bottom sheet on a phone. */
+.fa-legend {
+  position: absolute; left: 56px; top: 10px; z-index: 6; width: 272px;
+  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-2);
+  padding: .55rem .7rem .5rem; font-size: .76rem; color: var(--ink); transition: left .16s ease;
+}
+.fa-legend[hidden] { display: none; }
+body.rail-open .fa-legend { left: calc(var(--rail-w) + var(--gap) + 56px); }
+body.workbench-mode .fa-legend { display: none; }
+.fa-head { display: flex; align-items: baseline; gap: .45rem; }
+.fa-title { font-weight: 650; font-size: .84rem; letter-spacing: -.01em; }
+.fa-when { color: var(--muted); font-variant-numeric: tabular-nums; }
+.fa-x {
+  margin-left: auto; border: 0; background: none; color: var(--muted); font: inherit; font-size: 1rem;
+  line-height: 1; cursor: pointer; padding: .05rem .3rem; border-radius: 6px;
+}
+.fa-x:hover { background: var(--bg-soft); color: var(--ink); }
+.fa-scale { display: flex; align-items: flex-end; gap: 3px; margin: .5rem 0 .35rem; }
+.fa-chip {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 3px; flex: 1;
+  font-size: .66rem; color: var(--ink-2); font-variant-numeric: tabular-nums;
+}
+.fa-chip i { display: block; width: 100%; height: 8px; border-radius: 4px; }
+.fa-chip.zero { opacity: .4; }
+.fa-unit { font-size: .66rem; color: var(--muted); margin-left: .25rem; white-space: nowrap; }
+.fa-line { margin: .15rem 0 .4rem; line-height: 1.35; }
+.fa-actions { display: flex; gap: .3rem; flex-wrap: wrap; }
+.fa-btn {
+  font: inherit; font-size: .74rem; padding: .22rem .6rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--blue); background: var(--blue); color: #fff;
+}
+.fa-btn:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
+.fa-btn.quiet { background: transparent; color: var(--ink-2); border-color: var(--line); }
+.fa-btn.quiet:hover { background: var(--bg-soft); }
+.fa-foot { margin: .45rem 0 0; color: var(--muted); font-size: .68rem; line-height: 1.3; }
+.fa-legend.fa-empty { width: auto; max-width: 272px; }
+.fa-legend.fa-empty .fa-line { margin-bottom: 0; color: var(--muted); }
+.fa-legend.min { width: auto; padding: .4rem .45rem .4rem .7rem; }
+.fa-legend.min .fa-head { align-items: center; }
+.fa-mini { display: inline-flex; gap: 1px; }
+.fa-mini i { width: 7px; height: 7px; border-radius: 2px; }
+.fa-count { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.fa-popup .maplibregl-popup-content { padding: .6rem .8rem .55rem; min-width: 220px; }
+.fa-card p { margin: .22rem 0; line-height: 1.38; }
+.fa-card-head { display: flex; align-items: center; gap: .5rem; font-size: .88rem; margin: 0 1.1rem .3rem 0; }
+.fa-card-head i {
+  flex: none; width: 12px; height: 12px; border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--surface-solid), 0 0 0 3px var(--line);
+}
+.fa-gauges { display: flex; flex-direction: column; align-items: flex-start; gap: .15rem; margin: .4rem 0 .2rem; }
+.fa-gauge { font: inherit; border: 0; background: none; padding: 0; color: var(--blue); cursor: pointer; text-align: left; }
+.fa-gauge:hover { text-decoration: underline; }
+.fa-card-actions { margin: .5rem 0 .25rem; }
+.fa-card .fa-foot { font-size: .68rem; }
+
+@media (max-width: 860px) {
+  .fa-legend { left: 54px; width: min(272px, calc(100% - 64px)); }
+  body.rail-open .fa-legend { left: 54px; }
+}

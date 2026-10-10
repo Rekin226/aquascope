@@ -288,6 +288,10 @@ export function ensureShapeImages() {
   }
 }
 
+// Layers whose clicks their own module answers (Floods ahead's reaches, #546): a click on one is not a click on
+// a place, so the map-wide handler below leaves it alone.
+export const clickClaims = new Set();
+
 function firstDataLayerId() {
   for (const id of ["gauge-heat", "clusters", "points", "catchment-fill"]) {
     if (map.getLayer(id)) return id;
@@ -528,7 +532,8 @@ export function addStationLayers(fc) {
   });
   map.on("mouseleave", "points", () => { map.getCanvas().style.cursor = ""; popup.remove(); });
   map.on("click", (e) => {
-    const hit = map.queryRenderedFeatures(e.point, { layers: ["points", "clusters"] });
+    const claimed = [...clickClaims].filter((id) => map.getLayer(id));
+    const hit = map.queryRenderedFeatures(e.point, { layers: ["points", "clusters", ...claimed] });
     if (hit.length) return; // handled by the layer handlers
     actions.selectPoint(e.lngLat.lat, e.lngLat.lng);
   });

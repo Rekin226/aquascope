@@ -105,12 +105,14 @@ function picture(cell, sig) {
 
 // ── the layers ──────────────────────────────────────────────────────────────
 
-// Over the river status and Floods past, under the basemap's labels, the rivers, Floods ahead and the gauges:
-// the river that is forecast to flood stays drawn on top of its flood plain.
+// With Floods ahead, which chooses where it is drawn: over its soft glow and under its crisp class line, so the
+// reach forecast to flood stays drawn on top of its flood plain. Without it, under the rivers and the gauges.
+// Always over the river status and Floods past (#543).
 function beforeId() {
   const layers = (map.getStyle() && map.getStyle().layers) || [];
-  const hit = layers.find((l) => (l.type === "symbol" && !/^(points|selected|cluster-count|river-|study-|fp-|fd-)/.test(l.id)) ||
-    /^river-/.test(l.id) || ["catchment-fill", "gauge-heat", "clusters", "points"].includes(l.id));
+  const fa = layers.find((l) => l.id === "river-fa-casing" || l.id === "river-fa-line");
+  if (fa) return fa.id;
+  const hit = layers.find((l) => /^river-/.test(l.id) || ["catchment-fill", "gauge-heat", "clusters", "points"].includes(l.id));
   return hit ? hit.id : undefined;
 }
 
@@ -273,33 +275,32 @@ function buildLegend() {
 
 function renderLegend() {
   if (!legend) return;
-  const missing = !data || data.manifest.missing;
-  legend.hidden = !visible || !data || (missing && !data);
+  // Before the first issue Floods ahead's own legend says so; this one stays out of the way.
+  legend.hidden = !visible || !data || Boolean(data.manifest.missing);
   if (legend.hidden) return;
-  // Before the first issue, Floods ahead's own legend says so; this one stays out of the way.
-  if (missing) { legend.hidden = true; return; }
   const min = legend.classList.contains("min");
   const zoom = state.mapOk && map ? map.getZoom() : 0;
   const inView = zoom >= DEPTH_MINZOOM ? new Set(wanted.flatMap((c) => c.reaches.map((r) => r.id))).size : 0;
-  const line = depthLegendLine({ n: reaches.length, inView, zoom, missing });
+  const line = depthLegendLine({ n: reaches.length, inView, zoom });
   const reading = busy > 0 ? '<span class="fd-busy" aria-hidden="true"></span>' : "";
-  const ticks = RAMP.map((s) => `<span style="left:${Math.round(Math.sqrt(s.depth_m / 10) * 100)}%">${s.depth_m < 1 ? "0" : s.depth_m}${s.depth_m >= 10 ? "+" : ""}</span>`).join("");
+  const ticks = RAMP.map((s) => `<span style="left:${Math.round(Math.sqrt(s.depth_m / 10) * 100)}%">` +
+    `${s.depth_m < 1 ? "0" : s.depth_m}${s.depth_m >= 10 ? "+ m" : ""}</span>`).join("");
+  const go = reaches.length && (zoom < DEPTH_MINZOOM || !inView)
+    ? ' <button type="button" class="fd-go" data-act="go">Show one</button>' : "";
   legend.innerHTML =
-    `<div class="fd-head"><span class="fd-title">Flood depth</span>${reading}` +
+    `<header><b>Flood depth</b>${reading}` +
     (min ? `<span class="fd-mini" style="background:${rampCss()}" aria-hidden="true"></span>` : "") +
-    `<button type="button" class="fa-x" data-act="min" aria-expanded="${min ? "false" : "true"}" ` +
-    `aria-label="${min ? "Show" : "Fold"} the flood depth legend" title="${min ? "Show" : "Fold"}">${min ? "+" : "–"}</button></div>` +
+    '<button class="fd-btn info" type="button" data-act="about" aria-label="About the flood depth map" title="About this map">i</button>' +
+    `<button class="fd-btn" type="button" data-act="min" aria-expanded="${min ? "false" : "true"}" ` +
+    `aria-label="${min ? "Show" : "Fold"} the flood depth legend" title="${min ? "Show" : "Fold"}">${min ? "+" : "–"}</button>` +
+    '<button class="fd-btn" type="button" data-act="hide" aria-label="Hide the flood depth map" title="Hide">×</button></header>' +
     (min ? "" :
       `<p class="fd-tag">${escapeHtml(DEPTH_LABEL[0].toUpperCase() + DEPTH_LABEL.slice(1))}</p>` +
       `<div class="fd-ramp" role="img" aria-label="Water depth from 0 to over 10 metres, light to deep blue" style="background:${rampCss()}"></div>` +
-      `<div class="fd-ticks" aria-hidden="true">${ticks}<em>m</em></div>` +
-      `<p class="fd-line">${escapeHtml(line)}</p>` +
+      `<div class="fd-ticks" aria-hidden="true">${ticks}</div>` +
+      `<p class="fd-line">${escapeHtml(line)}${go}</p>` +
       (failed ? '<p class="fd-err">Some depth tiles could not be read.</p>' : "") +
-      `<div class="fa-actions">` +
-      (reaches.length && (zoom < DEPTH_MINZOOM || !inView) ? '<button type="button" class="fa-btn" data-act="go">Show one</button>' : "") +
-      '<button type="button" class="fa-btn quiet" data-act="about">About</button>' +
-      '<button type="button" class="fa-btn quiet" data-act="hide">Hide</button></div>' +
-      '<p class="fa-foot">JRC GloFAS hazard maps v2.1.2 · © EU, CC BY 4.0</p>');
+      '<p class="fd-src">JRC GloFAS hazard maps v2.1.2, © EU, CC BY 4.0</p>');
 }
 
 // The strongest reach of the day: the deepest map, then the largest peak against its 2-year flow.
@@ -314,8 +315,9 @@ function about() {
   import("./shell.js?v=__BUILD__").then(({ openModal }) => openModal("Flood depth where floods are forecast", `
     <p>When Floods ahead says a river reach will pass its 10-, 25-, 50- or 100-year flow in the next 15 days, the map
     shows the JRC flood depth map for the nearest return period at or below it (10, 20, 50 or 100 years; JRC has no
-    2- or 5-year maps), within a few kilometres of the reach: 4 km on a Strahler order 5 river, 2 km more for each
-    order up, fading at the edge. Move the time bar through the forecast, or press Play the 15 days, and the depth
+    2- or 5-year maps), within a few kilometres of the reach: 3 km on a Strahler order 5 river, 1.5 km more for each
+    order up, fading at the edge. Near a confluence the circle also takes in the other river, which may not be
+    forecast to flood. Move the time bar through the forecast, or press Play the 15 days, and the depth
     steps up and down with the forecast.</p>
     <p><strong>What it is not.</strong> A precomputed hazard map chosen by a forecast, not a flood simulation of
     this event: a model estimate twice over. The forecast (GEOGLOWS) and the hazard map (JRC, made with LISFLOOD

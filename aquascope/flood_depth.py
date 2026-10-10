@@ -194,12 +194,15 @@ def depth_return_period(forecast_class: Any) -> int | None:
 
 
 def reach_radius_km(order: Any) -> float:
-    """How far around a reach the depth is drawn: 2 km per Strahler order above 3 (order 5: 4 km), 3 to 12 km."""
+    """How far around a reach the depth is drawn: 1.5 km per Strahler order above 3 (order 5: 3 km), 2.5 to 10 km.
+
+    Small on purpose: a circle near a confluence also takes in the other river, so the less it reaches the better;
+    the reaches sit a kilometre or two apart, so their circles still join along a flooding river."""
     try:
         o = int(order)
     except (TypeError, ValueError):
         o = 5
-    return float(min(12, max(3, 2 * (o - 3))))
+    return float(min(10.0, max(2.5, 1.5 * (o - 3))))
 
 
 def disk_bbox(lon: float, lat: float, radius_km: float) -> list[float]:

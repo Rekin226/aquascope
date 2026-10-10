@@ -117,10 +117,10 @@ export function depthReturnPeriod(cls) {
   return out;
 }
 
-/** How far around a reach the depth is drawn, km: 2 per Strahler order above 3, 3 to 12 (aquascope.flood_depth). */
+/** How far around a reach the depth is drawn, km: 1.5 per Strahler order above 3, 2.5 to 10 (aquascope.flood_depth). */
 export function reachRadiusKm(order) {
   const o = Number.isFinite(Number(order)) && order !== null && order !== "" ? Math.trunc(Number(order)) : 5;
-  return Math.min(12, Math.max(3, 2 * (o - 3)));
+  return Math.min(10, Math.max(2.5, 1.5 * (o - 3)));
 }
 
 const KM_PER_DEG = 111.32;
@@ -321,13 +321,12 @@ export function reachAt(reaches, lon, lat, rp) {
 const fmtDepth = (m) => (m >= 10 ? Math.round(m).toString() : m.toFixed(1));
 
 /** The legend's one line for the view. */
-export function depthLegendLine({ n, inView, zoom, missing }) {
-  if (missing) return "Appears with the first Floods ahead issue.";
+export function depthLegendLine({ n, inView, zoom }) {
   if (!n) return "No river is forecast to pass its 10-year flow on this day.";
-  const reaches = `${n.toLocaleString("en-GB")} reach${n === 1 ? "" : "es"}`;
-  if (zoom < DEPTH_MINZOOM) return `Around ${reaches} forecast to pass the 10-year flow. Zoom in on one to see it.`;
-  if (!inView) return `None in view; ${reaches} elsewhere.`;
-  return `Around ${inView.toLocaleString("en-GB")} of ${reaches} forecast to pass the 10-year flow.`;
+  const of = `${n.toLocaleString("en-GB")} reach${n === 1 ? "" : "es"} forecast to pass the 10-year flow`;
+  if (zoom < DEPTH_MINZOOM) return `${of}. Zoom in on one to see the depth.`;
+  if (!inView) return `None in view, of ${of}.`;
+  return `${inView.toLocaleString("en-GB")} in view, of ${of}.`;
 }
 
 /** The card's words for a click on the depth. */

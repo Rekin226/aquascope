@@ -7,6 +7,13 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Floods ahead** (#546, part of #543): the river reaches the GEOGLOWS forecast expects to reach their 2-year flow in the next 15 days, on the globe.
+  - `aquascope.archive.warnings`: once a day, the whole GEOGLOWS v2 global forecast Zarr (51 members, 15 days) for every reach of Strahler order 5 and up and every reach an Archive gauge sits on, the ensemble-mean daily peak against the reach's own 2- to 100-year flows (GEOGLOWS's retrospective return periods, Gumbel on annual maxima of daily flow). Chunks are streamed and reduced (about 54 GB a day, nothing on disk); reaches with a 2-year flow under 5 m3/s are not classed. `classify` and `summarise` are pure and tested.
+  - Publishes only `forecasts/warnings/` (`latest.parquet`, `latest.geojson`, a dated copy and `manifest.json` with the issue date, counts by class, the method, the thresholds, the licences and what it is not: model output, not an official warning). `.github/workflows/flood-warnings.yml` runs daily at 14:23 UTC; a `smoke` input reads that many chunks and never publishes.
+  - `aquascope warnings [--bbox W S E N] [--min-rp T]` and the MCP tool `flood_warnings(bbox)`.
+  - The Explorer's **Floods ahead** layer, on by default: reaches glow in their class colour on the globe and light up along the river when closer, the gauges on them pulse (still under reduced motion), the map's date shows each day's class and **Play the 15 days** walks through them, a card on a clicked reach gives the peak, its day and the members that agree, and a legend says the issue date and that it is a model forecast. Before the first issue it says so.
+
 ### Fixed
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
 

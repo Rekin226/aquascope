@@ -333,6 +333,34 @@ Both forecasts are model output under CC BY 4.0 (GEOGLOWS v2; Open-Meteo, free f
 non-commercial use). The same functions are `aquascope now` and the MCP tools
 `flow_status`, `flow_forecast` and `correct_to_gauge`.
 
+## Floods ahead
+
+**Floods ahead** is on when the page opens: the river reaches the GEOGLOWS forecast
+expects to reach their 2-year flow in the next 15 days, drawn on the globe. Far out,
+each reach is a soft glow in its class colour (2, 5, 10, 25, 50 or 100-year flow,
+yellow to deep purple, darker for rarer); from about zoom 4 the river itself lights
+up along the GEOGLOWS stream tiles. The Archive gauges on those reaches pulse gently
+(a still ring when the reader prefers less motion).
+
+The legend card at the top left gives the classes, how many reaches, the day and the
+forecast run, and always says it is a model forecast, not an official warning. The
+map's date (the time bar) picks what is drawn: inside the forecast's 15 days each
+reach shows its class on that day; outside them, its 15-day peak. **Play the 15
+days** walks the map's date through them and back. **About** gives the method and
+what it is not; **Hide** (or the Overlays row) turns it off. On a phone the legend
+starts folded to one line.
+
+Clicking a reach opens a card on the map: the class, the peak and its day against the
+2-year flow, how many of the 51 members agree, the gauges on that reach, and **The
+15-day forecast**, which opens the place's Now tab. Before the first daily issue is
+published, the legend says so and nothing else changes.
+
+The numbers come from the daily `flood-warnings` workflow (`aquascope.archive.warnings`,
+[details](archive.md#floods-ahead-forecastswarnings)): Strahler order 5 and up plus
+every reach a gauge sits on, the ensemble mean's daily peak against GEOGLOWS's own
+return periods. The same issue is `aquascope warnings [--bbox W S E N]` and the MCP
+tool `flood_warnings`.
+
 ## The monthly bulletin
 
 **Bulletin** in the Tools menu opens last month's state of the rivers in a reader:

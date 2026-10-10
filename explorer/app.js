@@ -175,7 +175,8 @@ function bringMapOnline(url) {
   applyLayerState();
   syncRailControls();
   if (state.basinsOn || url.basins) setBasinsVisible(true);
-  if (state.riversOn || url.rivers) { setRiversVisible(true); renderCredits(); }
+  if (url.rivers === false) state.riversOn = false;   // on by default (#545); a link can say rivers=0
+  if (state.riversOn) { setRiversVisible(true); renderCredits(); }
   initFloodsAhead();
   initFloodsPast();
   // A selection made while the map was still dark has nothing on the map yet.

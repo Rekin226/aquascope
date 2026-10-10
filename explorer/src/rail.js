@@ -7,7 +7,7 @@ import { shapeSvg } from "./shapes.js?v=__BUILD__";
 import { sourceCounts } from "./catalog.js?v=__BUILD__";
 import { refreshMapData } from "./map.js?v=__BUILD__";
 import { setBasinsVisible } from "./basins.js?v=__BUILD__";
-import { setRiversVisible } from "./river-map.js?v=__BUILD__";
+import { setFlowOn, setRiversVisible } from "./river-map.js?v=__BUILD__";
 import { renderCredits } from "./layer-ui.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
 
@@ -45,6 +45,11 @@ export function buildRail() {
     renderCredits();
     writeUrl();
   });
+  const flow = $("toggle-flow");
+  if (flow) {
+    flow.checked = Boolean(state.flowOn);
+    flow.addEventListener("change", (e) => setFlowOn(e.target.checked));
+  }
   updateCount();
 }
 

@@ -129,10 +129,15 @@
             <i style="background:#e8820c;border-radius:50%"></i>
             <span class="rail-label">Floods past (news and radar)</span>
           </label>
-          <label class="rail-row" title="GEOGLOWS v2 stream network (TDX-Hydro, CC BY-SA 4.0), from zoom 3">
-            <input type="checkbox" id="toggle-rivers" />
-            <i style="background:#1e88e5;border-radius:2px;height:3px"></i>
+          <label class="rail-row" title="GEOGLOWS v2 stream network (TDX-Hydro, CC BY-SA 4.0): wider for bigger rivers, small streams as you zoom in">
+            <input type="checkbox" id="toggle-rivers" checked />
+            <i style="background:#3b7fc4;border-radius:2px;height:3px"></i>
             <span class="rail-label">Rivers (GEOGLOWS)</span>
+          </label>
+          <label class="rail-row" title="A dash moving the way the water flows; off when your system asks for less motion">
+            <input type="checkbox" id="toggle-flow" />
+            <i class="rail-flow-sw" aria-hidden="true"></i>
+            <span class="rail-label">Flow direction (animated)</span>
           </label>
           <label class="rail-row" title="River reaches the GEOGLOWS forecast expects to reach their 2-year flow in the next 15 days. Model output, not an official warning.">
             <input type="checkbox" id="toggle-floods" checked />
@@ -140,6 +145,7 @@
             <span class="rail-label">Floods ahead (15 days)</span>
           </label>
         </div>
+        <p class="rail-note muted">Rivers: wider is bigger (stream order). Click one to light what drains to it and its way to the sea.</p>
       </details>
 
       <details class="rail-group">
@@ -184,6 +190,8 @@
       </div>
       <!-- legends of the map layers (#543), stacked bottom left: Floods ahead (#546, added by its module) above Floods past (#547) above the world river status (#544) -->
       <div id="map-legends" class="map-legends">
+        <!-- living rivers (#545): what the lit network's colours mean, on top while a river is lit -->
+        <div id="river-key" class="river-key" role="status" aria-label="Lit river network" hidden></div>
         <section id="fp-legend" class="fp-legend" aria-label="Floods past legend" hidden></section>
         <!-- the world river status's legend (#544), filled by status-layer.js -->
         <section id="status-legend" class="status-legend" aria-label="World river status legend" hidden></section>

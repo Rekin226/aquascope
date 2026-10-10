@@ -262,7 +262,7 @@ export function setBasemap(id, { date = null, then = null } = {}) {
   map.setStyle(styleFor(id, date), { diff: false, transformStyle: carryOver });
   // The new style is not usable until it has loaded; terrain in particular is a
   // style property and has to be set again afterwards.
-  map.once("idle", () => {
+  onceIdle(() => {
     if (terrainOn && map.getSource("terrain-dem")) {
       map.setTerrain({ source: "terrain-dem", exaggeration: 1.3 });
     }
@@ -289,7 +289,8 @@ export function ensureShapeImages() {
 }
 
 function firstDataLayerId() {
-  for (const id of ["gauge-heat", "clusters", "points", "catchment-fill"]) {
+  // Rasters go under the river network (#545), which sits under the gauges.
+  for (const id of ["river-net-line", "gauge-heat", "clusters", "points", "catchment-fill"]) {
     if (map.getLayer(id)) return id;
   }
   return undefined;
@@ -338,6 +339,17 @@ export function applyDate(date, activeOverlays, basemapId) {
 
 // ── time (#522) ─────────────────────────────────────────────────────────────
 
+// Waiting for "idle" (#545). The rivers' flow animation (river-map.js) changes the style many times a second,
+// and every style change restarts MapLibre's 300 ms sky and projection transitions, so while the dash moves the
+// map never goes idle. Whoever waits for idle says so here, and the dash holds still until it comes.
+let idleWaits = 0;
+export const waitingForIdle = () => idleWaits > 0;
+
+function onceIdle(fn) {
+  idleWaits++;
+  map.once("idle", () => { idleWaits = Math.max(0, idleWaits - 1); fn(); });
+}
+
 // Work outside the tile pipeline that a frame has to wait for: the world
 // river status decodes its own image for each month (status-layer.js, #544).
 const holds = new Set();
@@ -356,7 +368,13 @@ export async function whenSettled(timeoutMs = 4000) {
   return new Promise((resolve) => {
     if (!state.mapOk || !map) { resolve(false); return; }
     let timer = null;
-    const finish = (ok) => { clearTimeout(timer); map.off("idle", onIdle); resolve(ok); };
+    idleWaits++;
+    const finish = (ok) => {
+      clearTimeout(timer);
+      map.off("idle", onIdle);
+      idleWaits = Math.max(0, idleWaits - 1);
+      resolve(ok);
+    };
     const onIdle = () => finish(true);
     timer = setTimeout(() => finish(false), timeoutMs);
     map.on("idle", onIdle);

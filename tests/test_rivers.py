@@ -427,6 +427,35 @@ def test_trace_downstream_stops_at_max_reaches(small_network):
     assert any("Stopped after 2 reaches" in n for n in res["notes"])
 
 
+def test_upstream_ids_lists_every_reach_that_drains_to_it(small_network):
+    res = rivers.upstream_ids(230000003)
+    assert res["ids"][0] == 230000003 and set(res["ids"]) == set(NET)
+    assert res["n_upstream"] == 4 and res["truncated"] is False and res["min_area_km2"] is None
+    assert res["upstream_area_km2"] == pytest.approx(20.0) and res["modelled"] is True
+    head = rivers.upstream_ids(230000001)
+    assert head["ids"] == [230000001] and head["n_upstream"] == 1
+
+
+def test_upstream_ids_keeps_the_biggest_drainage_when_capped(small_network):
+    # Drainage areas: 230000003 20, 230000002 18, 230000001 10, 230000004 3 km2.
+    res = rivers.upstream_ids(230000003, max_n=3)
+    assert res["truncated"] is True and res["n_upstream"] == 4 and res["n_ids"] == 3
+    assert res["ids"] == [230000003, 230000002, 230000001]  # breadth-first, the small tributary dropped
+    assert res["min_area_km2"] == pytest.approx(10.0) and "3 largest" in res["message"]
+
+
+def test_upstream_ids_agrees_with_upstream_area(small_network):
+    assert rivers.upstream_ids(230000002)["upstream_area_km2"] == rivers.upstream_area(230000002)["upstream_area_km2"]
+
+
+def test_downstream_ids_walk_to_the_outlet(small_network):
+    res = rivers.downstream_ids(230000004)
+    assert res["ids"] == [230000004, 230000002, 230000003] and res["outlet_id"] == 230000003
+    assert res["truncated"] is False and "outlet" in res["message"]
+    short = rivers.downstream_ids(230000001, max_n=2)
+    assert short["ids"] == [230000001, 230000002] and short["truncated"] is True
+
+
 def test_trace_needs_a_river_or_a_point():
     with pytest.raises(ValueError):
         rivers.trace_downstream()

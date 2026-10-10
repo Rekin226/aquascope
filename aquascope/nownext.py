@@ -36,12 +36,17 @@ __all__ = [
     "FORECAST_DAYS",
     "MIN_STATUS_YEARS",
     "STATUS_CLASSES",
+    "THRESHOLD_YEARS",
     "correct_to_gauge",
+    "ensemble_daily",
     "flow_status",
     "forecast",
+    "forecast_points",
     "hindcast_skill",
     "now",
+    "plume",
     "station_status",
+    "threshold_class",
     "top_up",
 ]
 
@@ -908,3 +913,375 @@ def now(lat: float | None = None, lon: float | None = None, *, station: str | No
     bits = [(out.get("status") or {}).get("sentence"), (out.get("forecast") or {}).get("sentence")]
     out["sentence"] = " ".join(b for b in bits if b)
     return out
+
+
+# ── 5. the FEWS view: threshold classes, the ensemble plume, forecast points (#556) ──
+#
+# Plain Python, no pandas: the Explorer reads these in a light worker that does not load it.
+
+#: The return periods (years) whose flows class a forecast: the Floods ahead layer's
+#: (:data:`aquascope.archive.warnings.RETURN_PERIODS`), so a reach reads the same on the map and in the card.
+THRESHOLD_YEARS = (2, 5, 10, 25, 50, 100)
+#: One character per day in ``daily``: the index into this tuple, as the Floods ahead file writes it.
+DAILY_CODES = (0, 2, 5, 10, 25, 50, 100)
+#: Days of a gauge's record drawn before the forecast starts, so the plume starts from what the river did.
+PLUME_OBS_DAYS = 21
+#: GEOGLOWS's high-resolution run rides along as member 52; it is not one of the 51 ensemble members.
+HIGH_RES_KEY = "ensemble_52"
+
+METHODS["plume"] = {
+    "name": "The ensemble plume and its threshold classes (the FEWS view)",
+    "text": "Each of the 51 GEOGLOWS ensemble members (the high-resolution run left out) is averaged over each UTC "
+    "day from the run's start. For each day the plume is the members' median, their middle half (25th to 75th "
+    "percentile) and their full range (lowest to highest), with the ensemble mean. A day's class is the largest "
+    "return period (2, 5, 10, 25, 50 or 100 years) whose flow the ensemble mean reaches, the rule the Floods ahead "
+    "layer uses; 'members' counts the members whose own flow that day reaches each return-period flow. At an "
+    "Archive gauge the daily forecast job's statistics are used, corrected to the gauge's record, with the gauge's "
+    "own return-period flows.",
+    "citation": "Werner, M. et al. (2013). The Delft-FEWS flow forecasting system. Environ. Model. Softw., 40, 65-77. "
+    "Alfieri, L. et al. (2013). GloFAS: global ensemble streamflow forecasting and flood early warning. HESS, 17, "
+    "1161-1175.",
+}
+
+
+def threshold_map(thresholds: Any) -> dict[int, float]:
+    """Return-period flows as ``{years: flow}`` from a dict (``{2: q}``, ``{"q2": q}`` or ``{"2": q}``), a
+    ``{"return_periods": [...], "q": [...]}`` answer (:func:`forecast`'s ``thresholds``), or a list in
+    :data:`THRESHOLD_YEARS` order. Missing, non-finite and non-positive flows are left out."""
+    if not thresholds:
+        return {}
+    pairs: list[tuple[Any, Any]]
+    if isinstance(thresholds, dict) and "q" in thresholds and isinstance(thresholds.get("q"), list):
+        pairs = list(zip(thresholds.get("return_periods") or THRESHOLD_YEARS, thresholds["q"]))
+    elif isinstance(thresholds, dict):
+        pairs = [(str(k).lstrip("q"), v) for k, v in thresholds.items()]
+    else:
+        pairs = list(zip(THRESHOLD_YEARS, thresholds))
+    out: dict[int, float] = {}
+    for k, v in pairs:
+        try:
+            t = int(float(k))
+        except (TypeError, ValueError):
+            continue
+        q = _num(v, 6)
+        if t in THRESHOLD_YEARS and q is not None and q > 0:
+            out[t] = q
+    return dict(sorted(out.items()))
+
+
+def threshold_class(value: Any, thresholds: Any) -> int:
+    """The largest return period (years) whose flow ``value`` reaches, or 0: the Floods ahead rule
+    (:func:`aquascope.archive.warnings.classify`). Without a 2-year flow nothing is classed."""
+    q = threshold_map(thresholds)
+    v = _num(value, 12)
+    if v is None or 2 not in q:
+        return 0
+    best = 0
+    for t, flow in q.items():
+        if v >= flow:
+            best = t
+    return best
+
+
+def daily_code(classes: list[int]) -> str:
+    """One character per day: each day's class as its index in :data:`DAILY_CODES` (the Floods ahead ``daily``)."""
+    index = {c: i for i, c in enumerate(DAILY_CODES)}
+    return "".join(str(index.get(int(c or 0), 0)) for c in classes)
+
+
+def _quantile(sorted_vals: list[float], q: float) -> float:
+    """numpy's default (linear) quantile of an already sorted, non-empty list."""
+    pos = (len(sorted_vals) - 1) * q
+    lo = int(math.floor(pos))
+    hi = min(lo + 1, len(sorted_vals) - 1)
+    return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (pos - lo)
+
+
+def ensemble_daily(times: list[Any], members: dict[str, list[Any]], *, days: int = FORECAST_DAYS,
+                   thresholds: Any = None) -> dict[str, Any]:
+    """The ensemble's daily plume from its members.
+
+    ``times`` are the forecast's time steps (ISO, UTC) and ``members`` each member's flows at them (``None`` for a
+    gap), as :func:`aquascope.rivers.forecast_ensemble` returns them. Each member is averaged over each UTC day from
+    the first step's day (the first ``days`` days); then, day by day, over the members: ``mean``, ``median``,
+    ``p25``, ``p75``, ``min`` and ``max``. :data:`HIGH_RES_KEY` is kept apart as ``high_res``. With
+    ``thresholds``, ``members_at`` counts per return period and day the members whose daily flow reaches its flow,
+    and ``share`` is, per return period, the fraction of members whose own 15-day peak reaches it (the Floods ahead
+    ``share`` for the 2-year flow).
+    """
+    stamps = [_utc_naive(t) for t in times]
+    valid = [t for t in stamps if t is not None]
+    if not valid:
+        return {"date": [], "n_members": 0}
+    first = min(valid).date()
+    keep = [first + timedelta(days=i) for i in range(int(days))]
+    slot = {d: i for i, d in enumerate(keep)}
+
+    def daily_of(vals: list[Any]) -> list[float | None]:
+        sums = [0.0] * len(keep)
+        counts = [0] * len(keep)
+        for t, v in zip(stamps, vals):
+            x = _num(v, 12)
+            if t is None or x is None:
+                continue
+            i = slot.get(t.date())
+            if i is not None:
+                sums[i] += x
+                counts[i] += 1
+        return [sums[i] / counts[i] if counts[i] else None for i in range(len(keep))]
+
+    per_member = {k: daily_of(v) for k, v in sorted(members.items()) if k != HIGH_RES_KEY}
+    stats: dict[str, list[float | None]] = {k: [] for k in ("mean", "median", "p25", "p75", "min", "max")}
+    for i in range(len(keep)):
+        vals = sorted(v[i] for v in per_member.values() if v[i] is not None)
+        if not vals:
+            for k in stats:
+                stats[k].append(None)
+            continue
+        stats["mean"].append(_num(sum(vals) / len(vals)))
+        stats["median"].append(_num(_quantile(vals, 0.5)))
+        stats["p25"].append(_num(_quantile(vals, 0.25)))
+        stats["p75"].append(_num(_quantile(vals, 0.75)))
+        stats["min"].append(_num(vals[0]))
+        stats["max"].append(_num(vals[-1]))
+    # A trailing day no member reaches (the run's last steps fall short of it) is not a forecast day.
+    n = len(keep)
+    while n and stats["mean"][n - 1] is None:
+        n -= 1
+    out: dict[str, Any] = {"date": [d.isoformat() for d in keep[:n]], "n_members": len(per_member),
+                           **{k: v[:n] for k, v in stats.items()},
+                           "initialized": min(valid).strftime("%Y-%m-%dT%H:%MZ")}
+    if HIGH_RES_KEY in members:
+        out["high_res"] = [_num(v) for v in daily_of(members[HIGH_RES_KEY])[:n]]
+    q = threshold_map(thresholds)
+    if q and per_member:
+        out["members_at"] = {str(t): [sum(1 for v in per_member.values() if v[i] is not None and v[i] >= flow)
+                                      for i in range(n)] for t, flow in q.items()}
+        peaks = [max((x for x in v[:n] if x is not None), default=None) for v in per_member.values()]
+        counted = [p for p in peaks if p is not None]
+        out["share"] = {str(t): _num(sum(1 for p in counted if p >= flow) / len(counted), 4) if counted else None
+                        for t, flow in q.items()}
+    return out
+
+
+def _obs_window(obs: Any, first: date, before: int, after: int) -> dict[str, list[Any]] | None:
+    """A gauge's daily values from ``before`` days ahead of ``first`` to ``after`` days past it, as ``{t, v}``."""
+    if obs is None:
+        return None
+    if isinstance(obs, dict):
+        t = next((obs[k] for k in ("t", "date") if obs.get(k) is not None), [])
+        v = next((obs[k] for k in ("v", "value") if obs.get(k) is not None), [])
+        pairs = list(zip(t, v))
+    else:
+        pairs = list(obs)
+    lo, hi = first - timedelta(days=int(before)), first + timedelta(days=int(after))
+    kept: dict[str, float] = {}
+    for when, val in pairs:
+        try:
+            d = date.fromisoformat(str(when)[:10])
+        except ValueError:
+            continue
+        x = _num(val)
+        if x is not None and lo <= d < hi:
+            kept[d.isoformat()] = x
+    if not kept:
+        return None
+    days_ = sorted(kept)
+    return {"t": days_, "v": [kept[d] for d in days_]}
+
+
+def _classes(part: dict[str, Any], q: dict[int, float]) -> dict[str, Any]:
+    """The day-by-day class of the ensemble mean, the peak and its class, and the first day at the 2-year flow."""
+    dates, mean = part.get("date") or [], part.get("mean") or []
+    daily = [threshold_class(v, q) for v in mean]
+    pairs = [(v, d) for v, d in zip(mean, dates) if v is not None]
+    out: dict[str, Any] = {"class_daily": daily, "daily": daily_code(daily), "rp": max(daily, default=0),
+                           "peak": None, "peak_date": None, "first_date": None}
+    if pairs:
+        peak, when = max(pairs)
+        out.update(peak=_num(peak), peak_date=when)
+    first = next((d for d, c in zip(dates, daily) if c), None)
+    out["first_date"] = first
+    return out
+
+
+def _members_line(share: dict[str, Any] | None, n: int, days: int = FORECAST_DAYS) -> str:
+    """'In the 15 days, 49 of the 51 members reach the 2-year flow and 15 the 5-year flow.'"""
+    if not share or not n:
+        return ""
+    bits = []
+    for t in THRESHOLD_YEARS:
+        s = share.get(str(t))
+        if s is None:
+            continue
+        k = int(round(float(s) * n))
+        if not k and bits:
+            break
+        bits.append((t, k))
+    if not bits:
+        return ""
+    lead = f"In the {days} days,"
+    t0, k0 = bits[0]
+    if not k0:
+        return f"{lead} none of the {n} members reaches the {t0}-year flow."
+    words = [f"all {n} members reach the {t0}-year flow" if k0 == n else f"{k0} of the {n} members reach the "
+             f"{t0}-year flow"]
+    words += [f"{'all' if k == n else k} the {t}-year flow" for t, k in bits[1:] if k]
+    body = words[0] if len(words) == 1 else ", ".join(words[:-1]) + " and " + words[-1]
+    return f"{lead} {body}."
+
+
+def _issue_thresholds(river_id: int) -> dict[int, float]:
+    """The reach's return-period flows from the published Floods ahead issue, when it is in it (pyarrow needed)."""
+    try:
+        from aquascope.archive import warnings as fw
+
+        res = fw.flood_warnings(limit=10**7)
+    except Exception as exc:  # noqa: BLE001 - no issue, no pyarrow or no network: the caller falls back
+        logger.info("no Floods ahead thresholds: %s", exc)
+        return {}
+    for r in res.get("reaches") or []:
+        if int(r.get("river_id") or -1) == int(river_id):
+            return threshold_map({f"q{t}": r.get(f"q{t}") for t in THRESHOLD_YEARS})
+    return {}
+
+
+def plume(river_id: int | str | None = None, *, lat: float | None = None, lon: float | None = None,
+          thresholds: Any = None, obs: Any = None, days: int = FORECAST_DAYS, obs_days: int = PLUME_OBS_DAYS,
+          history: bool = False, look_up: bool = True, run: str | None = None,
+          ensemble: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The FEWS view of a river reach: the 15-day ensemble plume, its threshold classes and the members past them.
+
+    Give a GEOGLOWS ``river_id``, or ``lat``/``lon`` to snap to the main river there. The 51 members of the newest
+    run, or of ``run`` (``YYYY-MM-DD``, the Floods ahead issue the map shows; the newest when that one does not
+    answer, said in ``notes``), are read (:func:`aquascope.rivers.forecast_ensemble`; ``ensemble`` passes an answer
+    already at hand) and reduced day by day (:func:`ensemble_daily`): ``median``, ``p25``/``p75`` (the middle
+    half), ``min``/``max`` (the full range), ``mean`` and ``high_res``. Should the members not answer,
+    GEOGLOWS's own statistics are used and the member counts are left out (``from`` says which).
+
+    ``thresholds`` are the return-period flows to class against (any form :func:`threshold_map` reads); the
+    Explorer passes the Floods ahead layer's. Without them the published Floods ahead issue is asked for this
+    reach (``look_up``; it needs pyarrow), and with ``history`` a Log-Pearson III fit to the reach's simulated
+    record is the last resort.
+    ``thresholds["source"]`` says where they came from.
+
+    Returns the plume, ``class_daily`` (each day's class from the ensemble mean, the Floods ahead rule), ``rp``,
+    ``peak``, ``peak_date``, ``first_date`` (the first day at the 2-year flow), ``members_at`` and ``share``,
+    ``observed`` (``obs``, a gauge's daily record, from ``obs_days`` before the run's start), ``issued`` (the run's
+    start day), ``sentence``, ``members_line``, ``method``, ``attribution`` and ``licence``. Model output.
+    """
+    from aquascope import rivers
+
+    days = max(1, min(int(days), 30))
+    if river_id in (None, ""):
+        if lat is None or lon is None:
+            raise ValueError("give a river_id, or lat and lon")
+        sn = rivers.snap_to_river(lat, lon, prefer="main")
+        if not sn.get("snapped"):
+            return {"river_id": None, "modelled": True, "snap": sn, "error": sn.get("message")}
+        river_id = sn["river_id"]
+    rid = rivers._river_id(river_id)
+    out: dict[str, Any] = {"river_id": rid, "modelled": True, "days": days, "method": METHODS["plume"],
+                           "attribution": GEOGLOWS_CREDIT, "licence": "CC BY 4.0", "unit": "m3/s", "notes": []}
+    ens = ensemble
+    if ens is None:
+        try:
+            ens = rivers.forecast_ensemble(rid, run) if run else rivers.forecast_ensemble(rid)
+        except Exception as exc:  # noqa: BLE001 - the newest run or the statistics below can still answer
+            ens = {"error": f"GEOGLOWS did not answer for the members ({exc})."}
+        if run and ens.get("error"):
+            try:
+                ens = rivers.forecast_ensemble(rid)
+                out["notes"].append(f"The run of {run} did not answer, so this is the newest run.")
+            except Exception as exc:  # noqa: BLE001 - the statistics below can still answer
+                ens = {"error": f"GEOGLOWS did not answer for the members ({exc})."}
+    q = threshold_map(thresholds)
+    source = (thresholds or {}).get("source") if isinstance(thresholds, dict) else None
+    if not q and look_up:
+        q = _issue_thresholds(rid)
+        source = "the Floods ahead issue (GEOGLOWS return periods, Gumbel on simulated annual maxima)" if q else None
+    if not q and history:
+        try:
+            _rec, series = _reach_history(rid)
+            fit = _thresholds(series) if series is not None and len(series) else {}
+            q = threshold_map(fit)
+            source = f"{fit.get('method')} fitted to the reach's simulated annual maxima" if q else None
+        except Exception as exc:  # noqa: BLE001 - a plume without thresholds is still a plume
+            logger.info("no simulated record for thresholds: %s", exc)
+    if not ens.get("error") and ens.get("members"):
+        part = ensemble_daily(ens["datetime"], ens["members"], days=days, thresholds=q)
+        part["from"] = "members"
+    else:
+        try:
+            stats = rivers.forecast_stats(rid)
+        except Exception as exc:  # noqa: BLE001 - said in the answer
+            stats = {"error": f"GEOGLOWS did not answer ({exc})."}
+        if stats.get("error"):
+            return {**out, "error": ens.get("error") or stats["error"]}
+        part = _daily_geoglows(stats, days)
+        part.update({"from": "statistics", "n_members": 51})
+        out["notes"].append("The members did not answer, so the plume is GEOGLOWS's own 3-hourly statistics "
+                            "averaged to days, and the member counts are left out.")
+        ens = stats
+    if not part.get("date"):
+        return {**out, "error": "GEOGLOWS returned no forecast days for this reach."}
+    out.update(part)
+    out.update({"generated": ens.get("generated"), "url": ens.get("url"),
+                "issued": str(part.get("initialized") or part["date"][0])[:10]})
+    out["thresholds"] = {"return_periods": list(q), "q": list(q.values()), "source": source} if q else None
+    if q and isinstance(thresholds, dict) and thresholds.get("licence"):
+        out["thresholds"]["licence"] = thresholds["licence"]
+    elif q and source and source.startswith("the Floods ahead issue"):
+        out["thresholds"]["licence"] = "CC BY-NC-SA 4.0 (GEOGLOWS v2 return periods)"
+    out.update(_classes(part, q))
+    if obs is not None:
+        out["observed"] = _obs_window(obs, date.fromisoformat(part["date"][0]), obs_days, len(part["date"]))
+    peak_q = {"return_periods": list(q), "q": list(q.values())} if q else None
+    out["sentence"] = _peak_sentence(part, peak_q, what="The ensemble mean")
+    out["members_line"] = _members_line(out.get("share"), int(part.get("n_members") or 0), len(part["date"]))
+    out["notes"].append("Model output, not an official warning: no forecaster, no local knowledge.")
+    return out
+
+
+def forecast_points(rows: list[dict[str, Any]], *, model: str = "geoglows") -> dict[str, Any]:
+    """The Archive's forecast gauges in the FEWS view, from the rows of one issued file (#517).
+
+    ``rows`` are ``forecasts/issued/<date>.parquet`` rows (one per gauge, model and valid day; any extra columns are
+    ignored). For each gauge with ``model`` rows: the plume by valid day (``median``, ``p25``, ``p75``, ``min``,
+    ``max``, ``mean``), corrected to the gauge where the job corrected every day (``corrected``), else raw; the
+    gauge's own return-period flows (``gauge_q2`` to ``gauge_q100``); each day's class from the mean against them,
+    the 15-day class ``rp``, the peak and the first day at the 2-year flow. ``counts`` tallies the gauges by class
+    (0 is below the 2-year flow, or no flows to class against: ``classed`` says which).
+    """
+    by_gauge: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for r in rows or []:
+        if str(r.get("model") or "") != model or r.get("source") is None or r.get("station_id") is None:
+            continue
+        by_gauge.setdefault((str(r["source"]), str(r["station_id"])), []).append(r)
+    points = []
+    for (source, sid), group in sorted(by_gauge.items()):
+        group.sort(key=lambda r: str(r.get("valid_date") or ""))
+        corrected = all(_num(r.get("mean_c")) is not None for r in group)
+        suffix = "_c" if corrected else ""
+        part: dict[str, Any] = {"date": [str(r.get("valid_date"))[:10] for r in group]}
+        for k in ("mean", "median", "p25", "p75", "min", "max"):
+            part[k] = [_num(r.get(f"{k}{suffix}")) for r in group]
+        q = threshold_map({f"q{t}": group[0].get(f"gauge_q{t}") for t in THRESHOLD_YEARS})
+        if 2 not in q:   # without the 2-year flow nothing is classed, so no lines either
+            q = {}
+        head = group[0]
+        point = {"key": f"{source}/{sid}", "source": source, "station_id": sid,
+                 "river_id": int(head["river_id"]) if head.get("river_id") is not None else None,
+                 "issue_date": str(head.get("issue_date") or "")[:10] or None,
+                 "issued": str(head.get("init_date") or head.get("issue_date") or "")[:10] or None,
+                 "corrected": corrected, "classed": bool(q), **part,
+                 "thresholds": {"return_periods": list(q), "q": list(q.values()),
+                                "source": "the gauge's own annual maxima"} if q else None,
+                 "kge_raw": _num(head.get("kge_raw"), 3), "kge_corrected": _num(head.get("kge_corrected"), 3),
+                 "reach_mean_ratio": _num(head.get("reach_mean_ratio"), 3)}
+        point.update(_classes(part, q))
+        points.append(point)
+    counts = {str(t): sum(1 for p in points if p["rp"] == t) for t in DAILY_CODES}
+    issue = next((p["issue_date"] for p in points if p.get("issue_date")), None)
+    return {"issue_date": issue, "model": model, "n": len(points), "counts": counts, "points": points,
+            "method": METHODS["plume"], "attribution": GEOGLOWS_CREDIT, "licence": "CC BY 4.0"}

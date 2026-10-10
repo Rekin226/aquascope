@@ -19,7 +19,8 @@ import { duck } from "./catalog.js?v=__BUILD__";
 import { callLight } from "./worker-client.js?v=__BUILD__";
 import { classColor, reachFacts } from "./floods-ahead-core.js?v=__BUILD__";
 import {
-  BELOW, FEWS_CLASSES, dayLabel, dayOf, fewsColor, obsBefore, plumeHead, plumeLabel, pointsGeoJSON, pointsLine,
+  BELOW, FEWS_CLASSES, dayLabel, dayOf, fewsColor, membersShort, obsBefore, plumeHead, plumeLabel, pointsGeoJSON,
+  pointsLine, recordEnd,
 } from "./fews-core.js?v=__BUILD__";
 
 const L = { src: "fews-pts", casing: "fews-ring-casing", ring: "fews-ring", dot: "fews-dot" };
@@ -82,15 +83,20 @@ export function forecastPoints() {
 export function gaugePlume(stationKey, series = null) {
   const pt = byKey.get(stationKey);
   if (!pt || !(pt.date || []).length) return null;
-  const skill = pt.corrected && Number.isFinite(pt.kge_corrected)
-    ? `Corrected to this gauge's record: KGE ${pt.kge_corrected.toFixed(2)} on the hindcast` +
-      (Number.isFinite(pt.kge_raw) ? `, raw ${pt.kge_raw.toFixed(2)}.` : ".")
-    : "Raw GEOGLOWS: there was no correction to this gauge's record that day.";
+  const kge = pt.corrected && Number.isFinite(pt.kge_corrected)
+    ? `KGE ${pt.kge_corrected.toFixed(2)} on the hindcast${Number.isFinite(pt.kge_raw) ? `, raw ${pt.kge_raw.toFixed(2)}` : ""}`
+    : "";
+  const skill = !pt.corrected ? "Raw GEOGLOWS: there was no correction to this gauge's record that day."
+    : pt.note ? `Corrected to this gauge's record, but the correction scored worse than the raw model on the hindcast ` +
+      `(KGE ${pt.kge_corrected.toFixed(2)}, raw ${pt.kge_raw.toFixed(2)}): read it with care.`
+      : kge ? `Corrected to this gauge's record: ${kge}.` : "Corrected to this gauge's record.";
+  const observed = series ? obsBefore(series, pt.date[0]) : null;
+  const end = series && !observed ? recordEnd(series, pt.date[0]) : null;
   return {
-    data: { ...pt, observed: series ? obsBefore(series, pt.date[0]) : null },
+    data: { ...pt, observed },
     head: plumeHead(pt), color: pt.classed ? fewsColor(pt.rp) : null,
     label: plumeLabel(pt, { corrected: pt.corrected }),
-    line: `${skill} GEOGLOWS v2, CC BY 4.0.`,
+    line: `${skill}${end ? ` The record here stops on ${dayLabel(end)}.` : ""} GEOGLOWS v2, CC BY 4.0.`,
   };
 }
 
@@ -251,7 +257,7 @@ export function openReachCard(f, lngLat, { day: d = -1, manifest = {} } = {}) {
     // Should that run not answer, the newest one does, and the card says so rather than quietly disagree.
     const newer = manifest.issue_date && pl.issued && pl.issued !== manifest.issue_date
       ? ` The map's colours are from the run of ${dayLabel(manifest.issue_date)}.` : "";
-    handle.update({ plume: { data: pl, label: plumeLabel(pl), line: `${pl.members_line || ""}${newer}`.trim() } });
+    handle.update({ plume: { data: pl, label: plumeLabel(pl), line: `${membersShort(pl) || pl.members_line || ""}${newer}`.trim() } });
   })().catch((err) => {
     handle.update({ plume: { empty: `The members did not answer this time (${err.message}). Details has the forecast.` } });
   });

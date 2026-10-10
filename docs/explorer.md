@@ -579,7 +579,7 @@ Forecasters read Delft-FEWS and the GloFAS and EFAS viewers this way: forecast p
 that change colour as thresholds are passed, and one click for the ensemble hydrograph.
 The Explorer does the same with two kinds of point, in the Floods ahead colours.
 
-![The plume for a Kansas River reach expected to reach its 5-year flow](img/globe/fews-reach-card.png)
+![The plume for a river reach in Paraná, Brazil, expected to reach its 25-year flow](img/globe/fews-reach-card.png)
 
 - **Floods ahead reaches** keep their glow and their lines. A click opens the map card
   with the plume for that reach.
@@ -590,7 +590,10 @@ The Explorer does the same with two kinds of point, in the Floods ahead colours.
   more, a thin slate ring when it stays below. Further out only the gauges that reach a
   threshold show, as small solid marks. A one-line note in the legend stack says how
   many there are while their rings are in view. Their card shows the corrected plume,
-  with the gauge's own record before the run.
+  with the gauge's own record before the run. A record that stops more than a week
+  before the run is left out, and the card says the day it stops.
+
+![A forecast gauge's card: the plume corrected to the gauge](img/globe/fews-gauge-card.png)
 
 **The plume** shows the next 15 days from the 51 members of the GEOGLOWS ensemble
 (the high-resolution run left out), averaged to UTC days:
@@ -608,8 +611,10 @@ The Explorer does the same with two kinds of point, in the Floods ahead colours.
 
 The axis follows the bulk of the ensemble. When one wet member runs far above the
 rest, the full range is cut at the top and its real top is named ("range runs to
-146 ↑"). Under the chart, one line says how many members reach each return-period
-flow, or, at a gauge, how well the correction scored on the hindcast.
+146 ↑"). Under the chart, one line says how many members reach the 2-year flow, the
+reach's class and the highest flow any member reaches (the CLI and the MCP tool list
+every return period). At a gauge it says how well the correction scored on the
+hindcast, and plainly when it scored worse than the raw model.
 
 A reach's card reads the same run the map shows, against the layer's own thresholds,
 so the card and the colours agree. If that run does not answer, the newest one is

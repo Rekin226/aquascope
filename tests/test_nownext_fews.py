@@ -200,3 +200,12 @@ def test_forecast_points_class_each_gauge_against_its_own_flows():
     assert z["classed"] is False and z["thresholds"] is None and z["rp"] == 0
     assert res["counts"]["5"] == 1 and res["counts"]["0"] == 2
     assert nownext.forecast_points([])["n"] == 0
+    assert "note" not in x
+
+
+def test_forecast_points_say_when_the_correction_scored_worse():
+    rows = [{**r, "kge_raw": 0.49, "kge_corrected": -0.05} for r in _issued()]
+    point = nownext.forecast_points(rows)["points"][0]
+    assert point["corrected"] is True and "scored worse" in point["note"]
+    raw = [{**r, "kge_raw": 0.49, "kge_corrected": -0.05} for r in _issued(corrected=False)]
+    assert "note" not in nownext.forecast_points(raw)["points"][0]   # the raw plume needs no warning

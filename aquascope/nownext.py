@@ -1250,7 +1250,8 @@ def forecast_points(rows: list[dict[str, Any]], *, model: str = "geoglows") -> d
     ignored). For each gauge with ``model`` rows: the plume by valid day (``median``, ``p25``, ``p75``, ``min``,
     ``max``, ``mean``), corrected to the gauge where the job corrected every day (``corrected``), else raw; the
     gauge's own return-period flows (``gauge_q2`` to ``gauge_q100``); each day's class from the mean against them,
-    the 15-day class ``rp``, the peak and the first day at the 2-year flow. ``counts`` tallies the gauges by class
+    the 15-day class ``rp``, the peak and the first day at the 2-year flow, and a ``note`` where the correction
+    scored worse than the raw model on the hindcast. ``counts`` tallies the gauges by class
     (0 is below the 2-year flow, or no flows to class against: ``classed`` says which).
     """
     by_gauge: dict[tuple[str, str], list[dict[str, Any]]] = {}
@@ -1279,6 +1280,10 @@ def forecast_points(rows: list[dict[str, Any]], *, model: str = "geoglows") -> d
                                 "source": "the gauge's own annual maxima"} if q else None,
                  "kge_raw": _num(head.get("kge_raw"), 3), "kge_corrected": _num(head.get("kge_corrected"), 3),
                  "reach_mean_ratio": _num(head.get("reach_mean_ratio"), 3)}
+        kr, kc = point["kge_raw"], point["kge_corrected"]
+        if corrected and kr is not None and kc is not None and kc < kr:
+            # The rule correct_to_gauge's skill gives: the card says so rather than show the plume as trusted.
+            point["note"] = "The correction scored worse than the raw model on the hindcast, so read it with care."
         point.update(_classes(part, q))
         points.append(point)
     counts = {str(t): sum(1 for p in points if p["rp"] == t) for t in DAILY_CODES}

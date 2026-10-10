@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 
 import { FLOOD_CLASSES } from "../src/floods-ahead-core.js";
 import {
-  BELOW, FEWS_CLASSES, classWords, colourDistances, dayOf, fewsColor, flowText, labOf, obsBefore, plumeAlt,
+  BELOW, FEWS_CLASSES, classWords, colourDistances, dayOf, fewsColor, flowText, labOf, membersShort, obsBefore, plumeAlt, recordEnd,
   plumeHead, plumeKey, plumeLabel, plumeScale, plumeSvg, pointsGeoJSON, pointsLine,
 } from "../src/fews-core.js";
 
@@ -120,4 +120,23 @@ test("the gauge's record before the run", () => {
   assert.deepEqual(obsBefore(s, "2026-10-09"), { t: ["2026-09-20", "2026-10-09"], v: [2, 4] });
   assert.equal(obsBefore({ t: [], v: [] }, "2026-10-09"), null);
   assert.equal(obsBefore(s, null), null);
+  // A record that stops weeks before the run is left out, and the card says when it stops.
+  const stale = { t: ["2026-09-19", "2026-09-20"], v: [1, 2] };
+  assert.equal(obsBefore(stale, "2026-10-09"), null);
+  assert.equal(recordEnd(stale, "2026-10-09"), "2026-09-20");
+  assert.equal(recordEnd({ t: [], v: [] }, "2026-10-09"), null);
+});
+
+test("the card's members line stays short: the 2-year flow, the class and the highest flow reached", () => {
+  const share = { 2: 0.9804, 5: 0.902, 10: 0.6863, 25: 0.549, 50: 0.4118, 100: 0.3137 };
+  assert.equal(membersShort({ n_members: 51, rp: 25, share }),
+    "50 of the 51 members reach the 2-year flow, 28 the 25-year and 16 the 100-year.");
+  assert.equal(membersShort({ n_members: 51, rp: 2, share: { 2: 1, 5: 0.0392, 10: 0 } }),
+    "All 51 members reach the 2-year flow and 2 the 5-year.");
+  assert.equal(membersShort({ n_members: 51, rp: 100, share: { 2: 1, 100: 1 } }),
+    "All 51 members reach the 2-year flow and all the 100-year.");
+  assert.equal(membersShort({ n_members: 51, rp: 0, share: { 2: 0.0196 } }),
+    "1 of the 51 members reaches the 2-year flow.");
+  assert.equal(membersShort({ n_members: 51, rp: 0, share: { 2: 0 } }), "None of the 51 members reaches the 2-year flow.");
+  assert.equal(membersShort({ n_members: 51 }), "");
 });

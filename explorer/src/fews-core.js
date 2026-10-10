@@ -117,6 +117,28 @@ export function plumeAlt(p) {
 }
 
 /** The key under the chart. */
+// The card's one line on the members (aquascope.nownext.plume's share): the 2-year flow, the reach's class and the
+// highest flow any member reaches. The package's members_line names every return period; the card keeps it short.
+export function membersShort(p) {
+  const n = Number(p && p.n_members);
+  const share = p && p.share;
+  if (!share || !n) return "";
+  const count = (t) => (finite(share[String(t)]) ? Math.round(Number(share[String(t)]) * n) : null);
+  const k2 = count(2);
+  if (k2 === null) return "";
+  if (!k2) return `None of the ${n} members reaches the 2-year flow.`;
+  const years = FLOOD_CLASSES.map((c) => c.rp).filter((t) => count(t));
+  const picks = [2];
+  const rp = Number(p.rp) || 0;
+  if (rp > 2 && count(rp)) picks.push(rp);
+  const top = years.at(-1);
+  if (top > picks.at(-1)) picks.push(top);
+  const first = k2 === n ? `All ${n} members reach` : `${k2} of the ${n} members ${k2 === 1 ? "reaches" : "reach"}`;
+  const rest = picks.slice(1).map((t) => `${count(t) === n ? "all" : count(t)} the ${t}-year`);
+  const tail = rest.length ? (rest.length === 1 ? ` and ${rest[0]}` : `, ${rest[0]} and ${rest[1]}`) : "";
+  return `${first} the 2-year flow${tail}.`;
+}
+
 export function plumeKey(p) {
   const bits = [
     `<span><i class="pl-k-med"></i>median</span>`,
@@ -329,19 +351,36 @@ export function pointsLine(res) {
 }
 
 /** Gauge record days to draw before a forecast that starts on `first` ({t, v} in, {t, v} out). */
+// A record that stops more than STALE_DAYS before the run is left out: a stub weeks earlier squeezes the plume
+// and says little. recordEnd() gives the day it stops, for the card to say so.
+export const STALE_DAYS = 7;
 export function obsBefore(series, first, days = OBS_DAYS) {
   const t = (series && series.t) || [];
   const v = (series && series.v) || [];
   const f = dayNo(first);
   if (f === null || !t.length) return null;
   const out = { t: [], v: [] };
+  let last = null;
   for (let i = 0; i < t.length; i++) {
     const d = dayNo(t[i]);
     if (d === null || d < f - days || d > f + 30 || !finite(v[i])) continue;
     out.t.push(String(t[i]).slice(0, 10));
     out.v.push(Number(v[i]));
+    last = Math.max(last ?? d, d);
   }
-  return out.t.length ? out : null;
+  return out.t.length && last >= f - STALE_DAYS ? out : null;
+}
+/** The last day of a record before ``first`` (ISO), or null. */
+export function recordEnd(series, first) {
+  const t = (series && series.t) || [];
+  const v = (series && series.v) || [];
+  const f = dayNo(first);
+  let best = null;
+  for (let i = 0; i < t.length; i++) {
+    const d = dayNo(t[i]);
+    if (d !== null && d < f && finite(v[i]) && (best === null || d > dayNo(best))) best = String(t[i]).slice(0, 10);
+  }
+  return best;
 }
 
 export { addDays };

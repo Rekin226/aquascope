@@ -286,8 +286,65 @@ function onClick(e) {
 }
 
 // ── the legend ──────────────────────────────────────────────────────────────
+// Where the page has the shared "On the map" legend (#map-legend, map-legend.js), the depth is one row in it.
+// Until then it is a small card in the legend stack (#map-legends), under Floods ahead. Both show the same key.
+
+let legendRow = null;     // map-legend.js's refreshLegend, once the depth is a row there
+
+function viewCounts() {
+  const zoom = state.mapOk && map ? map.getZoom() : 0;
+  const inView = zoom >= DEPTH_MINZOOM ? new Set(wanted.flatMap((c) => c.reaches.map((r) => r.id))).size : 0;
+  return { zoom, inView };
+}
+
+function act(name) {
+  if (name === "hide") setDepthVisible(false);
+  else if (name === "about") about();
+  else if (name === "go") goToOne();
+  else if (name === "min" && legend) { legend.classList.toggle("min"); renderLegend(); }
+}
+
+// The key: the honest label, the ramp, what is drawn, where it comes from.
+function keyHtml(withAbout = false) {
+  const { zoom, inView } = viewCounts();
+  const line = depthLegendLine({ n: reaches.length, inView, zoom });
+  const ticks = RAMP.map((s) => `<span style="left:${Math.round(Math.sqrt(s.depth_m / 10) * 100)}%">` +
+    `${s.depth_m < 1 ? "0" : s.depth_m}${s.depth_m >= 10 ? "+ m" : ""}</span>`).join("");
+  const go = reaches.length && (zoom < DEPTH_MINZOOM || !inView)
+    ? ' <button type="button" class="fd-go" data-act="go">Show one</button>' : "";
+  return `<p class="fd-tag">${escapeHtml(DEPTH_LABEL[0].toUpperCase() + DEPTH_LABEL.slice(1))}</p>` +
+    `<div class="fd-ramp" role="img" aria-label="Water depth from 0 to over 10 metres, light to deep blue" style="background:${rampCss()}"></div>` +
+    `<div class="fd-ticks" aria-hidden="true">${ticks}</div>` +
+    `<p class="fd-line">${escapeHtml(line)}${go}</p>` +
+    (failed ? '<p class="fd-err">Some depth tiles could not be read.</p>' : "") +
+    `<p class="fd-src">JRC GloFAS hazard maps v2.1.2, © EU, CC BY 4.0${withAbout ? ' · <button type="button" class="fd-go" data-act="about">About</button>' : ""}</p>`;
+}
+
+// The row's definition for "On the map" (map-legend.js registerLegendRow).
+const ROW = {
+  id: "flood-depth",
+  title: "Flood depth",
+  mark: () => `<i class="fd-mark" style="background:${rampCss()}"></i>`,
+  summary: () => {
+    if (busy > 0) return "reading…";
+    const { zoom, inView } = viewCounts();
+    return zoom < DEPTH_MINZOOM || !inView ? "model estimate, zoom in" : "model estimate";
+  },
+  on: () => visible,
+  empty: () => !data || Boolean(data.manifest.missing) || !reaches.length,
+  toggle: (on) => setDepthVisible(on),
+  body: () => keyHtml(true),
+  act: (name) => act(name),
+};
 
 function buildLegend() {
+  if (document.getElementById("map-legend")) {
+    import("./map-legend.js?v=__BUILD__").then((m) => {
+      m.registerLegendRow(ROW);
+      legendRow = () => m.refreshLegend(ROW.id);
+    }).catch((err) => console.info("flood depth legend row:", err && err.message));
+    return;
+  }
   const stack = document.getElementById("map-legends");
   if (!stack || legend) return;
   legend = document.createElement("section");
@@ -299,28 +356,18 @@ function buildLegend() {
   if (fa) fa.after(legend); else stack.prepend(legend);
   legend.addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-act]");
-    if (!btn) return;
-    if (btn.dataset.act === "hide") setDepthVisible(false);
-    else if (btn.dataset.act === "about") about();
-    else if (btn.dataset.act === "go") goToOne();
-    else if (btn.dataset.act === "min") { legend.classList.toggle("min"); renderLegend(); }
+    if (btn) act(btn.dataset.act);
   });
 }
 
 function renderLegend() {
+  if (legendRow) { legendRow(); return; }
   if (!legend) return;
   // Before the first issue Floods ahead's own legend says so; this one stays out of the way.
   legend.hidden = !visible || !data || Boolean(data.manifest.missing);
   if (legend.hidden) return;
   const min = legend.classList.contains("min");
-  const zoom = state.mapOk && map ? map.getZoom() : 0;
-  const inView = zoom >= DEPTH_MINZOOM ? new Set(wanted.flatMap((c) => c.reaches.map((r) => r.id))).size : 0;
-  const line = depthLegendLine({ n: reaches.length, inView, zoom });
   const reading = busy > 0 ? '<span class="fd-busy" aria-hidden="true"></span>' : "";
-  const ticks = RAMP.map((s) => `<span style="left:${Math.round(Math.sqrt(s.depth_m / 10) * 100)}%">` +
-    `${s.depth_m < 1 ? "0" : s.depth_m}${s.depth_m >= 10 ? "+ m" : ""}</span>`).join("");
-  const go = reaches.length && (zoom < DEPTH_MINZOOM || !inView)
-    ? ' <button type="button" class="fd-go" data-act="go">Show one</button>' : "";
   legend.innerHTML =
     `<header><b>Flood depth</b>${reading}` +
     (min ? `<span class="fd-mini" style="background:${rampCss()}" aria-hidden="true"></span><span class="fd-est">model estimate</span>` : "") +
@@ -328,13 +375,7 @@ function renderLegend() {
     `<button class="fd-btn" type="button" data-act="min" aria-expanded="${min ? "false" : "true"}" ` +
     `aria-label="${min ? "Show" : "Fold"} the flood depth legend" title="${min ? "Show" : "Fold"}">${min ? "+" : "–"}</button>` +
     '<button class="fd-btn" type="button" data-act="hide" aria-label="Hide the flood depth map" title="Hide">×</button></header>' +
-    (min ? "" :
-      `<p class="fd-tag">${escapeHtml(DEPTH_LABEL[0].toUpperCase() + DEPTH_LABEL.slice(1))}</p>` +
-      `<div class="fd-ramp" role="img" aria-label="Water depth from 0 to over 10 metres, light to deep blue" style="background:${rampCss()}"></div>` +
-      `<div class="fd-ticks" aria-hidden="true">${ticks}</div>` +
-      `<p class="fd-line">${escapeHtml(line)}${go}</p>` +
-      (failed ? '<p class="fd-err">Some depth tiles could not be read.</p>' : "") +
-      '<p class="fd-src">JRC GloFAS hazard maps v2.1.2, © EU, CC BY 4.0</p>');
+    (min ? "" : keyHtml());
 }
 
 // The strongest reach of the day: the deepest map, then the largest peak against its 2-year flow.

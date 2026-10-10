@@ -46,3 +46,10 @@ body.workbench-mode .fd-legend { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .fd-busy { animation: none; }
 }
+
+/* As a row of the shared "On the map" legend (map-legend.js), where the page has one: its mark and its key. */
+.fd-mark { display: inline-block; width: 18px; height: 8px; border-radius: 3px; }
+.ml-body .fd-tag { margin: 0 0 .35rem; color: var(--ink-2); }
+.ml-body .fd-line, .ml-body .fd-src, .ml-body .fd-err { margin: .25rem 0 0; line-height: 1.35; }
+.ml-body .fd-src { color: var(--muted); font-size: .66rem; }
+.ml-body .fd-err { color: var(--err-ink); }

@@ -48,6 +48,7 @@ const focusKey = () => focus.join(",");
 const keyOf = (month, f = focusKey()) => (f ? `${month}|${f}` : month);
 const loading = new Map();  // month -> promise of an object URL
 const headlines = new Map(); // month -> the caption's one line (status-core.js statusHeadline)
+const CAPTION_MAX_ZOOM = 3.5; // the caption shows on the globe, not once zoomed in on a region
 
 // A power-of-two square, smaller where memory is short.
 function pictureSize() {
@@ -305,7 +306,9 @@ function renderLegend() {
 function caption() {
   const el = $("map-caption");
   if (!el) return;
-  const text = state.status && shown ? headlines.get(shown) || "" : "";
+  // A world headline belongs to the world view: zoomed in on a region it would only talk over the map.
+  const far = !map || map.getZoom() < CAPTION_MAX_ZOOM;
+  const text = state.status && shown && far ? headlines.get(shown) || "" : "";
   // "River status, September 2026:" leads, quietly bold; the rest is the news.
   const cut = text.indexOf(": ");
   el.innerHTML = cut > 0 ? `<b>${escapeHtml(text.slice(0, cut + 1))}</b> ${escapeHtml(text.slice(cut + 2))}` : escapeHtml(text);
@@ -432,6 +435,7 @@ export function initStatusLayer(url = {}) {
     queued = null;
     draw(next);
   });
+  map.on("zoomend", caption);
   // A basemap change replaces the whole style; put the layer back on the new one.
   map.on("style.load", () => {
     const key = shown && keyOf(shown, shownFocus);

@@ -42,6 +42,7 @@ All notable changes to AquaScope are documented here.
   - **Quiet gauge clusters**: small, light and see-through with a small count, where they were large dark-blue bubbles; the gauges with a status today show as small dots in their today-vs-normal colour while the rest are still clustered.
   - **Floods past that inform**: only the cells that stand out from the region on screen are drawn (about the top eighth of the cells with any count there, above a small floor), as a soft heat up to the regional view and small translucent marks from zoom 6, so Bangladesh is a few hotspots rather than a grid of equal dots. Clicks on a cell start at zoom 6.
   - **Rivers**: the great rivers are a little wider on the globe, and the flow is a light glint walking down the line, 16 steps a second, rather than a dark dash. Floods ahead's glows are smaller and softer on the globe.
+  - **The month's one line** sits under the Ask the map pill on the world view only (zoomed in, it gives the map back), and while the time bar replays a past month the Gauges row says its dots still show today.
 - The **/** key opens Ask the map; the search is a click away in the header.
 - A GIF of the time bar credits the layers on it (GEOGLOWS for the river status), not NASA GIBS alone.
 - The layers keep one order (river status, Floods past, rivers, Floods ahead, gauges), and Floods past shows the latest twelve months on record when the river status opens the map on a month after them.

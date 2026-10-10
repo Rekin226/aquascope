@@ -1319,7 +1319,8 @@ body.workbench-mode .map-lead { display: none; }
 @keyframes mc-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 .map-card.sheet .btn.small { padding: .45rem .7rem; font-size: .78rem; }
 @media (max-width: 640px) {
-  .map-lead { top: auto; bottom: 118px; max-width: calc(100% - 32px); padding: .3rem .7rem; }
+  /* clear of the round Ask the map button on its right (#561) */
+  .map-lead { top: auto; bottom: 118px; left: 10px; right: 60px; transform: none; width: auto; max-width: none; padding: .3rem .7rem; }
   .map-caption { font-size: .74rem; }
 }
 @media (prefers-reduced-motion: reduce) {

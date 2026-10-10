@@ -154,7 +154,8 @@ komoot, OpenStreetMap data, ODbL); a name it does not hold is tried as a gauge i
 the catalogue. A river is lit from the point the gazetteer gives for it ("the Nile"
 starts at Lake Nasser), so "what drains to the Nile at Khartoum" or a click picks a
 better start. "Where are rivers much above normal" turns the world river status on
-and paints only those basins; the legend says what is left out and has **show all**.
+and paints only those basins; the River status row in **On the map** opens to say what
+is left out, with **show all**.
 
 The actions (`fly_to`, `set_time`, `set_layer`, `focus_status`, `set_basemap`,
 `highlight_river`, `draw_area`, `add_pin`) are the same everywhere:
@@ -206,7 +207,9 @@ such as the Amazon, the Sahel or South Asia, not basins), the share of the mappe
 area below and above normal, weighted by latitude, and the regions where at
 least half is one or the other: *River status, September 2026: much of the
 Sahel and the Amazon below normal, much of southern Africa above*. It follows
-the time bar, so a replay narrates itself. The same line and the shares are
+the time bar, so a replay narrates itself, and it shows on the world view only:
+zoomed in on a region, a world headline would only talk over the map. It sits
+under the **Ask the map** pill, and steps aside while the box is open. The same line and the shares are
 `aquascope layers status [YYYY-MM] --summary` and the MCP tool
 `river_status_summary` (`aquascope.map_layers.river_status_summary`); the page
 makes them from the file its worker has already decoded, and a test keeps the
@@ -250,7 +253,8 @@ basemap's water and labels and under the gauges, and fades as you zoom in.
 The colours are the gauges' own: the same five as **Today vs normal**, which is
 how the gauges are coloured by default. A gauge the daily snapshot covers takes
 its class colour; every other gauge keeps its agency colour, and the legend says
-which. GEOGLOWS draws the classes in the WMO HydroSOS red-to-blue; the info panel
+which. While the time bar replays a past month, the Gauges row says the dots
+still show today. GEOGLOWS draws the classes in the WMO HydroSOS red-to-blue; the info panel
 says so.
 
 `aquascope layers status [YYYY-MM]` and the MCP tool `river_status_month` give the

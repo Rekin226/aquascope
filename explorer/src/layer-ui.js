@@ -2,7 +2,7 @@
 // and legends, how the gauges are coloured, and "select an area". The date the
 // dated layers follow is not here: it is the time bar on the map (time-ui.js).
 
-import { $, actions, downloadBlob, escapeHtml, state, toCsv } from "./core.js?v=__BUILD__";
+import { $, actions, downloadBlob, escapeHtml, onTime, state, toCsv } from "./core.js?v=__BUILD__";
 import {
   BASEMAPS, GAUGE_STYLES, OVERLAYS, OVERLAY_GROUPS, RECENT_BREAKS, RECORD_BREAKS,
   basemapById, creditLines, defaultDate, overlayById, recordYears, yearsSinceLast,
@@ -16,7 +16,7 @@ import { openModal } from "./shell.js?v=__BUILD__";
 import { RIVERS_CREDIT } from "./river-core.js?v=__BUILD__";
 import { FLOODS_CREDIT } from "./floods-ahead-core.js?v=__BUILD__";
 import { NEWS_CREDIT, RADAR_CREDIT } from "./floods-past-core.js?v=__BUILD__";
-import { STATUS_CREDIT } from "./status-core.js?v=__BUILD__";
+import { STATUS_CREDIT, monthLabel } from "./status-core.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
 import { openAreaStudy } from "./area-study.js?v=__BUILD__";
 import { cancelAreaContext, openAreaContext } from "./context.js?v=__BUILD__";
@@ -184,8 +184,18 @@ function gaugesMark() {
   return '<i class="ml-dot" aria-hidden="true"></i>';
 }
 
+// While the time bar replays a past month, the dots still show today: the row says so (a month or two back
+// is as good as today, since the newest river status month trails the calendar).
+function pastMonth() {
+  const t = Date.parse(String(state.date || ""));
+  return Number.isFinite(t) && t < Date.now() - 62 * 86400e3 ? String(state.date).slice(0, 7) : "";
+}
+
 function gaugesSummary() {
-  if (nowReady()) return `${fmtK(state.nowStatus.size)} today vs normal`;
+  if (nowReady()) {
+    const past = pastMonth();
+    return `${fmtK(state.nowStatus.size)} today vs normal${past ? `, not ${monthLabel(past)}` : ""}`;
+  }
   const style = GAUGE_STYLES.find((g) => g.id === state.gaugeStyle);
   const n = state.stations.length;
   return `${n ? `${fmtK(n)}, ` : ""}by ${(style ? style.label : "agency").toLowerCase()}`;
@@ -214,6 +224,9 @@ function registerGaugesRow() {
     on: () => state.gaugesOn !== false,
     toggle: (on) => { setGaugesVisible(on); refreshLegend("gauges"); },
     body: gaugesBody,
+  });
+  onTime((t) => {
+    if (String(t.date).slice(0, 7) !== String(t.prev.date).slice(0, 7)) refreshLegend("gauges");
   });
 }
 

@@ -15,6 +15,7 @@ export const LAYER_CONTROLS = {
   status: "toggle-status",
   floods_past: "toggle-floods-past",
   floods_ahead: "toggle-floods",
+  flood_depth: "toggle-depth",
   rivers: "toggle-rivers",
   flow: "toggle-flow",
   basins: "toggle-basins",

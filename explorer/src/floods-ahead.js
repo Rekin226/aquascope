@@ -375,6 +375,9 @@ function openCard(f, lngLat) {
 
 export function floodsVisible() { return visible; }
 
+/** The issue and its reaches once read ({ manifest, features }), for the layers drawn from it: flood depth (#554). */
+export function floodsAheadData() { return load().then(() => data); }
+
 export function setFloodsVisible(on) {
   visible = Boolean(on);
   state.floodsOn = visible;

@@ -1,0 +1,112 @@
+name: Flood warnings
+
+# Floods ahead (#546). Once a day, the whole GEOGLOWS v2 global forecast (s3://geoglows-v2-forecasts, 51 members,
+# 15 days) is compared, reach by reach for Strahler order 5 and up, with each reach's own 2- to 100-year flows
+# (GEOGLOWS's retrospective return periods). The reaches expected to reach their 2-year flow are written to:
+#   forecasts/warnings/latest.parquet    every column
+#   forecasts/warnings/latest.geojson    slim points for the Explorer's Floods ahead layer
+#   forecasts/warnings/<date>.parquet    the same, kept by the forecast's start date
+#   forecasts/warnings/manifest.json     issue date, counts by class, method, thresholds, what it is not
+# It writes ONLY under forecasts/warnings/ in the Archive dataset. Model output, not an official warning.
+# Same HF_TOKEN secret as the harvest. Locally:
+#   python -m aquascope.archive.warnings run --out build --max-chunks 40
+
+on:
+  schedule:
+    # Daily 14:23 UTC. The 00 UTC run's consolidated metadata was written at 11:26 UTC on 2026-10-09; the job takes
+    # the newest run whose metadata is there, so a late run means yesterday's, never a half-written one.
+    - cron: "23 14 * * *"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to the Hugging Face dataset"
+        type: boolean
+        default: true
+      smoke:
+        description: "Forecast chunks read, for a smoke run that never publishes (empty = the whole globe)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flood-warnings
+  cancel-in-progress: false
+
+jobs:
+  warnings:
+    runs-on: ubuntu-latest
+    # About 54 GB of forecast chunks streamed (nothing kept on disk); the time budget below stops reading at 4.5 h
+    # and counts what it skipped, so the job always writes an issue inside the 6 h limit.
+    timeout-minutes: 330
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_DATASET: Rekin226/aquascope-gauges
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # numcodecs decodes the forecast's Blosc chunks.
+      - name: Install aquascope with the archive extra
+        run: python -m pip install -q ".[archive]" numcodecs
+
+      - name: Today's Floods ahead issue
+        env:
+          SMOKE: ${{ inputs.smoke }}
+        run: |
+          ARGS="--out build --workers 16 --time-budget-min 270"
+          if [ -n "$SMOKE" ]; then
+            case "$SMOKE" in *[!0-9]*) echo "::error::smoke must be a whole number of chunks"; exit 1;; esac
+            ARGS="$ARGS --max-chunks $SMOKE"
+          fi
+          python -m aquascope.archive.warnings run $ARGS
+
+      - name: Summary
+        if: always()
+        run: |
+          python - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          p = pathlib.Path("build/forecasts/warnings/manifest.json")
+          if not p.exists():
+              print("## Flood warnings\n\nno manifest written (the run stopped early)")
+              raise SystemExit
+          m = json.loads(p.read_text())
+          c = m["chunks"]
+          print(f"## Floods ahead, forecast of {m['issue_date']}{' (smoke run)' if m['smoke'] else ''}\n")
+          print(f"**{m['n']:,} reaches** of {m['checked']:,} checked reach their 2-year flow within 15 days.\n")
+          print("| class | reaches |\n| --- | ---: |")
+          for k, v in m["counts"].items():
+              print(f"| {k}-year flow | {v:,} |")
+          gb = (m.get("bytes_read") or 0) / 1e9
+          print(f"\nChunks: {c['read']:,} read of {c['needed']:,} needed, {c['failed']} failed, "
+                f"{c['skipped_time']} skipped for time; {gb:.1f} GB in {m['seconds'] / 60:.0f} min.")
+          EOF
+
+      # A smoke run never publishes: its few chunks would replace the day's issue (publish refuses it too).
+      - name: Publish forecasts/warnings/ to Hugging Face
+        if: env.HF_TOKEN != '' && inputs.smoke == '' && (github.event_name == 'schedule' || inputs.publish == true)
+        run: python -m aquascope.archive.warnings publish --out build
+
+      - name: Say why a smoke run was not published
+        if: inputs.smoke != ''
+        run: echo "::notice::A smoke run builds and summarises but does not publish."
+
+      - name: Warn when HF_TOKEN is missing
+        if: always() && env.HF_TOKEN == '' && github.event_name == 'schedule'
+        run: |
+          echo "::error::HF_TOKEN is not set, so the flood warnings ran but published nothing. Set the \
+          repository secret HF_TOKEN to a Hugging Face token with write access to $HF_DATASET."
+          exit 1
+
+      - name: Upload the issue as an artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flood-warnings-${{ github.run_id }}
+          path: build/forecasts/warnings/
+          retention-days: 7

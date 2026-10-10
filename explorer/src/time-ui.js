@@ -7,7 +7,7 @@
 // pasted link (url.js) or an agent (webmcp.js) moves the date the same way.
 // The date arithmetic is in timeline.js, which node tests directly.
 
-import { $, actions, onTime, setTime, state } from "./core.js?v=__BUILD__";
+import { $, actions, datedExtras, onTime, setTime, state } from "./core.js?v=__BUILD__";
 import { OVERLAYS, datedLayersOn } from "./layers.js?v=__BUILD__";
 import { applyDate, whenSettled } from "./map.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
@@ -25,7 +25,7 @@ let noteTimer = null;
 let playToken = 0;
 let gifRun = null;        // { cancel } while a GIF is being made
 
-const datedOn = () => datedLayersOn(state.basemap, state.overlays);
+const datedOn = () => [...datedLayersOn(state.basemap, state.overlays), ...datedExtras.values()];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const effectiveRange = () => normaliseRange(state.timeRange) || defaultRange(state.date, state.timeStep);
 
@@ -208,8 +208,10 @@ async function gif() {
   try {
     const { makeGif } = await import("./gif.js?v=__BUILD__");
     const label = datedOn().map((l) => l.label).join(" + ");
+    // Who to credit on each frame: NASA GIBS for the satellite layers, a layer's own `credit` otherwise.
+    const credit = [...new Set(datedOn().map((l) => l.credit || "NASA GIBS"))].join(" · ");
     const done = await makeGif({
-      dates, label, step: state.timeStep, isCancelled: () => run.cancelled,
+      dates, label, credit, step: state.timeStep, isCancelled: () => run.cancelled,
       setDate: (d) => setTime({ date: d }, { source: "gif" }),
       onProgress: (i, n) => { status.textContent = `Frame ${i} of ${n}${truncated ? ` (first ${n})` : ""}`; },
     });

@@ -62,8 +62,14 @@ export const LAYER_DEFAULTS = {
   hillshade: true,
   // Sparse worldwide coverage, so the world view is a globe (#281).
   globe: true,
-  gaugeStyle: "source",
+  // Today against normal where the daily snapshot covers a gauge, its agency
+  // colour elsewhere (#544): the map opens on the state of the rivers.
+  gaugeStyle: "now",
   heat: false,
+  // Floods past (#547): news and radar flood events, on from the start.
+  floodsPast: true,
+  // The world river status under the gauges, month by month (status-layer.js, #544).
+  status: true,
 };
 
 export const state = {
@@ -72,7 +78,9 @@ export const state = {
   panelOpen: false,   // map first (#548): the panel opens from the map card's Details or a tab= link
   period: null,   // the station's analysis period (#270): null = full record, else the last N years
   workerReady: false, booting: true, pending: new Map(), reqId: 0,
-  mapOk: false, marker: null, basinsOn: false, riversOn: false,
+  mapOk: false, marker: null, basinsOn: false,
+  // the river network is on from the start (#545); flowOn (river-map.js) follows prefers-reduced-motion
+  riversOn: true,
   // layers (#232)
   overlays: new Set(), opacity: {}, date: null,
   // time (#522): the map date above is the one every dated layer follows; these
@@ -128,6 +136,14 @@ export function setTime(patch = {}, { source = "bar" } = {}) {
   return true;
 }
 
+// Map layers outside the overlay catalogue that follow the map date while they
+// are on (#543), by id: { label, time: true, monthly, since, until }, the shape
+// of a dated overlay. The time bar shows itself for them as for an overlay.
+export const datedExtras = new Map();
+// Map layers whose features take a click before the map's own "select this
+// point" does (#543). The module that owns the layer handles the click.
+export const clickLayers = new Set();
+
 // Filled in by the modules that own each behaviour (breaks import cycles).
 export const actions = {
   selectStation: () => {},
@@ -141,6 +157,7 @@ export const actions = {
   showArea: () => {},         // layer-ui.js: show a box's result in the rail, as if just drawn
   openMapCard: () => {},      // map-card.js: a card on the map for anything clicked (a flood cell, a reach)
   closeMapCard: () => {},
+  setStatus: () => {},        // status-layer.js: the world river status on or off (#544)
 };
 
 export function escapeHtml(s) {

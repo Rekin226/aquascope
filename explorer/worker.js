@@ -103,6 +103,7 @@ json.dumps(_res)
 // simulated daily flow since 1940; trace reads the processing unit's routing tables (a few MB, up to about
 // 30 MB for the largest basins), the catalog the page sent with "catalog", the Archive's Global Dam Watch
 // cells along the path and upstream, a few zoom-8 stream tiles, and Natural Earth's borders (750 kB, once).
+// network (#545) reads the same routing tables and returns only ids, which the map lights up.
 async function river({ id, op, args }) {
   // The arguments travel inside the code as a JSON string literal, not through a shared global: two river
   // calls can be in flight (a record still running when the next click snaps), and a global set by one
@@ -123,6 +124,11 @@ elif _op == "trace":
                                     gauge_km=_k.get("gauge_km") or 2.0, max_points=3000)
 elif _op == "area":
     _res = _rivers.upstream_area(_k["river_id"], lat=_k.get("lat"), lon=_k.get("lon"))
+elif _op == "network":
+    _res = {"upstream": _rivers.upstream_ids(_k["river_id"], max_n=_k.get("max_up") or 20000,
+                                             lat=_k.get("lat"), lon=_k.get("lon")),
+            "downstream": _rivers.downstream_ids(_k["river_id"], max_n=_k.get("max_down") or 5000,
+                                                 lat=_k.get("lat"), lon=_k.get("lon"))}
 else:
     raise ValueError(f"unknown river operation {_op!r}")
 json.dumps(_res, default=str)
@@ -1029,10 +1035,12 @@ _out
 // fills line by line as each answers. op "point" reads a layer at (lat, lon),
 // op "area" over bbox [west, south, east, north]. Every layer reads open data
 // hosts that answer CORS (COG range reads, the Archive's context/ mirror).
-async function placeContext({ id, op, name, lat, lon, bbox }) {
+// op "floods_month" is Floods past (#547): a clicked cell's news events and
+// radar months from start to end (aquascope.context.floods_past).
+async function placeContext({ id, op, name, lat, lon, bbox, start, end }) {
   self.__aqContext = JSON.stringify({
     op: op || "point", name: String(name || ""), lat: Number(lat), lon: Number(lon),
-    bbox: Array.isArray(bbox) ? bbox.map(Number) : null,
+    bbox: Array.isArray(bbox) ? bbox.map(Number) : null, start: start || null, end: end || null,
   });
   const code = `
 import json
@@ -1044,6 +1052,9 @@ try:
         _out = _ctx.layer(_a["name"], _a["lat"], _a["lon"])
     elif _a["op"] == "area":
         _out = _ctx.area_layer(_a["name"], *_a["bbox"])
+    elif _a["op"] == "floods_month":
+        from aquascope.context.floods_past import flood_events_month
+        _out = flood_events_month(start=_a["start"], end=_a["end"], bbox=_a["bbox"], limit=12)
     else:
         _out = {"error": "unknown op"}
 except ValueError as exc:

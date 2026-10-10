@@ -8,13 +8,15 @@
 // #s=<source>/<id>&study=1            (the Study drawer, open at that place)
 // #study=kingston-flood                (a recorded study, by its id)
 // #study=z1.<token>                    (a shared plan, see study-link.js; ?study_url= carries a study.yaml)
+// #fp=0                                (Floods past off; it is on by default, #547)
 // #o=precip&d=2024-05-01&ts=week&r=2024-01-01..2024-06-30&cmp=2023-05-01   (the map date, see timeline.js)
+// #ws=0                                (the world river status off; it is on by default, #544)
 //
 // The legacy forms (#s=key, #p=lat,lon, #solve=...) still parse, so old links
 // keep working: a Solve link opens Study at the same place.
 
 import { CONFIG } from "../config.js?v=__BUILD__";
-import { LAYER_DEFAULTS, actions, state, trace } from "./core.js?v=__BUILD__";
+import { LAYER_DEFAULTS, actions, datedExtras, state, trace } from "./core.js?v=__BUILD__";
 import { datedLayersOn } from "./layers.js?v=__BUILD__";
 import { readTimeParams, writeTimeParams } from "./timeline.js?v=__BUILD__";
 
@@ -69,6 +71,7 @@ export function readUrl(hash = location.hash) {
   if (q.has("gl")) out.globe = q.get("gl") === "1";
   if (q.has("gs")) out.gaugeStyle = q.get("gs");
   if (q.has("hm")) out.heat = q.get("hm") === "1";
+  if (q.has("ws")) out.status = q.get("ws") === "1";   // the world river status (#544)
   return out;
 }
 
@@ -86,11 +89,11 @@ function currentHash({ view } = {}) {
   if (view) q.set("v", `${view.zoom.toFixed(2)}/${view.lat.toFixed(4)}/${view.lon.toFixed(4)}`);
   if (state.hidden.size) q.set("hide", [...state.hidden].join(","));
   if (state.basinsOn) q.set("basins", "1");
-  if (state.riversOn) q.set("rivers", "1");
+  if (!state.riversOn) q.set("rivers", "0");   // on by default since #545
   if (state.basemap && state.basemap !== LAYER_DEFAULTS.basemap) q.set("b", state.basemap);
   if (state.overlays && state.overlays.size) q.set("o", [...state.overlays].join(","));
   writeTimeParams(q, { date: state.date, step: state.timeStep, range: state.timeRange, compare: state.compare },
-    { dated: datedLayersOn(state.basemap, state.overlays).length > 0 });
+    { dated: datedLayersOn(state.basemap, state.overlays).length > 0 || datedExtras.size > 0 });
   // Only what differs from LAYER_DEFAULTS, written as 0 or 1 so a link can turn
   // a default-on layer off as well as a default-off layer on.
   const flag = (key, param) => {
@@ -101,6 +104,8 @@ function currentHash({ view } = {}) {
   flag("globe", "gl");
   if (state.gaugeStyle && state.gaugeStyle !== LAYER_DEFAULTS.gaugeStyle) q.set("gs", state.gaugeStyle);
   flag("heat", "hm");
+  flag("floodsPast", "fp");
+  flag("status", "ws");
   return `#${q.toString().replace(/%2F/gi, "/").replace(/%2C/gi, ",")}`;
 }
 

@@ -435,6 +435,26 @@ def trace_downstream(river_id: int | None = None, lat: float | None = None, lon:
     return res
 
 
+def upstream_ids(river_id: int, max_n: int = 200, lat: float | None = None,
+                 lon: float | None = None) -> dict[str, Any]:
+    """The river_ids of the GEOGLOWS v2 reaches upstream of a reach (its own first, breadth-first), with how many
+    there are in all and the area they drain. Past max_n (at most 20000) the reaches with the largest drainage
+    area are kept, so the main stems stay; min_area_km2 says where the cut fell. From the routing tables, the
+    same ones upstream_area reads; the Explorer lights these up on the map."""
+    from aquascope import rivers
+
+    return rivers.upstream_ids(river_id, max_n=max(1, min(int(max_n), 20_000)), lat=lat, lon=lon)
+
+
+def downstream_ids(river_id: int, max_n: int = 5000, lat: float | None = None,
+                   lon: float | None = None) -> dict[str, Any]:
+    """The river_ids from a GEOGLOWS v2 reach down to its outlet (the sea or an inland sink), in the order the
+    water goes, and the outlet's id. Lighter than trace_downstream: no geometry, gauges or dams."""
+    from aquascope import rivers
+
+    return rivers.downstream_ids(river_id, max_n=max(1, min(int(max_n), 20_000)), lat=lat, lon=lon)
+
+
 def upstream_dams(river_id: int | None = None, lat: float | None = None, lon: float | None = None,
                   with_flow: bool = True) -> dict[str, Any]:
     """Is a river regulated upstream of a reach (or of the reach a point snaps to)? The Global Dam Watch dams that
@@ -481,6 +501,21 @@ def status_bulletin(month: str | None = None, sources: list[str] | None = None,
         code = country.strip().upper()
         res["gauges"] = [g for g in gauges if (g.get("country") or "").upper() == code][:200]
     return res
+
+
+def flood_warnings(bbox: list[float] | None = None, min_rp: int = 2, limit: int = 50) -> dict[str, Any]:
+    """Floods ahead: the river reaches the GEOGLOWS v2 global forecast expects to reach their 2-year flow in the next
+    15 days, from the daily published issue (Strahler order 5 and up, ensemble-mean daily peak against the reach's
+    own 2- to 100-year flows). bbox is [west, south, east, north] in degrees; min_rp keeps only reaches at or above
+    that return period (2, 5, 10, 25, 50 or 100). Returns the issue date, counts by class, the reaches (highest class
+    first, at most limit) with peak flow, peak day, class and the share of members that agree, and the method. MODEL
+    OUTPUT, not an official warning: always say so when you quote it."""
+    from aquascope.archive import warnings
+
+    try:
+        return warnings.flood_warnings(bbox, min_rp=min_rp, limit=limit)
+    except ValueError as exc:
+        return {"error": str(exc)}
 
 
 def flow_forecast(lat: float | None = None, lon: float | None = None, river_id: int | None = None,
@@ -570,6 +605,17 @@ def layer_frames(layer: str, start: str, end: str, step: str = "day", max_frames
     return _frames(layer, start, end, step=step, max_frames=max_frames)
 
 
+def river_status_month(month: str | None = None) -> dict[str, Any]:
+    """The world river status map for one month (YYYY-MM; default the newest): GEOGLOWS v2's monthly
+    HydroSOS map, every HydroBASINS level-4 basin in one of five classes (much below normal to much above
+    normal, the month's modelled flow against the 10th, 25th, 75th and 90th percentiles of that calendar
+    month). Gives the GeoTIFF's URL, the legend with the file's colours, the months that exist (1990 to the
+    newest, with gaps), the method and the licence (CC BY 4.0)."""
+    from aquascope.map_layers import river_status_month as _status
+
+    return _status(month)
+
+
 def archive_health() -> dict[str, Any]:
     """Status of the last catalog harvest per source (health.json from the Archive)."""
     import httpx
@@ -630,6 +676,30 @@ def area_context(west: float, south: float, east: float, north: float,
         return context.area_context(float(west), float(south), float(east), float(north), layers=layers)
     except Exception as exc:  # noqa: BLE001 - the model gets to see it
         return {"error": f"area context failed: {type(exc).__name__}: {exc}"}
+
+
+def flood_events_month(month: str | None = None, start: str | None = None, end: str | None = None,
+                       west: float | None = None, south: float | None = None, east: float | None = None,
+                       north: float | None = None, limit: int = 20) -> dict[str, Any]:
+    """Where floods happened in a month or a range of months (at most 60), worldwide or in a box: flood events
+    reported in the news (Google Groundsource, CC BY 4.0, 2000 onwards) and flood detections by Sentinel-1 radar
+    (Microsoft AI for Good, MIT, October 2014 to September 2024), counted separately on a half-degree grid.
+    month is "YYYY-MM"; or give start and end; with none, the latest 12 months on record. A box (west, south,
+    east, north) narrows it; a small box also lists the news events with their dates and the radar months.
+    News says a flood was reported, radar says water was seen: quote them as such, with the attribution.
+    """
+    from aquascope.context.floods_past import flood_events_month as _run
+
+    box = (west, south, east, north)
+    if any(v is not None for v in box) and not all(v is not None for v in box):
+        return {"error": "give all of west, south, east and north, or none"}
+    try:
+        return _run(month, start=start, end=end, limit=int(limit),
+                    bbox=tuple(float(v) for v in box) if all(v is not None for v in box) else None)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001 - the model gets to see it
+        return {"error": f"flood events failed: {type(exc).__name__}: {exc}"}
 
 
 def similar_basins(
@@ -1243,16 +1313,20 @@ def build_server():
     server.tool()(reach_record)
     server.tool()(upstream_area)
     server.tool()(trace_downstream)
+    server.tool()(upstream_ids)
+    server.tool()(downstream_ids)
     server.tool()(upstream_dams)
     server.tool()(model_skill)
     server.tool()(model_to_lean_on)
     server.tool()(flow_status)
     server.tool()(flow_forecast)
     server.tool()(status_bulletin)
+    server.tool()(flood_warnings)
     server.tool()(correct_to_gauge)
     server.tool()(watch_digest)
     server.tool()(place_context)
     server.tool()(area_context)
+    server.tool()(flood_events_month)
     server.tool()(similar_basins)
     server.tool()(regionalize_signatures)
     from aquascope.archive.signatures import filter_gauges  # the map's signature filter (signatures.parquet)
@@ -1272,6 +1346,7 @@ def build_server():
     server.tool()(archive_health)
     server.tool()(dated_layers)
     server.tool()(layer_frames)
+    server.tool()(river_status_month)
     server.tool()(list_analyses)
     server.tool()(analyse_table)
     server.tool()(station_view)

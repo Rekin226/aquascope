@@ -7,6 +7,15 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Added
+- **World river status on the globe** (#544, part of #543). The Explorer opens on the state of the world's rivers: GEOGLOWS v2's monthly HydroSOS map, every HydroBASINS level-4 basin coloured from much below to much above normal, drawn under the gauges at the newest month (September 2026 today), with a small legend on the map that names the month. The time bar replays it month by month back to January 1990, preloading the next frame so a step never flashes; a month with no map (March 2026 is missing from the series) draws nothing and says so. Each month's GeoTIFF (about 500 kB, CC BY 4.0) is read in a worker with geotiff.js 3.0.5 and laid out on a Web Mercator image, so it sits right on the globe and on the flat map. It fades as you zoom in, keeps the basemap's coast and labels on top, and has its own row, opacity and info panel in the rail; `ws=0` in a link turns it off.
+  - The basins use the same five brown-to-teal colours as the gauges' "Today vs normal", so a dot and the basin around it mean the same thing; GEOGLOWS's own red-to-blue HydroSOS colours are noted in the info panel.
+  - `aquascope.map_layers.river_status_month(month)`: the month's COG URL, the legend with the file's colours and percentile bounds, the months that exist (the bucket listed live, cached six hours), the method and the licence. `aquascope layers status [YYYY-MM]` and the MCP tool `river_status_month`.
+- **Gauges coloured "Today vs normal" by default** (#544): where the daily status snapshot covers a gauge it takes its class colour, and every other gauge keeps its agency colour, which the legend says.
+
+### Changed
+- A GIF of the time bar credits the layers on it (GEOGLOWS for the river status), not NASA GIBS alone.
+
 ### Fixed
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
 

@@ -10,7 +10,7 @@ import { gifSize, shortDate } from "./timeline.js?v=__BUILD__";
 const GIFENC = "https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js";
 const MAX_WIDTH = 640;
 
-function stamp(ctx, w, h, date, label) {
+function stamp(ctx, w, h, date, label, by = "NASA GIBS") {
   const pad = Math.round(w / 64);
   const big = Math.max(13, Math.round(w / 30));
   const small = Math.max(10, Math.round(big * 0.62));
@@ -24,7 +24,7 @@ function stamp(ctx, w, h, date, label) {
   ctx.fillText(text, pad * 1.8, pad * 1.55);
   // The credit the layers ask for, on every frame, because a GIF travels alone.
   ctx.font = `${small}px system-ui, -apple-system, sans-serif`;
-  const credit = `${label ? `${label} · ` : ""}NASA GIBS · AquaScope Explorer`;
+  const credit = `${label ? `${label} · ` : ""}${by} · AquaScope Explorer`;
   const cw = ctx.measureText(credit).width;
   ctx.fillStyle = "rgba(10, 22, 32, .6)";
   ctx.fillRect(w - cw - pad * 2, h - small - pad * 1.4, cw + pad * 1.6, small + pad);
@@ -36,7 +36,7 @@ function stamp(ctx, w, h, date, label) {
  * Walk `dates`, capture a frame for each and download the GIF.
  * Resolves true when a file was saved, false when it was stopped.
  */
-export async function makeGif({ dates, label, step, setDate, isCancelled, onProgress }) {
+export async function makeGif({ dates, label, credit, step, setDate, isCancelled, onProgress }) {
   const { GIFEncoder, quantize, applyPalette } = await import(GIFENC);
   const gif = GIFEncoder();
   const canvas = document.createElement("canvas");
@@ -58,7 +58,7 @@ export async function makeGif({ dates, label, step, setDate, isCancelled, onProg
       ctx.drawImage(src, 0, 0, size.width, size.height);
     });
     if (!ok) throw new Error("the map could not be read");
-    stamp(ctx, size.width, size.height, dates[i], label);
+    stamp(ctx, size.width, size.height, dates[i], label, credit);
     const { data } = ctx.getImageData(0, 0, size.width, size.height);
     const palette = quantize(data, 256);
     gif.writeFrame(applyPalette(data, palette), size.width, size.height, { palette, delay });

@@ -16,6 +16,7 @@ import {
 import { defaultDate } from "./src/layers.js?v=__BUILD__";
 import { applyLayerState, initLayerUI, renderCredits, syncRailControls } from "./src/layer-ui.js?v=__BUILD__";
 import { initTimeBar } from "./src/time-ui.js?v=__BUILD__";
+import { initStatusLayer } from "./src/status-layer.js?v=__BUILD__";
 import { buildRail, syncRail, updateCount } from "./src/rail.js?v=__BUILD__";
 import { setBasinsVisible } from "./src/basins.js?v=__BUILD__";
 import { setRiversVisible } from "./src/river-map.js?v=__BUILD__";
@@ -134,6 +135,7 @@ function readLayerState(url) {
   set("globe", url.globe);
   set("gaugeStyle", url.gaugeStyle);
   set("heat", url.heat);
+  set("status", url.status);
   if (url.overlays) {
     const next = new Set(url.overlays);
     if (next.size !== state.overlays.size || [...next].some((o) => !state.overlays.has(o))) {
@@ -167,6 +169,7 @@ function bringMapOnline(url) {
   }
   initLayerUI();
   initTimeBar();
+  initStatusLayer(url);   // the world river status (#544), before the layers are applied
   applyLayerState();
   syncRailControls();
   if (state.basinsOn || url.basins) setBasinsVisible(true);

@@ -6,7 +6,7 @@
 import { CONFIG } from "../config.js?v=__BUILD__";
 import { escapeHtml, sourceStyle, state } from "./core.js?v=__BUILD__";
 import { duck } from "./catalog.js?v=__BUILD__";
-import { STATUS_CLASSES, NO_STATUS_COLOR, snapshotLine } from "./now-core.js?v=__BUILD__";
+import { STATUS_CLASSES, snapshotLine } from "./now-core.js?v=__BUILD__";
 
 let loading = null;
 
@@ -45,6 +45,6 @@ export function nowLegendHtml() {
   if (!meta) return `<p class="muted now-legend-note">Loading today's status…</p>`;
   const line = snapshotLine(meta, (s) => sourceStyle(s).label);
   if (meta.missing) return `<p class="muted now-legend-note">${escapeHtml(line)}</p>`;
-  return STATUS_CLASSES.map((c) => swatch(c.color, c.label)).join("") + swatch(NO_STATUS_COLOR, "no fresh record") +
-    `<p class="muted now-legend-note">${escapeHtml(line)}</p>`;
+  return STATUS_CLASSES.map((c) => swatch(c.color, c.label)).join("") +
+    `<p class="muted now-legend-note">${escapeHtml(line)} Gauges without a fresh record keep their agency colour, drawn fainter.</p>`;
 }

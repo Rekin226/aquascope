@@ -107,6 +107,15 @@
 
       <details class="rail-group">
         <summary>Overlays</summary>
+        <!-- the world river status (#544): wired by status-layer.js -->
+        <div id="rail-status" class="rail-list">
+          <div class="overlay-row">
+            <label class="rail-row"><input type="checkbox" id="toggle-status" />
+              <span class="rail-label">World river status (monthly)</span>
+              <button id="status-info" class="icon-btn tiny info" type="button" title="About this layer" aria-label="About World river status">i</button></label>
+            <div class="overlay-controls"><input type="range" id="status-opacity" min="0" max="1" step="0.05" aria-label="World river status opacity" /></div>
+          </div>
+        </div>
         <div id="rail-overlays" class="rail-list"></div>
         <div class="rail-list">
           <label class="rail-row">
@@ -204,6 +213,8 @@
           <div id="tb-note" class="tb-note" role="status" hidden></div>
         </div>
       </div>
+      <!-- the world river status's legend (#544), filled by status-layer.js -->
+      <section id="status-legend" class="status-legend" aria-label="World river status legend" hidden></section>
       <section id="area-study" class="area-study" aria-label="Study this area" hidden></section>
       <div id="map-fallback" class="map-fallback" hidden>
         <div id="map-fallback-text" class="status warn"></div>

@@ -75,10 +75,16 @@ of accessible observations or a sufficiently long record. Explorer fetches the f
 by default (or the last 40 or 20 years, your choice) and shows the period it actually
 analyzes; modelled discharge is distinguished from gauge observations.
 
-**Time on the map:** one date drives the NASA satellite, rain, soil moisture, snow and
-water storage layers. Play a range, click a day on a hydrograph to see the map on that
-day, swipe-compare two dates, and save the range as a GIF. The date is in the link
-([details](docs/explorer.md#time-on-the-map)).
+**The state of the world's rivers, on the globe:** the map opens on every river basin
+coloured from much below to much above normal for the newest month (GEOGLOWS v2's
+monthly HydroSOS map), with the gauges coloured by today against normal where they
+report. Press play to watch droughts and floods move across continents, month by
+month back to 1990 ([details](docs/explorer.md#world-river-status)).
+
+**Time on the map:** one date drives the river status and the NASA satellite, rain, soil
+moisture, snow and water storage layers. Play a range, click a day on a hydrograph to see
+the map on that day, swipe-compare two dates, and save the range as a GIF. The date is in
+the link ([details](docs/explorer.md#time-on-the-map)).
 
 **Study** guides you from a question through a plan you approve to a report and export
 bundle: Word, Excel, figures, notebook, findings and study YAML. Core studies run without

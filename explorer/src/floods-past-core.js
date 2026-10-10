@@ -98,6 +98,15 @@ export function windowFor({ date, range, playing, step } = {}, last) {
   return { months: monthsBetween(addMonths(end, -(DEFAULT_WINDOW - 1)), end), mode: "window", latest };
 }
 
+/** The window in a few words, for the legend's row: "Jul 2024", "year to Feb 2026" or "5 months to Jul 2024". */
+export function shortWhen(win) {
+  const months = (win && win.months) || [];
+  if (!months.length) return "";
+  if (months.length === 1) return monthLabel(months[0]);
+  const end = monthLabel(months[months.length - 1]);
+  return months.length === 12 ? `year to ${end}` : `${months.length} months to ${end}`;
+}
+
 /** The months of a window that the published index has a file for. */
 export function monthsOnRecord(index, months) {
   const have = new Set(((index && index.months) || []).map((m) => m.month));
@@ -164,13 +173,14 @@ export function cellsGeoJSON(monthsCells, deg = 0.5) {
   return { type: "FeatureCollection", features };
 }
 
-// The world view is a heat map of the cells, weighted by the logarithm of the
-// count (a cell with 1,000 news events is not 1,000 times hotter than one with
-// a single event, or the map would be one orange blot over Jakarta). Closer in,
-// radar is the half-degree cells themselves, shaded by their count, and news a
-// circle per cell, both of which a click can land on.
-export const HEAT_MAXZOOM = 5;
-export const CELL_MINZOOM = 4.5;
+// The world and regional views are a soft heat map of the cells that stand out, weighted by the logarithm of
+// the count (a cell with 1,000 news events is not 1,000 times hotter than one with a single event, or the map
+// would be one orange blot over Jakarta). Close in, from zoom 6, radar is the half-degree cells themselves,
+// shaded by their count, and news a small translucent circle per cell, both of which a click can land on. The
+// two cross over between HEAT_FADE[0] and HEAT_MAXZOOM.
+export const HEAT_MAXZOOM = 7;
+export const CELL_MINZOOM = 6;
+export const HEAT_FADE = [6, 7];
 
 export const POINTS = ["==", ["geometry-type"], "Point"];
 export const CELLS = ["==", ["geometry-type"], "Polygon"];
@@ -199,29 +209,30 @@ export function radarWeight(months = 12) {
 export function newsHeat(months = 12) {
   return {
     "heatmap-weight": newsWeight(months),
-    "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.55, 3, 0.9, 5.5, 1.3],
-    "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 2.5, 2, 5, 4, 11, 5.5, 18],
+    "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.55, 3, 0.9, 5.5, 1.5, 7, 1.8],
+    "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 2.5, 2, 5, 4, 11, 5.5, 20, 7, 34],
     "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"],
-      0, "rgba(253,200,120,0)", 0.12, "rgba(253,190,105,0.32)", 0.35, "rgba(244,150,40,0.62)",
-      0.65, "rgba(222,110,8,0.82)", 1, "rgba(150,58,0,0.92)"],
+      0, "rgba(253,200,120,0)", 0.15, "rgba(253,190,105,0.22)", 0.4, "rgba(244,150,40,0.45)",
+      0.7, "rgba(222,110,8,0.62)", 1, "rgba(165,68,0,0.75)"],
   };
 }
 
 export function radarHeat(months = 12) {
   return {
     "heatmap-weight": radarWeight(months),
-    "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.55, 3, 0.9, 5.5, 1.3],
-    "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 3, 2, 6, 4, 13, 5.5, 20],
+    "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.55, 3, 0.9, 5.5, 1.5, 7, 1.8],
+    "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 3, 2, 6, 4, 13, 5.5, 22, 7, 36],
     "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"],
-      0, "rgba(167,139,250,0)", 0.12, "rgba(160,130,250,0.35)", 0.35, "rgba(139,92,246,0.6)",
-      0.65, "rgba(112,50,225,0.8)", 1, "rgba(76,29,149,0.92)"],
+      0, "rgba(167,139,250,0)", 0.15, "rgba(160,130,250,0.25)", 0.4, "rgba(139,92,246,0.45)",
+      0.7, "rgba(112,50,225,0.62)", 1, "rgba(76,29,149,0.75)"],
   };
 }
 
+// Small, translucent marks closer in: a report is a place on the map, not a blot over the basins and the rivers.
 export function newsRadius() {
   return ["interpolate", ["linear"], ["zoom"],
-    4, ["+", 2, ["*", 0.85, ln1p("news")]],
-    8, ["+", 4, ["*", 1.6, ln1p("news")]],
+    6, ["+", 1.6, ["*", 0.6, ln1p("news")]],
+    9, ["+", 2.6, ["*", 1.0, ln1p("news")]],
   ];
 }
 
@@ -233,25 +244,71 @@ export const DARK_BASEMAPS = new Set(["dark", "satellite", "satellite-recent", "
 
 export function radarFill(dark = false) {
   const stops = dark
-    ? ["rgba(196,181,253,0)", "rgba(167,139,250,0.12)", "rgba(167,139,250,0.24)", "rgba(180,158,252,0.4)",
-      "rgba(205,190,254,0.55)"]
-    : ["rgba(167,139,250,0)", "rgba(167,139,250,0.16)", "rgba(139,92,246,0.32)", "rgba(109,40,217,0.5)",
-      "rgba(76,29,149,0.68)"];
+    ? ["rgba(196,181,253,0)", "rgba(167,139,250,0.1)", "rgba(167,139,250,0.2)", "rgba(180,158,252,0.34)",
+      "rgba(205,190,254,0.48)"]
+    : ["rgba(167,139,250,0)", "rgba(167,139,250,0.12)", "rgba(139,92,246,0.24)", "rgba(109,40,217,0.38)",
+      "rgba(76,29,149,0.52)"];
   const at = [200, 2000, 20000, 200000, 2000000];
   return ["interpolate", ["linear"], ln1p("radar"), ...at.flatMap((n, i) => [Math.log(1 + n), stops[i]])];
 }
 
-// A news circle fades with a small count, so a cell with one report is a whisper and a cell with fifty is
-// solid: closer in, every inhabited cell has a report or two, and equal dots would be confetti. The colour
-// carries this, not circle-opacity, which the crossfade between months uses.
+// A news mark is translucent, firmer with a bigger count, so a cluster of reports reads as a place and the
+// basins under it still show. The colour carries this, not circle-opacity, which the crossfade between months uses.
 export function newsFill() {
   return ["interpolate", ["linear"], ln1p("news"),
-    Math.log(2), "rgba(232,130,12,0.28)", Math.log(1 + 10), "rgba(232,130,12,0.7)", Math.log(1 + 50), "rgba(232,130,12,1)"];
+    Math.log(2), "rgba(232,130,12,0.38)", Math.log(1 + 10), "rgba(232,130,12,0.58)", Math.log(1 + 50), "rgba(222,110,8,0.78)"];
 }
 
 export function newsStroke() {
   return ["interpolate", ["linear"], ln1p("news"),
-    Math.log(2), "rgba(122,60,0,0.15)", Math.log(1 + 10), "rgba(122,60,0,0.5)", Math.log(1 + 50), "rgba(122,60,0,0.8)"];
+    Math.log(2), "rgba(255,255,255,0.35)", Math.log(1 + 50), "rgba(255,255,255,0.7)"];
+}
+
+// ── what stands out ─────────────────────────────────────────────────────────
+//
+// Twelve months of reports touch nearly every inhabited half-degree cell somewhere wet, so drawing them all
+// is wallpaper (a grid of equal dots over Bangladesh). Only the cells that stand out from the region on screen
+// are drawn: the top eighth or so of the cells with any count there (STANDOUT_SHARE), and never below a small
+// floor, so a quiet month shows little and a wet one shows where it was wettest. The heat follows the same rule.
+
+export const STANDOUT_SHARE = 0.12;
+export const STANDOUT_FLOOR = { news: 2, radar: 2000 };
+
+/** Whether [lon, lat] is inside [west, south, east, north] (a box across the antimeridian has west > east). */
+export function inBox(lon, lat, box) {
+  if (!box) return true;
+  const [w, s, e, n] = box;
+  if (lat < s || lat > n) return false;
+  return w <= e ? lon >= w && lon <= e : lon >= w || lon <= e;
+}
+
+/**
+ * The counts a cell needs to be drawn, per source, from the cells [{lon, lat, news, radar}] inside `box`
+ * (null: all of them): the value at the top `share` of the non-zero counts, never under `floor`.
+ */
+export function standoutThresholds(cells, box = null, { share = STANDOUT_SHARE, floor = STANDOUT_FLOOR } = {}) {
+  const vals = { news: [], radar: [] };
+  for (const c of cells || []) {
+    if (!inBox(c.lon, c.lat, box)) continue;
+    if (c.news > 0) vals.news.push(c.news);
+    if (c.radar > 0) vals.radar.push(c.radar);
+  }
+  const out = {};
+  for (const kind of ["news", "radar"]) {
+    const v = vals[kind].sort((a, b) => a - b);
+    const at = v.length ? v[Math.min(v.length - 1, Math.floor((1 - share) * v.length))] : 0;
+    out[kind] = Math.max(floor[kind], at);
+  }
+  return out;
+}
+
+/** The map filters for those thresholds: news circles and heat, radar cells and heat. */
+export function standoutFilters(t) {
+  return {
+    news: ["all", POINTS, [">=", ["get", "news"], t.news]],
+    radarHeat: ["all", POINTS, [">=", ["get", "radar"], t.radar]],
+    radarCells: ["all", CELLS, [">=", ["get", "radar"], t.radar]],
+  };
 }
 
 export function fmtCount(n) {

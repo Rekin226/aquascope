@@ -223,6 +223,8 @@ def test_a_run_writes_the_reaches_expected_to_flood(tmp_path, monkeypatch):
     fc = json.loads((root / "latest.geojson").read_text())
     assert [f["properties"]["river_id"] for f in fc["features"]] == [1006, 1001]   # highest class first
     assert fc["features"][0]["properties"]["gauges"] == "usgs/X"
+    # every return-period flow rides along, for the card's threshold lines (#556)
+    assert fc["features"][0]["properties"]["q100"] == 600 and "q5" in fc["features"][1]["properties"]
     m = json.loads((root / "manifest.json").read_text())
     assert m["valid_to"] == "2026-10-23" and m["min_strahler_order"] == fw.DEFAULT_MIN_ORDER
     assert m["not"].startswith("Model output, not an official warning")

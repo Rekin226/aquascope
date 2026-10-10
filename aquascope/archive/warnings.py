@@ -474,7 +474,9 @@ def to_geojson(rows: list[dict[str, Any]], cap: int = GEOJSON_MAX) -> tuple[dict
                                                                                        round(r["lat"], 4)]},
                       "properties": {"river_id": r["river_id"], "rp": r["rp"], "peak": r["peak_cms"], "q2": r["q2"],
                                      "day": r["peak_date"], "share": r["share"], "order": r["strahler_order"],
-                                     "daily": r["daily"], "gauges": ";".join(r.get("gauges") or [])}})
+                                     "daily": r["daily"], "gauges": ";".join(r.get("gauges") or []),
+                                     # The other return-period flows draw the card's threshold lines (#556).
+                                     **{f"q{t}": r.get(f"q{t}") for t in RETURN_PERIODS[1:]}}})
     return {"type": "FeatureCollection", "features": feats}, len(placed) > cap
 
 

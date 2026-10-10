@@ -963,6 +963,14 @@ def _print_river_status(res: dict) -> None:
     if rng:
         gaps = f"; no map for {', '.join(res['missing'])}" if res.get("missing") else ""
         print(f"  {rng['months']} months, {rng['first']} to {rng['latest']}{gaps}.")
+    if res.get("headline"):
+        from aquascope.map_layers import MIN_COVER
+
+        print(f"\n  {res['headline']}.")
+        for r in res.get("regions") or []:
+            if r["cover"] >= MIN_COVER:
+                print(f"    {r['name']:<28} {round(100 * r['below']):>3}% below  {round(100 * r['above']):>3}% above")
+        print(f"  {res['regions_note']}\n")
     for c in res.get("legend") or []:
         print(f"  {c['hex']}  {c['label']:<18} {c['range']}")
     if res.get("method"):
@@ -970,14 +978,48 @@ def _print_river_status(res: dict) -> None:
         print(f"  {res['attribution']} ({res['licence']})")
 
 
+def _print_flood_depth(res: dict) -> None:
+    """`aquascope layers depth`: the depth map chosen by the forecast, its tiles and what it found."""
+    if res.get("error"):
+        print(f"  {res['error']}")
+        return
+    print(f"  {res['summary']}")
+    for t in res.get("tiles") or []:
+        print(f"  {t['url']}")
+        print(f"    window {t['window']}   {t['gdal']}")
+    for r in (res.get("forecast_reaches") or [])[:20]:
+        print(f"  reach {r['river_id']}  {r['forecast_class']}-year flow, {r['depth_return_period']}-year map  "
+              f"({r['lat']:.3f}, {r['lon']:.3f})")
+    if res.get("forecast_reaches_n", 0) > 20:
+        print(f"  ... and {res['forecast_reaches_n'] - 20} more")
+    if res.get("not"):
+        print(f"\n  {res['not']}")
+    print(f"  {res['attribution']} ({res['licence']})")
+
+
 def cmd_layers(args: argparse.Namespace) -> None:
     """`aquascope layers`: the dated map layers and their valid dates, or the frames of a time-lapse (#522)."""
     from aquascope.map_time import dated_layers, layer_frames
 
-    if args.layers_cmd == "status":
-        from aquascope.map_layers import river_status_month
+    if args.layers_cmd == "depth":
+        from aquascope.flood_depth import flood_depth_overlay
 
-        res = river_status_month(args.month, live=not args.offline)
+        res = flood_depth_overlay(args.river_id, bbox=args.bbox, return_period=args.rp, day=args.day,
+                                  radius_km=args.radius_km, sample=not args.no_sample, local=args.local)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            _print_flood_depth(res)
+        if res.get("error"):
+            sys.exit(1)
+        return
+    if args.layers_cmd == "status":
+        from aquascope.map_layers import river_status_month, river_status_summary
+
+        if args.summary:
+            res = river_status_summary(args.month, live=not args.offline)
+        else:
+            res = river_status_month(args.month, live=not args.offline)
         if args.json:
             print(json.dumps(res, indent=2, ensure_ascii=False))
             return
@@ -1410,6 +1452,9 @@ def cmd_now(args: argparse.Namespace) -> None:
     if lat is None and not args.station and args.river_id is None:
         print("  Give LAT LON, --station SOURCE/ID or --river-id ID.")
         sys.exit(2)
+    if getattr(args, "plume", False):
+        _now_plume(args, lat, lon)
+        return
     try:
         res = nownext.now(lat, lon, station=args.station, river_id=args.river_id, days=args.days, date=args.date,
                           with_forecast=not args.status_only, correct=not args.raw, history=not args.quick)
@@ -1511,6 +1556,47 @@ def cmd_watch(args: argparse.Namespace) -> None:
     for err in res.get("errors") or []:
         print(f"  Skipped {err['item']}: {err['error']}")
     print("  Forecasts are model output (GEOGLOWS v2, CC BY 4.0). Flood events: Groundsource (CC BY 4.0).")
+
+
+def _now_plume(args: argparse.Namespace, lat: float | None, lon: float | None) -> None:
+    """`aquascope now --plume`: the reach's ensemble plume and its threshold classes (#556)."""
+    from aquascope import nownext
+
+    if args.station:
+        print("  --plume is for a river reach: give LAT LON or --river-id ID.")
+        sys.exit(2)
+    try:
+        res = nownext.plume(args.river_id, lat=lat, lon=lon, days=args.days, history=True)
+    except ValueError as exc:
+        print(f"  {exc}")
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    if res.get("error"):
+        print(f"  {res['error']}")
+        return
+    print(f"  River reach {res['river_id']}, GEOGLOWS run of {res.get('issued')} ({res.get('n_members')} members, "
+          "modelled)")
+    print(f"  {'day':<10}  {'median':>9}  {'middle half':>19}  {'full range':>19}  class")
+    for i, day in enumerate(res["date"]):
+        def cell(k: str, i: int = i) -> str:
+            v = (res.get(k) or [None] * (i + 1))[i]
+            return "-" if v is None else f"{v:,.4g}"
+
+        rp = res["class_daily"][i]
+        print(f"  {day:<10}  {cell('median'):>9}  {cell('p25') + ' - ' + cell('p75'):>19}  "
+              f"{cell('min') + ' - ' + cell('max'):>19}  {f'{rp}-yr' if rp else '-'}")
+    thr = res.get("thresholds") or {}
+    if thr.get("q"):
+        pairs = ", ".join(f"{t}-yr {q:,.4g}" for t, q in zip(thr["return_periods"], thr["q"]))
+        print(f"  Thresholds from {thr.get('source')}: {pairs}")
+    else:
+        print("  No return-period flows for this reach, so no classes.")
+    print(f"  {res.get('sentence')}")
+    if res.get("members_line"):
+        print(f"  {res['members_line']}")
+    print(f"  {res.get('attribution')}. Model output, not an official warning.")
 
 
 def _now_table(fc: dict) -> list[tuple]:
@@ -4107,7 +4193,22 @@ def main() -> None:
                                       "1990 on): its URL, legend, licence and the months that exist")
     p_lstatus.add_argument("month", nargs="?", default=None, help="YYYY-MM (default: the newest month)")
     p_lstatus.add_argument("--offline", action="store_true", help="Do not list the bucket; use the recorded range")
+    p_lstatus.add_argument("--summary", action="store_true",
+                           help="Read the month's map and say in one line where the rivers are low or high, "
+                                "with each named region's share below and above normal")
     p_lstatus.add_argument("--json", action="store_true")
+    p_ldepth = layers_sub.add_parser("depth", help="Flood depth where floods are forecast: the JRC depth map around a "
+                                     "Floods ahead reach, or over a box (#554)")
+    p_ldepth.add_argument("river_id", nargs="?", default=None, help="A GEOGLOWS reach in today's Floods ahead")
+    p_ldepth.add_argument("--bbox", nargs=4, type=float, metavar=("W", "S", "E", "N"), default=None,
+                          help="A box instead (up to 2 x 2 degrees)")
+    p_ldepth.add_argument("--rp", type=int, default=None, help="Return period: 10, 20, 50, 75, 100, 200 or 500 "
+                          "(default: the one the forecast reaches, or 100 for a box)")
+    p_ldepth.add_argument("--day", default=None, help="A day of the forecast (YYYY-MM-DD) instead of its peak")
+    p_ldepth.add_argument("--radius-km", type=float, default=None, help="How far around the reach (default by order)")
+    p_ldepth.add_argument("--no-sample", action="store_true", help="Do not read the depth, only say where it is")
+    p_ldepth.add_argument("--local", default=None, help="A local Floods ahead run folder instead of the Archive")
+    p_ldepth.add_argument("--json", action="store_true")
     # ── map (#561) ───────────────────────────────────────────────────
     p_map = sub.add_parser("map", help="Read a plain-English request about the Explorer's map into map actions "
                            "(the keyless phrase grammar, or --llm with your own key)")
@@ -4150,6 +4251,9 @@ def main() -> None:
     p_now.add_argument("--status-only", action="store_true", help="Only today against normal, no forecast")
     p_now.add_argument("--quick", action="store_true",
                        help="Only the two forecasts: no thresholds or correction (skips the simulated record)")
+    p_now.add_argument("--plume", action="store_true",
+                       help="The FEWS view of the reach: the 51-member plume day by day, its return-period classes "
+                       "and the members past each")
     p_now.add_argument("--csv", default=None, help="Write the forecast to this CSV")
     p_now.add_argument("--json", action="store_true")
     p_watch = sub.add_parser("watch", help="What changed at watched gauges, reaches and areas since a date")

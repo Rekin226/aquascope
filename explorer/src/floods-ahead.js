@@ -8,16 +8,19 @@
 // up along the GEOGLOWS stream tiles, and the Archive gauges on those reaches
 // pulse gently. The map's date (the time bar, core.js setTime) picks the day:
 // inside the forecast's 15 days the reaches show their class on that day,
-// otherwise the 15-day peak. Clicking a reach opens a small card on the map.
+// otherwise the 15-day peak. Clicking a reach opens the map card with its
+// ensemble plume (the FEWS view, fews.js).
 
 import { CONFIG } from "../config.js?v=__BUILD__";
-import { $, actions, clickLayers, escapeHtml, onTime, setTime, sourceStyle, state } from "./core.js?v=__BUILD__";
+import { $, clickLayers, escapeHtml, onTime, setTime, state } from "./core.js?v=__BUILD__";
 import { renderCredits } from "./layer-ui.js?v=__BUILD__";
+import { initFews, openReachCard, setFewsVisible } from "./fews.js?v=__BUILD__";
+import { refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
 import { map } from "./map.js?v=__BUILD__";
 import { STREAMS_PMTILES } from "./river-core.js?v=__BUILD__";
 import {
-  FLOODS_CREDIT, FLOOD_CLASSES, FORECAST_DAYS, NONE, addDays, classColor, countsFor, dayIndex, gaugesFor, idsByClass,
-  issueLine, legendLine, lineColorExpr, lineFilterExpr, pointsFor, reachFacts, shortDay,
+  FLOODS_CREDIT, FLOOD_CLASSES, FORECAST_DAYS, NONE, addDays, countsFor, dayIndex, gaugesFor, idsByClass,
+  issueLine, legendLine, lineColorExpr, lineFilterExpr, pointsFor, shortDay,
 } from "./floods-ahead-core.js?v=__BUILD__";
 
 export { FLOODS_CREDIT };
@@ -42,8 +45,6 @@ let data = null;          // { manifest, features, byId }
 let loading = null;
 let visible = true;
 let day = -1;             // the forecast day on show, -1 for the 15-day peak
-let legend = null;
-let popup = null;
 let pulseFrame = 0;
 let playToken = 0;
 let gaugeRetry = 0;
@@ -129,11 +130,12 @@ function ensureLayers() {
       layout: { visibility: vis(), "circle-sort-key": rank },
       paint: {
         "circle-color": ["match", ["get", "c"], ...FLOOD_CLASSES.flatMap((c) => [c.rp, c.color]), NONE],
+        // A soft glow, not a blot (#543 design pass): small on the globe, so the river status reads through it.
         "circle-radius": ["interpolate", ["linear"], ["zoom"],
-          1, ["interpolate", ["linear"], rank, 2, 7, 10, 10, 100, 16],
-          6, ["interpolate", ["linear"], rank, 2, 12, 10, 16, 100, 26]],
+          1, ["interpolate", ["linear"], rank, 2, 4.5, 10, 6.5, 100, 10],
+          6, ["interpolate", ["linear"], rank, 2, 9, 10, 12, 100, 18]],
         "circle-blur": 0.9,
-        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.6, LINE_ZOOM - 0.5, 0.45, 7, 0],
+        "circle-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.4, LINE_ZOOM - 0.5, 0.32, 7, 0],
       },
     }, before);
     map.addLayer({
@@ -253,67 +255,61 @@ function pulse() {
   pulseFrame = requestAnimationFrame(tick);
 }
 
-// ── the legend card ─────────────────────────────────────────────────────────
+// ── the row in "On the map" (map-legend.js) ─────────────────────────────────
 
-function buildLegend() {
-  // The shared legend stack (#543), Floods ahead on top as its layer is above the others.
-  const stack = document.getElementById("map-legends");
-  const wrap = stack || document.querySelector(".map-wrap");
-  if (!wrap || legend) return;
-  legend = document.createElement("section");
-  legend.className = "fa-legend";
-  // On a phone the map is half the screen: the legend starts folded to one line.
-  if (globalThis.matchMedia && globalThis.matchMedia("(max-width: 860px)").matches) legend.classList.add("min");
-  legend.setAttribute("aria-label", "Floods ahead");
-  if (stack) wrap.prepend(legend); else wrap.appendChild(legend);
-  legend.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-act]");
-    if (!btn) return;
-    if (btn.dataset.act === "play") play();
-    else if (btn.dataset.act === "stop") stopPlay();
-    else if (btn.dataset.act === "hide") setFloodsVisible(false);
-    else if (btn.dataset.act === "about") about();
-    else if (btn.dataset.act === "min") { legend.classList.toggle("min"); renderLegend(); }
-  });
+const classesMark = () => `<span class="fa-mini">${FLOOD_CLASSES.map((c) => `<i style="background:${c.color}"></i>`).join("")}</span>`;
+
+function reachCount() {
+  if (!data || data.manifest.missing) return 0;
+  return [...countsFor(data.features, day).values()].reduce((a, b) => a + b, 0);
 }
 
-function renderLegend() {
-  if (!legend) return;
-  legend.hidden = !visible || !data;
-  if (legend.hidden) return;
+function rowSummary() {
+  if (!data) return "loading";
+  if (data.manifest.missing) return "nothing published yet";
+  const n = reachCount();
+  const reaches = `${n.toLocaleString("en-GB")} reach${n === 1 ? "" : "es"}`;
+  if (day >= 0) return `${n ? n.toLocaleString("en-GB") : "none"} on ${shortDay(addDays(data.manifest.issue_date, day))}`;
+  return n ? reaches : "none in 15 days";
+}
+
+function rowBody() {
   const m = data.manifest;
-  const min = legend.classList.contains("min");
-  if (m.missing) {
-    legend.classList.add("fa-empty");
-    legend.innerHTML = `<div class="fa-head"><span class="fa-title">Floods ahead</span>` +
-      `<button type="button" class="fa-x" data-act="hide" aria-label="Hide Floods ahead" title="Hide">×</button></div>` +
-      `<p class="fa-line">${escapeHtml(legendLine(m))}</p>`;
-    return;
-  }
-  legend.classList.remove("fa-empty");
   const counts = countsFor(data.features, day);
-  const n = [...counts.values()].reduce((a, b) => a + b, 0);
+  const n = reachCount();
   const chips = FLOOD_CLASSES.map((c) => {
     const k = counts.get(c.rp) || 0;
     return `<span class="fa-chip${k ? "" : " zero"}" title="${k.toLocaleString("en-GB")} reach${k === 1 ? "" : "es"} at or above the ${c.label} flow">` +
       `<i style="background:${c.color}"></i>${c.rp}</span>`;
   }).join("");
   const playing = playToken > 0;
-  legend.innerHTML =
-    `<div class="fa-head"><span class="fa-title">Floods ahead</span>` +
-    `<span class="fa-when">${escapeHtml(day >= 0 ? shortDay(addDays(m.issue_date, day)) : "next 15 days")}</span>` +
-    (min ? `<span class="fa-mini" aria-hidden="true">${FLOOD_CLASSES.map((c) => `<i style="background:${c.color}"></i>`).join("")}</span>` +
-      `<span class="fa-count">${n.toLocaleString("en-GB")}</span>` : "") +
-    `<button type="button" class="fa-x" data-act="min" aria-expanded="${min ? "false" : "true"}" ` +
-    `aria-label="${min ? "Show" : "Fold"} the Floods ahead legend" title="${min ? "Show" : "Fold"}">${min ? "+" : "–"}</button></div>` +
-    (min ? "" :
-      `<div class="fa-scale" role="img" aria-label="Return-period classes, 2 to 100 years">${chips}<span class="fa-unit">year flow</span></div>` +
-      `<p class="fa-line">${escapeHtml(legendLine(m, day, n))}</p>` +
-      `<div class="fa-actions">` +
-      `<button type="button" class="fa-btn" data-act="${playing ? "stop" : "play"}">${playing ? "Stop" : "Play the 15 days"}</button>` +
-      `<button type="button" class="fa-btn quiet" data-act="about">About</button>` +
-      `<button type="button" class="fa-btn quiet" data-act="hide">Hide</button></div>` +
-      `<p class="fa-foot">${escapeHtml(issueLine(m))}. Model forecast, not an official warning.</p>`);
+  return `<div class="fa-scale" role="img" aria-label="Return-period classes, 2 to 100 years">${chips}<span class="fa-unit">year flow</span></div>` +
+    `<p class="ml-when">${escapeHtml(legendLine(m, day, n))}</p>` +
+    `<p class="ml-src">${escapeHtml(issueLine(m))}. Model forecast, not an official warning.</p>` +
+    `<div class="ml-actions">` +
+    `<button type="button" class="ml-btn" data-act="${playing ? "stop" : "play"}">${playing ? "Stop" : "Play the 15 days"}</button>` +
+    `<button type="button" class="ml-btn quiet" data-act="about">About</button></div>`;
+}
+
+function renderLegend() {
+  refreshLegend("floods-ahead");
+}
+
+function registerRow() {
+  registerLegendRow({
+    id: "floods-ahead", title: "Floods ahead",
+    mark: classesMark,
+    summary: rowSummary,
+    on: () => visible,
+    empty: () => !data || data.manifest.missing || !reachCount(),
+    toggle: (on) => setFloodsVisible(on),
+    body: rowBody,
+    act: (name) => {
+      if (name === "play") play();
+      else if (name === "stop") stopPlay();
+      else if (name === "about") about();
+    },
+  });
 }
 
 function about() {
@@ -370,45 +366,17 @@ function onClick(e) {
   openCard(hit, e.lngLat);
 }
 
+// The map card (#548) answers, with the reach's ensemble plume (the FEWS view, #556, fews.js).
 function openCard(f, lngLat) {
-  const p = f.properties;
-  const facts = reachFacts(p, day, (data.manifest && data.manifest.members) || 51);
-  const [lon, lat] = f.geometry.coordinates;
-  const gauges = String(p.gauges || "").split(";").filter(Boolean).map((key) => {
-    const r = state.byKey.get(key);
-    const name = r ? r.name || key.split("/")[1] : key;
-    const who = r ? sourceStyle(r.source).label : key.split("/")[0];
-    return `<button type="button" class="fa-gauge" data-key="${escapeHtml(key)}">${escapeHtml(name)} <span class="muted">${escapeHtml(who)}</span></button>`;
-  });
-  const html = `<div class="fa-card">
-    <div class="fa-card-head"><i style="background:${classColor(p.rp)}"></i><strong>${escapeHtml(facts.title)}</strong></div>
-    <p>${escapeHtml(facts.peak)}</p>
-    ${facts.today ? `<p>${escapeHtml(facts.today)}</p>` : ""}
-    ${facts.agree ? `<p class="muted">${escapeHtml(facts.agree)}</p>` : ""}
-    ${gauges.length ? `<div class="fa-gauges"><span class="muted">Gauge${gauges.length > 1 ? "s" : ""} here</span>${gauges.join("")}</div>` : ""}
-    <div class="fa-card-actions"><button type="button" class="btn tiny primary fa-open">The 15-day forecast</button></div>
-    <p class="fa-foot muted">${escapeHtml(facts.reach)} GEOGLOWS model forecast, not an official warning.</p>
-  </div>`;
-  if (popup) popup.remove();
-  // The legend would sit over a card near the top left: fold it while the card is open.
-  const folded = legend && !legend.classList.contains("min");
-  if (folded) { legend.classList.add("min"); renderLegend(); }
-  popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: "300px", offset: 10, className: "fa-popup" })
-    .setLngLat(lngLat || [lon, lat]).setHTML(html).addTo(map);
-  popup.on("close", () => { if (folded && legend) { legend.classList.remove("min"); renderLegend(); } });
-  const el = popup.getElement();
-  el.querySelector(".fa-open").addEventListener("click", () => {
-    popup.remove();
-    actions.selectPoint(lat, lon, { tab: "now" });
-  });
-  for (const b of el.querySelectorAll(".fa-gauge")) {
-    b.addEventListener("click", () => { popup.remove(); actions.selectStation(b.dataset.key, { fly: false }); });
-  }
+  openReachCard(f, lngLat, { day, manifest: data.manifest });
 }
 
 // ── on and off ──────────────────────────────────────────────────────────────
 
 export function floodsVisible() { return visible; }
+
+/** The issue and its reaches once read ({ manifest, features }), for the layers drawn from it: flood depth (#554). */
+export function floodsAheadData() { return load().then(() => data); }
 
 export function setFloodsVisible(on) {
   visible = Boolean(on);
@@ -416,7 +384,8 @@ export function setFloodsVisible(on) {
   renderCredits();
   const toggle = $("toggle-floods");
   if (toggle) toggle.checked = visible;
-  if (!visible) { stopPlay(); if (popup) popup.remove(); }
+  if (!visible) stopPlay();
+  setFewsVisible(visible);
   if (state.mapOk && map) {
     for (const id of ALL) {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis());
@@ -429,9 +398,10 @@ export function setFloodsVisible(on) {
 
 export function initFloodsAhead() {
   if (!state.mapOk || !map) return;
-  buildLegend();
+  registerRow();
   state.floodsOn = visible;
   renderCredits();
+  initFews();   // the forecast gauges and the plume card (#556)
   const toggle = $("toggle-floods");
   if (toggle) {
     toggle.checked = visible;

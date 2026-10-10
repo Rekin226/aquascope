@@ -66,6 +66,9 @@ LAYERS: dict[str, dict[str, Any]] = {
     "floods_ahead": {"label": "Floods ahead", "aliases": (
         "floods ahead", "flood forecast", "flood forecasts", "forecast floods", "flood warnings", "warnings",
         "future floods", "upcoming floods")},
+    "flood_depth": {"label": "Flood depth where floods are forecast", "aliases": (
+        "flood depth", "flood depths", "flood depth map", "depth map", "water depth", "inundation",
+        "inundation map", "flood extent", "ras mapper")},
     "rivers": {"label": "Rivers", "aliases": ("rivers", "river network", "the river network", "streams")},
     "flow": {"label": "Flow direction", "aliases": (
         "flow direction", "flow animation", "animated flow", "flow arrows", "flow")},

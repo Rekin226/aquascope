@@ -535,6 +535,23 @@ def flow_forecast(lat: float | None = None, lon: float | None = None, river_id: 
         return {"error": str(exc)}
 
 
+def forecast_plume(river_id: int | None = None, lat: float | None = None, lon: float | None = None,
+                   days: int = 15) -> dict[str, Any]:
+    """The FEWS view of a river reach, MODELLED (#556): the GEOGLOWS v2 ensemble plume for the next 15 days, day
+    by day from the 51 members (median, middle half 25-75 %, full range, ensemble mean), each day's return-period
+    class (2 to 100 years, the Floods ahead rule: the ensemble mean against the reach's own return-period flows),
+    the peak and its class, and how many members reach each return-period flow. Give a river_id, or a point
+    (snapped to the main river there). Quote the members_line with the class, and say it is a model forecast."""
+    from aquascope import nownext
+
+    try:
+        res = nownext.plume(river_id, lat=lat, lon=lon, days=days, history=True)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    res.pop("members_at", None)
+    return res
+
+
 def correct_to_gauge(source: str, station_id: str, river_id: int | None = None, days: int = 15) -> dict[str, Any]:
     """The GEOGLOWS forecast at a gauge's river reach corrected to the gauge's own record (flow-duration quantile
     mapping per calendar month, the MFDC-QM / SABER family), and how much to trust it: KGE (with r, alpha, beta),
@@ -614,6 +631,33 @@ def river_status_month(month: str | None = None) -> dict[str, Any]:
     from aquascope.map_layers import river_status_month as _status
 
     return _status(month)
+
+
+def flood_depth_overlay(river_id: int | None = None, bbox: list[float] | None = None,
+                        return_period: int | None = None, day: str | None = None) -> dict[str, Any]:
+    """Flood depth where a flood is forecast (the RAS Mapper view): for a GEOGLOWS river_id in today's Floods ahead
+    issue, the JRC CEMS-GloFAS flood depth map that matches its forecast class (10, 20, 50 or 100 years: the largest
+    not above the class; JRC has no 2- or 5-year maps), clipped to a circle around the reach, with the depth at the
+    reach, the deepest pixel and the wet share there. day (YYYY-MM-DD, inside the forecast) uses that day's class
+    instead of the 15-day peak. Or a bbox [west, south, east, north] (up to 2 x 2 degrees) with a return_period
+    (10, 20, 50, 75, 100, 200 or 500; default 100), which also lists the forecast reaches inside it. Returns the COG
+    tiles (URL, window, a GDAL command), the extent, the legend and the licence (CC BY 4.0, with JRC's own wording).
+    MODEL ESTIMATE twice over (a forecast choosing a precomputed hazard map): always say "may flood in the next 15
+    days, model estimate" when you quote it."""
+    from aquascope.flood_depth import flood_depth_overlay as _depth
+
+    return _depth(river_id, bbox=bbox, return_period=return_period, day=day)
+
+
+def river_status_summary(month: str | None = None) -> dict[str, Any]:
+    """Where the rivers are low or high in one month of the world river status map (YYYY-MM; default the
+    newest), in one line: reads the month's GeoTIFF and gives, for a few named regions (rough boxes such as
+    the Amazon, the Sahel, South Asia), the share of the mapped area below normal and above normal, and a
+    headline naming the regions that are mostly one or the other. The same line the Explorer shows over the
+    globe. Modelled (GEOGLOWS v2), CC BY 4.0."""
+    from aquascope.map_layers import river_status_summary as _summary
+
+    return _summary(month)
 
 
 def map_command(text: str, resolve: bool = False) -> dict[str, Any]:
@@ -1337,6 +1381,7 @@ def build_server():
     server.tool()(model_to_lean_on)
     server.tool()(flow_status)
     server.tool()(flow_forecast)
+    server.tool()(forecast_plume)
     server.tool()(status_bulletin)
     server.tool()(flood_warnings)
     server.tool()(correct_to_gauge)
@@ -1364,6 +1409,8 @@ def build_server():
     server.tool()(dated_layers)
     server.tool()(layer_frames)
     server.tool()(river_status_month)
+    server.tool()(flood_depth_overlay)
+    server.tool()(river_status_summary)
     server.tool()(map_command)
     server.tool()(list_analyses)
     server.tool()(analyse_table)

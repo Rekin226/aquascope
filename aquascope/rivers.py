@@ -906,6 +906,36 @@ def forecast_stats(river_id: int | str) -> dict[str, Any]:
     return out
 
 
+def forecast_ensemble(river_id: int | str, run: str | None = None) -> dict[str, Any]:
+    """Every member of the GEOGLOWS 15-day ensemble forecast for a reach (hourly then 3-hourly), modelled.
+
+    A thin fetch (#556): ``datetime`` and ``members``, a dict of ``ensemble_01`` to ``ensemble_52`` lists in m3/s,
+    gaps as ``None``. Member 52 is the high-resolution run, not one of the 51 ensemble members. ``run``
+    (``YYYY-MM-DD``) asks for that day's 00 UTC run rather than the newest, so a page can read the run its map shows.
+    """
+    rid = _river_id(river_id)
+    url = f"{GEOGLOWS_API}/forecastensemble/{rid}"
+    params = {"format": "json"}
+    if run:
+        params["date"] = str(run)[:10].replace("-", "")
+    data = _fetch_json(url, params)
+    out: dict[str, Any] = {"river_id": rid, "modelled": True, "label": "modelled",
+                           "source": "GEOGLOWS v2 forecast (ECMWF ensemble members)", "url": f"{url}?format=json",
+                           "attribution": ATTRIBUTION, "licence": LICENCE["discharge"], "unit": "m3/s"}
+    if not isinstance(data, dict) or not data.get("datetime"):
+        return {**out, "error": "GEOGLOWS returned no forecast ensemble for this reach."}
+    out["datetime"] = list(data["datetime"])
+    out["members"] = {key: [_num(v) if v not in ("", None) else None for v in vals]
+                      for key, vals in sorted(data.items())
+                      if key.startswith("ensemble_") and isinstance(vals, list)}
+    if not out["members"]:
+        return {**out, "error": "GEOGLOWS returned no forecast ensemble for this reach."}
+    meta = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+    if meta.get("gen_date"):
+        out["generated"] = meta["gen_date"]
+    return out
+
+
 # ── the network: topology and unit-catchment areas, one VPU at a time ───────
 
 

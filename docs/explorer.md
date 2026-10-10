@@ -90,11 +90,16 @@ opens beside it, pointing at what you clicked:
   the Archive's daily status snapshot when the gauge is in it, else it is ranked from
   the record once that has loaded; for a river it comes from the reach's simulated
   record since 1940, and says simulated,
-- **one sparkline**: the record's last 12 months, or for a river the next 15 days
-  from GEOGLOWS (the line is the ensemble mean, the shading its middle half),
+- **one sparkline**: the record's last 12 months (from zero), or for a river the next
+  15 days from GEOGLOWS (the line is the ensemble mean, the shading its middle half,
+  drawn on its own range so a rise shows; the number beside it gives the size),
 - **one number**: the newest value and its day, or the forecast's peak and its day,
 - **Details** (the full panel, on the right tab), **Trace to sea** (draws the path on
   the map), **☆ Watch** and **Study**.
+
+A click that misses the river (no stream within 1 km, easy from far out) says how
+far the nearest and the larger river are, and **Use the larger river** (or **Use
+the nearest river**) takes it in one click.
 
 The card shows at once with what is known (the name and position) and fills as the
 answers arrive. Its last line says where the numbers come from. **Escape** or ×

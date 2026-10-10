@@ -82,6 +82,21 @@ test("the sparkline starts at zero for a positive record, breaks at gaps, and en
   assert.equal(neg.line, "M0,10L10,0");
 });
 
+test("a forecast is scaled to its own range, never less than a fifth of its peak", () => {
+  // From zero, 90 to 100 is a flat line near the top; on its own range the rise fills the box.
+  const rec = sparkPaths({ v: [90, 100] }, { w: 10, h: 100, pad: 0 });
+  assert.equal(rec.line, "M0,10L10,0");
+  const fc = sparkPaths({ v: [90, 100] }, { w: 10, h: 100, pad: 0, fromZero: false });
+  assert.equal(fc.line, "M0,75L10,25");
+  // A steady river stays steady: 100 to 101 moves by a twentieth of the box at most.
+  const flat = sparkPaths({ v: [100, 101] }, { w: 10, h: 100, pad: 0, fromZero: false });
+  const [y0, y1] = flat.line.match(/,([\d.]+)/g).map((x) => Number(x.slice(1)));
+  assert.ok(Math.abs(y0 - y1) <= 5, flat.line);
+  // A wide range is drawn edge to edge.
+  const wide = sparkPaths({ v: [10, 100] }, { w: 10, h: 100, pad: 0, fromZero: false });
+  assert.equal(wide.line, "M0,100L10,0");
+});
+
 test("the card sits above what was clicked, flips below near the top, and stays inside the map", () => {
   const above = placeCard({ ax: 500, ay: 500, cw: 300, ch: 200, W: 1400, H: 800, lift: 10, gap: 10 });
   assert.deepEqual([above.left, above.top, above.side, above.tail, above.inside], [350, 280, "above", 150, true]);

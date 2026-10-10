@@ -113,16 +113,27 @@ export const prettyUnit = (u) => ({ "m3/s": "m³/s", "ft3/s": "ft³/s" }[u] || u
 
 // The sparkline as SVG path data, in a `w` x `h` box with `pad` pixels kept clear at the top and bottom.
 // `line` is the series (gaps break it), `band` an optional {lo, hi} pair drawn as one filled shape, and
-// `area` the same line closed down to the bottom (for a record, which has no band). Values are scaled from
-// zero when they never go below it, so a dry spell sits low rather than filling the box.
-export function sparkPaths({ v = [], band = null }, { w = 240, h = 44, pad = 3 } = {}) {
+// `area` the same line closed down to the bottom (for a record, which has no band). A record is scaled from
+// zero when it never goes below it, so a dry spell sits low rather than filling the box. A forecast
+// (`fromZero: false`) is scaled to its own range, so its rise or fall shows rather than a flat line near the
+// top; the range is kept at least a fifth of the largest value, so a steady river is not drawn as a flood.
+export function sparkPaths({ v = [], band = null }, { w = 240, h = 44, pad = 3, fromZero = true } = {}) {
   const vals = v.map((x) => (finite(x) ? Number(x) : null));
   const all = vals.filter((x) => x !== null);
   if (band) for (const k of ["lo", "hi"]) for (const x of band[k] || []) if (finite(x)) all.push(Number(x));
   if (all.length < 2) return null;
   let lo = Math.min(...all);
-  const hi = Math.max(...all);
-  if (lo >= 0) lo = 0;
+  let hi = Math.max(...all);
+  if (fromZero && lo >= 0) lo = 0;
+  if (!fromZero) {
+    const least = Math.abs(hi) * 0.2;
+    if (hi - lo < least) {
+      const mid = (hi + lo) / 2;
+      lo = mid - least / 2;
+      hi = mid + least / 2;
+      if (lo < 0 && Math.min(...all) >= 0) { hi -= lo; lo = 0; }
+    }
+  }
   const span = hi - lo || 1;
   const n = vals.length;
   const x = (i) => (n === 1 ? w / 2 : (i * w) / (n - 1));

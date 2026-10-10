@@ -21,7 +21,7 @@ import { call, callLight } from "./worker-client.js?v=__BUILD__";
 import { ensureNowStatus } from "./now-map.js?v=__BUILD__";
 import { statusClass } from "./now-core.js?v=__BUILD__";
 import { snapLine } from "./river-core.js?v=__BUILD__";
-import { traceRiver } from "./river.js?v=__BUILD__";
+import { takeOfferedReach, traceRiver } from "./river.js?v=__BUILD__";
 import { shapeSvg } from "./shapes.js?v=__BUILD__";
 import {
   cardNumber, dayMonth, forecastPeak, lastDays, latestValue, placeCard, prettyUnit, snapshotSentence, sparkPaths,
@@ -31,6 +31,7 @@ const STATUS_VARIABLES = new Set(["discharge", "water_level", "groundwater_level
 const SNAPSHOT_CREDIT = "AquaScope daily status snapshot";
 const GEOGLOWS_SHORT = "GEOGLOWS v2 forecast, CC BY 4.0, modelled";
 const SHEET_QUERY = "(max-width: 640px)";
+const NEAR_GAUGE_KM = 50;   // past this the nearest gauge says nothing about the place, so the card leaves it out
 const reducedMotion = () => Boolean(globalThis.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 const sheetMode = () => !state.mapOk || Boolean(globalThis.matchMedia && matchMedia(SHEET_QUERY).matches);
 
@@ -58,7 +59,8 @@ const el = () => $("map-card");
  *   what, whatIcon,           the kicker above the title ("Gauge", "Flood cell") and an optional SVG
  *   title, sub,               the name and one muted line under it
  *   status: { text, color } | { pending: "Reading…" } | null     the sentence, with a class colour
- *   spark: { v, band: {lo, hi}, label } | { pending, label } | { empty: "why" } | null
+ *   spark: { v, band: {lo, hi}, label, fromZero } | { pending, label } | { empty: "why" } | null
+ *                             (fromZero: false scales a forecast to its own range; a record starts at zero)
  *   figure: { value, unit, label } | { pending } | null           the one key number
  *   note,                     an extra line (for example what a trace found)
  *   credit,                   where the numbers come from, with the licence
@@ -180,7 +182,8 @@ function render() {
     </div>
     ${s.credit ? `<p class="mc-credit">${escapeHtml(s.credit)}</p>` : ""}
     <span class="mc-tail" aria-hidden="true"></span>`;
-  card.setAttribute("aria-describedby", s.status && !s.status.pending ? "mc-status" : "");
+  if (s.status && !s.status.pending) card.setAttribute("aria-describedby", "mc-status");
+  else card.removeAttribute("aria-describedby");
   card.querySelector('[data-act="close"]').addEventListener("click", () => closeCard());
   const det = card.querySelector('[data-act="details"]');
   if (det) det.addEventListener("click", () => s.details());
@@ -203,7 +206,7 @@ function drawSpark() {
   if (!sp || !box || !sp.v) return;
   const w = Math.max(120, Math.round(box.clientWidth || 180));
   const h = 40;
-  const p = sparkPaths({ v: sp.v, band: sp.band || null }, { w, h, pad: 4 });
+  const p = sparkPaths({ v: sp.v, band: sp.band || null }, { w, h, pad: 4, fromZero: sp.fromZero !== false });
   if (!p) { box.outerHTML = `<p class="mc-spark-empty muted">Too few values to draw.</p>`; return; }
   box.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">` +
     (p.band ? `<path class="mc-band" d="${p.band}"/>` : "") +
@@ -289,6 +292,7 @@ function keepAnchorAboveSheet() {
 
 // ── the selection's card: a gauge ───────────────────────────────────────────
 
+const distanceWords = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
 const coords = (lat, lon) => `${Number(lat).toFixed(3)}°, ${Number(lon).toFixed(3)}°`;
 
 function openDetails(surface, tab) {
@@ -501,14 +505,30 @@ function onSnap(m, snap) {
     return;
   }
   if (!snap.snapped) {
+    // No stream within the snap's reach of the click (easy at a world zoom): offer the river the snap found,
+    // in one click, rather than send the reader to the panel for it.
+    const which = snap.larger ? "larger" : snap.nearest ? "nearest" : null;
     const near = nearestGauge(m.lat, m.lon);
+    const take = which ? {
+      id: "reach", label: which === "larger" ? "Use the larger river" : "Use the nearest river",
+      title: `River reach ${snap[which].river_id}, ${distanceWords(snap[which].distance_m)} away`,
+      onClick: () => {
+        const reach = takeOfferedReach("pt", which);
+        if (!reach || model !== m) return;
+        onSnap(m, { snapped: true, river_id: reach.river_id, snap_lat: reach.lat, snap_lon: reach.lon,
+          strahler_order: reach.strahler_order });
+      },
+    } : null;
     updateCard(m.id, {
       status: { text: snapLine(snap), muted: true },
-      spark: { empty: "No mapped river here, so no river forecast. Details has the climate and the catchment." },
-      figure: near ? { value: near.d < 10 ? near.d.toFixed(1) : String(Math.round(near.d)), unit: " km",
+      spark: null,
+      // The nearest gauge, when it is near enough to matter.
+      figure: near && near.d <= NEAR_GAUGE_KM ? { value: near.d < 10 ? near.d.toFixed(1) : String(Math.round(near.d)), unit: " km",
         label: `to the nearest gauge, ${near.r.name || near.r.station_id}` } : null,
-      buttons: (m.spec.buttons || []).map((b) => (b.id === "trace" ? { ...traceButton("pt", { ready: false }), disabled: true,
-        title: "No river here to trace" } : b)),
+      buttons: [
+        ...(take ? [take] : []),
+        ...(m.spec.buttons || []).filter((b) => b.id !== "trace" && b.id !== "reach"),
+      ],
     });
     return;
   }
@@ -519,6 +539,9 @@ function onSnap(m, snap) {
     status: { pending: "Reading the 15-day forecast…" },
     credit: GEOGLOWS_SHORT,
     details: () => openDetails("panel-point", "now"),
+    // A reach taken from the offer above gets its Trace button back.
+    buttons: [traceButton("pt", { ready: Boolean(m.reach) }),
+      ...(m.spec.buttons || []).filter((b) => b.id !== "trace" && b.id !== "reach")],
   });
   void loadForecast(m, snap);
 }
@@ -536,7 +559,7 @@ async function loadForecast(m, snap) {
   if (g && !g.error && Array.isArray(g.mean)) {
     const peak = forecastPeak(g);
     updateCard(m.id, {
-      spark: { v: g.mean, band: { lo: g.p25 || [], hi: g.p75 || [] }, label: "next 15 days, modelled",
+      spark: { v: g.mean, band: { lo: g.p25 || [], hi: g.p75 || [] }, label: "next 15 days, modelled", fromZero: false,
         alt: "GEOGLOWS ensemble mean flow for the next 15 days, with the middle half of the ensemble shaded" },
       figure: peak ? { value: cardNumber(peak.value), unit: " m³/s", label: `15-day peak, ${dayMonth(peak.date, { short: true })}` } : null,
       status: { pending: "Comparing with this river's 86 simulated years…" },
@@ -634,7 +657,8 @@ export function initMapCard() {
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || !shown) return;
     const a = document.activeElement;
-    const fromMap = !a || a === document.body || (a.closest && a.closest("#map"));
+    // ... and from the map's own buttons (the panel handle keeps focus after folding the panel).
+    const fromMap = !a || a === document.body || (a.closest && a.closest("#map, .map-tool"));
     if (!(card.contains(a) || fromMap)) return;
     e.preventDefault();
     closeCard();

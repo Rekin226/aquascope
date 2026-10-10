@@ -144,6 +144,20 @@ function offerReach(t, reach, label, said) {
   where.append(" ", b);
 }
 
+// Take a reach the snap offered ("nearest" or "larger") from outside the panel: the map card's button (#548).
+// Does what the offer's own button does, and removes those buttons. Returns the reach, or null.
+export function takeOfferedReach(t, which) {
+  const r = runs[t];
+  const reach = r && r.snap && r.snap[which];
+  if (!reach) return null;
+  for (const where of [t === "pt" ? $("pt-snap") : null, part(t, "river-snap")]) {
+    if (where) where.querySelectorAll("button").forEach((x) => x.remove());
+  }
+  const said = which === "larger" ? `the larger river (order ${reach.strahler_order})` : "the nearest one mapped";
+  useReach(t, { river_id: reach.river_id, lat: reach.lat, lon: reach.lon, chosen: true, said });
+  return reach;
+}
+
 function useReach(t, reach) {
   const r = runs[t];
   r.reach = reach;

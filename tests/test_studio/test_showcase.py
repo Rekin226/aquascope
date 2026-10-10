@@ -125,7 +125,7 @@ def test_record_writes_the_files_the_meta_and_the_index(tmp_path):
                                                             "completion_tokens": 2_000},
                                           "author": {"calls": 1, "prompt_tokens": 20_000,
                                                      "completion_tokens": 3_000}}}
-    assert meta["usd"] == pytest.approx(0.225) and meta["usd_per_mtoken"] == [3.0, 15.0]
+    assert meta["usd"] == pytest.approx(0.15) and meta["usd_per_mtoken"] == [2.0, 10.0]
     assert meta["headline"] == "The 100-year flood is about 520 m3/s."
     assert meta["playbook"] == "flood_risk" and meta["branch"] == "at_site" and meta["trimmed"] == []
     assert meta["files"] == ["workspace.json", "report.md", "study.yaml", "figures/s2_frequency_curve.png"]
@@ -168,7 +168,7 @@ def test_rerun_skips_fresh_recordings_and_only_forces_them(tmp_path):
 
 def test_the_budget_stops_the_run(tmp_path):
     lines: list[str] = []
-    written = record([CASE, OTHER], tmp_path, studio_factory=_factory(), max_usd=0.2, on_event=lines.append)
+    written = record([CASE, OTHER], tmp_path, studio_factory=_factory(), max_usd=0.1, on_event=lines.append)
     assert [m["id"] for m in written] == ["kingston-flood"]
     assert any("budget reached" in line and "own-table-flood" in line for line in lines)
     studies = json.loads((tmp_path / "index.json").read_text(encoding="utf-8"))["studies"]
@@ -208,7 +208,7 @@ def test_keyless_recording_costs_nothing(tmp_path):
 
 
 def test_helpers():
-    assert usd_for({"a": {"prompt_tokens": 1_000_000, "completion_tokens": 0}}, "claude-sonnet-5") == 3.0
+    assert usd_for({"a": {"prompt_tokens": 1_000_000, "completion_tokens": 0}}, "claude-sonnet-5") == 2.0
     assert usd_for({"a": {"prompt_tokens": 0, "completion_tokens": 1_000_000}}, "unknown", (1.0, 2.0)) == 2.0
     assert headline("") == "" and headline("## No stop here") == "No stop here"
     assert headline("_The_ **uk_ea** gauge (`hubeau_hydrometrie`) is long. Next.") == \
@@ -230,7 +230,7 @@ def test_diagnose_and_the_cli_list(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["aquascope", "studio-showcase", "list", "--out", str(tmp_path)])
     cli.main()
     out = capsys.readouterr().out
-    assert "kingston-flood" in out and "done" in out and "1 recording(s), 55,000 tokens, 0.23 USD" in out
+    assert "kingston-flood" in out and "done" in out and "1 recording(s), 55,000 tokens, 0.15 USD" in out
 
 
 def test_the_cli_record_verb_drives_the_recorder(tmp_path, monkeypatch, capsys):
@@ -240,5 +240,5 @@ def test_the_cli_record_verb_drives_the_recorder(tmp_path, monkeypatch, capsys):
                                       "--model", "claude-sonnet-5"])
     cli.main()
     out = capsys.readouterr().out
-    assert "recorded 1/1 this run, 0.23 USD" in out and (tmp_path / "index.json").exists()
+    assert "recorded 1/1 this run, 0.15 USD" in out and (tmp_path / "index.json").exists()
     assert FakeStudio.made[0]["model"] == "claude-sonnet-5"

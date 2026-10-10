@@ -255,7 +255,7 @@ def propose_repair(evidence: Evidence, *, client: Any = None, model: str | None 
     cfg = {"model": model or "unknown"}
     if client is None:
         cfg = resolve_llm(provider, model, api_key, base_url)
-        client = make_client(cfg["api_key"], cfg["base_url"])
+        client = make_client(cfg["api_key"], cfg["base_url"], provider=cfg["provider"])
     response = client.chat.completions.create(
         model=cfg["model"],
         messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": evidence.to_prompt()}],

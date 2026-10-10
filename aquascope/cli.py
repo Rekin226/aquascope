@@ -902,7 +902,7 @@ def cmd_ingest(args: argparse.Namespace) -> None:
             from aquascope.ai_engine.llm_transport import make_client
 
             cfg = resolve_llm(args.provider, args.model, args.api_key)
-            client, model = make_client(cfg["api_key"], cfg["base_url"]), cfg["model"]
+            client, model = make_client(cfg["api_key"], cfg["base_url"], provider=cfg["provider"]), cfg["model"]
         except Exception as exc:  # noqa: BLE001
             logger.warning("LLM mapping unavailable (%s); using heuristics", exc)
     try:
@@ -4753,7 +4753,7 @@ def main() -> None:
     p_show_rec.add_argument("--only", default=None, help="Comma-separated case ids to (re)record whatever their age")
     p_show_rec.add_argument("--max-usd", type=float, default=15.0, help="Stop the run at this estimated spend")
     p_show_rec.add_argument("--provider", default="anthropic")
-    p_show_rec.add_argument("--model", default="claude-sonnet-5")
+    p_show_rec.add_argument("--model", default="claude-sonnet-5-5")
     p_show_rec.add_argument("--api-key", default=None)
     p_show_rec.add_argument(
         "--refresh-after",

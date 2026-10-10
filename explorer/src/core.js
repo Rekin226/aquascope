@@ -64,6 +64,8 @@ export const LAYER_DEFAULTS = {
   globe: true,
   gaugeStyle: "source",
   heat: false,
+  // Floods past (#547): news and radar flood events, on from the start.
+  floodsPast: true,
 };
 
 export const state = {
@@ -126,6 +128,14 @@ export function setTime(patch = {}, { source = "bar" } = {}) {
   }
   return true;
 }
+
+// Map layers outside the overlay catalogue that follow the map date while they
+// are on (#543), by id: { label, time: true, monthly, since, until }, the shape
+// of a dated overlay. The time bar shows itself for them as for an overlay.
+export const datedExtras = new Map();
+// Map layers whose features take a click before the map's own "select this
+// point" does (#543). The module that owns the layer handles the click.
+export const clickLayers = new Set();
 
 // Filled in by the modules that own each behaviour (breaks import cycles).
 export const actions = {

@@ -16,6 +16,7 @@ import {
 import { defaultDate } from "./src/layers.js?v=__BUILD__";
 import { applyLayerState, initLayerUI, renderCredits, syncRailControls } from "./src/layer-ui.js?v=__BUILD__";
 import { initTimeBar } from "./src/time-ui.js?v=__BUILD__";
+import { initFloodsPast } from "./src/floods-past.js?v=__BUILD__";  // Floods past (#547)
 import { buildRail, syncRail, updateCount } from "./src/rail.js?v=__BUILD__";
 import { setBasinsVisible } from "./src/basins.js?v=__BUILD__";
 import { setRiversVisible } from "./src/river-map.js?v=__BUILD__";
@@ -171,6 +172,7 @@ function bringMapOnline(url) {
   syncRailControls();
   if (state.basinsOn || url.basins) setBasinsVisible(true);
   if (state.riversOn || url.rivers) { setRiversVisible(true); renderCredits(); }
+  initFloodsPast();
   // A selection made while the map was still dark has nothing on the map yet.
   if (state.selected) {
     highlightStation(`${state.selected.source}/${state.selected.station_id}`);

@@ -2,7 +2,7 @@
 // the URL state. Layer choice (basemaps, imagery, terrain, climate rasters)
 // is #232; this module keeps the seams for it (setBasemap, overlay helpers).
 
-import { EMPTY_FC, actions, dbg, escapeHtml, sourceStyle, state, trace } from "./core.js?v=__BUILD__";
+import { EMPTY_FC, actions, clickLayers, dbg, escapeHtml, sourceStyle, state, trace } from "./core.js?v=__BUILD__";
 import { toFeatureCollection } from "./catalog.js?v=__BUILD__";
 import { TERRAIN_DEM, basemapById, overlayById, tileUrls } from "./layers.js?v=__BUILD__";
 import { SHAPE_NAMES, shapeSdf } from "./shapes.js?v=__BUILD__";
@@ -528,7 +528,8 @@ export function addStationLayers(fc) {
   });
   map.on("mouseleave", "points", () => { map.getCanvas().style.cursor = ""; popup.remove(); });
   map.on("click", (e) => {
-    const hit = map.queryRenderedFeatures(e.point, { layers: ["points", "clusters"] });
+    const taken = [...clickLayers].filter((id) => map.getLayer(id));
+    const hit = map.queryRenderedFeatures(e.point, { layers: ["points", "clusters", ...taken] });
     if (hit.length) return; // handled by the layer handlers
     actions.selectPoint(e.lngLat.lat, e.lngLat.lng);
   });

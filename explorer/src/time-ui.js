@@ -7,7 +7,7 @@
 // pasted link (url.js) or an agent (webmcp.js) moves the date the same way.
 // The date arithmetic is in timeline.js, which node tests directly.
 
-import { $, actions, onTime, setTime, state } from "./core.js?v=__BUILD__";
+import { $, actions, datedExtras, onTime, setTime, state } from "./core.js?v=__BUILD__";
 import { OVERLAYS, datedLayersOn } from "./layers.js?v=__BUILD__";
 import { applyDate, whenSettled } from "./map.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
@@ -25,7 +25,7 @@ let noteTimer = null;
 let playToken = 0;
 let gifRun = null;        // { cancel } while a GIF is being made
 
-const datedOn = () => datedLayersOn(state.basemap, state.overlays);
+const datedOn = () => [...datedLayersOn(state.basemap, state.overlays), ...datedExtras.values()];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const effectiveRange = () => normaliseRange(state.timeRange) || defaultRange(state.date, state.timeStep);
 

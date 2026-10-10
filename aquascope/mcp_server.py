@@ -616,6 +616,22 @@ def river_status_month(month: str | None = None) -> dict[str, Any]:
     return _status(month)
 
 
+def flood_depth_overlay(river_id: int | None = None, bbox: list[float] | None = None,
+                        return_period: int | None = None, day: str | None = None) -> dict[str, Any]:
+    """Flood depth where a flood is forecast (the RAS Mapper view): for a GEOGLOWS river_id in today's Floods ahead
+    issue, the JRC CEMS-GloFAS flood depth map that matches its forecast class (10, 20, 50 or 100 years: the largest
+    not above the class; JRC has no 2- or 5-year maps), clipped to a circle around the reach, with the depth at the
+    reach, the deepest pixel and the wet share there. day (YYYY-MM-DD, inside the forecast) uses that day's class
+    instead of the 15-day peak. Or a bbox [west, south, east, north] (up to 2 x 2 degrees) with a return_period
+    (10, 20, 50, 75, 100, 200 or 500; default 100), which also lists the forecast reaches inside it. Returns the COG
+    tiles (URL, window, a GDAL command), the extent, the legend and the licence (CC BY 4.0, with JRC's own wording).
+    MODEL ESTIMATE twice over (a forecast choosing a precomputed hazard map): always say "may flood in the next 15
+    days, model estimate" when you quote it."""
+    from aquascope.flood_depth import flood_depth_overlay as _depth
+
+    return _depth(river_id, bbox=bbox, return_period=return_period, day=day)
+
+
 def archive_health() -> dict[str, Any]:
     """Status of the last catalog harvest per source (health.json from the Archive)."""
     import httpx
@@ -1347,6 +1363,7 @@ def build_server():
     server.tool()(dated_layers)
     server.tool()(layer_frames)
     server.tool()(river_status_month)
+    server.tool()(flood_depth_overlay)
     server.tool()(list_analyses)
     server.tool()(analyse_table)
     server.tool()(station_view)

@@ -970,10 +970,41 @@ def _print_river_status(res: dict) -> None:
         print(f"  {res['attribution']} ({res['licence']})")
 
 
+def _print_flood_depth(res: dict) -> None:
+    """`aquascope layers depth`: the depth map chosen by the forecast, its tiles and what it found."""
+    if res.get("error"):
+        print(f"  {res['error']}")
+        return
+    print(f"  {res['summary']}")
+    for t in res.get("tiles") or []:
+        print(f"  {t['url']}")
+        print(f"    window {t['window']}   {t['gdal']}")
+    for r in (res.get("forecast_reaches") or [])[:20]:
+        print(f"  reach {r['river_id']}  {r['forecast_class']}-year flow, {r['depth_return_period']}-year map  "
+              f"({r['lat']:.3f}, {r['lon']:.3f})")
+    if res.get("forecast_reaches_n", 0) > 20:
+        print(f"  ... and {res['forecast_reaches_n'] - 20} more")
+    if res.get("not"):
+        print(f"\n  {res['not']}")
+    print(f"  {res['attribution']} ({res['licence']})")
+
+
 def cmd_layers(args: argparse.Namespace) -> None:
     """`aquascope layers`: the dated map layers and their valid dates, or the frames of a time-lapse (#522)."""
     from aquascope.map_time import dated_layers, layer_frames
 
+    if args.layers_cmd == "depth":
+        from aquascope.flood_depth import flood_depth_overlay
+
+        res = flood_depth_overlay(args.river_id, bbox=args.bbox, return_period=args.rp, day=args.day,
+                                  radius_km=args.radius_km, sample=not args.no_sample, local=args.local)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            _print_flood_depth(res)
+        if res.get("error"):
+            sys.exit(1)
+        return
     if args.layers_cmd == "status":
         from aquascope.map_layers import river_status_month
 
@@ -4067,6 +4098,18 @@ def main() -> None:
     p_lstatus.add_argument("month", nargs="?", default=None, help="YYYY-MM (default: the newest month)")
     p_lstatus.add_argument("--offline", action="store_true", help="Do not list the bucket; use the recorded range")
     p_lstatus.add_argument("--json", action="store_true")
+    p_ldepth = layers_sub.add_parser("depth", help="Flood depth where floods are forecast: the JRC depth map around a "
+                                     "Floods ahead reach, or over a box (#554)")
+    p_ldepth.add_argument("river_id", nargs="?", default=None, help="A GEOGLOWS reach in today's Floods ahead")
+    p_ldepth.add_argument("--bbox", nargs=4, type=float, metavar=("W", "S", "E", "N"), default=None,
+                          help="A box instead (up to 2 x 2 degrees)")
+    p_ldepth.add_argument("--rp", type=int, default=None, help="Return period: 10, 20, 50, 75, 100, 200 or 500 "
+                          "(default: the one the forecast reaches, or 100 for a box)")
+    p_ldepth.add_argument("--day", default=None, help="A day of the forecast (YYYY-MM-DD) instead of its peak")
+    p_ldepth.add_argument("--radius-km", type=float, default=None, help="How far around the reach (default by order)")
+    p_ldepth.add_argument("--no-sample", action="store_true", help="Do not read the depth, only say where it is")
+    p_ldepth.add_argument("--local", default=None, help="A local Floods ahead run folder instead of the Archive")
+    p_ldepth.add_argument("--json", action="store_true")
     # ── basins ───────────────────────────────────────────────────────
     p_bul = sub.add_parser("bulletin", help="The month's state of the rivers: every Archive gauge against normal, "
                            "HydroSOS classes")

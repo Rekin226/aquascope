@@ -73,12 +73,18 @@ HOMEPAGE = "https://data.jrc.ec.europa.eu/collection/id-0054"
 
 METHOD = ("The JRC CEMS-GloFAS flood depth map whose return period is the largest not above the reach's forecast "
           "class (10 -> 10-year, 25 -> 20-year, 50 -> 50-year, 100 -> 100-year; there are no 2- or 5-year maps), "
-          "read within {radius} of the reach's point in the GEOGLOWS tables. The class comes from the daily Floods "
-          "ahead issue: the ensemble-mean daily flow against the reach's own GEOGLOWS return-period flows.")
+          "read within {radius} of the reach (its line in the GEOGLOWS stream tiles, or its point), leaving out the "
+          "pixels nearer to another river at least as large (by Strahler order), so a tributary's flood does not "
+          "take in the main river's flood plain. The class comes from the daily Floods ahead issue: the "
+          "ensemble-mean daily flow against the reach's own GEOGLOWS return-period flows.")
+#: How soft the cut between a forecast river and a larger one is on the map (km); the larger keeps the halfway line.
+VORONOI_KM = 0.5
+#: The zoom of the GEOGLOWS stream tiles the reach lines are read from.
+LINES_ZOOM = 10
 NOT = ("A precomputed hazard map chosen by a forecast, not a flood simulation of this event: a model estimate twice "
        "over (the GEOGLOWS forecast and the JRC hazard map, two different models whose return periods are not the "
-       "same floods). The maps cover rivers draining more than about 1,000 km2 and leave out permanent water; "
-       "JRC warns that depths over 10 m on small channels can be artefacts. For warnings, follow your national "
+       "same floods). JRC warns that some depths are unrealistic: very deep water on small channels, at the edges "
+       "between its model tiles, and in sinks of the elevation model. For warnings, follow your national "
        "hydrological or meteorological service.")
 
 #: The colour ramp of the map and the legend: depth (m) -> colour and opacity. Light to deep blue, the JRC
@@ -292,34 +298,101 @@ def _reach_out(f: dict[str, Any], i: int) -> dict[str, Any]:
 # ── reading the depth ───────────────────────────────────────────────────────
 
 
-def sample_disk(lon: float, lat: float, radius_km: float, return_period: int, *, step: int = 2) -> dict[str, Any]:
-    """The depth at the point and the deepest and wet share within ``radius_km``, every ``step``-th pixel of the
-    full-resolution map (byte-range reads of the few 512-pixel blocks involved)."""
+Segment = tuple[float, float, float, float]
+
+
+def river_lines(lon: float, lat: float, radius_km: float, river_id: int, order: int | None
+                ) -> tuple[list[Segment], list[Segment]] | None:
+    """The reach's own line and the lines of every other river at least as large (Strahler order) near it, as
+    (lon1, lat1, lon2, lat2) segments, from the GEOGLOWS stream tiles at zoom :data:`LINES_ZOOM`; None when the tiles
+    cannot be read."""
+    from aquascope import rivers
+
+    z = LINES_ZOOM
+    gx, gy = rivers._world(lon, lat, z)
+    reach_units = 2 * radius_km * 1000 / rivers._metres_per_unit(lat, z)
+    smallest = int(order or 0)
+    own: list[Segment] = []
+    other: list[Segment] = []
+    try:
+        for tx, ty in rivers._tiles_around(gx, gy, reach_units, z, cap=16):
+            for rid, item in rivers._tile_reaches(z, tx, ty).items():
+                mine = int(rid) == int(river_id)
+                if not mine and not int(item.get("order") or 0) >= smallest:
+                    continue
+                for line in item["lines"]:
+                    pts = [rivers._lonlat(px, py, z) for px, py in line]
+                    for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+                        (own if mine else other).append((x1, y1, x2, y2))
+    except Exception as exc:  # noqa: BLE001 - the plain circle still stands
+        import logging
+
+        logging.getLogger(__name__).info("stream tiles unavailable for the depth clip: %s", exc)
+        return None
+    return own, other
+
+
+def _seg_km(px: float, py: float, s: Segment, kx: float) -> float:
+    """Distance (km) from a point to a segment, in a local flat frame (kx km per degree of longitude)."""
+    ax, ay, bx, by = (s[0] - px) * kx, (s[1] - py) * 111.32, (s[2] - px) * kx, (s[3] - py) * 111.32
+    dx, dy = bx - ax, by - ay
+    n = dx * dx + dy * dy
+    t = 0.0 if not n else max(0.0, min(1.0, -(ax * dx + ay * dy) / n))
+    return math.hypot(ax + t * dx, ay + t * dy)
+
+
+def clip_area(lon: float, lat: float, radius_km: float, lines: tuple[list[Segment], list[Segment]] | None = None
+              ) -> tuple[list[float], Any]:
+    """The box to read and the test for "around the reach": within ``radius_km`` of its line (or its point) and nearer
+    to it than to any other river at least as large. The same rule the Explorer paints (flood-depth-core.js)."""
+    own, other = lines or ([], [])
+    own = own or [(lon, lat, lon, lat)]
+    xs = [v for s in own for v in (s[0], s[2])]
+    ys = [v for s in own for v in (s[1], s[3])]
+    w, so, _, _ = disk_bbox(min(xs), min(ys), radius_km)
+    _, _, e, n = disk_bbox(max(xs), max(ys), radius_km)
+    kx = 111.32 * max(0.05, math.cos(math.radians(lat)))
+
+    def inside(px: float, py: float) -> bool:
+        d = min(_seg_km(px, py, s, kx) for s in own)
+        if d > radius_km:
+            return False
+        return not other or min(_seg_km(px, py, s, kx) for s in other) > d
+
+    return [w, so, e, n], inside
+
+
+def sample_area(lon: float, lat: float, radius_km: float, return_period: int, *, step: int = 2,
+                lines: tuple[list[Segment], list[Segment]] | None = None) -> dict[str, Any]:
+    """The depth at the reach's point, and the deepest pixel and the wet share of the area around it
+    (:func:`clip_area`), every ``step``-th pixel of the full-resolution map (byte-range reads of the few 512-pixel
+    blocks involved)."""
     from aquascope.utils.cog import COGNotFound, open_cog
 
-    west, south, east, north = disk_bbox(lon, lat, radius_km)
+    box, inside = clip_area(lon, lat, radius_km, lines)
+    west, south, east, north = box
     at_point: float | None = None
     deepest: float | None = None
     deepest_at: list[float] | None = None
     wet = total = 0
-    coslat = math.cos(math.radians(lat))
-    for name in tiles_for_bbox([west, south, east, north]):
+    for name in tiles_for_bbox(box):
         try:
             cog = open_cog(depth_url(name, return_period))
         except COGNotFound:
             continue
         tw, ts, te, tn = tile_bounds(name)
-        x0, dx, _, y0, _, dy = cog.images[0].transform
+        img = cog.images[0]
+        x0, dx, _, y0, _, dy = img.transform
         c0 = max(0, int((max(west, tw) - x0) / dx))
-        c1 = min(cog.images[0].width - 1, int((min(east, te) - x0) / dx))
+        c1 = min(img.width - 1, int((min(east, te) - x0) / dx))
         r0 = max(0, int((y0 - min(north, tn)) / -dy))
-        r1 = min(cog.images[0].height - 1, int((y0 - max(south, ts)) / -dy))
+        r1 = min(img.height - 1, int((y0 - max(south, ts)) / -dy))
         pixels = []
         for r in range(r0, r1 + 1, step):
             py = y0 + (r + 0.5) * dy
             for c in range(c0, c1 + 1, step):
                 px = x0 + (c + 0.5) * dx
-                if math.hypot((px - lon) * coslat, py - lat) * 111.32 <= radius_km:
+                if inside(px, py):
                     pixels.append((c, r, px, py))
         cog.prefetch([(c, r) for c, r, _, _ in pixels])
         for c, r, px, py in pixels:
@@ -460,13 +533,19 @@ def flood_depth_overlay(river_id: int | str | None = None, *, bbox: list[float] 
     rp = rp_asked or reach["depth_return_period"]
     out = _base(rp)
     radius = float(radius_km) if radius_km else reach_radius_km(reach["strahler_order"])
-    extent = disk_bbox(reach["lon"], reach["lat"], radius)
+    lines = river_lines(reach["lon"], reach["lat"], radius, rid, reach["strahler_order"]) if sample else None
+    extent, _ = clip_area(reach["lon"], reach["lat"], radius, lines)
+    extent = [round(v, 5) for v in extent]
     when = f"on {day}" if i >= 0 else f"(peak on {reach['peak_date']})"
     out.update(reach=reach, forecast=issue, day=day, method=METHOD.format(radius=f"{radius:g} km"),
-               extent={"bbox": extent, "clip": {"type": "disk", "center": [reach["lon"], reach["lat"]],
-                                                "radius_km": radius}})
+               extent={"bbox": extent, "clip": {
+                   "type": "reach", "center": [reach["lon"], reach["lat"]], "radius_km": radius,
+                   "along": "line" if lines and lines[0] else "point",
+                   "cut_by_rivers": bool(lines and lines[1]),
+                   "rule": "within radius_km of the reach and nearer to it than to any other river at least as "
+                           "large (Strahler order)"}})
     cls = reach["forecast_class"]
-    lead = (f"River reach {rid} is forecast to reach its {cls}-year flow {when}" if cls >= 2 else
+    lead = (f"River reach {rid} is forecast to pass its {cls}-year flow {when}" if cls >= 2 else
             f"River reach {rid} is forecast to stay below its 2-year flow on {day}")
     if rp is None:
         out.update(available=False, tiles=[],
@@ -480,14 +559,15 @@ def flood_depth_overlay(river_id: int | str | None = None, *, bbox: list[float] 
     summary = f"{lead}; {chosen} around it"
     if sample and out["tiles"]:
         try:
-            out["depth"] = sample_disk(reach["lon"], reach["lat"], radius, rp)
+            out["depth"] = sample_area(reach["lon"], reach["lat"], radius, rp, lines=lines)
         except Exception as exc:  # noqa: BLE001 - the tiles and the extent still stand
             out["depth_error"] = f"{type(exc).__name__}: {exc}"
     d = out.get("depth") or {}
     if d.get("max_m") is not None:
         share = d.get("wet_share") or 0
-        summary += f", within {radius:g} km: up to {d['max_m']:.1f} m deep, {share * 100:.0f} % of the area wet"
+        summary += (f", within {radius:g} km of it: up to {d['max_m']:.1f} m deep, {share * 100:.0f} % of the area "
+                    "wet")
     elif d:
-        summary += f": dry within {radius:g} km in this map"
+        summary += f": dry within {radius:g} km of it in this map"
     out["summary"] = summary + f". {LABEL[0].upper()}{LABEL[1:]}."
     return out

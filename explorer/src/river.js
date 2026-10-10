@@ -57,7 +57,7 @@ function skeleton(t) {
         <div class="river-trace-out"></div>
       </div>
     </div>`;
-  part(t, "river-trace-btn").addEventListener("click", () => traceToSea(t));
+  part(t, "river-trace-btn").addEventListener("click", () => { traceToSea(t).catch(() => {}); });   // the tab says why
 }
 
 // Snap the place (a click, or a gauge's position) to its reach. Returns the snap promise, which the
@@ -87,6 +87,7 @@ export function startRiver(t, lat, lon, { gauge = false, area = null } = {}) {
   }).then((snap) => {
     if (my !== r.run) return snap;
     r.snap = snap;
+    tellSnap(t, { ...snap, lat, lon });
     const line = snapLine(snap, { gauge });
     const p = part(t, "river-snap");
     // A point's snap is said once, under its title; the tab repeats it only when there is a choice to make.
@@ -104,6 +105,7 @@ export function startRiver(t, lat, lon, { gauge = false, area = null } = {}) {
   }).catch((err) => {
     if (my === r.run) {
       setTab(panel(t), "river", { enabled: false, reason: `Could not read the river network (${err.message}).` });
+      tellSnap(t, { error: err.message, lat, lon });
     }
     return null;
   });
@@ -115,6 +117,13 @@ export function startRiver(t, lat, lon, { gauge = false, area = null } = {}) {
 function announceReach(t, reach) {
   const el = panel(t);
   if (el) el.dispatchEvent(new CustomEvent("reachchange", { detail: reach ? { ...reach } : null }));
+}
+
+// How the snap went, as an event on the panel ("riversnap", detail: the snap with the asked lat and lon, or
+// { error }): the map card (#548) says "River reach ..." or "No mapped river here" from it.
+function tellSnap(t, detail) {
+  const el = panel(t);
+  if (el) el.dispatchEvent(new CustomEvent("riversnap", { detail }));
 }
 
 // A button after the snap sentence that switches to another reach the snap named: under a point's title
@@ -272,11 +281,19 @@ async function traceToSea(t) {
       drawRiverDams(res.dams || []);
     }
     renderTrace(t, res);
+    return res;
   } catch (err) {
-    if (my !== r.run) return;
+    if (my !== r.run) return null;
     btn.disabled = false;
     out.innerHTML = `<p class="status error">Could not trace this river: ${escapeHtml(err.message)}</p>`;
+    throw err;
   }
+}
+
+// Trace the open gauge's ("st") or place's ("pt") river to the sea from outside the River tab: the map card's
+// button (#548). Draws on the map and fills the tab as the tab's own button does; resolves to the answer.
+export function traceRiver(t) {
+  return traceToSea(t);
 }
 
 function renderTrace(t, res) {

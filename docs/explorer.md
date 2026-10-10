@@ -67,14 +67,46 @@ the Analyst float over it as cards, so the map is the first thing you see and
 opening a panel never takes width from it. The rail (the stacked-squares button
 at the top left) is closed on arrival and groups its controls under **Sources**,
 **Basemap**, **Relief**, **Overlays** and **Credits**; the chevron at the top
-right folds the inspector away when you want the whole map. On a phone the map
-keeps the screen and the inspector is a bottom sheet.
+right folds the inspector away or brings it back. The inspector starts folded:
+a click answers in the map card below, and its **Details** button opens the
+inspector on the right tab. On a phone the map keeps the screen and the
+inspector is a bottom sheet.
 
 The world view is a **globe**, because the coverage is worldwide and thin, and
 Mercator spends its pixels on the empty high latitudes. MapLibre eases the globe
 back to Mercator by about zoom 5, so everything below the world view behaves
 like an ordinary map. The button under the layers button switches projection,
 and `gl=0` in a link pins a flat map.
+
+## The map card
+
+A click answers on the map. Click a gauge, a river or any place and a small card
+opens beside it, pointing at what you clicked:
+
+- **what it is**: the gauge's name and agency, or the river reach the click
+  snapped to (or "Place" when no mapped river is near),
+- **today against normal** in one sentence, with the class colour the gauges use
+  (brown is below normal, slate is normal, teal is above). For a gauge it comes from
+  the Archive's daily status snapshot when the gauge is in it, else it is ranked from
+  the record once that has loaded; for a river it comes from the reach's simulated
+  record since 1940, and says simulated,
+- **one sparkline**: the record's last 12 months, or for a river the next 15 days
+  from GEOGLOWS (the line is the ensemble mean, the shading its middle half),
+- **one number**: the newest value and its day, or the forecast's peak and its day,
+- **Details** (the full panel, on the right tab), **Trace to sea** (draws the path on
+  the map), **☆ Watch** and **Study**.
+
+The card shows at once with what is known (the name and position) and fills as the
+answers arrive. Its last line says where the numbers come from. **Escape** or ×
+closes it; folding the panel away brings it back. On a phone it is a short sheet at
+the bottom of the map. A link with `tab=` (`#s=usgs/USGS-01013500&tab=floods`)
+opens the panel on that tab as before; a link without one opens the card.
+
+Other layers can open a card with their own content (a flood cell, a warning reach)
+through `openCard()` in `explorer/src/map-card.js` (also `actions.openMapCard`):
+pass `id`, `lngLat`, `what`, `title`, and any of `sub`, `status`, `spark`, `figure`,
+`credit`, `details` and `buttons`; it returns a handle with `update(patch)` and
+`close()`.
 
 ## Map layers
 

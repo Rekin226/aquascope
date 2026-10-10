@@ -77,7 +77,7 @@ function currentHash({ view } = {}) {
   if (state.mode === "workbench") q.set("m", "workbench");
   else if (state.selected) q.set("s", `${state.selected.source}/${state.selected.station_id}`);
   else if (state.point) q.set("p", `${state.point.lat},${state.point.lon}`);
-  if (state.activeTab) q.set("tab", state.activeTab);
+  if (state.activeTab && state.panelOpen !== false) q.set("tab", state.activeTab);   // a tab is a panel that is open (#548)
   if (state.selected && state.mode !== "workbench" && state.period !== defaultPeriod()) {
     q.set("yr", state.period === null ? "all" : String(state.period));
   }

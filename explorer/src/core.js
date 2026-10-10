@@ -69,6 +69,7 @@ export const LAYER_DEFAULTS = {
 export const state = {
   stations: [], byKey: new Map(), hidden: new Set(),
   selected: null, result: null, point: null,
+  panelOpen: false,   // map first (#548): the panel opens from the map card's Details or a tab= link
   period: null,   // the station's analysis period (#270): null = full record, else the last N years
   workerReady: false, booting: true, pending: new Map(), reqId: 0,
   mapOk: false, marker: null, basinsOn: false, riversOn: false,
@@ -138,6 +139,8 @@ export const actions = {
   setOverlay: () => {},       // layer-ui.js: turn an overlay on or off as if from the rail
   setBasemap: () => {},       // layer-ui.js: switch the basemap as if from the rail
   showArea: () => {},         // layer-ui.js: show a box's result in the rail, as if just drawn
+  openMapCard: () => {},      // map-card.js: a card on the map for anything clicked (a flood cell, a reach)
+  closeMapCard: () => {},
 };
 
 export function escapeHtml(s) {

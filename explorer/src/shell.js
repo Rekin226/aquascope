@@ -11,11 +11,14 @@ const SURFACES = ["panel-empty", "panel-station", "panel-point", "panel-workbenc
   "panel-places",   // My places + Compare (places.js)
   "panel-watch"];   // Watch: since you were here (watch.js)
 
-export function showSurface(id) {
+// `reveal: false` fills the surface without unfolding the panel: a click on the map answers in the map
+// card (map-card.js, #548) and the panel waits for its Details button. The "aq:surface" event tells the card.
+export function showSurface(id, { reveal = true } = {}) {
   for (const s of SURFACES) { const el = $(s); if (el) el.hidden = s !== id; }
   const panel = $("panel");
   if (panel) panel.scrollTop = 0;
-  revealPanel();
+  if (reveal) revealPanel();
+  document.dispatchEvent(new CustomEvent("aq:surface", { detail: { id } }));
   // Picking something on the map while the Analyst is open is a request to look
   // at it, so the Analyst steps aside rather than hiding the thing you clicked.
   if (drawerOpen()) closeDrawer();
@@ -46,8 +49,14 @@ export function initTabs(root) {
     }
     if (focus) tab.focus();
     root.dispatchEvent(new CustomEvent("tabchange", { detail: { tab: tab.dataset.tab }, bubbles: true }));
+    // Bring the tab into view inside its own strip only. scrollIntoView also scrolls every ancestor, and
+    // with the panel folded off screen (#548) that slid the whole page sideways.
     const scroller = root.querySelector(".tabs");
-    if (scroller) tab.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (scroller) {
+      const box = scroller.getBoundingClientRect(), r = tab.getBoundingClientRect();
+      if (r.left < box.left) scroller.scrollLeft -= box.left - r.left;
+      else if (r.right > box.right) scroller.scrollLeft += r.right - box.right;
+    }
   };
   list.addEventListener("click", (e) => {
     const tab = e.target.closest('[role="tab"]');
@@ -335,11 +344,18 @@ export function railOpen() {
 // One click to push the panel off screen and see the map whole, and the same
 // click to bring it back. The panel keeps its state and its scroll position.
 
-export function togglePanel(force) {
+// `write: false` leaves the address alone, for a caller that writes it next (a selection pushes its own entry).
+export function togglePanel(force, { write = true } = {}) {
   const collapsed = force === undefined ? !document.body.classList.contains("panel-collapsed") : force;
   const changed = collapsed !== document.body.classList.contains("panel-collapsed");
   document.body.classList.toggle("panel-collapsed", collapsed);
-  if (changed) syncMapPadding();
+  state.panelOpen = !collapsed;
+  if (changed) {
+    syncMapPadding();
+    // The open tab is in the address only while the panel shows it (#548), and the map card follows.
+    if (write) writeUrl();
+    document.dispatchEvent(new CustomEvent("aq:panel", { detail: { open: !collapsed } }));
+  }
   const btn = $("btn-panel");
   if (btn) {
     btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
@@ -351,7 +367,7 @@ export function togglePanel(force) {
 
 // A selection is worth showing: bring the panel back if it was folded away.
 export function revealPanel() {
-  if (document.body.classList.contains("panel-collapsed")) togglePanel(false);
+  if (document.body.classList.contains("panel-collapsed")) togglePanel(false, { write: false });
 }
 
 // ── modal ───────────────────────────────────────────────────────────────────
@@ -379,6 +395,8 @@ export function initShell() {
   $("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
   $("btn-rail").addEventListener("click", () => toggleRail());
   $("btn-panel").addEventListener("click", () => togglePanel());
+  // Map first (#548): the panel starts folded away and opens from a card's Details, a tab= link or the handle.
+  togglePanel(true);
   $("drawer-close").addEventListener("click", closeDrawer);
   for (const r of document.querySelectorAll('input[name="drawer-mode"]')) {
     r.addEventListener("change", () => { if (r.checked) setDrawerMode(r.value); });

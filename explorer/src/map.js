@@ -517,8 +517,9 @@ export function addStationLayers(fc) {
     const zoom = await map.getSource("stations").getClusterExpansionZoom(f.properties.cluster_id);
     map.easeTo({ center: f.geometry.coordinates, zoom });
   });
-  map.on("click", "points", (e) => actions.selectStation(e.features[0].properties.key, { fly: false }));
   const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 8 });
+  // The hover label gives way to the map card (#548) once the gauge is clicked.
+  map.on("click", "points", (e) => { popup.remove(); actions.selectStation(e.features[0].properties.key, { fly: false }); });
   map.on("mouseenter", "points", (e) => {
     map.getCanvas().style.cursor = "pointer";
     const p = e.features[0].properties;

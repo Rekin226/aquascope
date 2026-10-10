@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Map first: a click answers on the map** (#548, part of #543). A click on a gauge, a river or any place opens a small card anchored to it: the name, today against normal in one sentence (from the Archive's daily status snapshot, or ranked from the record, or for a river from its simulated record since 1940), one sparkline (the record's last 12 months, or the next 15 days from GEOGLOWS with the middle half of the ensemble shaded), one number (the newest value, or the forecast's peak) and **Details**, **Trace to sea**, **Watch** and **Study**. It fills as the answers arrive, never behind a wall of spinners, and every line says where it comes from. The side panel is folded away until **Details** opens it on the right tab, and a link with `tab=` still opens it there, as before. On a phone the card is a short sheet at the bottom; Escape closes it, focus moves into it, and it is labelled for a screen reader. Other map layers open a card with their own content through `openCard()` in `explorer/src/map-card.js`.
+
 ### Fixed
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
 

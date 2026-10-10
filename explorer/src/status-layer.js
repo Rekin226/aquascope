@@ -20,7 +20,7 @@ import { writeUrl } from "./url.js?v=__BUILD__";
 import { defaultRange, frameDates, nextFrame, normaliseRange } from "./timeline.js?v=__BUILD__";
 import {
   GEOTIFF_MODULE, STATUS_CORNERS, STATUS_CREDIT, STATUS_LIST_URL, decodeStatus, gridToPng, latestDay, missingMonths,
-  CLASS_ALPHA, hexRgb, monthLabel, parseListing, statusDatedLayer, statusMonthFor, statusUrl,
+  CLASS_ALPHA, focusPalette, hexRgb, monthLabel, parseListing, statusDatedLayer, statusMonthFor, statusUrl,
 } from "./status-core.js?v=__BUILD__";
 
 const SOURCE_ID = "status-src";
@@ -39,7 +39,12 @@ let side = 2048;            // the picture's width and height
 let worker = null;          // a Worker, or false once it has failed
 let reqId = 0;
 const waiting = new Map();  // worker request id -> { resolve, reject }
-const pictures = new Map(); // month -> object URL of its PNG (most recent last)
+const pictures = new Map(); // month (with the focus, #561) -> object URL of its PNG (most recent last)
+// Only some classes painted (#561, "where are rivers much above normal"): ids from STATUS_CLASSES; [] is all.
+let focus = [];
+let shownFocus = "";        // the focus the picture on the map was painted with
+const focusKey = () => focus.join(",");
+const keyOf = (month, f = focusKey()) => (f ? `${month}|${f}` : month);
 const loading = new Map();  // month -> promise of an object URL
 
 // A power-of-two square, smaller where memory is short.
@@ -76,7 +81,7 @@ function listMonths() {
 
 // ── making a month's picture ────────────────────────────────────────────────
 
-function inWorker(url) {
+function inWorker(url, classes) {
   if (!worker) {
     worker = new Worker(new URL("./status-worker.js?v=__BUILD__", import.meta.url), { type: "module" });
     worker.onmessage = (e) => {
@@ -96,23 +101,24 @@ function inWorker(url) {
   const id = ++reqId;
   return new Promise((resolve, reject) => {
     waiting.set(id, { resolve, reject });
-    worker.postMessage({ id, url, width: side, height: side });
+    worker.postMessage({ id, url, width: side, height: side, focus: classes });
   });
 }
 
-async function onPage(url) {
+async function onPage(url, classes) {
   const geotiff = await import(GEOTIFF_MODULE);
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const grid = await decodeStatus(geotiff, await res.arrayBuffer(), side, side);
-  return gridToPng(grid, side, side, (w, h) => Object.assign(document.createElement("canvas"), { width: w, height: h }));
+  return gridToPng(grid, side, side, (w, h) => Object.assign(document.createElement("canvas"), { width: w, height: h }),
+    focusPalette(classes));
 }
 
-function keep(month, objectUrl) {
-  pictures.set(month, objectUrl);
+function keep(key, objectUrl) {
+  pictures.set(key, objectUrl);
   for (const old of [...pictures.keys()]) {
     if (pictures.size <= KEEP) break;
-    if (old === shown || old === wanted) continue;
+    if (old === keyOf(shown, shownFocus) || old === keyOf(wanted)) continue;
     URL.revokeObjectURL(pictures.get(old));
     pictures.delete(old);
   }
@@ -120,18 +126,19 @@ function keep(month, objectUrl) {
 }
 
 function load(month) {
-  if (pictures.has(month)) {
-    const u = pictures.get(month);
-    pictures.delete(month);
-    pictures.set(month, u);    // most recent last
+  const key = keyOf(month), classes = focus.slice();
+  if (pictures.has(key)) {
+    const u = pictures.get(key);
+    pictures.delete(key);
+    pictures.set(key, u);    // most recent last
     return Promise.resolve(u);
   }
-  if (loading.has(month)) return loading.get(month);
+  if (loading.has(key)) return loading.get(key);
   const url = statusUrl(month);
-  const make = worker === false ? onPage(url)
-    : inWorker(url).catch((err) => { if (worker === false) return onPage(url); throw err; });
-  const p = make.then((png) => keep(month, URL.createObjectURL(png))).finally(() => loading.delete(month));
-  loading.set(month, p);
+  const make = worker === false ? onPage(url, classes)
+    : inWorker(url, classes).catch((err) => { if (worker === false) return onPage(url, classes); throw err; });
+  const p = make.then((png) => keep(key, URL.createObjectURL(png))).finally(() => loading.delete(key));
+  loading.set(key, p);
   return p;
 }
 
@@ -205,11 +212,13 @@ function update() {
     renderLegend();
     return;
   }
-  if (month === shown && map.getSource(SOURCE_ID)) { renderLegend(); preload(); return; }
+  if (month === shown && shownFocus === focusKey() && map.getSource(SOURCE_ID)) { renderLegend(); preload(); return; }
   renderLegend();
+  const painted = focusKey();
   const job = load(month).then((objectUrl) => {
-    if (wanted !== month || !state.status) return;
+    if (wanted !== month || !state.status || painted !== focusKey()) return;
     shown = month;
+    shownFocus = painted;
     draw(objectUrl);
     renderLegend();
     preload();
@@ -275,14 +284,17 @@ function renderLegend() {
   const err = failed && failed.month === month
     ? `<p class="sl-err">Could not read ${escapeHtml(monthLabel(month))}.</p>` : "";
   const bar = STATUS_CLASSES.map((c, i) =>
-    `<i style="--c:${swatchColor(c, i)}" title="${escapeHtml(c.label)}"></i>`).join("");
+    `<i style="--c:${swatchColor(c, i)}" title="${escapeHtml(c.label)}"${focus.length && !focus.includes(c.id) ? ' class="off"' : ""}></i>`).join("");
+  const only = focus.length
+    ? `<p class="sl-focus">Only ${escapeHtml(STATUS_CLASSES.filter((c) => focus.includes(c.id)).map((c) => c.label).join(" or "))}` +
+      ' <button type="button" class="link-btn" data-act="all">show all</button></p>' : "";
   el.innerHTML =
     `<header><b>River status</b>${when}${busy}` +
     '<button class="sl-btn" type="button" data-act="info" aria-label="About the river status map" title="About this map">i</button>' +
     '<button class="sl-btn" type="button" data-act="hide" aria-label="Hide the river status map" title="Hide">×</button></header>' +
     `<div class="sl-bar" role="img" aria-label="${escapeHtml(STATUS_CLASSES.map((c) => c.label).join(", "))}">${bar}</div>` +
     '<div class="sl-ends"><span>much below</span><span>normal</span><span>much above</span></div>' +
-    `${err}${gaugeLine(month || String(state.date || "").slice(0, 7), latest)}` +
+    `${only}${err}${gaugeLine(month || String(state.date || "").slice(0, 7), latest)}` +
     '<p class="sl-src">Each basin\'s monthly flow vs its normal. Modelled, GEOGLOWS, CC BY 4.0</p>' +
     '<p class="sl-credit">Modelled · GEOGLOWS · CC BY 4.0</p>';   // the phone's short credit (style.css)
 }
@@ -343,7 +355,7 @@ export function setStatusVisible(on) {
   state.status = Boolean(on);
   if (!state.mapOk || !map) return;
   if (state.status) {
-    if (shown && pictures.has(shown)) draw(pictures.get(shown));
+    if (shown && pictures.has(keyOf(shown, shownFocus))) draw(pictures.get(keyOf(shown, shownFocus)));
     listMonths().then(() => { syncTimeBar({ layersChanged: true }); update(); }).catch(() => renderLegend());
   } else {
     removeLayer();
@@ -362,6 +374,20 @@ function chooseStatus(on) {
   writeUrl();
 }
 
+/**
+ * Paint only some classes (ids from STATUS_CLASSES, such as ["much_above"]); [] paints them all again (#561).
+ * The map answers "where are rivers much above normal" by itself; the legend says what is left out.
+ */
+export function setStatusFocus(classes = []) {
+  const ids = new Set(STATUS_CLASSES.map((c) => c.id));
+  focus = STATUS_CLASSES.map((c) => c.id).filter((id) => (classes || []).includes(id) && ids.has(id));
+  update();
+  renderLegend();
+  return focus.slice();
+}
+
+export const getStatusFocus = () => focus.slice();
+
 export function initStatusLayer(url = {}) {
   side = pictureSize();
   actions.setStatus = setStatusVisible;
@@ -373,6 +399,7 @@ export function initStatusLayer(url = {}) {
     if (!btn) return;
     if (btn.dataset.act === "info") openAbout();
     else if (btn.dataset.act === "hide") chooseStatus(false);
+    else if (btn.dataset.act === "all") setStatusFocus([]);
   });
   // The picture that waited for the one before it (draw()).
   map.on("sourcedata", (e) => {
@@ -382,7 +409,10 @@ export function initStatusLayer(url = {}) {
     draw(next);
   });
   // A basemap change replaces the whole style; put the layer back on the new one.
-  map.on("style.load", () => { if (state.status && shown && pictures.has(shown)) draw(pictures.get(shown)); });
+  map.on("style.load", () => {
+    const key = shown && keyOf(shown, shownFocus);
+    if (state.status && key && pictures.has(key)) draw(pictures.get(key));
+  });
   onTime((t) => {
     if (t.date !== t.prev.date || t.playing !== t.prev.playing) update();
   });

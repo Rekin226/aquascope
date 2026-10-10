@@ -19,8 +19,11 @@ import { announce } from "./a11y.js?v=__BUILD__";
 export const log = new ActionLog();
 
 const AREA_SRC = "ai-areas";
-const PIN_SVG = '<svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 31s10-10.2 10-18A10 10 0 0 0 2 13c0 7.8 10 18 10 18Z"/>' +
-  '<circle cx="12" cy="12.5" r="3.6"/></svg>';
+const PIN_PATH = '<path d="M12 31s10-10.2 10-18A10 10 0 0 0 2 13c0 7.8 10 18 10 18Z"/>';
+const PIN_SVG = `<svg viewBox="0 0 24 32" aria-hidden="true">${PIN_PATH}<circle cx="12" cy="12.5" r="3.6"/></svg>`;
+// A ranked pin (Scout, #563) carries its number where the dot was.
+const rankedPin = (n) => `<svg viewBox="0 0 24 32" aria-hidden="true">${PIN_PATH}` +
+  `<text x="12" y="13" text-anchor="middle" dominant-baseline="central">${n}</text></svg>`;
 
 let river = null;              // the river this module lit: { lat, lon, river_id, direction, label } or null
 const areas = new Map();       // entry id -> { bbox, label, marker }
@@ -152,17 +155,29 @@ function openPinCard(id) {
   const p = e.after;
   const [first, ...rest] = p.facts || [];
   const v = first && (typeof first.value === "number" ? first.value.toLocaleString(undefined, { maximumFractionDigits: 3 }) : String(first.value));
-  const note = [p.text, ...rest.map(factLine)].filter(Boolean).join(" · ");
+  // A scout pin's reason already says its numbers (all formatted by the package); its facts stay in pins().
+  const note = p.rank ? p.text : [p.text, ...rest.map(factLine)].filter(Boolean).join(" · ");
   // The pin's card is what was asked for now: the log folds so the two do not stack (its count reopens it).
   if (logOpen) setLogOpen(false);
   actions.openMapCard({
     id: `pin:${id}`, lngLat: [p.lon, p.lat], lift: 30,
-    what: `Note, ${BY_LABEL[e.by] || e.by}`, whatIcon: `<span class="ma-pin-mini" aria-hidden="true">${PIN_SVG}</span>`,
+    what: p.rank ? `Scout ${p.rank}${p.kind ? `, ${p.kind}` : ""} · ${BY_LABEL[e.by] || e.by}` : `Note, ${BY_LABEL[e.by] || e.by}`,
+    whatIcon: `<span class="ma-pin-mini" aria-hidden="true">${PIN_SVG}</span>`,
     title: p.title, sub: `${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}`,
     figure: first ? { value: v, unit: first.unit || "", label: first.label } : null,
     note, credit: p.source || "",
     buttons: [{ id: "unpin", label: "Remove pin", title: "Undo this pin", onClick: () => { undoEntry(id); actions.closeMapCard(); } }],
   });
+}
+
+// A pin from the log: brought into view if it is off screen, then its card opened.
+function showPin(id) {
+  const e = log.get(id);
+  if (!e || e.undone) return;
+  const p = e.after;
+  const b = map.getBounds();
+  if (b && !b.contains([p.lon, p.lat])) map.easeTo({ center: [p.lon, p.lat], duration: 700 });
+  openPinCard(id);
 }
 
 function drawPin(id, pin) {
@@ -171,9 +186,9 @@ function drawPin(id, pin) {
   if (old) old.remove();
   const el = document.createElement("button");
   el.type = "button";
-  el.className = "ma-pin";
-  el.innerHTML = PIN_SVG;
-  el.setAttribute("aria-label", `Note: ${pin.title}`);
+  el.className = pin.rank ? "ma-pin ranked" : "ma-pin";
+  el.innerHTML = pin.rank ? rankedPin(pin.rank) : PIN_SVG;
+  el.setAttribute("aria-label", pin.rank ? `Scout ${pin.rank}: ${pin.title}` : `Note: ${pin.title}`);
   el.title = pin.title;
   el.addEventListener("click", (ev) => { ev.stopPropagation(); openPinCard(id); });
   const marker = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([pin.lon, pin.lat]).addTo(map);
@@ -355,6 +370,26 @@ export function addPin(pin, { by = "api", label = "" } = {}) {
   return entry.id;
 }
 
+/**
+ * Refine a pin already on the map (its title or note, as a place name arrives), without a new log entry: the
+ * pin stays where it is and keeps its undo. Returns false for a pin that is gone.
+ */
+export function updatePin(id, pin, { label = "" } = {}) {
+  const e = log.get(id);
+  if (!e || e.undone || !e.action || e.action.type !== "add_pin") return false;
+  const p = checkPin({ ...e.after, ...pin, lat: e.after.lat, lon: e.after.lon });
+  e.after = p;
+  if (label) e.label = label;
+  const m = pinMarkers.get(id);
+  if (m) {
+    const el = m.getElement();
+    el.title = p.title;
+    el.setAttribute("aria-label", p.rank ? `Scout ${p.rank}: ${p.title}` : `Note: ${p.title}`);
+  }
+  log.emit();
+  return true;
+}
+
 /** The pins on the map, oldest first: { id, lat, lon, title, text, facts, source, by, at }. */
 export const pins = () => log.pins();
 
@@ -399,8 +434,11 @@ export function renderLog() {
   const rows = live.slice().reverse().map((e) => {
     const by = BY_LABEL[e.by] || e.by;
     const title = [e.command ? `“${e.command}”` : "", e.detail, agoWords(e.at, now)].filter(Boolean).join(" · ");
-    return `<li class="ma-row" data-id="${e.id}">${icon(e.action && e.action.type)}` +
-      `<span class="ma-label" title="${escapeHtml(title)}">${escapeHtml(e.label)}</span>` +
+    const pin = e.action && e.action.type === "add_pin";
+    const label = pin
+      ? `<button type="button" class="ma-label ma-open-pin" data-pin="${e.id}" title="${escapeHtml(title)}">${escapeHtml(e.label)}</button>`
+      : `<span class="ma-label" title="${escapeHtml(title)}">${escapeHtml(e.label)}</span>`;
+    return `<li class="ma-row" data-id="${e.id}">${icon(e.action && e.action.type)}${label}` +
       `<span class="ma-by ma-by-${escapeHtml(e.by)}">${escapeHtml(by)}</span>` +
       `<button type="button" class="ma-undo" data-undo="${e.id}" aria-label="Undo: ${escapeHtml(e.label)}" title="Undo">` +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>' +
@@ -417,6 +455,8 @@ export function initMapActions() {
     box.addEventListener("click", (e) => {
       const one = e.target.closest("[data-undo]");
       if (one) { undoEntry(Number(one.dataset.undo)); return; }
+      const pin = e.target.closest("[data-pin]");
+      if (pin) { showPin(Number(pin.dataset.pin)); return; }
       if (e.target.closest("[data-undo-all]")) undoAll();
     });
   }

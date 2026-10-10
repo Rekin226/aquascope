@@ -65,11 +65,15 @@ export function checkPin(p) {
     .filter((f) => f && f.label !== undefined && f.value !== undefined && f.value !== null)
     .map((f) => ({ label: String(f.label).slice(0, 60), value: f.value, ...(f.unit ? { unit: String(f.unit).slice(0, 20) } : {}) }))
     : [];
+  // A rank (Scout, #563) is drawn in the pin; a kind says which layer the note is about.
+  const rank = Number(p.rank);
   return {
     lat: Math.round(lat * 1e5) / 1e5, lon: Math.round(lon * 1e5) / 1e5, title,
     text: p.text ? String(p.text).replace(/\s+/g, " ").trim().slice(0, 600) : "",
     facts,
-    source: p.source ? String(p.source).slice(0, 200) : "",
+    source: p.source ? String(p.source).slice(0, 320) : "",
+    ...(Number.isInteger(rank) && rank >= 1 && rank <= 99 ? { rank } : {}),
+    ...(p.kind ? { kind: String(p.kind).slice(0, 40) } : {}),
   };
 }
 

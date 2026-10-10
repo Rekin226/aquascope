@@ -168,6 +168,66 @@ facts, source})` in `explorer/src/map-actions.js` (also `actions.addPin`) drops 
 pin that opens a map card with its note, facts and source, listed in the log like
 any action; `pins()` lists them.
 
+## Scout
+
+The **Scout** pill beside **Ask the map** looks at the view on screen and drops up to
+ten numbered pins on what stands out, most worth a look first. Each pin opens a card
+with its title, its reason in a sentence or two, the main number and where it came
+from. The pins go in the action log, so **Undo all** or a pin's **Remove pin** takes
+them away, and a second Scout replaces the first one's pins. A pin's row in the log
+opens its card.
+
+![Scout: ten pins on what stands out today](img/globe/563-scout-globe.png)
+
+What it looks for, by fixed rules in `aquascope.map_scout`:
+
+| Kind | What makes it stand out | Data |
+|---|---|---|
+| World river status | The largest connected areas much above or much below normal in the month's map | GEOGLOWS v2 HydroSOS (modelled), CC BY 4.0 |
+| Floods ahead | The reaches with the highest return-period class and the largest rivers, one pin per river group | GEOGLOWS v2 forecast, CC BY 4.0; return periods CC BY-NC-SA 4.0 |
+| Floods past | The month's strongest groups of flood events in the news and radar detections | Groundsource (CC BY 4.0), Microsoft Sentinel-1 (MIT) |
+| Gauges today | Groups of gauges much above or much below normal for the date, around the most extreme one | The Archive's daily snapshot |
+| Models and gauges | Gauges where even the best model scored does no better than the gauge's own mean flow | The evidence table (`skill/model_skill.parquet`) |
+
+The month is the map's: move the time bar to a month and Scout looks at that month's
+river status and floods in the news. Floods ahead and the gauges are always today's.
+Two pins never sit closer than about a pin's height on screen, and each kind has a
+share of the ten (the past and the evidence table fewer), so one busy place does not
+take every pin. A pin's place name comes from the same gazetteer as the search
+(Photon reverse geocoding, OpenStreetMap data, ODbL). Photon answers one request at a
+time, so the pins drop at once under a named region or their coordinates and take
+their place names over the next few seconds; when Photon does not answer, they keep
+those.
+
+![A scout pin's card: the reason, the number and the source](img/globe/563-scout-card.png)
+
+**Where the findings come from.** Each day, after the Floods ahead issue, the
+flood-warnings workflow runs the scout over the whole world and publishes
+`scout/latest.json` (and a dated copy) in the Archive dataset, writing nothing else.
+That file adds record checks a browser cannot afford: the share of a named region
+much above or below normal against the same calendar month of every year since 1990
+(about 36 status maps), and a group of flood cells against the same month since 2000
+(news coverage grows over the years, which the method notes). When the view is half
+the globe at the newest month, Scout uses that file, and the line under the bar says
+"from today's scout file". Anywhere else, or before the first file is published, it
+scans the view in your browser, in a few seconds once the engine has started.
+
+**With a model.** Keyless, the rules' own sentences are used. With Chrome's built-in
+model ready, or a key in Ask ✨, the model puts the findings in order and words them,
+choosing from a few more than ten. It never writes a number: every number, date,
+place and ranking is a slot (`{area}`, `{peak}`, `{month}`) that the package fills in,
+and wording with a digit, a percent sign, a number word or a word like "record" or
+"largest" outside the slots is refused, so the rules' wording stays (the line says how
+many were refused). The maintainer's keys are never used for visitors.
+
+The same scan is `aquascope layers scout [--bbox W S E N] [--month YYYY-MM]
+[--published]`, the MCP tool `map_scout`, and, for an assistant in the browser, the
+WebMCP tool `aquascope_scout`. It is model output and news reports, not a warning.
+
+![Scout over Europe in September 2026](img/globe/563-scout-europe.png)
+
+![Scout on a phone, dark](img/globe/563-scout-phone-dark.png)
+
 ## Map layers
 
 The rail is a layer stack, and every layer in it is keyless and free to use.

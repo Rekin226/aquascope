@@ -124,6 +124,15 @@ const TOOLS = [
       required: ["actions"],
     },
   },
+  {
+    name: "aquascope_scout",
+    description: "Scout the view the reader is looking at (#563): drop up to ten numbered pins on what stands out "
+      + "(the largest areas much above or below normal in the month's river status, the strongest floods "
+      + "ahead, floods in the news, gauges at extremes today, gauges no model matches), each with its reason, "
+      + "numbers and source, found by fixed rules in aquascope.map_scout. The pins go in the action log, where "
+      + "the reader can undo them. Returns the pins.",
+    inputSchema: { type: "object", properties: {} },
+  },
 ];
 
 export function webmcpAvailable() {
@@ -166,6 +175,13 @@ export function registerWebMcpTools({ actions }) {
             const done = await actions.applyMapActions(resolved.actions, { by: "agent", said: resolved.said || [] });
             return textResult({ applied: done.applied.map((e) => ({ id: e.id, label: e.label })),
               failed: done.failed, rejected: checked.errors || [], notes: resolved.notes || [], credit: resolved.credit });
+          }
+          if (spec.name === "aquascope_scout") {  // page-side: scout.js (#563)
+            if (!actions.runScout) return textResult({ error: "The map is not ready." });
+            const done = await actions.runScout();
+            if (!done) return textResult({ error: "The scout could not run; the line under the bar says why." });
+            return textResult({ mode: done.mode, by: done.by, pins: done.picks.map((f) => ({ rank: f.rank,
+              title: f.title, reason: f.reason, lat: f.lat, lon: f.lon, source: f.source })) });
           }
           if (spec.name === "aquascope_show_on_map") {
             if (args.source && args.station_id) {

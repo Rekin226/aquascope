@@ -265,6 +265,15 @@
             </button>
             <button type="button" class="ma-x" aria-label="Close" title="Close (Esc)">×</button>
           </form>
+          <!-- Scout (#563): up to ten numbered pins on what stands out in the view; src/scout.js -->
+          <button id="btn-scout" class="ma-open ma-scout" type="button" aria-busy="false" aria-label="Scout"
+                  title="Scout: pin what stands out in this view, each with its reason and source">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="6.5" cy="15.5" r="3.5" /><circle cx="17.5" cy="15.5" r="3.5" />
+              <path d="M3.4 14 5.6 6.2A1.6 1.6 0 0 1 7.1 5H9l.8 7.4M20.6 14l-2.2-7.8A1.6 1.6 0 0 0 16.9 5H15l-.8 7.4M10 12.5h4" />
+            </svg>
+            <span class="ma-open-label">Scout</span>
+          </button>
           <button id="ma-log-toggle" class="ma-count" type="button" aria-expanded="false" aria-controls="ma-log" hidden></button>
         </div>
         <p id="ma-status" class="ma-status" role="status" hidden></p>

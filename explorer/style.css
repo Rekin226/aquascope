@@ -363,6 +363,7 @@ body.rail-open .status-legend { margin-left: calc(var(--rail-w) + var(--gap)); }
   background: conic-gradient(#a6611a 0 25%, #dfc27d 0 50%, #80cdc1 0 75%, #018571 0); box-shadow: 0 0 0 1.5px #fff;
 }
 .status-legend .sl-src { color: var(--muted); font-size: .64rem; }
+.status-legend .sl-credit { display: none; color: var(--muted); font-size: .6rem; margin-top: .2rem; }
 .status-legend .sl-err { color: var(--warn-ink); }
 @media (prefers-reduced-motion: reduce) {
   .status-legend .sl-busy { animation: none; border-top-color: var(--line); }
@@ -377,6 +378,7 @@ body.rail-open .status-legend { margin-left: calc(var(--rail-w) + var(--gap)); }
   .status-legend { left: 52px; width: auto; max-width: min(14rem, calc(100% - 60px)); padding: .35rem .5rem .4rem; }
   .status-legend header { margin-bottom: .25rem; }
   .status-legend .sl-tag, .status-legend .sl-src, .status-legend .sl-dots { display: none; }
+  .status-legend .sl-credit { display: block; }
   body.rail-open .status-legend { margin-left: 0; }
 }
 

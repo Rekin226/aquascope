@@ -242,7 +242,8 @@ function gaugeLine(month, latest) {
   const meta = state.nowMeta;
   if (!meta || meta.missing || !state.nowStatus) return "";
   const n = state.nowStatus.size.toLocaleString();
-  const text = !month || month === latest
+  // A month before the newest map is the past; the newest one and anything after it is as good as today.
+  const text = !month || !latest || month >= latest
     ? `Dots: today vs normal at ${n} gauges; the rest faint, in their agency colour.`
     : `Dots still show today (${n} gauges), not ${monthLabel(month)}.`;
   return `<p class="sl-dots"><i aria-hidden="true"></i>${escapeHtml(text)}</p>`;
@@ -284,8 +285,9 @@ function renderLegend() {
     '<button class="sl-btn" type="button" data-act="hide" aria-label="Hide the river status map" title="Hide">×</button></header>' +
     `<div class="sl-bar" role="img" aria-label="${escapeHtml(STATUS_CLASSES.map((c) => c.label).join(", "))}">${bar}</div>` +
     '<div class="sl-ends"><span>much below</span><span>normal</span><span>much above</span></div>' +
-    `${err}${gaugeLine(month, latest)}` +
-    '<p class="sl-src">Each basin\'s monthly flow vs its normal. Modelled, GEOGLOWS, CC BY 4.0</p>';
+    `${err}${gaugeLine(month || String(state.date || "").slice(0, 7), latest)}` +
+    '<p class="sl-src">Each basin\'s monthly flow vs its normal. Modelled, GEOGLOWS, CC BY 4.0</p>' +
+    '<p class="sl-credit">Modelled · GEOGLOWS · CC BY 4.0</p>';   // the phone's short credit (style.css)
 }
 
 function openAbout() {

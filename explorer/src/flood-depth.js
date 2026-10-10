@@ -19,8 +19,8 @@ import { openCard } from "./map-card.js?v=__BUILD__";
 import { addDays, dayIndex, shortDay } from "./floods-ahead-core.js?v=__BUILD__";
 import { floodsAheadData } from "./floods-ahead.js?v=__BUILD__";
 import {
-  CELL_PX, DEPTH_CREDIT, DEPTH_LABEL, DEPTH_MINZOOM, MAX_CELLS, RAMP, activeReaches, cellParts, cellSignature,
-  cellsFor, cellsInView, depthFacts, depthLegendLine, diskBox, probeCell, rampColor, rampCss, reachAt,
+  CELL_PX, DEPTH_CREDIT, DEPTH_LABEL, DEPTH_MINZOOM, MAX_CELLS, RAMP, activeReaches, cellLines, cellParts,
+  cellSignature, cellsFor, cellsInView, depthFacts, depthLegendLine, diskBox, probeCell, rampColor, rampCss, reachAt,
 } from "./flood-depth-core.js?v=__BUILD__";
 
 export { DEPTH_CREDIT };
@@ -49,7 +49,7 @@ const vis = () => (visible ? "visible" : "none");
 
 // ── reading a cell ──────────────────────────────────────────────────────────
 
-function inWorker(cell, parts) {
+function inWorker(cell, parts, lines) {
   if (!worker) {
     worker = new Worker(new URL("./flood-depth-worker.js?v=__BUILD__", import.meta.url), { type: "module" });
     worker.onmessage = (e) => {
@@ -68,10 +68,10 @@ function inWorker(cell, parts) {
   if (worker === false) return Promise.reject(new Error("no worker"));
   const id = ++reqId;
   // Only what the worker needs: the box and the circles, not the reaches' forecast properties.
-  const slim = { key: cell.key, box: cell.box, reaches: cell.reaches.map(({ id: rid, lon, lat, r, rp }) => ({ id: rid, lon, lat, r, rp })) };
+  const slim = { key: cell.key, box: cell.box, reaches: cell.reaches.map(({ id: rid, lon, lat, r, rp, order }) => ({ id: rid, lon, lat, r, rp, order })) };
   return new Promise((resolve, reject) => {
     waiting.set(id, { resolve, reject });
-    worker.postMessage({ id, cell: slim, parts, size: CELL_PX });
+    worker.postMessage({ id, cell: slim, parts, size: CELL_PX, lines: { act: lines.act, other: lines.other } });
   });
 }
 
@@ -87,7 +87,7 @@ function keep(k, pic) {
   return pic;
 }
 
-function picture(cell, sig) {
+function picture(cell, sig, lines) {
   const k = `${cell.key}|${sig}`;
   if (pictures.has(k)) {
     const p = pictures.get(k);
@@ -96,7 +96,7 @@ function picture(cell, sig) {
     return Promise.resolve(p);
   }
   if (loading.has(k)) return loading.get(k);
-  const p = inWorker(cell, cellParts(cell))
+  const p = inWorker(cell, cellParts(cell), lines)
     .then((res) => keep(k, { url: res.png ? URL.createObjectURL(res.png) : null, painted: res }))
     .finally(() => loading.delete(k));
   loading.set(k, p);
@@ -174,7 +174,41 @@ function viewBounds() {
   return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
 }
 
+// The rivers in view from the stream tiles already loaded for the rivers and Floods ahead: riverId -> { order,
+// segs, box }. Only rivers of order 5 and up and the forecast reaches themselves, which is what cellLines uses.
+const NET_SOURCES = ["river-fa-net", "river-net"];
+function riverLines(ids) {
+  const out = new Map();
+  for (const src of NET_SOURCES) {
+    if (!map.getSource(src)) continue;
+    let feats = [];
+    try {
+      feats = map.querySourceFeatures(src, { sourceLayer: "streams",
+        filter: ["any", [">=", ["coalesce", ["get", "strahlerOrder"], 0], 5], ["in", ["to-number", ["get", "riverId"]], ["literal", ids]]] });
+    } catch { continue; }
+    for (const f of feats) {
+      const id = Number(f.properties.riverId);
+      const g = f.geometry;
+      const parts = g.type === "LineString" ? [g.coordinates] : g.type === "MultiLineString" ? g.coordinates : [];
+      if (!parts.length) continue;
+      let e = out.get(id);
+      if (!e) { e = { order: Number(f.properties.strahlerOrder) || 0, segs: [], box: [Infinity, Infinity, -Infinity, -Infinity] }; out.set(id, e); }
+      for (const line of parts) {
+        for (let k = 0; k + 1 < line.length; k++) {
+          const [x1, y1] = line[k], [x2, y2] = line[k + 1];
+          e.segs.push(x1, y1, x2, y2);
+          e.box[0] = Math.min(e.box[0], x1, x2); e.box[1] = Math.min(e.box[1], y1, y2);
+          e.box[2] = Math.max(e.box[2], x1, x2); e.box[3] = Math.max(e.box[3], y1, y2);
+        }
+      }
+    }
+    if (out.size) break;   // one network is enough
+  }
+  return out;
+}
+
 let wanted = [];
+let wantedSig = new Map();
 function update() {
   renderLegend();
   if (!state.mapOk || !map || !data) return;
@@ -189,14 +223,18 @@ function update() {
   wanted = cellsInView(cells, viewBounds(), [c.lng, c.lat], MAX_CELLS);
   const keys = new Set(wanted.map((x) => x.key));
   for (const key of [...onMap.keys()]) if (!keys.has(key)) removeCell(key);
+  const lines = riverLines([...new Set(wanted.flatMap((x) => x.reaches.map((r) => r.id)))]);
+  wantedSig = new Map();
   const jobs = [];
   for (const cell of wanted) {
-    const sig = cellSignature(cell);
+    const cl = cellLines(cell, lines);
+    const sig = cellSignature(cell, cl.sig);
+    wantedSig.set(cell.key, sig);
     const now = onMap.get(cell.key);
     if (now && now.sig === sig) continue;
     busy++;
-    const job = picture(cell, sig).then((pic) => {
-      if (!visible || !wanted.some((x) => x.key === cell.key) || cellSignature(cells.get(cell.key) || cell) !== sig) return;
+    const job = picture(cell, sig, cl).then((pic) => {
+      if (!visible || wantedSig.get(cell.key) !== sig) return;
       drawCell(cell, pic);
       if (pic.url) onMap.set(cell.key, { sig, painted: pic.painted, cell });
       failed = false;
@@ -359,7 +397,12 @@ export function initFloodDepth() {
     if (next !== day) setDay(next);
   });
   let t = 0;
-  map.on("moveend", () => { clearTimeout(t); t = setTimeout(update, 120); });
+  const later = (ms) => { clearTimeout(t); t = setTimeout(update, ms); };
+  map.on("moveend", () => later(120));
+  // The stream tiles shape the cells (cellLines): when more of them arrive, look again.
+  map.on("sourcedata", (e) => {
+    if (NET_SOURCES.includes(e.sourceId) && e.isSourceLoaded && visible && map.getZoom() >= DEPTH_MINZOOM) later(400);
+  });
   // A basemap change replaces the style: our sources go with it, so draw the cells again.
   map.on("style.load", () => { onMap.clear(); setTimeout(() => setDay(day), 0); });
   floodsAheadData().then((d) => {

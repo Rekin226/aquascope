@@ -58,7 +58,7 @@ function grid(url, cell) {
 }
 
 self.onmessage = async (event) => {
-  const { id, cell, parts, size } = event.data || {};
+  const { id, cell, parts, size, lines } = event.data || {};
   try {
     if (typeof OffscreenCanvas === "undefined") throw new Error("no OffscreenCanvas");
     geotiff = geotiff || await import(GEOTIFF_MODULE);
@@ -67,7 +67,7 @@ self.onmessage = async (event) => {
       const g = await grid(p.url, cell);
       if (g) grids.set(p.rp, g);
     }));
-    const painted = paintCell(cell, grids, size, size);
+    const painted = paintCell(cell, grids, size, size, lines);
     let png = null;
     if (painted.wet) {
       const canvas = new OffscreenCanvas(size, size);

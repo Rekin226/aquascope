@@ -179,8 +179,44 @@ export function cellParts(cell) {
   return rps.map((rp) => ({ rp, url: depthUrl(name, rp) }));
 }
 
-/** A cell's "signature": which reaches it draws and from which maps. The same signature is the same picture. */
-export const cellSignature = (cell) => cell.reaches.map((r) => `${r.id}@${r.rp}`).sort().join(",");
+/**
+ * Where each river runs in a cell, from the stream tiles: the forecast reaches as lines (a reach whose line is not
+ * loaded stays a point), and the other rivers at least as large as the smallest of them, which take the pixels
+ * nearer to them. `lines` maps a riverId to { order, segs: [x1, y1, x2, y2, ...], box: [w, s, e, n] }.
+ * Returns { act: [{ rp, r, segs }], other: [x1, y1, x2, y2, ...], sig }.
+ */
+export function cellLines(cell, lines) {
+  const ids = new Set(cell.reaches.map((r) => r.id));
+  const act = cell.reaches.map((r) => {
+    const l = lines && lines.get(r.id);
+    return { rp: r.rp, r: r.r, segs: l ? l.segs : [r.lon, r.lat, r.lon, r.lat] };
+  });
+  const minOrder = Math.min(...cell.reaches.map((r) => Number(r.order) || 5));
+  const margin = Math.max(...cell.reaches.map((r) => r.r)) / KM_PER_DEG / cosd((cell.box[1] + cell.box[3]) / 2);
+  const [w, s, e, n] = cell.box;
+  const other = [];
+  const otherIds = [];
+  for (const [id, l] of (lines || new Map())) {
+    if (ids.has(id) || !(l.order >= minOrder)) continue;
+    const [lw, ls, le, ln] = l.box;
+    if (le < w - margin || lw > e + margin || ln < s - margin || ls > n + margin) continue;
+    for (const v of l.segs) other.push(v);
+    otherIds.push(id);
+  }
+  const lined = cell.reaches.filter((r) => lines && lines.has(r.id)).map((r) => r.id);
+  return { act, other, sig: `${lined.sort().join(".")}|${hash(otherIds.sort().join("."))}` };
+}
+
+function hash(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36);
+}
+
+/** A cell's "signature": which reaches it draws, from which maps, and the rivers that shape it. Same signature,
+ * same picture. */
+export const cellSignature = (cell, linesSig = "") =>
+  `${cell.reaches.map((r) => `${r.id}@${r.rp}`).sort().join(",")}#${linesSig}`;
 
 /** The nearest cells to the middle of the view, at most `max`, among those inside `bounds` [w, s, e, n]. */
 export function cellsInView(cells, bounds, center, max = MAX_CELLS) {
@@ -233,61 +269,144 @@ export function rowLats(s, n, h) {
   return out;
 }
 
+// The circles are worked out on a grid at half the picture's resolution (180 m), which is plenty for a soft edge.
+const STEP = 2;
+// How soft the line between a forecast river and a larger one is, km.
+const VORONOI_KM = 0.5;
+
+/** Distance (squared) from (px, py) to the segment (ax, ay)-(bx, by), all in km. */
+function segDist2(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const ex = ax + t * dx - px, ey = ay + t * dy - py;
+  return ex * ex + ey * ey;
+}
+
 /**
- * Paint one cell: inside each reach's circle the depth of that reach's map, the deepest map where circles
- * overlap, faded towards the rim. `grids` maps a return period to { data, x0, y0, dx, dy, width, height }:
- * the window the worker read (x0, y0 its top-left corner, dy negative).
- * Returns { rgba, depthCm, rpAt, wet, max }: the picture, the depth (cm) and the map (return period) per pixel.
+ * Which pixels of a cell belong to the forecast, on the half-resolution grid: within r of a forecast reach (its
+ * line, or its point), and not nearer to another river at least as large (so a tributary's flood does not spill
+ * the main river's flood plain into the picture). Returns { rpAt, fade, gw, gh }: the map to read and how strongly
+ * (1 inside, fading to 0 over the outer FADE of r).
  */
-export function paintCell(cell, grids, w = CELL_PX, h = CELL_PX) {
+export function cellMask(cell, lines, w = CELL_PX, h = CELL_PX) {
+  const gw = Math.ceil(w / STEP), gh = Math.ceil(h / STEP);
   const [cw, cs, ce, cn] = cell.box;
-  const lats = rowLats(cs, cn, h);
-  const rpAt = new Uint16Array(w * h);
-  const fade = new Float32Array(w * h);
-  const pxDeg = (ce - cw) / w;
-  for (const r of cell.reaches) {
-    if (!grids.has(r.rp)) continue;
-    const [bw, bs, be, bn] = diskBox(r.lon, r.lat, r.r);
-    const x0 = Math.max(0, Math.floor((bw - cw) / pxDeg)), x1 = Math.min(w - 1, Math.ceil((be - cw) / pxDeg));
-    if (x1 < x0) continue;
-    const kx = KM_PER_DEG * cosd(r.lat);
-    for (let y = 0; y < h; y++) {
-      const lat = lats[y];
-      if (lat < bs || lat > bn) continue;
-      const dyKm = (lat - r.lat) * KM_PER_DEG;
-      for (let x = x0; x <= x1; x++) {
-        const dxKm = (cw + (x + 0.5) * pxDeg - r.lon) * kx;
-        const d = Math.sqrt(dxKm * dxKm + dyKm * dyKm);
-        if (d > r.r) continue;
-        const f = Math.min(1, (r.r - d) / (FADE * r.r));
-        const i = y * w + x;
-        if (r.rp > rpAt[i]) rpAt[i] = r.rp;
-        if (f > fade[i]) fade[i] = f;
+  const lats = rowLats(cs, cn, gh);
+  const lat0 = (cs + cn) / 2;
+  const kx = KM_PER_DEG * cosd(lat0);
+  const pxKm = ((ce - cw) / gw) * kx;
+  const X = (lon) => (lon - cw) * kx, Y = (lat) => (lat - lat0) * KM_PER_DEG;
+  const colX = new Float64Array(gw);
+  for (let x = 0; x < gw; x++) colX[x] = ((x + 0.5) / gw) * (ce - cw) * kx;
+  const rowY = Float64Array.from(lats, Y);
+  // Rows run north to south, unevenly (Mercator): the row range of a latitude band, by search.
+  const rowsFor = (yLo, yHi) => {
+    let a = 0, b = gh - 1;
+    while (a < gh && rowY[a] > yHi) a++;
+    while (b >= 0 && rowY[b] < yLo) b--;
+    return [a, b];
+  };
+  const { act, other } = lines || cellLines(cell, null);
+  const rpAt = new Uint16Array(gw * gh);
+  const fade = new Float32Array(gw * gh);
+  const dAct = new Float32Array(gw * gh).fill(Infinity);
+  for (const a of act) {
+    const r2 = a.r * a.r;
+    for (let k = 0; k + 3 < a.segs.length; k += 4) {
+      const ax = X(a.segs[k]), ay = Y(a.segs[k + 1]), bx = X(a.segs[k + 2]), by = Y(a.segs[k + 3]);
+      const x0 = Math.max(0, Math.floor((Math.min(ax, bx) - a.r) / pxKm)), x1 = Math.min(gw - 1, Math.ceil((Math.max(ax, bx) + a.r) / pxKm));
+      if (x1 < x0) continue;
+      const [y0, y1] = rowsFor(Math.min(ay, by) - a.r, Math.max(ay, by) + a.r);
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const d2 = segDist2(colX[x], rowY[y], ax, ay, bx, by);
+          if (d2 > r2) continue;
+          const i = y * gw + x;
+          const d = Math.sqrt(d2);
+          const f = Math.min(1, (a.r - d) / (FADE * a.r));
+          if (a.rp > rpAt[i]) rpAt[i] = a.rp;
+          if (f > fade[i]) fade[i] = f;
+          if (d < dAct[i]) dAct[i] = d;
+        }
       }
     }
   }
+  const dOther = new Float32Array(gw * gh).fill(Infinity);
+  if (other && other.length) {
+    const reach = Math.max(...act.map((a) => a.r));
+    for (let k = 0; k + 3 < other.length; k += 4) {
+      const ax = X(other[k]), ay = Y(other[k + 1]), bx = X(other[k + 2]), by = Y(other[k + 3]);
+      const x0 = Math.max(0, Math.floor((Math.min(ax, bx) - reach) / pxKm)), x1 = Math.min(gw - 1, Math.ceil((Math.max(ax, bx) + reach) / pxKm));
+      if (x1 < x0) continue;
+      const [y0, y1] = rowsFor(Math.min(ay, by) - reach, Math.max(ay, by) + reach);
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const i = y * gw + x;
+          if (!rpAt[i]) continue;
+          const d = Math.sqrt(segDist2(colX[x], rowY[y], ax, ay, bx, by));
+          if (d < dOther[i]) dOther[i] = d;
+        }
+      }
+    }
+    // The larger river keeps the pixels halfway: the weight rises from 0 there to 1 VORONOI_KM nearer the reach.
+    for (let i = 0; i < rpAt.length; i++) {
+      if (!rpAt[i] || dOther[i] === Infinity) continue;
+      const v = Math.min(1, Math.max(0, (dOther[i] - dAct[i]) / VORONOI_KM));
+      fade[i] *= v;
+      if (!v) rpAt[i] = 0;
+    }
+  }
+  return { rpAt, fade, gw, gh };
+}
+
+/**
+ * Paint one cell from the depth windows the worker read: inside the mask (cellMask) the depth of the map it
+ * names, the deepest map where reaches overlap, faded towards the rim. `grids` maps a return period to
+ * { data, x0, y0, dx, dy, width, height }, the window read (x0, y0 its top-left corner, dy negative).
+ * Returns { rgba, depthCm, rpAt, wet, max }: the picture, and the depth (cm) and map per pixel for a click.
+ */
+export function paintCell(cell, grids, w = CELL_PX, h = CELL_PX, lines = null) {
+  const [cw, cs, ce, cn] = cell.box;
+  const lats = rowLats(cs, cn, h);
+  const mask = cellMask(cell, lines, w, h);
+  const pxDeg = (ce - cw) / w;
   const rgba = new Uint8ClampedArray(w * h * 4);
   const depthCm = new Uint16Array(w * h);
+  const rpAt = new Uint16Array(w * h);
   let wet = 0, max = 0;
+  const { gw, gh } = mask;
+  // The weight between grid points, bilinear, so the edges are smooth curves rather than 180 m steps.
+  const weight = (x, y) => {
+    const fx = Math.min(gw - 1, Math.max(0, (x + 0.5) / STEP - 0.5)), fy = Math.min(gh - 1, Math.max(0, (y + 0.5) / STEP - 0.5));
+    const x0 = Math.floor(fx), y0 = Math.floor(fy), x1 = Math.min(gw - 1, x0 + 1), y1 = Math.min(gh - 1, y0 + 1);
+    const tx = fx - x0, ty = fy - y0, f = mask.fade;
+    return (f[y0 * gw + x0] * (1 - tx) + f[y0 * gw + x1] * tx) * (1 - ty) + (f[y1 * gw + x0] * (1 - tx) + f[y1 * gw + x1] * tx) * ty;
+  };
   for (let y = 0; y < h; y++) {
     const lat = lats[y];
+    const my = Math.min(gh - 1, Math.floor(y / STEP)) * gw;
     for (let x = 0; x < w; x++) {
-      const i = y * w + x;
-      const rp = rpAt[i];
+      const m = my + Math.min(gw - 1, Math.floor(x / STEP));
+      const rp = mask.rpAt[m];
       if (!rp) continue;
       const g = grids.get(rp);
+      if (!g) continue;
       const col = Math.floor((cw + (x + 0.5) * pxDeg - g.x0) / g.dx);
       const row = Math.floor((lat - g.y0) / g.dy);
       if (col < 0 || row < 0 || col >= g.width || row >= g.height) continue;
       const v = g.data[row * g.width + col];
       const c = rampColor(v);
       if (!c) continue;
+      const i = y * w + x;
       wet++;
       if (v > max) max = v;
       depthCm[i] = Math.min(65535, Math.round(v * 100));
+      rpAt[i] = rp;
       const o = i * 4;
       rgba[o] = c[0]; rgba[o + 1] = c[1]; rgba[o + 2] = c[2];
-      rgba[o + 3] = Math.round(255 * c[3] * fade[i]);
+      rgba[o + 3] = Math.round(255 * c[3] * weight(x, y));
     }
   }
   return { rgba, depthCm, rpAt, wet, max };

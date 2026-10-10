@@ -8,6 +8,7 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Fixed
+- **Explorer calls of the same kind in flight no longer read each other's arguments.** The worker handed each message's arguments (and progress callbacks) to Python through one JS global per message type, cleared after the call. `runPythonAsync` yields before it runs, so a second call overwrote the first one's arguments and then cleared them before the first read them, which failed with `TypeError: the JSON object must be str, bytes or bytearray, not JsNull` (seen selecting several gauges quickly). Every call now keeps its arguments and callbacks under its own key and drops them when it ends. This covers assess, engineering export, compare, catalog, ask, solve, the Studio, ingest, the workbench, tools, area study, place context and watch. `tests/test_explorer` checks that no worker call reads a global another call can clear, and `explorer/tests/worker-calls.test.mjs` runs overlapping calls of each type against the worker.
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
 
 ## [0.26.0] - 2026-10-09

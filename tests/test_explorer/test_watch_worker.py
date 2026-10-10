@@ -22,9 +22,10 @@ WORKER = ROOT / "explorer" / "worker.js"
 
 def _code() -> str:
     text = WORKER.read_text(encoding="utf-8")
-    m = re.search(r"async function watchDigest\(.*?const code = `(.*?)`;", text, re.S)
+    m = re.search(r"async function watchDigest\(.*?const code = \(k\) => `(.*?)`;", text, re.S)
     assert m, "watchDigest's Python block is missing from worker.js"
-    return m.group(1)
+    # runPy hands the code its call key as a Python string literal
+    return m.group(1).replace("${k}", '"k"')
 
 
 @pytest.fixture
@@ -33,8 +34,9 @@ def run(monkeypatch):
 
     def call(payload: dict):
         fake = types.ModuleType("js")
-        fake.__aqWatch = json.dumps({"op": "digest", "items": [], "last_seen": {}, "snapshot": [], "issued": [],
-                                     "today": None, **payload})
+        args = json.dumps({"op": "digest", "items": [], "last_seen": {}, "snapshot": [], "issued": [],
+                           "today": None, **payload})
+        fake.__aqCall = lambda key, name: args if (key, name) == ("k", "args") else None
         monkeypatch.setitem(sys.modules, "js", fake)
         ns: dict = {}
         lines = code.strip().splitlines()

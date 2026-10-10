@@ -13,6 +13,27 @@ const LITE_TYPES = new Set(["context", "river", "now"]);
 
 function post(type, extra = {}) { self.postMessage({ type, ...extra }); }
 
+// What one Python call reads from this side (its arguments, its progress callbacks), under a key of its own.
+// The code names the key as a literal and asks __aqCall for each slot, and the slots are dropped when the call
+// ends. One global per message type (self.__aqAssess and the like, set before runPythonAsync and nulled in a
+// finally) raced: runPythonAsync yields before it runs (it loads the packages the code imports), so a second
+// call of the same type overwrote the first one's arguments, and its finally cleared them before the first
+// read them ("the JSON object must be str, bytes or bytearray, not JsNull", seen selecting gauges quickly).
+const calls = new Map();
+let callSeq = 0;
+self.__aqCall = (key, name) => (calls.get(key) || {})[name] ?? null;
+
+// code is (k) => the Python, with k the key as a Python string literal.
+async function runPy(slots, code) {
+  const key = `call-${++callSeq}`;
+  calls.set(key, slots);
+  try {
+    return await pyodide.runPythonAsync(code(JSON.stringify(key)));
+  } finally {
+    calls.delete(key);
+  }
+}
+
 async function init({ pyodideIndexURL, wheelsJson, lite: light = false }) {
   lite = Boolean(light);
   post("progress", { text: "Loading Python runtime (Pyodide)…" });
@@ -206,16 +227,16 @@ analysis.to_csv(_STORE["result"], series=_STORE.get("series"))
 // this variable; op "export" returns one tool's files as a base64 zip (text formats only: DSS goes as the
 // CSV hecdss reads, since its native library cannot load here).
 async function engineering({ id, op, tool, name, lat, lon }) {
-  self.__aqEng = JSON.stringify({
+  const args = JSON.stringify({
     op: op === "menu" ? "menu" : "export", tool: String(tool || ""), name: name ? String(name) : null,
     lat: Number.isFinite(Number(lat)) && lat !== null ? Number(lat) : null,
     lon: Number.isFinite(Number(lon)) && lon !== null ? Number(lon) : null,
   });
-  const code = `
+  const code = (k) => `
 import json
-from js import __aqEng
+from js import __aqCall
 from aquascope.io import engineering as _eng
-_a = json.loads(__aqEng)
+_a = json.loads(__aqCall(${k}, "args"))
 _r = _STORE.get("result") or {}
 if _a["op"] == "menu":
     _out = _eng.menu(_r.get("variable"))
@@ -225,12 +246,8 @@ else:
                               lat=_a.get("lat"), lon=_a.get("lon"), with_text=False, as_zip=True, dss_binary=False)
 json.dumps(_out)
 `;
-  try {
-    const out = await pyodide.runPythonAsync(code);
-    post("result", { id, result: JSON.parse(out) });
-  } finally {
-    self.__aqEng = null;
-  }
+  const out = await runPy({ args }, code);
+  post("result", { id, result: JSON.parse(out) });
 }
 
 // "What can be answered here": aquascope.explore.assess_site over the catalog
@@ -239,46 +256,38 @@ json.dumps(_out)
 // similarity table are read by DuckDB-WASM on the main thread, not here.
 async function assess({ id, lat, lon, radius_km, problem, area_km2, donors }) {
   post("progress", { text: "Checking what the record here supports…" });
-  self.__aqAssess = JSON.stringify({
+  const args = JSON.stringify({
     lat: Number(lat), lon: Number(lon), radius_km: Number(radius_km) || 50, problem: problem || null,
     area_km2: Number.isFinite(Number(area_km2)) && area_km2 !== null ? Number(area_km2) : null,
     donors: Number.isFinite(Number(donors)) && donors !== null ? Number(donors) : null,
   });
-  const code = `
+  const code = (k) => `
 import json
-from js import __aqAssess
-_a = json.loads(__aqAssess)
+from js import __aqCall
+_a = json.loads(__aqCall(${k}, "args"))
 json.dumps(analysis.assess_site(
     _a["lat"], _a["lon"], radius_km=_a["radius_km"], problem=_a.get("problem"),
     area_km2=_a.get("area_km2"), donors=_a.get("donors"),
 ))
 `;
-  try {
-    const out = await pyodide.runPythonAsync(code);
-    post("result", { id, result: JSON.parse(out) });
-  } finally {
-    self.__aqAssess = null;
-  }
+  const out = await runPy({ args }, code);
+  post("result", { id, result: JSON.parse(out) });
 }
 
 // My places, Compare: aquascope.compare over two to five gauges. The page
 // passes each gauge's catchment area, which it reads from its own table.
 async function compare({ id, stations, years }) {
   post("progress", { text: "Fetching the records to compare…" });
-  self.__aqCompare = JSON.stringify({ stations: stations || [], years: Number(years) > 0 ? Math.round(Number(years)) : null });
-  const code = `
+  const args = JSON.stringify({ stations: stations || [], years: Number(years) > 0 ? Math.round(Number(years)) : null });
+  const code = (k) => `
 import json
-from js import __aqCompare
+from js import __aqCall
 import aquascope.compare as _compare
-_a = json.loads(__aqCompare)
+_a = json.loads(__aqCall(${k}, "args"))
 json.dumps(_compare.compare_stations(_a["stations"], years=_a["years"]))
 `;
-  try {
-    const out = await pyodide.runPythonAsync(code);
-    post("result", { id, result: JSON.parse(out) });
-  } finally {
-    self.__aqCompare = null;
-  }
+  const out = await runPy({ args }, code);
+  post("result", { id, result: JSON.parse(out) });
 }
 
 // The main thread already holds the station catalog (DuckDB-WASM); hand it to
@@ -286,14 +295,12 @@ json.dumps(_compare.compare_stations(_a["stations"], years=_a["years"]))
 // (httpx / pyarrow do not run here).
 let catalogLoaded = false;
 async function catalog({ id, rows }) {
-  self.__aqCatalog = JSON.stringify(rows);
-  await pyodide.runPythonAsync(`
+  await runPy({ args: JSON.stringify(rows) }, (k) => `
 import json
-from js import __aqCatalog
+from js import __aqCall
 from aquascope.archive import catalog as _catalog
-_catalog.set_catalog(json.loads(__aqCatalog))
+_catalog.set_catalog(json.loads(__aqCall(${k}, "args")))
 `);
-  self.__aqCatalog = null;
   catalogLoaded = true;
   post("result", { id, result: { n: rows.length } });
 }
@@ -303,13 +310,13 @@ _catalog.set_catalog(json.loads(__aqCatalog))
 // straight from this worker to the provider the user picked. The key never
 // touches any server of ours (there is none).
 async function ask({ id, question, provider, model, api_key, base_url, max_steps }) {
-  self.__aqAskEvent = (text) => post("ask_progress", { id, text: String(text) });
-  self.__aqAsk = JSON.stringify({ question, provider, model, api_key, base_url, max_steps: Number(max_steps) || 8 });
-  const code = `
+  const event = (text) => post("ask_progress", { id, text: String(text) });
+  const args = JSON.stringify({ question, provider, model, api_key, base_url, max_steps: Number(max_steps) || 8 });
+  const code = (k) => `
 import json
-from js import __aqAsk, __aqAskEvent
+from js import __aqCall
 from aquascope.ai_engine import analyst as _analyst
-_args = json.loads(__aqAsk)
+_args = json.loads(__aqCall(${k}, "args"))
 _res = _analyst.ask(
     _args["question"],
     provider=_args.get("provider") or None,
@@ -317,7 +324,7 @@ _res = _analyst.ask(
     api_key=_args.get("api_key") or None,
     base_url=_args.get("base_url") or None,
     max_steps=int(_args.get("max_steps") or 8),
-    on_event=lambda m: __aqAskEvent(m),
+    on_event=lambda m, _f=__aqCall(${k}, "event"): _f(m),
     # The record on screen, so run_python can work on it (#234).
     data={"df": _STORE["frame"]} if _STORE.get("frame") is not None else None,
 )
@@ -335,13 +342,8 @@ json.dumps({
     "study": _res.study,
 })
 `;
-  try {
-    const out = await pyodide.runPythonAsync(code);
-    post("result", { id, result: JSON.parse(out) });
-  } finally {
-    self.__aqAsk = null;
-    self.__aqAskEvent = null;
-  }
+  const out = await runPy({ args, event }, code);
+  post("result", { id, result: JSON.parse(out) });
 }
 
 // ── Solve: a problem at a place, planned first ──────────────────────────────
@@ -360,15 +362,15 @@ function solveArgs() {
 // The plan half: the playbook the chips or the keyword rules pick, the branch
 // the tree selects for the data that exists, the study it fills. Nothing runs.
 async function solvePlan({ id, problem, lat, lon, playbook, intake, recon, provider, model, api_key, base_url }) {
-  self.__aqSolve = JSON.stringify({
+  const args = JSON.stringify({
     problem: problem || "", lat: Number(lat), lon: Number(lon), playbook: playbook || null,
     intake: intake || null, recon: recon || null, provider, model, api_key, base_url,
   });
-  const code = `
+  const code = (k) => `
 import json
-from js import __aqSolve
+from js import __aqCall
 from aquascope.ai_engine import team as _team
-_a = json.loads(__aqSolve)
+_a = json.loads(__aqCall(${k}, "args"))
 _res = _team.solve(
     _a["problem"], lat=_a["lat"], lon=_a["lon"], playbook=_a.get("playbook"), intake=_a.get("intake"),
     recon=_a.get("recon"), ${solveArgs()},
@@ -376,12 +378,8 @@ _res = _team.solve(
 )
 json.dumps(_res.to_dict(), default=str)
 `;
-  try {
-    const out = await pyodide.runPythonAsync(code);
-    post("result", { id, result: JSON.parse(out) });
-  } finally {
-    self.__aqSolve = null;
-  }
+  const out = await runPy({ args }, code);
+  post("result", { id, result: JSON.parse(out) });
 }
 
 // The intake a small model wrote on the reader's device, made safe by the
@@ -390,12 +388,12 @@ json.dumps(_res.to_dict(), default=str)
 // An unknown playbook comes back as null, and the page falls back to the
 // keyword rules solve_plan applies anyway.
 async function coerceIntake({ id, playbook, intake }) {
-  self.__aqIntake = JSON.stringify({ playbook: playbook || null, intake: intake || null });
-  const code = `
+  const args = JSON.stringify({ playbook: playbook || null, intake: intake || null });
+  const code = (k) => `
 import json
-from js import __aqIntake
+from js import __aqCall
 from aquascope import playbooks as _pbk
-_a = json.loads(__aqIntake)
+_a = json.loads(__aqCall(${k}, "args"))
 try:
     _pb = _pbk.load(_a["playbook"] or "")
     _out = {"playbook": _pb.id, "intake": _pbk.coerce_intake(_pb, _a.get("intake"))}
@@ -403,12 +401,8 @@ except _pbk.PlaybookError as exc:
     _out = {"playbook": None, "intake": None, "error": str(exc)}
 json.dumps(_out, default=str)
 `;
-  try {
-    const out = await pyodide.runPythonAsync(code);
-    post("result", { id, result: JSON.parse(out) });
-  } finally {
-    self.__aqIntake = null;
-  }
+  const out = await runPy({ args }, code);
+  post("result", { id, result: JSON.parse(out) });
 }
 
 // The run half: the reviewed study (edited or not) with its gates, one bounded
@@ -418,13 +412,13 @@ json.dumps(_out, default=str)
 // attribute row the page found with DuckDB and FlatGeobuf travel in as
 // `catchment`, and the package builds describe_catchment's payload from them.
 async function solveRun({ id, study, recon, catchment, provider, model, api_key, base_url }) {
-  self.__aqSolveEvent = (text) => post("solve_progress", { id, event: JSON.parse(text) });
-  self.__aqSolve = JSON.stringify({ study, recon: recon || null, catchment: catchment || null, provider, model, api_key, base_url });
-  const code = `
+  const event = (text) => post("solve_progress", { id, event: JSON.parse(text) });
+  const args = JSON.stringify({ study, recon: recon || null, catchment: catchment || null, provider, model, api_key, base_url });
+  const code = (k) => `
 import json
-from js import __aqSolve, __aqSolveEvent
+from js import __aqCall
 from aquascope.ai_engine import team as _team
-_a = json.loads(__aqSolve)
+_a = json.loads(__aqCall(${k}, "args"))
 _tools = {}
 _c = _a.get("catchment")
 if _c and (_c.get("sub_basin") or {}).get("hybas_id") is not None:
@@ -433,18 +427,13 @@ if _c and (_c.get("sub_basin") or {}).get("hybas_id") is not None:
         lat, lon, _c["sub_basin"], _c.get("row"), n_upstream=_c.get("n_upstream"))
 _res = _team.run_reviewed(
     _a["study"], recon=_a.get("recon"), ${solveArgs()},
-    on_event=lambda e: __aqSolveEvent(json.dumps(e, default=str)),
+    on_event=lambda e, _f=__aqCall(${k}, "event"): _f(json.dumps(e, default=str)),
     tools=_tools or None,
 )
 json.dumps(_res.to_dict(), default=str)
 `;
-  try {
-    const out = await pyodide.runPythonAsync(code);
-    post("result", { id, result: JSON.parse(out) });
-  } finally {
-    self.__aqSolve = null;
-    self.__aqSolveEvent = null;
-  }
+  const out = await runPy({ args, event }, code);
+  post("result", { id, result: JSON.parse(out) });
 }
 
 
@@ -809,11 +798,10 @@ async function ensureDocs(id) {
   docsLoaded = true;
 }
 
-// One studio call at a time. The arguments travel through a global the Python
-// reads at its start, and runPythonAsync yields before it runs (it scans the
-// code for imports), so two calls in flight read each other's: seen when a
-// follow-up was stopped on the page (abandoned here, still running) and the
-// next message arrived behind it with JsNull for its arguments.
+// One studio call at a time. The arguments travel by key (runPy), so two calls
+// no longer read each other's, but the worker's copy of a study (_STUDIO) is
+// shared: a follow-up stopped on the page (abandoned here, still running) must
+// finish before the next message for the same study starts.
 let studioChain = Promise.resolve();
 function studioSerial(m) {
   const run = studioChain.then(() => studio(m));
@@ -826,19 +814,15 @@ async function studio(m) {
   await ensureStudioPython();
   if (args.op === "table") {
     await ensureDocs(id);
-    self.__aqStudio = JSON.stringify({ name: args.name || "table.xlsx", data: args.data || "" });
-    const code = `
+    const table = JSON.stringify({ name: args.name || "table.xlsx", data: args.data || "" });
+    const code = (k) => `
 import json
-from js import __aqStudio
-_a = json.loads(__aqStudio)
+from js import __aqCall
+_a = json.loads(__aqCall(${k}, "args"))
 json.dumps(studio_table(_a["name"], _a["data"]), default=str)
 `;
-    try {
-      const out = await pyodide.runPythonAsync(code);
-      post("result", { id, result: JSON.parse(out) });
-    } finally {
-      self.__aqStudio = null;
-    }
+    const out = await runPy({ args: table }, code);
+    post("result", { id, result: JSON.parse(out) });
     return;
   }
   // A run draws figures and, at the end, the documents; narrate rewrites the
@@ -847,32 +831,28 @@ json.dumps(studio_table(_a["name"], _a["data"]), default=str)
     await ensurePlotting(id);
     await ensureDocs(id);
   }
-  self.__aqStudio = JSON.stringify(args);
-  self.__aqStudioEvent = (text) => post("studio_progress", { id, event: JSON.parse(text) });
-  self.__aqStudioArtifact = (text) => post("studio_artifact", { id, artifact: JSON.parse(text) });
-  const code = `
+  const slots = {
+    args: JSON.stringify(args),
+    event: (text) => post("studio_progress", { id, event: JSON.parse(text) }),
+    artifact: (text) => post("studio_artifact", { id, artifact: JSON.parse(text) }),
+  };
+  const code = (k) => `
 import json
-from js import __aqStudio, __aqStudioEvent, __aqStudioArtifact
-_a = json.loads(__aqStudio)
+from js import __aqCall
+_a = json.loads(__aqCall(${k}, "args"))
 _out = studio_call(
     _a,
-    on_event=lambda e: __aqStudioEvent(json.dumps(e, default=str)),
+    on_event=lambda e, _f=__aqCall(${k}, "event"): _f(json.dumps(e, default=str)),
     # PNG figures travel with their bytes so the page can show them as they land; SVG and CSV without.
     # The study map (study_map.geojson) travels with its bytes too, so the page draws it as the steps land.
-    on_artifact=lambda art: __aqStudioArtifact(
+    on_artifact=lambda art, _f=__aqCall(${k}, "artifact"): _f(
         json.dumps(art.to_dict(with_data=art.media_type == "image/png" or art.id == "study-map"), default=str)),
     store=_STORE,
 )
 json.dumps(_out, default=str)
 `;
-  try {
-    const out = await pyodide.runPythonAsync(code);
-    post("result", { id, result: JSON.parse(out) });
-  } finally {
-    self.__aqStudio = null;
-    self.__aqStudioEvent = null;
-    self.__aqStudioArtifact = null;
-  }
+  const out = await runPy(slots, code);
+  post("result", { id, result: JSON.parse(out) });
 }
 
 // ── the workbench: analyses of the user's own table ─────────────────────────
@@ -881,12 +861,12 @@ json.dumps(_out, default=str)
 
 async function ingestText({ id, text, filename, options }) {
   post("progress", { text: "Reading the file and working out its columns…" });
-  self.__aqIngest = JSON.stringify({ text, filename: filename || "upload.csv", options: options || {} });
-  const code = `
+  const args = JSON.stringify({ text, filename: filename || "upload.csv", options: options || {} });
+  const code = (k) => `
 import json
-from js import __aqIngest
+from js import __aqCall
 from aquascope import ingest as _ingest
-_args = json.loads(__aqIngest)
+_args = json.loads(__aqCall(${k}, "args"))
 _res = _ingest.ingest_text(_args["text"], _args["filename"], **(_args.get("options") or {}))
 _STORE["frame"] = _res["series"].rename("value").to_frame().reset_index().rename(columns={"index": "date"})
 _STORE["result"] = _res["analysis"]
@@ -899,43 +879,39 @@ json.dumps({
     "csv": analysis.to_csv(_res["analysis"], series=_res["series"]),
 })
 `;
-  const out = await pyodide.runPythonAsync(code);
-  self.__aqIngest = null;
+  const out = await runPy({ args }, code);
   post("result", { id, result: JSON.parse(out) });
 }
 
 // A table the page already holds (CSV text), kept for the workbench analyses.
 async function loadTable({ id, csv, label }) {
-  self.__aqCsv = csv;
-  const code = `
+  const code = (k) => `
 import json, io
 import pandas as pd
-from js import __aqCsv
-_STORE["frame"] = pd.read_csv(io.StringIO(__aqCsv))
+from js import __aqCall
+_STORE["frame"] = pd.read_csv(io.StringIO(__aqCall(${k}, "csv")))
 from aquascope import workbench as _wb
 json.dumps({"n": int(len(_STORE["frame"])), "columns": [str(c) for c in _STORE["frame"].columns],
             "insights": _wb.insights(_STORE["frame"])})
 `;
-  const out = await pyodide.runPythonAsync(code);
-  self.__aqCsv = null;
+  const out = await runPy({ csv: String(csv ?? "") }, code);
   post("result", { id, result: { ...JSON.parse(out), label: label || "table" } });
 }
 
 async function workbench({ id, analysis, params }) {
   post("progress", { text: `Running ${analysis}…` });
-  self.__aqWb = JSON.stringify({ analysis, params: params || {} });
-  const code = `
+  const args = JSON.stringify({ analysis, params: params || {} });
+  const code = (k) => `
 import json
-from js import __aqWb
+from js import __aqCall
 from aquascope import workbench as _wb
-_a = json.loads(__aqWb)
+_a = json.loads(__aqCall(${k}, "args"))
 _frame = _STORE.get("frame")
 _res = _wb.run(_a["analysis"], _frame, **(_a.get("params") or {}))
 _res.pop("frame", None)
 json.dumps(_res)
 `;
-  const out = await pyodide.runPythonAsync(code);
-  self.__aqWb = null;
+  const out = await runPy({ args }, code);
   post("result", { id, result: JSON.parse(out) });
 }
 
@@ -963,12 +939,12 @@ json.dumps({"n": int(len(_STORE["frame"])), "columns": ["date", _variable],
 // Run one analyst tool by name, for the showcase's "run the tools again": the
 // deterministic half of a recorded answer, live, with no model and no key.
 async function runTool({ id, name, arguments: args }) {
-  self.__aqTool = JSON.stringify({ name, args: args || {} });
-  const code = `
+  const payload = JSON.stringify({ name, args: args || {} });
+  const code = (k) => `
 import json
-from js import __aqTool
+from js import __aqCall
 from aquascope.ai_engine import analyst as _analyst
-_a = json.loads(__aqTool)
+_a = json.loads(__aqCall(${k}, "args"))
 _specs = {s.name: s for s in _analyst._tool_specs()}
 _spec = _specs.get(_a["name"])
 if _spec is None:
@@ -980,8 +956,7 @@ else:
         _out = {"error": f"{type(exc).__name__}: {exc}"}
 json.dumps(_out, default=str)
 `;
-  const out = await pyodide.runPythonAsync(code);
-  self.__aqTool = null;
+  const out = await runPy({ args: payload }, code);
   post("result", { id, result: JSON.parse(out) });
 }
 
@@ -991,20 +966,20 @@ json.dumps(_out, default=str)
 // "xlsx" are the downloads (openpyxl is installed on first use).
 async function areaStudy({ id, op, stations, question, max_live, areas }) {
   if (op === "xlsx") await ensureDocs(id);
-  self.__aqArea = JSON.stringify({ op, stations: stations || [], question: question || null,
+  const args = JSON.stringify({ op, stations: stations || [], question: question || null,
     max_live: Number.isFinite(Number(max_live)) ? Number(max_live) : null, areas: areas || {} });
-  self.__aqAreaEvent = (text) => post("area_progress", { id, event: JSON.parse(text) });
-  const code = `
+  const event = (text) => post("area_progress", { id, event: JSON.parse(text) });
+  const code = (k) => `
 import json, base64
-from js import __aqArea, __aqAreaEvent
+from js import __aqCall
 from aquascope import area_study as _area_mod
 _AREA_STORE = globals().setdefault("_AREA_STORE", {})
-_a = json.loads(__aqArea)
+_a = json.loads(__aqCall(${k}, "args"))
 if _a["op"] == "run":
     _kw = {"max_live": _a["max_live"]} if _a.get("max_live") is not None else {}
     _AREA_STORE["result"] = _area_mod.study_area(
         _a["stations"], question=_a.get("question"),
-        on_progress=lambda e: __aqAreaEvent(json.dumps(e, default=str)), **_kw)
+        on_progress=lambda e, _f=__aqCall(${k}, "event"): _f(json.dumps(e, default=str)), **_kw)
     _out = json.dumps(_AREA_STORE["result"], default=str)
 elif _a["op"] == "areas":
     _out = json.dumps(_area_mod.apply_areas(_AREA_STORE["result"], _a["areas"]), default=str)
@@ -1016,13 +991,8 @@ else:
     _out = json.dumps({"error": "unknown op"})
 _out
 `;
-  try {
-    const out = await pyodide.runPythonAsync(code);
-    post("result", { id, result: JSON.parse(out) });
-  } finally {
-    self.__aqArea = null;
-    self.__aqAreaEvent = null;
-  }
+  const out = await runPy({ args, event }, code);
+  post("result", { id, result: JSON.parse(out) });
 }
 
 // ── Place context (#520): aquascope.context, one layer per message so the card
@@ -1030,15 +1000,15 @@ _out
 // op "area" over bbox [west, south, east, north]. Every layer reads open data
 // hosts that answer CORS (COG range reads, the Archive's context/ mirror).
 async function placeContext({ id, op, name, lat, lon, bbox }) {
-  self.__aqContext = JSON.stringify({
+  const args = JSON.stringify({
     op: op || "point", name: String(name || ""), lat: Number(lat), lon: Number(lon),
     bbox: Array.isArray(bbox) ? bbox.map(Number) : null,
   });
-  const code = `
+  const code = (k) => `
 import json
-from js import __aqContext
+from js import __aqCall
 from aquascope import context as _ctx
-_a = json.loads(__aqContext)
+_a = json.loads(__aqCall(${k}, "args"))
 try:
     if _a["op"] == "point":
         _out = _ctx.layer(_a["name"], _a["lat"], _a["lon"])
@@ -1050,12 +1020,8 @@ except ValueError as exc:
     _out = {"error": str(exc)}
 json.dumps(_out, default=str)
 `;
-  try {
-    const out = await pyodide.runPythonAsync(code);
-    post("result", { id, result: JSON.parse(out) });
-  } finally {
-    self.__aqContext = null;
-  }
+  const out = await runPy({ args }, code);
+  post("result", { id, result: JSON.parse(out) });
 }
 
 // ── Watch (#521): aquascope.watch, the same function as `aquascope watch` and the MCP tool. op "digest"
@@ -1064,15 +1030,15 @@ json.dumps(_out, default=str)
 // top-up, a forecast the archive does not cover and the flood events are read here. op "summary" says the
 // whole digest in one line.
 async function watchDigest({ id, op, items, last_seen, snapshot, issued, today }) {
-  self.__aqWatch = JSON.stringify({
+  const args = JSON.stringify({
     op: op || "digest", items: items || [], last_seen: last_seen || {}, snapshot: snapshot || [],
     issued: issued || [], today: today || null,
   });
-  const code = `
+  const code = (k) => `
 import json
-from js import __aqWatch
+from js import __aqCall
 from aquascope import watch as _watch
-_a = json.loads(__aqWatch)
+_a = json.loads(__aqCall(${k}, "args"))
 try:
     if _a["op"] == "digest":
         _out = _watch.watch_digest(_a["items"], _a["last_seen"], today=_a["today"], snapshot=_a["snapshot"],
@@ -1085,12 +1051,8 @@ except ValueError as exc:
     _out = {"error": str(exc)}
 json.dumps(_out, default=str)
 `;
-  try {
-    const out = await pyodide.runPythonAsync(code);
-    post("result", { id, result: JSON.parse(out) });
-  } finally {
-    self.__aqWatch = null;
-  }
+  const out = await runPy({ args }, code);
+  post("result", { id, result: JSON.parse(out) });
 }
 
 self.onmessage = async (e) => {

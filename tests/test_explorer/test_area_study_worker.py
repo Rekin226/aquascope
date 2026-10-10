@@ -25,9 +25,10 @@ WORKER = Path(__file__).resolve().parents[2] / "explorer" / "worker.js"
 
 def _code() -> str:
     text = WORKER.read_text(encoding="utf-8")
-    m = re.search(r"async function areaStudy\(.*?const code = `(.*?)`;", text, re.S)
+    m = re.search(r"async function areaStudy\(.*?const code = \(k\) => `(.*?)`;", text, re.S)
     assert m, "areaStudy's Python block is missing from worker.js"
-    return m.group(1)
+    # runPy hands the code its call key as a Python string literal
+    return m.group(1).replace("${k}", '"k"')
 
 
 def _daily(seed: int) -> pd.Series:
@@ -48,8 +49,9 @@ def run(monkeypatch):
 
     def call(payload: dict):
         fake = types.ModuleType("js")
-        fake.__aqArea = json.dumps({"stations": [], "question": None, "max_live": None, "areas": {}, **payload})
-        fake.__aqAreaEvent = lambda text: events.append(json.loads(text))
+        slots = {"args": json.dumps({"stations": [], "question": None, "max_live": None, "areas": {}, **payload}),
+                 "event": lambda text: events.append(json.loads(text))}
+        fake.__aqCall = lambda key, name: slots[name] if key == "k" else None
         monkeypatch.setitem(sys.modules, "js", fake)
         lines = code.strip().splitlines()
         exec("\n".join(lines[:-1]), ns)  # noqa: S102 - the worker's own code, under test

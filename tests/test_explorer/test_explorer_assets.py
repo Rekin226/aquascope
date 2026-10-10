@@ -723,6 +723,32 @@ def test_the_worker_studio_message_keeps_the_contract() -> None:
     assert 'm.type === "studio_progress"' in client and 'm.type === "studio_artifact"' in client
 
 
+def test_no_worker_call_reads_a_global_another_call_can_clear() -> None:
+    """Two calls of one type in flight must not share their arguments through a JS global.
+
+    runPythonAsync yields before it runs (it loads the packages the code imports), so a global set by one call
+    and nulled in its finally was overwritten by the next call and cleared before the first read it: "the JSON
+    object must be str, bytes or bytearray, not JsNull" when several gauges were selected quickly. Every global
+    the Python reads through `from js import` is set once at the worker's top level and never cleared; what
+    differs per call travels by key (runPy) or as a literal in the code. The behaviour itself is exercised by
+    explorer/tests/worker-calls.test.mjs.
+    """
+    worker = (EXPLORER / "worker.js").read_text(encoding="utf-8")
+    code = re.sub(r"^\s*//[^\n]*$", "", worker, flags=re.M)
+    assigned = re.findall(r"^([ \t]*)self\.(__aq\w+)\s*=\s*([^;\n]*)", code, re.M)
+    names = [name for _, name, _ in assigned]
+    for indent, name, value in assigned:
+        assert not indent, f"self.{name} is set inside a function, so a second call can overwrite it"
+        assert value.strip() not in ("null", "undefined"), f"self.{name} is cleared"
+        assert names.count(name) == 1, f"self.{name} is set more than once"
+    imported = {n.strip() for group in re.findall(r"from js import ([\w, ]+)", code) for n in group.split(",")}
+    assert imported, "the worker's Python reads nothing from JS: this check has gone stale"
+    assert imported <= set(names), f"read from JS but not a module-level global: {sorted(imported - set(names))}"
+    # the slots of a call are dropped however it ends
+    run_py = code[code.index("async function runPy("):]
+    assert "finally" in run_py[:run_py.index("\n}\n")] and "calls.delete(key)" in run_py[:run_py.index("\n}\n")]
+
+
 def test_the_study_surface_writes_with_plain_hyphens() -> None:
     """House style: no em or en dashes in what the Study surface says."""
     for path in (EXPLORER / "src" / "studio.js", EXPLORER / "src" / "intake.js", EXPLORER / "playbooks.json"):

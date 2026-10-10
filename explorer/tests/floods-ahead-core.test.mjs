@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 
 import {
   DAILY_CODES, FLOOD_CLASSES, FORECAST_DAYS, NONE, addDays, classColor, classOn, countsFor, dayIndex, gaugesFor,
-  idsByClass, issueLine, legendLine, lineColorExpr, lineFilterExpr, pointsFor, reachFacts, shortDay,
+  idsByClass, issueLine, legendLine, totalsFor, lineColorExpr, lineFilterExpr, pointsFor, reachFacts, shortDay,
 } from "../src/floods-ahead-core.js";
 
 const reach = (id, rp, daily, gauges = "") => ({
@@ -96,4 +96,18 @@ test("the card's facts are plain sentences with the ratio and the members", () =
   assert.equal(f.today, "");
   assert.equal(reachFacts(FEATURES[0].properties, 0).today, "On the map's date: below the 2-year flow.");
   for (const text of [...Object.values(f), legendLine(MANIFEST, -1, 3)]) assert.ok(!text.includes("\u2014"));
+});
+
+test("totalsFor uses the published totals over the 15 days when the browser file was cut", () => {
+  const m = { ...MANIFEST, n: 20071, geojson_truncated: true, counts: { 2: 14104, 5: 3909, 10: 1587, 25: 221, 50: 103, 100: 147 } };
+  const whole = totalsFor(m, FEATURES, -1);
+  assert.equal(whole.n, 20071);
+  assert.equal(whole.shown, FEATURES.length);
+  assert.equal(whole.counts.get(2), 14104);
+  // One day is counted from what is drawn: the file holds nothing more.
+  const one = totalsFor(m, FEATURES, 3);
+  assert.equal(one.shown, null);
+  assert.equal(one.n, [...one.counts.values()].reduce((a, b) => a + b, 0));
+  // An uncut file counts what is drawn.
+  assert.equal(totalsFor(MANIFEST, FEATURES, -1).shown, null);
 });

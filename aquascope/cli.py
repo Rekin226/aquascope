@@ -963,6 +963,14 @@ def _print_river_status(res: dict) -> None:
     if rng:
         gaps = f"; no map for {', '.join(res['missing'])}" if res.get("missing") else ""
         print(f"  {rng['months']} months, {rng['first']} to {rng['latest']}{gaps}.")
+    if res.get("headline"):
+        from aquascope.map_layers import MIN_COVER
+
+        print(f"\n  {res['headline']}.")
+        for r in res.get("regions") or []:
+            if r["cover"] >= MIN_COVER:
+                print(f"    {r['name']:<28} {round(100 * r['below']):>3}% below  {round(100 * r['above']):>3}% above")
+        print(f"  {res['regions_note']}\n")
     for c in res.get("legend") or []:
         print(f"  {c['hex']}  {c['label']:<18} {c['range']}")
     if res.get("method"):
@@ -975,9 +983,12 @@ def cmd_layers(args: argparse.Namespace) -> None:
     from aquascope.map_time import dated_layers, layer_frames
 
     if args.layers_cmd == "status":
-        from aquascope.map_layers import river_status_month
+        from aquascope.map_layers import river_status_month, river_status_summary
 
-        res = river_status_month(args.month, live=not args.offline)
+        if args.summary:
+            res = river_status_summary(args.month, live=not args.offline)
+        else:
+            res = river_status_month(args.month, live=not args.offline)
         if args.json:
             print(json.dumps(res, indent=2, ensure_ascii=False))
             return
@@ -4066,6 +4077,9 @@ def main() -> None:
                                       "1990 on): its URL, legend, licence and the months that exist")
     p_lstatus.add_argument("month", nargs="?", default=None, help="YYYY-MM (default: the newest month)")
     p_lstatus.add_argument("--offline", action="store_true", help="Do not list the bucket; use the recorded range")
+    p_lstatus.add_argument("--summary", action="store_true",
+                           help="Read the month's map and say in one line where the rivers are low or high, "
+                                "with each named region's share below and above normal")
     p_lstatus.add_argument("--json", action="store_true")
     # ── basins ───────────────────────────────────────────────────────
     p_bul = sub.add_parser("bulletin", help="The month's state of the rivers: every Archive gauge against normal, "

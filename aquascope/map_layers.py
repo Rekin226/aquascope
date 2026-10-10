@@ -282,12 +282,14 @@ def status_classes(data: bytes) -> Any:
     return lut[_tiff_red(data)]
 
 
-def region_shares(classes: Any, deg: float = 0.05) -> list[dict[str, Any]]:
+def region_shares(classes: Any) -> list[dict[str, Any]]:
     """For each named region: the share of its mapped area below normal (much below and below), above
-    normal (above and much above), and how much of its box is mapped at all. Area-weighted by latitude."""
+    normal (above and much above), and how much of its box is mapped at all. Area-weighted by latitude.
+    ``classes`` covers the world, 90 N to 90 S and 180 W to 180 E (0.05 degree in the files)."""
     import numpy as np
 
     height, width = classes.shape
+    deg = 180 / height
     lats = 90 - (np.arange(height) + 0.5) * deg
     weights = np.cos(np.radians(lats))
     out = []

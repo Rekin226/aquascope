@@ -267,8 +267,9 @@ function rowSummary() {
   if (!data) return "loading";
   if (data.manifest.missing) return "nothing published yet";
   const n = reachCount();
-  const when = day >= 0 ? shortDay(addDays(data.manifest.issue_date, day)) : "15 days";
-  return n ? `${n.toLocaleString("en-GB")} reach${n === 1 ? "" : "es"}, ${when}` : `none, ${when}`;
+  const reaches = `${n.toLocaleString("en-GB")} reach${n === 1 ? "" : "es"}`;
+  if (day >= 0) return `${n ? n.toLocaleString("en-GB") : "none"} on ${shortDay(addDays(data.manifest.issue_date, day))}`;
+  return n ? reaches : "none in 15 days";
 }
 
 function rowBody() {

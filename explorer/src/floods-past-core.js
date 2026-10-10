@@ -98,12 +98,13 @@ export function windowFor({ date, range, playing, step } = {}, last) {
   return { months: monthsBetween(addMonths(end, -(DEFAULT_WINDOW - 1)), end), mode: "window", latest };
 }
 
-/** The window in a few words, for the legend's row: "Jul 2024", or "12 months to Feb 2026". */
+/** The window in a few words, for the legend's row: "Jul 2024", "year to Feb 2026" or "5 months to Jul 2024". */
 export function shortWhen(win) {
   const months = (win && win.months) || [];
   if (!months.length) return "";
   if (months.length === 1) return monthLabel(months[0]);
-  return `${months.length} months to ${monthLabel(months[months.length - 1])}`;
+  const end = monthLabel(months[months.length - 1]);
+  return months.length === 12 ? `year to ${end}` : `${months.length} months to ${end}`;
 }
 
 /** The months of a window that the published index has a file for. */

@@ -86,7 +86,7 @@ function currentHash({ view } = {}) {
   if (view) q.set("v", `${view.zoom.toFixed(2)}/${view.lat.toFixed(4)}/${view.lon.toFixed(4)}`);
   if (state.hidden.size) q.set("hide", [...state.hidden].join(","));
   if (state.basinsOn) q.set("basins", "1");
-  if (state.riversOn) q.set("rivers", "1");
+  if (!state.riversOn) q.set("rivers", "0");   // on by default since #545
   if (state.basemap && state.basemap !== LAYER_DEFAULTS.basemap) q.set("b", state.basemap);
   if (state.overlays && state.overlays.size) q.set("o", [...state.overlays].join(","));
   writeTimeParams(q, { date: state.date, step: state.timeStep, range: state.timeRange, compare: state.compare },

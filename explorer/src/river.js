@@ -8,7 +8,9 @@ import { $, actions, escapeHtml, fmt, sourceStyle, state, stationKey } from "./c
 import { addTableDownload, plot } from "./charts.js?v=__BUILD__";
 import { addMethodOnce } from "./methods.js?v=__BUILD__";
 import { flyToPoint, setPointMarker } from "./map.js?v=__BUILD__";
-import { clearRiverTrace, drawRiverDams, drawRiverTrace, setRiversVisible } from "./river-map.js?v=__BUILD__";
+import {
+  clearRiverNetwork, clearRiverTrace, drawRiverDams, drawRiverTrace, lightRiverNetwork, setRiversVisible,
+} from "./river-map.js?v=__BUILD__";
 import {
   BORDERS_CREDIT, DAMS_CREDIT, RECORD_CREDIT, damFacts, damName, notableDams, snapLine,
 } from "./river-core.js?v=__BUILD__";
@@ -69,7 +71,7 @@ export function startRiver(t, lat, lon, { gauge = false, area = null } = {}) {
   const my = ++r.run;
   Object.assign(r, { lat, lon, gauge, snap: null, reach: null, record: null, recordFor: null });
   announceReach(t, null);
-  if (!keepTrace) clearRiverTrace();
+  if (!keepTrace) { clearRiverTrace(); clearRiverNetwork(); }
   keepTrace = false;
   skeleton(t);
   const head = t === "pt" ? $("pt-snap") : null;
@@ -149,6 +151,10 @@ function useReach(t, reach) {
     const head = t === "pt" ? $("pt-snap") : null;
     if (head) { head.textContent = line; head.hidden = false; }
   }
+  // On the map, at once: what drains to this reach and its way to the sea (#545). The ids come from
+  // aquascope.rivers.upstream_ids and downstream_ids, which read the basin's routing tables (pandas, so
+  // the main worker).
+  lightRiverNetwork(reach, () => call("river", { op: "network", args: { river_id: reach.river_id, lat: reach.lat, lon: reach.lon } }));
   const trace = part(t, "river-trace");
   if (trace) { trace.hidden = false; trace.dataset.state = "ready"; }
   if (isRiverTabShown(t) || reach.chosen) loadRecord(t);
@@ -331,6 +337,7 @@ function renderTrace(t, res) {
 export function clearRiver() {
   for (const t of Object.keys(runs)) runs[t].run++;
   clearRiverTrace();
+  clearRiverNetwork();
 }
 
 export function initRiver() {

@@ -103,6 +103,7 @@ json.dumps(_res)
 // simulated daily flow since 1940; trace reads the processing unit's routing tables (a few MB, up to about
 // 30 MB for the largest basins), the catalog the page sent with "catalog", the Archive's Global Dam Watch
 // cells along the path and upstream, a few zoom-8 stream tiles, and Natural Earth's borders (750 kB, once).
+// network (#545) reads the same routing tables and returns only ids, which the map lights up.
 async function river({ id, op, args }) {
   // The arguments travel inside the code as a JSON string literal, not through a shared global: two river
   // calls can be in flight (a record still running when the next click snaps), and a global set by one
@@ -123,6 +124,11 @@ elif _op == "trace":
                                     gauge_km=_k.get("gauge_km") or 2.0, max_points=3000)
 elif _op == "area":
     _res = _rivers.upstream_area(_k["river_id"], lat=_k.get("lat"), lon=_k.get("lon"))
+elif _op == "network":
+    _res = {"upstream": _rivers.upstream_ids(_k["river_id"], max_n=_k.get("max_up") or 20000,
+                                             lat=_k.get("lat"), lon=_k.get("lon")),
+            "downstream": _rivers.downstream_ids(_k["river_id"], max_n=_k.get("max_down") or 5000,
+                                                 lat=_k.get("lat"), lon=_k.get("lon"))}
 else:
     raise ValueError(f"unknown river operation {_op!r}")
 json.dumps(_res, default=str)

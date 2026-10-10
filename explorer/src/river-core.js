@@ -14,19 +14,127 @@ export const RIVERS_CREDIT = {
 };
 export const RECORD_CREDIT = "GEOGLOWS v2 retrospective simulation (GEOGloWS ECMWF Streamflow Service), CC BY 4.0";
 
+// The network on the globe (#545). The tiles hold orders 6 and up at every
+// zoom, 4 and up from zoom 6 and all from zoom 8; the style fades a river in
+// by its order as you zoom, so the globe shows the great rivers (order 8 and
+// up, order 7 faintly), a continent its main tributaries and a valley every stream. Each table
+// is zoom -> [[Strahler order, value], ...]; MapLibre interpolates between.
+const WIDTH = {
+  1: [[6, 0], [7, 0.5], [8, 1.2], [9, 2], [10, 2.8], [12, 3.6]],
+  3: [[6, 0.3], [7, 0.9], [8, 1.4], [9, 2.1], [10, 2.9], [12, 3.8]],
+  5: [[4, 0.3], [6, 1], [8, 1.8], [10, 3.2]],
+  8: [[1, 0.4], [4, 0.9], [6, 1.7], [10, 4.2]],
+  12: [[1, 1], [6, 3], [10, 6.5]],
+};
+const OPACITY = {
+  1: [[6, 0], [7, 0.35], [8, 0.8], [9, 0.92], [10, 0.95]],
+  3: [[6, 0], [7, 0.6], [8, 0.85], [10, 0.95]],
+  5: [[4, 0], [5, 0.4], [6, 0.7], [8, 0.85], [10, 0.95]],
+  8: [[1, 0.35], [3, 0.55], [6, 0.85], [10, 0.95]],
+  11: [[1, 0.6], [4, 0.85], [10, 0.95]],
+};
+// The moving glints: only on the lines wide enough to carry them.
+const FLOW_OPACITY = {
+  1: [[8, 0], [9, 0.5], [10, 0.7]],
+  3: [[7, 0], [8, 0.55], [10, 0.7]],
+  5: [[5, 0], [6, 0.5], [10, 0.7]],
+  8: [[2, 0], [3, 0.5], [10, 0.7]],
+};
+
+const ORDER = ["coalesce", ["get", "strahlerOrder"], 1];
+const byOrder = (stops, f = (v) => v) => ["interpolate", ["linear"], ORDER, ...stops.flatMap(([o, v]) => [o, f(v)])];
+const byZoom = (table, f) => ["interpolate", ["linear"], ["zoom"],
+  ...Object.entries(table).flatMap(([z, stops]) => [Number(z), f(stops)])];
+
 // Line width by Strahler order, growing with zoom: big rivers read at a
-// continent's scale, the headwater streams only once you are close.
-export function riverWidth() {
-  return ["interpolate", ["linear"], ["zoom"],
-    3, ["interpolate", ["linear"], ["coalesce", ["get", "strahlerOrder"], 1], 1, 0.2, 6, 0.8, 10, 2.4],
-    8, ["interpolate", ["linear"], ["coalesce", ["get", "strahlerOrder"], 1], 1, 0.4, 6, 1.6, 10, 4],
-    12, ["interpolate", ["linear"], ["coalesce", ["get", "strahlerOrder"], 1], 1, 1, 6, 3, 10, 6],
-  ];
+// globe's scale, the headwater streams only once you are close.
+export function riverWidth() { return byZoom(WIDTH, (stops) => byOrder(stops)); }
+// `scale` dims the plain network while a click's network is lit, so the answer stands out.
+export function riverOpacity(scale = 1) { return byZoom(OPACITY, (stops) => byOrder(stops, (v) => Number((v * scale).toFixed(3)))); }
+export function flowOpacity() { return byZoom(FLOW_OPACITY, (stops) => byOrder(stops)); }
+
+// The network around a clicked reach is drawn by feature-state on riverId:
+// hl 1 = drains here (upstream), 2 = on the way to the sea, 3 = the reach itself.
+export const HL = { up: 1, down: 2, here: 3 };
+const hl = ["coalesce", ["feature-state", "hl"], 0];
+
+// Wider than the plain line, and never thinner than a hair, so a lit
+// tributary still shows at a zoom where the plain network hides it.
+export function highlightWidth(extra = 0) {
+  return byZoom(WIDTH, (stops) => ["match", hl,
+    HL.here, byOrder(stops, (v) => Math.max(2.6, v + 2.2) + extra),
+    HL.down, byOrder(stops, (v) => Math.max(1.8, v + 1.4) + extra),
+    HL.up, byOrder(stops, (v) => Math.max(0.7, v + 0.5) + extra),
+    0]);
+}
+export function highlightColor(theme) {
+  return ["match", hl, HL.here, theme.down, HL.down, theme.down, theme.up];
+}
+export function highlightOpacity(on = 1) { return ["case", [">", hl, 0], on, 0]; }
+
+// Colours that hold on every basemap and for every kind of colour vision: the
+// network a calm blue, what drains to a click a stronger blue, its way to the
+// sea orange (blue against orange is the pair no colour blindness merges),
+// each lit line on a casing of the basemap's own background.
+export const RIVER_THEMES = {
+  light: { line: "#3478bd", flow: "#0c3f7a", up: "#0f4f9c", down: "#d95f02", casing: "#ffffff" },
+  dark: { line: "#4f9de0", flow: "#e2f1ff", up: "#8fd0ff", down: "#ff9d42", casing: "#0b141d" },
+  imagery: { line: "#6bb9f2", flow: "#ffffff", up: "#a8dcff", down: "#ff9d42", casing: "#0b141d" },
+};
+export function riverTheme(basemap) {
+  if (basemap === "dark") return RIVER_THEMES.dark;
+  if (basemap === "satellite" || basemap === "satellite-recent") return RIVER_THEMES.imagery;
+  return RIVER_THEMES.light;
 }
 
-// The tiles hold orders 6 and up at every zoom, 4 and up from zoom 6 and all
-// from zoom 8; the layer starts at 3 so the world view is not a mesh of lines.
-export const RIVERS_MINZOOM = 3;
+// The flow animation is a dash that walks along each line. MapLibre has no
+// dash offset, so the phase is baked into the dash array: FLOW_STEPS arrays
+// per period, reused (each new array costs a row in MapLibre's dash atlas, so
+// the phase is never continuous). TDX-Hydro draws a reach from its downstream
+// end, so the dash walks towards the start of the line: the way the water goes.
+export const FLOW_DASH = 1.2;     // dash length, in line widths
+export const FLOW_PERIOD = 9;     // dash plus gap
+export const FLOW_STEPS = 24;
+export const FLOW_FPS = 20;
+export function flowDash(step, { dash = FLOW_DASH, period = FLOW_PERIOD, steps = FLOW_STEPS } = {}) {
+  const k = ((Math.round(step) % steps) + steps) % steps;
+  // Downstream is towards the line's start, so the dash's offset shrinks as time goes on.
+  const s = Number((((steps - k) % steps) * (period / steps)).toFixed(4));
+  if (s + dash <= period) return [0, s, dash, Number((period - s - dash).toFixed(4))];
+  const head = Number((s + dash - period).toFixed(4));
+  return [head, Number((period - dash).toFixed(4)), Number((period - s).toFixed(4)), 0];
+}
+
+// The states to set for a lit network: the reach, its way to the sea, what
+// drains to it, each id once with the strongest role.
+export function networkStates(reachId, up = [], down = []) {
+  const out = new Map();
+  for (const id of up || []) out.set(Number(id), HL.up);
+  for (const id of down || []) out.set(Number(id), HL.down);
+  if (reachId !== null && reachId !== undefined) out.set(Number(reachId), HL.here);
+  return out;
+}
+
+// The few words under the lit network: how much drains here and how far the
+// water goes. Every number is Python's (aquascope.rivers.upstream_ids and
+// downstream_ids); this only says it.
+export function networkSummary(net) {
+  if (!net) return { up: "", down: "", cut: "" };
+  const u = net.upstream || {}, d = net.downstream || {};
+  const n = Number(u.n_upstream);
+  const area = Number(u.upstream_area_km2);
+  const areaText = Number.isFinite(area)
+    ? area >= 1e6 ? `${Number((area / 1e6).toFixed(2))} million km²` : `${Math.round(area).toLocaleString("en-US")} km²`
+    : "";
+  let up = Number.isFinite(n) ? `${n.toLocaleString("en-US")} reach${n === 1 ? "" : "es"}` : "";
+  if (areaText) up += `${up ? ", " : ""}${areaText}`;
+  // A big basin is lit by its largest reaches only; the key says where the cut fell.
+  const cut = u.truncated && Number.isFinite(Number(u.min_area_km2))
+    ? `lit: reaches draining over ${Math.round(Number(u.min_area_km2)).toLocaleString("en-US")} km²` : "";
+  const m = Number(d.n_ids);
+  const down = Number.isFinite(m) ? `${m.toLocaleString("en-US")} reach${m === 1 ? "" : "es"}${d.truncated ? " and on" : ""}` : "";
+  return { up, down, cut };
+}
 
 function distanceText(m) {
   const n = Number(m);

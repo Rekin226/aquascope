@@ -258,14 +258,40 @@ the water meets them (Global Dam Watch v1.0, CC BY 4.0, from the Archive's
 mirror). One line names the countries the river crosses (Natural Earth 1:50m,
 public domain) and another says whether dams upstream regulate the starting
 reach. Until the dam mirror is published the card says so and the rest of the
-trace stands. The **Rivers (GEOGLOWS)** layer in the
-rail draws the whole network by stream order, read in place from the 2.4 GB
-`streams.pmtiles` in the GEOGLOWS bucket. The network geometry is CC BY-SA 4.0:
-shown here, never republished.
+trace stands.
 
-The same functions are `aquascope river snap|record|area|trace|dams` and the MCP
-tools `snap_to_river`, `reach_record`, `upstream_area`, `trace_downstream` and
-`upstream_dams`.
+### Living rivers
+
+The river network is on from the start (#545), read in place from the 2.4 GB
+`streams.pmtiles` in the GEOGLOWS bucket and drawn by Strahler stream order: on
+the globe only the great rivers (order 8 and up, order 7 faintly), a continent's
+main tributaries as you come closer, every stream from about zoom 8. It sits
+above the raster overlays and below the gauges, in a calm blue that changes
+shade with the basemap. **Rivers (GEOGLOWS)** in the rail turns it off, and a
+link can carry `rivers=0`.
+
+**Flow direction (animated)** moves a short dash along each line the way the
+water goes (TDX-Hydro draws every reach from its downstream end). It steps at a
+steady 20 frames a second, stops while the tab is hidden, and starts off when
+the system asks for reduced motion; the rail turns it either way.
+
+A click lights the river up on the map. As soon as the point snaps, its reach is
+ringed; then the reaches that drain to it turn a stronger blue and its way to
+the sea turns orange, each on a casing of the basemap's own background, and the
+rest of the network fades back. Blue against orange is the pair no common colour
+blindness merges. A small key at the top of the map says what the colours mean,
+how many reaches drain there and how much area, and how many reaches it is to the
+outlet; while the basin's routing tables load (a few MB, up to about 30 MB for
+the largest basins) it says so. A big basin has hundreds of thousands of
+reaches, so the 20,000 that drain the most are lit (the trunk and the big
+tributaries) and the key says where that cut fell. The ids come from
+`aquascope.rivers.upstream_ids` and `downstream_ids`, drawn with MapLibre
+feature-state on `riverId`. The network geometry is CC BY-SA 4.0: shown here,
+never republished.
+
+The same functions are `aquascope river snap|record|area|trace|dams|upstream|downstream`
+and the MCP tools `snap_to_river`, `reach_record`, `upstream_area`,
+`trace_downstream`, `upstream_dams`, `upstream_ids` and `downstream_ids`.
 
 ## Evidence: the models against the gauge
 

@@ -289,7 +289,8 @@ export function ensureShapeImages() {
 }
 
 function firstDataLayerId() {
-  for (const id of ["gauge-heat", "clusters", "points", "catchment-fill"]) {
+  // Rasters go under the river network (#545), which sits under the gauges.
+  for (const id of ["river-net-line", "gauge-heat", "clusters", "points", "catchment-fill"]) {
     if (map.getLayer(id)) return id;
   }
   return undefined;

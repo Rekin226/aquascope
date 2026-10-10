@@ -7,6 +7,13 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Living rivers** (#545, part of #543). The Explorer's globe now shows the rivers themselves.
+  - The GEOGLOWS v2 river network is on by default, drawn by Strahler order so the great rivers read on the globe and the small streams appear as you zoom, above the raster overlays and below the gauges, in a blue that follows the basemap. `rivers=0` in a link turns it off.
+  - **Flow direction (animated)**: a short dash moves along every river the way the water goes, at a steady 20 frames a second, paused while the tab is hidden and off when the system asks for reduced motion. A toggle in the rail.
+  - **A click lights the river up**: the snapped reach is ringed, everything that drains to it turns blue and its way to the sea orange (feature-state on `riverId`), with a key on the map that says what the colours mean and how many reaches and km² drain there, and a progress line while the basin's routing tables load. The rest of the network fades back. The trace to the sea is drawn in the same orange.
+  - `aquascope.rivers.upstream_ids(river_id, max_n)` and `downstream_ids(river_id, max_n)`: the reaches that drain to a reach (past `max_n`, the ones that drain the most, with the cut said) and the reaches to its outlet, from the routing tables `upstream_area` and `trace_downstream` read. The upstream walk goes a whole level of the network at a time in numpy: once the tables are read, the Mississippi at St. Louis (123,896 reaches) takes about 0.05 s on a laptop. `aquascope river upstream|downstream` and the MCP tools `upstream_ids` and `downstream_ids`.
+
 ### Fixed
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
 

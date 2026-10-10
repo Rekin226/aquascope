@@ -1215,3 +1215,30 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
 .now-legend-note { flex-basis: 100%; margin: .2rem 0 0; font-size: .68rem; line-height: 1.35; }
 /* the monthly bulletin (#523): "Read it" under the legend; the reader reuses .study-reader */
 .link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--blue); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── living rivers (#545): the key for a lit river network, top centre of the visible map ── */
+.river-key {
+  position: absolute; top: 10px; left: 56px; z-index: 7; margin: 0 auto; width: max-content; max-width: min(440px, calc(100% - 112px));
+  display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .7rem; padding: .4rem 2rem .4rem .7rem;
+  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-2);
+  font-size: .78rem; color: var(--ink); line-height: 1.35;
+}
+.river-key[hidden] { display: none; }
+.river-key .rk-row { display: inline-flex; align-items: center; gap: .35rem; }
+.river-key .rk-row b { font-weight: 620; white-space: nowrap; }
+.river-key .rk-sw { width: 16px; height: 4px; border-radius: 2px; flex: none; display: inline-block; }
+.river-key .rk-src { flex-basis: 100%; font-size: .7rem; }
+.river-key .spinner { margin-right: .1rem; }
+.river-key-x {
+  position: absolute; top: .25rem; right: .3rem; width: 22px; height: 22px; border: 0; border-radius: 50%;
+  background: transparent; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer;
+}
+.river-key-x:hover { background: var(--bg-soft); color: var(--ink); }
+@media (max-width: 640px) {
+  .river-key { left: 52px; right: 8px !important; width: auto; max-width: none; margin: 0; font-size: .74rem; }
+}
+.rail-row i.rail-flow-sw {
+  width: 14px; height: 3px; border-radius: 0;
+  background: repeating-linear-gradient(90deg, #3b7fc4 0 6px, #cfe6fb 6px 8px);
+}

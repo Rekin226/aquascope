@@ -435,6 +435,26 @@ def trace_downstream(river_id: int | None = None, lat: float | None = None, lon:
     return res
 
 
+def upstream_ids(river_id: int, max_n: int = 200, lat: float | None = None,
+                 lon: float | None = None) -> dict[str, Any]:
+    """The river_ids of the GEOGLOWS v2 reaches upstream of a reach (its own first, breadth-first), with how many
+    there are in all and the area they drain. Past max_n (at most 20000) the reaches with the largest drainage
+    area are kept, so the main stems stay; min_area_km2 says where the cut fell. From the routing tables, the
+    same ones upstream_area reads; the Explorer lights these up on the map."""
+    from aquascope import rivers
+
+    return rivers.upstream_ids(river_id, max_n=max(1, min(int(max_n), 20_000)), lat=lat, lon=lon)
+
+
+def downstream_ids(river_id: int, max_n: int = 5000, lat: float | None = None,
+                   lon: float | None = None) -> dict[str, Any]:
+    """The river_ids from a GEOGLOWS v2 reach down to its outlet (the sea or an inland sink), in the order the
+    water goes, and the outlet's id. Lighter than trace_downstream: no geometry, gauges or dams."""
+    from aquascope import rivers
+
+    return rivers.downstream_ids(river_id, max_n=max(1, min(int(max_n), 20_000)), lat=lat, lon=lon)
+
+
 def upstream_dams(river_id: int | None = None, lat: float | None = None, lon: float | None = None,
                   with_flow: bool = True) -> dict[str, Any]:
     """Is a river regulated upstream of a reach (or of the reach a point snaps to)? The Global Dam Watch dams that
@@ -1243,6 +1263,8 @@ def build_server():
     server.tool()(reach_record)
     server.tool()(upstream_area)
     server.tool()(trace_downstream)
+    server.tool()(upstream_ids)
+    server.tool()(downstream_ids)
     server.tool()(upstream_dams)
     server.tool()(model_skill)
     server.tool()(model_to_lean_on)

@@ -1,7 +1,7 @@
 """Rivers as objects: snap a point to a river reach, its simulated record, its upstream area, its way to the sea.
 
 The unit is a GEOGLOWS v2 river reach (about 6.8 million of them, keyed by a
-9-digit ``river_id``, the TDX-Hydro ``LINKNO``). Five functions, one engine for
+9-digit ``river_id``, the TDX-Hydro ``LINKNO``). The functions below are one engine for
 the Explorer, the MCP server and the CLI:
 
 * :func:`snap_to_river` reads the global stream network (``streams.pmtiles``,
@@ -22,6 +22,9 @@ the Explorer, the MCP server and the CLI:
 * :func:`upstream_dams` says whether the river is regulated upstream of a
   reach: the Global Dam Watch dams that drain to it and their storage as a
   share of a year's flow.
+* :func:`upstream_ids` and :func:`downstream_ids` list the reaches that drain
+  to a reach and the reaches from it to the sea, which the Explorer lights up
+  on the map.
 
 Everything is keyless and readable from a browser page (both hosts answer CORS
 for any origin), and every reader here is plain Python (no pyarrow, no
@@ -52,6 +55,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "ATTRIBUTION",
+    "downstream_ids",
     "forecast_stats",
     "main_channel",
     "match_by_area",
@@ -62,6 +66,7 @@ __all__ = [
     "trace_downstream",
     "upstream_area",
     "upstream_dams",
+    "upstream_ids",
 ]
 
 GEOGLOWS_API = "https://geoglows.ecmwf.int/api/v2"
@@ -1049,6 +1054,113 @@ def upstream_dams(river_id: int | str | None = None, **kwargs: Any) -> dict[str,
 
     res: dict[str, Any] = _upstream_dams(river_id, **kwargs)
     return res
+
+
+# ── the network around a reach, as ids: what the map lights up (#545) ───────
+
+
+def _upstream_tree(net: _Network, i: int, cap: int = 3_000_000) -> tuple[Any, Any, list[int]]:
+    """Breadth-first up the network from reach index ``i``, a whole level at a time (numpy, no per-reach loop:
+    the Mississippi at St. Louis, 123,896 reaches, in about 0.05 s): the reach indices in visiting order, the
+    position of each one's downstream neighbour in that order (-1 for the start), and where each level begins."""
+    import numpy as np
+
+    nodes = [np.array([i], dtype=np.int64)]
+    parents = [np.array([-1], dtype=np.int64)]
+    starts = [0]
+    frontier = nodes[0]
+    first = 0  # position of the frontier's first node in the whole order
+    total = 1
+    while frontier.size and total < cap:
+        rids = net.ids[frontier]
+        lo = np.searchsorted(net._ds_sorted, rids, side="left")
+        hi = np.searchsorted(net._ds_sorted, rids, side="right")
+        counts = hi - lo
+        n = int(counts.sum())
+        if n == 0:
+            break
+        offsets = np.repeat(lo - (np.cumsum(counts) - counts), counts)
+        children = net._ds_order[offsets + np.arange(n)].astype(np.int64)
+        parent_pos = np.repeat(np.arange(first, first + frontier.size, dtype=np.int64), counts)
+        starts.append(total)
+        nodes.append(children)
+        parents.append(parent_pos)
+        first = total
+        total += n
+        frontier = children
+    return np.concatenate(nodes), np.concatenate(parents), starts
+
+
+UPSTREAM_RULE = ("Every reach that drains to this one, from GEOGLOWS's rapid_connect topology; when there are more "
+                 "than max_n, the max_n with the largest drainage area (the main stems and big tributaries) are kept.")
+
+
+def upstream_ids(river_id: int | str, max_n: int = 20_000, *, lat: float | None = None,
+                 lon: float | None = None) -> dict[str, Any]:
+    """The river_ids of the reaches upstream of a reach (its own first), for lighting the network up on a map.
+
+    Reads the processing unit's routing tables like :func:`upstream_area`. A big basin has hundreds of thousands
+    of reaches; past ``max_n`` the ones with the largest drainage area are kept, so the trunk and the big
+    tributaries stay and the smallest headwaters go, and ``min_area_km2`` says where the cut fell. ``ids`` are in
+    breadth-first order from the reach upward. ``lat``/``lon`` only decide which unit is read first.
+    """
+    import numpy as np
+
+    rid = _river_id(river_id)
+    max_n = max(1, int(max_n))
+    net = _network_for(rid, lat, lon)
+    i = net.index(rid)
+    assert i is not None
+    order, parent, starts = _upstream_tree(net, i)
+    acc = net.area_m2[order].astype(float)
+    acc[~np.isfinite(acc)] = 0.0
+    # Drainage area of every reach in the tree: each level, deepest first, added into its downstream neighbour.
+    bounds = [*starts, len(order)]
+    for k in range(len(starts) - 1, 0, -1):
+        sl = slice(bounds[k], bounds[k + 1])
+        np.add.at(acc, parent[sl], acc[sl])
+    n = len(order)
+    keep = np.arange(n)
+    truncated = n > max_n
+    min_area = None
+    if truncated:
+        keep = np.sort(np.argpartition(-acc, max_n - 1)[:max_n])
+        min_area = round(float(acc[keep].min()) / 1e6, 1)
+    ids = [int(x) for x in net.ids[order[keep]]]
+    area_km2 = round(float(acc[0]) / 1e6, 1)
+    message = (f"{n:,} reaches drain to river reach {rid} ({area_km2:,.0f} km2)"
+               + (f"; the {max_n:,} largest, each draining at least {min_area:,.0f} km2, are listed." if truncated
+                  else "."))
+    return {"river_id": rid, "vpu": net.vpu, "ids": ids, "n_upstream": n, "n_ids": len(ids),
+            "truncated": truncated, "min_area_km2": min_area, "upstream_area_km2": area_km2,
+            "message": message, "method": UPSTREAM_RULE, "modelled": True, "attribution": ATTRIBUTION}
+
+
+def downstream_ids(river_id: int | str, max_n: int = 5_000, *, lat: float | None = None,
+                   lon: float | None = None) -> dict[str, Any]:
+    """The river_ids from a reach down to its outlet (the reach first, the outlet last): the path to the sea, or to
+    an inland sink, as GEOGLOWS's routing tables have it. Stops after ``max_n`` reaches and says so."""
+    rid = _river_id(river_id)
+    max_n = max(1, int(max_n))
+    net = _network_for(rid, lat, lon)
+    i = net.index(rid)
+    assert i is not None
+    path = [rid]
+    seen = {i}
+    while len(path) < max_n:
+        nxt = net.index(int(net.ds[i]))
+        if nxt is None or nxt in seen:
+            break
+        seen.add(nxt)
+        i = nxt
+        path.append(int(net.ids[i]))
+    nxt = net.index(int(net.ds[i]))
+    truncated = nxt is not None and nxt not in seen
+    message = (f"{len(path):,} reaches from river reach {rid} to "
+               + ("where the list stops; the river goes on." if truncated
+                  else f"the outlet, reach {path[-1]} (the sea, or an inland sink)."))
+    return {"river_id": rid, "vpu": net.vpu, "ids": path, "n_ids": len(path), "outlet_id": path[-1],
+            "truncated": truncated, "message": message, "modelled": True, "attribution": ATTRIBUTION}
 
 
 # ── the trace to the outlet ──────────────────────────────────────────────────

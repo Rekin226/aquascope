@@ -1440,8 +1440,8 @@ def _now_csv(fc: dict, path: str) -> None:
 
 
 def cmd_river(args: argparse.Namespace) -> None:
-    """`aquascope river snap|record|area|trace|dams`: GEOGLOWS v2 river reaches, keyless (the modelled record is
-    CC BY); the dams come from the Archive's Global Dam Watch mirror (CC BY 4.0)."""
+    """`aquascope river snap|record|area|trace|dams|upstream|downstream`: GEOGLOWS v2 river reaches, keyless
+    (the modelled record is CC BY); the dams come from the Archive's Global Dam Watch mirror (CC BY 4.0)."""
     from aquascope import rivers
 
     if args.river_cmd == "snap":
@@ -1542,6 +1542,17 @@ def cmd_river(args: argparse.Namespace) -> None:
             print(f"  Upstream: {up['summary']}")
         for note in res.get("notes") or []:
             print(f"  {note}")
+        return
+    if args.river_cmd in ("upstream", "downstream"):
+        fn = rivers.upstream_ids if args.river_cmd == "upstream" else rivers.downstream_ids
+        res = fn(rid, max_n=args.max, **near)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+            return
+        print(f"  {res['message']}")
+        ids = res["ids"]
+        shown = ids if len(ids) <= 12 else [*ids[:6], "...", *ids[-6:]]
+        print("  " + " ".join(str(x) for x in shown))
         return
 
 
@@ -3997,7 +4008,9 @@ def main() -> None:
     for name, helptext in (("record", "86 years of simulated daily flow for a reach, analysed like a gauge"),
                            ("area", "The area draining to a reach"),
                            ("trace", "Follow a reach to its outlet: length, path, gauges, dams and countries"),
-                           ("dams", "Dams upstream of a reach (Global Dam Watch) and the degree of regulation")):
+                           ("dams", "Dams upstream of a reach (Global Dam Watch) and the degree of regulation"),
+                           ("upstream", "The river_ids of every reach that drains to a reach"),
+                           ("downstream", "The river_ids from a reach to its outlet")):
         p_r = river_sub.add_parser(name, help=helptext)
         p_r.add_argument("river_id", nargs="?", type=int, default=None)
         p_r.add_argument("--at", nargs=2, type=float, metavar=("LAT", "LON"), help="Snap this point first")
@@ -4010,6 +4023,9 @@ def main() -> None:
             p_r.add_argument("--gauge-km", type=float, default=2.0, help="List gauges this close to the path (2)")
             p_r.add_argument("--dam-km", type=float, default=2.0, help="List dams this close to the path (2)")
             p_r.add_argument("--geojson", default=None, help="Write the path to this GeoJSON file")
+        if name in ("upstream", "downstream"):
+            p_r.add_argument("--max", type=int, default=20_000 if name == "upstream" else 5_000,
+                             help="At most this many ids (upstream keeps the largest drainage areas)")
         if name == "dams":
             p_r.add_argument("--no-flow", action="store_true",
                              help="Skip the mean-flow request (one ~10 s GEOGLOWS call) and the degree of regulation")

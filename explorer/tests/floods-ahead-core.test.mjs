@@ -79,6 +79,10 @@ test("the legend says the day, the count and where it is from, and degrades befo
   assert.equal(legendLine(MANIFEST, 3, 1), "Mon 12 Oct, day 4 of 15: 1 river reach at or above the 2-year flow.");
   assert.equal(issueLine(MANIFEST), "GEOGLOWS forecast of Fri 9 Oct");
   assert.equal(issueLine({ ...MANIFEST, smoke: true }), "GEOGLOWS forecast of Fri 9 Oct (smoke sample)");
+  const partial = { ...MANIFEST, chunks: { needed: 3458, read: 3000, failed: 0, skipped_time: 458 } };
+  assert.equal(issueLine(partial), "GEOGLOWS forecast of Fri 9 Oct (partial: 86% of rivers read)");
+  assert.equal(issueLine({ ...MANIFEST, chunks: { needed: 3458, read: 3458 } }), "GEOGLOWS forecast of Fri 9 Oct");
+  assert.equal(issueLine({ ...partial, smoke: true }), "GEOGLOWS forecast of Fri 9 Oct (smoke sample)");
   assert.equal(shortDay("2026-10-12"), "Mon 12 Oct");
   assert.equal(addDays("2026-10-30", 3), "2026-11-02");
 });

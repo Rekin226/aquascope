@@ -109,6 +109,20 @@ def test_decode_chunk_reads_an_uncompressed_chunk_and_refuses_other_codecs():
         fw.decode_chunk(b"", {**arr, "compressor": {"id": "gzip"}})
 
 
+def test_to_geojson_ranks_by_class_and_leaves_out_reaches_without_a_position():
+    base = {"peak_cms": 10.0, "q2": 5.0, "peak_date": "2026-10-10", "share": 0.5, "strahler_order": 6,
+            "daily": "0" * 15, "gauges": []}
+    rows = [{**base, "river_id": 1, "lat": 10.0, "lon": 20.0, "rp": 2},
+            {**base, "river_id": 2, "lat": float("nan"), "lon": 20.0, "rp": 100},
+            {**base, "river_id": 3, "lat": -5.0, "lon": 30.0, "rp": 25}]
+    fc, truncated = fw.to_geojson(rows, cap=5)
+    assert [f["properties"]["river_id"] for f in fc["features"]] == [3, 1]
+    assert not truncated
+    json.dumps(fc, allow_nan=False)                     # what the browser reads must be strict JSON
+    _, truncated = fw.to_geojson(rows, cap=1)
+    assert truncated
+
+
 # ── a whole run over a fake forecast ────────────────────────────────────────
 
 MEMBERS, STEPS, DAY_STEPS = 3, 40, 8                    # 3 members + the high-res run, 5 days of 3-hourly steps

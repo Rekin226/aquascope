@@ -25,12 +25,18 @@ export { FLOODS_CREDIT };
 const BASE = `${CONFIG.forecastsBase}warnings/`;
 const L = {
   net: "river-fa-net", pts: "river-fa-pts", gauges: "river-fa-gauges",
-  glow: "river-fa-glow", line: "river-fa-line", halo: "river-fa-halo", dot: "river-fa-dot", ring: "river-fa-ring",
-  pulse: "river-fa-pulse",
+  glow: "river-fa-glow", casing: "river-fa-casing", line: "river-fa-line", halo: "river-fa-halo", dot: "river-fa-dot",
+  ringCasing: "river-fa-ring-casing", ring: "river-fa-ring", pulse: "river-fa-pulse",
 };
+const ALL = [L.glow, L.casing, L.line, L.halo, L.dot, L.ringCasing, L.ring, L.pulse];
 const CLICKABLE = [L.dot, L.halo, L.line];
 // Past this zoom the river lines carry the class and the glow dots step back.
 const LINE_ZOOM = 5;
+// The gauges stop clustering past zoom 6 (map.js, clusterMaxZoom); before that a ring would sit on a cluster
+// bubble or on empty map, so the rings start here.
+const RING_ZOOM = 7;
+// A thin dark edge under the class colour: the pale 2-year yellow is the commonest class and needs it on a light map.
+const CASING = "rgba(24,28,36,0.45)";
 
 let data = null;          // { manifest, features, byId }
 let loading = null;
@@ -99,6 +105,15 @@ function ensureLayers() {
         },
       }, before);
       map.addLayer({
+        id: L.casing, type: "line", source: L.net, "source-layer": "streams", minzoom: 3, filter: ["boolean", false],
+        layout: { visibility: vis(), "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": CASING,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 3, 2.6, 6, 4, 10, 6.6],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0, LINE_ZOOM - 1, 0.8],
+        },
+      }, before);
+      map.addLayer({
         id: L.line, type: "line", source: L.net, "source-layer": "streams", minzoom: 3, filter: ["boolean", false],
         layout: { visibility: vis(), "line-cap": "round", "line-join": "round" },
         paint: {
@@ -134,16 +149,25 @@ function ensureLayers() {
     // The gauges on a flooded reach: a still ring in the reach's class colour (all a reader who prefers less
     // motion sees), and over it a second ring that breathes outwards.
     const ringColor = ["match", ["get", "c"], ...FLOOD_CLASSES.flatMap((c) => [c.rp, c.color]), NONE];
+    const ringRadius = ["interpolate", ["linear"], ["zoom"], RING_ZOOM, 7, 10, 10];
     map.addLayer({
-      id: L.ring, type: "circle", source: L.gauges,
+      id: L.ringCasing, type: "circle", source: L.gauges, minzoom: RING_ZOOM,
       layout: { visibility: vis() },
       paint: {
-        "circle-color": NONE, "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 6, 10, 10],
+        "circle-color": NONE, "circle-radius": ringRadius,
+        "circle-stroke-color": CASING, "circle-stroke-width": 4.2, "circle-stroke-opacity": 0.8,
+      },
+    });
+    map.addLayer({
+      id: L.ring, type: "circle", source: L.gauges, minzoom: RING_ZOOM,
+      layout: { visibility: vis() },
+      paint: {
+        "circle-color": NONE, "circle-radius": ringRadius,
         "circle-stroke-color": ringColor, "circle-stroke-width": 2.2, "circle-stroke-opacity": 0.95,
       },
     });
     map.addLayer({
-      id: L.pulse, type: "circle", source: L.gauges,
+      id: L.pulse, type: "circle", source: L.gauges, minzoom: RING_ZOOM,
       layout: { visibility: vis() },
       paint: {
         "circle-color": NONE, "circle-radius": 9,
@@ -170,9 +194,9 @@ function draw() {
   const groups = idsByClass(data.features, day);
   if (map.getLayer(L.line)) {
     const color = lineColorExpr(groups), filter = lineFilterExpr(groups);
-    for (const id of [L.glow, L.line]) {
+    for (const id of [L.glow, L.casing, L.line]) {
       map.setFilter(id, filter);
-      map.setPaintProperty(id, "line-color", color);
+      if (id !== L.casing) map.setPaintProperty(id, "line-color", color);
     }
   }
   map.getSource(L.pts).setData(pointsFor(data.features, day));
@@ -216,7 +240,7 @@ function pulse() {
     last = now;
     if (!map.getLayer(L.pulse)) return;
     const box = map.getBounds();
-    const inView = map.getZoom() >= 3 && gaugeCoords.some((c) => box.contains(c));
+    const inView = map.getZoom() >= RING_ZOOM && gaugeCoords.some((c) => box.contains(c));
     if (!inView) {
       if (!idle) { map.setPaintProperty(L.pulse, "circle-stroke-opacity", 0); idle = true; }
       return;
@@ -392,7 +416,7 @@ export function setFloodsVisible(on) {
   if (toggle) toggle.checked = visible;
   if (!visible) { stopPlay(); if (popup) popup.remove(); }
   if (state.mapOk && map) {
-    for (const id of [L.glow, L.line, L.halo, L.dot, L.ring, L.pulse]) {
+    for (const id of ALL) {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis());
     }
   }

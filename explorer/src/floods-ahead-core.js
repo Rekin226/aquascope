@@ -5,8 +5,9 @@
 // class on the map's date, the MapLibre expressions and the short sentences.
 
 // Return-period classes, yellow to deep purple. Lightness falls steadily with
-// the class, so the order still reads under any colour-vision deficiency, and
-// every class is drawn with a light halo so the dark end holds on a dark map.
+// the class, so the order still reads under any colour-vision deficiency. The
+// soft glow under each line keeps the dark end visible on a dark map, and a thin
+// dark casing keeps the pale yellow end visible on a light one.
 export const FLOOD_CLASSES = [
   { rp: 2, label: "2-year", color: "#f2c94c" },
   { rp: 5, label: "5-year", color: "#f2994a" },
@@ -136,7 +137,16 @@ export function legendLine(manifest, i, n) {
 
 export function issueLine(manifest) {
   if (!manifest || manifest.missing) return "";
-  return `GEOGLOWS forecast of ${shortDay(manifest.issue_date)}${manifest.smoke ? " (smoke sample)" : ""}`;
+  return `GEOGLOWS forecast of ${shortDay(manifest.issue_date)}${manifest.smoke ? " (smoke sample)" : coverageNote(manifest)}`;
+}
+
+/** " (partial: 87% of rivers read)" when the daily job ran out of time or lost chunks, else "". A gap in the
+ * reading is a gap on the map, so the legend says so rather than look complete. */
+export function coverageNote(manifest) {
+  const c = (manifest && manifest.chunks) || {};
+  const needed = Number(c.needed), read = Number(c.read);
+  if (!(needed > 0) || !Number.isFinite(read) || read >= needed) return "";
+  return ` (partial: ${Math.floor((100 * read) / needed)}% of rivers read)`;
 }
 
 const fmtFlow = (x) => {

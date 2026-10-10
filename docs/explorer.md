@@ -339,11 +339,13 @@ non-commercial use). The same functions are `aquascope now` and the MCP tools
 expects to reach their 2-year flow in the next 15 days, drawn on the globe. Far out,
 each reach is a soft glow in its class colour (2, 5, 10, 25, 50 or 100-year flow,
 yellow to deep purple, darker for rarer); from about zoom 4 the river itself lights
-up along the GEOGLOWS stream tiles. The Archive gauges on those reaches pulse gently
-(a still ring when the reader prefers less motion).
+up along the GEOGLOWS stream tiles. Zoomed in past the gauge clusters (zoom 7), the
+Archive gauges on those reaches pulse gently (a still ring when the reader prefers less
+motion).
 
 The legend card at the top left gives the classes, how many reaches, the day and the
-forecast run, and always says it is a model forecast, not an official warning. The
+forecast run, and always says it is a model forecast, not an official warning (and,
+if the daily job could not read every river in time, how much it read). The
 map's date (the time bar) picks what is drawn: inside the forecast's 15 days each
 reach shows its class on that day; outside them, its 15-day peak. **Play the 15
 days** walks the map's date through them and back. **About** gives the method and

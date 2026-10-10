@@ -463,7 +463,11 @@ def _write_parquet(rows: list[dict[str, Any]], path: Path) -> None:
 
 def to_geojson(rows: list[dict[str, Any]], cap: int = GEOJSON_MAX) -> tuple[dict[str, Any], bool]:
     """The reaches as slim points for the browser, highest class (then the largest peak over 2-year flow) first."""
-    ranked = sorted(rows, key=lambda r: (-r["rp"], -(r["peak_cms"] or 0) / max(r["q2"] or 1e-9, 1e-9)))
+    import math
+
+    # A reach with no position cannot be drawn, and a NaN would make the file invalid JSON for the browser.
+    placed = [r for r in rows if math.isfinite(r.get("lat", math.nan)) and math.isfinite(r.get("lon", math.nan))]
+    ranked = sorted(placed, key=lambda r: (-r["rp"], -(r["peak_cms"] or 0) / max(r["q2"] or 1e-9, 1e-9)))
     feats = []
     for r in ranked[:cap]:
         feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(r["lon"], 4),
@@ -471,7 +475,7 @@ def to_geojson(rows: list[dict[str, Any]], cap: int = GEOJSON_MAX) -> tuple[dict
                       "properties": {"river_id": r["river_id"], "rp": r["rp"], "peak": r["peak_cms"], "q2": r["q2"],
                                      "day": r["peak_date"], "share": r["share"], "order": r["strahler_order"],
                                      "daily": r["daily"], "gauges": ";".join(r.get("gauges") or [])}})
-    return {"type": "FeatureCollection", "features": feats}, len(rows) > cap
+    return {"type": "FeatureCollection", "features": feats}, len(placed) > cap
 
 
 def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, min_order: int = DEFAULT_MIN_ORDER,
@@ -587,7 +591,7 @@ def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, min_order: int = DEFAUL
     _write_parquet(rows, root / "latest.parquet")
     _write_parquet(rows, root / f"{day}.parquet")
     fc, truncated = to_geojson(rows)
-    (root / "latest.geojson").write_text(json.dumps(fc, separators=(",", ":")))
+    (root / "latest.geojson").write_text(json.dumps(fc, separators=(",", ":"), allow_nan=False))
     counts = counts_by_class([r["rp"] for r in rows])
     smoke = max_chunks is not None
     entry = {"issue_date": day, "file": f"{FOLDER}/{day}.parquet", "n": len(rows), "counts": counts}

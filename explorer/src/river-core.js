@@ -23,25 +23,27 @@ export const RECORD_CREDIT = "GEOGLOWS v2 retrospective simulation (GEOGloWS ECM
 // up, order 7 faintly), a continent its main tributaries and a valley every stream. Each table
 // is zoom -> [[Strahler order, value], ...]; MapLibre interpolates between.
 const WIDTH = {
-  1: [[6, 0], [7, 0.5], [8, 1.2], [9, 2], [10, 2.8], [12, 3.6]],
-  3: [[6, 0.3], [7, 0.9], [8, 1.4], [9, 2.1], [10, 2.9], [12, 3.8]],
+  1: [[6, 0], [7, 0.6], [8, 1.4], [9, 2.3], [10, 3.1], [12, 4]],
+  3: [[6, 0.4], [7, 1], [8, 1.6], [9, 2.4], [10, 3.2], [12, 4.2]],
   5: [[4, 0.3], [6, 1], [8, 1.8], [10, 3.2]],
   8: [[1, 0.4], [4, 0.9], [6, 1.7], [10, 4.2]],
   12: [[1, 1], [6, 3], [10, 6.5]],
 };
 const OPACITY = {
-  1: [[6, 0], [7, 0.35], [8, 0.8], [9, 0.92], [10, 0.95]],
+  1: [[6, 0], [7, 0.4], [8, 0.85], [9, 0.95], [10, 1]],
   3: [[6, 0], [7, 0.6], [8, 0.85], [10, 0.95]],
   5: [[4, 0], [5, 0.4], [6, 0.7], [8, 0.85], [10, 0.95]],
   8: [[1, 0.35], [3, 0.55], [6, 0.85], [10, 0.95]],
   11: [[1, 0.6], [4, 0.85], [10, 0.95]],
 };
 // The moving glints: only on the lines wide enough to carry them.
+// A light glint walking down a blue line (#543 design pass): you see the water move without a dark dash
+// marching over every river; on the globe only the great rivers carry it.
 const FLOW_OPACITY = {
-  1: [[8, 0], [9, 0.5], [10, 0.7]],
-  3: [[7, 0], [8, 0.55], [10, 0.7]],
-  5: [[5, 0], [6, 0.5], [10, 0.7]],
-  8: [[2, 0], [3, 0.5], [10, 0.7]],
+  1: [[8, 0], [9, 0.45], [10, 0.6]],
+  3: [[7, 0], [8, 0.5], [10, 0.6]],
+  5: [[5, 0], [6, 0.5], [10, 0.62]],
+  8: [[2, 0], [3, 0.5], [10, 0.62]],
 };
 
 const ORDER = ["coalesce", ["get", "strahlerOrder"], 1];
@@ -80,7 +82,7 @@ export function highlightOpacity(on = 1) { return ["case", [">", hl, 0], on, 0];
 // sea orange (blue against orange is the pair no colour blindness merges),
 // each lit line on a casing of the basemap's own background.
 export const RIVER_THEMES = {
-  light: { line: "#3478bd", flow: "#0c3f7a", up: "#0f4f9c", down: "#d95f02", casing: "#ffffff" },
+  light: { line: "#3478bd", flow: "#e6f3ff", up: "#0f4f9c", down: "#d95f02", casing: "#ffffff" },
   dark: { line: "#4f9de0", flow: "#e2f1ff", up: "#8fd0ff", down: "#ff9d42", casing: "#0b141d" },
   imagery: { line: "#6bb9f2", flow: "#ffffff", up: "#a8dcff", down: "#ff9d42", casing: "#0b141d" },
 };
@@ -98,7 +100,7 @@ export function riverTheme(basemap) {
 export const FLOW_DASH = 1.2;     // dash length, in line widths
 export const FLOW_PERIOD = 9;     // dash plus gap
 export const FLOW_STEPS = 24;
-export const FLOW_FPS = 20;
+export const FLOW_FPS = 16;
 export function flowDash(step, { dash = FLOW_DASH, period = FLOW_PERIOD, steps = FLOW_STEPS } = {}) {
   const k = ((Math.round(step) % steps) + steps) % steps;
   // Downstream is towards the line's start, so the dash's offset shrinks as time goes on.

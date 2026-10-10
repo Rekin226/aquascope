@@ -194,13 +194,9 @@
         <div id="compare-handle" class="compare-handle" role="slider" tabindex="0" aria-label="Compare divider"
              aria-valuemin="5" aria-valuemax="95" aria-valuenow="50"><span aria-hidden="true">‹ ›</span></div>
       </div>
-      <!-- legends of the map layers (#543), stacked bottom left: Floods ahead (#546, added by its module) above Floods past (#547) above the world river status (#544) -->
+      <!-- "On the map" (#543): one legend for every layer, a row each (map-legend.js); the layer modules add their rows -->
       <div id="map-legends" class="map-legends">
-        <!-- living rivers (#545): what the lit network's colours mean, on top while a river is lit -->
-        <div id="river-key" class="river-key" role="status" aria-label="Lit river network" hidden></div>
-        <section id="fp-legend" class="fp-legend" aria-label="Floods past legend" hidden></section>
-        <!-- the world river status's legend (#544), filled by status-layer.js -->
-        <section id="status-legend" class="status-legend" aria-label="World river status legend" hidden></section>
+        <section id="map-legend" class="map-legend" aria-label="On the map" hidden></section>
       </div>
       <!-- the map date (#522): one control that every dated layer follows -->
       <div id="timebar-wrap" class="timebar-wrap">
@@ -247,7 +243,6 @@
       <section id="area-study" class="area-study" aria-label="Study this area" hidden></section>
       <!-- map first (#548): what was clicked, answered on the map; filled by src/map-card.js -->
       <section id="map-card" class="map-card" role="dialog" aria-modal="false" aria-labelledby="mc-title" tabindex="-1" hidden></section>
-      <p id="map-hint" class="map-hint" hidden>Click a gauge, a river or anywhere on the map</p>
       <!-- talk to the map (#561): one line on the map and the action log under it; src/map-command.js and src/map-actions.js -->
       <div id="map-ask" class="map-ask">
         <div class="ma-bar">
@@ -274,6 +269,12 @@
         <p id="ma-status" class="ma-status" role="status" hidden></p>
         <div id="ma-tries" class="ma-tries" hidden></div>
         <section id="ma-log" class="ma-log" aria-label="Map actions" hidden></section>
+      </div>
+      <!-- the first view's one line (#543): where the rivers are low or high this month, made from the river status
+           file (status-layer.js); and, until the first click, how to ask the map -->
+      <div class="map-lead">
+        <p id="map-caption" class="map-caption" hidden></p>
+        <p id="map-hint" class="map-hint" hidden>Click a gauge, a river or anywhere on the map</p>
       </div>
       <div id="map-fallback" class="map-fallback" hidden>
         <div id="map-fallback-text" class="status warn"></div>

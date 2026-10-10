@@ -2,13 +2,13 @@
 // and legends, how the gauges are coloured, and "select an area". The date the
 // dated layers follow is not here: it is the time bar on the map (time-ui.js).
 
-import { $, actions, downloadBlob, escapeHtml, state, toCsv } from "./core.js?v=__BUILD__";
+import { $, actions, downloadBlob, escapeHtml, onTime, state, toCsv } from "./core.js?v=__BUILD__";
 import {
   BASEMAPS, GAUGE_STYLES, OVERLAYS, OVERLAY_GROUPS, RECENT_BREAKS, RECORD_BREAKS,
   basemapById, creditLines, defaultDate, overlayById, recordYears, yearsSinceLast,
 } from "./layers.js?v=__BUILD__";
 import {
-  areaSelectActive, currentBasemap, globeSupported, refreshMapData, setBasemap, setGaugeStyle, setGlobe,
+  areaSelectActive, currentBasemap, globeSupported, refreshMapData, setBasemap, setGaugeStyle, setGaugesVisible, setGlobe,
   setHeatmap, setHillshade, setOverlay, setOverlayOpacity, setTerrain, startAreaSelect,
 } from "./map.js?v=__BUILD__";
 import { syncTimeBar } from "./time-ui.js?v=__BUILD__";
@@ -17,7 +17,7 @@ import { RIVERS_CREDIT } from "./river-core.js?v=__BUILD__";
 import { FLOODS_CREDIT } from "./floods-ahead-core.js?v=__BUILD__";
 import { DEPTH_CREDIT } from "./flood-depth-core.js?v=__BUILD__";
 import { NEWS_CREDIT, RADAR_CREDIT } from "./floods-past-core.js?v=__BUILD__";
-import { STATUS_CREDIT } from "./status-core.js?v=__BUILD__";
+import { STATUS_CREDIT, monthLabel } from "./status-core.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
 import { openAreaStudy } from "./area-study.js?v=__BUILD__";
 import { cancelAreaContext, openAreaContext } from "./context.js?v=__BUILD__";
@@ -25,6 +25,8 @@ import { loadSkillGrades, skillLegendHtml } from "./evidence.js?v=__BUILD__";
 import { ensureNowStatus, nowLegendHtml } from "./now-map.js?v=__BUILD__";
 import { bulletinLegendHtml, ensureBulletinStatus } from "./bulletin.js?v=__BUILD__";
 import { areaWatchButton } from "./watch.js?v=__BUILD__";
+import { refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
+import { STATUS_CLASSES } from "./now-core.js?v=__BUILD__";
 
 // A tiny swatch standing in for each basemap, so eight radio rows become two
 // columns of chips you can pick from at a glance.
@@ -173,6 +175,62 @@ function gaugeLegendHtml(mode) {
   return "";
 }
 
+// ── the Gauges row in "On the map" (map-legend.js) ──────────────────────────
+
+const fmtK = (n) => (n >= 10000 ? `${Math.round(n / 1000)}k` : n.toLocaleString("en-GB"));
+const nowReady = () => state.gaugeStyle === "now" && state.nowStatus && state.nowMeta && !state.nowMeta.missing;
+
+function gaugesMark() {
+  if (nowReady()) return '<i class="ml-dot now" aria-hidden="true"></i>';
+  return '<i class="ml-dot" aria-hidden="true"></i>';
+}
+
+// While the time bar replays a past month, the dots still show today: the row says so (a month or two back
+// is as good as today, since the newest river status month trails the calendar).
+function pastMonth() {
+  const t = Date.parse(String(state.date || ""));
+  return Number.isFinite(t) && t < Date.now() - 62 * 86400e3 ? String(state.date).slice(0, 7) : "";
+}
+
+function gaugesSummary() {
+  if (nowReady()) {
+    const past = pastMonth();
+    return `${fmtK(state.nowStatus.size)} today vs normal${past ? `, not ${monthLabel(past)}` : ""}`;
+  }
+  const style = GAUGE_STYLES.find((g) => g.id === state.gaugeStyle);
+  const n = state.stations.length;
+  return `${n ? `${fmtK(n)}, ` : ""}by ${(style ? style.label : "agency").toLowerCase()}`;
+}
+
+function gaugesBody() {
+  if (nowReady()) {
+    const dots = STATUS_CLASSES.map((c) => `<i style="--c:${c.color}" title="${escapeHtml(c.label)}"></i>`).join("");
+    return `<span class="ml-dots">${dots}</span>` +
+      '<div class="sl-ends"><span>much below</span><span>normal</span><span>much above</span></div>' +
+      `<p class="ml-when">Measured flow today against the same day in other years, at ${state.nowStatus.size.toLocaleString("en-GB")} ` +
+      "gauges with a fresh record. The rest wait in the light clusters; zoom in to see them.</p>" +
+      '<p class="ml-src">Colour the gauges another way in Layers.</p>';
+  }
+  const html = gaugeLegendHtml(state.gaugeStyle);
+  return (html ? `<div class="swatches">${html}</div>` : "") +
+    '<p class="ml-when">The light circles are groups of gauges: click one to zoom in.</p>' +
+    '<p class="ml-src">Colour the gauges another way in Layers.</p>';
+}
+
+function registerGaugesRow() {
+  registerLegendRow({
+    id: "gauges", title: "Gauges",
+    mark: gaugesMark,
+    summary: gaugesSummary,
+    on: () => state.gaugesOn !== false,
+    toggle: (on) => { setGaugesVisible(on); refreshLegend("gauges"); },
+    body: gaugesBody,
+  });
+  onTime((t) => {
+    if (String(t.date).slice(0, 7) !== String(t.prev.date).slice(0, 7)) refreshLegend("gauges");
+  });
+}
+
 // "Best model skill" (#518) reads skill/model_skill.parquet on first use; the dots are grey until it has
 // loaded, and stay grey (with a legend that says why) when the table is not published yet.
 function ensureSkillColours() {
@@ -189,6 +247,7 @@ function buildGaugeStyle() {
   select.value = state.gaugeStyle;
   const apply = () => {
     setGaugeStyle(state.gaugeStyle);
+    refreshLegend("gauges");
     $("gauge-legend").innerHTML = gaugeLegendHtml(state.gaugeStyle);
     $("gauge-legend").hidden = state.gaugeStyle === "source";
     $("rail-sources").classList.toggle("dimmed", !["source", "now"].includes(state.gaugeStyle));
@@ -200,6 +259,7 @@ function buildGaugeStyle() {
         refreshMapData();
         setGaugeStyle("now");
         $("gauge-legend").innerHTML = gaugeLegendHtml("now");
+        refreshLegend("gauges");
       });
     }
     // Last month's status reads the latest bulletin the first time it is picked (#523).
@@ -339,6 +399,7 @@ export function initLayerUI() {
   buildOverlays();
   actions.setOverlay = toggleOverlay;
   actions.setBasemap = chooseBasemap;
+  registerGaugesRow();
   buildGaugeStyle();
   buildAreaSelect();
   renderCredits();

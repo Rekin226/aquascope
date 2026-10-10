@@ -1,23 +1,7 @@
-/* Flood depth where floods are forecast (#554): its card in the shared legend stack (.map-legends, floods-past.css),
-   under Floods ahead, in the same quiet style as the river status card. */
-.fd-legend {
-  width: 16.5rem; max-width: calc(100vw - 24px);
-  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-1);
-  padding: .45rem .6rem .5rem; font-size: .72rem; color: var(--ink);
-}
-.fd-legend[hidden] { display: none; }
-body.workbench-mode .fd-legend { display: none; }
-.fd-legend header { display: flex; align-items: center; gap: .4rem; }
-.fd-legend header b { font-size: .76rem; font-weight: 650; white-space: nowrap; }
-.fd-btn {
-  font: inherit; font-size: .72rem; line-height: 1; width: 20px; height: 20px; display: grid; place-items: center;
-  border: 1px solid transparent; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; padding: 0;
-}
-.fd-btn.info { margin-left: auto; font-weight: 650; font-style: italic; font-family: Georgia, serif; }
-.fd-btn:hover { background: var(--bg-soft); border-color: var(--line); color: var(--ink); }
-.fd-legend p { margin: .3rem 0 0; line-height: 1.35; }
-.fd-legend .fd-tag { margin: .05rem 0 .4rem; color: var(--ink-2); }
+/* Flood depth where floods are forecast (#554): its row in the shared "On the map" legend (map-legend.js),
+   its mark and its key. */
+.fd-mark { display: inline-block; width: 18px; height: 8px; border-radius: 3px; }
+.ml-body .fd-tag { margin: 0 0 .35rem; color: var(--ink-2); }
 .fd-ramp { height: 9px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(23, 63, 153, .12); }
 .fd-ticks {
   position: relative; height: .95rem; margin-right: 1.3rem;
@@ -26,30 +10,10 @@ body.workbench-mode .fd-legend { display: none; }
 .fd-ticks span { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; }
 .fd-ticks span:first-child { transform: none; }
 .fd-ticks span:last-child { transform: translateX(-30%); }
-.fd-legend .fd-line { margin-top: .2rem; color: var(--ink); }
+.ml-body .fd-line, .ml-body .fd-src, .ml-body .fd-err { margin: .25rem 0 0; line-height: 1.35; }
+.ml-body .fd-src { color: var(--muted); font-size: .66rem; }
+.ml-body .fd-err { color: var(--err-ink); }
 .fd-go {
   font: inherit; border: 0; background: none; padding: 0; color: var(--blue); cursor: pointer;
   text-decoration: underline; text-underline-offset: 2px;
 }
-.fd-legend .fd-err { color: var(--err-ink); }
-.fd-legend .fd-src { color: var(--muted); font-size: .66rem; }
-.fd-busy {
-  width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--line); border-top-color: var(--ink-2);
-  animation: fd-spin .8s linear infinite;
-}
-@keyframes fd-spin { to { transform: rotate(360deg); } }
-.fd-legend.min { width: auto; }
-.fd-legend.min .fd-btn.info { margin-left: .2rem; }
-.fd-mini { display: inline-block; width: 40px; height: 7px; border-radius: 3px; }
-.fd-est { color: var(--muted); font-size: .66rem; white-space: nowrap; }
-
-@media (prefers-reduced-motion: reduce) {
-  .fd-busy { animation: none; }
-}
-
-/* As a row of the shared "On the map" legend (map-legend.js), where the page has one: its mark and its key. */
-.fd-mark { display: inline-block; width: 18px; height: 8px; border-radius: 3px; }
-.ml-body .fd-tag { margin: 0 0 .35rem; color: var(--ink-2); }
-.ml-body .fd-line, .ml-body .fd-src, .ml-body .fd-err { margin: .25rem 0 0; line-height: 1.35; }
-.ml-body .fd-src { color: var(--muted); font-size: .66rem; }
-.ml-body .fd-err { color: var(--err-ink); }

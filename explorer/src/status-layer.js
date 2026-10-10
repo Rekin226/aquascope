@@ -12,15 +12,16 @@ import { $, actions, escapeHtml, onTime, setTime, state, trace } from "./core.js
 import { registerDatedLayer } from "./layers.js?v=__BUILD__";
 import { holdSettle, map } from "./map.js?v=__BUILD__";
 import { STATUS_CLASSES } from "./now-core.js?v=__BUILD__";
-import { ensureNowStatus } from "./now-map.js?v=__BUILD__";
 import { renderCredits } from "./layer-ui.js?v=__BUILD__";
+import { openLegendRow, refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
 import { syncTimeBar } from "./time-ui.js?v=__BUILD__";
 import { openModal } from "./shell.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
 import { defaultRange, frameDates, nextFrame, normaliseRange } from "./timeline.js?v=__BUILD__";
 import {
   GEOTIFF_MODULE, STATUS_CORNERS, STATUS_CREDIT, STATUS_LIST_URL, decodeStatus, gridToPng, latestDay, missingMonths,
-  CLASS_ALPHA, focusPalette, hexRgb, monthLabel, parseListing, statusDatedLayer, statusMonthFor, statusUrl,
+  CLASS_ALPHA, focusPalette, hexRgb, monthLabel, parseListing, statusDatedLayer, statusHeadline, statusMonthFor,
+  statusUrl,
 } from "./status-core.js?v=__BUILD__";
 
 const SOURCE_ID = "status-src";
@@ -46,6 +47,8 @@ let shownFocus = "";        // the focus the picture on the map was painted with
 const focusKey = () => focus.join(",");
 const keyOf = (month, f = focusKey()) => (f ? `${month}|${f}` : month);
 const loading = new Map();  // month -> promise of an object URL
+const headlines = new Map(); // month -> the caption's one line (status-core.js statusHeadline)
+const CAPTION_MAX_ZOOM = 3.5; // the caption shows on the globe, not once zoomed in on a region
 
 // A power-of-two square, smaller where memory is short.
 function pictureSize() {
@@ -89,7 +92,7 @@ function inWorker(url, classes) {
       if (!job) return;
       waiting.delete(e.data.id);
       if (e.data.noCanvas) worker = false;   // no OffscreenCanvas: make them on the page from now on
-      if (e.data.error) job.reject(new Error(e.data.error)); else job.resolve(e.data.png);
+      if (e.data.error) job.reject(new Error(e.data.error)); else job.resolve({ png: e.data.png, regions: e.data.regions });
     };
     worker.onerror = (e) => {
       console.warn("status worker:", e && e.message);
@@ -109,9 +112,10 @@ async function onPage(url, classes) {
   const geotiff = await import(GEOTIFF_MODULE);
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const grid = await decodeStatus(geotiff, await res.arrayBuffer(), side, side);
-  return gridToPng(grid, side, side, (w, h) => Object.assign(document.createElement("canvas"), { width: w, height: h }),
+  const { grid, regions } = await decodeStatus(geotiff, await res.arrayBuffer(), side, side, { withRegions: true });
+  const png = await gridToPng(grid, side, side, (w, h) => Object.assign(document.createElement("canvas"), { width: w, height: h }),
     focusPalette(classes));
+  return { png, regions };
 }
 
 function keep(key, objectUrl) {
@@ -137,7 +141,11 @@ function load(month) {
   const url = statusUrl(month);
   const make = worker === false ? onPage(url, classes)
     : inWorker(url, classes).catch((err) => { if (worker === false) return onPage(url, classes); throw err; });
-  const p = make.then((png) => keep(key, URL.createObjectURL(png))).finally(() => loading.delete(key));
+  // The caption reads every class, whatever the focus paints (#561): the regions come from the whole grid.
+  const p = make.then(({ png, regions }) => {
+    if (regions) headlines.set(month, statusHeadline(month, regions));
+    return keep(key, URL.createObjectURL(png));
+  }).finally(() => loading.delete(key));
   loading.set(key, p);
   return p;
 }
@@ -210,6 +218,7 @@ function update() {
     shown = null;
     hide();
     renderLegend();
+    caption();
     return;
   }
   if (month === shown && shownFocus === focusKey() && map.getSource(SOURCE_ID)) { renderLegend(); preload(); return; }
@@ -221,6 +230,7 @@ function update() {
     shownFocus = painted;
     draw(objectUrl);
     renderLegend();
+    caption();
     preload();
   }).catch((err) => {
     console.warn(`status ${month}:`, err && err.message);
@@ -238,22 +248,7 @@ function preload() {
   if (next && next !== shown) load(next).catch(() => {});
 }
 
-// ── the legend on the map ───────────────────────────────────────────────────
-
-const legendEl = () => $("status-legend");
-
-// The gauges' line: what the dots mean, and that they stay on today while the map replays the past.
-function gaugeLine(month, latest) {
-  if (state.gaugeStyle !== "now") return "";
-  const meta = state.nowMeta;
-  if (!meta || meta.missing || !state.nowStatus) return "";
-  const n = state.nowStatus.size.toLocaleString();
-  // A month before the newest map is the past; the newest one and anything after it is as good as today.
-  const text = !month || !latest || month >= latest
-    ? `Dots: today vs normal at ${n} gauges; the rest faint, in their agency colour.`
-    : `Dots still show today (${n} gauges), not ${monthLabel(month)}.`;
-  return `<p class="sl-dots"><i aria-hidden="true"></i>${escapeHtml(text)}</p>`;
-}
+// ── the row in "On the map" (map-legend.js) ─────────────────────────────────
 
 // A swatch as the map draws it: the class colour at the strength it is painted with.
 function swatchColor(c, i) {
@@ -262,41 +257,78 @@ function swatchColor(c, i) {
   return `rgba(${r},${g},${b},${a.toFixed(3)})`;
 }
 
-function renderLegend() {
-  const el = legendEl();
-  if (!el) return;
-  el.hidden = !state.status || !state.mapOk;
-  if (el.hidden) return;
-  const latest = months && months[months.length - 1];
-  const month = wanted || shown;
-  let when;
-  if (!months) when = '<span class="sl-when muted">loading…</span>';
-  else if (month) {
-    when = `<span class="sl-when">${escapeHtml(monthLabel(month))}</span>` +
-      (month === latest ? '<span class="sl-tag">latest</span>' : "");
-  } else {
-    const ym = String(state.date || "").slice(0, 7);
-    const gap = months.length && ym > months[0] && ym < latest && missingMonths(months).includes(ym);
-    when = `<span class="sl-when muted">${gap ? `no map for ${escapeHtml(monthLabel(ym))}` :
-      `${escapeHtml(monthLabel(months[0]))} to ${escapeHtml(monthLabel(latest))} only`}</span>`;
+// The five classes, much below to much above: the row's mark (small) and its key (wide).
+// A class left off by a focus (#561) is a faint swatch.
+const statusBar = (cls) => `<span class="${cls}">${STATUS_CLASSES.map((c, i) =>
+  `<i style="--c:${swatchColor(c, i)}" title="${escapeHtml(c.label)}"${focus.length && !focus.includes(c.id) ? ' class="off"' : ""}></i>`).join("")}</span>`;
+
+function rowMonth() {
+  return wanted || shown;
+}
+
+// The few words beside the name: the month on the map, or why there is none.
+function rowSummary() {
+  if (!months) return "loading";
+  const latest = months[months.length - 1];
+  const month = rowMonth();
+  if (month) {
+    const busy = month !== shown && !failed;
+    const only = focus.length ? `, only ${STATUS_CLASSES.filter((c) => focus.includes(c.id)).map((c) => c.label.toLowerCase()).join(" or ")}` : "";
+    return `${monthLabel(month)}${only}${busy ? ", loading" : ""}` +
+      `${failed && failed.month === month ? ", could not read" : ""}`;
   }
-  const busy = month && month !== shown && !failed ? '<span class="sl-busy" aria-hidden="true"></span>' : "";
-  const err = failed && failed.month === month
-    ? `<p class="sl-err">Could not read ${escapeHtml(monthLabel(month))}.</p>` : "";
-  const bar = STATUS_CLASSES.map((c, i) =>
-    `<i style="--c:${swatchColor(c, i)}" title="${escapeHtml(c.label)}"${focus.length && !focus.includes(c.id) ? ' class="off"' : ""}></i>`).join("");
-  const only = focus.length
-    ? `<p class="sl-focus">Only ${escapeHtml(STATUS_CLASSES.filter((c) => focus.includes(c.id)).map((c) => c.label).join(" or "))}` +
-      ' <button type="button" class="link-btn" data-act="all">show all</button></p>' : "";
-  el.innerHTML =
-    `<header><b>River status</b>${when}${busy}` +
-    '<button class="sl-btn" type="button" data-act="info" aria-label="About the river status map" title="About this map">i</button>' +
-    '<button class="sl-btn" type="button" data-act="hide" aria-label="Hide the river status map" title="Hide">×</button></header>' +
-    `<div class="sl-bar" role="img" aria-label="${escapeHtml(STATUS_CLASSES.map((c) => c.label).join(", "))}">${bar}</div>` +
-    '<div class="sl-ends"><span>much below</span><span>normal</span><span>much above</span></div>' +
-    `${only}${err}${gaugeLine(month || String(state.date || "").slice(0, 7), latest)}` +
-    '<p class="sl-src">Each basin\'s monthly flow vs its normal. Modelled, GEOGLOWS, CC BY 4.0</p>' +
-    '<p class="sl-credit">Modelled · GEOGLOWS · CC BY 4.0</p>';   // the phone's short credit (style.css)
+  const ym = String(state.date || "").slice(0, 7);
+  const gap = months.length && ym > months[0] && ym < latest && missingMonths(months).includes(ym);
+  return gap ? `no map for ${monthLabel(ym)}` : `${monthLabel(months[0])} to ${monthLabel(latest)} only`;
+}
+
+// Only some classes painted (Ask the map, #561): which, and a way to put the rest back.
+function focusLine() {
+  if (!focus.length) return "";
+  const names = STATUS_CLASSES.filter((c) => focus.includes(c.id)).map((c) => c.label).join(" or ");
+  return `<p class="sl-focus">Only ${escapeHtml(names)} ` +
+    '<button type="button" class="ml-link" data-act="all">show all</button></p>';
+}
+
+function rowBody() {
+  return statusBar("sl-bar") +
+    '<div class="sl-ends"><span>much below</span><span>normal</span><span>much above</span></div>' + focusLine() +
+    '<p class="ml-src">Each basin\'s monthly flow against its normal. Modelled: GEOGLOWS, CC BY 4.0. ' +
+    '<button type="button" class="ml-link" data-act="info">About</button></p>';
+}
+
+function renderLegend() {
+  refreshLegend("status");
+}
+
+// The first view's one line, over the globe (#map-caption, beside the click hint): where the rivers are low
+// or high in the month on the map, made from the file itself. Empty while the layer is off or has no month.
+function caption() {
+  const el = $("map-caption");
+  if (!el) return;
+  // A world headline belongs to the world view: zoomed in on a region it would only talk over the map.
+  const far = !map || map.getZoom() < CAPTION_MAX_ZOOM;
+  const text = state.status && shown && far ? headlines.get(shown) || "" : "";
+  // "River status, September 2026:" leads, quietly bold; the rest is the news.
+  const cut = text.indexOf(": ");
+  el.innerHTML = cut > 0 ? `<b>${escapeHtml(text.slice(0, cut + 1))}</b> ${escapeHtml(text.slice(cut + 2))}` : escapeHtml(text);
+  el.hidden = !text;
+}
+
+function registerRow() {
+  registerLegendRow({
+    id: "status", title: "River status",
+    mark: () => statusBar("sl-bar mini"),
+    summary: rowSummary,
+    on: () => Boolean(state.status && state.mapOk),
+    empty: () => Boolean(months && !rowMonth()),
+    toggle: (on) => chooseStatus(on),
+    body: rowBody,
+    act: (name) => {
+      if (name === "info") openAbout();
+      else if (name === "all") setStatusFocus([]);
+    },
+  });
 }
 
 function openAbout() {
@@ -360,6 +392,7 @@ export function setStatusVisible(on) {
   } else {
     removeLayer();
   }
+  caption();
   syncRailRow();
   renderLegend();
 }
@@ -383,6 +416,7 @@ export function setStatusFocus(classes = []) {
   focus = STATUS_CLASSES.map((c) => c.id).filter((id) => (classes || []).includes(id) && ids.has(id));
   update();
   renderLegend();
+  if (focus.length) openLegendRow("status", true);   // the key says what is left out, with "show all"
   return focus.slice();
 }
 
@@ -393,14 +427,7 @@ export function initStatusLayer(url = {}) {
   actions.setStatus = setStatusVisible;
   registerDatedLayer(() => (state.status ? statusDatedLayer(months) : null));
   buildRailRow();
-  const el = legendEl();
-  el.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-act]");
-    if (!btn) return;
-    if (btn.dataset.act === "info") openAbout();
-    else if (btn.dataset.act === "hide") chooseStatus(false);
-    else if (btn.dataset.act === "all") setStatusFocus([]);
-  });
+  registerRow();
   // The picture that waited for the one before it (draw()).
   map.on("sourcedata", (e) => {
     if (e.sourceId !== SOURCE_ID || !queued || !e.source || !map.getSource(SOURCE_ID).loaded()) return;
@@ -408,6 +435,7 @@ export function initStatusLayer(url = {}) {
     queued = null;
     draw(next);
   });
+  map.on("zoomend", caption);
   // A basemap change replaces the whole style; put the layer back on the new one.
   map.on("style.load", () => {
     const key = shown && keyOf(shown, shownFocus);
@@ -416,8 +444,6 @@ export function initStatusLayer(url = {}) {
   onTime((t) => {
     if (t.date !== t.prev.date || t.playing !== t.prev.playing) update();
   });
-  // The gauges' line in the legend fills in once today's snapshot has loaded.
-  if (state.gaugeStyle === "now") ensureNowStatus().then(renderLegend);
   // Open on the newest month: with no date in the link, move the map date into it,
   // and step by a month so play walks the months.
   const bootDate = state.date;

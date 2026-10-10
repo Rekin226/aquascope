@@ -152,7 +152,8 @@ test = [
 docs = [
     "mkdocs-material[imaging]>=9.5,<10",
     "mkdocstrings[python]>=0.24,<0.30",
-    "pymdown-extensions>=10.7",
+    # 12.2 (2026-10-10) changed Highlight.__init__ and breaks mkdocstrings 0.29 (the docs build)
+    "pymdown-extensions>=10.7,<12.2",
 ]
 
 [project.scripts]

@@ -16,18 +16,22 @@ import { writeUrl } from "./url.js?v=__BUILD__";
 import { syncTimeBar } from "./time-ui.js?v=__BUILD__";
 import { renderCredits } from "./layer-ui.js?v=__BUILD__";
 import { openModal } from "./shell.js?v=__BUILD__";
+import { refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
 import { callLight } from "./worker-client.js?v=__BUILD__";
 import {
-  CELLS, CELL_MINZOOM, DARK_BASEMAPS, FLOODS_PAST_BASE, HEAT_MAXZOOM, MAX_MONTHS, NEWS_COLOR, NEWS_STROKE, POINTS, RADAR_COLOR,
+  CELLS, CELL_MINZOOM, DARK_BASEMAPS, FLOODS_PAST_BASE, HEAT_FADE, HEAT_MAXZOOM, MAX_MONTHS, NEWS_COLOR, NEWS_STROKE, POINTS, RADAR_COLOR,
   RADAR_PERIOD, cellBbox, cellsGeoJSON, eventDates, fmtCount, legendLines, monthLabel, monthsBetween,
   monthsOnRecord, newsFill, newsHeat, newsRadius, newsStroke, newsWeight, placeLabel, radarFill, radarHeat, radarWeight,
-  readFloodsParam, windowFor, windowLabel, areaLabel,
+  readFloodsParam, shortWhen, standoutFilters, standoutThresholds, windowFor, windowLabel, areaLabel,
 } from "./floods-past-core.js?v=__BUILD__";
 
 const SLOTS = ["a", "b"];
 const LAYER_IDS = [...SLOTS.flatMap((s) => [`fp-heat-radar-${s}`, `fp-heat-news-${s}`, `fp-radar-${s}`, `fp-news-${s}`]),
   "fp-sel-line"];
-const OPACITY = { news: 0.9, stroke: 1, newsHeat: 0.85, radarHeat: 0.8 };
+const OPACITY = { news: 1, stroke: 1, newsHeat: 0.9, radarHeat: 0.85 };
+// The heat hands over to the marks between zoom 6 and 7; the slot's crossfade factor k scales both.
+const heatOpacity = (kind, k) => ["interpolate", ["linear"], ["zoom"], HEAT_FADE[0], OPACITY[`${kind}Heat`] * k, HEAT_FADE[1], 0];
+const markOpacity = (o, k) => ["interpolate", ["linear"], ["zoom"], CELL_MINZOOM, 0, CELL_MINZOOM + 0.6, o * k];
 const EMPTY = { type: "FeatureCollection", features: [] };
 
 let index;                 // undefined: not read yet; null: not published; else index.json
@@ -110,7 +114,7 @@ function ensureLayers() {
     // closer in, radar shades its half-degree cells and news is a circle per cell, and a click lands on either.
     map.addLayer({
       id: `fp-radar-${s}`, type: "fill", source: `fp-${s}`, minzoom: CELL_MINZOOM, filter: CELLS,
-      paint: { "fill-color": radarFill(DARK_BASEMAPS.has(state.basemap)), "fill-opacity": k, "fill-opacity-transition": t, "fill-antialias": false },
+      paint: { "fill-color": radarFill(DARK_BASEMAPS.has(state.basemap)), "fill-opacity": markOpacity(1, k), "fill-opacity-transition": t, "fill-antialias": false },
     }, belowLabels() || before);
     // News under radar at the world view: the reports are everywhere people are, the radar glow is where
     // the water was, and it should not be buried under the reports.
@@ -118,7 +122,7 @@ function ensureLayers() {
       map.addLayer({
         id: `fp-heat-${kind}-${s}`, type: "heatmap", source: `fp-${s}`, maxzoom: HEAT_MAXZOOM,
         filter: ["all", POINTS, [">", ["get", kind], 0]],
-        paint: { ...heat, "heatmap-opacity": OPACITY[`${kind}Heat`] * k, "heatmap-opacity-transition": t },
+        paint: { ...heat, "heatmap-opacity": heatOpacity(kind, k), "heatmap-opacity-transition": t },
       }, before);
     }
     map.addLayer({
@@ -127,9 +131,9 @@ function ensureLayers() {
       layout: { "circle-sort-key": ["-", 0, ["get", "news"]] },
       paint: {
         "circle-color": newsFill(), "circle-radius": newsRadius(),
-        "circle-opacity": OPACITY.news * k, "circle-opacity-transition": t,
-        "circle-stroke-color": newsStroke(), "circle-stroke-width": 0.8,
-        "circle-stroke-opacity": OPACITY.stroke * k, "circle-stroke-opacity-transition": t,
+        "circle-opacity": markOpacity(OPACITY.news, k), "circle-opacity-transition": t,
+        "circle-stroke-color": newsStroke(), "circle-stroke-width": 0.6,
+        "circle-stroke-opacity": markOpacity(OPACITY.stroke, k), "circle-stroke-opacity-transition": t,
       },
     }, before);
   }
@@ -151,11 +155,11 @@ function setVisible(on) {
 
 function setSlotOpacity(slot, on) {
   const k = on ? 1 : 0;
-  map.setPaintProperty(`fp-heat-radar-${slot}`, "heatmap-opacity", OPACITY.radarHeat * k);
-  map.setPaintProperty(`fp-heat-news-${slot}`, "heatmap-opacity", OPACITY.newsHeat * k);
-  map.setPaintProperty(`fp-radar-${slot}`, "fill-opacity", k);
-  map.setPaintProperty(`fp-news-${slot}`, "circle-opacity", OPACITY.news * k);
-  map.setPaintProperty(`fp-news-${slot}`, "circle-stroke-opacity", OPACITY.stroke * k);
+  map.setPaintProperty(`fp-heat-radar-${slot}`, "heatmap-opacity", heatOpacity("radar", k));
+  map.setPaintProperty(`fp-heat-news-${slot}`, "heatmap-opacity", heatOpacity("news", k));
+  map.setPaintProperty(`fp-radar-${slot}`, "fill-opacity", markOpacity(1, k));
+  map.setPaintProperty(`fp-news-${slot}`, "circle-opacity", markOpacity(OPACITY.news, k));
+  map.setPaintProperty(`fp-news-${slot}`, "circle-stroke-opacity", markOpacity(OPACITY.stroke, k));
 }
 
 let heatScale = 12;
@@ -167,6 +171,30 @@ function setHeatScale(n) {
     map.setPaintProperty(`fp-heat-news-${s}`, "heatmap-weight", newsWeight(months));
     map.setPaintProperty(`fp-heat-radar-${s}`, "heatmap-weight", radarWeight(months));
   }
+}
+
+// ── only what stands out (floods-past-core.js standoutThresholds) ──────────
+
+let shownCells = [];
+function cellList(fc) {
+  return ((fc && fc.features) || []).filter((f) => f.geometry.type === "Point")
+    .map((f) => ({ lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], news: f.properties.news, radar: f.properties.radar }));
+}
+
+// The region is what is on screen; on the world view, the whole world.
+function viewBox() {
+  if (!map || map.getZoom() < 3) return null;
+  const b = map.getBounds();
+  return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((v, i) => (i % 2 ? v : ((v + 540) % 360) - 180));
+}
+
+function applyStandout(slot = front) {
+  if (!state.mapOk || !map || !map.getLayer(`fp-news-${slot}`)) return;
+  const f = standoutFilters(standoutThresholds(shownCells, viewBox()));
+  map.setFilter(`fp-news-${slot}`, f.news);
+  map.setFilter(`fp-heat-news-${slot}`, f.news);
+  map.setFilter(`fp-heat-radar-${slot}`, f.radarHeat);
+  map.setFilter(`fp-radar-${slot}`, f.radarCells);
 }
 
 // Wait until the back slot has taken its new data, so the fade shows it rather than an empty frame.
@@ -186,6 +214,8 @@ async function show(fc) {
   const back = front === "a" ? "b" : "a";
   map.getSource(`fp-${back}`).setData(fc);
   shown = fc;
+  shownCells = cellList(fc);
+  applyStandout(back);
   await whenLoaded(`fp-${back}`);
   setSlotOpacity(back, true);
   setSlotOpacity(front, false);
@@ -254,78 +284,63 @@ export function setFloodsPast(on, { write = true } = {}) {
   renderCredits();
 }
 
-// ── the legend ──────────────────────────────────────────────────────────────
+// ── the row in "On the map" (map-legend.js) ─────────────────────────────────
 
-const legendHost = () => $("fp-legend");
-
-// Folded, the legend is one line (the two marks and the months): how it starts on a phone, where the map is small.
-let folded = narrow();
 let noteText = "";
+let busy = false;
 function setNote(text) { noteText = text || ""; renderLegend(); }
-function setBusy(on) { const c = $("fp-legend"); if (c) c.classList.toggle("busy", Boolean(on)); }
+function setBusy(on) { if (busy !== Boolean(on)) { busy = Boolean(on); renderLegend(); } }
 
 const dot = `<svg class="fp-key" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.6" fill="${NEWS_COLOR}" stroke="${NEWS_STROKE}" stroke-opacity=".6" stroke-width="1"/></svg>`;
 // Radar is a shaded cell on the map, so its key is a square.
 const glow = `<svg class="fp-key" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2" ` +
   `fill="${RADAR_COLOR}" fill-opacity=".55" stroke="${RADAR_COLOR}" stroke-opacity=".8"/></svg>`;
+const pair = `<svg class="fp-key" viewBox="0 0 22 16" aria-hidden="true"><rect x="9" y="3" width="11" height="11" rx="2" ` +
+  `fill="${RADAR_COLOR}" fill-opacity=".5"/><circle cx="7" cy="8" r="4.4" fill="${NEWS_COLOR}" stroke="#fff" stroke-width="1.2"/></svg>`;
 
 function renderLegend() {
-  const card = legendHost();
-  if (!card) return;
-  card.hidden = !state.floodsPast || !state.mapOk;
-  if (card.hidden) return;
-  if (index === undefined) {
-    card.innerHTML = `<div class="fp-head"><h3>Floods past</h3></div><p class="fp-sub muted">Loading…</p>`;
-    return;
-  }
+  refreshLegend("floods-past");
   if (index === null) {
-    // Until the mirror-context workflow has published the grid there is nothing to draw: no card on the map,
-    // and the rail says why.
-    card.hidden = true;
+    // Until the mirror-context workflow has published the grid there is nothing to draw; the rail says so too.
     const label = $("toggle-floods-past") && $("toggle-floods-past").parentElement.querySelector(".rail-label");
     if (label && !label.querySelector(".muted")) label.insertAdjacentHTML("beforeend", ' <span class="muted">(not published yet)</span>');
-    return;
   }
+}
+
+function rowSummary() {
+  if (index === undefined) return "loading";
+  if (index === null) return "not published yet";
+  return shortWhen(current) + (busy ? ", loading" : "");
+}
+
+function rowBody() {
   const l = legendLines(index, current);
+  if (!l) return "";
   const playing = state.playing && current.mode === "frame";
-  card.classList.toggle("folded", folded);
-  card.innerHTML =
-    `<div class="fp-head"><h3>Floods past</h3>` +
-    `<button class="fp-btn fp-play" type="button" aria-pressed="${playing ? "true" : "false"}" ` +
-    `title="${playing ? "Pause" : "Replay these months one by one"}" aria-label="${playing ? "Pause the replay" : "Replay month by month"}">` +
-    (playing ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" fill="currentColor"/></svg>'
-      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>') +
-    `</button><button class="fp-btn fp-about" type="button" title="What the colours mean" aria-label="About Floods past">` +
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/>' +
-    '<path d="M12 11v6M12 7.5v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>' +
-    `<button class="fp-btn fp-fold" type="button" aria-expanded="${folded ? "false" : "true"}" ` +
-    `title="${folded ? "Show the counts and sources" : "Fold the legend"}" aria-label="${folded ? "Show the legend" : "Fold the legend"}">` +
-    `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${folded ? "M6 9l6 6 6-6" : "M6 15l6-6 6 6"}" fill="none" ` +
-    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
-    `${closeBtn()}</div>` +
-    `<p class="fp-mini">${dot}<span>News</span>${glow}<span>Radar</span><span class="fp-mini-when">${escapeHtml(l.when)}</span></p>` +
-    `<p class="fp-sub" aria-live="polite">${escapeHtml(l.when)}</p>` +
+  return `<p class="ml-when" aria-live="polite">${escapeHtml(l.when)}</p>` +
     `<div class="fp-row" title="Flood events extracted from news articles: somewhere a flood was reported">${dot}` +
     `<span class="fp-what">Reported in the news</span><span class="fp-n">${escapeHtml(l.news)}</span></div>` +
     `<div class="fp-row" title="Sentinel-1 radar pixels classified as flood water: water seen from space">${glow}` +
     `<span class="fp-what">Seen by radar</span><span class="fp-n">${escapeHtml(l.radar)}</span></div>` +
+    `<p class="ml-src">Drawn where a place stands out from its region. ` +
+    `Groundsource, CC BY 4.0; Microsoft, MIT.</p>` +
     (noteText ? `<p class="fp-note">${escapeHtml(noteText)}</p>` : "") +
-    `<p class="fp-foot muted">Groundsource, CC BY 4.0 · Microsoft, MIT</p>`;
-  wireLegend(card);
+    `<div class="ml-actions"><button type="button" class="ml-btn" data-act="play" aria-pressed="${playing ? "true" : "false"}">` +
+    `${playing ? "Pause" : "Replay month by month"}</button>` +
+    `<button type="button" class="ml-btn quiet" data-act="about">About</button></div>`;
 }
 
-const closeBtn = () => '<button class="fp-btn fp-close" type="button" title="Hide Floods past" aria-label="Hide Floods past">' +
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>';
-
-function wireLegend(card) {
-  const close = card.querySelector(".fp-close");
-  if (close) close.addEventListener("click", () => setFloodsPast(false));
-  const play = card.querySelector(".fp-play");
-  if (play) play.addEventListener("click", replay);
-  const fold = card.querySelector(".fp-fold");
-  if (fold) fold.addEventListener("click", () => { folded = !folded; renderLegend(); card.querySelector(".fp-fold")?.focus(); });
-  const about = card.querySelector(".fp-about");
-  if (about) about.addEventListener("click", aboutModal);
+function registerRow() {
+  registerLegendRow({
+    id: "floods-past", title: "Floods past",
+    mark: () => pair,
+    summary: rowSummary,
+    on: () => Boolean(state.floodsPast && state.mapOk),
+    empty: () => index === null || index === undefined,
+    toggle: (on) => setFloodsPast(on),
+    body: rowBody,
+    act: (name) => { if (name === "play") replay(); else if (name === "about") aboutModal(); },
+  });
 }
 
 // Replay the months on screen through the time bar: a month step, the window as the range, then play.
@@ -458,6 +473,7 @@ async function onCellClick(e) {
 // ── boot ────────────────────────────────────────────────────────────────────
 
 export function initFloodsPast() {
+  registerRow();
   const fromUrl = readFloodsParam(location.hash);
   if (fromUrl !== null) state.floodsPast = fromUrl;
   const toggle = $("toggle-floods-past");
@@ -467,7 +483,9 @@ export function initFloodsPast() {
   }
   if (!state.mapOk || !map) return;
   // A basemap change replaces the style and drops our layers: put them back with what they showed.
-  map.on("style.load", () => { if (ensureLayers()) setVisible(state.floodsPast); });
+  map.on("style.load", () => { if (ensureLayers()) { setVisible(state.floodsPast); applyStandout(); } });
+  // A new region on screen has its own standouts.
+  map.on("moveend", () => { if (state.floodsPast && shownCells.length) applyStandout(); });
   for (const s of SLOTS) {
     for (const kind of ["radar", "news"]) {
       const id = `fp-${kind}-${s}`;

@@ -14,6 +14,7 @@ import {
 import { syncTimeBar } from "./time-ui.js?v=__BUILD__";
 import { openModal } from "./shell.js?v=__BUILD__";
 import { RIVERS_CREDIT } from "./river-core.js?v=__BUILD__";
+import { NEWS_CREDIT, RADAR_CREDIT } from "./floods-past-core.js?v=__BUILD__";
 import { STATUS_CREDIT } from "./status-core.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
 import { openAreaStudy } from "./area-study.js?v=__BUILD__";
@@ -294,6 +295,7 @@ function buildAreaSelect() {
 export function renderCredits() {
   const lines = creditLines(state.basemap, [...state.overlays], { terrain: state.terrain || state.hillshade });
   if (state.riversOn) lines.push(RIVERS_CREDIT);
+  if (state.floodsPast) lines.push(NEWS_CREDIT, RADAR_CREDIT);
   if (state.status) lines.push(STATUS_CREDIT);
   $("rail-credits").innerHTML = lines
     .map((l) => `<div><b>${escapeHtml(l.label)}</b>: ${l.attribution} <span class="muted">(${escapeHtml(l.licence)})</span></div>`)

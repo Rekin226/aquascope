@@ -643,6 +643,30 @@ def area_context(west: float, south: float, east: float, north: float,
         return {"error": f"area context failed: {type(exc).__name__}: {exc}"}
 
 
+def flood_events_month(month: str | None = None, start: str | None = None, end: str | None = None,
+                       west: float | None = None, south: float | None = None, east: float | None = None,
+                       north: float | None = None, limit: int = 20) -> dict[str, Any]:
+    """Where floods happened in a month or a range of months (at most 60), worldwide or in a box: flood events
+    reported in the news (Google Groundsource, CC BY 4.0, 2000 onwards) and flood detections by Sentinel-1 radar
+    (Microsoft AI for Good, MIT, October 2014 to September 2024), counted separately on a half-degree grid.
+    month is "YYYY-MM"; or give start and end; with none, the latest 12 months on record. A box (west, south,
+    east, north) narrows it; a small box also lists the news events with their dates and the radar months.
+    News says a flood was reported, radar says water was seen: quote them as such, with the attribution.
+    """
+    from aquascope.context.floods_past import flood_events_month as _run
+
+    box = (west, south, east, north)
+    if any(v is not None for v in box) and not all(v is not None for v in box):
+        return {"error": "give all of west, south, east and north, or none"}
+    try:
+        return _run(month, start=start, end=end, limit=int(limit),
+                    bbox=tuple(float(v) for v in box) if all(v is not None for v in box) else None)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    except Exception as exc:  # noqa: BLE001 - the model gets to see it
+        return {"error": f"flood events failed: {type(exc).__name__}: {exc}"}
+
+
 def similar_basins(
     lat: float | None = None,
     lon: float | None = None,
@@ -1264,6 +1288,7 @@ def build_server():
     server.tool()(watch_digest)
     server.tool()(place_context)
     server.tool()(area_context)
+    server.tool()(flood_events_month)
     server.tool()(similar_basins)
     server.tool()(regionalize_signatures)
     from aquascope.archive.signatures import filter_gauges  # the map's signature filter (signatures.parquet)

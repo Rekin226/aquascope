@@ -325,14 +325,14 @@ body.workbench-mode .maplibregl-ctrl-top-left { margin-top: 0; }
 
 /* ── the world river status's legend (#544): one small card, bottom left ── */
 
+/* It sits in the shared legend stack (.map-legends, floods-past.css), which places it and follows the rail. */
 .status-legend {
-  position: absolute; left: var(--gap); bottom: 62px; z-index: 6; width: 16.5rem; max-width: calc(100% - 2 * var(--gap));
+  width: 16.5rem; max-width: calc(100vw - 24px);
   background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-1);
-  padding: .45rem .6rem .5rem; font-size: .72rem; color: var(--ink); transition: margin-left .16s ease;
+  padding: .45rem .6rem .5rem; font-size: .72rem; color: var(--ink);
 }
 .status-legend[hidden] { display: none; }
-body.rail-open .status-legend { margin-left: calc(var(--rail-w) + var(--gap)); }
 .status-legend header { display: flex; align-items: center; gap: .4rem; margin-bottom: .35rem; }
 .status-legend header b { font-size: .76rem; font-weight: 650; white-space: nowrap; }
 .status-legend .sl-when { font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }
@@ -367,19 +367,13 @@ body.rail-open .status-legend { margin-left: calc(var(--rail-w) + var(--gap)); }
 .status-legend .sl-err { color: var(--warn-ink); }
 @media (prefers-reduced-motion: reduce) {
   .status-legend .sl-busy { animation: none; border-top-color: var(--line); }
-  .status-legend { transition: none; }
-}
-/* Where the time bar would run into it, the legend goes to the top, beside the map tools. */
-@media (max-width: 1100px) {
-  .status-legend { top: var(--gap); bottom: auto; left: 56px; }
 }
 /* On a phone the map is the strip above the bottom sheet: the legend keeps the bar and its ends. */
 @media (max-width: 860px) {
-  .status-legend { left: 52px; width: auto; max-width: min(14rem, calc(100% - 60px)); padding: .35rem .5rem .4rem; }
+  .status-legend { width: auto; max-width: min(14rem, calc(100vw - 72px)); padding: .35rem .5rem .4rem; }
   .status-legend header { margin-bottom: .25rem; }
   .status-legend .sl-tag, .status-legend .sl-src, .status-legend .sl-dots { display: none; }
   .status-legend .sl-credit { display: block; }
-  body.rail-open .status-legend { margin-left: 0; }
 }
 
 /* swipe compare: the right-hand map, clipped at the handle */

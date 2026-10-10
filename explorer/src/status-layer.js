@@ -138,17 +138,14 @@ function load(month) {
 // ── the map layer ───────────────────────────────────────────────────────────
 
 // Under the basemap's water where it has one, so the coast stays crisp and the
-// labels stay on top; under every layer of ours (hillshade, overlays, rivers,
-// catchments, gauges) otherwise.
+// labels stay on top, and under every layer of ours (hillshade, overlays, floods
+// past, rivers, catchments, gauges): whichever of these comes first in the style.
 function beforeId() {
   const layers = (map.getStyle() && map.getStyle().layers) || [];
-  const water = layers.find((l) => l.id === "water");
-  if (water) return water.id;
-  const symbol = layers.find((l) => l.type === "symbol");
-  if (symbol) return symbol.id;
-  const ours = layers.find((l) => l.id === "hillshade" || /^(ov-|river-|basins|study-)/.test(l.id) ||
+  const hit = layers.find((l) => l.id === "water" || l.type === "symbol" || l.id === "hillshade" ||
+    /^(ov-|fp-|river-|basins|study-)/.test(l.id) ||
     ["catchment-fill", "gauge-heat", "clusters", "points"].includes(l.id));
-  return ours ? ours.id : undefined;
+  return hit ? hit.id : undefined;
 }
 
 // Put a month's picture on the map: a new source the first time (and after a

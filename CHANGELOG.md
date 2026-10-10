@@ -12,9 +12,16 @@ All notable changes to AquaScope are documented here.
   - The basins use the same five brown-to-teal colours as the gauges' "Today vs normal", so a dot and the basin around it mean the same thing; GEOGLOWS's own red-to-blue HydroSOS colours are noted in the info panel.
   - `aquascope.map_layers.river_status_month(month)`: the month's COG URL, the legend with the file's colours and percentile bounds, the months that exist (the bucket listed live, cached six hours), the method and the licence. `aquascope layers status [YYYY-MM]` and the MCP tool `river_status_month`.
 - **Gauges coloured "Today vs normal" by default** (#544): where the daily status snapshot covers a gauge it takes its class colour, and every other gauge keeps its agency colour, which the legend says.
+- **Floods past on the globe** (#547, part of #543). Where floods were reported in the news and seen by radar, on the Explorer's globe from the moment it opens, following the time bar ([docs](docs/explorer.md#floods-past)).
+  - `aquascope.context.floods_past`: Groundsource news events (CC BY 4.0) and Microsoft Sentinel-1 flood detections (MIT, October 2014 to September 2024) rolled into one row per half-degree cell and month, the two sources in separate columns. Built from the published mirror on 2026-10-10: 1,405,624 rows over 314 months (January 2000 to February 2026), `grid.parquet` 5.6 MB, the 314 gzipped month files 5.5 MB together (71 KB the largest), `index.json` 29 KB.
+  - `flood_events_month(month | start, end, bbox)`: the news events and radar detections in a month or a range (up to 60 months), worldwide with the hotspots, or in a box; a small box (a clicked cell) also lists its news events with their dates and its radar months. `aquascope context --floods-past [--month | --from --to] [--bbox]` and the MCP tool `flood_events_month`.
+  - The `mirror-context` workflow builds it after the flood mirrors and publishes it under `context/floods/monthly/` only; its `floods_monthly_only` input rebuilds just the grid from what is already published.
+  - The Explorer's **Floods past** layer, on by default: a heat map at the world view, news circles and shaded radar cells closer in, the twelve months up to the map date (or the latest twelve on record), one month at a time while playing or stepping by month, a range when one is set. Months crossfade (at once with reduced motion). A legend on the map says what the two marks mean, the months and the counts, and the licences, with a replay button and a folded one-line form on phones. Clicking a cell outlines it and lists its events. Turned off with the rail row, the legend's ×, or `fp=0` in the link.
+  - Map layers outside the overlay catalogue can now follow the date and take clicks (`datedExtras` and `clickLayers` in `core.js`).
 
 ### Changed
 - A GIF of the time bar credits the layers on it (GEOGLOWS for the river status), not NASA GIBS alone.
+- The map's legends stack in one place (Floods past above the river status), and Floods past shows the latest twelve months on record when the river status opens the map on a month after them.
 
 ### Fixed
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.

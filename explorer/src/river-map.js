@@ -12,9 +12,12 @@ import {
 let added = false;
 let animation = 0;
 
+// Under Floods ahead (river-fa-*) and the gauges: the order on the map is basemap, river status,
+// Floods past, rivers, Floods ahead, gauges (#543).
 function beforeGauges() {
-  for (const id of ["catchment-fill", "gauge-heat", "clusters", "points"]) if (map.getLayer(id)) return id;
-  return undefined;
+  const layers = (map.getStyle() && map.getStyle().layers) || [];
+  const hit = layers.find((l) => /^river-fa-/.test(l.id) || ["catchment-fill", "gauge-heat", "clusters", "points"].includes(l.id));
+  return hit ? hit.id : undefined;
 }
 
 export function ensureRiverLayers() {

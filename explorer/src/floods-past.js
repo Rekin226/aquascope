@@ -83,9 +83,12 @@ function prefetch(range) {
 
 // ── layers ──────────────────────────────────────────────────────────────────
 
+// Under the rivers and Floods ahead (their ids start "river-") and the gauges: the order on the map is
+// basemap, river status, Floods past, rivers, Floods ahead, gauges (#543).
 function beforeGauges() {
-  for (const id of ["catchment-fill", "gauge-heat", "clusters", "points"]) if (map.getLayer(id)) return id;
-  return undefined;
+  const layers = (map.getStyle() && map.getStyle().layers) || [];
+  const hit = layers.find((l) => /^river-/.test(l.id) || ["catchment-fill", "gauge-heat", "clusters", "points"].includes(l.id));
+  return hit ? hit.id : undefined;
 }
 
 // The basemap's first label layer: the radar cells go under it, so place names stay crisp on top.

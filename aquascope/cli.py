@@ -1326,6 +1326,37 @@ def cmd_bulletin(args: argparse.Namespace) -> None:
         print("  Write the HTML, Markdown, map and status table with --out DIR.")
 
 
+def cmd_warnings(args: argparse.Namespace) -> None:
+    """`aquascope warnings [--bbox W S E N]`: Floods ahead, the reaches expected to reach their 2-year flow (#546)."""
+    from aquascope.archive import warnings
+
+    try:
+        res = warnings.flood_warnings(args.bbox, min_rp=args.min_rp, limit=args.limit, local=args.local)
+    except ValueError as exc:
+        print(f"  {exc}")
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    print(f"  {res['sentence']}")
+    if not res.get("available"):
+        return
+    counts = ", ".join(f"{v:,} at {k}-year" for k, v in res["counts"].items() if v)
+    if counts:
+        print(f"  {counts}")
+    if res["reaches"]:
+        print()
+        print(f"  {'River id':>10}  {'Lat':>7} {'Lon':>8}  {'Class':>6}  {'Peak m3/s':>10}  {'2-yr m3/s':>10}  "
+              f"{'Peak day':<10}  Members")
+        for r in res["reaches"]:
+            print(f"  {r['river_id']:>10}  {r['lat']:>7.2f} {r['lon']:>8.2f}  {str(r['rp']) + '-yr':>6}  "
+                  f"{r['peak_cms'] or 0:>10,.0f}  {r['q2'] or 0:>10,.0f}  {r['peak_date']:<10}  {r['share']:.0%}")
+        if res.get("truncated"):
+            print(f"  ... the first {len(res['reaches'])} shown; --limit N for more")
+    print()
+    print(f"  {res.get('not') or ''}")
+
+
 def cmd_now(args: argparse.Namespace) -> None:
     """`aquascope now LAT LON | --station SOURCE/ID | --river-id ID`: today against normal and the next 15 days."""
     from aquascope import nownext
@@ -4038,6 +4069,13 @@ def main() -> None:
     p_bul.add_argument("--no-map", action="store_true", help="Leave the map out (no matplotlib needed)")
     p_bul.add_argument("--gauges", action="store_true", help="With --json, include every classed gauge")
     p_bul.add_argument("--json", action="store_true")
+    p_warn = sub.add_parser("warnings", help="Floods ahead: river reaches the GEOGLOWS forecast expects to reach "
+                            "their 2-year flow in the next 15 days (model output, not an official warning)")
+    p_warn.add_argument("--bbox", nargs=4, type=float, default=None, metavar=("WEST", "SOUTH", "EAST", "NORTH"))
+    p_warn.add_argument("--min-rp", type=int, default=2, help="Only reaches at or above this return period (years)")
+    p_warn.add_argument("--limit", type=int, default=20, help="Reaches listed (highest class first)")
+    p_warn.add_argument("--local", default=None, help="Read an issue written by python -m aquascope.archive.warnings")
+    p_warn.add_argument("--json", action="store_true")
     p_now = sub.add_parser("now", help="Today against normal and the next 15 days (GEOGLOWS, GloFAS), corrected to a gauge")
     p_now.add_argument("coords", nargs="*", type=float, metavar="LAT LON", help="A point, snapped to its river reach")
     p_now.add_argument("--station", default=None, metavar="SOURCE/ID", help="A gauge: its status, and the forecast "
@@ -4804,6 +4842,7 @@ def main() -> None:
         "evidence": cmd_evidence,
         "now": cmd_now,
         "bulletin": cmd_bulletin,
+        "warnings": cmd_warnings,
         "watch": cmd_watch,
         "assess": cmd_assess,
         "context": cmd_context,

@@ -262,7 +262,7 @@ async function runDigest() {
   if (!st.items.length) { $("watch-summary").textContent = ""; say(""); return; }
   const day = today();
   const req = digestRequest(st, day);
-  $("watch-summary").textContent = state.workerReady ? "Checking each place…" : "Loading Python in your browser (about 15 MB, once), then checking each place…";
+  $("watch-summary").textContent = state.workerReady ? "Checking each place…" : "Loading Python in your browser (about 30 MB, once), then checking each place…";
   const rows = await archiveRows(req.items);
   if (my !== run) return;
   for (const item of req.items) {

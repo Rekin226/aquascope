@@ -50,6 +50,8 @@ See [validation scope](docs/validation_scope.md) for comparators and limitations
 **[Open AquaScope Explorer](https://rekin226-aquascope-explorer.static.hf.space/)**.
 Start with one task:
 
+- **Click the map:** a gauge, a river or any place answers in a small card right there: what it is, today
+  against normal, the last year (or the next 15 days on a river), one number, and Details for the full panel.
 - **Find river data:** search a gauge, inspect its actual available period and units, then download CSV,
   or the inputs for HEC-HMS, HEC-RAS, HEC-SSP, SWMM, MODFLOW 6, Delft-FEWS or Raven (**Export for…**).
 - **Explore a worked analysis:** open a recorded study, read its limits and reproduce its plan at another gauge.
@@ -57,13 +59,18 @@ Start with one task:
 - **Watch a river:** press ☆ Watch on a gauge, a reach or a drawn area. The next visit opens on what changed
   since: new data, today's status, a forecast above your threshold, new flood events nearby. A gauge with a live
   record also has an Atom feed. No account; the list stays in your browser.
-- **Follow a river:** click anywhere and the point snaps to its river (or says no stream is near). The River
-  tab shows 86 years of simulated daily flow for that reach, its return periods and flow-duration curve, and
+- **Follow a river:** the river network is on the globe from the start, the big rivers first and the small
+  streams as you zoom, with a moving dash showing which way the water goes. Click anywhere and the point snaps to
+  its river (or says no stream is near), and the map lights up everything that drains to that reach and its way to
+  the sea. The River tab shows 86 years of simulated daily flow for that reach, its return periods and flow-duration curve, and
   traces it to the sea past the gauges and dams on the way, naming the countries it crosses. Simulated, and
   labelled so.
 - **Now and next:** a gauge's **Now** tab says where today's flow sits against normal for the date, and plots the
   next 15 days from GEOGLOWS and GloFAS with the return-period lines, corrected to the gauge's own record with the
   correction's skill beside it. The map can colour the gauges by today against normal. Model forecasts, labelled so.
+- **See floods ahead:** the globe opens with the river reaches the GEOGLOWS forecast expects to reach their 2-year
+  flow in the next 15 days glowing in their return-period class, the gauges on them pulsing. Play the 15 days with
+  the time bar, click a reach for its peak and day. A model forecast, not an official warning.
 - **Read the month:** **Bulletin** (in Tools) opens last month's state of the rivers: every Archive gauge against
   the same month in its other years, by country and river basin, with the new records. The map can colour the
   gauges by last month's status.
@@ -75,10 +82,23 @@ of accessible observations or a sufficiently long record. Explorer fetches the f
 by default (or the last 40 or 20 years, your choice) and shows the period it actually
 analyzes; modelled discharge is distinguished from gauge observations.
 
-**Time on the map:** one date drives the NASA satellite, rain, soil moisture, snow and
-water storage layers. Play a range, click a day on a hydrograph to see the map on that
-day, swipe-compare two dates, and save the range as a GIF. The date is in the link
-([details](docs/explorer.md#time-on-the-map)).
+**The state of the world's rivers, on the globe:** the map opens on every river basin
+coloured from much below to much above normal for the newest month (GEOGLOWS v2's
+monthly HydroSOS map), with the gauges coloured by today against normal where they
+report. Press play to watch droughts and floods move across continents, month by
+month back to 1990 ([details](docs/explorer.md#world-river-status)).
+
+**Time on the map:** one date drives the river status and the NASA satellite, rain, soil
+moisture, snow and water storage layers. Play a range, click a day on a hydrograph to see
+the map on that day, swipe-compare two dates, and save the range as a GIF. The date is in
+the link ([details](docs/explorer.md#time-on-the-map)).
+
+**Rivers, past floods and an AI that acts on the map:** every river is drawn and flows
+downstream, and it can be coloured by today's flow against its normal. Floods past shows where
+floods were reported in the news or seen by radar, month by month. **Ask the map** moves the
+view, switches layers and sets the date from plain words. **Explain this view** and **Scout**
+pin short notes and findings on the globe, every number taken from the data. Each action is
+logged and can be undone, and all of it works without a key.
 
 **Study** guides you from a question through a plan you approve to a report and export
 bundle: Word, Excel, figures, notebook, findings and study YAML. Core studies run without
@@ -133,16 +153,16 @@ virtual environment first: `python3 -m venv .venv && source .venv/bin/activate`.
 ## ✨ What you can do
 
 - 🌊 **Pull water data** from USGS, NOAA NWPS, Colorado DWR/CDSS, US Water Quality Portal, England's Environment Agency, France Hub'Eau, Germany PEGELONLINE, Ireland OPW, Greece Hydroscope and OpenHi.net, Poland IMGW-PIB, EU WFD, Taiwan MOENV/WRA/CWA/Civil IoT/DataGov, Japan MLIT, Korea WAMIS, India WRIS, South Africa DWS, Australia BOM, Brazil ANA Hidroweb, CAMELS-CL and CAMELS-BR, GRDC, GEMStat, Copernicus ERA5, OpenMeteo, FAO AQUASTAT, FAO WaPOR and UN SDG 6 — **one unified Python API**.
-- 🏞️ **Treat rivers as objects**: snap any point to its GEOGLOWS v2 river reach (about 6.8 million worldwide), read that reach's simulated daily flow since 1940 with return periods, flow-duration curve and monthly regime (labelled modelled), and trace it downstream to the sea with the gauges and dams it passes and the countries it crosses, and see whether dams upstream regulate it (Global Dam Watch). `aquascope river snap|record|area|trace|dams`, the MCP tools, the Explorer's River tab, and the Studio's ungauged studies all use the same functions.
+- 🏞️ **Treat rivers as objects**: snap any point to its GEOGLOWS v2 river reach (about 6.8 million worldwide), read that reach's simulated daily flow since 1940 with return periods, flow-duration curve and monthly regime (labelled modelled), and trace it downstream to the sea with the gauges and dams it passes and the countries it crosses, and see whether dams upstream regulate it (Global Dam Watch), or list every reach that drains to it and the reaches to its outlet. `aquascope river snap|record|area|trace|dams|upstream|downstream`, the MCP tools, the Explorer's River tab, and the Studio's ungauged studies all use the same functions.
 - 🪜 **Grade the global models at a gauge**: GEOGLOWS v2, GloFAS, NWM v3 (US) and Google's Flood Hub reanalysis set against the gauge's own record, with KGE and its parts, bias, the error at the 2-, 10- and 100-year flows, a grade from A to D and one sentence on where they disagree. `aquascope evidence skill`, the MCP tool `model_skill`, the Explorer's Evidence tab and "Best model skill" map colouring, and a monthly CI table in the Archive; the Studio uses it to say which model to lean on near an ungauged site ([how the grades work](docs/evidence.md)).
-- 🔭 **Now and next**: where a gauge's flow sits today against normal for the date (the USGS and WMO HydroSOS classes, at least 10 years behind it), and the next 15 days from GEOGLOWS and GloFAS with return-period thresholds, corrected to the gauge's record by flow-duration quantile mapping with the hindcast skill of that correction. A daily workflow archives the forecasts as issued, so real forecast skill builds up. `aquascope now`, the MCP tools, the Explorer's Now tab and its "Today vs normal" map colouring use the same functions.
+- 🔭 **Now and next**: where a gauge's flow sits today against normal for the date (the USGS and WMO HydroSOS classes, at least 10 years behind it), and the next 15 days from GEOGLOWS and GloFAS with return-period thresholds, corrected to the gauge's record by flow-duration quantile mapping with the hindcast skill of that correction. A daily workflow archives the forecasts as issued, so real forecast skill builds up, and another classes the whole global forecast against each reach's return periods every day: the reaches expected to reach their 2-year flow in 15 days (`aquascope warnings`, the MCP tool `flood_warnings`, the Explorer's Floods ahead layer). `aquascope now`, the MCP tools, the Explorer's Now tab and its "Today vs normal" map colouring use the same functions.
 - 🗓️ **A monthly state of the rivers**: on the 3rd of each month a workflow places every Archive gauge's monthly mean flow against the same month in its other years (25 days a month, 10 years, HydroSOS classes), rolls it up per country and per BasinATLAS river basin, names the new monthly records and the gauges furthest from normal, and writes a print-ready HTML and Markdown bulletin with a map into the Archive. The summary is written by rules, not a model. `aquascope bulletin`, the MCP tool `status_bulletin` and the Explorer's Bulletin reader and "Last month's status" colouring use the same functions ([docs](docs/bulletin.md)).
 - ⭐ **Watch a river**: star gauges, reaches and areas, and get what changed since you last looked: new data and the latest value, today's status class against the one then, the 15-day forecast against a threshold you set (a value or a return period) and new flood events nearby. `aquascope watch ID... --since DATE`, the MCP tool `watch_digest` and the Explorer's "Since you were here" panel use the same function, and a daily workflow writes an Atom feed per live gauge.
 - 📈 **Run hydrological analyses** — flood frequency (GEV / LP3 / Gumbel / non-stationary GEV, with separate EMA routines), baseflow separation, rating curves, 22 hydrological signatures.
 - 🌾 **Plan agricultural water** — FAO-56 Penman-Monteith ET₀, crop water requirements for 26 crops (olive, grape, citrus and winter wheat resolved by variety and canopy), irrigation scheduling, soil water balance with auto-irrigation.
 - 🤖 **Ask the AI engine** — describe your goal in plain English and get a recommended methodology, scored against your dataset profile and auto-executed. LLM enhancement via OpenAI, Groq (free), HuggingFace (free), or local Ollama.
 - 🧑‍🔬 **Hand a study to the crew** — `aquascope studio "PROBLEM" --lat --lon`: a Consultant, a Scout, a Methodologist, Analysts, an Interpreter, a Critic and an Author over one workspace, the plan shown before it runs, every step gated (a failed gate fails its step, not the study), every answer graded (established, indicative, screening, not established) with findings that point at the result they rest on, a request for the data that would unlock a question instead of a decline, and the bundle at the end: a technical report and a memo (Word and print-ready HTML) that lead with the answer and its grade, the Excel workbook, publication figures, the notebook, findings.json and study.yaml. Also in the Explorer and over MCP. The [advanced studies](docs/advanced_studies.md) go past the design flow: change points and a nonstationary flood fit, GR4J with a snow store validated on years it never saw, "what if" scenarios, and CMIP6 change factors through the calibrated model.
-- 🧭 **Read the context of any place**: `aquascope context LAT LON` (also over MCP and in the Explorer): flood events in the news (Groundsource) and Sentinel-1 radar floods 2014-2024, surface water since 1984 (JRC), modelled flood depth at the 10 to 500-year floods (JRC GloFAS), dams (Global Dam Watch), soil texture and available water (SoilGrids), actual ET (FAO WaPOR) and the nearest NOAA GHCN-Daily rain gauge. Keyless, each line with its licence; rasters are read pixel by pixel from Cloud-Optimized GeoTIFFs in pure Python.
+- 🧭 **Read the context of any place**: `aquascope context LAT LON` (also over MCP and in the Explorer): flood events in the news (Groundsource) and Sentinel-1 radar floods 2014-2024, surface water since 1984 (JRC), modelled flood depth at the 10 to 500-year floods (JRC GloFAS), dams (Global Dam Watch), soil texture and available water (SoilGrids), actual ET (FAO WaPOR) and the nearest NOAA GHCN-Daily rain gauge. Keyless, each line with its licence; rasters are read pixel by pixel from Cloud-Optimized GeoTIFFs in pure Python. The news and radar floods are also rolled into a monthly half-degree grid that the Explorer's globe shows from the start and replays with the time bar (`aquascope context --floods-past`, MCP `flood_events_month`).
 - 🛠️ **Hand a record to the engineering tools**: `aquascope export --to hec-ssp` (or `hec-hms`, `hec-ras`, `dss`, `swmm`, `modflow6`, `fews`, `raven`) writes ready inputs from any gauge or CSV, real `.dss` through HEC's own `hecdss`; the same files come from the Explorer, the MCP server and every Studio bundle. Our Bulletin 17C is checked against the published Bulletin 17C examples, honestly: it matches on a plain record and does not yet on one with low outliers ([engineering exports](docs/engineering_exports.md)).
 - 📊 **Visualise + report** — 17 plot types, Q-Q / P-P diagnostics, Markdown / HTML reports with embedded figures, threshold alerts (WHO / EPA / EU WFD).
 - 🗺️ **Spatial hydrology** — DEM processing, D8 flow direction, watershed delineation, Strahler ordering.
@@ -355,7 +375,7 @@ Switch to MCMC with `degree>1` for polynomial models, or pass `prior_precision` 
 
 ## 💻 CLI
 
-AquaScope ships a 41-command CLI (`agri`, `basins`, `caravan`, `eval`, `evidence`, `gym`, `layers`, `playbooks` and `river` carry subcommands) for the most common workflows:
+AquaScope ships a 49-command CLI (`agri`, `basins`, `caravan`, `eval`, `evidence`, `groundwater`, `gym`, `layers`, `playbooks` and `river` carry subcommands) for the most common workflows:
 
 ```bash
 # Find stations, then collect data
@@ -370,6 +390,8 @@ aquascope river trace --at 46.948 7.452           # follow it to the sea: length
 aquascope river dams --at 46.948 7.452            # the dams upstream of that reach and the degree of regulation
 aquascope now --station usgs/USGS-01350000        # today against normal, and the 15-day forecast corrected to the gauge
 aquascope bulletin 2026-09 --out bulletin         # last month's state of the rivers: HydroSOS classes, HTML and Markdown
+aquascope warnings --bbox -10 35 30 60            # floods ahead: reaches expected to reach their 2-year flow in 15 days
+aquascope flowstatus --bbox -10 35 30 60          # every big reach's flow today against its normal for the month
 aquascope watch usgs/USGS-01350000 river:230260670 --since 2026-10-01   # what changed since then: data, status, forecast, floods
 aquascope assess 51.415 -0.308 --problem flood_risk   # what can be answered here: gauges in reach, catchment, which methods the record supports
 aquascope context 51.86 5.95                      # flood history, surface water, flood depth, dams, rain gauge, ET and soil at a place
@@ -377,6 +399,13 @@ aquascope caravan export --source uk_ea --out caravan_gb   # a Caravan-format la
 aquascope export --to hec-ssp --station usgs/01134500   # inputs for HEC-HMS/RAS/SSP, SWMM, MODFLOW 6, Delft-FEWS or Raven
 aquascope gym run --basin uk_ea/013054a3-670e-49ee-afda-e0865a449197   # HydroGym: calibrate GR4J on a real basin as a gym episode
 aquascope layers frames precip --start 2024-05-01 --end 2024-05-20   # a time-lapse of a dated map layer: dates and tile URLs
+aquascope map "trace the Nile to the sea" --resolve   # plain words to the Explorer's map actions (keyless rules)
+aquascope mesh my_run.p01.hdf                     # a HEC-RAS 2D or UGRID mesh result: cells, times, largest depth and speed
+aquascope whatif --lat 47.598 --lon 8.682 "20% less rain and 2 degrees warmer"   # GR4J for the basin, the change carried downstream
+aquascope swmm model.inp model.out --crs 32617   # an EPA SWMM model and results: network, flooding nodes, largest flows
+aquascope layers scout --bbox -10 35 30 60           # what stands out on the map, each with its reason (the Explorer's Scout)
+aquascope groundwater surface --mode change      # the head surface of the Archive's wells and its change, masked where wells are sparse
+aquascope modflow model.hds --grid model.dis.grb --crs EPSG:27700   # your MODFLOW heads on the map: cells in lon/lat, per layer and time
 aquascope mcp                                     # serve the same tools to Claude / Cursor over MCP
 aquascope ask "100-year flood of the Seine at Paris?"   # the analyst: tools + a cited Markdown report
 aquascope ingest agency_export.csv --unit cfs     # any CSV/Excel -> clean daily series + QA report
@@ -564,8 +593,8 @@ If you use AquaScope in your research, please cite:
   author  = {Ouédraogo, Abdoul Rachid},
   year    = {2026},
   url     = {https://github.com/Rekin226/aquascope},
-  version = {0.26.0},
-  doi     = {10.5281/zenodo.23246553},
+  version = {0.27.0},
+  doi     = {10.5281/zenodo.23301359},
   license = {MIT}
 }
 ```
@@ -573,7 +602,7 @@ If you use AquaScope in your research, please cite:
 Machine-readable metadata lives in [CITATION.cff](CITATION.cff); GitHub's "Cite this
 repository" button renders it in APA and BibTeX. Every tagged release is archived on
 Zenodo; `10.5281/zenodo.21903143` is the concept DOI that always resolves to the latest
-version (v0.26.0 is [10.5281/zenodo.23246553](https://doi.org/10.5281/zenodo.23246553)).
+version (v0.27.0 is [10.5281/zenodo.23301359](https://doi.org/10.5281/zenodo.23301359)).
 
 ## 📄 License
 

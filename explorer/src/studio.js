@@ -914,7 +914,7 @@ async function start(text, { intake: given = null } = {}) {
   S.planLine = null;
   S.proseLine = null;
   setBusy(true);
-  note(state.workerReady ? "" : "Loading Python in your browser (about 15 MB, once)…");
+  note(state.workerReady ? "" : "Loading Python in your browser (about 30 MB, once)…");
   try {
     let intake = given, brief = null;
     if (!given && await deviceOnCrew()) {
@@ -1636,7 +1636,7 @@ export async function openSharedStudy({ link = null, studyUrl = null } = {}) {
     renderAll();
     return;
   }
-  note(state.workerReady ? "" : "Loading Python in your browser (about 15 MB, once)…");
+  note(state.workerReady ? "" : "Loading Python in your browser (about 30 MB, once)…");
   let res;
   try {
     res = await call("studio", link ? { op: "open_link", token: link }

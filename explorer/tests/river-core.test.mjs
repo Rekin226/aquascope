@@ -3,7 +3,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  cumulativeKm, damFacts, damName, damsGeoJSON, lineBounds, lineUpTo, notableDams, riverWidth, snapLine, STREAMS_PMTILES,
+  FLOW_PERIOD, FLOW_STEPS, HL, RIVER_THEMES, cumulativeKm, damFacts, damName, damsGeoJSON, flowDash, flowOpacity,
+  highlightColor, highlightOpacity, highlightWidth, lineBounds, lineUpTo, networkStates, networkSummary, notableDams,
+  RIVERS_ATTRIBUTION, riverOpacity, riverTheme, riverWidth, snapLine, STREAMS_PMTILES,
 } from "../src/river-core.js";
 
 test("snapLine says where the click landed, or that no stream is near", () => {
@@ -87,4 +89,93 @@ test("notableDams lists the named or storing dams and counts the unnamed weirs",
   assert.equal(notable.length, 3);
   assert.equal(others, 2);
   assert.deepEqual(notableDams(undefined), { notable: [], others: 0 });
+});
+
+// ── living rivers (#545) ──────────────────────────────────────────────────────
+
+// The value an interpolate expression gives at an input, for the plain numeric stops these tables use.
+function at(expr, x) {
+  const stops = expr.slice(3);
+  for (let i = 0; i < stops.length; i += 2) {
+    if (x <= stops[i]) {
+      if (i === 0) return stops[1];
+      const [x0, y0, x1, y1] = [stops[i - 2], stops[i - 1], stops[i], stops[i + 1]];
+      return y0 + (y1 - y0) * (x - x0) / (x1 - x0);
+    }
+  }
+  return stops[stops.length - 1];
+}
+const zoomStop = (expr, z) => { const s = expr.slice(3); return s[s.indexOf(z) + 1]; };
+
+test("the great rivers show on the globe and the small streams only close up", () => {
+  const op = riverOpacity(), w = riverWidth();
+  assert.equal(at(zoomStop(op, 1), 6), 0);            // order 6 hidden on the globe
+  assert.ok(at(zoomStop(op, 1), 7) < at(zoomStop(op, 1), 8));
+  assert.ok(at(zoomStop(op, 1), 9) > 0.8);            // order 9 clear
+  assert.ok(at(zoomStop(w, 1), 10) > at(zoomStop(w, 1), 8));
+  assert.ok(at(zoomStop(op, 8), 2) > 0.3);            // headwaters by zoom 8
+  assert.ok(at(zoomStop(w, 12), 10) > at(zoomStop(w, 3), 10));
+  const dim = riverOpacity(0.5);
+  assert.equal(at(zoomStop(dim, 1), 10), at(zoomStop(op, 1), 10) / 2);
+  assert.ok(JSON.stringify(flowOpacity()).includes("strahlerOrder"));
+});
+
+test("the flow dash keeps its length, walks one way and repeats every FLOW_STEPS", () => {
+  const len = (a) => a.reduce((s, v) => s + v, 0);
+  const dashLen = (a) => a[0] + a[2];
+  for (let k = 0; k < FLOW_STEPS; k++) {
+    const d = flowDash(k);
+    assert.equal(d.length, 4);
+    assert.ok(Math.abs(len(d) - FLOW_PERIOD) < 1e-6, `period at step ${k}`);
+    assert.ok(Math.abs(dashLen(d) - 1.2) < 1e-6, `dash at step ${k}`);
+    assert.ok(d.every((v) => v >= 0));
+  }
+  assert.deepEqual(flowDash(FLOW_STEPS + 3), flowDash(3));
+  assert.deepEqual(flowDash(-1), flowDash(FLOW_STEPS - 1));
+  // TDX-Hydro lines start downstream, so the dash's start moves towards 0 as the steps go on.
+  assert.ok(flowDash(6)[1] < flowDash(5)[1] && flowDash(5)[0] === 0);
+  assert.equal(new Set(Array.from({ length: 100 }, (_, k) => JSON.stringify(flowDash(k)))).size, FLOW_STEPS);
+});
+
+test("a lit network gives each reach one role, the clicked reach first", () => {
+  const m = networkStates(5, [5, 4, 3], [5, 6, 7]);
+  assert.equal(m.get(5), HL.here);
+  assert.equal(m.get(4), HL.up);
+  assert.equal(m.get(6), HL.down);
+  assert.equal(m.size, 5);
+  assert.equal(networkStates(1).size, 1);
+});
+
+test("the lit lines are styled by feature-state, blue upstream and orange to the sea", () => {
+  const th = riverTheme("light");
+  assert.ok(JSON.stringify(highlightWidth()).includes("feature-state"));
+  assert.deepEqual(highlightOpacity(0.8), ["case", [">", ["coalesce", ["feature-state", "hl"], 0], 0], 0.8, 0]);
+  const c = highlightColor(th);
+  assert.equal(c[c.length - 1], th.up);
+  assert.ok(c.includes(th.down));
+  assert.equal(riverTheme("dark"), RIVER_THEMES.dark);
+  assert.equal(riverTheme("satellite-recent"), RIVER_THEMES.imagery);
+  assert.equal(riverTheme(undefined), RIVER_THEMES.light);
+  for (const t of Object.values(RIVER_THEMES)) assert.notEqual(t.up, t.down);
+});
+
+test("networkSummary says Python's numbers in a few words", () => {
+  const s = networkSummary({
+    upstream: { n_upstream: 123896, upstream_area_km2: 1775541.6, truncated: true, min_area_km2: 1183.2 },
+    downstream: { n_ids: 323, truncated: false },
+  });
+  assert.equal(s.up, "123,896 reaches, 1.78 million km²");
+  assert.equal(s.down, "323 reaches");
+  assert.equal(s.cut, "lit: reaches draining over 1,183 km²");
+  const small = networkSummary({ upstream: { n_upstream: 1, upstream_area_km2: 12.4 }, downstream: { n_ids: 5000, truncated: true } });
+  assert.equal(small.up, "1 reach, 12 km²");
+  assert.equal(small.down, "5,000 reaches and on");
+  assert.equal(small.cut, "");
+  assert.deepEqual(networkSummary(null), { up: "", down: "", cut: "" });
+});
+
+test("the map's own attribution line credits the river network and its licence", () => {
+  assert.match(RIVERS_ATTRIBUTION, /TDX-Hydro/);
+  assert.match(RIVERS_ATTRIBUTION, /CC BY-SA 4\.0/);
+  assert.match(RIVERS_ATTRIBUTION, /href="https:\/\/registry\.opendata\.aws\/geoglows-v2\/"/);
 });

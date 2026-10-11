@@ -62,16 +62,33 @@ export const LAYER_DEFAULTS = {
   hillshade: true,
   // Sparse worldwide coverage, so the world view is a globe (#281).
   globe: true,
-  gaugeStyle: "source",
+  // Today against normal where the daily snapshot covers a gauge, its agency
+  // colour elsewhere (#544): the map opens on the state of the rivers.
+  gaugeStyle: "now",
   heat: false,
+  // Floods past (#547): news and radar flood events, on from the start.
+  floodsPast: true,
+  // The world river status under the gauges, month by month (status-layer.js, #544).
+  status: true,
+  // Groundwater (#558): the wells' head surface, off until asked for.
+  groundwater: false,
+  // Flow vs normal on the rivers (#559): off until asked for, from the Rivers row of the legend.
+  flowNormal: false,
+  // Water balance (#557): subbasins by monthly rain, evaporation, runoff and closure, off until asked for.
+  waterBalance: false,
 };
 
 export const state = {
   stations: [], byKey: new Map(), hidden: new Set(),
   selected: null, result: null, point: null,
+  panelOpen: false,   // map first (#548): the panel opens from the map card's Details or a tab= link
   period: null,   // the station's analysis period (#270): null = full record, else the last N years
   workerReady: false, booting: true, pending: new Map(), reqId: 0,
-  mapOk: false, marker: null, basinsOn: false, riversOn: false,
+  mapOk: false, marker: null, basinsOn: false,
+  // the river network is on from the start (#545); flowOn (river-map.js) follows prefers-reduced-motion
+  riversOn: true,
+  gaugesOn: true,      // the legend's Gauges row can hide every gauge mark (map.js setGaugesVisible)
+  flowNormalShown: false,   // Flow vs normal's classes are drawn on the rivers now (flowstatus-layer.js, #559)
   // layers (#232)
   overlays: new Set(), opacity: {}, date: null,
   // time (#522): the map date above is the one every dated layer follows; these
@@ -127,6 +144,25 @@ export function setTime(patch = {}, { source = "bar" } = {}) {
   return true;
 }
 
+// Map layers outside the overlay catalogue that follow the map date while they
+// are on (#543), by id: { label, time: true, monthly, since, until }, the shape
+// of a dated overlay. The time bar shows itself for them as for an overlay.
+export const datedExtras = new Map();
+// Map layers whose features take a click before the map's own "select this
+// point" does (#543). The module that owns the layer handles the click.
+export const clickLayers = new Set();
+// A layer the reader brought to the map (their own model results, #555) answers a click on itself before the
+// background layers do: it registers a claim (lngLat -> bool), and Floods ahead and Floods past step aside for
+// a click it claims. Gauges still come first.
+const clickClaims = new Set();
+export function claimClicks(fn) { clickClaims.add(fn); return () => clickClaims.delete(fn); }
+export function clickClaimed(e) {
+  for (const fn of clickClaims) {
+    try { if (fn(e.lngLat)) return true; } catch (err) { console.warn("click claim:", err && err.message); }
+  }
+  return false;
+}
+
 // Filled in by the modules that own each behaviour (breaks import cycles).
 export const actions = {
   selectStation: () => {},
@@ -138,6 +174,9 @@ export const actions = {
   setOverlay: () => {},       // layer-ui.js: turn an overlay on or off as if from the rail
   setBasemap: () => {},       // layer-ui.js: switch the basemap as if from the rail
   showArea: () => {},         // layer-ui.js: show a box's result in the rail, as if just drawn
+  openMapCard: () => {},      // map-card.js: a card on the map for anything clicked (a flood cell, a reach)
+  closeMapCard: () => {},
+  setStatus: () => {},        // status-layer.js: the world river status on or off (#544)
 };
 
 export function escapeHtml(s) {

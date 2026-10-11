@@ -57,3 +57,46 @@ def test_context_needs_a_place(monkeypatch):
     with pytest.raises(SystemExit) as exc:
         cli.main()
     assert exc.value.code == 2
+
+
+FLOODS = {
+    "summary": "3 flood events in the news in this box, Jul 2021; Sentinel-1 radar made 150 flood detections (20 m "
+               "pixels).",
+    "available": True, "bbox": [5.5, 50.5, 6.0, 51.0],
+    "news": {"events": [{"start": "2021-07-14", "end": "2021-07-16", "area_km2": 120.5}], "events_found": 3},
+    "radar": {"by_month": {"2021-07": 150}},
+    "attribution": "Groundsource (CC BY 4.0); Microsoft (MIT)",
+}
+
+
+def test_context_floods_past_lists_a_box(monkeypatch, capsys):
+    seen = {}
+
+    def fake(month=None, *, start=None, end=None, bbox=None, limit=20):
+        seen.update(month=month, start=start, end=end, bbox=bbox, limit=limit)
+        return FLOODS
+
+    monkeypatch.setattr("aquascope.context.floods_past.flood_events_month", fake)
+    monkeypatch.setattr(sys, "argv", ["aquascope", "context", "--floods-past", "--from", "2021-07", "--to", "2021-07",
+                                      "--bbox=5.5,50.5,6,51"])
+    cli.main()
+    out = capsys.readouterr().out
+    assert seen == {"month": None, "start": "2021-07", "end": "2021-07", "bbox": (5.5, 50.5, 6.0, 51.0), "limit": 20}
+    assert out.startswith("3 flood events in the news in this box")
+    assert "2021-07-14 to 2021-07-16  120 km2" in out and "and 2 more" in out
+    assert "Radar detections by month: 2021-07 150" in out and "Data: Groundsource" in out
+
+
+def test_context_month_alone_means_floods_past(monkeypatch, capsys):
+    monkeypatch.setattr("aquascope.context.floods_past.flood_events_month",
+                        lambda month=None, **kw: {**FLOODS, "bbox": None, "month": month})
+    monkeypatch.setattr(sys, "argv", ["aquascope", "context", "--month", "2021-07", "--json"])
+    cli.main()
+    assert json.loads(capsys.readouterr().out)["month"] == "2021-07"
+
+
+def test_context_floods_past_rejects_a_long_window(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["aquascope", "context", "--floods-past", "--from", "2000-01", "--to", "2020-01"])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2

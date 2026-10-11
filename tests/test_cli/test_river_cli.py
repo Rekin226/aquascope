@@ -142,6 +142,29 @@ def test_river_dams_lists_the_dams_upstream(monkeypatch, capsys):
     assert seen == {"rid": 230260670, "with_flow": False, "lat": 46.9498} and "CC BY 4.0" in out
 
 
+def test_river_upstream_and_downstream_print_the_ids(monkeypatch, capsys):
+    seen = {}
+
+    def up(rid, max_n=20_000, lat=None, lon=None):
+        seen.update(up=(rid, max_n, lat))
+        return {"ids": list(range(230000001, 230000021)), "message": "20 reaches drain to river reach 230000001."}
+
+    def down(rid, max_n=5_000, lat=None, lon=None):
+        seen.update(down=(rid, max_n))
+        return {"ids": [230000001, 230000002], "message": "2 reaches from river reach 230000001 to the outlet."}
+
+    monkeypatch.setattr(rivers, "snap_to_river", lambda lat, lon, max_distance_m=1000.0: SNAP)
+    monkeypatch.setattr(rivers, "upstream_ids", up)
+    monkeypatch.setattr(rivers, "downstream_ids", down)
+    _run(monkeypatch, "upstream", "--at", "46.948", "7.452", "--max", "50")
+    out = capsys.readouterr().out
+    assert "20 reaches drain" in out and "230000006 ... 230000015" in out
+    assert seen["up"] == (230260670, 50, 46.9498)
+    _run(monkeypatch, "downstream", "230000001", "--json")
+    assert json.loads(capsys.readouterr().out)["ids"] == [230000001, 230000002]
+    assert seen["down"] == (230000001, 5000)
+
+
 def test_river_needs_a_reach_or_a_point(monkeypatch, capsys):
     with pytest.raises(SystemExit) as exc:
         _run(monkeypatch, "record")
@@ -171,6 +194,10 @@ def test_mcp_tools_wrap_the_engine(monkeypatch):
     monkeypatch.setattr(rivers, "upstream_dams", lambda rid, lat=None, lon=None, with_flow=True: {
         "river_id": rid, "with_flow": with_flow})
     assert m.upstream_dams(230260670, with_flow=False) == {"river_id": 230260670, "with_flow": False}
+    monkeypatch.setattr(rivers, "upstream_ids", lambda rid, max_n=0, lat=None, lon=None: {"n": max_n})
+    assert m.upstream_ids(230260670)["n"] == 200 and m.upstream_ids(230260670, max_n=10**9)["n"] == 20_000
+    monkeypatch.setattr(rivers, "downstream_ids", lambda rid, max_n=0, lat=None, lon=None: {"n": max_n})
+    assert m.downstream_ids(230260670)["n"] == 5000
 
 
 def test_the_mcp_server_registers_the_river_tools():
@@ -179,7 +206,8 @@ def test_the_mcp_server_registers_the_river_tools():
     from aquascope import mcp_server as m
 
     names = {t.name for t in asyncio.run(m.build_server().list_tools())}
-    assert {"snap_to_river", "reach_record", "upstream_area", "trace_downstream", "upstream_dams"} <= names
+    assert {"snap_to_river", "reach_record", "upstream_area", "trace_downstream", "upstream_dams",
+            "upstream_ids", "downstream_ids"} <= names
 
 
 def test_the_analyst_tool_and_the_team_sentence(monkeypatch):

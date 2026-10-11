@@ -234,6 +234,83 @@ then recorded; the skill the Explorer shows today is the correction's skill on t
 `python -m aquascope.archive.forecasts run|publish --out build`. A run with `max_items` set is a smoke run and
 never publishes.
 
+### Floods ahead (`forecasts/warnings/`)
+
+Once a day the `flood-warnings` workflow (#546) reads the whole GEOGLOWS v2 global forecast
+(`s3://geoglows-v2-forecasts/YYYYMMDD00.zarr`: 51 ensemble members, 15 days, 6.8 million reaches) and, for every reach
+of Strahler order 5 and up and every reach an Archive gauge sits on, compares the ensemble-mean daily flow with the
+reach's own 2-, 5-, 10-, 25-, 50- and 100-year flows (GEOGLOWS's retrospective return periods: a Gumbel fit to the
+annual maxima of daily flow since 1940). It writes only under `forecasts/warnings/`.
+
+| path | what | licence |
+| --- | --- | --- |
+| `forecasts/warnings/latest.parquet` | every reach expected to reach its 2-year flow in the 15 days: `river_id`, `lat`, `lon`, `strahler_order`, `area_km2`, `peak_cms`, `peak_date`, `rp` (the class, in years), `share` (members that agree), `q2` to `q100`, `daily` (one class per day) and `gauges` | CC BY-NC-SA 4.0 (the forecast is CC BY 4.0; the return periods' own metadata says CC BY-NC-SA 4.0) |
+| `forecasts/warnings/latest.geojson` | the same reaches as slim points for the Explorer, at most 10,000, highest class first | as above |
+| `forecasts/warnings/<date>.parquet` | the same table, kept by the forecast's start date | as above |
+| `forecasts/warnings/manifest.json` | the issue date, counts by class, reaches checked, the method, the thresholds, what it is not, the licences and the issue history | |
+
+Reaches whose 2-year flow is under 5 m3/s (mostly dry desert channels) are not classed, unless a gauge is on them. The cost: the forecast's
+chunks hold 686 reaches each, all members and steps together, about 16 MB compressed; the bigger rivers sit together,
+so order 5 and up is 3,401 of the 9,970 chunks (about 54 GB a day, streamed and dropped, nothing kept on disk). A
+time budget stops reading at 4.5 hours and counts what it skipped. Model output, not an official warning. Every step
+is also `python -m aquascope.archive.warnings run|publish --out build`; `--max-chunks N` is a smoke run that reads N
+chunks spread over the globe, is marked so, and is never published.
+
+### Flow against normal (`flowstatus/`)
+
+Every reach of Strahler order 5 and up (842,581 reaches), classed once a day by its forecast flow for the day against
+its own normal for the month (#559), the NOAA National Water Model map for the whole world. Two parts:
+
+- **The climatology, once** (`flow-climatology.yml`, run by hand): GEOGLOWS publishes flow duration curves for every
+  reach (`s3://geoglows-v2/retrospective/fdc.zarr`, `daily_monthly`), the percentiles of daily flow in each calendar
+  month. Checked against the daily records of four reaches (three months each), they are the percentiles of 1950 to 2019 (linear
+  interpolation) to within 1e-7. The job keeps the 10th, 25th, 75th and 90th of each month and writes only under
+  `flowstatus/climatology/`. Those reaches are spread over 23,085 of the store's 27,356 chunks (250 reaches each,
+  every month and probability together, 0.8 MB compressed), so the build streams about 18.5 GB. Measured on a
+  Europe box (31,128 reaches, 1,737 chunks, 1.39 GB): 8 minutes on a home line, 1.8 GB of memory at the peak (most
+  of it the GEOGLOWS model table), and 24 bytes a reach for each month file, so the whole climatology comes to about
+  250 MB.
+- **Today, daily**: the `flood-warnings` run already reads every order-5 chunk of the forecast, so
+  `warnings run --day0` keeps each reach's first-day flow (the ensemble mean of the forecast's first UTC day) as it
+  goes, and `python -m aquascope.flowstatus daily` classes it against the forecast month's percentiles. Nothing is
+  downloaded twice: the extra cost is one month file (about 20 MB) and a second or two of work. On the Europe box the
+  day's `latest.bin.gz` was 26 kB for 31,128 reaches (0.85 bytes a reach), so about 0.7 MB for the world. It writes only under `flowstatus/`, and it does not turn the day's Floods ahead issue red if it
+  fails.
+
+| path | what | licence |
+| --- | --- | --- |
+| `flowstatus/latest.bin.gz` | the classes for the Explorer: gzip of `AQFS`, a version byte, n (uint32 little endian), the sorted river ids as n LEB128 gaps, n class bytes (1 much below to 5 much above); reaches with no class left out | CC BY 4.0 |
+| `flowstatus/latest.parquet` | `river_id`, `flow_cms` (the first day's ensemble mean), `class` | CC BY 4.0 |
+| `flowstatus/<date>.bin.gz` | the day's classes, kept by the forecast's start date | CC BY 4.0 |
+| `flowstatus/manifest.json` | the issue date, the month, counts by class, the reaches with no flow or a dry channel, the method, what it is not, sizes, licences and the history | |
+| `flowstatus/climatology/month-01.parquet` to `month-12.parquet` | `river_id`, `p10`, `p25`, `p75`, `p90` (m3/s, daily flow in that calendar month, 1950 to 2019) | CC BY 4.0 |
+| `flowstatus/climatology/reaches.parquet` | `river_id`, `lat`, `lon`, `strahler_order` | CC BY 4.0 |
+
+The classes are the river status layer's: below the 10th percentile much below normal, 10th to 25th below, 25th to
+75th normal, 75th to 90th above, above the 90th much above; a flow equal to a bound counts towards normal. A reach whose
+90th percentile is zero (dry nine days in ten that month) is not classed. Modelled, not measured: the flow is the
+model's forecast and the normal the same model's simulated record. Locally:
+`python -m aquascope.flowstatus climatology --out build --max-chunks 40` (a smoke run, marked so, never published),
+`python -m aquascope.flowstatus daily --out build --climatology build --bbox W S E N` (reads the forecast itself), and
+`aquascope flowstatus [--bbox W S E N] [--river-id ID]` to read what is published.
+
+### Scout (`scout/`)
+
+After the day's Floods ahead issue, the same `flood-warnings` workflow runs the Explorer's Scout (#563) over the
+whole world and writes only under `scout/`. It reads the published layers (the newest month of the GEOGLOWS river
+status map, the Floods ahead issue, the newest complete month of Floods past, today's gauge snapshot and the
+evidence table) and keeps what stands out, by fixed rules ([explorer.md](explorer.md#scout)).
+
+| path | what |
+| --- | --- |
+| `scout/latest.json` | the findings (up to 25 per kind), each with `lat`, `lon`, `title`, `reason`, its headline `value` and `unit`, all its numbers under `facts`, its `source`; today's ten `picks`; the record checks (a named region's share much above or below normal against the same calendar month since 1990, flood cells against the same month since 2000); the inputs, the method and the sources |
+| `scout/<date>.json` | the same file, kept by the day it was made |
+
+Each finding carries the licence of the layer it came from (the river status map and the forecast CC BY 4.0, the
+return periods CC BY-NC-SA 4.0, Groundsource CC BY 4.0, the Sentinel-1 detections MIT). A day where no layer can be
+read writes nothing, so yesterday's file stays. Not a warning. Also `python -m aquascope.map_scout daily|publish
+--out build`.
+
 ## Monthly bulletins (`bulletins/`)
 
 On the 3rd of every month the `bulletin` workflow (#523) writes last month's state of

@@ -21,12 +21,13 @@ export const statusClass = (id) => STATUS_CLASSES.find((c) => c.id === id) || nu
 
 // The colour a gauge gets under "Today vs normal". Before any snapshot has
 // loaded (statusMap null) a gauge keeps its agency colour; once one has, a
-// gauge without a fresh status is light grey.
-export function nowColor(statusMap, key, fallback) {
+// gauge without a fresh status takes `missing`: light grey by default, its
+// agency colour on the map's default view (#544), where most gauges have none.
+export function nowColor(statusMap, key, fallback, missing = NO_STATUS_COLOR) {
   if (!statusMap) return fallback;
   const s = statusMap.get(key);
   const c = s && statusClass(s.cls);
-  return c ? c.color : NO_STATUS_COLOR;
+  return c ? c.color : missing;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

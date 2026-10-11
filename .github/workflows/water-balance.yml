@@ -1,0 +1,138 @@
+name: Water balance
+
+# Subbasins by monthly water balance (#557). For every HydroBASINS level-4 subbasin and month since 1990: ERA5
+# precipitation and evaporation (ARCO-ERA5 on Google Cloud, read anonymously, area-weighted), the subbasin's own
+# runoff from GEOGLOWS v2 (outlet flow minus inflow, over its area) and the closure error P - ET - Q. Written to:
+#   waterbalance/monthly.parquet    one row per subbasin and month, every variable and its anomaly
+#   waterbalance/normals.parquet    1991-2020 means per subbasin and calendar month
+#   waterbalance/basins.parquet     areas, outlet reaches, upstream and downstream neighbours
+#   waterbalance/basins.geojson     simplified outlines for the Explorer
+#   waterbalance/normals.json, waterbalance/years/<YYYY>.json   the Explorer's files
+#   waterbalance/manifest.json      months covered, method, licences, what the run cost
+# It writes ONLY under waterbalance/ in the Archive dataset. Modelled, not measured.
+#
+# Cost, measured on 2026-10-11: ERA5 is one whole-globe hour per chunk (on average 1.83 MB of precipitation and
+# 3.01 MB of evaporation), so a month is about 1,460 chunks and 3.5 GB, and 1990 to now about 1.56 TB. Runners read
+# 74 to 186 MB/s, so the backfill is 2.3 to 5.9 h of reading: each run reads the published table, computes the
+# missing months newest first until its time budget, and publishes what it has, so one or two dispatches fill it
+# (the run's summary says how fast it read). After that a monthly run recomputes the newest three months (ERA5T becomes final).
+# Locally:
+#   python -m aquascope.waterbalance run --out build --smoke-hours 6
+
+on:
+  schedule:
+    # The 9th of each month, 05:41 UTC: ERA5T reaches about five days back, so last month is whole by then.
+    - cron: "41 5 9 * *"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to the Hugging Face dataset"
+        type: boolean
+        default: true
+      smoke_hours:
+        description: "Hours of the newest month read, for a smoke run that never publishes (empty = whole months)"
+        type: string
+        default: ""
+      time_budget_min:
+        description: "Minutes of ERA5 reading before the run stops and publishes what it has"
+        type: string
+        default: "300"
+  # A pull request that changes the job runs a smoke on a GitHub runner, which measures what the backfill costs
+  # there (its summary: 240 hours, about 1.2 GB of ERA5). It has no secrets and never publishes.
+  pull_request:
+    paths:
+      - "aquascope/waterbalance.py"
+      - ".github/workflows/water-balance.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: water-balance-${{ github.event_name == 'pull_request' && github.ref || 'archive' }}
+  cancel-in-progress: false
+
+jobs:
+  waterbalance:
+    runs-on: ubuntu-latest
+    # The reading stops at the time budget (300 min by default) and the job then writes and publishes, so it ends
+    # inside the 6 h limit with whatever months it finished.
+    timeout-minutes: 350
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_DATASET: Rekin226/aquascope-gauges
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # numcodecs decodes the Blosc chunks; shapely (basins extra) places the ERA5 grid in the subbasins.
+      - name: Install aquascope with the archive and basins extras
+        run: python -m pip install -q ".[archive,basins]" numcodecs
+
+      - name: The water balance
+        env:
+          SMOKE: ${{ github.event_name == 'pull_request' && '240' || inputs.smoke_hours }}
+          BUDGET: ${{ inputs.time_budget_min || '300' }}
+        run: |
+          case "$BUDGET" in ''|*[!0-9]*) echo "::error::time_budget_min must be a whole number"; exit 1;; esac
+          ARGS="--out build --workers 64 --time-budget-min $BUDGET"
+          if [ -n "$SMOKE" ]; then
+            case "$SMOKE" in *[!0-9]*) echo "::error::smoke_hours must be a whole number of hours"; exit 1;; esac
+            ARGS="$ARGS --smoke-hours $SMOKE"
+          fi
+          python -m aquascope.waterbalance run $ARGS
+
+      - name: Summary
+        if: always()
+        run: |
+          python - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          p = pathlib.Path("build/waterbalance/manifest.json")
+          if not p.exists():
+              print("## Water balance\n\nno manifest written (the run stopped early)")
+              raise SystemExit
+          m = json.loads(p.read_text())
+          c = m["cost"]
+          print(f"## Water balance, {m['first_month']} to {m['last_month']}{' (smoke run)' if m['smoke'] else ''}\n")
+          print(f"**{m['months']} months** of {m['basins']:,} subbasins; {len(m['computed'])} computed in this run, "
+                f"{len(m['skipped_for_time'])} left for the next one; {m['runoff_ok']:,} subbasins have runoff.\n")
+          gb, s = (c.get("era5_bytes") or 0) / 1e9, c.get("era5_seconds") or 0
+          print(f"ERA5: {c['era5_chunks']:,} hourly chunks, {gb:.1f} GB in {s / 60:.1f} min"
+                + (f" ({gb * 1000 / s:.0f} MB/s)" if s else "") + f"; {m['missing_hours']} missing.")
+          if s and gb:
+              rate = gb / s                       # GB per second on this runner
+              total = 1560                        # GB for 1990 to now, sampled per chunk on 2026-10-11
+              print(f"\nAt this rate the whole 1990-to-now backfill (about {total:,} GB) takes about "
+                    f"{total / rate / 3600:.1f} h of reading, and a month (about 3.5 GB) {3.5 / rate:.0f} s.")
+          print(f"\nGEOGLOWS: {c['geoglows_chunks']} chunks in {c['geoglows_seconds']:.0f} s. Whole run "
+                f"{c['seconds'] / 60:.1f} min.")
+          EOF
+
+      # A smoke run never publishes: its few hours are not a month. A pull request has no token anyway.
+      - name: Publish waterbalance/ to Hugging Face
+        if: >-
+          env.HF_TOKEN != '' && github.event_name != 'pull_request' && inputs.smoke_hours == '' &&
+          (github.event_name == 'schedule' || inputs.publish == true)
+        run: python -m aquascope.waterbalance publish --out build
+
+      - name: Say why a smoke run was not published
+        if: github.event_name == 'pull_request' || inputs.smoke_hours != ''
+        run: echo "::notice::A smoke run builds and summarises but does not publish."
+
+      - name: Warn when HF_TOKEN is missing
+        if: always() && env.HF_TOKEN == '' && github.event_name == 'schedule'
+        run: |
+          echo "::error::HF_TOKEN is not set, so the water balance ran but published nothing. Set the \
+          repository secret HF_TOKEN to a Hugging Face token with write access to $HF_DATASET."
+          exit 1
+
+      - name: Upload the table as an artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: water-balance-${{ github.run_id }}
+          path: build/waterbalance/
+          retention-days: 7

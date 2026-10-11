@@ -775,3 +775,19 @@ def test_every_named_source_is_a_registry_source() -> None:
     assert set(got["keys"]) <= set(SOURCES), set(got["keys"]) - set(SOURCES)
     assert got["ana"] == "ANA (BR)"
     assert got["unknown"] == "nowhere"
+
+
+def test_the_python_workers_boot_the_way_pyodide_314_needs() -> None:
+    """Pyodide 314 throws "Classic web workers are not supported": module workers and import(), in one place."""
+    config = (EXPLORER / "config.js").read_text(encoding="utf-8")
+    m = re.search(r'pyodideIndexURL:\s*"https://cdn\.jsdelivr\.net/pyodide/v(\d+)\.(\d+)\.(\d+)/full/"', config)
+    assert m, "CONFIG.pyodideIndexURL pins one exact Pyodide version (the smoke workflow reads it from here)"
+    worker = (EXPLORER / "worker.js").read_text(encoding="utf-8")
+    assert "importScripts(" not in worker, "a module worker cannot importScripts; Pyodide comes in through import()"
+    assert "await import(`${pyodideIndexURL}pyodide.mjs`)" in worker
+    client = (EXPLORER / "src" / "worker-client.js").read_text(encoding="utf-8")
+    starts = re.findall(r"new Worker\(`\./worker\.js\?v=\$\{CONFIG\.build\}`(, \{ type: \"module\" \})?\)", client)
+    assert len(starts) == 2 and all(starts), "the main worker and every light worker start as module workers"
+    for path in [EXPLORER / "app.js", *MODULES, EXPLORER / "worker.js"]:
+        text = path.read_text(encoding="utf-8")
+        assert "cdn.jsdelivr.net/pyodide/" not in text, f"{path.name}: the Pyodide version lives in config.js only"

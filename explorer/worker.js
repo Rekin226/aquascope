@@ -1,7 +1,9 @@
 // AquaScope Explorer, worker thread: Pyodide + aquascope. Fetches the observed
 // record through aquascope's own collectors and runs aquascope.explore (the
 // same code the CLI and MCP server use). Sync XHR (pyodide-http) is allowed in
-// workers, so the page stays responsive while Python is busy.
+// workers, so the page stays responsive while Python is busy. Started as a module
+// worker ({ type: "module" } in worker-client.js): Pyodide 314 no longer runs in
+// classic workers, so the runtime comes in through import(), not importScripts.
 
 let pyodide = null;
 let ready = null;
@@ -9,14 +11,15 @@ let ready = null;
 // network without them: a place's context layers, a click's river snap and the quick forecast. Several run at
 // once, so those reads no longer queue behind the main worker's record, one sync request after another.
 let lite = false;
-const LITE_TYPES = new Set(["context", "river", "now"]);
+const LITE_TYPES = new Set(["context", "river", "now", "map_command", "scout", "map_explain", "mesh_review",
+  "whatif_words"]);
 
 function post(type, extra = {}) { self.postMessage({ type, ...extra }); }
 
 async function init({ pyodideIndexURL, wheelsJson, lite: light = false }) {
   lite = Boolean(light);
   post("progress", { text: "Loading Python runtime (Pyodide)…" });
-  importScripts(`${pyodideIndexURL}pyodide.js`);
+  const { loadPyodide } = await import(`${pyodideIndexURL}pyodide.mjs`);
   pyodide = await loadPyodide({ indexURL: pyodideIndexURL });
 
   post("progress", { text: lite ? "Loading numpy…" : "Loading numpy, scipy, pandas…" });
@@ -103,6 +106,7 @@ json.dumps(_res)
 // simulated daily flow since 1940; trace reads the processing unit's routing tables (a few MB, up to about
 // 30 MB for the largest basins), the catalog the page sent with "catalog", the Archive's Global Dam Watch
 // cells along the path and upstream, a few zoom-8 stream tiles, and Natural Earth's borders (750 kB, once).
+// network (#545) reads the same routing tables and returns only ids, which the map lights up.
 async function river({ id, op, args }) {
   // The arguments travel inside the code as a JSON string literal, not through a shared global: two river
   // calls can be in flight (a record still running when the next click snaps), and a global set by one
@@ -123,6 +127,11 @@ elif _op == "trace":
                                     gauge_km=_k.get("gauge_km") or 2.0, max_points=3000)
 elif _op == "area":
     _res = _rivers.upstream_area(_k["river_id"], lat=_k.get("lat"), lon=_k.get("lon"))
+elif _op == "network":
+    _res = {"upstream": _rivers.upstream_ids(_k["river_id"], max_n=_k.get("max_up") or 20000,
+                                             lat=_k.get("lat"), lon=_k.get("lon")),
+            "downstream": _rivers.downstream_ids(_k["river_id"], max_n=_k.get("max_down") or 5000,
+                                                 lat=_k.get("lat"), lon=_k.get("lon"))}
 else:
     raise ValueError(f"unknown river operation {_op!r}")
 json.dumps(_res, default=str)
@@ -178,6 +187,14 @@ elif _op == "forecast":
                         match_mean_flow=_k.get("match_mean_flow"), snap=False,
                         history=_k.get("history", True), glofas=_k.get("glofas", True),
                         known_geoglows=_k.get("known_geoglows"))
+elif _op == "plume":
+    # The FEWS view of a reach (#556): the 51 members day by day, classed against the thresholds the page passes
+    # (the Floods ahead layer's), with a gauge's record when the page has one. No pandas: a light worker answers.
+    _res = _nn.plume(_k.get("river_id"), thresholds=_k.get("thresholds"), obs=_k.get("obs"),
+                     days=_k.get("days", 15), run=_k.get("run"), look_up=False)
+elif _op == "points":
+    # The Archive's forecast gauges, classed against their own return-period flows, from one issued file's rows.
+    _res = _nn.forecast_points(_k.get("rows") or [])
 else:
     raise ValueError(f"unknown now operation {_op!r}")
 json.dumps(_res, default=str)
@@ -1029,10 +1046,12 @@ _out
 // fills line by line as each answers. op "point" reads a layer at (lat, lon),
 // op "area" over bbox [west, south, east, north]. Every layer reads open data
 // hosts that answer CORS (COG range reads, the Archive's context/ mirror).
-async function placeContext({ id, op, name, lat, lon, bbox }) {
+// op "floods_month" is Floods past (#547): a clicked cell's news events and
+// radar months from start to end (aquascope.context.floods_past).
+async function placeContext({ id, op, name, lat, lon, bbox, start, end }) {
   self.__aqContext = JSON.stringify({
     op: op || "point", name: String(name || ""), lat: Number(lat), lon: Number(lon),
-    bbox: Array.isArray(bbox) ? bbox.map(Number) : null,
+    bbox: Array.isArray(bbox) ? bbox.map(Number) : null, start: start || null, end: end || null,
   });
   const code = `
 import json
@@ -1044,6 +1063,9 @@ try:
         _out = _ctx.layer(_a["name"], _a["lat"], _a["lon"])
     elif _a["op"] == "area":
         _out = _ctx.area_layer(_a["name"], *_a["bbox"])
+    elif _a["op"] == "floods_month":
+        from aquascope.context.floods_past import flood_events_month
+        _out = flood_events_month(start=_a["start"], end=_a["end"], bbox=_a["bbox"], limit=12)
     else:
         _out = {"error": "unknown op"}
 except ValueError as exc:
@@ -1093,6 +1115,316 @@ json.dumps(_out, default=str)
   }
 }
 
+// ── Talk to the map (#561): aquascope.map_commands, the same functions as `aquascope map` and the MCP tool.
+// op "parse" reads a request with the keyless grammar; "prompt" is the system prompt and schema for a model;
+// "reply" checks a model's reply; "validate" checks actions from anywhere (an agent over WebMCP); "resolve"
+// looks place names up in the gazetteer (Photon); "llm" asks the reader's own model with their key (the main
+// worker only: the provider client lives beside the Analyst).
+async function mapCommand({ id, op, text, today, context, reply, actions, provider, model, api_key, base_url }) {
+  self.__aqMap = JSON.stringify({
+    op: String(op || "parse"), text: String(text || ""), today: today || null, context: String(context || ""),
+    reply: reply === undefined ? null : reply, actions: actions || [],
+    llm: { provider: provider || null, model: model || null, api_key: api_key || null, base_url: base_url || null },
+  });
+  const code = `
+import json
+from js import __aqMap
+from aquascope import map_commands as _mc
+_a = json.loads(__aqMap)
+try:
+    if _a["op"] == "parse":
+        _out = _mc.parse_command(_a["text"], today=_a["today"])
+    elif _a["op"] == "prompt":
+        _out = _mc.model_prompt(_a["context"], today=_a["today"])
+    elif _a["op"] == "reply":
+        _out = _mc.parse_model_reply(_a["reply"], today=_a["today"])
+    elif _a["op"] == "validate":
+        _out = _mc.parse_model_reply({"actions": _a["actions"]}, today=_a["today"])
+    elif _a["op"] == "resolve":
+        _out = _mc.resolve_actions(_a["actions"])
+    elif _a["op"] == "llm":
+        _out = _mc.model_command(_a["text"], context=_a["context"], today=_a["today"], **_a["llm"])
+    else:
+        _out = {"error": "unknown op"}
+except (ValueError, RuntimeError) as exc:
+    _out = {"error": str(exc)}
+json.dumps(_out, default=str)
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqMap = null;
+  }
+}
+
+// ── Scout (#563): aquascope.map_scout, the same functions as `aquascope layers scout` and the MCP tool map_scout.
+// op "view" scouts the view on screen (the daily file when it can answer, a live scan otherwise; the page hands
+// in the gauge snapshot and the evidence rows it read with DuckDB); "places" names the findings from the
+// gazetteer answers the page fetched in parallel (a worker's requests run one at a time); "prompt" is what a
+// model is asked; "words" holds a model's reply to the claim lock; "llm" asks the reader's own model with their
+// key (main worker only).
+async function scoutOp({ id, op, view, month, gauges, skill, extra, places, findings, reply, answers, by, context,
+                         max_pins, provider, model, api_key, base_url }) {
+  self.__aqScout = JSON.stringify({
+    op: String(op || "view"), view: view || null, month: month || null, gauges: gauges || null, skill: skill || null,
+    extra: Number(extra) || 0, places: places === undefined ? true : places, findings: findings || [],
+    reply: reply === undefined ? null : reply, answers: answers || [],
+    by: by || "model", context: String(context || ""), max_pins: Number(max_pins) || 10,
+    llm: { provider: provider || null, model: model || null, api_key: api_key || null, base_url: base_url || null },
+  });
+  const code = `
+import json
+from js import __aqScout
+from aquascope import map_scout as _sc
+_a = json.loads(__aqScout)
+try:
+    if _a["op"] == "view":
+        _out = _sc.scout_view(_a["view"], _a["month"], doc=_sc.published(), gauges=_a["gauges"], skill=_a["skill"],
+                              extra=_a["extra"], places=_a["places"], max_pins=_a["max_pins"])
+    elif _a["op"] == "places":
+        _sc.apply_places(_a["findings"], _a["answers"])
+        _out = {"findings": _a["findings"]}
+    elif _a["op"] == "prompt":
+        _out = _sc.wording_prompt(_a["findings"], _a["max_pins"], _a["context"])
+    elif _a["op"] == "words":
+        _out = _sc.apply_wording(_a["findings"], _a["reply"], max_pins=_a["max_pins"], by=_a["by"])
+    elif _a["op"] == "llm":
+        _out = _sc.model_wording(_a["findings"], context=_a["context"], max_pins=_a["max_pins"], **_a["llm"])
+    else:
+        _out = {"error": "unknown op"}
+except (ValueError, RuntimeError) as exc:
+    _out = {"error": str(exc)}
+json.dumps(_out, default=str)
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqScout = null;
+  }
+}
+
+// ── What if, on the map (#565): aquascope.whatif_map, the same functions as `aquascope whatif` and the MCP tool
+// whatif_map. Type "whatif" (the main worker: GR4J needs scipy and pandas): op "run" calibrates the basin's model
+// and carries the scenario downstream; op "llm" reads the reader's line with their own key. Type "whatif_words"
+// (a light worker can): op "parse" is the keyless rules, "prompt" the system prompt and schema for the on-device
+// model, "reply" checks a model's reply against the reader's words (the claim lock).
+async function whatIf({ id, type, op, args, text, reply, context, provider, model, api_key, base_url }) {
+  self.__aqWhatIf = JSON.stringify({
+    op: String(op || (type === "whatif" ? "run" : "parse")), args: args || {}, text: String(text || ""),
+    reply: reply === undefined ? null : reply, context: String(context || ""),
+    llm: { provider: provider || null, model: model || null, api_key: api_key || null, base_url: base_url || null },
+  });
+  const code = `
+import json
+from js import __aqWhatIf
+from aquascope import whatif_map as _wi
+_a = json.loads(__aqWhatIf)
+try:
+    if _a["op"] == "run":
+        _x = dict(_a["args"])
+        _rid = _x.pop("river_id", None)
+        _out = _wi.whatif(_rid, **_x)
+    elif _a["op"] == "parse":
+        _out = _wi.parse_scenario(_a["text"])
+    elif _a["op"] == "prompt":
+        _out = _wi.scenario_prompt(_a["context"])
+    elif _a["op"] == "reply":
+        _out = _wi.parse_scenario_reply(_a["reply"], _a["text"])
+    elif _a["op"] == "llm":
+        _out = _wi.model_scenario(_a["text"], context=_a["context"], **_a["llm"])
+    else:
+        _out = {"error": "unknown op"}
+except (ValueError, RuntimeError, LookupError, TypeError) as exc:
+    _out = {"error": str(exc)}
+json.dumps(_out, default=str)
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqWhatIf = null;
+  }
+}
+
+// ── Review my model results (#564): what lies outside the dropped file, for aquascope.mesh_review (the checks
+// themselves run in mesh-worker.js beside the file). op "floods" reads the Sentinel-1 radar and news flood events
+// around the mesh from the Archive's context mirror (a light worker can); "gauges" reads each gauge's record over
+// the run and "llm" asks the reader's own model with their key (the main worker only).
+async function meshReviewOp({ id, op, bbox, gauges, start, end, findings, context, provider, model, api_key, base_url }) {
+  self.__aqReview = JSON.stringify({
+    op: String(op || ""), bbox: bbox || null, gauges: gauges || [], start: start || null, end: end || null,
+    findings: findings || [], context: String(context || ""),
+    llm: { provider: provider || null, model: model || null, api_key: api_key || null, base_url: base_url || null },
+  });
+  const code = `
+import json
+from js import __aqReview
+from aquascope import mesh_review as _mr
+_a = json.loads(__aqReview)
+try:
+    if _a["op"] == "floods":
+        _out = _mr.gather_floods(_a["bbox"])
+    elif _a["op"] == "gauges":
+        _out = {"gauges": _mr.gauge_series(_a["gauges"], _a["start"], _a["end"])}
+    elif _a["op"] == "llm":
+        _out = _mr.model_words(_a["findings"], context=_a["context"], **_a["llm"])
+    else:
+        _out = {"error": "unknown op"}
+except (ValueError, RuntimeError) as exc:
+    _out = {"error": str(exc)}
+json.dumps(_out, default=str)
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqReview = null;
+  }
+}
+
+// ── Explain what is on screen (#562): aquascope.map_explain, the same functions as `aquascope layers explain`
+// and the MCP tool explain_view. op "facts" reads the view into facts and template notes (the month's status
+// file is fetched here and handed over as bytes); "check" holds a model's notes to the facts (the claim lock);
+// "llm" asks the reader's own model with their key (the main worker only, beside the Analyst's client).
+async function mapExplain({ id, op, view, status_url, status_month, warnings, floods_past, gauges, reply, facts,
+  context, provider, model, api_key, base_url }) {
+  let bytes = null;
+  if (op === "facts" && status_url) {
+    const res = await fetch(status_url);
+    if (res.ok) bytes = new Uint8Array(await res.arrayBuffer());
+  }
+  self.__aqExplain = JSON.stringify({
+    op: String(op || "facts"), view: view || {}, status_month: status_month || null, warnings: warnings || null,
+    floods_past: floods_past || null, gauges: gauges || [], reply: reply === undefined ? null : reply,
+    facts: facts || [], context: String(context || ""),
+    llm: { provider: provider || null, model: model || null, api_key: api_key || null, base_url: base_url || null },
+  });
+  self.__aqExplainBytes = bytes;
+  const code = `
+import json
+from js import __aqExplain, __aqExplainBytes
+from aquascope import map_explain as _me
+_a = json.loads(__aqExplain)
+_bbox = (_a["view"] or {}).get("bbox")
+try:
+    if _a["op"] == "facts":
+        _st = None
+        if _a["status_month"] and __aqExplainBytes is not None:
+            _st = {"month": _a["status_month"], "data": bytes(__aqExplainBytes.to_py())}
+        _out = _me.explain(_a["view"], status=_st, warnings=_a["warnings"], floods_past=_a["floods_past"],
+                           gauges=_a["gauges"], context=_a["context"])
+    elif _a["op"] == "check":
+        _out = _me.check_model_notes(_a["reply"], _a["facts"], _bbox)
+        _me.name_notes(_out["notes"], (_a["view"] or {}).get("zoom") or 5)
+    elif _a["op"] == "llm":
+        _out = _me.model_notes(_a["facts"], context=_a["context"], bbox=_bbox, **_a["llm"])
+        _me.name_notes(_out["notes"], (_a["view"] or {}).get("zoom") or 5)
+    else:
+        _out = {"error": "unknown op"}
+except (ValueError, RuntimeError) as exc:
+    _out = {"error": str(exc)}
+json.dumps(_out, default=str)
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    self.__aqExplain = null;
+    self.__aqExplainBytes = null;
+  }
+}
+
+// ── Groundwater (#558): aquascope.groundwater.surface, the same functions as `aquascope groundwater surface`,
+// `aquascope modflow` and the MCP tools. op "surface" interpolates the wells' readings the page read from the
+// Archive with DuckDB. op "modflow" reads the head file (and its grid and sidecars) the reader dropped on the
+// map: the bytes stay in this worker, and the cells and heads go back to the page as typed arrays.
+let pyprojLoaded = false;
+async function groundwater(m) {
+  const { id, op } = m;
+  if (op === "surface") {
+    self.__aqGw = JSON.stringify({
+      wells: m.wells || [], readings: m.readings || {}, month: m.month || null, mode: m.mode || "level",
+      compare: m.compare || null, bbox: Array.isArray(m.bbox) ? m.bbox.map(Number) : null,
+    });
+    const code = `
+import json
+from js import __aqGw
+from aquascope.groundwater.surface import surface_from_readings as _surface
+_a = json.loads(__aqGw)
+try:
+    _out = _surface(_a["wells"], _a["readings"], month=_a["month"], mode=_a["mode"], compare=_a["compare"],
+                    bbox=_a["bbox"])
+except ValueError as exc:
+    _out = {"kind": "groundwater_surface", "error": str(exc)}
+json.dumps(_out)
+`;
+    try {
+      const out = await pyodide.runPythonAsync(code);
+      post("result", { id, result: JSON.parse(out) });
+    } finally {
+      self.__aqGw = null;
+    }
+    return;
+  }
+  if (op !== "modflow") throw new Error(`unknown groundwater op ${op}`);
+  if (!pyprojLoaded) {
+    // Placing a projected grid needs pyproj (3.8 MB, once, only when a model is dropped).
+    await pyodide.loadPackage(["pyproj"]);
+    pyprojLoaded = true;
+  }
+  pyodide.FS.mkdirTree("/tmp/gw");
+  const write = (name, buf) => { pyodide.FS.writeFile(`/tmp/gw/${name}`, new Uint8Array(buf)); return `/tmp/gw/${name}`; };
+  const hds = write("heads", m.hds);
+  const grid = m.grid ? write(`grid-${String(m.gridName || "grid").replace(/[^A-Za-z0-9._-]/g, "_")}`, m.grid) : null;
+  const sidecars = (m.sidecars || []).map((b, i) => write(`sidecar-${i}`, b));
+  self.__aqGw = JSON.stringify({ hds, grid, sidecars, place: m.place || {} });
+  const code = `
+import json
+import numpy as np
+from js import __aqGw
+from aquascope.groundwater.surface import read_modflow_heads as _read, modflow_summary as _summary
+_a = json.loads(__aqGw)
+_p = _a["place"]
+_GW_RINGS = _GW_HEADS = None
+try:
+    _res = _read(_a["hds"], _a["grid"], sidecars=_a["sidecars"], origin=_p.get("origin"), rotation=_p.get("rotation"),
+                 crs=_p.get("crs"), cell_size=_p.get("cell_size"), start_date=_p.get("start_date"))
+    if not _res.get("error"):
+        _GW_RINGS = np.ascontiguousarray(_res["rings"], dtype="<f8").tobytes()
+        _GW_OFFS = np.ascontiguousarray(_res["ring_offsets"], dtype="<i4").tobytes()
+        _h = np.ascontiguousarray(_res["heads"], dtype="<f4")
+        _GW_SHAPE = list(_h.shape)
+        _GW_HEADS = _h.tobytes()
+    _out = _summary(_res)
+    _out.pop("frame", None)
+    _out["times"], _out["dates"] = _res.get("times"), _res.get("dates")
+    _out["kstpkper"] = _res.get("kstpkper")
+except (ValueError, ImportError) as exc:
+    _out = {"kind": "modflow_heads", "error": str(exc)}
+json.dumps(_out, default=str)
+`;
+  try {
+    const meta = JSON.parse(await pyodide.runPythonAsync(code));
+    if (meta.error) { post("result", { id, result: meta }); return; }
+    const take = (name) => { const p = pyodide.globals.get(name); const u8 = p.toJs(); p.destroy(); return u8; };
+    const rings = take("_GW_RINGS"), offs = take("_GW_OFFS"), heads = take("_GW_HEADS");
+    const shape = pyodide.globals.get("_GW_SHAPE").toJs();
+    pyodide.runPython("_GW_RINGS = _GW_HEADS = _GW_OFFS = _res = None");
+    const result = {
+      ...meta, shape,
+      rings: new Float64Array(rings.buffer, rings.byteOffset, rings.byteLength / 8),
+      offsets: new Int32Array(offs.buffer, offs.byteOffset, offs.byteLength / 4),
+      heads: new Float32Array(heads.buffer, heads.byteOffset, heads.byteLength / 4),
+    };
+    self.postMessage({ type: "result", id, result }, [rings.buffer, offs.buffer, heads.buffer]);
+  } finally {
+    self.__aqGw = null;
+    for (const f of [hds, grid, ...sidecars]) { if (f) try { pyodide.FS.unlink(f); } catch (err) { /* already gone */ } }
+  }
+}
+
 self.onmessage = async (e) => {
   const m = e.data;
   try {
@@ -1123,6 +1455,12 @@ self.onmessage = async (e) => {
     if (m.type === "area_study") return await areaStudy(m);
     if (m.type === "context") return await placeContext(m);
     if (m.type === "watch") return await watchDigest(m);
+    if (m.type === "map_command") return await mapCommand(m);
+    if (m.type === "scout") return await scoutOp(m);
+    if (m.type === "map_explain") return await mapExplain(m);
+    if (m.type === "mesh_review") return await meshReviewOp(m);
+    if (m.type === "whatif" || m.type === "whatif_words") return await whatIf(m);
+    if (m.type === "groundwater") return await groundwater(m);
   } catch (err) {
     // Pyodide raises PythonError with the full traceback in .message; keep the
     // exception line (last non-empty) and log the whole thing for debugging.

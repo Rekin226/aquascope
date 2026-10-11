@@ -39,6 +39,7 @@ from __future__ import annotations
 import logging
 import math
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -220,6 +221,31 @@ _RECORDS: dict[tuple[Any, ...], dict[str, Any]] = {}
 _RECORDS_MAX = 6
 
 
+#: The pseudo-source of a river reach's simulated flow: ``station_id`` is a GEOGLOWS v2 ``river_id`` (#565).
+GEOGLOWS_SOURCE = "geoglows"
+
+
+def _geoglows_series(river_id: str, years: int | None) -> dict[str, Any]:
+    """A GEOGLOWS v2 reach's simulated daily flow (m3/s, modelled) in the shape :func:`_fetch` returns."""
+    from aquascope import rivers
+
+    rid = rivers._river_id(river_id)
+    params: dict[str, Any] = {"format": "json"}
+    if years:
+        start = datetime.now(timezone.utc).date() - timedelta(days=int(float(years) * 365.25))
+        params["start_date"] = start.strftime("%Y%m%d")
+    data = rivers._fetch_json(f"{rivers.GEOGLOWS_API}/retrospectivedaily/{rid}", params)
+    values = data.get(str(rid)) if isinstance(data, dict) else None
+    times = data.get("datetime") if isinstance(data, dict) else None
+    if not values or not times or len(values) != len(times):
+        return {"series": None, "variable": "discharge", "unit": "m3/s",
+                "note": f"GEOGLOWS returned no simulated flow for river reach {rid}"}
+    idx = pd.to_datetime(list(times), utc=True).tz_convert(None)
+    s = pd.Series(pd.to_numeric(pd.Series(list(values)), errors="coerce").to_numpy(dtype=float), index=idx)
+    return {"series": s.where(s >= 0).dropna(), "variable": "discharge", "unit": "m3/s",
+            "note": f"GEOGLOWS v2 simulated flow for river reach {rid} (modelled, CC BY 4.0), not a gauge"}
+
+
 def _fetch(source: str, station_id: str, years: int | None, variable: str | None) -> dict[str, Any]:
     from aquascope.explore import fetch_series
 
@@ -227,7 +253,10 @@ def _fetch(source: str, station_id: str, years: int | None, variable: str | None
     if key not in _RECORDS:
         while len(_RECORDS) >= _RECORDS_MAX:
             _RECORDS.pop(next(iter(_RECORDS)))
-        _RECORDS[key] = fetch_series(source, station_id, years=years, variable=variable)
+        if source == GEOGLOWS_SOURCE:
+            _RECORDS[key] = _geoglows_series(station_id, years)
+        else:
+            _RECORDS[key] = fetch_series(source, station_id, years=years, variable=variable)
     return _RECORDS[key]
 
 
@@ -609,13 +638,98 @@ def _forcing(lat: float, lon: float, start: date, end: date) -> pd.DataFrame:
     return frame
 
 
-def _flow_stats(q: pd.Series) -> dict[str, float | None]:
+def _flow_stats(q: pd.Series, flood_rp: float | None = None) -> dict[str, float | None]:
     q = q.dropna()
     if q.empty:
-        return {"mean": None, "q95": None, "q05": None, "amax_median": None}
+        return {"mean": None, "q95": None, "q05": None, "amax_median": None, "flood": None}
     am = q.groupby(q.index.year).max()
-    return {"mean": float(q.mean()), "q95": float(q.quantile(0.05)), "q05": float(q.quantile(0.95)),
-            "amax_median": float(am.median()) if len(am) else None}
+    out = {"mean": float(q.mean()), "q95": float(q.quantile(0.05)), "q05": float(q.quantile(0.95)),
+           "amax_median": float(am.median()) if len(am) else None, "flood": None}
+    if flood_rp is not None:
+        try:
+            out["flood"] = _gev_q(am.to_numpy(dtype=float), float(flood_rp))
+        except (ValueError, FloatingPointError, RuntimeError):
+            out["flood"] = None
+    return out
+
+
+#: A parameter set is behavioural when its validation KGE is within this of the calibrated set's.
+BEHAVIOURAL_KGE = 0.05
+#: The spread of the perturbed parameter sets, as a share of each parameter's bound width.
+MEMBER_SPREAD = 0.05
+_CHANGE_KEYS = ("mean_flow_change_pct", "q95_change_pct", "q05_change_pct", "flood_change_pct")
+
+
+def _kge_on(o: pd.Series, s: pd.Series) -> float | None:
+    from aquascope.analysis import metrics
+
+    v = metrics.kge(o.to_numpy(dtype=float), s.to_numpy(dtype=float))
+    return float(v) if v is not None and math.isfinite(float(v)) else None
+
+
+def _behavioural_ranges(members: int, best: dict[str, float], use_snow: bool, kge_valid: float | None,
+                        runs: list[dict[str, Any]], plan: list[tuple[Any, ...]], rp: float | None, *,
+                        simulate: Any, score: Any, valid_span: tuple[int, int], stats: Any,
+                        scenario_stats: Any, seed: int = 42) -> dict[str, Any]:
+    """The range of each scenario's changes over the parameter sets that do as well on the validation years.
+
+    Adds ``range`` (``{key: [low, high]}``) to each run in place and returns what was done: how many sets were
+    tried and kept, and the rule.
+    """
+    from aquascope.models.rainfall_runoff import GR4J_PARAM_BOUNDS, SNOW_PARAM_BOUNDS
+
+    bounds = {**GR4J_PARAM_BOUNDS, **(SNOW_PARAM_BOUNDS if use_snow else {})}
+    rng = np.random.default_rng(seed)
+    floor = (kge_valid - BEHAVIOURAL_KGE) if kge_valid is not None else None
+    kept: list[dict[str, float]] = [dict(best)]
+    for _ in range(max(0, members - 1)):
+        p = {k: float(np.clip(best[k] + rng.normal(0.0, MEMBER_SPREAD * (hi - lo)), lo, hi))
+             for k, (lo, hi) in bounds.items() if k in best}
+        k = score(*valid_span, simulate(p))
+        if floor is not None and k is not None and k >= floor:
+            kept.append(p)
+    changes: list[list[dict[str, float | None]]] = [[] for _ in runs]
+    for p in kept:
+        b = stats(simulate(p))
+        for i, (_sc, dp, dt, de, demand) in enumerate(plan):
+            st = scenario_stats(dp, dt, de, demand, p)
+            changes[i].append({"mean_flow_change_pct": _pct(st["mean"], b["mean"]),
+                               "q95_change_pct": _pct(st["q95"], b["q95"]),
+                               "q05_change_pct": _pct(st["q05"], b["q05"]),
+                               "flood_change_pct": _pct(st["flood"], b["flood"]) if rp is not None else None})
+    for r, ch in zip(runs, changes):
+        span: dict[str, list[float] | None] = {}
+        for key in _CHANGE_KEYS:
+            if key == "flood_change_pct" and rp is None:
+                continue
+            v = np.array([c[key] for c in ch if c[key] is not None], dtype=float)
+            if not len(v):
+                span[key] = None
+            elif len(v) >= 10:
+                span[key] = [_clean(float(np.percentile(v, 5))), _clean(float(np.percentile(v, 95)))]
+            else:
+                span[key] = [_clean(float(v.min())), _clean(float(v.max()))]
+        r["range"] = span
+    return {"tried": int(members), "kept": len(kept), "spread": MEMBER_SPREAD, "kge_tolerance": BEHAVIOURAL_KGE,
+            "rule": (f"{members} parameter sets around the calibrated one ({MEMBER_SPREAD:.0%} of each bound's "
+                     f"width), kept when the validation KGE is within {BEHAVIOURAL_KGE} of the calibrated set's; "
+                     "each range is the 5th to 95th percentile of the change across the kept sets (the extremes "
+                     "when fewer than ten)."),
+            "note": None if len(kept) >= 5 else
+            f"Only {len(kept)} parameter set{'s' if len(kept) != 1 else ''} did as well on the validation years: "
+            "the range is narrow because few were kept, not because the change is certain."}
+
+
+def _given_params(params: Any) -> dict[str, float] | None:
+    """Parameters handed back from an earlier answer, checked: X1-X4 (and DDF and T0 together), finite."""
+    if not isinstance(params, dict):
+        return None
+    keys = ["X1", "X2", "X3", "X4"] + (["DDF", "T0"] if "DDF" in params or "T0" in params else [])
+    try:
+        out = {k: float(params[k]) for k in keys}
+    except (KeyError, TypeError, ValueError):
+        return None
+    return out if all(math.isfinite(v) for v in out.values()) else None
 
 
 def _default_scenarios() -> list[dict[str, Any]]:
@@ -638,6 +752,9 @@ def catchment_model(
     warmup_days: int = 365,
     pet_pct_per_c: float = PET_PCT_PER_C,
     snow: str | bool = "auto",
+    flood_rp: float | None = None,
+    members: int = 0,
+    params: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """GR4J calibrated on the gauge, validated on years it never saw, then run under "what if" changes.
 
@@ -654,6 +771,22 @@ def catchment_model(
     assumption). Each is simulated over the whole period with the calibrated
     parameters and reported as the change in mean flow, low flow (Q95, the
     flow exceeded 95 % of days), high flow (Q05) and the median annual maximum.
+    A scenario's ``demand_cms`` takes a constant flow (m3/s) out of the
+    simulated river, never below zero. ``source="geoglows"`` with a GEOGLOWS
+    v2 ``river_id`` as ``station_id`` calibrates on that reach's simulated
+    flow instead of a gauge (#565), and says so.
+
+    ``flood_rp`` (a return period in years) adds the change in that flood: a
+    GEV by L-moments on the simulated annual maxima, before and after. With
+    ``members`` (for example 24) every change also gets a ``range``: that many
+    parameter sets near the calibrated one (Gaussian, :data:`MEMBER_SPREAD` of
+    each bound's width), kept when their validation KGE is within
+    :data:`BEHAVIOURAL_KGE` of the calibrated set's on the years it never saw,
+    each run with and without the scenario; the range is the spread of the
+    change across the kept sets (5th to 95th percentile from ten, else the
+    extremes). A fixed seed makes it the same every run. ``params`` (the
+    ``params`` of an earlier answer for the same record) skips the
+    calibration and repeats only the runs, so a second scenario is quick.
 
     ``snow`` puts a degree-day snow store in front of GR4J (two more
     calibrated parameters, :func:`aquascope.models.rainfall_runoff.degree_day_snow`).
@@ -683,11 +816,16 @@ def catchment_model(
         return out
     out["area_km2"] = _clean(area)
     try:
-        daily, meta = _station(source, station_id)
+        # A reach's simulated record is read for the modelled years only (with the spin-up), not since 1940.
+        daily, meta = _station(source, station_id, years=int(years) + 3 if source == GEOGLOWS_SOURCE else None)
     except Exception as exc:  # noqa: BLE001
         out["error"] = str(exc)
         return out
     out.update({k: meta[k] for k in ("unit", "note")})
+    if source == GEOGLOWS_SOURCE:
+        out["calibrated_on"] = "modelled"
+        out["notes"].append("Calibrated on GEOGLOWS v2 simulated flow for the reach, not on a gauge: GR4J here "
+                            "emulates that model, and its skill says how well, not how true either is.")
     era5_start = date(1941, 1, 1)
     end = min(daily.dropna().index.max().date(), datetime.now(timezone.utc).date() - timedelta(days=10))
     start = max(daily.dropna().index.min().date(), era5_start, end - timedelta(days=int(years * 365.25)))
@@ -713,21 +851,32 @@ def catchment_model(
     cold = forcing["t"] < 0.0
     snow_share = float(forcing.loc[cold, "p"].sum() / forcing["p"].sum()) if forcing["p"].sum() > 0 else 0.0
     use_snow = bool(snow) if not isinstance(snow, str) else snow_share >= SNOW_FRACTION
+    given = _given_params(params)
+    if given is not None:
+        use_snow = "DDF" in given   # the parameters say which model they belong to
     out["snow"] = {"used": use_snow, "share_below_freezing": _clean(snow_share), "rule": str(snow)}
     if use_snow:
+        out["methods"] += _m("degree_day")
+    if given is not None:
+        # A previous calibration of this same record and forcing (the fit is seeded, so it is the same answer
+        # again): only the runs are repeated. The skill below is recomputed from these parameters, not trusted.
+        cal = SimpleNamespace(params=given)
+        out["calibration_reused"] = True
+    elif use_snow:
         cal = calibrate_snow(cal_p, cal_e, forcing["t"].iloc[:mid], cal_q, objective=objective, warmup_days=wu,
                              maxiter=int(maxiter))
-        out["methods"] += _m("degree_day")
     else:
         cal = calibrate(cal_p, cal_e, cal_q, objective=objective, warmup_days=wu, maxiter=int(maxiter))
     model = GR4J(**{k.lower(): cal.params[k] for k in ("X1", "X2", "X3", "X4")})
-    ddf, t0 = cal.params.get("DDF"), cal.params.get("T0")
 
-    def run(p_scale: float = 1.0, e_scale: float = 1.0, dt: float = 0.0) -> pd.Series:
+    def run(p_scale: float = 1.0, e_scale: float = 1.0, dt: float = 0.0, params: dict[str, float] | None = None
+            ) -> pd.Series:
+        m = model if params is None else GR4J(**{k.lower(): params[k] for k in ("X1", "X2", "X3", "X4")})
         p_in = forcing["p"] * p_scale
         if use_snow:
-            p_in = degree_day_snow(p_in, forcing["t"] + dt, ddf=float(ddf), t0=float(t0))
-        return model.simulate(p_in, forcing["pet"] * e_scale, warmup_days=wu).streamflow
+            pp = params if params is not None else cal.params
+            p_in = degree_day_snow(p_in, forcing["t"] + dt, ddf=float(pp["DDF"]), t0=float(pp["T0"]))
+        return m.simulate(p_in, forcing["pet"] * e_scale, warmup_days=wu).streamflow
 
     sim = run()
     obs = q_mm
@@ -773,23 +922,50 @@ def catchment_model(
                       "observed": [_clean(v) for v in mo["observed"]],
                       "simulated": [_clean(v) for v in mo["simulated"]]}
     # what-if runs
-    base = _flow_stats(sim.iloc[wu:] * to_cms)
-    runs = []
+    rp = float(flood_rp) if flood_rp is not None and float(flood_rp) > 1 else None
+    base = _flow_stats(sim.iloc[wu:] * to_cms, rp)
+    plan = []
     for sc in (scenarios if scenarios is not None else _default_scenarios()):
         if not isinstance(sc, dict):
             continue
         dp = float(sc.get("dp_pct") or 0.0)
         dt = float(sc.get("dt_c") or 0.0)
         de = float(sc["dpet_pct"]) if sc.get("dpet_pct") is not None else dt * float(pet_pct_per_c)
-        s2 = run(1 + dp / 100.0, 1 + de / 100.0, dt).iloc[wu:] * to_cms
-        st = _flow_stats(s2)
-        runs.append({"label": str(sc.get("label") or f"P {dp:+g}%, PET {de:+g}%"), "dp_pct": dp, "dpet_pct": de,
-                     "dt_c": dt or None, "mean_flow_change_pct": _pct(st["mean"], base["mean"]),
-                     "q95_change_pct": _pct(st["q95"], base["q95"]), "q05_change_pct": _pct(st["q05"], base["q05"]),
-                     "amax_median_change_pct": _pct(st["amax_median"], base["amax_median"]),
-                     "mean_flow": _clean(st["mean"]), "q95": _clean(st["q95"])})
-    out["baseline_simulated"] = _clean(base)
+        demand = max(0.0, float(sc.get("demand_cms") or 0.0))
+        plan.append((sc, dp, dt, de, demand))
+
+    def scenario_stats(dp: float, dt: float, de: float, demand: float, params: dict[str, float] | None = None
+                       ) -> dict[str, float | None]:
+        s2 = run(1 + dp / 100.0, 1 + de / 100.0, dt, params).iloc[wu:] * to_cms
+        if demand:
+            s2 = (s2 - demand).clip(lower=0.0)
+        return _flow_stats(s2, rp)
+
+    runs = []
+    for sc, dp, dt, de, demand in plan:
+        st = scenario_stats(dp, dt, de, demand)
+        label = str(sc.get("label") or (f"P {dp:+g}%, PET {de:+g}%" + (f", {demand:g} m3/s taken" if demand else "")))
+        r = {"label": label, "dp_pct": dp, "dpet_pct": de,
+             "dt_c": dt or None, "mean_flow_change_pct": _pct(st["mean"], base["mean"]),
+             "q95_change_pct": _pct(st["q95"], base["q95"]), "q05_change_pct": _pct(st["q05"], base["q05"]),
+             "amax_median_change_pct": _pct(st["amax_median"], base["amax_median"]),
+             "mean_flow": _clean(st["mean"]), "q95": _clean(st["q95"])}
+        if demand:
+            r["demand_cms"] = demand
+        if rp is not None:
+            r["flood"] = _clean(st["flood"])
+            r["flood_change_pct"] = _pct(st["flood"], base["flood"])
+        runs.append(r)
+    out["baseline_simulated"] = _clean({k: v for k, v in base.items() if k != "flood" or rp is not None})
+    if rp is not None:
+        out["flood_rp"] = rp
     out["scenarios"] = runs
+    if members and int(members) > 0 and runs:
+        out["ensemble"] = _behavioural_ranges(
+            int(members), cal.params, use_snow, valid.get("kge"), runs, plan, rp,
+            simulate=lambda params: run(params=params),
+            score=lambda a, b, s_: _kge_on(obs.iloc[a:b], s_.iloc[a:b]), valid_span=(mid, n),
+            stats=lambda s_: _flow_stats(s_.iloc[wu:] * to_cms, rp), scenario_stats=scenario_stats)
     if any(r["dt_c"] and r["dpet_pct"] == r["dt_c"] * pet_pct_per_c for r in runs):
         out["notes"].append(f"A warming scenario raises reference evaporation by an assumed {pet_pct_per_c:g}% per "
                             "degree; pass dpet_pct to set it.")

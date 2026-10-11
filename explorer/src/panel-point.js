@@ -92,7 +92,7 @@ export async function selectPoint(lat, lon, { tab = null, push = true, fly = fal
   setPointMarker(lat, lon);
   if (fly) flyToPoint(lat, lon);
 
-  showSurface("panel-point");
+  showSurface("panel-point", { reveal: Boolean(tab) });   // map first (#548): the card answers a click
   $("pt-title").textContent = `${lat.toFixed(3)}°, ${lon.toFixed(3)}°`;
   $("pt-coords").textContent = `lat ${lat}, lon ${lon}`;
   for (const id of ["pt-climate-card", "pt-glofas-card", "pt-notes-card", "pt-assess-card"]) hideCard($(id));
@@ -123,7 +123,7 @@ export async function selectPoint(lat, lon, { tab = null, push = true, fly = fal
   requestAssess({ lat, lon, target: "pt" });
 
   setCard($("pt-climate-card"), "loading", {
-    message: state.workerReady ? "Asking Open-Meteo about this point…" : "Loading Python in your browser (about 15 MB, once)…",
+    message: state.workerReady ? "Asking Open-Meteo about this point…" : "Loading Python in your browser (about 30 MB, once)…",
   });
   try {
     const res = await call("anywhere", { lat, lon, years: 10 });

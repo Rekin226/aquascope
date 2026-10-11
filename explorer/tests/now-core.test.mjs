@@ -18,6 +18,9 @@ test("nowColor keeps the agency colour until a snapshot has loaded, then greys t
   const map = new Map([["usgs/1", { cls: "much_above" }]]);
   assert.equal(nowColor(map, "usgs/1", "#1565c0"), STATUS_CLASSES[4].color);
   assert.equal(nowColor(map, "usgs/2", "#1565c0"), NO_STATUS_COLOR);
+  // the map's default view (#544): a gauge the snapshot lacks keeps its agency colour
+  assert.equal(nowColor(map, "usgs/2", "#1565c0", "#1565c0"), "#1565c0");
+  assert.equal(nowColor(map, "usgs/1", "#1565c0", "#1565c0"), STATUS_CLASSES[4].color);
 });
 
 test("snapshotLine says when and from where, or that there is none yet", () => {

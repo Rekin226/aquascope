@@ -23,6 +23,7 @@ from aquascope.schemas.station import Station, in_bbox
 from aquascope.schemas.water_data import (
     DataSource,
     GeoLocation,
+    Quality,
     StreamflowReading,
     WaterLevelReading,
     WaterQualitySample,
@@ -79,6 +80,56 @@ def _parse_iso_date(value: str | None) -> date | None:
         return date.fromisoformat(str(value)[:10])
     except ValueError:
         return None
+
+
+def _map_uk_ea_quality(item: dict) -> tuple[Quality, str | None]:
+    """Map UK EA daily reading quality fields to harmonized Quality enum.
+
+    Parameters
+    ----------
+    item : dict
+        Raw reading item returned by the UK EA API. May contain ``quality``,
+        ``completeness``, ``valid``, ``invalid``, and ``missing`` (sub-daily counts).
+
+    Returns
+    -------
+    tuple[Quality, str | None]
+        A tuple of (harmonized Quality enum, raw quality string).
+    """
+    quality_val = _first_str(item.get("quality"))
+    completeness_val = _first_str(item.get("completeness"))
+    valid_val = _first_str(item.get("valid"))
+    invalid_val = _first_str(item.get("invalid"))
+    missing_val = _first_str(item.get("missing"))
+
+    raw_parts = []
+    if quality_val and quality_val != "N/A":
+        raw_parts.append(f"quality={quality_val}")
+    if completeness_val and completeness_val != "N/A":
+        raw_parts.append(f"completeness={completeness_val}")
+    if valid_val is not None and valid_val != "N/A":
+        raw_parts.append(f"valid={valid_val}")
+    if invalid_val is not None and invalid_val != "N/A":
+        raw_parts.append(f"invalid={invalid_val}")
+    if missing_val is not None and missing_val != "N/A":
+        raw_parts.append(f"missing={missing_val}")
+
+    quality_raw = " | ".join(raw_parts) if raw_parts else None
+
+    if not quality_val or quality_val == "N/A":
+        return Quality.UNKNOWN, quality_raw
+
+    q_lower = quality_val.strip().lower()
+    if q_lower == "good":
+        return Quality.APPROVED, quality_raw
+    if q_lower == "unchecked":
+        return Quality.PROVISIONAL, quality_raw
+    if q_lower == "estimated":
+        return Quality.ESTIMATED, quality_raw
+    if q_lower == "suspect":
+        return Quality.SUSPECT, quality_raw
+
+    return Quality.UNKNOWN, quality_raw
 
 
 class UKEACollector(BaseCollector):
@@ -510,6 +561,7 @@ class UKEACollector(BaseCollector):
         for item in raw:
             try:
                 station_suid, value, reading_datetime, remark = UKEACollector._extract_reading_data(item)
+                quality, quality_raw = _map_uk_ea_quality(item)
                 unit = MAPPED_OBSERVED_PROPERTY_UNITS.get(observed_property, None)
                 if not unit:
                     raise ValueError("Incomplete raw data reading")
@@ -536,6 +588,8 @@ class UKEACollector(BaseCollector):
                         catchment_area_km2=catchment_area_km2,
                         unit=unit,
                         remark=remark,
+                        quality=quality,
+                        quality_raw=quality_raw,
                     )
                 )
             except (ValueError, KeyError, TypeError) as exc:
@@ -563,6 +617,7 @@ class UKEACollector(BaseCollector):
         for item in raw:
             try:
                 station_suid, value, sample_datetime, remark = UKEACollector._extract_reading_data(item)
+                quality, quality_raw = _map_uk_ea_quality(item)
                 unit = MAPPED_OBSERVED_PROPERTY_UNITS.get(observed_property, None)
                 if not unit:
                     raise ValueError("Incomplete raw data reading")
@@ -588,6 +643,8 @@ class UKEACollector(BaseCollector):
                         unit=unit,
                         river=river,
                         remark=remark,
+                        quality=quality,
+                        quality_raw=quality_raw,
                     )
                 )
             except (ValueError, KeyError, TypeError) as exc:
@@ -616,6 +673,7 @@ class UKEACollector(BaseCollector):
         for item in raw:
             try:
                 station_suid, value, reading_datetime, remark = UKEACollector._extract_reading_data(item)
+                quality, quality_raw = _map_uk_ea_quality(item)
                 unit = MAPPED_OBSERVED_PROPERTY_UNITS.get(observed_property, None)
                 if not unit:
                     raise ValueError("Incomplete raw data reading")
@@ -637,6 +695,8 @@ class UKEACollector(BaseCollector):
                         water_level=float(value),
                         unit=unit,
                         remark=remark,
+                        quality=quality,
+                        quality_raw=quality_raw,
                     )
                 )
             except (ValueError, KeyError, TypeError) as exc:

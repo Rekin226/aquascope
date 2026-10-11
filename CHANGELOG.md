@@ -51,6 +51,7 @@ All notable changes to AquaScope are documented here.
   - The depth is read in a worker with geotiff.js from the Source Cooperative mirror (byte ranges, a few hundred kB per half-degree cell) and kept, so stepping repaints from memory.
   - `aquascope.flood_depth.flood_depth_overlay(river_id | bbox, return_period, day)`: the map chosen, the tiles with their windows and a GDAL command, the extent around the reach and its clip, and the depth at the reach, the deepest pixel and the wet share. `aquascope layers depth` and the MCP tool `flood_depth_overlay`. Ask the map (#561) knows the layer too ("show the flood depth").
   - The licence is confirmed from JRC's own files on 2026-10-10: the copyright notice licenses the dataset under CC BY 4.0 (credit given, changes indicated), and the README says "no restrictions, free and open Copernicus product". Both are recorded with the layer.
+- **UK EA daily reading quality mapping** (#439). Parsed agency `quality`, `completeness`, and sub-daily counts (`valid`, `invalid`, `missing`) in `UKEACollector`. Mapped `quality` codes to harmonized `Quality` enum (`Good` -> `approved`, `Unchecked` -> `provisional`, `Estimated` -> `estimated`, `Suspect` -> `suspect`, `Missing` -> `unknown`), while preserving completeness and raw telemetry counts in `quality_raw`. Documented the mapping in `docs/data_sources.md`.
 
 ### Changed
 - **The globe, calmer** (part of #543): the first view shows the rivers, not the furniture ([docs](docs/explorer.md#on-the-map-one-legend-one-line)).

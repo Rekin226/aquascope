@@ -20,7 +20,7 @@ export const GEOTIFF_MODULE = "https://cdn.jsdelivr.net/npm/geotiff@3.0.5/+esm";
 
 export const STATUS_CREDIT = {
   label: "World river status",
-  attribution: 'GEOGLOWS v2 HydroSOS monthly map (<a href="https://geoglows.org">GEOGloWS ECMWF Streamflow Service</a>)',
+  attribution: 'GEOGLOWS v2 HydroSOS monthly map (<a href="https://www.geoglows.org">GEOGloWS ECMWF Streamflow Service</a>)',
   licence: "CC BY 4.0",
 };
 

@@ -93,6 +93,13 @@ moisture, snow and water storage layers. Play a range, click a day on a hydrogra
 the map on that day, swipe-compare two dates, and save the range as a GIF. The date is in
 the link ([details](docs/explorer.md#time-on-the-map)).
 
+**Rivers, past floods and an AI that acts on the map:** every river is drawn and flows
+downstream, and it can be coloured by today's flow against its normal. Floods past shows where
+floods were reported in the news or seen by radar, month by month. **Ask the map** moves the
+view, switches layers and sets the date from plain words. **Explain this view** and **Scout**
+pin short notes and findings on the globe, every number taken from the data. Each action is
+logged and can be undone, and all of it works without a key.
+
 **Study** guides you from a question through a plan you approve to a report and export
 bundle: Word, Excel, figures, notebook, findings and study YAML. Core studies run without
 an API key. Optional model setup is available when you choose to use it. Beyond the design
@@ -368,7 +375,7 @@ Switch to MCMC with `degree>1` for polynomial models, or pass `prior_precision` 
 
 ## 💻 CLI
 
-AquaScope ships a 43-command CLI (`agri`, `basins`, `caravan`, `eval`, `evidence`, `gym`, `layers`, `playbooks` and `river` carry subcommands) for the most common workflows:
+AquaScope ships a 49-command CLI (`agri`, `basins`, `caravan`, `eval`, `evidence`, `groundwater`, `gym`, `layers`, `playbooks` and `river` carry subcommands) for the most common workflows:
 
 ```bash
 # Find stations, then collect data
@@ -384,6 +391,7 @@ aquascope river dams --at 46.948 7.452            # the dams upstream of that re
 aquascope now --station usgs/USGS-01350000        # today against normal, and the 15-day forecast corrected to the gauge
 aquascope bulletin 2026-09 --out bulletin         # last month's state of the rivers: HydroSOS classes, HTML and Markdown
 aquascope warnings --bbox -10 35 30 60            # floods ahead: reaches expected to reach their 2-year flow in 15 days
+aquascope flowstatus --bbox -10 35 30 60          # every big reach's flow today against its normal for the month
 aquascope watch usgs/USGS-01350000 river:230260670 --since 2026-10-01   # what changed since then: data, status, forecast, floods
 aquascope assess 51.415 -0.308 --problem flood_risk   # what can be answered here: gauges in reach, catchment, which methods the record supports
 aquascope context 51.86 5.95                      # flood history, surface water, flood depth, dams, rain gauge, ET and soil at a place
@@ -392,6 +400,12 @@ aquascope export --to hec-ssp --station usgs/01134500   # inputs for HEC-HMS/RAS
 aquascope gym run --basin uk_ea/013054a3-670e-49ee-afda-e0865a449197   # HydroGym: calibrate GR4J on a real basin as a gym episode
 aquascope layers frames precip --start 2024-05-01 --end 2024-05-20   # a time-lapse of a dated map layer: dates and tile URLs
 aquascope map "trace the Nile to the sea" --resolve   # plain words to the Explorer's map actions (keyless rules)
+aquascope mesh my_run.p01.hdf                     # a HEC-RAS 2D or UGRID mesh result: cells, times, largest depth and speed
+aquascope whatif --lat 47.598 --lon 8.682 "20% less rain and 2 degrees warmer"   # GR4J for the basin, the change carried downstream
+aquascope swmm model.inp model.out --crs 32617   # an EPA SWMM model and results: network, flooding nodes, largest flows
+aquascope layers scout --bbox -10 35 30 60           # what stands out on the map, each with its reason (the Explorer's Scout)
+aquascope groundwater surface --mode change      # the head surface of the Archive's wells and its change, masked where wells are sparse
+aquascope modflow model.hds --grid model.dis.grb --crs EPSG:27700   # your MODFLOW heads on the map: cells in lon/lat, per layer and time
 aquascope mcp                                     # serve the same tools to Claude / Cursor over MCP
 aquascope ask "100-year flood of the Seine at Paris?"   # the analyst: tools + a cited Markdown report
 aquascope ingest agency_export.csv --unit cfs     # any CSV/Excel -> clean daily series + QA report
@@ -579,8 +593,8 @@ If you use AquaScope in your research, please cite:
   author  = {Ouédraogo, Abdoul Rachid},
   year    = {2026},
   url     = {https://github.com/Rekin226/aquascope},
-  version = {0.26.0},
-  doi     = {10.5281/zenodo.23246553},
+  version = {0.27.0},
+  doi     = {10.5281/zenodo.23301359},
   license = {MIT}
 }
 ```
@@ -588,7 +602,7 @@ If you use AquaScope in your research, please cite:
 Machine-readable metadata lives in [CITATION.cff](CITATION.cff); GitHub's "Cite this
 repository" button renders it in APA and BibTeX. Every tagged release is archived on
 Zenodo; `10.5281/zenodo.21903143` is the concept DOI that always resolves to the latest
-version (v0.26.0 is [10.5281/zenodo.23246553](https://doi.org/10.5281/zenodo.23246553)).
+version (v0.27.0 is [10.5281/zenodo.23301359](https://doi.org/10.5281/zenodo.23301359)).
 
 ## 📄 License
 

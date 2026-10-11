@@ -118,7 +118,7 @@ export function selectStation(key, { fly = false, tab = null, push = true } = {}
   writeUrl({ push });
   selectTab(root(), state.activeTab);
 
-  setCard($("st-kpis-card"), "loading", { message: state.workerReady ? fetchingMessage() : "Loading Python in your browser (about 15 MB, once)…" });
+  setCard($("st-kpis-card"), "loading", { message: state.workerReady ? fetchingMessage() : "Loading Python in your browser (about 30 MB, once)…" });
   requestAnalysis(r, my);
   requestCatchment({ station: r, target: "st" });
   requestBasin(r.lat, r.lon, "st");

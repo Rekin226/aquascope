@@ -14,6 +14,7 @@ import {
   ActionLog, BY_LABEL, LAYER_CONTROLS, agoWords, checkPin, inkOn, noteBody, placeNotes, slotOf,
 } from "./map-actions-core.js?v=__BUILD__";
 import { getStatusFocus, setStatusFocus } from "./status-layer.js?v=__BUILD__";
+import { SEVERITY as REVIEW_SEVERITY } from "./mesh-review-core.js?v=__BUILD__";
 import { clearRiverNetwork, lightRiverNetwork } from "./river-map.js?v=__BUILD__";
 import { call, callLight } from "./worker-client.js?v=__BUILD__";
 import { announce } from "./a11y.js?v=__BUILD__";
@@ -21,8 +22,11 @@ import { announce } from "./a11y.js?v=__BUILD__";
 export const log = new ActionLog();
 
 const AREA_SRC = "ai-areas";
-const PIN_SVG = '<svg viewBox="0 0 24 32" aria-hidden="true"><path d="M12 31s10-10.2 10-18A10 10 0 0 0 2 13c0 7.8 10 18 10 18Z"/>' +
-  '<circle cx="12" cy="12.5" r="3.6"/></svg>';
+const PIN_PATH = '<path d="M12 31s10-10.2 10-18A10 10 0 0 0 2 13c0 7.8 10 18 10 18Z"/>';
+const PIN_SVG = `<svg viewBox="0 0 24 32" aria-hidden="true">${PIN_PATH}<circle cx="12" cy="12.5" r="3.6"/></svg>`;
+// A ranked pin (Scout, #563) carries its number where the dot was.
+const rankedPin = (n) => `<svg viewBox="0 0 24 32" aria-hidden="true">${PIN_PATH}` +
+  `<text x="12" y="13" text-anchor="middle" dominant-baseline="central">${n}</text></svg>`;
 
 let river = null;              // the river this module lit: { lat, lon, river_id, direction, label } or null
 const areas = new Map();       // entry id -> { bbox, label, marker }
@@ -81,6 +85,32 @@ const SLOT_WRITERS = {
   basemap: (v) => actions.setBasemap(v),
   river: (v) => { if (v) lightRiver(v); else { river = null; clearRiverNetwork(); } },
 };
+
+/**
+ * A module that paints its own slot (What if, #565) hands the writer that puts a value back on the map, so the
+ * log's undo can restore what was there before: `fn(value)` with null clears it.
+ */
+export function registerSlotWriter(slot, fn) {
+  SLOT_WRITERS[slot] = fn;
+}
+
+/**
+ * Log an action a module has already applied itself (its slot needs a writer: registerSlotWriter), with what it
+ * replaced, so the log lists it and undo puts `before` back. Returns the entry.
+ */
+export function logAction({ action, before = null, after = null, label = "", by = "rules", detail = "", command = "" }) {
+  const slot = slotOf(action);
+  if (!slot || !SLOT_WRITERS[slot]) throw new Error(`no writer for ${action && action.type}`);
+  const entry = log.add({ action, slot, before, after, label: label || action.type, by, detail, command });
+  renderLog();
+  return entry;
+}
+
+/** The value in force on a slot now: the newest live entry's `after`, or null. */
+export function slotValue(slot) {
+  const live = log.live().filter((e) => e.slot === slot);
+  return live.length ? live[live.length - 1].after : null;
+}
 
 function writeSlot(slot, value) {
   if (SLOT_WRITERS[slot]) return SLOT_WRITERS[slot](value);
@@ -155,17 +185,23 @@ function openPinCard(id) {
   const [first, ...rest] = p.facts || [];
   const v = first && (typeof first.value === "number" ? first.value.toLocaleString(undefined, { maximumFractionDigits: 3 }) : String(first.value));
   const isNote = p.kind === "note";
-  // A note's card leads with its words; the facts they do not already give follow (#562).
-  const note = isNote ? noteBody(p) : [p.text, ...rest.map(factLine)].filter(Boolean).join(" · ");
+  const isReview = p.kind === "review";
+  // A note's card leads with its words; the facts they do not already give follow (#562). A scout pin's reason
+  // already says its numbers (all formatted by the package); its facts stay in pins() (#563).
+  const note = isNote ? noteBody(p) : p.rank ? p.text : [p.text, ...rest.map(factLine)].filter(Boolean).join(" · ");
+  const sev = isReview ? REVIEW_SEVERITY[p.severity] || REVIEW_SEVERITY.info : null;
   // The pin's card is what was asked for now: the log folds so the two do not stack (its count reopens it).
   if (logOpen) setLogOpen(false);
   actions.openMapCard({
     id: `pin:${id}`, lngLat: [p.lon, p.lat], lift: isNote ? 14 : 30,
-    what: `Note, ${BY_LABEL[e.by] || e.by}`, whatIcon: `<span class="ma-pin-mini" aria-hidden="true">${PIN_SVG}</span>`,
+    what: isReview ? `Review ${p.rank}, ${p.check} · ${BY_LABEL[e.by] || e.by}`
+      : !isNote && p.rank ? `Scout ${p.rank}${p.kind ? `, ${p.kind}` : ""} · ${BY_LABEL[e.by] || e.by}` : `Note, ${BY_LABEL[e.by] || e.by}`,
+    ...(sev ? { status: { text: sev.words, color: sev.colour } } : {}),
+    whatIcon: `<span class="ma-pin-mini" aria-hidden="true">${PIN_SVG}</span>`,
     title: p.title, sub: [p.place || `${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}`, p.when].filter(Boolean).join(" · "),
     figure: !isNote && first ? { value: v, unit: first.unit || "", label: first.label } : null,
     note, credit: p.credit || p.source || "",
-    buttons: [{ id: "unpin", label: isNote ? "Remove note" : "Remove pin", title: "Undo this pin",
+    buttons: [{ id: "unpin", label: isNote ? "Remove note" : isReview ? "Remove this finding" : "Remove pin", title: "Undo this pin",
       onClick: () => { undoEntry(id); actions.closeMapCard(); } }],
   });
   // Its callout steps back while the card says the same thing in full.
@@ -223,6 +259,16 @@ function placeNoteCards() {
   });
 }
 
+// A pin from the log: brought into view if it is off screen, then its card opened.
+function showPin(id) {
+  const e = log.get(id);
+  if (!e || e.undone) return;
+  const p = e.after;
+  const b = map.getBounds();
+  if (b && !b.contains([p.lon, p.lat])) map.easeTo({ center: [p.lon, p.lat], duration: 700 });
+  openPinCard(id);
+}
+
 function drawPin(id, pin) {
   if (!state.mapOk || !map) return;
   const old = pinMarkers.get(id);
@@ -231,9 +277,14 @@ function drawPin(id, pin) {
   if (pin.kind === "note") { drawNote(id, pin); return; }
   const el = document.createElement("button");
   el.type = "button";
-  el.className = "ma-pin";
-  el.innerHTML = PIN_SVG;
-  el.setAttribute("aria-label", `Note: ${pin.title}`);
+  el.className = pin.rank ? "ma-pin ranked" : "ma-pin";
+  el.innerHTML = pin.rank ? rankedPin(pin.rank) : PIN_SVG;
+  el.setAttribute("aria-label", pin.rank ? `${pin.kind === "review" ? "Review" : "Scout"} ${pin.rank}: ${pin.title}` : `Note: ${pin.title}`);
+  if (pin.kind === "review") {
+    // A review pin (#564) wears its severity: red a problem, amber worth a look, blue for information.
+    el.classList.add("review", `sev-${pin.severity}`);
+    el.style.setProperty("--pin", (REVIEW_SEVERITY[pin.severity] || REVIEW_SEVERITY.info).colour);
+  }
   el.title = pin.title;
   el.addEventListener("click", (ev) => { ev.stopPropagation(); openPinCard(id); });
   const marker = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([pin.lon, pin.lat]).addTo(map);
@@ -416,6 +467,26 @@ export function addPin(pin, { by = "api", label = "" } = {}) {
   return entry.id;
 }
 
+/**
+ * Refine a pin already on the map (its title or note, as a place name arrives), without a new log entry: the
+ * pin stays where it is and keeps its undo. Returns false for a pin that is gone.
+ */
+export function updatePin(id, pin, { label = "" } = {}) {
+  const e = log.get(id);
+  if (!e || e.undone || !e.action || e.action.type !== "add_pin") return false;
+  const p = checkPin({ ...e.after, ...pin, lat: e.after.lat, lon: e.after.lon });
+  e.after = p;
+  if (label) e.label = label;
+  const m = pinMarkers.get(id);
+  if (m) {
+    const el = m.getElement();
+    el.title = p.title;
+    el.setAttribute("aria-label", p.rank ? `Scout ${p.rank}: ${p.title}` : `Note: ${p.title}`);
+  }
+  log.emit();
+  return true;
+}
+
 /** The pins on the map, oldest first: { id, lat, lon, title, text, facts, source, by, at }. */
 export const pins = () => log.pins();
 
@@ -432,6 +503,7 @@ const ICON = {
   highlight_river: '<path d="M4 18c3 0 3-4 6-4s3 4 6 4 2-3 4-3"/><path d="M4 11c3 0 3-4 6-4s3 4 6 4 2-3 4-3"/>',
   draw_area: '<rect x="4.5" y="5.5" width="15" height="13" rx="1" stroke-dasharray="3 2"/>',
   add_pin: '<path d="M12 21s7-7 7-12a7 7 0 0 0-14 0c0 5 7 12 7 12Z"/><circle cx="12" cy="9" r="2.2"/>',
+  what_if: '<path d="M4 17c3 0 3-3 6-3s3 3 6 3 2-2 4-2"/><path d="M9 4.5a3 3 0 1 1 3 3.5v1.6"/><path d="M12 11.6h.01"/>',
 };
 
 const icon = (type) => `<svg class="ma-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ` +
@@ -460,8 +532,11 @@ export function renderLog() {
   const rows = live.slice().reverse().map((e) => {
     const by = BY_LABEL[e.by] || e.by;
     const title = [e.command ? `“${e.command}”` : "", e.detail, agoWords(e.at, now)].filter(Boolean).join(" · ");
-    return `<li class="ma-row" data-id="${e.id}">${icon(e.action && e.action.type)}` +
-      `<span class="ma-label" title="${escapeHtml(title)}">${escapeHtml(e.label)}</span>` +
+    const pin = e.action && e.action.type === "add_pin";
+    const label = pin
+      ? `<button type="button" class="ma-label ma-open-pin" data-pin="${e.id}" title="${escapeHtml(title)}">${escapeHtml(e.label)}</button>`
+      : `<span class="ma-label" title="${escapeHtml(title)}">${escapeHtml(e.label)}</span>`;
+    return `<li class="ma-row" data-id="${e.id}">${icon(e.action && e.action.type)}${label}` +
       `<span class="ma-by ma-by-${escapeHtml(e.by)}">${escapeHtml(by)}</span>` +
       `<button type="button" class="ma-undo" data-undo="${e.id}" aria-label="Undo: ${escapeHtml(e.label)}" title="Undo">` +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>' +
@@ -478,6 +553,8 @@ export function initMapActions() {
     box.addEventListener("click", (e) => {
       const one = e.target.closest("[data-undo]");
       if (one) { undoEntry(Number(one.dataset.undo)); return; }
+      const pin = e.target.closest("[data-pin]");
+      if (pin) { showPin(Number(pin.dataset.pin)); return; }
       if (e.target.closest("[data-undo-all]")) undoAll();
     });
   }

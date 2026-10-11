@@ -1,0 +1,95 @@
+/* What if, on the map (#565): the small panel with the sliders and the line, the before/after swipe, and the
+   legend row's mark. The rivers themselves are painted by src/whatif-map.js. */
+
+.whatif {
+  position: absolute; right: var(--gap); bottom: 40px; z-index: 7; width: 300px; max-width: calc(100% - 24px);
+  padding: 11px 13px 12px; background: var(--surface-solid); color: var(--ink); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-2); font-size: .8rem; line-height: 1.4;
+}
+.whatif[hidden] { display: none; }
+.wi-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
+.wi-kicker { margin: 0; font-size: .66rem; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.wi-title { margin: .05rem 0 0; font-size: .95rem; font-weight: 650; line-height: 1.25; }
+.wi-sub { margin: .1rem 0 0; color: var(--muted); font-size: .72rem; }
+.wi-close {
+  font: inherit; font-size: 1.05rem; line-height: 1; border: 0; background: none; color: var(--muted); cursor: pointer;
+  padding: 0 2px; margin: -2px -4px 0 0;
+}
+.wi-line { display: flex; gap: .35rem; margin: .6rem 0 0; }
+.wi-line input {
+  flex: 1; min-width: 0; font: inherit; font-size: .78rem; padding: .32rem .5rem; border: 1px solid var(--line);
+  border-radius: var(--radius-xs); background: var(--bg); color: var(--ink);
+}
+.wi-read { margin: .3rem 0 0; color: var(--muted); font-size: .7rem; }
+.wi-read[hidden] { display: none; }
+.wi-form { margin-top: .55rem; display: grid; gap: .3rem; }
+.wi-slider { display: grid; grid-template-columns: 4.6rem 1fr 4.4rem; align-items: center; gap: .45rem; }
+.wi-slider > span { color: var(--ink-2); font-size: .74rem; }
+.wi-slider input[type="range"] { width: 100%; accent-color: var(--blue); }
+.wi-slider input[type="number"] {
+  font: inherit; font-size: .76rem; width: 100%; padding: .2rem .4rem; border: 1px solid var(--line);
+  border-radius: var(--radius-xs); background: var(--bg); color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.wi-slider output { font-variant-numeric: tabular-nums; font-size: .74rem; text-align: right; color: var(--ink); }
+.wi-slider:last-of-type output { color: var(--muted); font-size: .7rem; text-align: left; }
+.wi-run-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-top: .2rem; }
+.wi-scn { color: var(--muted); font-size: .72rem; }
+.wi-status { margin: .45rem 0 0; font-size: .74rem; color: var(--ink-2); display: flex; align-items: center; gap: .4rem; }
+.wi-status[hidden] { display: none; }
+.wi-status.warn { color: var(--warn-ink); }
+.wi-status.error { color: var(--err-ink); }
+.wi-status.ok { color: var(--ok-ink); }
+.wi-result { margin-top: .55rem; padding-top: .5rem; border-top: 1px solid var(--line-soft); }
+.wi-result[hidden] { display: none; }
+.wi-measures { display: grid; gap: .2rem; }
+.wi-m {
+  font: inherit; display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: .45rem; width: 100%;
+  padding: .26rem .4rem; border: 1px solid transparent; border-radius: var(--radius-xs); background: none;
+  color: var(--ink); cursor: pointer; text-align: left;
+}
+.wi-m:hover { background: var(--bg-soft); }
+.wi-m[aria-pressed="true"] { border-color: var(--line); background: var(--bg-soft); }
+.wi-m i { width: 10px; height: 10px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(15, 28, 38, .25); }
+.wi-m-label { font-size: .74rem; color: var(--ink-2); }
+.wi-m b { font-weight: 650; font-variant-numeric: tabular-nums; font-size: .76rem; }
+.wi-model { margin: .4rem 0 .2rem; color: var(--muted); font-size: .7rem; }
+.wi-check { display: flex; align-items: center; gap: .35rem; font-size: .74rem; color: var(--ink-2); cursor: pointer; }
+.wi-foot { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.wi-edit { display: none; font-size: .74rem; }
+
+/* the legend row's mark: a small diverging bar */
+.wi-mark { display: inline-flex; width: 22px; height: 8px; border-radius: 2px; overflow: hidden; }
+.wi-mark i { flex: 1; }
+
+/* the swipe: a line across the map with a handle; left of it the rivers as they are, right with the scenario */
+.wi-swipe { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.wi-swipe[hidden] { display: none; }
+.wi-sw-line {
+  position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: rgba(15, 28, 38, .7);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .7);
+}
+.wi-sw-handle {
+  position: absolute; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; display: grid; place-items: center;
+  border-radius: 50%; background: var(--surface-solid); border: 1px solid var(--line); box-shadow: var(--shadow-2);
+  color: var(--ink); font-size: .8rem; cursor: ew-resize; pointer-events: auto; touch-action: none;
+}
+.wi-sw-handle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.wi-sw-label {
+  position: absolute; top: 58px; padding: .15rem .45rem; border-radius: 999px; font-size: .7rem; font-weight: 600;
+  background: var(--surface-solid); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow-1);
+  white-space: nowrap;
+}
+.wi-sw-before { right: calc(100% - var(--x, 50%) + 8px); }
+.wi-sw-after { left: calc(var(--x, 50%) + 8px); }
+
+/* a phone: a short sheet over the bottom of the map */
+@media (max-width: 640px) {
+  .whatif { left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 62vh; overflow: auto; z-index: 12; }
+  /* after a run the sliders fold away, so the map above shows the answer; "Change the scenario" brings them back */
+  .whatif.done .wi-line, .whatif.done .wi-read, .whatif.done .wi-form, .whatif.done .wi-sub { display: none; }
+  .whatif.done .wi-edit { display: inline; }
+  .wi-sw-label { top: 64px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .whatif { transition: none; }
+}

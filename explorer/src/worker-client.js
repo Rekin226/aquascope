@@ -32,7 +32,7 @@ export function onAreaProgress(fn) { areaListeners.add(fn); return () => areaLis
 
 export function ensureWorker() {
   if (worker) return worker;
-  worker = new Worker(`./worker.js?v=${CONFIG.build}`);
+  worker = new Worker(`./worker.js?v=${CONFIG.build}`, { type: "module" });
   worker.onmessage = (e) => {
     const m = e.data;
     if (m.type === "progress") { if (!state.workerReady) bootProgress(m.text); return; }
@@ -140,7 +140,7 @@ export async function ensureCatalogInWorker() {
 }
 
 export function workerBusyMessage() {
-  return state.workerReady ? null : "Loading Python in your browser (about 15 MB, once).";
+  return state.workerReady ? null : "Loading Python in your browser (about 30 MB, once).";
 }
 
 // ── the light pool ──────────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ export function lightPoolSize() {
 }
 
 function startLight() {
-  const slot = { worker: new Worker(`./worker.js?v=${CONFIG.build}`), ready: false, job: null };
+  const slot = { worker: new Worker(`./worker.js?v=${CONFIG.build}`, { type: "module" }), ready: false, job: null };
   slot.worker.onmessage = (e) => {
     const m = e.data;
     if (m.type === "ready") { slot.ready = true; pump(); return; }

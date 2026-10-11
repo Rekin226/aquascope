@@ -63,6 +63,12 @@ LAYERS: dict[str, dict[str, Any]] = {
     "floods_past": {"label": "Floods past", "aliases": (
         "floods past", "past floods", "flood events", "flood news", "floods in the news", "radar floods",
         "flood history", "historical floods")},
+    "groundwater": {"label": "Groundwater", "aliases": (
+        "groundwater", "groundwater level", "groundwater levels", "groundwater surface", "water table",
+        "head surface", "heads", "well levels", "wells", "modelmuse", "modflow", "modflow heads")},
+    "water_balance": {"label": "Water balance", "aliases": (
+        "water balance", "water budget", "basin water balance", "subbasin water balance", "subbasins",
+        "evaporation", "evapotranspiration", "runoff", "closure error", "hec-hms", "qswat", "swat")},
     "floods_ahead": {"label": "Floods ahead", "aliases": (
         "floods ahead", "flood forecast", "flood forecasts", "forecast floods", "flood warnings", "warnings",
         "future floods", "upcoming floods")},
@@ -967,13 +973,22 @@ _EXPLAIN = re.compile(
     r")")
 
 
+# "Review my model": the checks on the model result on the map (#564, aquascope.mesh_review), a control too.
+_REVIEW = re.compile(
+    r"(?:please\s+|can you\s+)?(?:"
+    r"(?:review|check)(?: (?:my|the|this|these))?(?: model)?(?: (?:results?|run|mesh|output))?(?: please)?"
+    r"|(?:does|do) (?:my|the|this) (?:model|run|results?) look (?:right|ok|okay|sensible)"
+    r")")
+
+
 def parse_command(text: str, today: str | date | None = None) -> dict[str, Any]:
     """Read one plain-English request into checked map actions, with no model and no network.
 
     Returns ``{"text", "matched", "actions", "said", "rules", "errors", "control"}``: ``matched`` is True only
     when every word of the request was understood (so "show me the Rhine and something clever" is left to a
     model rather than half done); ``said`` is one line per action for the log; ``control`` is "undo" or
-    "undo_all" when the request was about the log itself, and "explain" for "what am I seeing?" (#562). Place
+    "undo_all" when the request was about the log itself, "explain" for "what am I seeing?" (#562) and
+    "review" for "review my model" (#564). Place
     names stay names (``place``) until :func:`resolve_actions` looks them up.
     """
     t = _today(today)
@@ -990,6 +1005,8 @@ def parse_command(text: str, today: str | date | None = None) -> dict[str, Any]:
         return {**out, "matched": True, "control": "undo_all", "rules": ["undo_all"]}
     if _EXPLAIN.fullmatch(folded.replace("'", "")):
         return {**out, "matched": True, "control": "explain", "rules": ["explain"]}
+    if _REVIEW.fullmatch(folded.replace("'", "")) and re.search(r"model|result|run|mesh|output|review", folded):
+        return {**out, "matched": True, "control": "review", "rules": ["review"]}
 
     # The whole request first, then clause by clause: "Bosnia and Herzegovina" is one place.
     clauses = [_parse_clause(text, t)]

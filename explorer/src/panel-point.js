@@ -123,7 +123,7 @@ export async function selectPoint(lat, lon, { tab = null, push = true, fly = fal
   requestAssess({ lat, lon, target: "pt" });
 
   setCard($("pt-climate-card"), "loading", {
-    message: state.workerReady ? "Asking Open-Meteo about this point…" : "Loading Python in your browser (about 15 MB, once)…",
+    message: state.workerReady ? "Asking Open-Meteo about this point…" : "Loading Python in your browser (about 30 MB, once)…",
   });
   try {
     const res = await call("anywhere", { lat, lon, years: 10 });

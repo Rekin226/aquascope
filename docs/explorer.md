@@ -168,6 +168,68 @@ facts, source})` in `explorer/src/map-actions.js` (also `actions.addPin`) drops 
 pin that opens a map card with its note, facts and source, listed in the log like
 any action; `pins()` lists them.
 
+## Scout
+
+The **Scout** pill beside **Ask the map** looks at the view on screen and drops up to
+ten numbered pins on what stands out, most worth a look first. Each pin opens a card
+with its title, its reason in a sentence or two, the main number and where it came
+from. The pins go in the action log, so **Undo all** or a pin's **Remove pin** takes
+them away, and a second Scout replaces the first one's pins. Scout and **Explain this
+view** take turns: each clears the other's numbered marks, so one set of numbers is on
+the map at a time. A pin's row in the log opens its card.
+
+![Scout: ten pins on what stands out today](img/globe/563-scout-globe.png)
+
+What it looks for, by fixed rules in `aquascope.map_scout`:
+
+| Kind | What makes it stand out | Data |
+|---|---|---|
+| World river status | The largest connected areas much above or much below normal in the month's map | GEOGLOWS v2 HydroSOS (modelled), CC BY 4.0 |
+| Floods ahead | The reaches with the highest return-period class and the largest rivers, one pin per river group | GEOGLOWS v2 forecast, CC BY 4.0; return periods CC BY-NC-SA 4.0 |
+| Floods past | The month's strongest groups of flood events in the news and radar detections | Groundsource (CC BY 4.0), Microsoft Sentinel-1 (MIT) |
+| Gauges today | Groups of gauges much above or much below normal for the date, around the most extreme one | The Archive's daily snapshot |
+| Models and gauges | Gauges where even the best model scored does no better than the gauge's own mean flow | The evidence table (`skill/model_skill.parquet`) |
+
+The month is the map's: move the time bar to a month and Scout looks at that month's
+river status and floods in the news. Floods ahead and the gauges are always today's.
+Two pins never sit closer than about a pin's height on screen, a pin that would stand
+under the bars, the time bar or the legends is left out for the next finding, and each
+kind has a share of the ten (the past and the evidence table fewer), so one busy place does not
+take every pin. A pin's place name comes from the same gazetteer as the search
+(Photon reverse geocoding, OpenStreetMap data, ODbL). Photon answers one request at a
+time, so the pins drop at once under a named region or their coordinates and take
+their place names over the next few seconds; when Photon does not answer, they keep
+those.
+
+![A scout pin's card: the reason, the number and the source](img/globe/563-scout-card.png)
+
+**Where the findings come from.** Each day, after the Floods ahead issue, the
+flood-warnings workflow runs the scout over the whole world and publishes
+`scout/latest.json` (and a dated copy) in the Archive dataset, writing nothing else.
+That file adds record checks a browser cannot afford: the share of a named region
+much above or below normal against the same calendar month of every year since 1990
+(about 36 status maps), and a group of flood cells against the same month since 2000
+(news coverage grows over the years, which the method notes). When the view is half
+the globe at the newest month, Scout uses that file, and the line under the bar says
+"from today's scout file". Anywhere else, or before the first file is published, it
+scans the view in your browser, in a few seconds once the engine has started.
+
+**With a model.** Keyless, the rules' own sentences are used. With Chrome's built-in
+model ready, or a key in Ask ✨, the model puts the findings in order and words them,
+choosing from a few more than ten. It never writes a number: every number, date,
+place and ranking is a slot (`{area}`, `{peak}`, `{month}`) that the package fills in,
+and wording with a digit, a percent sign, a number word or a word like "record" or
+"largest" outside the slots is refused, and so is a sign set against a slot ("-{peak}",
+"minus {area}"), so the rules' wording stays (the line says how many were refused). The maintainer's keys are never used for visitors.
+
+The same scan is `aquascope layers scout [--bbox W S E N] [--month YYYY-MM]
+[--published]`, the MCP tool `map_scout`, and, for an assistant in the browser, the
+WebMCP tool `aquascope_scout`. It is model output and news reports, not a warning.
+
+![Scout over Europe in September 2026](img/globe/563-scout-europe.png)
+
+![Scout on a phone, dark](img/globe/563-scout-phone-dark.png)
+
 ## Explain this view
 
 "What am I seeing?" gets an answer on the map, not in a report. Press **Explain this
@@ -208,7 +270,9 @@ Who words the notes:
    Ask the map. The model only chooses and orders the facts and writes the words
    between them. It writes each number as a placeholder (`{f3}`), which code fills in
    from the facts, and a note whose words hold any other number, in digits or in words
-   ("twelve", "half"), is refused (the claim lock); the line under the box says how many were refused and why. When fewer than
+   ("twelve", "half"), or with a sign or a digit set against a placeholder ("-{f3}", "minus {f3}",
+   "{f3}0", which would change the number code puts in), is refused (the claim lock, the same check
+   Scout and the mesh review make); the line under the box says how many were refused and why. When fewer than
    three pass, notes in fixed wording on the other facts make up the rest.
 
 A layer still reading its file (just after the page opens, or after a new date) is
@@ -229,6 +293,87 @@ The same engine answers outside the page: `aquascope layers explain W S E N [--d
 [--layers ...] [--facts] [--llm]` prints the notes (and with `--facts`, every fact),
 and the MCP tool `explain_view(bbox, date, layers)` returns the facts and the notes as
 JSON. Both read the published layers themselves.
+
+## What if, on the map
+
+"What if it rains 20% less?" changes the rivers on the map, not a table. On a river
+reach's map card (or a gauge's, once its river is found), **What if…** opens a small
+panel: a rain slider, a warming slider and a demand (m³/s taken from the river), and
+one line for words.
+
+![What if: 20% less rain and 2 °C warmer on the Thur, painted on its basin and down the Rhine](img/globe/whatif-thur-painted.png)
+
+**Run** calibrates GR4J for the basin that drains to the reach and runs it without and
+with the scenario (`aquascope.whatif_map.whatif`, in the worker):
+
+- **The basin** comes from the GEOGLOWS v2 routing tables, the ones the upstream area
+  and the trace to the sea read. The forcing is ERA5 (Open-Meteo) at the basin's
+  area-weighted centre; a basin over 100,000 km² is refused, since one cell cannot
+  stand for its weather.
+- **The model** is GR4J, with a degree-day snow store where enough of the rain falls
+  below freezing (`aquascope.advanced.catchment_model`). On a gauge it is calibrated on
+  the gauge's record; on a reach without one, on the reach's GEOGLOWS simulated flow,
+  and the panel says so. Half the years calibrate, the other half validate.
+- **The answer at the outlet**: the change in mean flow, low flow (Q95, the flow
+  exceeded 95% of days) and the 10-year flood (GEV on the simulated annual maxima),
+  each with a range: 24 parameter sets near the calibrated one, kept when they do as
+  well on the validation years (KGE within 0.05), each run with and without the
+  scenario.
+- **Downstream**, the change is carried by area weighting to the third major
+  confluence (a tributary at least a quarter of the main stem's area): at each reach,
+  the outlet's change times the share of the drainage area the basin makes up. This
+  assumes the rest of the drainage area unchanged and running off at the same rate
+  per km². It ignores wetter or drier tributaries, dams and lakes, and floods that do
+  not peak together; the flood is the roughest of the three.
+
+The map shows the answer directly. The basin's reaches take the outlet's change (the
+model is lumped: one change for the whole basin). The river below them fades as other
+rivers join, coloured from brown (drier) to teal (wetter), quiet grey within ±3%. A
+label gives the change at the outlet and after each major confluence. The panel lists
+the three changes and switches the colours between them.
+
+**Before/after swipe** (in the panel or the legend row) draws a divider across the map:
+left of it the rivers as they are modelled today, in their own blue; right of it, the
+scenario.
+
+![The before/after swipe](img/globe/whatif-thur-swipe.png)
+
+A click on a painted reach opens its map card: the three changes with their ranges,
+the share of the water that comes from the basin modelled, and the confluence when
+there is one, with **What if… here** for that reach's own basin.
+
+![A reach's card below the first confluence](img/globe/whatif-reach-card.png)
+
+Who reads the line, in the same order as Ask the map:
+
+1. **No model, no key**: fixed rules (`parse_scenario`) read "20% less rain and 2
+   degrees warmer", "a fifth less rain", "take 5 m3/s for irrigation", "rain -10%,
+   +1.5 °C". This always works.
+2. **The model on your device**, then **your own key** from Ask ✨. The model only
+   fills the four parameters (rain %, warming, evaporation %, demand). A number it
+   gives that is not in your words, one your words say once but it uses twice, one
+   going the other way from your words ("20% more rain" is never -20), or one outside
+   the limits is refused (the claim lock), and the line under the box says who read it. The values go into the sliders before the run, so you see
+   exactly what runs.
+
+Every run is in the action log with its undo; a new run replaces the painting and undo
+puts the one before back. A second scenario on the same basin reuses the calibration
+(the fit is seeded, so the numbers are a fresh run's), which makes it quick. The first
+run takes about a minute in the browser: measured 47 to 90 s in headless Chrome for the
+Thur (1,729 km²), engine start included; 10 s from the command line.
+
+On a phone the panel is a sheet, and after a run the sliders fold away so the map shows
+the answer; **Change the scenario** brings them back.
+
+![What if on a phone](img/globe/whatif-phone.png)
+
+The same engine answers outside the page: `aquascope whatif --lat 47.598 --lon 8.682
+"20% less rain and 2 degrees warmer"` (or `--river ID`, `--source` and `--station` for
+a gauge, `--rain`, `--warming`, `--demand`, `--rp`, `--llm` with your own key,
+`--json`) prints the outlet's numbers and the reaches downstream, and the MCP tool
+`whatif_map` returns them as JSON. The numbers on the map are the CLI's: the same
+seeded calibration gives −38.3% mean flow, −38.5% low flow and −46.0% 10-year flood
+for the Thur in both.
 
 ## Map layers
 
@@ -437,6 +582,163 @@ Google Maps and Google Earth tiles are deliberately absent: their terms forbid
 this use. Esri's legacy imagery answers without a token but Esri's own
 documentation requires one, so it is out too.
 
+## Groundwater
+
+**Groundwater** in the legend (off until you turn it on) draws a groundwater-level surface
+from the Archive's wells, the way ModelMuse, FloPy and GMS show a head surface, and its
+change over a year. The Archive mirrors the Environment Agency's wells in England (about
+380, Open Government Licence v3.0), so that is where it draws; elsewhere the legend offers
+to go there.
+
+![The head surface over England in July 2026, with the legend's key](img/globe/groundwater-level.png)
+
+- **Level or change.** Level is the head in metres above Ordnance Datum: the wells' datum
+  is common, so this is a head surface, not a depth to water (that would need each well's
+  ground level), with contour lines. **Change over 12 months** is this month minus the
+  same month a year before, at the wells that have both, brown where the level fell and
+  blue-green where it rose; the colours saturate at a round number near the 90th
+  percentile of the changes, so the ordinary rises and falls show.
+- **The month.** The time bar picks it. Each well's value is the mean of its readings in
+  the month, or the reading nearest the 15th within a month. When few wells have reported
+  yet (the Archive is a few weeks behind), the latest month most wells reported in is
+  drawn, and the key says so.
+- **The density mask.** Inverse distance weighting between the wells (power 2, fading to
+  nothing at 40 km), drawn only where at least 3 wells lie within 20 km. Where only one
+  or two do, the map is hatched grey: looked at, too few wells to draw. Where none do,
+  nothing is drawn. The wells are the small dots, in the same colours.
+- **A click** on the surface opens the map card with the value there, how many wells it
+  rests on and the nearest well; on the hatching, how many wells are near and how many the
+  surface needs. A click on a well's gauge opens its record as usual.
+- **Beside it**: GRACE water storage (Layers, Water storage anomaly), the regional change
+  from space, at about 300 km, 2002 to mid-2022.
+
+![Change from July 2025 to July 2026, and the card for a point between wells](img/globe/groundwater-change-card.png)
+
+What it is not: a groundwater model. Wells in different aquifers are mixed, and between
+wells the surface is a guess. How it runs: the page reads the wells' readings from the
+Archive's bundle (`obs/groundwater_level/uk_ea.parquet`, about 4 MB, once) with DuckDB and
+hands the months it needs to Python in the worker; the month, the interpolation and the
+mask are `aquascope.groundwater.surface.surface_from_readings`.
+
+The same in Python: `aquascope groundwater surface [--bbox W S E N] [--month YYYY-MM]
+[--mode level|change] [--compare YYYY-MM] [--geojson out.geojson]` and the MCP tool
+`groundwater_surface`.
+
+### Your MODFLOW heads
+
+Drop a MODFLOW head file (`.hds`) on the map with its grid (`.dis`, `.disv` or
+`.dis.grb`), and the `.nam` FloPy writes if it says where the model is, or open them from
+the Groundwater key. The files are read in your browser's worker by aquascope's own
+reader (plain numpy, [checked against FloPy](modflow.md#checked-against-flopy)) and do not
+leave it. When the files do not say where the model sits, a small form asks for the
+lower-left corner, the rotation and the CRS (and a cell size without a grid file, and a
+start date if you want the time bar to drive it).
+
+The heads are drawn on the model grid, rotated with it, under the rivers: **Your MODFLOW
+heads** in the legend picks the layer, steps through the times with a slider, and plays
+the run with the time bar when the model has dates. The colours span the whole run, so a
+falling head looks like one. A click on a cell gives its row, column, layer and head.
+
+The same in Python: `aquascope modflow model.hds --grid model.dis.grb [--crs EPSG:27700]
+[--origin X Y] [--layer N] [--time I] [--geojson out.geojson]` and the MCP tool
+`modflow_heads`. More in [MODFLOW heads on the map](modflow.md).
+
+![On a phone: the head surface over England](img/globe/groundwater-phone.png)
+
+## Water balance
+
+**Water balance** in the legend (off until you turn it on) colours every HydroBASINS
+level-4 subbasin (1,342 of them, about 100,000 km² on average) by its month, the way
+HEC-HMS and QSWAT basin maps show where the water goes. It follows the time bar month by
+month from January 1990, so play walks the months.
+
+![Rain in September 2026 over the level-4 subbasins](img/globe/waterbalance-rain.png)
+
+- **Rain**: ERA5 total precipitation, summed over the month's hours and averaged over the
+  0.25° cells whose centres fall in the subbasin, weighted by area.
+- **Evaporation**: ERA5 total evaporation, which over land is the actual
+  evapotranspiration, averaged the same way. ERA5's rather than WaPOR's: WaPOR covers
+  Africa and the Near East since 2018, this map the world since 1990.
+- **Runoff**: the runoff the subbasin makes itself, the GEOGLOWS v2 monthly flow at its
+  outlet reach minus the flow coming in from the level-4 subbasins upstream, spread over
+  its area (BasinATLAS). Brown where the river leaves smaller than it came in. Grey where
+  GEOGLOWS has no outlet reach for the subbasin or for one upstream of it (457 of 1,342,
+  mostly deserts, coasts and islands), and where the difference cannot be trusted, so it
+  is withheld (the card says which check, the flows stay in the table): the reach paired
+  with the outlet carries less than half the inflow (a delta, a coast with several
+  outlets), the river brings in more than a metre of water a month over the subbasin (a
+  small subbasin on a big river, where 5 % of the inflow is already 50 mm), the outlet
+  carries more than the rain over the record, or the inflow comes from a subbasin that
+  fails one of these. On the nine months of 2026 that withholds 37 subbasins and leaves
+  848 with runoff; without it the Amazon mouth showed a loss of over 100,000 mm in a month.
+![Runoff in September 2026: brown where the Nile loses water](img/globe/waterbalance-runoff.png)
+
+- **Closure**: P − ET − Q, **shown as it comes out, never hidden**. It holds the change in
+  storage (soil, snow, groundwater, lakes and reservoirs), which swings with the seasons,
+  and the errors of three products made separately. Over whole years it should be small;
+  where it is not, one of the three is off. GEOGLOWS is itself driven by ERA5 runoff, so
+  the three are not independent.
+- **vs normal**: each of the four against the subbasin's 1991-2020 mean for the calendar
+  month (it needs at least 20 of those years; until the table holds them the key says so).
+- **A click** on a subbasin opens the map card: the month in one sentence (every number
+  from the file), and the year as bars, rain beside evaporation with runoff stacked on it,
+  so the gap between the two is the closure error, with the normal rain as a tick. With a
+  whole year it adds the year's closure. **This place** opens the river and gauges there.
+- **Turning it on** turns the river status off while it is on (both colour the same
+  level-4 basins) and back on after.
+
+![The card of a subbasin at the Amazon mouth: the year as bars, and why its runoff is withheld](img/globe/waterbalance-card.png)
+
+Months after ERA5's final data are ERA5T, preliminary, and are recomputed when final; the
+key and the card say so.
+
+How it is made: `.github/workflows/water-balance.yml` runs `python -m aquascope.waterbalance
+run` on the 9th of every month and publishes `waterbalance/` in the Archive dataset (and
+nothing else): `monthly.parquet` (one row per subbasin and month, every variable and its
+anomaly, the outlet flows), `normals.parquet`, `basins.parquet` (areas, outlet reaches,
+upstream and downstream neighbours), `basins.geojson` (simplified outlines, about 2 MB),
+`normals.json` and one `years/<YYYY>.json` per year for the Explorer, and a manifest with
+what the run cost. The level-4 routing comes from the Archive's BasinATLAS level-12 table:
+each level-12 sub-basin is placed in its level-4 subbasin, which gives the area and which
+subbasin drains into which.
+
+**What it costs**, measured on 2026-10-11 before building the job. ERA5 on Google Cloud
+(ARCO-ERA5, read anonymously) is stored one whole-globe hour per chunk. Sampled over
+1990 to 2026, a chunk is on average 1.83 MB of precipitation and 3.01 MB of evaporation,
+so a month is about 1,460 chunks and 3.5 GB, and January 1990 to September 2026 (441
+months) about 1.56 TB. The newest, preliminary months are smaller (about 1.7 MB a chunk).
+Reading is the whole cost: decoding a chunk and summing it over the subbasins takes about
+2 ms.
+
+| Where | What was read | Time |
+|---|---|---|
+| GitHub runner (the pull request smoke, 64 threads, two runs) | 480 chunks, 0.82 GB | 11 s and 4.4 s: 74 to 186 MB/s; the whole job 1.5 to 3 min, most of it setting up |
+| Home line (48 threads) | January to September 2026, 13,104 chunks, 24.3 GB | 614 s, 55 to 76 s a month |
+| Home line | GEOGLOWS, the whole monthly record of the 943 outlet reaches: 568 column chunks, 0.49 GB | 125 s |
+
+At the runners' rates the backfill is 2.3 to 5.9 hours of reading: one or two dispatches
+at the default 300-minute budget, since each run reads the published table first, computes only
+the missing months newest first until its budget, and publishes what it has. After that, a
+monthly run recomputes the newest three months (ERA5T becoming final), about 8 to 11 GB, a
+few minutes. Every run's summary reports its rate and extrapolates the backfill. The
+published files come to about 35 to 50 MB for the whole record (the table 14 to 25 MB,
+the year files about 0.5 to 0.7 MB each, the outlines 1.9 MB; the upper ends measured on a
+full-size table of random numbers, which compress worse than real ones). Writing that
+full-size table took 3 minutes and 3.3 GB of memory at most, inside a runner's 7 GB. Level 5 (about 4,700 subbasins) would
+read the same ERA5 chunks, so it costs the same; what it lacks is GEOGLOWS's outlet
+pairing, which exists for level 4 only, so this layer stays at level 4.
+
+The same in Python: `aquascope waterbalance --at LAT LON` (or `--basin HYBAS_ID`, or a
+month's overview with `--month YYYY-MM [--bbox W S E N] [--variable p|et|q|closure]`), and
+the MCP tool `water_balance`.
+
+Data: ERA5 hourly single levels, CC BY 4.0, Copernicus Climate Change Service / ECMWF
+(Hersbach et al. 2020; contains modified Copernicus Climate Change Service information).
+GEOGLOWS v2 retrospective simulation and HydroSOS tables, CC BY 4.0. HydroBASINS level-4
+subbasins as published in BasinATLAS v1.0 (Linke et al. 2019), CC BY 4.0.
+
+![On a phone: the closure error in July 2026, the monsoon storing water over South Asia](img/globe/waterbalance-phone.png)
+
 ## Context of a place
 
 Click a point, or open a gauge, and open the **Context** tab: one line per
@@ -575,6 +877,31 @@ tributaries) and the key says where that cut fell. The ids come from
 `aquascope.rivers.upstream_ids` and `downstream_ids`, drawn with MapLibre
 feature-state on `riverId`. The network geometry is CC BY-SA 4.0: shown here,
 never republished, and credited in the map's own attribution line.
+
+### Flow vs normal on the rivers
+
+The NOAA National Water Model map colours every reach by its flow against normal; this does it for the world (#559).
+In the legend, the **Rivers** row has **Colour by flow against normal**: every GEOGLOWS reach of Strahler order 5 and
+up takes the colour of its forecast flow for the day against its own normal for the month, in the river status
+layer's five classes and colours (much below, below, normal, above, much above), so a river and the basin around it
+mean the same thing. The key gives the forecast day, the month the normal is for, and the share of reaches above and
+below normal; lines with no class (smaller streams as you zoom in, dry channels) fade to a thin grey.
+
+The classes are computed in Python once a day ([archive.md](archive.md#flow-against-normal-flowstatus)) and published
+as one compact file, `flowstatus/latest.bin.gz` (the river ids and a byte each). The page reads it once and, as the
+stream tiles load, sets each reach's class as MapLibre feature-state on `riverId`, the same mechanism as the lit
+network (which now takes off only its own state, so the two can be on together). A classed reach is drawn a little
+wider than the plain network, on a thin casing in the basemap's background colour, and while the classes are on the
+river status layer's basins fade to 30 % of their opacity: in the same five colours, a brown river would otherwise
+vanish into a brown basin. It is off by default. On the globe only the great rivers are drawn, a pixel or two wide,
+and the basins already answer there; the colouring is for a region (zoom 5 and closer). A link carries `fn=1`.
+
+![Flow vs normal over western Europe at zoom 5, the basins faded](img/globe/flow-vs-normal-europe.png)
+![The Rhine, Mosel and Main at zoom 7](img/globe/flow-vs-normal-rhine.png)
+
+Before the first daily issue the key says it is not published yet, and the rivers and basins stay as they were. The
+same issue is `aquascope flowstatus [--bbox W S E N] [--river-id ID]` and the MCP tool `flow_vs_normal`. Modelled,
+not measured.
 
 The same functions are `aquascope river snap|record|area|trace|dams|upstream|downstream`
 and the MCP tools `snap_to_river`, `reach_record`, `upstream_area`,
@@ -796,6 +1123,78 @@ The numbers come from `aquascope.nownext`: `plume()` for a reach (the members by
 `forecast_plume`. Model output, under CC BY 4.0 (the forecast) and CC BY-NC-SA 4.0
 (GEOGLOWS's return periods), and not an official warning.
 
+## Your model results on the globe (the Crayfish view)
+
+Drop a HEC-RAS 2D plan file (`*.p01.hdf`) or a UGRID NetCDF mesh result (`*.nc`: D-Flow
+FM, ADH, ADCIRC and others) on the map, or use **Tools**, **Open model results**, and the
+mesh is drawn on the globe, as RAS Mapper or QGIS with Crayfish would show it. Nothing is
+installed and nothing is uploaded: the file is read in your browser.
+
+![A HEC-RAS 2D run on the globe, a cell's card open](img/globe/555-hecras-card.png)
+
+- **The picture.** The largest depth in each cell over the run, in blues (light and
+  see-through when shallow, deep blue when deep), on a square-root scale up to the
+  file's own 99th percentile. A file without bed levels shows the water surface instead,
+  and says so. From zoom 13 the cell edges are drawn faintly.
+- **The arrows.** One arrow for about every 34 pixels on screen, pointing where the water
+  goes, longer when faster. In the largest view they show the step with the most water
+  on the mesh.
+- **Particles.** Tick **Particles** in the legend and white traces drift with the current
+  (sped up so the fastest water crosses the screen in a few seconds).
+- **Time.** The time bar switches to the model's own clock and says so ("Model time: 37
+  steps, 1 Jan 1999 12:00 to 4 Jan 12:00"). Step and play through the run; **Back to
+  dates** returns it to the map date. **Show the largest** in the legend or the card goes
+  back to the largest view.
+- **A click on a cell** opens the map card: the depth (or water surface) and the velocity
+  at the step on show, the largest over the run, and the time series at that cell.
+- **One legend row** with the file's name: the ramp and its units, the arrows and
+  particles, **Zoom to** and **Remove**.
+
+![A UGRID mesh of San Diego Bay (ADH), the largest depth](img/globe/555-ugrid-sandiego.png)
+
+**Review these results** (#564) on the legend row, or "review my model" in Ask the map, runs
+checks by code on the run: the deepest water, negative and film depths, isolated wet cells,
+wet and dry flicker, the model's own volume error, the modelled extent against floods seen
+by radar and in the news, and the modelled peak against the Archive's gauges inside the
+mesh. The findings drop as numbered pins (red a problem, amber worth a look, slate for
+information), flag the cells they are about, and go in the action log with an undo each;
+the legend row lists the nine checks and what each found. A model, on the device or with
+your key, may only order and word them, held to the numbers by the claim lock
+([mesh.md](mesh.md#review-my-model-results)).
+
+A file that does not say its coordinate system gets one question: its EPSG code (the
+UGRID sample above needs 26911, UTM zone 11N). A file the viewer cannot read gets one
+plain sentence why: not a model result, a HEC-RAS geometry file with no results in it,
+over 2 GB, or over 250,000 cells.
+
+A stripped HEC-RAS plan file (`*.p01.timeseries.hdf`) holds the results but not the mesh
+they sit on. Dropped alone, it gets one sentence naming the part that is missing and what
+to drop instead: the full plan file, or the stripped file and the geometry file the plan
+was run with (`*.g01.hdf`) together. Dropped (or picked) together, the two are read as one
+run.
+
+![A stripped plan dropped alone: what is missing and what to drop](img/globe/555-stripped-alone.png)
+
+![The same plan dropped with its geometry file](img/globe/555-stripped-with-geometry.png)
+
+**How it works.** The file is handed to a worker with its own Python (Pyodide), mounted
+read-only (WORKERFS) so its bytes are read from the file as needed and never copied into
+memory. `aquascope.io.mesh` reads the cells, the maxima and the step with the most water
+once, then one time step or one cell when asked (h5py for HEC-RAS and NetCDF-4, scipy for
+NetCDF-3). The page works out once which cell covers each pixel of the picture, so a time
+step only looks colours up: a mesh of a quarter of a million cells plays smoothly. The same
+reader is `aquascope mesh FILE` and the MCP tool `mesh_summary` ([mesh.md](mesh.md)).
+
+![Particles drifting with the current](img/globe/555-particles.png)
+
+![The same run on a phone](img/globe/555-phone.png)
+
+**SWMM models are next.** A SWMM model (`.inp`) and its results (`.out`) read in the
+browser (#560): `aquascope.io.swmm` needs only numpy and gives the same values as SWMM's own
+reader. They are not on the map yet; for now `aquascope swmm model.inp model.out` and the
+MCP tool `swmm_summary` list the flooding nodes and the largest flows. What was tested and
+the plan for the map view are in [assessments/swmm.md](assessments/swmm.md).
+
 ## The monthly bulletin
 
 **Bulletin** in the Tools menu opens last month's state of the rivers in a reader:
@@ -968,8 +1367,9 @@ loop is nine times faster, same numbers to 1e-14), which is what makes
   with `showcase.js` and `local-model.js`, `studio.js` with `intake.js`,
   `studio-device.js` and `study-store.js` (Study, loaded on first use), and
   `webmcp.js`. `app.js` wires them together.
-- `worker.js`: a Web Worker that loads Pyodide, numpy / scipy / pandas, and the
-  aquascope wheel, then calls `aquascope.explore`; the `studio` message drives
+- `worker.js`: a module Web Worker that loads Pyodide (the version pinned once,
+  in `config.js`; Pyodide 314 runs only in module workers), numpy / scipy /
+  pandas, and the aquascope wheel, then calls `aquascope.explore`; the `studio` message drives
   `aquascope.studio.Studio` for Study, loading matplotlib and the document
   libraries only when a study runs. Its ops: `start`, `say` (with a
   `proposed` brief), `approve` (with a `plan`), `follow_up`, `narrate`,
@@ -983,7 +1383,7 @@ loop is nine times faster, same numbers to 1e-14), which is what makes
   `.github/workflows/explorer.yml` publishes it to the Hugging Face static Space
   on every push to `main`; `docs.yml` adds it under `/explorer/app/` here.
 
-First analysis in a session loads about 15 MB of Python once; the catalog
+The first analysis loads about 30 MB of Python (Pyodide 314) once; the catalog
 itself arrives in a few seconds. Sources that don't allow browser fetches
 (CORS) will come through the Archive as it grows.
 

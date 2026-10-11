@@ -6,6 +6,10 @@
 // This module listens like any other subscriber; a chart click (charts.js), a
 // pasted link (url.js) or an agent (webmcp.js) moves the date the same way.
 // The date arithmetic is in timeline.js, which node tests directly.
+//
+// A model result dropped on the map (#555, mesh-view.js) brings its own clock: hourly or finer steps over a
+// few days, often decades ago. While it is on, the bar steps and plays through the model's own times
+// (useModelClock), says so in its note, and "Back to dates" returns it to the map date.
 
 import { $, actions, datedExtras, onTime, setTime, state } from "./core.js?v=__BUILD__";
 import { OVERLAYS, datedLayersOn } from "./layers.js?v=__BUILD__";
@@ -24,6 +28,11 @@ let note = null;          // { text, until } a passing note: "Map set to 14 Jul 
 let noteTimer = null;
 let playToken = 0;
 let gifRun = null;        // { cancel } while a GIF is being made
+// The model's own clock while a model result is on (#555): { times, index, label(i), summary, onStep(i) ->
+// promise, onExit() }; null on the map date.
+let clock = null;
+let clockToken = 0;
+let clockPlaying = false;
 
 const datedOn = () => [...datedLayersOn(state.basemap, state.overlays), ...datedExtras.values()];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -31,6 +40,7 @@ const effectiveRange = () => normaliseRange(state.timeRange) || defaultRange(sta
 
 function barVisible() {
   if (!state.mapOk) return false;
+  if (clock) return userOpen !== false;
   return userOpen === null ? datedOn().length > 0 : userOpen;
 }
 
@@ -48,6 +58,16 @@ function renderNote() {
   if (!box) return;
   box.innerHTML = "";
   let text = note && note.text;
+  if (clock) {
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "tb-chip";
+    back.textContent = "Back to dates";
+    back.addEventListener("click", () => releaseModelClock({ exit: true }));
+    box.append(document.createTextNode(text || clock.summary), back);
+    box.hidden = false;
+    return;
+  }
   if (!text) {
     const dated = datedOn();
     if (!dated.length) {
@@ -85,6 +105,25 @@ export function syncTimeBar({ layersChanged = false } = {}) {
     btn.setAttribute("aria-pressed", bar.hidden ? "false" : "true");
   }
   if (bar.hidden) { closeMore(); return; }
+  bar.classList.toggle("tb-clock", Boolean(clock));
+  $("tb-date").hidden = Boolean(clock);
+  $("tb-more").hidden = Boolean(clock);
+  const model = $("tb-model");
+  if (model) model.hidden = !clock;
+  if (clock) {
+    closeMore();
+    model.textContent = clock.label(clock.index);
+    const label = clockPlaying ? "Pause" : "Play";
+    $("tb-play").setAttribute("aria-pressed", clockPlaying ? "true" : "false");
+    $("tb-play").setAttribute("aria-label", label);
+    $("tb-play").title = label;
+    $("tb-prev").disabled = clock.index <= 0;
+    $("tb-next").disabled = clock.index >= clock.times.length - 1;
+    renderNote();
+    placeBar();
+    return;
+  }
+  $("tb-prev").disabled = false;
   const today = todayIso();
   $("tb-date").value = state.date || "";
   $("tb-date").max = today;
@@ -144,7 +183,59 @@ function stopPlay() {
   setTime({ playing: false }, { source: "bar" });
 }
 
+// ── the model's own clock (#555) ────────────────────────────────────────────
+
+/** Hand the bar to a model's own times; the previous clock, if any, is let go. */
+export function useModelClock(next) {
+  stopPlay();
+  stopClock();
+  clock = { index: 0, ...next };
+  userOpen = null;
+  syncTimeBar();
+}
+
+/** Back to the map date; exit: true also tells the model view (the reader pressed "Back to dates"). */
+export function releaseModelClock({ exit = false } = {}) {
+  if (!clock) return;
+  const was = clock;
+  stopClock();
+  clock = null;
+  syncTimeBar();
+  if (exit && was.onExit) was.onExit();
+}
+
+export const modelClockOn = () => Boolean(clock);
+
+/** Move the model clock (the legend's buttons, the card): draws through the clock's own onStep. */
+export function setModelStep(i, { fromPlay = false } = {}) {
+  if (!clock) return Promise.resolve();
+  const k = Math.max(0, Math.min(clock.times.length - 1, Math.round(i)));
+  if (!fromPlay) stopClock();
+  clock.index = k;
+  syncTimeBar();
+  return Promise.resolve(clock.onStep ? clock.onStep(k) : null);
+}
+
+function stopClock() {
+  clockToken++;
+  if (clockPlaying) { clockPlaying = false; syncTimeBar(); }
+}
+
+async function playClock() {
+  const token = ++clockToken;
+  clockPlaying = true;
+  let i = clock.index >= clock.times.length - 1 ? 0 : clock.index;
+  while (clock && token === clockToken) {
+    const started = performance.now();
+    await setModelStep(i, { fromPlay: true });
+    await sleep(Math.max(60, 380 - (performance.now() - started)));
+    if (!clock || token !== clockToken) return;
+    i = (i + 1) % clock.times.length;
+  }
+}
+
 function step(n) {
+  if (clock) { setModelStep(clock.index + n); return; }
   if (!state.date) return;
   stopPlay();
   setTime({ date: clampDate(addStep(state.date, state.timeStep, n), null, todayIso()) }, { source: "bar" });
@@ -255,7 +346,10 @@ export function initTimeBar() {
     stopPlay();
     setTime({ date: clampDate(e.target.value, null, todayIso()) }, { source: "bar" });
   });
-  $("tb-play").addEventListener("click", () => (state.playing ? stopPlay() : play()));
+  $("tb-play").addEventListener("click", () => {
+    if (clock) { if (clockPlaying) stopClock(); else playClock(); return; }
+    if (state.playing) stopPlay(); else play();
+  });
   $("tb-more").addEventListener("click", toggleMore);
   $("tb-panel").addEventListener("keydown", (e) => {
     if (e.key === "Escape") { closeMore(); $("tb-more").focus(); }

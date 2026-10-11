@@ -168,6 +168,10 @@ const explainPins = () => log.live().filter((e) => e.action && e.action.type ===
 
 function clearNotes() {
   for (const e of explainPins().reverse()) undoEntry(e.id);
+  // Scout's numbered pins (#563) step aside too: two sets of numbers on one map read as one list.
+  for (const e of log.live().filter((x) => x.action && x.action.type === "add_pin" && x.after && x.after.rank).reverse()) {
+    undoEntry(e.id);
+  }
 }
 
 function pinNotes(notes, by) {

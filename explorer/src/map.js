@@ -214,7 +214,7 @@ export function initMap(initialView, { basemap = "light", date = null, globe = f
     timer = setTimeout(() => done({ ok: false, reason: "slow" }), 20000);
     map.once("load", () => {
       // The twenty seconds are a promise to the reader, not a verdict on the
-      // map: a cold cache with Pyodide's 15 MB downloading alongside it can
+      // map: a cold cache with Pyodide's 30 MB downloading alongside it can
       // take longer, and a tab that was in the background renders nothing at
       // all until it is looked at, so `load` can arrive minutes late. It used
       // to be terminal, which left a working map with no gauges on it under a

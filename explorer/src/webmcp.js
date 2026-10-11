@@ -124,6 +124,24 @@ const TOOLS = [
       required: ["actions"],
     },
   },
+  {
+    name: "aquascope_scout",
+    description: "Scout the view the reader is looking at (#563): drop up to ten numbered pins on what stands out "
+      + "(the largest areas much above or below normal in the month's river status, the strongest floods "
+      + "ahead, floods in the news, gauges at extremes today, gauges no model matches), each with its reason, "
+      + "numbers and source, found by fixed rules in aquascope.map_scout. The pins go in the action log, where "
+      + "the reader can undo them. Returns the pins.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "aquascope_review_model",
+    description: "Review the model result the reader dropped on the map (#564): checks made by code in "
+      + "aquascope.mesh_review (the deepest water, negative and film depths, isolated wet cells, wet and dry "
+      + "flicker, the model's own volume error, the modelled extent against floods seen by radar and in the news, "
+      + "the modelled peak against gauges inside the mesh). The findings drop as numbered pins, coloured by "
+      + "severity, in the action log where the reader can undo them. Returns the findings.",
+    inputSchema: { type: "object", properties: {} },
+  },
 ];
 
 export function webmcpAvailable() {
@@ -166,6 +184,23 @@ export function registerWebMcpTools({ actions }) {
             const done = await actions.applyMapActions(resolved.actions, { by: "agent", said: resolved.said || [] });
             return textResult({ applied: done.applied.map((e) => ({ id: e.id, label: e.label })),
               failed: done.failed, rejected: checked.errors || [], notes: resolved.notes || [], credit: resolved.credit });
+          }
+          if (spec.name === "aquascope_scout") {  // page-side: scout.js (#563)
+            if (!actions.runScout) return textResult({ error: "The map is not ready." });
+            const done = await actions.runScout();
+            if (!done) return textResult({ error: "The scout could not run; the line under the bar says why." });
+            return textResult({ mode: done.mode, by: done.by, pins: done.picks.map((f) => ({ rank: f.rank,
+              title: f.title, reason: f.reason, lat: f.lat, lon: f.lon, source: f.source })) });
+          }
+          if (spec.name === "aquascope_review_model") {  // page-side: mesh-review.js (#564)
+            if (!actions.reviewModel || !actions.hasModel || !actions.hasModel()) {
+              return textResult({ error: "No model result is on the map: the reader drops one first." });
+            }
+            const done = await actions.reviewModel();
+            if (!done) return textResult({ error: "The review could not run; the line under the bar says why." });
+            return textResult({ by: done.by, summary: done.summary, findings: done.findings.map((f) => ({ rank: f.rank,
+              severity: f.severity, check: f.label, title: f.title, reason: f.reason, lat: f.lat, lon: f.lon,
+              value: f.value, unit: f.unit, source: f.source })) });
           }
           if (spec.name === "aquascope_show_on_map") {
             if (args.source && args.station_id) {

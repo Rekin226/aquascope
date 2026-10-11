@@ -70,6 +70,12 @@ export const LAYER_DEFAULTS = {
   floodsPast: true,
   // The world river status under the gauges, month by month (status-layer.js, #544).
   status: true,
+  // Groundwater (#558): the wells' head surface, off until asked for.
+  groundwater: false,
+  // Flow vs normal on the rivers (#559): off until asked for, from the Rivers row of the legend.
+  flowNormal: false,
+  // Water balance (#557): subbasins by monthly rain, evaporation, runoff and closure, off until asked for.
+  waterBalance: false,
 };
 
 export const state = {
@@ -82,6 +88,7 @@ export const state = {
   // the river network is on from the start (#545); flowOn (river-map.js) follows prefers-reduced-motion
   riversOn: true,
   gaugesOn: true,      // the legend's Gauges row can hide every gauge mark (map.js setGaugesVisible)
+  flowNormalShown: false,   // Flow vs normal's classes are drawn on the rivers now (flowstatus-layer.js, #559)
   // layers (#232)
   overlays: new Set(), opacity: {}, date: null,
   // time (#522): the map date above is the one every dated layer follows; these
@@ -144,6 +151,17 @@ export const datedExtras = new Map();
 // Map layers whose features take a click before the map's own "select this
 // point" does (#543). The module that owns the layer handles the click.
 export const clickLayers = new Set();
+// A layer the reader brought to the map (their own model results, #555) answers a click on itself before the
+// background layers do: it registers a claim (lngLat -> bool), and Floods ahead and Floods past step aside for
+// a click it claims. Gauges still come first.
+const clickClaims = new Set();
+export function claimClicks(fn) { clickClaims.add(fn); return () => clickClaims.delete(fn); }
+export function clickClaimed(e) {
+  for (const fn of clickClaims) {
+    try { if (fn(e.lngLat)) return true; } catch (err) { console.warn("click claim:", err && err.message); }
+  }
+  return false;
+}
 
 // Filled in by the modules that own each behaviour (breaks import cycles).
 export const actions = {

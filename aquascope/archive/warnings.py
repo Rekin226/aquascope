@@ -186,6 +186,16 @@ def daily_means(values: Any, seconds: Any, days: int = DAYS) -> Any:
     return out
 
 
+def day0_flow(values: Any, seconds: Any) -> Any:
+    """The ensemble-mean flow of the forecast's first UTC day for each reach: (members, steps, reaches) -> (reaches,).
+    Flow against normal (#559, aquascope.flowstatus) compares it with the reach's percentiles for the month."""
+    import numpy as np
+
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("ignore", category=RuntimeWarning)
+        return np.nanmean(daily_means(values, seconds, 1)[:, 0, :], axis=0)
+
+
 def summarise(values: Any, seconds: Any, q: Any, days: int = DAYS) -> dict[str, Any]:
     """The 15-day picture for a block of reaches. ``values`` is (members, steps, reaches) of ensemble members only,
     ``q`` (6, reaches). Returns arrays over reaches: peak (ensemble-mean daily peak), peak_day (0-based), rp (class),
@@ -485,11 +495,16 @@ def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, min_order: int = DEFAUL
         time_budget_s: float = 4.5 * 3600,
         run_name: str | None = None, fetch: Callable[[str], bytes | None] | None = None,
         tables: Callable[[Any], dict[str, Any]] | None = None,
-        gauges: dict[int, list[str]] | None = None, today: date | None = None) -> dict[str, Any]:
+        gauges: dict[int, list[str]] | None = None, today: date | None = None,
+        day0_out: str | Path | None = None) -> dict[str, Any]:
     """Build today's Floods ahead issue under ``<out>/forecasts/warnings/`` and return a summary.
 
     ``max_chunks`` makes a smoke run: that many forecast chunks, spread over the globe, and a manifest marked
     ``smoke`` that :func:`publish` refuses. Chunks past the time budget are skipped and counted.
+
+    ``day0_out`` also writes the first day's ensemble-mean flow of every reach read to that parquet (river_id,
+    flow_cms) with a ``.json`` beside it (run, issue date, smoke), for Flow against normal (#559): the same chunks,
+    read once, give both layers. It is a working file, never published.
     """
     import numpy as np
 
@@ -525,6 +540,7 @@ def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, min_order: int = DEFAUL
     q = read_thresholds(fetch, rivid, selected & in_chosen)
 
     rows: list[dict[str, Any]] = []
+    day0: Any = np.full(len(rivid), np.nan, dtype="float32") if day0_out else None
     tally = {"checked": 0, "no_threshold": 0, "below_floor": 0, "failed": 0, "skipped_time": 0, "read": 0}
     lock = threading.Lock()
     zarr = lay["zarray"]
@@ -547,10 +563,13 @@ def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, min_order: int = DEFAUL
         lo = ch * c
         local = np.nonzero(selected[lo:lo + c])[0]
         glob = lo + local
+        block = block[members]
+        if day0 is not None:
+            day0[glob] = day0_flow(block[:, :, local], seconds)
         qq = q[:, glob]
         has_q = np.isfinite(qq[0]) & (qq[0] > 0)
         ok = has_q & ((qq[0] >= min_q2) | on_gauge[glob])   # a gauged river is no desert wadi
-        s = summarise(block[members][:, :, local[ok]], seconds, qq[:, ok])
+        s = summarise(block[:, :, local[ok]], seconds, qq[:, ok])
         found: list[dict[str, Any]] = []
         for j, g in enumerate(glob[ok]):
             rp = int(s["rp"][j])
@@ -627,9 +646,28 @@ def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, min_order: int = DEFAUL
         "history": sorted(history + [entry], key=lambda h: h["issue_date"]),
     }
     (root / "manifest.json").write_text(json.dumps(doc, indent=1))
+    if day0 is not None and day0_out:
+        write_day0(day0_out, rivid, day0, {"run": name, "issue_date": day, "forecast": f"{base}/", "smoke": smoke,
+                                           "min_strahler_order": min_order, "chunks": doc["chunks"]})
     keys = ("issue_date", "run", "n", "counts", "checked", "no_threshold", "below_floor", "chunks", "bytes_read",
             "seconds", "smoke", "geojson_features")
     return {k: doc[k] for k in keys}
+
+
+def write_day0(path: str | Path, rivid: Any, flow: Any, info: dict[str, Any]) -> Path:
+    """The first day's flow of every reach that has one: ``path`` (river_id, flow_cms) and ``path``.json (info)."""
+    import numpy as np
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    flow = np.asarray(flow, dtype="float32")
+    keep = np.isfinite(flow)
+    pq.write_table(pa.table({"river_id": np.asarray(rivid, dtype="int64")[keep], "flow_cms": flow[keep]}), path,
+                   compression="zstd")
+    path.with_suffix(".json").write_text(json.dumps({**info, "n": int(keep.sum())}, indent=1, default=str))
+    return path
 
 
 def publish(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None = None) -> str:
@@ -714,6 +752,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--time-budget-min", type=float, default=270.0)
     p.add_argument("--run", default=None, help="a forecast run (YYYYMMDD00) instead of the newest")
+    p.add_argument("--day0", default=None, help="also write every reach's first-day flow here (parquet), for "
+                   "python -m aquascope.flowstatus daily --day0 (#559)")
     p = sub.add_parser("publish")
     p.add_argument("--out", required=True)
     p.add_argument("--repo", default=os.environ.get("HF_DATASET", DEFAULT_REPO))
@@ -724,7 +764,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "run":
         info = run(a.out, repo_id=a.repo, min_order=a.min_order, min_q2=a.min_q2, max_chunks=a.max_chunks,
                    workers=a.workers,
-                   time_budget_s=a.time_budget_min * 60, run_name=a.run)
+                   time_budget_s=a.time_budget_min * 60, run_name=a.run, day0_out=a.day0)
     else:
         info = {"commit": publish(a.out, repo_id=a.repo)}
     print(json.dumps(info, indent=1, default=str))

@@ -1,0 +1,97 @@
+name: Flow climatology
+
+# Flow against normal (#559), the one-off part. Reads GEOGLOWS v2's flow duration curves
+# (s3://geoglows-v2/retrospective/fdc.zarr, daily_monthly: the percentiles of daily flow in each calendar month,
+# 1950 to 2019) for every reach of Strahler order 5 and up, keeps the 10th, 25th, 75th and 90th percentiles, and
+# publishes them under flowstatus/climatology/ ONLY:
+#   flowstatus/climatology/month-01.parquet .. month-12.parquet   river_id, p10, p25, p75, p90
+#   flowstatus/climatology/reaches.parquet                        river_id, lat, lon, strahler_order
+#   flowstatus/climatology/manifest.json                          source, base period, counts, sizes
+# The daily step (flood-warnings.yml) classes each day's forecast against these. Run it again only if GEOGLOWS
+# rebuilds its flow duration curves. Cost: 23,085 store chunks (about 18 GB, streamed, nothing kept on disk).
+# Same HF_TOKEN secret as the harvest. Locally:
+#   python -m aquascope.flowstatus climatology --out build --max-chunks 40
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to the Hugging Face dataset"
+        type: boolean
+        default: true
+      smoke:
+        description: "Store chunks read, for a smoke run that never publishes (empty = every reach)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flow-climatology
+  cancel-in-progress: false
+
+jobs:
+  climatology:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_DATASET: Rekin226/aquascope-gauges
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install aquascope with the archive extra
+        run: python -m pip install -q ".[archive]" numcodecs
+
+      - name: The monthly percentiles of every big reach
+        env:
+          SMOKE: ${{ inputs.smoke }}
+        run: |
+          ARGS="--out build --workers 16"
+          if [ -n "$SMOKE" ]; then
+            case "$SMOKE" in *[!0-9]*) echo "::error::smoke must be a whole number of chunks"; exit 1;; esac
+            ARGS="$ARGS --max-chunks $SMOKE"
+          fi
+          python -m aquascope.flowstatus climatology $ARGS
+
+      - name: Summary
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          p = pathlib.Path("build/flowstatus/climatology/manifest.json")
+          if not p.exists():
+              print("## Flow climatology\n\nno manifest written (the run stopped early)")
+              raise SystemExit
+          m = json.loads(p.read_text())
+          c = m["chunks"]
+          print(f"## Flow climatology{' (smoke run)' if m['smoke'] else ''}\n")
+          print(f"**{m['n']:,} reaches** of Strahler order {m['min_strahler_order']} and up, {m['base_period']}.\n")
+          gb = (m.get("bytes_read") or 0) / 1e9
+          mb = sum(m["sizes"].values()) / 1e6
+          print(f"Chunks: {c['read']:,} read of {c['needed']:,} needed, {c['failed']} failed; {gb:.1f} GB read in "
+                f"{m['seconds'] / 60:.0f} min; {mb:.1f} MB written.")
+          PY
+
+      # A smoke run never publishes: a few chunks would replace every reach's normal (publish refuses it too).
+      - name: Publish flowstatus/climatology/ to Hugging Face
+        if: env.HF_TOKEN != '' && inputs.smoke == '' && inputs.publish == true
+        run: python -m aquascope.flowstatus publish-climatology --out build
+
+      - name: Say why a smoke run was not published
+        if: inputs.smoke != ''
+        run: echo "::notice::A smoke run builds and summarises but does not publish."
+
+      - name: Upload the climatology as an artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-climatology-${{ github.run_id }}
+          path: build/flowstatus/climatology/
+          retention-days: 7

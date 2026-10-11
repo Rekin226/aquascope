@@ -12,7 +12,7 @@
 // ensemble plume (the FEWS view, fews.js).
 
 import { CONFIG } from "../config.js?v=__BUILD__";
-import { $, clickLayers, escapeHtml, onTime, setTime, state } from "./core.js?v=__BUILD__";
+import { $, clickClaimed, clickLayers, escapeHtml, onTime, setTime, state } from "./core.js?v=__BUILD__";
 import { renderCredits } from "./layer-ui.js?v=__BUILD__";
 import { initFews, openReachCard, setFewsVisible } from "./fews.js?v=__BUILD__";
 import { refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
@@ -361,6 +361,7 @@ function onClick(e) {
   // A gauge under the pointer is what the reader meant: its own handler opens it.
   const gaugeHit = ["points", "clusters"].filter((id) => map.getLayer(id));
   if (gaugeHit.length && map.queryRenderedFeatures(e.point, { layers: gaugeHit }).length) return;
+  if (clickClaimed(e)) return;   // the reader's own model under the click (#555) answers it
   const f = e.features && e.features[0];
   if (!f) return;
   const id = Number(f.properties.river_id ?? f.properties.riverId);

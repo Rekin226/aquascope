@@ -57,6 +57,13 @@ export function riverWidth() { return byZoom(WIDTH, (stops) => byOrder(stops)); 
 // `scale` dims the plain network while a click's network is lit, so the answer stands out.
 export function riverOpacity(scale = 1) { return byZoom(OPACITY, (stops) => byOrder(stops, (v) => Number((v * scale).toFixed(3)))); }
 export function flowOpacity() { return byZoom(FLOW_OPACITY, (stops) => byOrder(stops)); }
+// Flow vs normal (#559): a reach with a class keeps the network's opacity, one without fades to `dim` of it, so
+// the classes carry the picture. `scale` dims both while a click's network is lit.
+export function riverOpacityFlow(dim = 0.35, scale = 1) {
+  const fs = [">", ["coalesce", ["feature-state", "fs"], 0], 0];
+  const r = (v) => Number(v.toFixed(3));
+  return byZoom(OPACITY, (stops) => ["case", fs, byOrder(stops, (v) => r(v * scale)), byOrder(stops, (v) => r(v * scale * dim))]);
+}
 
 // The network around a clicked reach is drawn by feature-state on riverId:
 // hl 1 = drains here (upstream), 2 = on the way to the sea, 3 = the reach itself.
@@ -86,6 +93,28 @@ export const RIVER_THEMES = {
   dark: { line: "#4f9de0", flow: "#e2f1ff", up: "#8fd0ff", down: "#ff9d42", casing: "#0b141d" },
   imagery: { line: "#6bb9f2", flow: "#ffffff", up: "#a8dcff", down: "#ff9d42", casing: "#0b141d" },
 };
+// Under a classed reach, a casing in the basemap's own background (#559): the class colours are the river status
+// layer's, so without it a brown river vanishes into a brown basin, and a pale one into the land.
+// A classed reach is also drawn `FS_WIDER` px wider than the plain network: at a region's zoom the order-5 to 8
+// rivers are a pixel or so wide, too thin to carry a colour (seen in the review screenshots at zoom 5).
+export const FS_WIDER = 0.8;
+const wider = (v, extra = 0) => (v > 0 ? Number((v + FS_WIDER + extra).toFixed(2)) : 0);
+export function riverWidthFlow() {
+  const fs = [">", ["coalesce", ["feature-state", "fs"], 0], 0];
+  return byZoom(WIDTH, (stops) => ["case", fs, byOrder(stops, (v) => wider(v)), byOrder(stops)]);
+}
+export function riverCasingWidth(extra = 1.6) {
+  return byZoom(WIDTH, (stops) => byOrder(stops, (v) => wider(v, extra)));
+}
+export function riverCasingOpacity(scale = 0.9) {
+  const fs = [">", ["coalesce", ["feature-state", "fs"], 0], 0];
+  return byZoom(OPACITY, (stops) => ["case", fs, byOrder(stops, (v) => Number((v * scale).toFixed(3))), 0]);
+}
+export function riverThemeKind(basemap) {
+  if (basemap === "dark") return "dark";
+  if (basemap === "satellite" || basemap === "satellite-recent") return "imagery";
+  return "light";
+}
 export function riverTheme(basemap) {
   if (basemap === "dark") return RIVER_THEMES.dark;
   if (basemap === "satellite" || basemap === "satellite-recent") return RIVER_THEMES.imagery;

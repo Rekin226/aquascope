@@ -8,7 +8,7 @@
 // Nothing here ever uses a key of ours: with no rule match, no model on the device and no key of the
 // reader's, the box says so and offers examples.
 
-import { $, escapeHtml, state } from "./core.js?v=__BUILD__";
+import { $, actions, escapeHtml, state } from "./core.js?v=__BUILD__";
 import { applyActions, renderLog, setLogOpen, undoAll, undoLast } from "./map-actions.js?v=__BUILD__";
 import { explainView, initMapExplain } from "./map-explain.js?v=__BUILD__";
 import { askModelConfig, currentContext } from "./ask.js?v=__BUILD__";
@@ -143,6 +143,18 @@ async function runCommand(text) {
       // "What am I seeing?" (#562): notes pinned on the map, not actions.
       await explainView({ say });
       if (my === run) $("ma-input").value = "";
+      return;
+    }
+    if (res && res.control === "review") {
+      // "Review my model" (#564): the checks on the model result on the map drop their pins, as the legend's
+      // "Review these results" does. With no model on the map, say how to put one there.
+      if (actions.reviewModel && actions.hasModel && actions.hasModel()) {
+        await actions.reviewModel({ say });
+        if (my === run) $("ma-input").value = "";
+      } else {
+        say("No model result on the map to review. Drop a HEC-RAS plan (*.p01.hdf) or a UGRID NetCDF file on the " +
+          "map, or use Tools, Open model results.", "warn");
+      }
       return;
     }
     if (res && res.control) {

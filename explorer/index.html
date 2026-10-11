@@ -21,8 +21,12 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="./style.css?v=__BUILD__" />
   <link rel="stylesheet" href="./floods-past.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./groundwater.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./waterbalance.css?v=__BUILD__" />
   <link rel="stylesheet" href="./flood-depth.css?v=__BUILD__" />
   <link rel="stylesheet" href="./fews.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./mesh.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./whatif.css?v=__BUILD__" />
 </head>
 <body class="panel-collapsed">
   <a class="skip" href="#panel">Skip to the results panel</a>
@@ -50,6 +54,8 @@
       <summary class="btn">Tools</summary>
       <div class="header-tools-menu">
       <button id="btn-workbench" class="btn" title="Analyse your own data with the same tools">My data</button>
+      <button id="btn-mesh" class="btn" title="See a HEC-RAS 2D plan or a UGRID mesh result on the globe. The file stays in your browser.">Open model results</button>
+      <input id="mesh-file" type="file" accept=".hdf,.h5,.hdf5,.nc,.nc4,.cdf" hidden />
       <button id="btn-open-study" class="btn">Open saved study</button>
       <input id="open-study-file" type="file" accept=".json" hidden />
       <button id="btn-places" class="btn" title="Gauges you saved in this browser; compare two to five of them">My places<span id="places-count" class="tab-badge" hidden></span></button>
@@ -130,6 +136,16 @@
             <input type="checkbox" id="toggle-floods-past" checked />
             <i style="background:#e8820c;border-radius:50%"></i>
             <span class="rail-label">Floods past (news and radar)</span>
+          </label>
+          <label class="rail-row" title="A head surface from the Environment Agency's wells (England, OGL v3.0), drawn only where wells are dense enough, following the time bar; drop your MODFLOW heads on the map">
+            <input type="checkbox" id="toggle-groundwater" />
+            <i style="background:linear-gradient(90deg,#c7e9b4,#41b6c4,#0c2c84);border-radius:2px"></i>
+            <span class="rail-label">Groundwater (wells, your MODFLOW heads)</span>
+          </label>
+          <label class="rail-row" title="HydroBASINS level-4 subbasins by monthly rain, evaporation, runoff and closure error (ERA5, GEOGLOWS v2, CC BY 4.0; modelled), following the time bar">
+            <input type="checkbox" id="toggle-water-balance" />
+            <i style="background:linear-gradient(90deg,#deebf7,#6baed6,#08519c);border-radius:2px"></i>
+            <span class="rail-label">Water balance (subbasins, monthly)</span>
           </label>
           <label class="rail-row" title="GEOGLOWS v2 stream network (TDX-Hydro, CC BY-SA 4.0): wider for bigger rivers, small streams as you zoom in">
             <input type="checkbox" id="toggle-rivers" checked />
@@ -230,6 +246,7 @@
           <div class="tb-main">
             <button id="tb-prev" class="tb-btn" type="button" title="Back one step" aria-label="Back one step">‹</button>
             <input type="date" id="tb-date" aria-label="Map date" />
+            <output id="tb-model" class="tb-model" aria-live="polite" hidden></output>
             <button id="tb-next" class="tb-btn" type="button" title="Forward one step" aria-label="Forward one step">›</button>
             <button id="tb-play" class="tb-btn tb-play" type="button" aria-pressed="false" title="Play" aria-label="Play">
               <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" /></svg>
@@ -243,7 +260,62 @@
       </div>
       <section id="area-study" class="area-study" aria-label="Study this area" hidden></section>
       <!-- map first (#548): what was clicked, answered on the map; filled by src/map-card.js -->
+      <div id="mesh-drop" class="mesh-drop" hidden>
+        <div class="md-box">
+          <p class="md-title">Drop your model results</p>
+          <p>A HEC-RAS 2D plan file (.p01.hdf) or a UGRID NetCDF mesh (.nc), up to 2 GB, or MODFLOW heads (.hds with its .dis or .dis.grb). They stay in your browser.</p>
+        </div>
+      </div>
+      <section id="mesh-status" class="mesh-status" role="status" aria-live="polite" hidden></section>
       <section id="map-card" class="map-card" role="dialog" aria-modal="false" aria-labelledby="mc-title" tabindex="-1" hidden></section>
+      <!-- what if, on the map (#565): a scenario for the basin, painted on the rivers downstream; src/whatif-map.js -->
+      <div id="wi-swipe" class="wi-swipe" hidden>
+        <span class="wi-sw-line" aria-hidden="true"></span>
+        <span class="wi-sw-label wi-sw-before">Before</span>
+        <span id="wi-sw-after" class="wi-sw-label wi-sw-after">After</span>
+        <div class="wi-sw-handle" role="slider" tabindex="0" aria-label="Before and after divider"
+             aria-valuemin="5" aria-valuemax="95" aria-valuenow="50"><span aria-hidden="true">‹ ›</span></div>
+      </div>
+      <section id="whatif" class="whatif" aria-labelledby="wi-title" hidden>
+        <header class="wi-head">
+          <div>
+            <p class="wi-kicker">What if</p>
+            <h2 id="wi-title" class="wi-title">River reach</h2>
+            <p id="wi-sub" class="wi-sub"></p>
+          </div>
+          <button type="button" class="wi-close" aria-label="Close What if" title="Close (Esc)">×</button>
+        </header>
+        <form id="wi-line" class="wi-line" role="search">
+          <input id="wi-text" type="text" autocomplete="off" spellcheck="false" enterkeyhint="go"
+                 placeholder="“20% less rain and 2 degrees warmer”" aria-label="What if, in words" />
+          <button type="submit" class="btn small" title="Read the words into the sliders, then run">Read</button>
+        </form>
+        <p id="wi-read" class="wi-read" hidden></p>
+        <form id="wi-form" class="wi-form">
+          <label class="wi-slider"><span>Rain</span>
+            <input id="wi-rain" type="range" min="-50" max="50" step="5" value="-20" />
+            <output id="wi-rain-out" for="wi-rain">−20%</output></label>
+          <label class="wi-slider"><span>Warming</span>
+            <input id="wi-warm" type="range" min="-2" max="6" step="0.5" value="0" />
+            <output id="wi-warm-out" for="wi-warm">0 °C</output></label>
+          <label class="wi-slider"><span>Demand</span>
+            <input id="wi-demand" type="number" min="0" step="any" inputmode="decimal" placeholder="0" />
+            <output>m³/s taken</output></label>
+          <div class="wi-run-row">
+            <span id="wi-scn" class="wi-scn"></span>
+            <button id="wi-run" type="submit" class="btn small primary">Run</button>
+          </div>
+        </form>
+        <p id="wi-status" class="wi-status" role="status" hidden></p>
+        <div id="wi-result" class="wi-result" hidden>
+          <div id="wi-measures" class="wi-measures" role="group" aria-label="Paint the rivers by"></div>
+          <p id="wi-model" class="wi-model"></p>
+          <div class="wi-foot">
+            <label class="wi-check"><input id="wi-swipe-on" type="checkbox" /> Before/after swipe</label>
+            <button id="wi-edit" type="button" class="link-btn wi-edit">Change the scenario</button>
+          </div>
+        </div>
+      </section>
       <!-- talk to the map (#561): one line on the map and the action log under it; src/map-command.js and src/map-actions.js -->
       <div id="map-ask" class="map-ask">
         <div class="ma-bar">
@@ -273,6 +345,15 @@
             </button>
             <button type="button" class="ma-x" aria-label="Close" title="Close (Esc)">×</button>
           </form>
+          <!-- Scout (#563): up to ten numbered pins on what stands out in the view; src/scout.js -->
+          <button id="btn-scout" class="ma-open ma-scout" type="button" aria-busy="false" aria-label="Scout"
+                  title="Scout: pin what stands out in this view, each with its reason and source">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="6.5" cy="15.5" r="3.5" /><circle cx="17.5" cy="15.5" r="3.5" />
+              <path d="M3.4 14 5.6 6.2A1.6 1.6 0 0 1 7.1 5H9l.8 7.4M20.6 14l-2.2-7.8A1.6 1.6 0 0 0 16.9 5H15l-.8 7.4M10 12.5h4" />
+            </svg>
+            <span class="ma-open-label">Scout</span>
+          </button>
           <button id="ma-log-toggle" class="ma-count" type="button" aria-expanded="false" aria-controls="ma-log" hidden></button>
         </div>
         <p id="ma-status" class="ma-status" role="status" hidden></p>
@@ -315,7 +396,7 @@
             <li><strong>USGS</strong>, <strong>UK EA</strong>, <strong>Hub'Eau</strong>: daily records where available. The returned period determines which analyses can run.</li>
             <li><strong>PEGELONLINE</strong>, <strong>OPW</strong>: the last month only. <strong>Taiwan CWA</strong>: daily rainfall.</li>
             <li>Anywhere on land: ERA5 climate, GloFAS modelled discharge, and the upstream catchment.</li>
-            <li>The first analysis loads Python here (about 15 MB, once).</li>
+            <li>The first analysis loads Python here (about 30 MB, once).</li>
           </ul>
         </details>
       </div>

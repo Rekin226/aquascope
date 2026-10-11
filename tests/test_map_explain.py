@@ -324,6 +324,36 @@ def test_the_claim_lock_counts_numbers_in_words_and_other_numerals(facts):
     assert me.claim_lock("Most reports sit in this half-degree cell.", [cell]) == []   # its label says "half"
 
 
+@pytest.mark.parametrize("words", [
+    "-{f1}", "Falls to -{f1} today.", "Falls to \u2212{f1}.", "Up +{f1}.", "\u00b1 {f1}", "Falls to minus {f1}.",
+    "Negative {f1} here.", "plus {f1}", "(- {f1})", "- {f1} today", "{f1}0 reaches", "1{f1} reaches", "{f1}.5",
+    "{f1},000 m\u00b3/s", "0.{f1}", ".{f1}", "{f1}e3", "{f1}k reports", "{f1}{f2}", "{f1}{f2.when}",
+    "Falls to \u2013{f1}.", "(\u2014{f1})", "\u2013 {f1} today",
+])
+def test_a_sign_or_a_digit_against_a_placeholder_is_found(words):
+    assert me.placeholder_touches(words)
+    # claim_lock lists it too, so a caller of the lock alone is held to it.
+    assert me.claim_lock(words, [{"shown": "", "label": ""}])
+
+
+@pytest.mark.parametrize("words", [
+    "{f1}-{f2}", "mid-{month}", "Floods ahead - {place}", "At the {f1} today.", "Peaks at {f1}.", "{f1}, then more",
+    "in {place}, {month}", "the {f1}-year flow", "{f1} m deep", "since {f1.when}", "{f1} keeps rising", "end.{f1}",
+    "{f1}\u2013{f2}", "Floods ahead \u2014 {place}", "ahead\u2014{place}",
+])
+def test_wording_around_a_placeholder_is_not_a_sign(words):
+    assert me.placeholder_touches(words) == []
+
+
+def test_a_model_note_with_a_sign_against_a_placeholder_is_refused(facts):
+    gauge = by_kind(facts, "gauge_pct", side="above")[0]
+    for text in (f"At -{ph(gauge['id'])} today.", f"At minus {ph(gauge['id'])}.", f"At {ph(gauge['id'])}0 today."):
+        out = me.check_model_notes({"notes": [{"facts": [gauge["id"]], "title": "High", "text": text}]},
+                                   facts["facts"], VIEW["bbox"])
+        assert all(n.get("by") == "rules" for n in out["notes"]), text
+        assert any("a sign or a digit against a placeholder" in r for r in out["refused"]), text
+
+
 def test_model_notes_are_filled_in_by_code_and_held_to_their_facts(facts):
     fid = {f["kind"] + str(f.get("rank", f.get("side", f.get("class", "")))): f["id"] for f in facts["facts"]}
     reply = json.dumps({"notes": [

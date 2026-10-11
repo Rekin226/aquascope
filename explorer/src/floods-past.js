@@ -10,7 +10,9 @@
 // written by the mirror-context workflow. The drawing rules and the words are
 // in floods-past-core.js, which node tests.
 
-import { $, actions, clickLayers, datedExtras, escapeHtml, onTime, setTime, state, timeState } from "./core.js?v=__BUILD__";
+import {
+  $, actions, clickClaimed, clickLayers, datedExtras, escapeHtml, onTime, setTime, state, timeState,
+} from "./core.js?v=__BUILD__";
 import { map } from "./map.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
 import { syncTimeBar } from "./time-ui.js?v=__BUILD__";
@@ -456,6 +458,7 @@ async function onCellClick(e) {
   lastClick = e.originalEvent || null;
   // A gauge under the click wins: it has its own handler.
   if (map.queryRenderedFeatures(e.point, { layers: ["points", "clusters"].filter((id) => map.getLayer(id)) }).length) return;
+  if (clickClaimed(e)) return;   // the reader's own model under the click (#555) answers it
   const f = (e.features || [])[0];
   if (!f) return;
   const p = f.properties || {};

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aquascope"
-version = "0.26.0"
+version = "0.27.0"
 description = "Explore river records and run reproducible water analyses in your browser or Python"
 readme = "README.md"
 license = {text = "MIT"}

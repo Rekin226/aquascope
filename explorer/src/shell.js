@@ -188,7 +188,7 @@ export function setStatusEl(el, text, kind = "info") {
 }
 
 // ── boot progress ───────────────────────────────────────────────────────────
-// The Pyodide download is ~15 MB once. The worker already reports each stage;
+// The Pyodide download is ~30 MB once. The worker already reports each stage;
 // the bar shows them wherever the user is (it used to be dropped unless a
 // station happened to be selected).
 

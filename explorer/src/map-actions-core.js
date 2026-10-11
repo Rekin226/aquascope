@@ -14,6 +14,8 @@
 export const LAYER_CONTROLS = {
   status: "toggle-status",
   floods_past: "toggle-floods-past",
+  groundwater: "toggle-groundwater",
+  water_balance: "toggle-water-balance",
   floods_ahead: "toggle-floods",
   flood_depth: "toggle-depth",
   rivers: "toggle-rivers",
@@ -48,6 +50,7 @@ export function slotOf(action, id) {
     case "highlight_river": return "river";
     case "draw_area": return `area:${id}`;
     case "add_pin": return `pin:${id}`;
+    case "what_if": return "whatif";   // one what-if painted at a time (#565); a new run replaces it
     default: return null;
   }
 }
@@ -69,11 +72,15 @@ export function checkPin(p) {
       ...(f.when ? { when: String(f.when).slice(0, 40) } : {}),
     }))
     : [];
+  // A rank (Scout, #563) is drawn in the pin; a kind says which layer the note is about.
+  const rank = Number(p.rank);
   const out = {
     lat: Math.round(lat * 1e5) / 1e5, lon: Math.round(lon * 1e5) / 1e5, title,
     text: p.text ? String(p.text).replace(/\s+/g, " ").trim().slice(0, 600) : "",
     facts,
-    source: p.source ? String(p.source).slice(0, 200) : "",
+    source: p.source ? String(p.source).slice(0, 320) : "",
+    ...(Number.isInteger(rank) && rank >= 1 && rank <= 99 ? { rank } : {}),
+    ...(p.kind ? { kind: String(p.kind).slice(0, 40) } : {}),
   };
   // A note (Explain, #562) is drawn as a short callout on the map rather than a pin you must open.
   if (p.kind === "note") {
@@ -84,6 +91,14 @@ export function checkPin(p) {
     out.when = p.when ? String(p.when).slice(0, 40) : "";
     out.credit = p.credit ? String(p.credit).slice(0, 400) : "";
     out.group = p.group ? String(p.group).slice(0, 40) : "";
+  }
+  // A review finding (#564) flags cells of the user's model: which mesh, which cells, how severe.
+  if (p.kind === "review") {
+    out.kind = "review";
+    out.severity = ["problem", "warning", "info"].includes(p.severity) ? p.severity : "info";
+    out.check = p.check ? String(p.check).slice(0, 40) : "";
+    out.mesh = p.mesh ? String(p.mesh).slice(0, 200) : "";
+    out.cells = Array.isArray(p.cells) ? p.cells.slice(0, 5000).map(Number).filter((c) => Number.isInteger(c) && c >= 0) : [];
   }
   return out;
 }

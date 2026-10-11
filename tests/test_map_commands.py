@@ -122,6 +122,17 @@ def test_undo_is_a_control_not_an_action(text):
     assert res["matched"] and res["control"] == "undo" and res["actions"] == []
 
 
+@pytest.mark.parametrize("text", ["review my model", "Review my model results", "check my run",
+                                  "does my model look right?", "review these results please"])
+def test_review_my_model_is_a_control(text):
+    res = mc.parse_command(text, today=TODAY)
+    assert res["matched"] and res["control"] == "review" and res["actions"] == []
+
+
+def test_check_alone_is_not_a_review():
+    assert mc.parse_command("check the map", today=TODAY)["control"] is None
+
+
 def test_undo_all():
     assert mc.parse_command("start over", today=TODAY)["control"] == "undo_all"
     assert mc.parse_command("undo everything", today=TODAY)["control"] == "undo_all"

@@ -14,8 +14,9 @@ engine behind that, shared by the page, ``aquascope layers explain`` and the MCP
 * :func:`notes_prompt`, :func:`check_model_notes` and :func:`model_notes` are the model path. A model (the
   reader's own key, or the on-device model in the browser) only chooses and orders facts and writes the
   connecting words. It writes numbers as placeholders (``{f3}``), which code fills in from the facts, and a
-  note whose words carry any number (in digits or in words) that is not in the facts it cites is
-  refused (the claim lock).
+  note whose words carry any number (in digits or in words) that is not in the facts it cites, or a sign or
+  a digit set against a placeholder ("-{f3}", "{f3}0"), is refused (the claim lock, shared with
+  :mod:`aquascope.map_scout` and :mod:`aquascope.mesh_review`).
 
 :func:`explain_view` gathers the published layers itself (the world river status file, the Floods ahead
 issue, the Floods past grid and today's gauge status) for the CLI and the MCP tool; the page hands
@@ -39,7 +40,8 @@ from aquascope.map_layers import STATUS_ATTRIBUTION, STATUS_CLASSES, STATUS_LICE
 
 __all__ = [
     "LAYERS", "MAX_NOTES", "MIN_NOTES", "check_model_notes", "claim_lock", "explain", "explain_view", "model_notes",
-    "name_notes", "notes_prompt", "place_name", "status_sample", "template_notes", "view_facts",
+    "name_notes", "notes_prompt", "place_name", "placeholder_touches", "status_sample", "template_notes",
+    "view_facts",
 ]
 
 #: The layers a view can be explained from, by the ids aquascope.map_commands.LAYERS uses (gauges are the
@@ -976,17 +978,43 @@ def _numbers(text: str) -> set[str]:
     return out
 
 
+# Any placeholder: Explain's and mesh review's {f3} and {f3.when}, Scout's {peak}.
+_ANY_SLOT = r"\{\w+(?:\.\w+)?\}"
+# A sign, a digit or a decimal point set against a placeholder changes the number code puts in: "-{f1}" turns
+# 3.2 into -3.2, "{f1}0" turns 3 into 30, "{f1}{f2}" glues two values into one. A hyphen that joins a word
+# ("mid-{month}") or two placeholders (a range, "{f1}-{f2}") and a spaced dash ("Floods ahead - {place}")
+# are wording, not a sign.
+_TOUCH = re.compile(
+    r"(?:[+\u2212\u00b1]\s?"                    # a plus, a minus sign or a plus-minus, touching or one space off
+    r"|(?<![^\W\d_]|\})[-\u2013\u2014]"            # a hyphen or a dash (en, em) not joining words or placeholders
+    r"|(?:^|(?<=[(\[=]))\s*[-\u2013\u2014]\s+"      # "- {f1}" opening the words or a bracket
+    r"|\b(?:minus|negative|plus)\s+"             # the sign in words
+    r"|\d[.,]?|(?<!\w)\.)"                       # a digit or a decimal point before it ("1{f1}", ".{f1}")
+    + _ANY_SLOT
+    + r"|" + _ANY_SLOT
+    + r"(?:\d|[.,]\d|e[-+]?\d|k\b|bn\b|" + _ANY_SLOT + ")",   # after: "{f1}0", "{f1}.5", "{f1}e3", "{f1}k", "{f1}{f2}"
+    re.IGNORECASE)
+
+
+def placeholder_touches(words: str) -> list[str]:
+    """The places in ``words`` where a sign, a digit or a decimal point is set against a placeholder ("-{f1}",
+    "minus {f1}", "{f1}0", "{f1}{f2}"): each would change the number code fills in. Empty means none. The one
+    check Explain, Scout and mesh review all make."""
+    return [m.group(0).strip() for m in _TOUCH.finditer(words or "")]
+
+
 def claim_lock(words: str, cited: list[dict[str, Any]]) -> list[str]:
     """The numbers in a model's ``words`` (placeholders taken out) that are not in the facts it cites: the
     value as shown, its date, its place and its label. Digits, numbers in words ("twelve", "half") and other
-    numeric characters ("½") all count. Empty means the words pass."""
+    numeric characters ("½") all count, and so does a sign or a digit set against a placeholder
+    (:func:`placeholder_touches`, listed as written, "-{f1}"). Empty means the words pass."""
     allowed: set[str] = set()
     for f in cited:
         # The label too: "Peak against the 2-year flow" is how code named the fact.
         for part in (f.get("shown"), f.get("when"), (f.get("place") or {}).get("name"), f.get("label")):
             allowed |= _numbers(str(part or ""))
     bare = _PLACEHOLDER.sub(" ", words or "")
-    return sorted(n for n in _numbers(bare) if n not in allowed)
+    return sorted(n for n in _numbers(bare) if n not in allowed) + placeholder_touches(words)
 
 
 def _part(fact: dict[str, Any], part: str | None) -> str:
@@ -1106,6 +1134,10 @@ def check_model_notes(reply: Any, facts: list[dict[str, Any]], bbox: list[float]
         for f in used:
             if f not in cited:
                 cited.append(f)
+        touch = placeholder_touches(title + " " + text)
+        if touch:
+            refused.append(f"note {i}: a sign or a digit against a placeholder ({', '.join(touch)})")
+            continue
         stray = claim_lock(title + " " + text, cited)
         if stray:
             refused.append(f"note {i}: a number not in its facts ({', '.join(stray)})")

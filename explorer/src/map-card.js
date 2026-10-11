@@ -66,6 +66,8 @@ const el = () => $("map-card");
  *   figure: { value, unit, label } | { pending } | null           the one key number
  *   plume: { data, head, color, label, line } | { pending } | { empty }   an ensemble plume (#556,
  *                             fews.js); it takes the place of the sparkline and the number
+ *   chart: { svg, alt, key, label }   a small chart made by a layer's core module from published numbers
+ *                             (the water balance's monthly bars, #557); also in place of the sparkline
  *   note,                     an extra line (for example what a trace found)
  *   credit,                   where the numbers come from, with the licence
  *   details: () => void,      the Details button (omitted: no button)
@@ -177,13 +179,22 @@ function plumeHtml(pl) {
     (pl.line ? `<p class="mc-pl-line">${escapeHtml(pl.line)}</p>` : "");
 }
 
+// A layer's own small chart (#557): the SVG and its key come from the layer's core module, fixed words and
+// numbers only.
+function chartHtml(c) {
+  if (!c) return "";
+  return (c.label ? `<p class="mc-pl-label">${escapeHtml(c.label)}</p>` : "") +
+    `<div class="mc-chart" role="img" aria-label="${escapeHtml(c.alt || "chart")}">${c.svg || ""}</div>` +
+    (c.key ? `<p class="mc-chart-key">${c.key}</p>` : "");
+}
+
 function render() {
   const card = el();
   if (!card || !spec) return;
   const active = document.activeElement && card.contains(document.activeElement) ? document.activeElement.dataset.act : null;
   const s = spec;
   const buttons = (s.buttons || []).filter((b) => !b.hidden);
-  const middle = s.plume ? plumeHtml(s.plume) : (s.spark || s.figure)
+  const middle = s.plume ? plumeHtml(s.plume) : s.chart ? chartHtml(s.chart) : (s.spark || s.figure)
     ? `<div class="mc-row"><div class="mc-spark-wrap">${sparkHtml(s.spark)}</div>${figureHtml(s.figure)}</div>` : "";
   card.innerHTML = `
     <div class="mc-head">
@@ -390,6 +401,15 @@ async function startTrace(t) {
   }
 }
 
+// What if (#565): a scenario for the basin draining to this reach, painted on the rivers below it.
+function whatIfButton(t) {
+  return {
+    id: "whatif", label: "What if…", hidden: !actions.openWhatIf || !t,
+    title: "Less rain, a warmer climate or a new demand: GR4J for the basin, the change painted downstream",
+    onClick: () => { if (t && actions.openWhatIf) actions.openWhatIf(t); },
+  };
+}
+
 const studyButton = () => ({
   id: "study", label: "Study", title: "A complete study at this place, planned with you, with a report",
   onClick: () => actions.openStudy({ fresh: true }),
@@ -579,7 +599,8 @@ function onSnap(m, snap) {
     details: () => openDetails("panel-point", "now"),
     // A reach taken from the offer above gets its Trace button back.
     buttons: [traceButton("pt", { ready: Boolean(m.reach) }),
-      ...(m.spec.buttons || []).filter((b) => b.id !== "trace" && b.id !== "reach")],
+      ...(m.spec.buttons || []).filter((b) => b.id !== "trace" && b.id !== "reach" && b.id !== "whatif"),
+      whatIfButton({ kind: "reach", river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon })],
   });
   void loadForecast(m, snap);
 }
@@ -689,6 +710,13 @@ export function initMapCard() {
       if (!reach) return;
       setButton("trace", traceButton(t, { ready: true }));
       refreshWatch();
+      if (model.kind === "gauge" && state.selected) {
+        const g = state.selected;
+        const btn = whatIfButton({ kind: "gauge", river_id: reach.river_id, lat: g.lat, lon: g.lon, source: g.source,
+          station_id: g.station_id, name: g.name || g.station_id });
+        const others = (model.spec.buttons || []).filter((b) => b.id !== "whatif");
+        updateCard(model.id, { buttons: [...others, btn] });
+      }
     });
   }
   // Escape closes the card from inside it, and from the map (where the click that opened it left focus).

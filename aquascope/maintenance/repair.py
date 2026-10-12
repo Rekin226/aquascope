@@ -361,7 +361,15 @@ def repair_source(source: str, error: str, diagnosis: str, *, repo_root: str | P
     try:
         prop = propose_repair(ev, client=client, model=model, provider=provider)
     except Exception as exc:  # noqa: BLE001 - report, do not raise out of a maintenance loop
-        return RepairResult(source, ev, None, None, "error", f"model call failed: {type(exc).__name__}: {exc}")
+        message = str(exc)
+        if ("413" in message and ("Request too large" in message or "tokens per minute" in message
+                                   or "TPM" in message)):
+            note = ("model request too large for the configured provider/token limit (HTTP 413). "
+                    "Try ANTHROPIC_API_KEY or a model with a larger allowance; "
+                    "reduce the collector evidence before retrying.")
+        else:
+            note = f"model call failed: {type(exc).__name__}: {exc}"
+        return RepairResult(source, ev, None, None, "error", note)
     if not prop.is_patch:
         return RepairResult(source, ev, prop, None, "no_fix", prop.explanation)
     if prop.confidence < min_confidence:

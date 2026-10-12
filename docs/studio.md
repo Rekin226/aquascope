@@ -8,9 +8,45 @@ file re-runs with no model. [studio-design.md](studio-design.md) is the
 contract; this page is the user's guide.
 
 ```
- you ──► Consultant ──► Scout ──► Methodologist ──► you ──► Analysts ──► Critic ──► Author ──► bundle
+ you ──► Consultant ──► Scout ──► Methodologist ──► you ──► Analysts ──► Interpreter ──► Critic ──► Author ──► bundle
         (the brief)   (inventory)  (the plan)     (approve)  (run, gates)  (review)  (report)
 ```
+
+## Start
+
+```bash
+pip install "aquascope[studio,basins]"
+aquascope studio
+```
+
+In a terminal, `aquascope studio` with nothing else asks where (a gauge name or river words from the station
+catalog, a station id such as `USGS-01013500`, or `lat, lon`) and what you want to know. Then it asks whether you
+have a model key: paste one (hidden; the provider is read off its prefix, and one short request checks it), get a
+free Groq key, or run keyless. A key it may remember is kept in `~/.config/aquascope/keys.json` (mode 600) and
+offered next time; a key already in the environment is offered the same way. It never uses a key silently, and
+the spend ceiling is $1 unless `--max-usd` says otherwise. For scripts, give everything
+on the line: `aquascope studio "PROBLEM" --at USGS-01013500 --yes` (or `--lat`/`--lon`). Without the `studio`
+extra the bundle holds only the Markdown and HTML report and the tables, and the CLI says so.
+
+Beyond the design flow, the Studio plans three [advanced studies](advanced_studies.md): whether the flood is changing
+(`flood_change`), how the river changes with the climate by 2050 (`climate_change`) and what happens if the rain drops
+or it warms (`catchment_response`).
+
+## The questions
+
+A playbook's `checklist` lists what the study must know before it plans. The Consultant reads your first message
+against it, then asks what is still open, one question at a time, each with one line on what the answer changes
+and a short list of options (an arrow-key list in the terminal, chips in the Explorer, always with room for your
+own words). A reply that names no option is asked again; `just go` takes the defaults and lists them as
+assumptions. For flood questions:
+
+| You ask | It asks | The plan |
+|---|---|---|
+| "Is flooding here getting worse?" | Which period should the trend cover? | trend: Mann-Kendall and Sen's slope on the annual peaks |
+| "Design flow for a crossing, 100-year" | nothing | at-site frequency fit, T = 100 |
+| "Tell me about floods here" | What do you need to know? then, for a design, Which flood size? | follows the answers |
+
+With a model, the model reads your replies into the same values; it cannot skip an item or add questions of its own.
 
 ## The flow
 
@@ -34,17 +70,52 @@ contract; this page is the user's guide.
    (`s3.return_period=200`) or change the brief ("make it a 200-year return
    period") and get a new plan.
 5. **Run.** The Analysts run the steps in order with their gates; a failed
-   gate runs the fallback once, or the plan is replanned once (the playbook's
+   gate runs the fallback once; a step that still fails is recorded as not established and the rest of
+   the plan runs (its dependents are skipped with the reason); each failed step gets its replan or its
+   Specialist fallback once (the playbook's
    branch, or a Specialist's proposal validated against the catalogue).
    Figures and tables are made per step as results land.
-6. **Report.** The Author writes the report from the results; the Critic
-   checks it (every number must be in a result; a return level carries its
-   interval; the record is named) and lists what is not established. With a
-   model the Critic's `fix` issues earn one rewrite.
-7. **Bundle.** Markdown, `study.yaml`, `report.json`, `workspace.json` and,
+   **Waiting for data.** When a playbook's own rule would decline for data
+   the user could bring (abstraction records to attribute a groundwater
+   decline, a reservoir's capacity and rule, your own water-quality samples,
+   a discharge record where no gauge reaches), the crew asks instead: what
+   it needs, why, and what it changes. Drop the table in (the page, `--data`
+   or a path at the prompt in the terminal, `tables` over MCP) and the plan
+   is written again on it, or say "continue without" and the study goes on
+   at the lower grade the request named (`--continue-without` in the
+   terminal). A table can arrive at any point: at review it is inventoried
+   and planned on, after the report it runs as a follow-up change.
+6. **Interpret.** The Interpreter reads the results, the gates and the brief's
+   decision and writes findings, not prose: claims that each point at the
+   result they come from (`s3.ffa.fits.gev_lmoments.q.5`), whether the
+   estimates agree, the decision block (the value, its band, its grade, the
+   conditions, what would change it), the data the crew would ask for, and
+   the assumptions. Keyless it is a rule table over the key numbers and the
+   gates; with a model, one call the engine holds to the results (a basis
+   that resolves to nothing drops the finding, a grade may go down, never up).
+   Every answer carries a grade: `established` (at-site data, every gate
+   passed), `indicative` (a fallback, a donor transfer, a marginal method),
+   `screening` (regional or reanalysis data only), `not_established`.
+7. **Report.** The Author writes the report from the findings; every sentence
+   a model wrote passes the Critic's number check first (one whose numbers
+   are in no result is dropped and counted). The Critic then runs its
+   deterministic checks and, with a model, one independent pass; every
+   failed check and every `fix` issue goes to the Author for one rewrite,
+   the second critique keeps the model, and a report that still fails opens
+   with one line naming the failed checks. What is not established is
+   listed, never hidden.
+8. **Bundle.** Markdown, `study.yaml`, `report.json`, `findings.json`, `workspace.json` and,
    when the deliverables package is installed, the figures, the Excel
-   workbook, the Word report, the notebook and one zip.
-8. **Follow-up.** A question is answered from the workspace; a change (another
+   workbook, the Word report and memo, the notebook and one zip. The report
+   and the memo (`aquascope.studio.document`) lead with the answer and its
+   grade, organise the results by question, number every figure and table,
+   and leave the checked-by and approved-by lines blank for a person; a
+   study that established nothing becomes a one-page study note instead.
+   `report.html` and `memo.html` print to A4 (the PDF path), and
+   `--style style.yaml` sets the organisation, project, names and logo. The raw record and
+   the raw samples live in the workbook and the notebook; the documents say
+   which sheet, and print the evidence tables only.
+9. **Follow-up.** A question is answered from the workspace; a change (another
    return period, another statistic, another gauge, the donors) is planned,
    run and re-authored, reusing every step whose arguments and gates did not
    change.
@@ -97,7 +168,10 @@ model, and the list of what can.
 
 A model is used only when asked for (`--provider`, `--model`, `--api-key`,
 `--base-url`, or a ready client). The ledger of calls and tokens per role is
-in the report's footer.
+in the report's footer, with the USD spent when the model is in the price table
+(`aquascope.ai_engine.providers.PRICES`) and the sentences the checks dropped.
+`--max-usd` (CLI), `max_usd` (`Studio`, MCP) is a spend ceiling: past it the roles
+run keyless, the event and the footer say so, and the study still ends in a bundle.
 
 ## CLI
 
@@ -187,6 +261,46 @@ source="device")`, `studio_context(workspace, role, text=None)` (role
 `studio_export(workspace, out_dir)`. The tools are stateless: each returns
 the reply, a summary and the workspace dict to pass to the next.
 
+## The Study Desk
+
+A report is never right the first time. The Desk is where a finished study is revised, checked and signed,
+with every change on record (`aquascope.studio.desk`).
+
+- **Levers in plain words.** The design return period, the record window (only the last N years), the years
+  whose flood is left out of the fit (a dam break, a rating revised afterwards), and the distribution the
+  answer quotes. The first three rerun the flood steps, with their checks, through the steering. Every other
+  result is reused, and `study.yaml` reproduces the revision (`exclude_years` is a real argument of the flood
+  fit). The distribution only changes which fit leads the answer; every fit stays in the tables.
+- **A revision history.** Each change is a lettered revision (A is the study as the crew delivered it), with
+  who made it and the answer before and after. The table sits under the document control in the report.
+- **Sensitivity of the answer.** The design value under the reasonable alternatives:
+  - the other fitted distributions,
+  - the largest flood left out,
+  - only the most recent 50 or 30 years,
+  - the excluded years put back.
+
+  It is computed from the stored annual maxima with the reported distribution, without a new fetch, and goes
+  in the report under the design flood.
+- **Review and sign-off.** Review comments are kept with their responses in an appendix. Signing as prepared,
+  checked or approved fills the document control and moves the status from DRAFT to CHECKED to ISSUED.
+
+From the command line, point `aquascope studio` at a finished study's bundle folder (`aquascope desk` is the
+same thing under a shorter name):
+
+```bash
+aquascope studio studio-abc123/                    # the levers, the sensitivity, the revisions
+aquascope studio studio-abc123/ --exclude-years 2008 --by "A. Reviewer"
+aquascope studio studio-abc123/ --estimator lp3 --comment "Why GEV here?" --section "Design flood"
+aquascope studio studio-abc123/ --resolve c1="LP3 now leads, per agency practice" --sign checked="B. Checker"
+```
+
+Each call rewrites the documents and `workspace.json` in the bundle directory. A revision refits the record
+the study already holds (its record table) instead of fetching it again, so a change of assumption never
+arrives with a change of data. In the Explorer, **Read the
+report** opens the document with the Desk beside it. A change there reruns in the browser and reloads the
+document in place. From Python, `Studio.revise({...})`, `Studio.sign(role, name)` and
+`aquascope.studio.desk.comment` / `resolve` / `sensitivity` do the same.
+
 ## In the Explorer
 
 **Study** is the second mode of the Explorer's drawer, next to Ask. Open it
@@ -219,11 +333,24 @@ board above the input shows one thing at a time:
    that copy. The table open in My data is handed to the new worker again.
 4. **Done**: the answer, the key numbers, the figures, what the study does
    not establish when the Critic listed anything, **Download bundle** (the
-   zip) and links for the Word, Excel, Markdown, notebook and `study.yaml`
-   files. The input stays open: a question is answered from the workspace, a
+   zip), **Read the report** and **Read the memo** (the documents in a
+   reader with Print or save as PDF), and links for the Word, Excel,
+   Markdown, notebook and `study.yaml` files. The input stays open: a question is answered from the workspace, a
    change ("redo it with a 200-year return period") is planned, run and
    re-authored, and the board refreshes. **New study** clears the board for
    another study at the same place.
+
+The Done board opens with a grade badge (established, indicative, screening
+or not established, each explained on hover) and the decision block above the
+answer: what the value holds if, what would change it and what the crew would
+ask for, then the findings, collapsed. When a playbook's own rule would
+decline for data you could bring, the board shows a waiting card instead:
+what the crew needs, why, and a **Continue without** button where the study
+can still answer at the lower grade the request names. A CSV or XLSX can be
+dropped at intake, waiting, review or done alike, not only before a study
+starts: once one exists, a table is attached to it directly, and the crew
+plans again on it at waiting or review, or runs it as a follow-up once the
+report is in.
 
 The tiers are Ask's. Keyless by default, which is a complete study: the
 playbook tree plans, the gates check, templates write. When Ask holds a key,

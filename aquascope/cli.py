@@ -35,6 +35,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
 )
+# numexpr announces its thread count at INFO the moment pandas imports it, on every command; nobody asked.
+logging.getLogger("numexpr").setLevel(logging.WARNING)
 logger = logging.getLogger("aquascope")
 
 
@@ -120,6 +122,7 @@ def _parse_bbox(value: str | None) -> tuple[float, float, float, float] | None:
 
 def cmd_collect(args: argparse.Namespace) -> None:
     """Run a data collector and save results."""
+    from aquascope.collectors.base import CollectorError
     from aquascope.registry import build_collector, source_keys
     from aquascope.utils.storage import save_records
 
@@ -295,7 +298,12 @@ def cmd_collect(args: argparse.Namespace) -> None:
             kwargs["end_date"] = args.end_date
         if args.parameter_type:
             kwargs["parameter_type"] = args.parameter_type
-    records = collector.collect(**kwargs)
+    try:
+        records = collector.collect(**kwargs)
+    except CollectorError as exc:
+        logger.error("[%s] Collection failed: %s", source, exc)
+        sys.exit(1)
+
     if not records:
         logger.warning("No records collected.")
         return
@@ -328,7 +336,7 @@ def cmd_recommend(args: argparse.Namespace) -> None:
     if args.from_file:
         path = Path(args.from_file)
         if path.exists():
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(data, list) and data:
                 params_from_data = {r.get("parameter", "") for r in data if r.get("parameter")}
                 profile.parameters = list(params_from_data | set(profile.parameters))
@@ -468,7 +476,8 @@ def cmd_run_pipeline(args: argparse.Namespace) -> None:
                 },
                 indent=2,
                 default=str,
-            )
+            ),
+            encoding="utf-8",
         )
         print(f"\n  ✓ Full results saved → {out_path}")
 
@@ -574,10 +583,11 @@ def cmd_stations(args: argparse.Namespace) -> None:
                 {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props}
             )
         out_path.write_text(
-            json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, indent=2)
+            json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
     elif fmt == "json":
-        out_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2))
+        out_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
     else:
         import csv
 
@@ -616,6 +626,9 @@ def cmd_harvest(args: argparse.Namespace) -> None:
     if args.what == "bundles":
         _cmd_harvest_bundles(args)
         return
+    if args.what == "signatures":
+        _cmd_harvest_signatures(args)
+        return
 
     report = harvest_stations(
         args.out,
@@ -624,6 +637,7 @@ def cmd_harvest(args: argparse.Namespace) -> None:
         api_key=args.api_key,
         max_workers=args.workers,
         write_geojson=not args.no_geojson,
+        write_signatures=not args.no_signatures,
     )
     for s in report.sources:
         status = f"{s.n_stations:>6} stations" if s.ok else f"FAILED: {s.error}"
@@ -672,11 +686,13 @@ def _cmd_harvest_obs(args: argparse.Namespace) -> None:
         max_stations=args.max_stations,
         refresh_days=args.refresh_days,
         only_stations=args.station or None,
+        max_seconds=args.max_seconds,
     )
     for h in report.sources:
         print(
             f"  {h.source:<20} {h.variable:<14} harvested {h.harvested:>4}  empty {h.empty:>4}  "
             f"failed {h.failed:>3}  of {h.attempted:>4} picked  ({h.seconds:.0f}s)"
+            + (f"  stopped: {h.stopped}" if h.stopped else "")
         )
         for err in h.errors[:3]:
             print(f"      {err}")
@@ -705,6 +721,25 @@ def _cmd_harvest_bundles(args: argparse.Namespace) -> None:
     print(f"\n  {len(infos)} bundles written")
     if args.publish:
         url = publish_folder(args.out, args.publish, commit_message="harvest bundles")
+        print(f"  published: {url}")
+
+
+def _cmd_harvest_signatures(args: argparse.Namespace) -> None:
+    """`aquascope harvest signatures`: build signatures.parquet from the mirrored discharge files in --out."""
+    from aquascope.archive import publish_folder
+    from aquascope.archive.signatures import build_signatures_file
+
+    summary = build_signatures_file(args.out, sources=args.source or None)
+    if not summary.get("file"):
+        print(f"  {summary.get('note', 'nothing to do')}")
+        return
+    print(
+        f"  {summary['n_stations']:,} stations -> {summary['file']}: flows for {summary['n_with_flows']:,}, "
+        f"flood trend for {summary['n_with_trend']:,} ({summary['n_rising']:,} rising, "
+        f"{summary['n_falling']:,} falling), Q100 for {summary['n_with_q100']:,}"
+    )
+    if args.publish:
+        url = publish_folder(args.out, args.publish, commit_message="harvest signatures")
         print(f"  published: {url}")
 
 
@@ -850,8 +885,10 @@ def cmd_playbooks(args: argparse.Namespace) -> None:
             print(f"  {r['id']:<22} (broken: {r['error']})")
             continue
         print(f"  {r['id']:<22} {r['title']}  (branches: {', '.join(r['branches'])})")
-    print(f"\n  {len(rows)} playbook(s); `aquascope playbooks show ID` prints one, "
-          "`aquascope solve \"PROBLEM\" --lat LAT --lon LON` runs one.")
+    print(
+        f"\n  {len(rows)} playbook(s); `aquascope playbooks show ID` prints one, "
+        '`aquascope solve "PROBLEM" --lat LAT --lon LON` runs one.'
+    )
 
 
 def cmd_ingest(args: argparse.Namespace) -> None:
@@ -912,6 +949,440 @@ def cmd_mcp(args: argparse.Namespace) -> None:
         logger.error("%s", exc)
         sys.exit(1)
     mcp_main(transport=args.transport)
+
+
+def _print_river_status(res: dict) -> None:
+    """`aquascope layers status`: one month of the world river status map (#544)."""
+    rng = res.get("valid_range") or {}
+    if res.get("live_error"):
+        print(f"  Could not list the bucket ({res['live_error']}); showing what it held on {res.get('checked')}.")
+    if res.get("available"):
+        print(f"  World river status, {res['month']}: {res['url']}")
+    else:
+        print(f"  {res.get('error', 'no map')}")
+    if rng:
+        gaps = f"; no map for {', '.join(res['missing'])}" if res.get("missing") else ""
+        print(f"  {rng['months']} months, {rng['first']} to {rng['latest']}{gaps}.")
+    if res.get("headline"):
+        from aquascope.map_layers import MIN_COVER
+
+        print(f"\n  {res['headline']}.")
+        for r in res.get("regions") or []:
+            if r["cover"] >= MIN_COVER:
+                print(f"    {r['name']:<28} {round(100 * r['below']):>3}% below  {round(100 * r['above']):>3}% above")
+        print(f"  {res['regions_note']}\n")
+    for c in res.get("legend") or []:
+        print(f"  {c['hex']}  {c['label']:<18} {c['range']}")
+    if res.get("method"):
+        print(f"\n  {res['method']}")
+        print(f"  {res['attribution']} ({res['licence']})")
+
+
+def _layers_scout(args: argparse.Namespace) -> None:
+    """`aquascope layers scout`: what stands out on the map, by the Explorer's Scout rules (#563)."""
+    from aquascope import map_scout
+
+    view = {"bbox": list(args.bbox)} if args.bbox else None
+    if args.published:
+        doc = map_scout.published()
+        if not doc:
+            print("  No scout file is published yet; the daily flood-warnings workflow writes scout/latest.json.")
+            sys.exit(1)
+        res = map_scout.from_published(doc, view, max_pins=args.pins)
+        res["mode"] = "daily"
+    else:
+        res = map_scout.scan(view, args.month, max_pins=args.pins, places=not args.no_places)
+        res["mode"] = "live"
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    when = ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in (res.get("inputs") or {}).items() if v)
+    print(f"  Scout ({'the published daily file' if res['mode'] == 'daily' else 'scanned now'}; {when})\n")
+    for f in res["picks"]:
+        print(f"  {f['rank']:>2}. {f['title']}  [{f['lat']:.2f}, {f['lon']:.2f}]")
+        print(f"      {f['reason']}")
+        print(f"      Source: {f['source']}")
+    for note in res.get("notes") or []:
+        print(f"  Note: {note}")
+    if not res["picks"]:
+        print("  Nothing stands out in this view.")
+    print("\n  Rules, no model: every number formatted by aquascope.map_scout. Not a warning.")
+
+
+def _cmd_layers_explain(args: argparse.Namespace) -> None:
+    """`aquascope layers explain W S E N`: what is on the Explorer's map in a view, as facts and notes (#562)."""
+    from aquascope.map_explain import LAYERS, explain_view
+
+    # "status floods_ahead" or "status,floods_ahead": both read the same.
+    layers = [x for item in args.layers or [] for x in item.split(",") if x] or list(LAYERS)
+    bad = [x for x in layers if x not in LAYERS]
+    if bad:
+        print(f"  Unknown layer {', '.join(bad)}: choose from {', '.join(LAYERS)}")
+        sys.exit(2)
+    llm = None
+    if args.llm:
+        llm = {"provider": args.provider, "model": args.model, "api_key": args.api_key, "base_url": None}
+    try:
+        res = explain_view(args.bbox, args.date, layers, name_places=not args.no_places, llm=llm)
+    except ValueError as exc:
+        print(f"  {exc}")
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    w, s, e, n = res["view"]["bbox"]
+    print(f"  The view {w:g}, {s:g} to {e:g}, {n:g} on {res['view']['date']}: {len(res['facts'])} facts, "
+          f"{len(res['notes'])} notes ({res['by']}).\n")
+    for i, note in enumerate(res["notes"], 1):
+        where = note["place"] or f"{note['lat']:.3f}, {note['lon']:.3f}"
+        print(f"  {i}. {note['title']} ({where})")
+        print(f"     {note['text']}")
+        print(f"     Source: {note['source']}")
+    if args.facts:
+        print("\n  Facts:")
+        for f in res["facts"]:
+            p = f.get("place")
+            at = f" at {p['lat']:.3f}, {p['lon']:.3f}" if p else ""
+            print(f"  {f['id']:>4}  {f['label']}: {f['shown']}{(' ' + f['when']) if f.get('when') else ''}{at}")
+    for line in res.get("skipped") or []:
+        print(f"  ({line})")
+    for line in res.get("refused") or []:
+        print(f"  refused: {line}")
+    for line in res.get("errors") or []:
+        print(f"  could not read {line}")
+    if res.get("credits"):
+        print("\n  " + "\n  ".join(res["credits"]))
+
+
+def _print_flood_depth(res: dict) -> None:
+    """`aquascope layers depth`: the depth map chosen by the forecast, its tiles and what it found."""
+    if res.get("error"):
+        print(f"  {res['error']}")
+        return
+    print(f"  {res['summary']}")
+    for t in res.get("tiles") or []:
+        print(f"  {t['url']}")
+        print(f"    window {t['window']}   {t['gdal']}")
+    for r in (res.get("forecast_reaches") or [])[:20]:
+        print(f"  reach {r['river_id']}  {r['forecast_class']}-year flow, {r['depth_return_period']}-year map  "
+              f"({r['lat']:.3f}, {r['lon']:.3f})")
+    if res.get("forecast_reaches_n", 0) > 20:
+        print(f"  ... and {res['forecast_reaches_n'] - 20} more")
+    if res.get("not"):
+        print(f"\n  {res['not']}")
+    print(f"  {res['attribution']} ({res['licence']})")
+
+
+def cmd_layers(args: argparse.Namespace) -> None:
+    """`aquascope layers`: the dated map layers and their valid dates, or the frames of a time-lapse (#522)."""
+    from aquascope.map_time import dated_layers, layer_frames
+
+    if args.layers_cmd == "depth":
+        from aquascope.flood_depth import flood_depth_overlay
+
+        res = flood_depth_overlay(args.river_id, bbox=args.bbox, return_period=args.rp, day=args.day,
+                                  radius_km=args.radius_km, sample=not args.no_sample, local=args.local)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            _print_flood_depth(res)
+        if res.get("error"):
+            sys.exit(1)
+        return
+    if args.layers_cmd == "status":
+        from aquascope.map_layers import river_status_month, river_status_summary
+
+        if args.summary:
+            res = river_status_summary(args.month, live=not args.offline)
+        else:
+            res = river_status_month(args.month, live=not args.offline)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+            return
+        _print_river_status(res)
+        if not res.get("available"):
+            sys.exit(1)
+        return
+    if args.layers_cmd == "scout":
+        _layers_scout(args)
+        return
+    if args.layers_cmd == "explain":
+        _cmd_layers_explain(args)
+        return
+    if args.layers_cmd == "frames":
+        res = layer_frames(args.layer, args.start, args.end, step=args.step, max_frames=args.max_frames)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+            return
+        if res.get("error"):
+            print(f"  {res['error']}")
+            sys.exit(1)
+        print(f"  {res['label']}, every {res['step']}, {len(res['frames'])} frames"
+              + (" (capped)" if res.get("truncated") else "")
+              + (f", {res['skipped']} dates it cannot show" if res.get("skipped") else ""))
+        if res.get("note"):
+            print(f"  {res['note']}")
+        for f in res["frames"]:
+            print(f"  {f['date']}  {f['tiles']}")
+        print(f"\n  {res['attribution']} ({res['licence']})")
+        return
+    res = dated_layers(live=args.live)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return
+    if res.get("live_error"):
+        print(f"  Could not read GIBS ({res['live_error']}); showing the ranges recorded on {res['checked']}.")
+    for lay in res["layers"]:
+        until = lay.get("latest") or lay.get("until") or "now"
+        gaps = f", {len(lay['gaps'])} gaps" if lay.get("gaps") else ""
+        print(f"  {lay['id']:<8} {lay['label']:<28} {lay['cadence']:<6} {lay['since']} to {until}{gaps}")
+    print(f"\n  Steps: {', '.join(res['steps'])}. {res['note']}")
+
+
+def cmd_map(args: argparse.Namespace) -> None:
+    """`aquascope map "<request>"`: a plain-English request about the Explorer's map, read into map actions (#561)."""
+    from aquascope import map_commands as mc
+
+    text = " ".join(args.request)
+    if args.llm:
+        try:
+            res = mc.model_command(text, provider=args.provider, model=args.model, api_key=args.api_key, today=args.today)
+        except (RuntimeError, ValueError) as exc:
+            print(f"  {exc}")
+            sys.exit(1)
+        res["by"] = res.pop("model")
+    else:
+        res = mc.parse_command(text, today=args.today)
+        res["by"] = "rules"
+    if args.resolve and res.get("actions"):
+        resolved = mc.resolve_actions(res["actions"])
+        res.update(actions=resolved["actions"], said=resolved["said"], notes=resolved["notes"],
+                   credit=resolved["credit"])
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return
+    if res.get("control"):
+        print(f"  {res['control'].replace('_', ' ')}: the Explorer's action log does this")
+        return
+    if not res.get("actions"):
+        unknown = ", ".join(res.get("unknown") or [])
+        print("  Not understood by the rules" + (f" (unknown words: {unknown})" if unknown else "")
+              + ". Try --llm with your own key, or rephrase.")
+        for e in res.get("errors") or []:
+            print(f"  {e}")
+        sys.exit(1)
+    print(f"  Understood by {res['by']}:")
+    for said, action in zip(res["said"], res["actions"]):
+        print(f"  - {said:<44} {json.dumps(action, ensure_ascii=False)}")
+    for note in res.get("notes") or []:
+        print(f"  note: {note}")
+    if res.get("credit"):
+        print(f"\n  {res['credit']}")
+
+
+def cmd_whatif(args: argparse.Namespace) -> None:
+    """`aquascope whatif`: a scenario for a reach's basin, carried down the river (#565)."""
+    from aquascope import whatif_map as wm
+
+    # The answer speaks for the run: the fit notes (a GEV per parameter set, the requests) stay out of it.
+    for name in ("aquascope", "httpx"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    text = " ".join(args.scenario or []).strip()
+    numbers = {"dp_pct": args.rain, "dt_c": args.warming, "dpet_pct": args.evaporation, "demand_cms": args.demand}
+    by = "the numbers given"
+    if text and not any(v is not None for v in numbers.values()):
+        if args.llm:
+            try:
+                read = wm.model_scenario(text, provider=args.provider, model=args.model, api_key=args.api_key)
+            except (RuntimeError, ValueError) as exc:
+                print(f"  {exc}")
+                sys.exit(1)
+            by = read["model"]
+            for e in read.get("errors") or []:
+                print(f"  {e}")
+            if not read["scenario"]:
+                sys.exit(1)
+        else:
+            read = wm.parse_scenario(text)
+            by = "rules"
+            if not read["matched"]:
+                unknown = "; ".join(read.get("unknown") or [])
+                print(f"  Not understood by the rules{f' ({unknown})' if unknown else ''}. Try --llm with your own "
+                      "key, or give --rain, --warming, --demand.")
+                sys.exit(1)
+        numbers = read["scenario"]
+    if args.river is None and (args.lat is None or args.lon is None):
+        print("  Give --river ID, or --lat and --lon (with --source and --station for a gauge).")
+        sys.exit(1)
+    res = wm.whatif(args.river, lat=args.lat, lon=args.lon, source=args.source, station_id=args.station,
+                    area_km2=args.area, flood_rp=args.rp, members=args.members, confluences=args.confluences,
+                    **numbers)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    if not res.get("ok"):
+        print(f"  {res.get('error')}")
+        sys.exit(1)
+    o, m = res["outlet"], res["model"]
+    print(f"  What if: {res['scenario']['label']} (read by {by})")
+    print(f"  Basin: {res['basin']['area_km2']:,.0f} km2 draining to river reach {o['river_id']}; GR4J calibrated on "
+          f"{'the gauge' if m['calibrated_on'] == 'gauge' else 'GEOGLOWS v2 simulated flow (modelled)'}, "
+          f"validation KGE {(m.get('validation') or {}).get('kge') or float('nan'):.2f} ({m.get('skill_grade')})")
+    print(f"\n  {'At the outlet':<40}{'before':>10}{'after':>10}{'change':>9}  range")
+
+    def fmt(v: float | None) -> str:
+        return "n/a" if v is None else f"{v:,.2f}"
+
+    for key in ("mean", "low", "flood"):
+        row = o[key]
+        rng = row.get("range")
+        ch = row.get("change_pct")
+        print(f"  {row['label']:<40}{fmt(row.get('before')):>10}{fmt(row.get('after')):>10}"
+              f"{'n/a' if ch is None else f'{ch:+.1f}%':>9}  {f'{rng[0]:+.1f} to {rng[1]:+.1f}%' if rng else ''}")
+    print(f"\n  Downstream ({res['downstream']['n_reaches']} reaches, stopped: {res['downstream']['stopped']}):")
+    for r in res["reaches"]:
+        if r is res["reaches"][0] or r.get("confluence") or r is res["reaches"][-1]:
+            tag = f"after confluence {r['confluence']['n']}" if r.get("confluence") else (
+                "the outlet of the basin" if r is res["reaches"][0] else "where the walk stops")
+            print(f"  - reach {r['river_id']}  {r['area_km2']:>11,.0f} km2  share {r['share']:.0%}  mean "
+                  f"{r['mean_change_pct']:+.1f}%  Q95 {r['q95_change_pct']:+.1f}%  flood "
+                  f"{r['flood_change_pct'] if r['flood_change_pct'] is None else round(r['flood_change_pct'], 1)}%"
+                  f"  ({tag})")
+    print(f"\n  {res['verdict']}")
+    for note in res.get("notes") or []:
+        print(f"  note: {note}")
+    print(f"  simplification: {res['simplification']}")
+    print(f"\n  {res['attribution']}")
+
+
+def cmd_mesh(args: argparse.Namespace) -> None:
+    """`aquascope mesh FILE`: what a HEC-RAS 2D plan or UGRID mesh result holds (#555), the same summary the
+    MCP tool mesh_summary gives and the Explorer draws on the globe."""
+    from aquascope.io.mesh import mesh_summary
+
+    if args.file == "review" and args.review_file:
+        _mesh_review(args)
+        return
+    res = mesh_summary(args.file, crs=args.crs, geometry=args.geometry)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        if not res.get("ok"):
+            sys.exit(1)
+        return
+    if not res.get("ok"):
+        print(f"  {res['error']}")
+        _mesh_hint(res["error"])
+        sys.exit(1)
+    fmt = {"hec-ras": "HEC-RAS 2D plan", "ugrid": "UGRID mesh"}.get(res["format"], res["format"])
+    print(f"  {res['name']}: {fmt}, {res['model']}")
+    print(f"  {res['title']}")
+    areas = ", ".join(f"{a['name']} ({a['cells']:,})" for a in res["areas"])
+    print(f"  {res['cells']:,} cells: {areas}")
+    print(f"  Coordinate system: {res['crs']['label']} ({'from the file' if res['crs']['from'] == 'file' else 'given'})")
+    w, s_, e, n = res["bbox"]
+    print(f"  Extent: {w:.4f} to {e:.4f} E, {s_:.4f} to {n:.4f} N")
+    if res["time_steps"]:
+        print(f"  {res['time_steps']} time steps, {res['start']} to {res['end']}")
+    label = "depth" if res["variable"] == "depth" else "water surface"
+    mx = res.get("max")
+    if mx:
+        unit = f" {mx['unit']}" if mx.get("unit") else ""
+        print(f"  Largest {label}: {mx['value']}{unit} at {mx['lat']}, {mx['lon']} (cell {mx['cell']})")
+    if res.get("wet_cells") is not None:
+        print(f"  Cells wet at some time: {res['wet_cells']:,} of {res['cells']:,}")
+    sp = res.get("max_speed")
+    if sp:
+        unit = f" {sp['unit']}" if sp.get("unit") else ""
+        print(f"  Largest speed: {sp['value']}{unit} at {sp['lat']}, {sp['lon']} (cell {sp['cell']})")
+    for note in res.get("notes") or []:
+        print(f"  note: {note}")
+
+
+def cmd_swmm(args: argparse.Namespace) -> None:
+    """`aquascope swmm FILE [FILE]`: what an EPA SWMM model (.inp) and its results (.out) hold (#560), the same
+    summary the MCP tool swmm_summary gives."""
+    from aquascope.io.swmm import swmm_summary
+
+    inp = next((f for f in args.files if f.lower().endswith(".inp")), None)
+    out = next((f for f in args.files if not f.lower().endswith(".inp")), None)
+    res = swmm_summary(inp, out, crs=args.crs, top=args.top, element=args.element)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        if not res.get("ok"):
+            sys.exit(1)
+        return
+    if not res.get("ok"):
+        print(f"  {res['error']}")
+        sys.exit(1)
+    net = res.get("network")
+    if net:
+        kinds = ", ".join(f"{v} {k}" for k, v in net["node_types"].items())
+        lkinds = ", ".join(f"{v} {k}" for k, v in net["link_types"].items())
+        print(f"  {net['file']}: {net['title'] or 'SWMM model'} ({net['flow_units']})")
+        print(f"  {net['nodes']} nodes ({kinds}); {net['links']} links ({lkinds}); {net['subcatchments']} subcatchments")
+        if net.get("crs"):
+            w, s_, e, n = net["bbox"]
+            print(f"  Coordinate system: {net['crs']['label']}; extent {w:.4f} to {e:.4f} E, {s_:.4f} to {n:.4f} N")
+    r = res.get("results")
+    if r:
+        print(f"  {r['file']}: SWMM {r['swmm_version']}, {r['periods']} report steps of {r['report_step_s']} s, "
+              f"{r['start']} to {r['end']}")
+        fl = res.get("flooding")
+        if fl is not None:
+            print(f"  Nodes flooded: {fl['nodes_flooded']} of {r['nodes']}")
+            for row in fl["nodes"]:
+                where = f" at {row['lat']}, {row['lon']}" if row.get("lat") is not None else ""
+                print(f"    {row['id']} ({row['type']}): peak {row['peak']} {fl['unit']} at {row['peak_time']}, "
+                      f"{row['hours_flooded']} h, {row['volume_m3']} m3{where}")
+        fw = res.get("flows")
+        if fw is not None and fw["links"]:
+            print("  Largest flows:")
+            for row in fw["links"]:
+                print(f"    {row['id']} ({row['type']}): {row['peak']} {fw['unit']} at {row['peak_time']}, "
+                      f"fullest {row['peak_capacity']}")
+    if res.get("series"):
+        s = res["series"]
+        print(f"  {s['kind'].title()} {s['id']}: {len(s['times'])} values; use --json for the series")
+    for note in res.get("notes") or []:
+        print(f"  note: {note}")
+
+
+def _mesh_hint(error: str) -> None:
+    """The flag that fixes a mesh file's error, when one does."""
+    if "EPSG" in error:
+        print("  Pass it with --crs, for example --crs 32633 for UTM zone 33N.")
+    elif "not the mesh they sit on" in error:
+        print("  Pass the geometry file with --geometry, for example --geometry Model.g01.hdf.")
+
+
+def _mesh_review(args: argparse.Namespace) -> None:
+    """`aquascope mesh review FILE` (#564): the checks the Explorer's "Review these results" runs."""
+    from aquascope.mesh_review import review_file
+
+    res = review_file(args.review_file, crs=args.crs, context=not args.offline, top=args.top, geometry=args.geometry)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        if not res.get("ok"):
+            sys.exit(1)
+        return
+    if not res.get("ok"):
+        print(f"  {res['error']}")
+        _mesh_hint(res["error"])
+        sys.exit(1)
+    m = res["mesh"]
+    print(f"  {m['name']}: {m['cells']:,} cells, {m['steps']} time steps")
+    print(f"  {res['summary']}")
+    print()
+    for c in res["checks"]:
+        print(f"  {c['status']:<8} {c['label']}: {c['line']}")
+    if res["findings"]:
+        print()
+    for f in res["findings"]:
+        print(f"  {f['rank']:>2}. [{f['severity']}] {f['title']}  ({f['lat']:.5f}, {f['lon']:.5f})")
+        print(f"      {f['reason']}")
+        print(f"      Source: {f['source']}")
+    for e in res.get("errors") or []:
+        print(f"  note: {e}")
 
 
 def cmd_basins(args: argparse.Namespace) -> None:
@@ -1046,8 +1517,10 @@ def _format_assessment(res: dict, *, radius_km: float) -> str:
     catch = res.get("catchment") or {}
     stations = res.get("stations") or []
     rows = res.get("sufficiency") or []
-    head = [f"{res['point']['lat']:.4f}, {res['point']['lon']:.4f}",
-            f"{len(stations)} gauge{'' if len(stations) == 1 else 's'} within {radius_km:g} km"]
+    head = [
+        f"{res['point']['lat']:.4f}, {res['point']['lon']:.4f}",
+        f"{len(stations)} gauge{'' if len(stations) == 1 else 's'} within {radius_km:g} km",
+    ]
     area = ctx.get("area_km2")
     if area:
         head.append(f"catchment {area:,.0f} km²" + (" (caller)" if catch.get("source") == "caller" else ""))
@@ -1082,17 +1555,771 @@ def cmd_assess(args: argparse.Namespace) -> None:
     """`aquascope assess LAT LON`: what can be answered at a place, from the catalog and BasinATLAS, no agency call."""
     from aquascope.explore import assess_site
 
-    res = assess_site(args.lat, args.lon, radius_km=args.radius_km, problem=args.problem,
-                      return_period=args.return_period)
+    res = assess_site(
+        args.lat, args.lon, radius_km=args.radius_km, problem=args.problem, return_period=args.return_period
+    )
     if args.json:
         print(json.dumps(res, indent=2, ensure_ascii=False))
         return
     print(_format_assessment(res, radius_km=args.radius_km))
 
 
+# ── river (GEOGLOWS v2 reaches) ──────────────────────────────────────────────
+
+
+def _river_target(args: argparse.Namespace) -> tuple[int | None, dict | None]:
+    """The river_id the user gave, or the one ``--at LAT LON`` snaps to (with the snap, to report it)."""
+    from aquascope import rivers
+
+    if getattr(args, "at", None):
+        snap = rivers.snap_to_river(args.at[0], args.at[1], max_distance_m=args.max_distance)
+        print(f"  {snap['message']}")
+        if not snap["snapped"]:
+            sys.exit(1)
+        return int(snap["river_id"]), snap
+    if args.river_id is None:
+        print("  Give a RIVER_ID, or --at LAT LON to snap to the nearest reach.")
+        sys.exit(2)
+    return int(args.river_id), None
+
+
+# ── evidence (the model-skill ladder, #518) ────────────────────────────────
+
+
+def _print_skill(res: dict) -> None:
+    where = f"{res.get('source')}/{res.get('station_id')}" if res.get("source") else f"{res.get('lat')}, {res.get('lon')}"
+    print(f"  Model skill at {where}, gauge record {res.get('obs_start')} to {res.get('obs_end')}")
+    if res.get("error"):
+        print(f"  {res['error']}")
+        return
+    print(f"  {'model':<12} {'grade':>5} {'KGE':>6} {'r':>6} {'alpha':>6} {'beta':>6} {'NSE':>6} {'PBIAS':>7} "
+          f"{'Q2 err':>7} {'Q10 err':>8} {'Q100 err':>9}")
+
+    def f(x, d=2, pct=False):
+        if x is None:
+            return "-"
+        return f"{x:+.0f} %" if pct else f"{x:.{d}f}"
+
+    for r in res.get("models") or []:
+        if r.get("kge") is None:
+            print(f"  {r.get('label', r.get('model')):<12} {'-':>5}  {r.get('why') or ''}")
+            continue
+        print(f"  {r['label']:<12} {r.get('grade') or '-':>5} {f(r.get('kge')):>6} {f(r.get('r')):>6} "
+              f"{f(r.get('alpha')):>6} {f(r.get('beta')):>6} {f(r.get('nse')):>6} {f(r.get('pbias'), 1):>7} "
+              f"{f(r.get('q2_error_pct'), pct=True):>7} {f(r.get('q10_error_pct'), pct=True):>8} "
+              f"{f(r.get('q100_error_pct'), pct=True):>9}")
+    print(f"  {res.get('sentence')}")
+    for n in res.get("notes") or []:
+        print(f"  {n}")
+    print("  Grades: A KGE >= 0.75, B >= 0.5, C > -0.41 (the mean-flow benchmark), else D; one letter lower when "
+          "the 100-year flow is off by more than 50 %.")
+
+
+def cmd_evidence(args: argparse.Namespace) -> None:
+    """`aquascope evidence skill|near|build|publish`: every global model scored at a gauge (#518)."""
+    if args.evidence_cmd == "skill":
+        from aquascope import evidence
+
+        series = None
+        if args.csv:
+            import pandas as pd
+
+            df = pd.read_csv(args.csv)
+            series = pd.Series(pd.to_numeric(df.iloc[:, 1], errors="coerce").to_numpy(float),
+                               index=pd.to_datetime(df.iloc[:, 0]))
+        at = args.at or (None, None)
+        res = evidence.model_skill(args.source, args.station_id, series=series, lat=at[0], lon=at[1],
+                                   area_km2=args.area, models=args.models, years=args.years or None)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+            return
+        _print_skill(res)
+        return
+    if args.evidence_cmd == "near":
+        from aquascope import evidence
+
+        res = evidence.lean_on(args.lat, args.lon, radius_km=args.radius_km)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+            return
+        print(f"  {res['sentence']}")
+        return
+    from aquascope.archive import skill
+
+    if args.evidence_cmd == "build":
+        argv = ["build", "--archive", args.archive, "--out", args.out, "--max-gauges", str(args.max_gauges),
+                "--nwm-years", str(args.nwm_years), "--nwm-max-columns", str(args.nwm_max_columns),
+                "--grrr-max-chunks", str(args.grrr_max_chunks), "--workers", str(args.workers)]
+        if args.smoke:
+            argv.append("--smoke")
+        sys.exit(skill.main(argv))
+    sys.exit(skill.main(["publish", "--out", args.out, "--repo", args.repo]))
+
+
+def cmd_bulletin(args: argparse.Namespace) -> None:
+    """`aquascope bulletin [YYYY-MM]`: the month's state of the rivers, HydroSOS style (#523)."""
+    from aquascope import bulletin
+
+    try:
+        res = bulletin.status_bulletin(args.month, args.sources, archive=args.archive, rebuild=args.rebuild,
+                                       top_up=args.top_up, workers=args.workers)
+    except ValueError as exc:
+        print(f"  {exc}")
+        sys.exit(2)
+    if args.out:
+        written = bulletin.write_bulletin(res, args.out, figure=not args.no_map)
+        if not args.json:
+            for what, path in written.items():
+                print(f"  {what:<8} -> {path}")
+    if args.json:
+        print(json.dumps(res if args.gauges else {k: v for k, v in res.items() if k != "gauges"}, indent=2,
+                         ensure_ascii=False, default=str))
+        return
+    where = "published" if res.get("origin") == "published" else "built from the Archive's discharge records"
+    print(f"  {res['title']}, {res['label']} ({where})")
+    print(f"  {res['summary']}")
+    cov = res["coverage"]
+    if cov["classed"]:
+        print()
+        print(f"  {'Country':<16} {'Gauges':>6}  {'Much below':>10} {'Below':>6} {'Normal':>6} {'Above':>6} "
+              f"{'Much above':>10}  Median pct")
+        order = ("much_below", "below", "normal", "above", "much_above")
+        for c in res["countries"]:
+            k = [c["counts"][x] for x in order]
+            print(f"  {c['name'][:16]:<16} {c['n']:>6}  {k[0]:>10} {k[1]:>6} {k[2]:>6} {k[3]:>6} {k[4]:>10}  "
+                  f"{c['median_percentile']:.0f} ({c['median_label']})")
+    left = {k: v for k, v in cov["excluded"].items() if v}
+    if left:
+        print()
+        print("  Left out: " + "; ".join(f"{v:,} with {cov['excluded_text'][k]}" for k, v in left.items()) + ".")
+    if not args.out:
+        print("  Write the HTML, Markdown, map and status table with --out DIR.")
+
+
+def cmd_warnings(args: argparse.Namespace) -> None:
+    """`aquascope warnings [--bbox W S E N]`: Floods ahead, the reaches expected to reach their 2-year flow (#546)."""
+    from aquascope.archive import warnings
+
+    try:
+        res = warnings.flood_warnings(args.bbox, min_rp=args.min_rp, limit=args.limit, local=args.local)
+    except ValueError as exc:
+        print(f"  {exc}")
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    print(f"  {res['sentence']}")
+    if not res.get("available"):
+        return
+    counts = ", ".join(f"{v:,} at {k}-year" for k, v in res["counts"].items() if v)
+    if counts:
+        print(f"  {counts}")
+    if res["reaches"]:
+        print()
+        print(f"  {'River id':>10}  {'Lat':>7} {'Lon':>8}  {'Class':>6}  {'Peak m3/s':>10}  {'2-yr m3/s':>10}  "
+              f"{'Peak day':<10}  Members")
+        for r in res["reaches"]:
+            print(f"  {r['river_id']:>10}  {r['lat']:>7.2f} {r['lon']:>8.2f}  {str(r['rp']) + '-yr':>6}  "
+                  f"{r['peak_cms'] or 0:>10,.0f}  {r['q2'] or 0:>10,.0f}  {r['peak_date']:<10}  {r['share']:.0%}")
+        if res.get("truncated"):
+            print(f"  ... the first {len(res['reaches'])} shown; --limit N for more")
+    print()
+    print(f"  {res.get('not') or ''}")
+
+
+def cmd_waterbalance(args: argparse.Namespace) -> None:
+    """`aquascope waterbalance [--basin ID | --at LAT LON] [--month YYYY-MM]`: subbasins by monthly water balance
+    (#557): rain, evaporation, runoff and the closure error P - ET - Q, against the 1991-2020 normal."""
+    from aquascope.waterbalance import LABELS, water_balance
+
+    lat, lon = (args.at if args.at else (None, None))
+    try:
+        res = water_balance(args.basin, lat, lon, args.month, months=args.months, bbox=args.bbox,
+                            variable=args.variable, limit=args.limit, local=args.local)
+    except ValueError as exc:
+        print(f"  {exc}")
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    print(f"  {res['sentence']}")
+    if not res.get("available"):
+        return
+
+    def mm(x: object) -> str:
+        return "" if x is None else f"{x:,.0f}"
+
+    if res.get("series"):
+        print(f"  Subbasin {res['hybas_id']}, {res['area_km2'] or 0:,.0f} km2. mm per month:")
+        print()
+        print(f"  {'Month':<8} {'Rain':>6} {'Evap':>6} {'Runoff':>7} {'P-ET-Q':>7}   {'Rain vs normal':>14}")
+        for r in res["series"]:
+            print(f"  {r['month']:<8} {mm(r['p_mm']):>6} {mm(r['et_mm']):>6} {mm(r['q_mm']):>7} "
+                  f"{mm(r['closure_mm']):>7}   {mm(r['p_anom']):>14}")
+        if res.get("runoff_withheld_because"):
+            print(f"  No runoff here: {res['runoff_withheld_because']}.")
+        elif res.get("runoff_ok") is False:
+            print("  No runoff here: GEOGLOWS has no outlet reach for this subbasin or one upstream of it.")
+    elif res.get("furthest_from_normal"):
+        v = res["variable"]
+        print()
+        print(f"  Furthest from normal in {LABELS[v]} (mm):")
+        for r in res["furthest_from_normal"]:
+            print(f"  {r['hybas_id']:>12}  {mm(r[f'{v}_mm']):>6}  {r[f'{v}_anom']:+,.0f}")
+    print()
+    print(f"  {res.get('closure') or ''}")
+
+
+def cmd_flowstatus(args: argparse.Namespace) -> None:
+    """`aquascope flowstatus [--bbox W S E N] [--river-id ID]`: every big reach's flow against normal (#559)."""
+    from aquascope import flowstatus
+
+    try:
+        res = flowstatus.flow_vs_normal(args.bbox, river_id=args.river_id, local=args.local)
+    except ValueError as exc:
+        print(f"  {exc}")
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    print(f"  {res['sentence']}")
+    if not res.get("available"):
+        return
+    total = sum(res["counts"].values())
+    print()
+    for c in flowstatus.CLASSES:
+        k = res["counts"].get(c["id"], 0)
+        share = f"{k / total:.0%}" if total else "-"
+        print(f"  {c['label']:<18} {k:>9,}  {share:>4}   {c['range']}")
+    reach = res.get("reach")
+    if reach:
+        print()
+        label = next((c["label"] for c in flowstatus.CLASSES if c["id"] == reach.get("class")), None)
+        flow = f", {reach['flow_cms']:,.4g} m3/s today" if reach.get("flow_cms") is not None else ""
+        print(f"  Reach {reach['river_id']}: {label or 'not classed'}{flow}")
+        if reach.get("p25") is not None:
+            print(f"  Normal for month {res.get('month')}: {reach['p25']:,.4g} to {reach['p75']:,.4g} m3/s "
+                  f"(10th {reach['p10']:,.4g}, 90th {reach['p90']:,.4g})")
+        if reach.get("why"):
+            print(f"  {reach['why']}")
+    print()
+    print(f"  {res.get('not') or ''}")
+
+
+def cmd_now(args: argparse.Namespace) -> None:
+    """`aquascope now LAT LON | --station SOURCE/ID | --river-id ID`: today against normal and the next 15 days."""
+    from aquascope import nownext
+
+    coords = list(args.coords or [])
+    if coords and len(coords) != 2:
+        print("  Give LAT LON, --station SOURCE/ID or --river-id ID.")
+        sys.exit(2)
+    lat, lon = (coords[0], coords[1]) if coords else (None, None)
+    if lat is None and not args.station and args.river_id is None:
+        print("  Give LAT LON, --station SOURCE/ID or --river-id ID.")
+        sys.exit(2)
+    if getattr(args, "plume", False):
+        _now_plume(args, lat, lon)
+        return
+    try:
+        res = nownext.now(lat, lon, station=args.station, river_id=args.river_id, days=args.days, date=args.date,
+                          with_forecast=not args.status_only, correct=not args.raw, history=not args.quick)
+    except ValueError as exc:
+        print(f"  {exc}")
+        sys.exit(2)
+    fc = res.get("forecast") or {}
+    if args.csv and fc:
+        _now_csv(fc, args.csv)
+        print(f"  forecast -> {args.csv}")
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    st = res.get("status") or {}
+    if res.get("station"):
+        s = res["station"]
+        print(f"  {s.get('name') or s['station_id']} ({s['source']}/{s['station_id']}), {s.get('variable')}")
+    if st:
+        print(f"  {st.get('sentence') or st.get('error')}")
+        if st.get("top_up"):
+            print(f"    {st['top_up']}")
+    if not fc:
+        return
+    if fc.get("snap"):
+        print(f"  {fc['snap'].get('message')}")
+    if not st and (fc.get("status") or {}).get("sentence"):
+        print(f"  {fc['status']['sentence']}")
+    rows = _now_table(fc)
+    if rows:
+        corrected = any(r[2] is not None for r in rows)
+        head = f"  {'day':<10}  {'GEOGLOWS mean [25-75 %]':>28}" + (f"  {'corrected':>10}" if corrected else "")
+        print(head + f"  {'GloFAS mean':>11}   (m3/s, modelled)")
+        for day, g, c, gl in rows:
+            band = f"{g[0]:,.4g} [{g[1]:,.4g}-{g[2]:,.4g}]" if g and g[0] is not None else "-"
+            line = f"  {day:<10}  {band:>28}"
+            if corrected:
+                line += f"  {c:>10,.4g}" if c is not None else f"  {'-':>10}"
+            line += f"  {gl:>11,.4g}" if gl is not None else f"  {'-':>11}"
+            print(line)
+    thr = fc.get("gauge_thresholds") if (fc.get("correction") or {}).get("forecast") else fc.get("thresholds")
+    if thr and thr.get("q"):
+        pairs = ", ".join(f"{t:g}-yr {q:,.4g}" for t, q in zip(thr["return_periods"], thr["q"]) if q is not None)
+        print(f"  Thresholds from {thr.get('source')}, {thr.get('method')}: {pairs}")
+    print(f"  {fc.get('sentence')}")
+    corr = fc.get("correction") or {}
+    if corr.get("skill_line"):
+        print(f"  {corr['skill_line']}")
+        if corr.get("skill_detail"):
+            print(f"    {corr['skill_detail']}")
+    elif corr.get("error"):
+        print(f"  No correction: {corr['error']}")
+    if (fc.get("reach_check") or {}).get("note"):
+        print(f"  {fc['reach_check']['note']}")
+    for g in ("geoglows", "glofas"):
+        if (fc.get(g) or {}).get("error"):
+            print(f"  {g}: {fc[g]['error']}")
+    print("  Data: GEOGLOWS v2 (CC BY 4.0); GloFAS v4 via Open-Meteo (CC BY 4.0).")
+
+
+def cmd_watch(args: argparse.Namespace) -> None:
+    """`aquascope watch ID... --since DATE`: what changed at watched gauges, reaches and areas."""
+    from aquascope import watch
+
+    thresholds: dict[str, str] = {}
+    for spec in args.threshold or []:
+        key, sep, value = spec.rpartition("=")
+        if not sep or not key:
+            print(f"  --threshold takes ID=VALUE or ID=10y, not {spec!r}")
+            sys.exit(2)
+        thresholds[key] = value
+    items = []
+    for ident in args.ids:
+        try:
+            item = watch.parse_item(ident)
+        except ValueError as exc:
+            print(f"  {exc}")
+            sys.exit(2)
+        if item["id"] in thresholds or ident in thresholds:
+            item["threshold"] = thresholds.get(item["id"], thresholds.get(ident))
+        items.append(item)
+    try:
+        res = watch.watch_digest(items, args.since, forecast="off" if args.no_forecast else args.forecast,
+                                 floods=not args.no_floods, refresh=not args.no_refresh)
+    except ValueError as exc:
+        print(f"  {exc}")
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    print(f"  {res['summary']}")
+    for item in res["items"]:
+        mark = "*" if item.get("alerts") else ("+" if item.get("changed") else " ")
+        print(f"  {mark} {item.get('name')} ({item['id']})")
+        print(f"      {item.get('line')}")
+        for note in item.get("notes") or []:
+            print(f"      ({note})")
+    for note in res.get("notes") or []:
+        print(f"  {note}")
+    for err in res.get("errors") or []:
+        print(f"  Skipped {err['item']}: {err['error']}")
+    print("  Forecasts are model output (GEOGLOWS v2, CC BY 4.0). Flood events: Groundsource (CC BY 4.0).")
+
+
+def _now_plume(args: argparse.Namespace, lat: float | None, lon: float | None) -> None:
+    """`aquascope now --plume`: the reach's ensemble plume and its threshold classes (#556)."""
+    from aquascope import nownext
+
+    if args.station:
+        print("  --plume is for a river reach: give LAT LON or --river-id ID.")
+        sys.exit(2)
+    try:
+        res = nownext.plume(args.river_id, lat=lat, lon=lon, days=args.days, history=True)
+    except ValueError as exc:
+        print(f"  {exc}")
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    if res.get("error"):
+        print(f"  {res['error']}")
+        return
+    print(f"  River reach {res['river_id']}, GEOGLOWS run of {res.get('issued')} ({res.get('n_members')} members, "
+          "modelled)")
+    print(f"  {'day':<10}  {'median':>9}  {'middle half':>19}  {'full range':>19}  class")
+    for i, day in enumerate(res["date"]):
+        def cell(k: str, i: int = i) -> str:
+            v = (res.get(k) or [None] * (i + 1))[i]
+            return "-" if v is None else f"{v:,.4g}"
+
+        rp = res["class_daily"][i]
+        print(f"  {day:<10}  {cell('median'):>9}  {cell('p25') + ' - ' + cell('p75'):>19}  "
+              f"{cell('min') + ' - ' + cell('max'):>19}  {f'{rp}-yr' if rp else '-'}")
+    thr = res.get("thresholds") or {}
+    if thr.get("q"):
+        pairs = ", ".join(f"{t}-yr {q:,.4g}" for t, q in zip(thr["return_periods"], thr["q"]))
+        print(f"  Thresholds from {thr.get('source')}: {pairs}")
+    else:
+        print("  No return-period flows for this reach, so no classes.")
+    print(f"  {res.get('sentence')}")
+    if res.get("members_line"):
+        print(f"  {res['members_line']}")
+    print(f"  {res.get('attribution')}. Model output, not an official warning.")
+
+
+def _now_table(fc: dict) -> list[tuple]:
+    g, gl = fc.get("geoglows") or {}, fc.get("glofas") or {}
+    c = (fc.get("correction") or {}).get("forecast") or {}
+    days = sorted(set(g.get("date") or []) | set(gl.get("date") or []))
+
+    def at(part: dict, key: str, day: str):
+        dates = part.get("date") or []
+        vals = part.get(key) or []
+        return vals[dates.index(day)] if day in dates and dates.index(day) < len(vals) else None
+
+    return [(d, (at(g, "mean", d), at(g, "p25", d), at(g, "p75", d)), at(c, "mean", d), at(gl, "mean", d))
+            for d in days]
+
+
+def _now_csv(fc: dict, path: str) -> None:
+    from aquascope.nownext import STAT_KEYS
+
+    c = (fc.get("correction") or {}).get("forecast") or {}
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("model,date," + ",".join(STAT_KEYS) + ",corrected\n")
+        for model in ("geoglows", "glofas"):
+            part = fc.get(model) or {}
+            for i, day in enumerate(part.get("date") or []):
+                vals = [part.get(k)[i] if isinstance(part.get(k), list) else None for k in STAT_KEYS]
+                corrected = (c.get("mean") or [None] * (i + 1))[i] if model == "geoglows" and c else None
+                fh.write(",".join([model, day, *("" if v is None else f"{v:g}" for v in [*vals, corrected])]) + "\n")
+
+
+def cmd_river(args: argparse.Namespace) -> None:
+    """`aquascope river snap|record|area|trace|dams|upstream|downstream`: GEOGLOWS v2 river reaches, keyless
+    (the modelled record is CC BY); the dams come from the Archive's Global Dam Watch mirror (CC BY 4.0)."""
+    from aquascope import rivers
+
+    if args.river_cmd == "snap":
+        res = rivers.snap_to_river(args.lat, args.lon, max_distance_m=args.max_distance,
+                                   prefer="nearest" if args.nearest else "main", area_km2=args.area)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+            return
+        print(f"  {res['message']}")
+        if res["snapped"]:
+            print(f"  river_id {res['river_id']} at {res['snap_lat']:.5f}, {res['snap_lon']:.5f}")
+        return
+    rid, snap = _river_target(args)
+    # Where the snapped reach is: it lets the area and the trace read the right processing unit first.
+    near = {"lat": snap["snap_lat"], "lon": snap["snap_lon"]} if snap else {}
+    if args.river_cmd == "record":
+        store: dict = {}
+        res = rivers.reach_record(rid, years=args.years, store=store)
+        if args.csv and store.get("series") is not None:
+            series = store["series"]
+            with open(args.csv, "w", encoding="utf-8") as fh:
+                fh.write("date,discharge_m3_per_s_modelled\n")
+                fh.writelines(f"{t.date().isoformat()},{v:g}\n" for t, v in series.items())
+            print(f"  {len(series):,} simulated days -> {args.csv}")
+        if args.json:
+            res.pop("series", None)
+            print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+            return
+        if res.get("error"):
+            print(f"  {res['error']}")
+            sys.exit(1)
+        st = res["stats"]
+        print(f"  River reach {rid}: MODELLED daily discharge, {res['start']} to {res['end']} ({res['years']:g} years)")
+        print(f"  mean {st['mean']:,.3g} m3/s, max {st['max']:,.4g} m3/s; Q95 {res['fdc']['q95']:,.3g}, "
+              f"Q50 {res['fdc']['q50']:,.3g}, Q10 {res['fdc']['q10']:,.3g}")
+        ffa = res.get("ffa") or {}
+        gev, lp3 = (ffa.get("fits") or {}).get("gev_lmoments") or {}, (ffa.get("fits") or {}).get("lp3") or {}
+        if gev.get("q"):
+            print(f"  Return periods from {ffa['n_years']} annual maxima (m3/s):")
+            for k, t in enumerate(ffa["return_periods"]):
+                ci = (lp3.get("ci") or [[None, None]] * len(ffa["return_periods"]))[k]
+                band = f" (LP3 {lp3['q'][k]:,.4g}, 90 % CI {ci[0]:,.4g} to {ci[1]:,.4g})" if lp3.get("q") else ""
+                print(f"    {t:>5g}-yr  GEV {gev['q'][k]:,.4g}{band}")
+        print(f"  {res['notes'][0]}")
+        print(f"  {res['attribution']}")
+        return
+    if args.river_cmd == "area":
+        res = rivers.upstream_area(rid, **near)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+            return
+        print(f"  River reach {rid}: {res['upstream_area_km2']:,.1f} km2 drain to it, "
+              f"{res['n_reaches_upstream']:,} reaches upstream (GEOGLOWS unit {res['vpu']}).")
+        print(f"  {res['note']}")
+        return
+    if args.river_cmd == "dams":
+        res = rivers.upstream_dams(rid, with_flow=not args.no_flow, **near)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+            return
+        print(f"  River reach {rid}: {res['summary']}")
+        for d in res.get("dams") or []:
+            cap = f"{d['capacity_mcm']:,.1f} million m3" if d.get("capacity_mcm") else "storage unknown"
+            print(f"    {d.get('name') or 'unnamed':<28} {cap:<24} {d.get('purpose') or ''}")
+        if res.get("note"):
+            print(f"  {res['note']}")
+        print(f"  {res['source']['attribution']}")
+        return
+    if args.river_cmd == "trace":
+        res = rivers.trace_downstream(rid, gauge_km=args.gauge_km, dam_km=args.dam_km, **near)
+        if args.geojson:
+            feature = {"type": "Feature", "geometry": res.get("geometry"),
+                       "properties": {"river_id": rid, "length_km": res.get("length_km"),
+                                      "licence": res.get("geometry_licence")}}
+            with open(args.geojson, "w", encoding="utf-8") as fh:
+                json.dump({"type": "FeatureCollection", "features": [feature]}, fh)
+            print(f"  path -> {args.geojson} (TDX-Hydro geometry, CC BY-SA 4.0)")
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+            return
+        print(f"  {res['message']}")
+        if res.get("upstream_area_km2") is not None:
+            print(f"  {res['upstream_area_km2']:,.0f} km2 drain to the first reach.")
+        for g in res.get("gauges") or []:
+            print(f"    km {g['along_km']:>7,.1f}  {g['source']}/{g['station_id']}  {g.get('name') or ''}")
+        countries = res.get("countries_info") or {}
+        if countries.get("summary"):
+            print(f"  {countries['summary']}")
+        dams_info = res.get("dams_info") or {}
+        if dams_info.get("summary"):
+            print(f"  {dams_info['summary']}")
+        for d in res.get("dams") or []:
+            cap = f"  {d['capacity_mcm']:,.1f} million m3" if d.get("capacity_mcm") else ""
+            use = f"  {d['purpose']}" if d.get("purpose") else ""
+            print(f"    km {d['along_km']:>7,.1f}  {d.get('name') or 'unnamed'}{cap}{use}")
+        up = res.get("upstream_dams") or {}
+        if up.get("summary"):
+            print(f"  Upstream: {up['summary']}")
+        for note in res.get("notes") or []:
+            print(f"  {note}")
+        return
+    if args.river_cmd in ("upstream", "downstream"):
+        fn = rivers.upstream_ids if args.river_cmd == "upstream" else rivers.downstream_ids
+        res = fn(rid, max_n=args.max, **near)
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+            return
+        print(f"  {res['message']}")
+        ids = res["ids"]
+        shown = ids if len(ids) <= 12 else [*ids[:6], "...", *ids[-6:]]
+        print("  " + " ".join(str(x) for x in shown))
+        return
+
+
+# ── context (place context layers, #520) ────────────────────────────────────
+
+_CONTEXT_LABELS = {
+    "flood_history": "Flood history", "surface_water": "Surface water", "flood_hazard": "Flood hazard",
+    "dams": "Dams", "rain_gauge": "Rain gauge", "actual_et": "Actual ET", "soil": "Soil",
+}
+
+
+def _format_context(res: dict[str, Any]) -> str:
+    if res.get("bbox"):
+        w, s, e, n = res["bbox"]
+        lines = [f"Context of the box {w:g}, {s:g} to {e:g}, {n:g} (west, south to east, north)"]
+    else:
+        lines = [f"Context of {res['lat']:.4f}, {res['lon']:.4f}"]
+    for name, layer in res["layers"].items():
+        lines.append(f"  {_CONTEXT_LABELS.get(name, name):<14}  {layer.get('summary') or ''}")
+    lines.append("")
+    lines.append("Data: " + "; ".join(res.get("attribution") or []))
+    return "\n".join(lines)
+
+
+def cmd_context(args: argparse.Namespace) -> None:
+    """`aquascope context LAT LON` (or `--bbox`): flood history, surface water, flood hazard, dams, rain gauge,
+    actual ET and soil at a place, from open global data, each line with its source (thin face)."""
+    from aquascope import context
+
+    if args.floods_past or args.month or args.start or args.end:
+        cmd_floods_past(args)
+        return
+    layers = args.layers or None
+    try:
+        if args.bbox:
+            res = context.area_context(*_parse_bbox(args.bbox), layers=layers)
+        elif args.lat is not None and args.lon is not None:
+            res = context.place_context(args.lat, args.lon, layers=layers)
+        else:
+            logger.error("give LAT LON, or --bbox=west,south,east,north")
+            sys.exit(2)
+    except ValueError as exc:
+        logger.error("%s", exc)
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    print(_format_context(res))
+
+
+def _format_floods_past(res: dict[str, Any]) -> str:
+    lines = [res.get("summary") or ""]
+    if res.get("available") is False:
+        return "\n".join(lines)
+    news, radar = res.get("news") or {}, res.get("radar") or {}
+    for label, part, key in (("Most news", news, "news"), ("Most radar", radar, "radar")):
+        spots = part.get("hotspots") or []
+        if spots and res.get("bbox") is None:
+            lines.append(f"{label}:")
+            for h in spots:
+                lines.append(f"  {h['lat']:7.2f}, {h['lon']:8.2f}   news {h['news']:>7,}   radar {h['radar']:>12,}")
+    if news.get("events"):
+        lines.append("News events (latest first):")
+        for e in news["events"]:
+            dates = e["start"] if not e.get("end") or e["end"] == e["start"] else f"{e['start']} to {e['end']}"
+            area = f"  {e['area_km2']:,.0f} km2" if e.get("area_km2") else ""
+            lines.append(f"  {dates}{area}")
+        more = (news.get("events_found") or 0) - len(news["events"])
+        if more > 0:
+            lines.append(f"  and {more:,} more")
+    if res.get("bbox") is not None and radar.get("by_month"):
+        lines.append("Radar detections by month: " + ", ".join(f"{m} {n:,}" for m, n in radar["by_month"].items()))
+    lines.append("")
+    lines.append("Data: " + (res.get("attribution") or ""))
+    return "\n".join(lines)
+
+
+def cmd_floods_past(args: argparse.Namespace) -> None:
+    """`aquascope context --floods-past [--month YYYY-MM | --from --to] [--bbox]`: flood events in the news and
+    floods seen by radar, per month, worldwide or in a box (#547, thin face over aquascope.context.floods_past)."""
+    from aquascope.context.floods_past import flood_events_month
+
+    try:
+        res = flood_events_month(args.month, start=args.start, end=args.end,
+                                 bbox=_parse_bbox(args.bbox), limit=args.limit)
+    except ValueError as exc:
+        logger.error("%s", exc)
+        sys.exit(2)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        return
+    print(_format_floods_past(res))
+
+
+# ── export (engineering tools, #519) ─────────────────────────────────────────
+
+
+#: The ``--to`` choices, kept literal so the parser stays import-light (a test pins it to engineering.TOOLS).
+EXPORT_TOOLS = ("hec-hms", "hec-ras", "hec-ssp", "dss", "swmm", "modflow6", "fews", "raven")
+
+
+def _export_series_from_file(path: str, column: str | None):
+    """A CSV's first datetime-like column as the index and ``column`` (or the first numeric one) as values."""
+    import pandas as pd
+
+    df = pd.read_csv(path)
+    if df.shape[1] < 2:
+        raise ValueError(f"{path}: need a date column and a value column")
+    when = pd.to_datetime(df.iloc[:, 0], errors="coerce", utc=False)
+    if column:
+        if column not in df.columns:
+            raise ValueError(f"{path}: no column {column!r}; columns are {list(df.columns)}")
+        values = df[column]
+    else:
+        numeric = [c for c in df.columns[1:] if pd.api.types.is_numeric_dtype(df[c])]
+        if not numeric:
+            raise ValueError(f"{path}: no numeric value column")
+        values = df[numeric[0]]
+    s = pd.Series(pd.to_numeric(values, errors="coerce").to_numpy(), index=pd.DatetimeIndex(when))
+    return s[s.index.notna()]
+
+
+def cmd_export(args: argparse.Namespace) -> None:
+    """`aquascope export --to TOOL`: a gauge's record (or a CSV) as inputs for an engineering tool (thin face)."""
+    from aquascope.io import engineering as eng
+
+    opts = {"regional_skew": args.regional_skew, "regional_skew_mse": args.regional_skew_mse,
+            "year_start_month": args.year_start_month, "subbasin_id": args.subbasin_id,
+            "cellid": tuple(args.cell) if args.cell else (1, 1, 1), "cond": args.cond, "rbot": args.rbot,
+            "period": args.period, "engine": args.engine, "dss_binary": False if args.no_dss else None}
+    try:
+        if args.station:
+            source, _, station_id = args.station.partition("/")
+            if not station_id:
+                raise ValueError("give --station as source/station_id, for example usgs/01646500")
+            res = eng.export_station(source, station_id, args.to, years=args.years, variable=args.variable,
+                                     **opts)
+        elif args.file:
+            s = _export_series_from_file(args.file, args.column)
+            res = eng.export_series(s, args.to, variable=args.variable or "discharge", unit=args.unit,
+                                    location=args.location or Path(args.file).stem, name=args.location, **opts)
+        else:
+            raise ValueError("give --station source/station_id or --file a CSV")
+    except (ValueError, KeyError) as exc:
+        logger.error("%s", exc)
+        sys.exit(2)
+    if "error" in res:
+        logger.error("%s", res["error"])
+        sys.exit(1)
+    files = eng.files_from(res)
+    if args.zip:
+        out = Path(args.out_dir if args.out_dir.endswith(".zip") else f"{args.out_dir}.zip")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(eng.zip_bytes(files))
+        written = [str(out)]
+    else:
+        written = eng.write_files(files, args.out_dir)
+    if args.json:
+        print(json.dumps({"written": written, "notes": res["notes"], "tool": res["tool"]}, indent=2))
+        return
+    print(f"{res['label']}: {len(files)} file(s)")
+    for w in written:
+        print(f"  {w}")
+    for n in res["notes"]:
+        print(f"- {n}")
+
+
+# ── area-study (Study this area) ─────────────────────────────────────────────
+
+
+def cmd_area_study(args: argparse.Namespace) -> None:
+    """`aquascope area-study`: a multi-gauge flood study over a box or a list of stations (thin face)."""
+    from aquascope import area_study
+
+    if not args.bbox and not args.station:
+        logger.error("give --bbox=west,south,east,north or one or more --station source/station_id")
+        sys.exit(2)
+    res = area_study.study_area(
+        args.station or None, bbox=_parse_bbox(args.bbox) if not args.station else None, question=args.question,
+        max_sites=args.max_sites, max_live=args.max_live,
+    )
+    if args.output:
+        out = Path(args.output)
+        if out.suffix == ".xlsx":
+            out.write_bytes(area_study.to_xlsx(res))
+        elif out.suffix == ".csv":
+            out.write_text(area_study.to_csv(res), encoding="utf-8")
+        elif out.suffix == ".geojson":
+            out.write_text(json.dumps(res["geojson"], ensure_ascii=False), encoding="utf-8")
+        else:
+            out.write_text(json.dumps(res, indent=1, ensure_ascii=False), encoding="utf-8")
+        print(f"wrote {out}", file=sys.stderr)
+    if args.json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return
+    print(res["headline"])
+    print()
+    for r in res["sites"]:
+        if r["status"] != "studied":
+            print(f"  {r['source']}/{r['station_id']}: {r['status']} ({r['note']})")
+            continue
+        q = f"Q100 {r['q100']:g} {r['unit']}" if r.get("q100") is not None else "no Q100"
+        p = f", p = {r['trend_p']:.3f}" if r.get("trend_p") is not None else ""
+        print(f"  {r['source']}/{r['station_id']}: {r['record_years']} yr, {q}, trend {r['trend']}{p}")
+    for note in res["notes"]:
+        print(f"- {note}")
+
+
 def cmd_gym(args: argparse.Namespace) -> None:
     """`aquascope gym basins|run|leaderboard`: HydroGym, the calibration environment over real basins (Phase 0),
-    and `aquascope gym tasks|bench|leaderboard FILES`: the playbook benchmark (Phase 1)."""
+    `aquascope gym tasks|bench|leaderboard FILES`: the playbook benchmark (Phase 1), `aquascope gym plans
+    list|show|validate|score|rescore`: the plan-quality benchmark (Phase 2), and `aquascope gym reports
+    list|show|score|bench`: report-quality scoring over a finished study bundle (#382)."""
     from aquascope import gym as hg
 
     def say(msg: str) -> None:
@@ -1109,8 +2336,11 @@ def cmd_gym(args: argparse.Namespace) -> None:
                 return
             print(f"  {len(rows)} reference plans in {args.plans or gp.PLANS_DIR}")
             for r in rows:
-                what = "decline" if r["decline"] else (f"{r['steps']} step(s)"
-                                                       + (f" + {r['optional']} optional" if r["optional"] else ""))
+                what = (
+                    "decline"
+                    if r["decline"]
+                    else (f"{r['steps']} step(s)" + (f" + {r['optional']} optional" if r["optional"] else ""))
+                )
                 tags = f" [{', '.join(r['tags'])}]" if r["tags"] else ""
                 print(f"  {r['id']:<42} {r['playbook']:<24} {what:<24} {str(r['site'])[:44]}{tags}")
             return
@@ -1139,8 +2369,10 @@ def cmd_gym(args: argparse.Namespace) -> None:
                 rows = gp.rescore_plans(rows, plans_dir=args.plans)
                 target = Path(args.out) if args.out and len(args.results) == 1 else Path(path)
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text("".join(json.dumps(r.to_dict(), ensure_ascii=False, default=str) + "\n"
-                                          for r in rows), encoding="utf-8")
+                target.write_text(
+                    "".join(json.dumps(r.to_dict(), ensure_ascii=False, default=str) + "\n" for r in rows),
+                    encoding="utf-8",
+                )
                 print(f"  {len(rows)} rows re-scored -> {target}")
             return
         if args.plans_cmd == "score":
@@ -1155,12 +2387,76 @@ def cmd_gym(args: argparse.Namespace) -> None:
                 print(json.dumps({"case": ref.id, **scored, "candidate": cand.to_dict()}, indent=2, default=str))
                 return
             pct = lambda x: "-" if x is None else f"{100 * x:.0f} %"  # noqa: E731
-            print(f"  {ref.id} ({'the tree' if not args.candidate else args.candidate}): score {scored['score']:.2f}; "
-                  f"tools {pct(scored['coverage_tools'])}, methods {pct(scored['coverage_methods'])}, gates "
-                  f"{pct(scored['coverage_gates'])}, extraneous {pct(scored['extraneous'])}, forbidden "
-                  f"{scored['forbidden_used']}, decline correct {scored['decline_correct']}")
+            print(
+                f"  {ref.id} ({'the tree' if not args.candidate else args.candidate}): score {scored['score']:.2f}; "
+                f"tools {pct(scored['coverage_tools'])}, methods {pct(scored['coverage_methods'])}, gates "
+                f"{pct(scored['coverage_gates'])}, extraneous {pct(scored['extraneous'])}, forbidden "
+                f"{scored['forbidden_used']}, decline correct {scored['decline_correct']}"
+            )
             for line in scored["explain"]:
                 print(f"    {line}")
+            return
+
+    if args.gym_cmd == "reports":
+        from aquascope.gym import reports as gru
+
+        if args.reports_cmd == "list":
+            rows = gru.list_references(args.reports)
+            if args.json:
+                print(json.dumps(rows, indent=2, default=str))
+                return
+            print(f"  {len(rows)} report references in {args.reports or gru.REPORTS_DIR}")
+            for r in rows:
+                tags = f" [{', '.join(r['tags'])}]" if r["tags"] else ""
+                print(
+                    f"  {r['id']:<28} study {r['study']:<24} must_say {r['must_say']:>2} must_not_say "
+                    f"{r['must_not_say']:>2}{tags}"
+                )
+            return
+        if args.reports_cmd == "show":
+            ref = gru.load_reference(args.id, args.reports)
+            if args.json or not ref.path:
+                print(json.dumps(ref.to_dict(), indent=2, default=str))
+                return
+            print(Path(ref.path).read_text(encoding="utf-8"))
+            return
+        if args.reports_cmd == "score":
+            study_dir = Path(args.study_dir)
+            ref = (
+                gru.load_reference(args.reference, args.reports)
+                if args.reference
+                else next((r for r in gru.load_references(args.reports) if r.study == study_dir.name), None)
+            )
+            scored = gru.score_study_dir(study_dir, reference=ref)
+            if args.json:
+                print(json.dumps(scored.to_dict(), indent=2, default=str))
+                return
+            print(f"  {scored.study_id}: mean {scored.mean}")
+            for dim in gru.DIMENSIONS:
+                print(f"    {dim}: {scored.dimensions.get(dim)}")
+            if scored.reference:
+                print(f"  reference {scored.reference['reference_id']}: score {scored.reference['score']}")
+                for line in scored.reference["must_say"]["failed"]:
+                    print(f"    must_say failed: {line}")
+                for line in scored.reference["must_not_say"]["violated"]:
+                    print(f"    must_not_say violated: {line}")
+            if scored.error:
+                print(f"  error: {scored.error}")
+            return
+        if args.reports_cmd == "bench":
+            refs = gru.load_references(args.reports)
+
+            def say(msg: str) -> None:
+                if not args.quiet:
+                    print(f"  · {msg}", file=sys.stderr)
+
+            results = gru.run_report_bench(args.dir, refs, study_ids=args.study or None, out=args.out, on_event=say)
+            if args.json:
+                print(json.dumps(gru.summarize_reports(results), indent=2, default=str))
+                return
+            print(gru.report_leaderboard(results))
+            if args.out:
+                print(f"  -> {args.out}")
             return
 
     if args.gym_cmd == "tasks":
@@ -1171,9 +2467,13 @@ def cmd_gym(args: argparse.Namespace) -> None:
         probes = None if args.probes == "all" else int(args.probes)
         n_probes = sum(len(gt.decline_probes(p)) for p in pbs) if probes is None else probes
         per_site = max(1, len(pbs) + n_probes)
-        sites = gt.suggest_sites(-(-args.n // per_site), seed=args.seed, sources=args.source or None,
-                                 ungauged_share=args.ungauged_share,
-                                 on_land=None if args.no_check_land else gt.on_land_basinatlas)
+        sites = gt.suggest_sites(
+            -(-args.n // per_site),
+            seed=args.seed,
+            sources=args.source or None,
+            ungauged_share=args.ungauged_share,
+            on_land=None if args.no_check_land else gt.on_land_basinatlas,
+        )
         skipped: list[dict] = []
         tasks = gt.tasks_from_playbooks(sites, pbs, probes=probes, on_event=say, skipped=skipped)[: args.n]
         gt.write_tasks(tasks, args.out)
@@ -1183,8 +2483,10 @@ def cmd_gym(args: argparse.Namespace) -> None:
         print(f"  {len(tasks)} tasks from {n_sites} sites ({hard} unsolvable, {test} held out as test) -> {args.out}")
         if skipped:
             sites_lost = sum(1 for e in skipped if "playbook" not in e)
-            print(f"  skipped: {sites_lost} of {len(sites)} sites (reconnaissance unavailable), "
-                  f"{len(skipped) - sites_lost} tasks (no key):")
+            print(
+                f"  skipped: {sites_lost} of {len(sites)} sites (reconnaissance unavailable), "
+                f"{len(skipped) - sites_lost} tasks (no key):"
+            )
             for entry in skipped:
                 what = f" {entry['playbook']}" if entry.get("playbook") else ""
                 print(f"    {gt.site_key(entry['site'])}{what}: {entry['error'][:100]}")
@@ -1206,9 +2508,20 @@ def cmd_gym(args: argparse.Namespace) -> None:
             if args.agent not in gp.AGENTS:
                 sys.exit(f"  --agent {args.agent} plays Phase 1 tasks; pass --tasks, or one of {gp.AGENTS} for Phase 2")
             plan_results = gp.run_plan_bench(
-                args.plans, args.agent, provider=args.provider, model=args.model, api_key=args.api_key,
-                base_url=args.base_url, candidates_dir=args.candidates, limit=args.limit, case_ids=args.case or None,
-                repeats=args.repeats, out=args.out, resume=args.resume, timeout=args.timeout or None, on_event=say,
+                args.plans,
+                args.agent,
+                provider=args.provider,
+                model=args.model,
+                api_key=args.api_key,
+                base_url=args.base_url,
+                candidates_dir=args.candidates,
+                limit=args.limit,
+                case_ids=args.case or None,
+                repeats=args.repeats,
+                out=args.out,
+                resume=args.resume,
+                timeout=args.timeout or None,
+                on_event=say,
             )
             if args.json:
                 print(json.dumps(gp.summarize_plans(plan_results), indent=2, default=str))
@@ -1218,10 +2531,22 @@ def cmd_gym(args: argparse.Namespace) -> None:
                 print(f"  -> {args.out}")
             return
         results = gb.run_bench(
-            args.tasks, args.agent, provider=args.provider, model=args.model, api_key=args.api_key,
-            base_url=args.base_url, limit=args.limit, unsolvable=args.unsolvable, task_ids=args.task or None,
-            timeout=args.timeout or None, out=args.out, max_steps=args.max_steps, context_chars=args.context_chars,
-            on_event=say, spread=args.spread, resume=args.resume,
+            args.tasks,
+            args.agent,
+            provider=args.provider,
+            model=args.model,
+            api_key=args.api_key,
+            base_url=args.base_url,
+            limit=args.limit,
+            unsolvable=args.unsolvable,
+            task_ids=args.task or None,
+            timeout=args.timeout or None,
+            out=args.out,
+            max_steps=args.max_steps,
+            context_chars=args.context_chars,
+            on_event=say,
+            spread=args.spread,
+            resume=args.resume,
         )
         if args.json:
             print(json.dumps(gb.summarize(results), indent=2, default=str))
@@ -1234,22 +2559,30 @@ def cmd_gym(args: argparse.Namespace) -> None:
     if args.gym_cmd == "leaderboard" and args.results:
         from aquascope.gym import bench as gb
         from aquascope.gym import plans as gp
+        from aquascope.gym import reports as gru
 
         results = gb.load_results(args.results)
         plan_results = gp.load_plan_results(args.results)
+        report_results = gru.load_report_results(args.results)
         if args.json:
-            if results and plan_results:
-                print(json.dumps({"tasks": gb.summarize(results), "plans": gp.summarize_plans(plan_results)},
-                                 indent=2, default=str))
-            else:
-                print(json.dumps(gp.summarize_plans(plan_results) if plan_results else gb.summarize(results),
-                                 indent=2, default=str))
+            summary = {}
+            if results:
+                summary["tasks"] = gb.summarize(results)
+            if plan_results:
+                summary["plans"] = gp.summarize_plans(plan_results)
+            if report_results:
+                summary["reports"] = gru.summarize_reports(report_results)
+            print(json.dumps(summary if len(summary) > 1 else next(iter(summary.values()), {}), indent=2, default=str))
             return
         parts = []
         if results:
             parts.append(gb.leaderboard(results, title=args.title))
         if plan_results:
             parts.append(gp.plan_leaderboard(plan_results, title=(args.title if not results else None)))
+        if report_results:
+            parts.append(
+                gru.report_leaderboard(report_results, title=(args.title if not (results or plan_results) else None))
+            )
         text = "\n".join(parts)
         print(text)
         if args.out:
@@ -1467,9 +2800,17 @@ def cmd_solve_team(args: argparse.Namespace) -> None:
 
     try:
         result = solve(
-            args.query, lat=args.lat, lon=args.lon, playbook=args.playbook, intake=intake,
-            provider=args.provider, model=args.model, api_key=args.api_key, base_url=args.base_url,
-            review=review, on_event=on_event,
+            args.query,
+            lat=args.lat,
+            lon=args.lon,
+            playbook=args.playbook,
+            intake=intake,
+            provider=args.provider,
+            model=args.model,
+            api_key=args.api_key,
+            base_url=args.base_url,
+            review=review,
+            on_event=on_event,
         )
     except (RuntimeError, ValueError, ImportError) as exc:
         logger.error("%s", exc)
@@ -1495,6 +2836,240 @@ def cmd_solve_team(args: argparse.Namespace) -> None:
             print(f"   · {line}", file=sys.stderr)
 
 
+_LATLON = r"^\s*(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)\s*$"
+
+
+def _place_matches(text: str, limit: int = 5) -> list[dict]:
+    """Where a study goes, from what a person types: ``lat, lon`` (one match, no catalog read), a station
+    id (``USGS-01013500``), or words of a gauge's name or river ("Fish River Fort Kent"), searched in the
+    Archive's station catalog. Rows carry ``name``, ``latitude``, ``longitude`` and, from the catalog,
+    ``source`` and ``station_id``."""
+    import re
+
+    m = re.match(_LATLON, text or "")
+    if m:
+        lat, lon = float(m.group(1)), float(m.group(2))
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            raise ValueError(f"{lat}, {lon} is not a latitude, longitude")
+        return [{"name": f"{lat:g}, {lon:g}", "latitude": lat, "longitude": lon}]
+    import logging
+
+    from aquascope.archive.catalog import load_stations, search_stations
+
+    quiet = [logging.getLogger(n) for n in ("httpx", "aquascope.archive.catalog")]
+    levels = [lg.level for lg in quiet]
+    for lg in quiet:  # the daily catalog download logs a signed URL a screen wide
+        lg.setLevel(logging.WARNING)
+    try:
+        rows = load_stations()
+    finally:
+        for lg, level in zip(quiet, levels):
+            lg.setLevel(level)
+    wanted = (text or "").strip().lower()
+    exact = [r for r in rows if str(r.get("station_id", "")).lower() == wanted]
+    return exact[:limit] or search_stations(rows, query=text, limit=limit, group_sites=True)
+
+
+def _place_line(row: dict) -> str:
+    where = f"{row['latitude']:.4f}, {row['longitude']:.4f}"
+    if row.get("station_id"):
+        return f"{row.get('name') or row['station_id']} ({row.get('source')} {row['station_id']}) at {where}"
+    return where
+
+
+def _studio_key_offer() -> str | None:
+    """The provider whose key is in the environment, in the CLI's usual scan order, or None."""
+    import os
+
+    from aquascope.ai_engine.providers import ENV_SCAN_ORDER, env_var
+
+    for name in ENV_SCAN_ORDER:
+        env = env_var(name)
+        if env and os.environ.get(env):
+            return name
+    return None
+
+
+def _studio_start(args: argparse.Namespace) -> bool:
+    """``aquascope studio`` with nothing else: ask where, what, and whether to use a key found in the
+    environment, then fill ``args`` as if they had been typed. False when the person leaves."""
+
+    def ask(prompt: str) -> str | None:
+        try:
+            return input(prompt)
+        except (EOFError, KeyboardInterrupt):
+            print(file=sys.stderr)
+            return None
+
+    print("AquaScope Studio: a crew that runs a complete study at a place and hands you the bundle.")
+    print("Nothing runs until you approve the plan.\n")
+    while args.lat is None:
+        text = ask('Where? A gauge name or id ("Fish River Fort Kent", USGS-01013500) or lat, lon: ')
+        if text is None:
+            return False
+        if not text.strip():
+            continue
+        try:
+            rows = _place_matches(text)
+        except Exception as exc:  # noqa: BLE001 - a failed catalog read: coordinates still work
+            print(f"  cannot search the station catalog ({exc}); type lat, lon instead.", file=sys.stderr)
+            continue
+        if not rows:
+            print("  no gauge matches that; try other words, a station id, or lat, lon.", file=sys.stderr)
+            continue
+        pick = rows[0]
+        if len(rows) > 1:
+            for i, row in enumerate(rows, 1):
+                print(f"  {i}. {_place_line(row)}")
+            choice = (ask(f"Which one? [1-{len(rows)}, Enter for 1, or search again]: ") or "").strip()
+            if choice and not choice.isdigit():
+                continue
+            if choice:
+                if not 1 <= int(choice) <= len(rows):
+                    continue
+                pick = rows[int(choice) - 1]
+        print(f"  → {_place_line(pick)}")
+        args.lat, args.lon = pick["latitude"], pick["longitude"]
+    while not args.query:
+        text = ask('\nWhat do you want to know? (e.g. "Is flooding here getting worse?"): ')
+        if text is None:
+            return False
+        args.query = text.strip() or None
+    if not any((args.provider, args.model, args.api_key, args.base_url)):
+        if not _studio_key_step(args):
+            return False
+    print()
+    return True
+
+
+_OTHER = "Other (type it)"
+
+
+def _choose(q: dict) -> str | None:
+    """One Studio question as a pick list: arrow keys and Enter with ``questionary`` (the ``studio`` extra),
+    numbers otherwise; the last row takes the answer in your own words. None when the person leaves."""
+    options = [str(o) for o in q.get("options") or []]
+    default = str(q["default"]) if q.get("default") is not None and str(q["default"]) in options else None
+    try:
+        import questionary
+    except ImportError:
+        questionary = None
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        questionary = None      # a pick list needs a terminal on both ends; numbers work anywhere
+    print()
+    if q.get("retry"):
+        print(f"  {q['retry']}")
+    if questionary is not None:
+        if q.get("why"):
+            questionary.print(f"  {q['why']}", style="italic fg:ansibrightblack")
+        picked = questionary.select(str(q.get("text") or ""), choices=[*options, _OTHER], default=default,
+                                    qmark="?").ask()
+        if picked == _OTHER:
+            picked = questionary.text("Your answer:", qmark="›").ask()
+        return picked
+    print(q.get("text") or "")
+    if q.get("why"):
+        print(f"  ({q['why']})")
+    for i, o in enumerate([*options, _OTHER], 1):
+        print(f"  {i}. {o}" + ("  (default)" if o == default else ""))
+    while True:
+        try:
+            answer = input(f"Pick 1-{len(options) + 1} (Enter for the default): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(file=sys.stderr)
+            return None
+        if not answer:
+            return default or "just go"
+        if answer.isdigit() and 1 <= int(answer) <= len(options):
+            return options[int(answer) - 1]
+        if answer.isdigit() and int(answer) == len(options) + 1:
+            try:
+                return input("Your answer: ")
+            except (EOFError, KeyboardInterrupt):
+                return None
+        return answer
+
+
+_NO_KEY, _PASTE, _FREE = "No, run keyless", "Yes, paste a key", "Get a free key first (Groq)"
+
+
+def _studio_key_step(args: argparse.Namespace) -> bool:
+    """Whether a model joins the crew: a key already set (or saved) is offered; otherwise the person is asked
+    if they have one, pastes it (hidden), and it is checked with one tiny request before the study starts.
+    Fills ``args.provider``, ``args.api_key`` and a $1 ``args.max_usd``. False when the person leaves."""
+    import getpass
+
+    from aquascope.ai_engine import keys
+
+    why = "With a key the model writes the brief, the plan and the prose; the numbers come from the tools either way."
+    cap = args.max_usd if args.max_usd is not None else 1.0
+    found = _studio_key_offer()
+    if found:
+        answer = _choose({"text": f"A {found} key is set. Use it?", "why": f"{why} Spend ceiling ${cap:g}.",
+                          "options": ["Yes, use it", "No, run keyless"], "default": "Yes, use it"})
+        if answer is None:
+            return False
+        if answer.strip().lower() in ("yes, use it", "y", "yes"):
+            args.provider, args.max_usd = found, cap
+        return True
+    answer = _choose({"text": "Do you have an AI model key? (optional)", "why": why,
+                      "options": [_NO_KEY, _PASTE, _FREE], "default": _NO_KEY})
+    if answer is None:
+        return False
+    if answer == _FREE:
+        print("  Make one at https://console.groq.com/keys (free tier, no card), then paste it here.")
+    elif answer != _PASTE and answer.strip().lower() not in ("y", "yes"):
+        return True
+    while True:
+        try:
+            key = getpass.getpass("  Paste your key (it stays hidden; Enter to skip): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(file=sys.stderr)
+            return False
+        if not key:
+            print("  Running keyless.")
+            return True
+        provider = keys.guess_provider(key)
+        if provider is None:
+            from aquascope.ai_engine.providers import PROVIDERS
+
+            ids = [p for p in PROVIDERS if PROVIDERS[p].env]
+            picked = _choose({"text": "Which service is this key for?",
+                              "options": [PROVIDERS[p].label for p in ids], "default": PROVIDERS[ids[0]].label})
+            if picked is None:
+                return False
+            provider = next((p for p in ids if PROVIDERS[p].label == picked), None)
+            if provider is None:
+                continue
+        print("  Checking the key with one short request...")
+        works, said = keys.check_key(provider, key, model=args.model)
+        if works:
+            print(f"  OK: {said}. Spend ceiling ${cap:g} (--max-usd changes it).")
+            args.provider, args.api_key, args.max_usd = provider, key, cap
+            keep = _choose({"text": "Remember this key on this computer?",
+                            "why": f"Saved to {keys.keys_path()}, readable only by you; next time the Studio "
+                                   "offers it instead of asking.",
+                            "options": ["No, just this time", "Yes, remember it"], "default": "No, just this time"})
+            if keep == "Yes, remember it":
+                keys.save_key(provider, key)
+                print("  Saved.")
+            return True
+        again = _choose({"text": f"That key did not work: {said}.", "options": ["Paste it again", _NO_KEY],
+                         "default": "Paste it again"})
+        if again is None:
+            return False
+        if again != "Paste it again":
+            return True
+
+
+def _studio_missing_extras() -> list[str]:
+    """The ``studio`` extra's modules this install lacks. Without them the bundle is the Markdown and HTML
+    report and the tables only: no Word report, workbook, figures, notebook or bundle.zip."""
+    import importlib.util
+
+    return [mod for mod in ("docx", "openpyxl", "matplotlib") if importlib.util.find_spec(mod) is None]
+
+
 def _parse_edits(text: str) -> dict:
     """``s3.return_period=200, s2.k=8`` -> ``{"s3": {"arguments": {"return_period": 200}}, "s2": {...}}``."""
     import re
@@ -1516,9 +3091,47 @@ def _parse_edits(text: str) -> dict:
     return out
 
 
+def _finished_study(target: str | None) -> Path | None:
+    """The workspace.json of a finished study ``target`` names (its bundle folder or the file), else None."""
+    if not target:
+        return None
+    path = Path(target).expanduser()
+    if path.is_dir():
+        path = path / "workspace.json"
+    if path.suffix != ".json" or not path.is_file():
+        return None
+    try:
+        status = json.loads(path.read_text(encoding="utf-8")).get("status")
+    except (OSError, ValueError):
+        return None
+    return path if status == "done" else None
+
+
+#: The Desk's options, so `aquascope studio <bundle>` and `aquascope desk <bundle>` take the same ones.
+_DESK_OPTIONS = ("set", "years", "exclude_years", "estimator", "sign", "comment", "section", "resolve", "by",
+                 "note")
+
+
 def cmd_studio(args: argparse.Namespace) -> None:
-    """`aquascope studio`: the crew, from the brief you agree and the plan you approve to the bundle."""
+    """`aquascope studio`: the crew, from the brief you agree and the plan you approve to the bundle. Given a
+    finished study (its bundle folder or workspace.json) it opens the Study Desk instead."""
     from aquascope.studio import Studio
+
+    finished = _finished_study(args.query)
+    if finished is not None:
+        args.workspace = str(finished)
+        cmd_desk(args)
+        return
+    if args.query and Path(args.query).expanduser().exists():
+        logger.error("%s is not a finished study; pick an unfinished one up with --resume WORKSPACE.JSON",
+                     args.query)
+        sys.exit(1)
+    if any(getattr(args, k, None) for k in _DESK_OPTIONS if k != "by"):
+        logger.error("those options revise a finished study: give its bundle folder, e.g. "
+                     "aquascope studio ./studio-<id>/ --exclude-years 2008")
+        sys.exit(1)
+    if getattr(args, "return_period", None) is not None:
+        args.intake = [*list(args.intake or []), f"return_period={args.return_period:g}"]
 
     workspace = None
     if args.resume:
@@ -1527,9 +3140,25 @@ def cmd_studio(args: argparse.Namespace) -> None:
         except (OSError, ValueError) as exc:
             logger.error("cannot read %s: %s", args.resume, exc)
             sys.exit(1)
-    elif args.lat is None or args.lon is None:
-        logger.error("studio needs --lat and --lon (or --resume workspace.json).")
-        sys.exit(1)
+    else:
+        if args.at and (args.lat is None or args.lon is None):
+            try:
+                rows = _place_matches(args.at)
+            except Exception as exc:  # noqa: BLE001 - a bad place or a failed catalog read
+                logger.error("cannot place %r: %s", args.at, exc)
+                sys.exit(1)
+            if not rows:
+                logger.error("no gauge matches %r; try a station id or lat, lon.", args.at)
+                sys.exit(1)
+            print(f"  Study at {_place_line(rows[0])}", file=sys.stderr)
+            args.lat, args.lon = rows[0]["latitude"], rows[0]["longitude"]
+        if (args.lat is None or args.lon is None or not args.query) and sys.stdin.isatty() and not args.yes:
+            if not _studio_start(args):
+                return
+        if args.lat is None or args.lon is None:
+            logger.error("studio needs a place: --at 'GAUGE, ID or lat,lon', or --lat and --lon "
+                         "(or run `aquascope studio` in a terminal and it asks).")
+            sys.exit(1)
     try:
         intake = _parse_intake(args.intake)
     except ValueError as exc:
@@ -1545,17 +3174,59 @@ def cmd_studio(args: argparse.Namespace) -> None:
             logger.error("cannot read %s: %s", path, exc)
             sys.exit(1)
 
+    for name in ("httpx", "aquascope.archive", "aquascope.collectors"):
+        logging.getLogger(name).setLevel(logging.WARNING)   # the crew's timeline says what is happening
+    if not any((args.provider, args.model, args.api_key, args.base_url)):
+        from aquascope.ai_engine.keys import load_saved_keys
+
+        load_saved_keys()      # a key the person asked the Studio to remember; the shell's own wins
+
+    from aquascope.studio.progress import Narrator
+
+    narrator = Narrator()
+    verbose = bool(getattr(args, "verbose", False))
+    if not verbose:
+        # The short log speaks for the crew: library notes (fit parameters, a missing optional API key) stay out
+        # of it unless something is wrong.
+        logging.getLogger("aquascope").setLevel(logging.WARNING)
+        for name in ("aquascope.collectors", "aquascope.archive", "numexpr"):
+            logging.getLogger(name).setLevel(logging.ERROR)
+
     def on_event(event: dict) -> None:
-        if not args.quiet:
+        if args.quiet:
+            return
+        if verbose:
             print(f"  · {_format_event(event)}", file=sys.stderr)
+            return
+        for line in narrator.feed(event):
+            print(f"  {line}", file=sys.stderr)
 
     try:
-        studio = Studio(args.lat, args.lon, provider=args.provider, model=args.model, api_key=args.api_key,
-                        base_url=args.base_url, data=data, on_event=on_event, workspace=workspace, intake=intake)
+        studio = Studio(
+            args.lat,
+            args.lon,
+            provider=args.provider,
+            model=args.model,
+            api_key=args.api_key,
+            base_url=args.base_url,
+            data=data,
+            on_event=on_event,
+            workspace=workspace,
+            intake=intake,
+            max_usd=args.max_usd,
+        )
     except (RuntimeError, ValueError, ImportError) as exc:
         logger.error("%s", exc)
         sys.exit(1)
     ws = studio.workspace
+    if getattr(args, "style", None):
+        from aquascope.studio.document import load_style
+
+        try:
+            ws.house_style = load_style(args.style).to_dict()
+        except (OSError, ValueError) as exc:
+            logger.error("cannot read the house style %s: %s", args.style, exc)
+            sys.exit(1)
     out_dir = Path(args.out or f"./studio-{ws.id}")
     interactive = sys.stdin.isatty() and not args.yes
 
@@ -1575,8 +3246,39 @@ def cmd_studio(args: argparse.Namespace) -> None:
             logger.error("studio needs the problem in plain language.")
             sys.exit(1)
         reply = studio.say(args.query) if args.query else studio.say("just go")
-        while reply.kind == "questions":
+    elif ws.status == "waiting":
+        reply = studio._request_reply()
+    if reply is not None and reply.kind in ("questions", "data_request"):
+        while reply.kind in ("questions", "data_request"):
+            qs = reply.payload.get("questions") or []     # a question, or a choice the crew offers (a gauge)
+            if interactive and len(qs) == 1 and qs[0].get("options"):
+                answer = _choose(qs[0])
+                if answer is None:
+                    checkpoint()
+                    return
+                reply = studio.say(answer)
+                continue
             print(reply.text)
+            if reply.kind == "data_request":
+                if args.continue_without or not interactive:
+                    print("  Continuing without it (--continue-without or no terminal).", file=sys.stderr)
+                    reply = studio.say("continue without")
+                    continue
+                answer = ask("Path to a table (CSV, Excel, JSON), or 'continue' to go on without: ")
+                if answer is None:
+                    checkpoint()
+                    return
+                path = Path(answer.strip())
+                if path.exists():
+                    try:
+                        from aquascope.ingest import read_table
+
+                        reply = studio.add_table(path.name, read_table(str(path)))
+                    except (OSError, ValueError) as exc:
+                        print(f"  cannot read {path}: {exc}", file=sys.stderr)
+                else:
+                    reply = studio.say(answer)
+                continue
             if not interactive:
                 print("  Proceeding on the defaults (--yes or no terminal).", file=sys.stderr)
                 reply = studio.say("just go")
@@ -1586,7 +3288,7 @@ def cmd_studio(args: argparse.Namespace) -> None:
                 checkpoint()
                 return
             reply = studio.say(answer)
-    elif ws.status == "review":
+    if ws.status == "review" and reply is None:
         reply = studio._plan_reply()
     elif ws.status == "done":
         reply = studio._report_reply()
@@ -1595,24 +3297,37 @@ def cmd_studio(args: argparse.Namespace) -> None:
         checkpoint()
         sys.exit(1 if reply is not None else 0)
     if reply.kind == "plan":
-        print(reply.text)
+        # Asked to approve, the whole plan is shown; run with --yes, its first line says what will run (the
+        # progress log shows each analysis as it happens) unless --verbose asks for everything.
+        print(reply.text if interactive or getattr(args, "verbose", False) else reply.text.splitlines()[0])
         edits = None
         if interactive:
+            run, change, later = "Run it", "Change a step first", "Not now (save it for later)"
             while True:
-                answer = (ask("Run this plan? [y/N/e] ") or "n").strip().lower()
-                if answer in ("y", "yes"):
+                answer = _choose({"text": "Run this plan?", "options": [run, change, later], "default": run})
+                low = (answer or "").strip().lower()
+                if answer is None or answer == later or low in ("n", "no", "not now", "later"):
+                    checkpoint()
+                    print(f"\n  Saved. Pick it up any time: aquascope studio --resume {out_dir / 'workspace.json'}",
+                          file=sys.stderr)
+                    return
+                if answer == run or low in ("y", "yes", "run", "go", "just go"):
                     break
-                if answer == "e":
-                    line = ask("Overrides, STEP.ARG=VALUE separated by commas (blank keeps the plan): ") or ""
+                if answer == change or low == "e":
+                    line = ask("Overrides, STEP.ARG=VALUE separated by commas, e.g. s3.return_period=200 "
+                               "(blank keeps the plan): ") or ""
                     try:
                         edits = _parse_edits(line) or None
                     except ValueError as exc:
                         print(f"  {exc}", file=sys.stderr)
                         continue
                     break
-                print("  Declined at review; the workspace is saved.", file=sys.stderr)
-                checkpoint()
-                return
+                # anything else is a change to the brief in your own words: the crew plans again
+                reply = studio.say(answer)
+                print(reply.text)
+                if reply.kind != "plan":
+                    checkpoint()
+                    return
         elif not args.yes:
             print("  Not a terminal: pass --yes to run the plan.", file=sys.stderr)
             checkpoint()
@@ -1626,15 +3341,42 @@ def cmd_studio(args: argparse.Namespace) -> None:
             except ValueError as exc:
                 print(f"  {exc}", file=sys.stderr)
     if reply.kind == "report":
-        print()
-        print(reply.text)
-        missing = reply.payload.get("not_established") or []
-        if missing and not args.quiet:
-            print("\n  What this study does not establish:", file=sys.stderr)
-            for line in missing:
-                print(f"   · {line}", file=sys.stderr)
+        for line in narrator.flush():
+            if not args.quiet and not verbose:
+                print(f"  {line}", file=sys.stderr)
         paths = studio.export(out_dir)
-        print(f"\n  Bundle written to {out_dir}: {', '.join(sorted(paths))}")
+        if verbose:
+            print()
+            print(reply.text)
+            decision = reply.payload.get("decision") or {}
+            if decision.get("grade"):
+                print(f"\n  Grade: {str(decision['grade']).replace('_', ' ')}", file=sys.stderr)
+            for line in decision.get("conditions") or []:
+                print(f"   · holds if: {line}", file=sys.stderr)
+            for line in decision.get("what_would_change_it") or []:
+                print(f"   · would change it: {line}", file=sys.stderr)
+            for f in (reply.payload.get("findings") or [])[:12]:
+                print(f"   · [{str(f.get('grade') or '').replace('_', ' ')}] {f.get('claim')}", file=sys.stderr)
+            for line in reply.payload.get("not_established") or []:
+                print(f"   · not established: {line}", file=sys.stderr)
+            print(f"\n  Bundle written to {out_dir}: {', '.join(sorted(paths))}")
+        else:
+            print()
+            try:
+                from aquascope.studio.document import terminal_summary
+
+                lines = terminal_summary(ws, str(out_dir))
+            except Exception as exc:  # noqa: BLE001 - the summary is a nicety; the answer must still print
+                logger.debug("terminal summary unavailable: %s", exc)
+                lines = [reply.text, "", f"Bundle written to {out_dir}"]
+            for line in lines:
+                print(line)
+        if _studio_missing_extras():
+            print(
+                "  This install writes the Markdown and HTML report and the tables only. For the Word report, "
+                "the Excel workbook, the figures, the notebook and bundle.zip: pip install \"aquascope[studio]\"",
+                file=sys.stderr,
+            )
         if interactive:
             while True:
                 text = ask("Follow-up (or 'done'): ")
@@ -1650,6 +3392,127 @@ def cmd_studio(args: argparse.Namespace) -> None:
     checkpoint()
 
 
+def cmd_desk(args: argparse.Namespace) -> None:
+    """`aquascope desk WORKSPACE.json`: revise, review and sign a finished study (aquascope.studio.desk)."""
+    from aquascope.studio import desk
+    from aquascope.studio.coordinator import Studio
+    from aquascope.studio.workspace import Workspace
+
+    path = Path(args.workspace)
+    if path.is_dir():
+        path = path / "workspace.json"
+    try:
+        ws = Workspace.from_json(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        logger.error("cannot read %s: %s", path, exc)
+        sys.exit(1)
+    if not getattr(args, "verbose", False):
+        logging.getLogger("aquascope").setLevel(logging.WARNING)
+        for name in ("aquascope.collectors", "aquascope.archive", "numexpr", "httpx"):
+            logging.getLogger(name).setLevel(logging.ERROR)
+    out_dir = Path(args.out) if args.out else path.parent
+    from aquascope.studio.progress import Narrator
+
+    narrator = Narrator()
+
+    def on_event(event: dict) -> None:
+        lines = [f"· {_format_event(event)}"] if getattr(args, "verbose", False) else narrator.feed(event)
+        for line in lines:
+            print(f"  {line}", file=sys.stderr)
+
+    studio = Studio(workspace=ws, on_event=on_event)
+
+    changes: dict[str, Any] = {}
+    for item in args.set or []:
+        key, _, value = item.partition("=")
+        changes[key.strip()] = value.strip()
+    if args.return_period is not None:
+        changes["return_period"] = args.return_period
+    if args.years is not None:
+        changes["years"] = args.years if args.years > 0 else None
+    if args.exclude_years is not None:
+        changes["exclude_years"] = args.exclude_years
+    if args.estimator:
+        changes["estimator"] = args.estimator
+    did = False
+    if changes:
+        print("  Revising: " + ", ".join(f"{k} = {v}" for k, v in changes.items()), file=sys.stderr)
+        reply = studio.revise(changes, by=args.by, note=args.note)
+        if reply.payload.get("errors"):
+            logger.error("%s", reply.text)
+            sys.exit(1)
+        rev = reply.payload.get("revision") or {}
+        print(f"  Revision {rev.get('rev')}: {rev.get('description')}")
+        did = True
+    for item in args.comment or []:
+        c = desk.comment(ws, item, section=args.section or "", author=args.by or "")
+        print(f"  Comment {c['id']} recorded.")
+        did = True
+    for item in args.resolve or []:
+        cid, _, response = item.partition("=")
+        try:
+            desk.resolve(ws, cid.strip(), response.strip(), by=args.by or "")
+        except ValueError as exc:
+            logger.error("%s", exc)
+            sys.exit(1)
+        print(f"  Comment {cid.strip()} resolved.")
+        did = True
+    for item in args.sign or []:
+        role, _, name = item.partition("=")
+        role = role.strip().lower()
+        role = role if role.endswith("_by") else f"{role}_by"
+        reply = studio.sign(role, name.strip())
+        if reply.payload.get("errors"):
+            logger.error("%s", reply.text)
+            sys.exit(1)
+        print(f"  {desk.ROLE_WORDS.get(role, role)} by {name.strip()}; status "
+              f"{(ws.house_style or {}).get('status')}.")
+        did = True
+    if (args.comment or args.resolve) and not (changes or args.sign):
+        studio._build_deliverables()
+
+    if did:
+        studio.export(out_dir)
+        (out_dir / "workspace.json").write_text(ws.to_json(), encoding="utf-8")
+        print(f"  Documents rewritten in {out_dir}")
+
+    print()
+    from aquascope.studio.document.text import num, value
+
+    levers = desk.levers(ws)
+    if levers:
+        print("Levers (change with --set ID=VALUE, or the shortcuts in --help):")
+        for lv in levers:
+            current = lv["value"]
+            if lv["id"] == "estimator":
+                current = (lv.get("labels") or {}).get(current, current)
+            if isinstance(current, list):
+                current = ", ".join(str(x) for x in current) or "none"
+            print(f"  {lv['id']:<15} {lv['label']}: {current if current not in (None, '') else 'default'}")
+        cand = next((lv.get("candidates") for lv in levers if lv["id"] == "exclude_years"), None)
+        if cand:
+            print("  largest floods: " + ", ".join(f"{c['year']} ({num(c['value'])})" for c in cand[:6]))
+    rows = desk.sensitivity(ws)
+    if len(rows) > 1:
+        unit = next(((r.get("result") or {}).get("unit") for r in (ws.run or {}).get("results") or []
+                     if isinstance(r.get("result"), dict) and (r["result"]).get("ffa")), None)
+        print("\nSensitivity of the design value:")
+        for r in rows:
+            ch = "" if r is rows[0] or r.get("change_pct") is None else f"{r['change_pct']:+.0f} %"
+            print(f"  {r['case']:<52} {value(r['value'], unit):>12} {ch:>6}")
+    revs = (ws.desk or {}).get("revisions") or []
+    if revs:
+        print("\nRevisions:")
+        for r in revs:
+            print(f"  {r['rev']:<3} {str(r.get('at'))[:10]}  {r.get('description')}" +
+                  (f" ({r['by']})" if r.get("by") else ""))
+    open_comments = [c for c in (ws.desk or {}).get("comments") or [] if c.get("status") != "resolved"]
+    if open_comments:
+        print("\nOpen review comments:")
+        for c in open_comments:
+            print(f"  {c['id']}: {c['text']}")
+
+
 def cmd_studio_showcase(args: argparse.Namespace) -> None:
     """`aquascope studio-showcase record | list`: the recorded studies the Explorer replays keyless."""
     from aquascope.studio import showcase
@@ -1659,13 +3522,215 @@ def cmd_studio_showcase(args: argparse.Namespace) -> None:
         return
     only = [s for s in (args.only or "").split(",") if s.strip()] or None
     say = (lambda m: None) if args.quiet else (lambda m: print(m, flush=True))
-    written = showcase.record(out_dir=args.out, provider=args.provider, model=args.model, api_key=args.api_key,
-                              max_usd=args.max_usd, fresh_for_days=args.refresh_after, only=only, on_event=say)
+    written = showcase.record(
+        out_dir=args.out,
+        provider=args.provider,
+        model=args.model,
+        api_key=args.api_key,
+        max_usd=args.max_usd,
+        fresh_for_days=args.refresh_after,
+        only=only,
+        on_event=say,
+    )
     ok = sum(1 for m in written if m.get("status") in ("done", "declined") and not m.get("error"))
     print(f"recorded {ok}/{len(written)} this run, {sum(float(m.get('usd') or 0) for m in written):.2f} USD")
     print(showcase.diagnose(args.out))
     if written and ok == 0:
         sys.exit(1)
+
+
+def cmd_update(args: argparse.Namespace) -> None:
+    """`aquascope update [--check] [--yes]`: upgrade to the newest release, the way this copy was installed."""
+    import logging
+    import shlex
+    import subprocess
+
+    from aquascope import updates
+
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    info = updates.check()
+    shown = shlex.join(info["command"]) if info["command"] else None
+    print(f"  aquascope {info['installed']} ({info['kind']} install at {info['location']})")
+    if info["kind"] == "editable":
+        print("  This is a development checkout: update it with `git pull` in the clone (pip would not touch it).")
+        if info["latest"] and info["newer"]:
+            print(f"  The newest release on PyPI is {info['latest']}.")
+        return
+    if info["latest"] is None:
+        print(f"  {info['error']}", file=sys.stderr)
+        sys.exit(1)
+    if not info["newer"]:
+        print(f"  Up to date: {info['latest']} is the newest release.")
+        return
+    print(f"  {info['installed']} -> {info['latest']} available. Upgrade command: {shown}")
+    if info["error"]:
+        print(f"  {info['error']}", file=sys.stderr)
+        sys.exit(1)
+    if args.check:
+        return
+    if not args.yes:
+        if not sys.stdin.isatty():
+            print("  Not a terminal: rerun with --yes to upgrade, or run the command above yourself.", file=sys.stderr)
+            sys.exit(1)
+        if input("  Upgrade now? [y/N] ").strip().lower() not in ("y", "yes"):
+            print("  Not upgraded.")
+            return
+    code = subprocess.run(info["command"], check=False).returncode
+    if code:
+        print(f"  The upgrade command exited with {code}.", file=sys.stderr)
+        sys.exit(code)
+    print("  Done. `aquascope --version` shows the version now installed.")
+
+
+def _pct(x: float | None) -> str:
+    return "-" if x is None else f"{100 * x:.0f} %"
+
+
+def _secs(x: float | None) -> str:
+    return "-" if x is None else f"{x:,.0f} s"
+
+
+def _print_scorecard(c: dict) -> None:
+    head = " · ".join(str(v) for v in (
+        c["study"], c["playbook"] + (f" ({c['branch']})" if c.get("branch") else "") if c.get("playbook") else None,
+        c.get("model") or "keyless", f"aquascope {c['aquascope_version']}" if c.get("aquascope_version") else None,
+        c.get("date")) if v)
+    print(f"  {head}")
+    if c.get("question"):
+        print(f"  question  {c['question']}")
+    o, r, k, rep, cost = c["outcome"], c["run"], c["critic"], c["report"], c["cost"]
+    print(f"  outcome   {o['status']}, grade {o.get('grade') or '-'}" + (f", declined: {o['declined']}"
+                                                                          if o.get("declined") else ""))
+    if o.get("headline"):
+        print(f"            {o['headline']}")
+    g = r["gates"]
+    print(f"  run       {r['ok']} of {r['planned']} steps ok, {r['failed']} failed, {r['skipped']} skipped · gates "
+          f"{g['passed']} passed, {g['failed']} failed, {g['skipped']} skipped · {r['fallbacks']} fallback(s), "
+          f"{r['replans']} replan(s)")
+    print(f"  critic    {k['passed']} of {k['total']} checks passed · {k['issues']} issue(s) · "
+          f"{k['not_established']} not established")
+    dims = ", ".join(f"{d.replace('_', ' ')} {('-' if v is None else f'{v:.2f}')}"
+                     for d, v in (rep.get("dimensions") or {}).items())
+    mean = "-" if rep.get("mean") is None else f"{rep['mean']:.2f}"
+    print(f"  report    mean {mean} · {dims or rep.get('error', '')}"
+          + (f" · reference {rep['reference']:.2f}" if rep.get("reference") is not None else "")
+          + (f" · {rep['numbers_without_evidence']} number(s) without evidence"
+             if rep.get("numbers_without_evidence") else ""))
+    if c.get("plan"):
+        pl = c["plan"]
+        print(f"  plan      vs {pl['case']}: {pl['score']:.2f} (tools {_pct(pl['tools'])}, methods "
+              f"{_pct(pl['methods'])}, gates {_pct(pl['gates'])}, extraneous {_pct(pl['extraneous'])}, "
+              f"forbidden {pl['forbidden']})")
+        for line in pl["explain"][:6]:
+            print(f"              {line}")
+    slow = cost.get("slowest_phase")
+    step = cost.get("slowest_step")
+    where = "; ".join(x for x in (
+        slow and f"slowest phase {slow['phase']} {_secs(slow['seconds'])}",
+        step and f"slowest step {step['id']} {step['tool']} {_secs(step['seconds'])}") if x)
+    model = (f"{cost['calls']} model call(s), {cost['prompt_tokens'] + cost['completion_tokens']:,} tokens"
+             + (f", {cost['usd']:.2f} USD" if cost.get("usd") is not None else "")) if cost["calls"] else "keyless"
+    print(f"  cost      {_secs(cost['seconds'])}" + (f" ({where})" if where else "") + f" · {model}")
+
+
+def _print_trace(t: dict, *, events: bool) -> None:
+    print(f"  {t['study']} · {_secs(t['seconds'])}" + (f" · {t['question']}" if t.get("question") else ""))
+    print("  phases    " + " · ".join(
+        f"{p['phase']} {_secs(p['seconds'])}" + (" (includes waiting for you)" if p["phase"] == "review" else "")
+        for p in t["phases"]))
+    print("  steps")
+    for s in t["steps"]:
+        g = s["gates"]
+        state = "skipped" if s["skipped"] else ("ok" if s["ok"] else "failed")
+        extra = " (fallback ran)" if s["fallback_used"] else ""
+        print(f"    {s['id']:<4} {str(s['tool']):<24} {_secs(s['seconds']):>7}  {state}{extra} · gates "
+              f"{g['passed']} passed, {g['failed']} failed, {g['skipped']} skipped")
+        for n in s["not_passed"]:
+            detail = n["detail"][:140] + ("…" if len(n["detail"]) > 140 else "")
+            print(f"           {n['state']} {n['check']}: {detail}")
+        if s.get("error"):
+            print(f"           error: {str(s['error'])[:140]}")
+    if t["model_calls"]:
+        print("  model")
+        for role, row in t["model_calls"].items():
+            tok = int(row.get("prompt_tokens") or 0) + int(row.get("completion_tokens") or 0)
+            usd = f", {row['cost_usd']:.3f} USD" if row.get("cost_usd") is not None else ""
+            print(f"    {role:<14} {row.get('calls', 0)} call(s), {tok:,} tokens{usd}")
+    else:
+        print("  model     keyless (no model calls)")
+    if events:
+        print("  events")
+        for e in t["events"]:
+            at = "" if e["t"] is None else f"+{e['t']:.0f}s"
+            step = f" {e['step']}" if e.get("step") else ""
+            print(f"    {at:>6} {e['role']}{step} {e['event']}: {e['detail'][:150]}")
+
+
+def _print_stats(result: dict) -> None:
+    key = result["by"] if result["by"] != "none" else "group"
+    print(f"  {result['studies']} studies, by {result['by']}")
+    print()
+    print(f"| {key} | n | grades | report | plan | gates passed / failed / skipped | critic | median time | "
+          f"tokens | USD | USD per study |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    for r in result["rows"]:
+        grades = ", ".join(f"{g} {n}" for g, n in sorted(r["grades"].items()))
+        fmt = lambda x: "-" if x is None else f"{x:.2f}"  # noqa: E731
+        print(f"| {r[key]} | {r['n']} | {grades} | {fmt(r['report_mean'])} | {fmt(r['plan_mean'])} | "
+              f"{_pct(r['gates_passed'])} / {_pct(r['gates_failed'])} / {_pct(r['gates_skipped'])} | "
+              f"{_pct(r['critic_passed'])} | {_secs(r['median_seconds'])} | {r['tokens']:,} | "
+              f"{fmt(r['usd'])} | {fmt(r['usd_per_study'])} |")
+    probs = result["gate_problems"]
+    for kind in ("failed", "skipped"):
+        if probs[kind]:
+            print(f"\n  most often {kind}: " + ", ".join(
+                f"{p['check']} ({p['studies']} {'study' if p['studies'] == 1 else 'studies'})" for p in probs[kind]))
+
+
+def cmd_eval(args: argparse.Namespace) -> None:
+    """`aquascope eval score | trace | stats`: evaluate finished studies from their bundles, no model."""
+    from aquascope import evaluation as ev
+
+    if args.eval_cmd == "score":
+        cards = [ev.score_path(p, plan_case=args.case) for p in args.study]
+        if args.json:
+            print(json.dumps(cards if len(cards) > 1 else cards[0], indent=2, default=str))
+            return
+        for i, c in enumerate(cards):
+            if i:
+                print()
+            _print_scorecard(c)
+        return
+    if args.eval_cmd == "trace":
+        ws, meta, _d = ev.load_study(args.study)
+        t = ev.trace(ws, meta)
+        if args.json:
+            print(json.dumps(t, indent=2, default=str))
+            return
+        _print_trace(t, events=args.events)
+        return
+    if args.eval_cmd == "stats":
+        dirs = ev.find_studies(args.paths)
+        if not dirs:
+            print(f"  no studies (no workspace.json) under {', '.join(args.paths)}", file=sys.stderr)
+            sys.exit(1)
+        cards = []
+        for d in dirs:
+            try:
+                cards.append(ev.score_path(d, plan_case=args.case))
+            except Exception as exc:  # one broken bundle should not hide the others
+                print(f"  skipped {d}: {exc}", file=sys.stderr)
+        result = ev.stats(cards, by=args.by, top=args.top)
+        if args.csv:
+            Path(args.csv).write_text(ev.stats_rows_csv(result), encoding="utf-8")
+            print(f"  -> {args.csv}")
+        if args.json:
+            print(json.dumps({**result, "cards": cards if args.cards else None}, indent=2, default=str))
+            return
+        _print_stats(result)
+        return
+    print("usage: aquascope eval {score,trace,stats} ... (see aquascope eval --help)", file=sys.stderr)
+    sys.exit(2)
 
 
 def cmd_forecast(args: argparse.Namespace) -> None:
@@ -1799,7 +3864,7 @@ def cmd_alerts(args: argparse.Namespace) -> None:
                 for a in report.alerts
             ],
         }
-        out_path.write_text(json.dumps(out_data, indent=2, default=str))
+        out_path.write_text(json.dumps(out_data, indent=2, default=str), encoding="utf-8")
         print(f"  ✓ Report saved → {out_path}\n")
 
 
@@ -1895,8 +3960,78 @@ def cmd_agri(args: argparse.Namespace) -> None:
         cmd_agri_productivity(args)
 
 
+def cmd_modflow(args: argparse.Namespace) -> None:
+    """`aquascope modflow`: a MODFLOW head file on the map (#558)."""
+    from aquascope.groundwater.surface import modflow_geojson, modflow_summary, read_modflow_heads
+
+    cell = args.cell_size
+    res = read_modflow_heads(args.hds, args.grid, origin=args.origin, rotation=args.rotation, crs=args.crs,
+                             cell_size=(cell[0] if cell and len(cell) == 1 else cell), start_date=args.start_date,
+                             time_units=args.time_units, sidecars=args.sidecar)
+    out = modflow_summary(res, args.time, args.layer)
+    if args.geojson and not res.get("error"):
+        Path(args.geojson).write_text(json.dumps(modflow_geojson(res, args.time, args.layer)), encoding="utf-8")
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False, default=str))
+    elif res.get("error"):
+        print(f"  {res['error']}")
+    else:
+        print(f"  {out['summary']}")
+        g = out["grid"]
+        print(f"  grid from {g['from']}, origin {g['origin'][0]:g}, {g['origin'][1]:g}, rotation {g['rotation']:g}")
+        print(f"  extent {out['bbox']} (lon/lat)")
+        f = out["frame"]
+        when = f["date"] or f"t = {f['time']:g} {out['time_units']}"
+        lo = "no head" if f["min"] is None else f"{f['min']:g} to {f['max']:g}"
+        print(f"  layer {f['layer']}, {when}: heads {lo} on {f['cells_with_head']:,} cells")
+        for note in out.get("notes") or []:
+            print(f"  {note}")
+        if args.geojson:
+            print(f"  wrote {args.geojson}")
+    if res.get("error"):
+        sys.exit(1)
+
+
+def _print_groundwater_surface(res: dict) -> None:
+    """`aquascope groundwater surface`: what was drawn, the mask rule, and the wells."""
+    if res.get("error"):
+        print(f"  {res['error']}")
+        return
+    print(f"  {res['summary']}")
+    for note in res.get("notes") or []:
+        print(f"  {note}")
+    if res.get("range"):
+        lo, hi = res["range"]
+        print(f"  colour range {lo:g} to {hi:g} m" + (f"; contours every {res['contours']['step']:g} m"
+                                                    if (res.get("contours") or {}).get("step") else ""))
+    print(f"  {res['rule']}")
+    for w in sorted(res.get("wells") or [], key=lambda w: w["value"])[:12]:
+        print(f"  {w['value']:>9.2f} m  {w.get('name') or w['id']}  ({w['lat']:.3f}, {w['lon']:.3f})  {w['how']}")
+    print(f"\n  {res['not']}")
+    print(f"  {res['grace']}")
+    print(f"  {res['attribution']} ({res['licence']})")
+
+
 def cmd_groundwater(args: argparse.Namespace) -> None:
     """Run groundwater analysis."""
+    if getattr(args, "action", None) == "surface":
+        from aquascope.groundwater.surface import groundwater_surface, surface_geojson, surface_summary
+
+        res = groundwater_surface(args.bbox, month=args.month, mode=args.mode, compare=args.compare)
+        if args.geojson and res.get("grid"):
+            Path(args.geojson).write_text(json.dumps(surface_geojson(res)), encoding="utf-8")
+            print(f"  wrote {args.geojson}")
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False, default=str))
+        else:
+            _print_groundwater_surface(surface_summary(res) | {"contours": res.get("contours")})
+        if res.get("error"):
+            sys.exit(1)
+        return
+    if not args.analysis or not args.file:
+        print("aquascope groundwater: --analysis and --file are needed (or use 'aquascope groundwater surface')",
+              file=sys.stderr)
+        sys.exit(2)
     import numpy as np
     import pandas as pd
 
@@ -2134,7 +4269,7 @@ def cmd_agri_benchmark(args: argparse.Namespace) -> None:
 
     if args.output:
         out_path = Path(args.output)
-        out_path.write_text(json.dumps(result.to_dict(), indent=2, default=str))
+        out_path.write_text(json.dumps(result.to_dict(), indent=2, default=str), encoding="utf-8")
         print(f"\n  ✓ Benchmark results saved → {out_path}")
 
 
@@ -2186,15 +4321,41 @@ def cmd_agri_productivity(args: argparse.Namespace) -> None:
 
     if args.output:
         out_path = Path(args.output)
-        out_path.write_text(json.dumps(result.to_dict(), indent=2, default=str))
+        out_path.write_text(json.dumps(result.to_dict(), indent=2, default=str), encoding="utf-8")
         print(f"\n  ✓ Productivity results saved → {out_path}")
 
 
+def _add_desk_args(p: argparse.ArgumentParser, *, studio: bool = False) -> None:
+    """The Study Desk's options (aquascope.studio.desk), on `aquascope studio` and its `aquascope desk` alias."""
+    p.add_argument("--set", action="append", default=[], metavar="LEVER=VALUE",
+                   help="Revise a finished study: change a lever (return_period, years, exclude_years, estimator)")
+    p.add_argument("--return-period", type=float, default=None,
+                   help="The design return period: for a new study its intake, for a finished one a revision")
+    p.add_argument("--years", type=int, default=None, help="Revise: use only the last N years (0: the full record)")
+    p.add_argument("--exclude-years", default=None, metavar="YEARS",
+                   help="Revise: leave these years' floods out of the fit, e.g. 2008,1936 (empty string clears)")
+    p.add_argument("--estimator", default=None, choices=["gev_lmoments", "lp3", "gev_bootstrap"],
+                   help="Revise: the distribution the answer quotes (every fit stays in the tables)")
+    p.add_argument("--sign", action="append", default=[], metavar="ROLE=NAME",
+                   help="Sign as prepared, checked or approved, e.g. --sign checked=\"A. Hydrologist\"")
+    p.add_argument("--comment", action="append", default=[], metavar="TEXT", help="Add a review comment")
+    p.add_argument("--section", default=None, help="The section a --comment is about")
+    p.add_argument("--resolve", action="append", default=[], metavar="ID=RESPONSE",
+                   help="Close a review comment with the response, e.g. --resolve c1=\"Done in rev C\"")
+    p.add_argument("--by", default=None, help="Who is making the change, comment or signature (for the record)")
+    p.add_argument("--note", default=None, help="A revision's description, instead of the generated one")
+    if not studio:
+        p.add_argument("--out", "-o", default=None, help="Where the documents go (default: beside the workspace)")
+        p.add_argument("--verbose", "-v", action="store_true", help="Show every event of a rerun")
+
+
 def main() -> None:
+    from aquascope import __version__
     from aquascope.registry import source_keys
     from aquascope.schemas.station import VARIABLES
 
     parser = argparse.ArgumentParser(description="AquaScope — Water data collection, analysis & AI research recomm...")
+    parser.add_argument("--version", action="version", version=f"aquascope {__version__}")
     sub = parser.add_subparsers(dest="command")
 
     # — collect ——————————————————————————————
@@ -2207,7 +4368,10 @@ def main() -> None:
     )
     p_collect.add_argument("--api-key", default=None, help="API key (if required)")
     p_collect.add_argument(
-        "--days", type=int, default=None, help="Number of days (USGS/UKEA/PEGELONLINE/BOM/South Africa DWS; PEGELONLINE max: 31)"
+        "--days",
+        type=int,
+        default=None,
+        help="Number of days (USGS/UKEA/PEGELONLINE/BOM/South Africa DWS; PEGELONLINE max: 31)",
     )
     p_collect.add_argument(
         "--parameter-type",
@@ -2363,9 +4527,9 @@ def main() -> None:
     p_harvest = sub.add_parser("harvest", help="Harvest catalogs into GeoParquet for the open archive (#188)")
     p_harvest.add_argument(
         "what",
-        choices=["stations", "obs", "bundles"],
+        choices=["stations", "obs", "bundles", "signatures"],
         help="stations: the catalog; obs: daily series per station; bundles: one Parquet per "
-        "variable and source rolled up from obs/",
+        "variable and source rolled up from obs/; signatures: signatures.parquet from the mirrored discharge",
     )
     p_harvest.add_argument("--out", default="archive", help="Output folder (default: ./archive)")
     p_harvest.add_argument("--source", action="append", choices=source_keys(), help="Restrict to a source (repeatable)")
@@ -2384,11 +4548,17 @@ def main() -> None:
         help="bundles: restrict to these variables (repeatable)",
     )
     p_harvest.add_argument(
-        "--years", type=int, default=None,
+        "--years",
+        type=int,
+        default=None,
         help="obs: cap the record asked for, in years (default: the full record, from the catalog's first date)",
     )
     p_harvest.add_argument("--max-stations", type=int, default=100, help="obs: stations per source per run")
     p_harvest.add_argument("--refresh-days", type=int, default=30, help="obs: re-harvest a station older than this")
+    p_harvest.add_argument(
+        "--max-seconds", type=float, default=None,
+        help="obs: time budget per source and variable; stations not reached wait for the next run",
+    )
     p_harvest.add_argument("--station", action="append", help="obs: only these station ids (repeatable)")
     p_harvest.add_argument(
         "--sync-from",
@@ -2399,6 +4569,9 @@ def main() -> None:
     p_harvest.add_argument("--api-key", default=None)
     p_harvest.add_argument("--workers", type=int, default=4)
     p_harvest.add_argument("--no-geojson", action="store_true", help="Skip stations.geojson")
+    p_harvest.add_argument(
+        "--no-signatures", action="store_true", help="stations: skip rebuilding signatures.parquet from obs/"
+    )
     p_harvest.add_argument(
         "--publish",
         default=None,
@@ -2439,7 +4612,252 @@ def main() -> None:
     p_ingest.add_argument("--out", "-o", default=None, help="Output stem (default: <file>_clean)")
 
     # ── mcp ──────────────────────────────────────────────────────────
+    # ── layers (#522) ────────────────────────────────────────────────
+    p_layers = sub.add_parser("layers", help="The dated map layers and their valid dates, or a time-lapse's frames")
+    layers_sub = p_layers.add_subparsers(dest="layers_cmd", required=True)
+    p_llist = layers_sub.add_parser("list", help="List the dated layers, their cadence and first and last day")
+    p_llist.add_argument("--live", action="store_true", help="Read the exact intervals (gaps included) from GIBS")
+    p_llist.add_argument("--json", action="store_true")
+    p_lframes = layers_sub.add_parser("frames", help="The dates and tile URLs of a time-lapse of one layer")
+    p_lframes.add_argument("layer", help="daily, precip, soil, snow, lst or storage")
+    p_lframes.add_argument("--start", required=True, help="YYYY-MM-DD")
+    p_lframes.add_argument("--end", required=True, help="YYYY-MM-DD")
+    p_lframes.add_argument("--step", choices=["day", "week", "month"], default="day")
+    p_lframes.add_argument("--max-frames", type=int, default=60)
+    p_lframes.add_argument("--json", action="store_true")
+    p_lstatus = layers_sub.add_parser("status", help="The world river status map for a month (GEOGLOWS HydroSOS, "
+                                      "1990 on): its URL, legend, licence and the months that exist")
+    p_lstatus.add_argument("month", nargs="?", default=None, help="YYYY-MM (default: the newest month)")
+    p_lstatus.add_argument("--offline", action="store_true", help="Do not list the bucket; use the recorded range")
+    p_lstatus.add_argument("--summary", action="store_true",
+                           help="Read the month's map and say in one line where the rivers are low or high, "
+                                "with each named region's share below and above normal")
+    p_lstatus.add_argument("--json", action="store_true")
+    p_lscout = layers_sub.add_parser("scout", help="What stands out on the map: the largest areas much above or "
+                                     "below normal, the strongest floods ahead and past, gauges at extremes, and "
+                                     "gauges no model matches, each with its reason and source (the Explorer's Scout)")
+    p_lscout.add_argument("--bbox", nargs=4, type=float, default=None, metavar=("WEST", "SOUTH", "EAST", "NORTH"))
+    p_lscout.add_argument("--month", default=None, help="YYYY-MM for the status and Floods past layers (default: newest)")
+    p_lscout.add_argument("--pins", type=int, default=10, help="How many findings (default 10)")
+    p_lscout.add_argument("--published", action="store_true",
+                          help="Read the daily scout file (with its record checks) instead of scanning now")
+    p_lscout.add_argument("--no-places", action="store_true", help="Do not name places with the gazetteer (Photon)")
+    p_lscout.add_argument("--json", action="store_true")
+    p_lexplain = layers_sub.add_parser("explain", help="Explain a view of the Explorer's map: facts read by code from "
+                                       "the river status, Floods ahead, Floods past and the gauges, and 3 to 5 notes")
+    p_lexplain.add_argument("bbox", nargs=4, type=float, metavar=("WEST", "SOUTH", "EAST", "NORTH"))
+    p_lexplain.add_argument("--date", default=None, help="The map date, YYYY-MM-DD (default: today)")
+    p_lexplain.add_argument("--layers", nargs="+", default=None,
+                            help="Among status, floods_ahead, floods_past, gauges (default: all four)")
+    p_lexplain.add_argument("--facts", action="store_true", help="List every fact, not only the notes")
+    p_lexplain.add_argument("--no-places", action="store_true", help="Do not name places with the gazetteer")
+    p_lexplain.add_argument("--llm", action="store_true", help="Word the notes with your own model (claim-locked)")
+    p_lexplain.add_argument("--provider", choices=provider_ids(), default=None)
+    p_lexplain.add_argument("--model", default=None)
+    p_lexplain.add_argument("--api-key", default=None)
+    p_lexplain.add_argument("--json", action="store_true")
+    p_ldepth = layers_sub.add_parser("depth", help="Flood depth where floods are forecast: the JRC depth map around a "
+                                     "Floods ahead reach, or over a box (#554)")
+    p_ldepth.add_argument("river_id", nargs="?", default=None, help="A GEOGLOWS reach in today's Floods ahead")
+    p_ldepth.add_argument("--bbox", nargs=4, type=float, metavar=("W", "S", "E", "N"), default=None,
+                          help="A box instead (up to 2 x 2 degrees)")
+    p_ldepth.add_argument("--rp", type=int, default=None, help="Return period: 10, 20, 50, 75, 100, 200 or 500 "
+                          "(default: the one the forecast reaches, or 100 for a box)")
+    p_ldepth.add_argument("--day", default=None, help="A day of the forecast (YYYY-MM-DD) instead of its peak")
+    p_ldepth.add_argument("--radius-km", type=float, default=None, help="How far around the reach (default by order)")
+    p_ldepth.add_argument("--no-sample", action="store_true", help="Do not read the depth, only say where it is")
+    p_ldepth.add_argument("--local", default=None, help="A local Floods ahead run folder instead of the Archive")
+    p_ldepth.add_argument("--json", action="store_true")
+    # ── map (#561) ───────────────────────────────────────────────────
+    p_map = sub.add_parser("map", help="Read a plain-English request about the Explorer's map into map actions "
+                           "(the keyless phrase grammar, or --llm with your own key)")
+    p_map.add_argument("request", nargs="+", help='For example: "trace the Nile to the sea"')
+    p_map.add_argument("--resolve", action="store_true", help="Look place names up in the gazetteer (Photon, OSM)")
+    p_map.add_argument("--llm", action="store_true", help="Ask your own model instead of the rules")
+    p_map.add_argument("--provider", choices=provider_ids(), default=None)
+    p_map.add_argument("--model", default=None)
+    p_map.add_argument("--api-key", default=None)
+    p_map.add_argument("--today", default=None, help="Read dates as if today were YYYY-MM-DD")
+    p_map.add_argument("--json", action="store_true")
+    # ── what if, on the map (#565) ───────────────────────────────────
+    p_wi = sub.add_parser("whatif", help="A what-if scenario for a river reach's basin (GR4J) and its change carried "
+                          "down the river: the Explorer's What if on the map")
+    p_wi.add_argument("scenario", nargs="*", help='In words, for example: "20%% less rain and 2 degrees warmer"')
+    p_wi.add_argument("--river", default=None, help="A GEOGLOWS v2 river_id (or give --lat and --lon to snap)")
+    p_wi.add_argument("--lat", type=float, default=None)
+    p_wi.add_argument("--lon", type=float, default=None)
+    p_wi.add_argument("--source", default=None, help="With --station: calibrate on this gauge instead of GEOGLOWS")
+    p_wi.add_argument("--station", default=None)
+    p_wi.add_argument("--area", type=float, default=None, help="The gauge's catchment area, km2")
+    p_wi.add_argument("--rain", type=float, default=None, help="Rain change in %% (-20 is 20%% less)")
+    p_wi.add_argument("--warming", type=float, default=None, help="Warming in degrees C")
+    p_wi.add_argument("--evaporation", type=float, default=None, help="Evaporation change in %% (default 3%% a degree)")
+    p_wi.add_argument("--demand", type=float, default=None, help="Water taken from the river, m3/s")
+    p_wi.add_argument("--rp", type=float, default=10.0, help="The flood's return period, years (default 10)")
+    p_wi.add_argument("--confluences", type=int, default=3, help="How many major confluences to carry the change past")
+    p_wi.add_argument("--members", type=int, default=24, help="Parameter sets tried for the range (0: no range)")
+    p_wi.add_argument("--llm", action="store_true", help="Read the words with your own model instead of the rules")
+    p_wi.add_argument("--provider", choices=provider_ids(), default=None)
+    p_wi.add_argument("--model", default=None)
+    p_wi.add_argument("--api-key", default=None)
+    p_wi.add_argument("--json", action="store_true")
+    # ── model results on a mesh (#555) ──────────────────────────────
+    p_mesh = sub.add_parser("mesh", help="What a HEC-RAS 2D plan HDF5 or UGRID NetCDF mesh result holds: cells, "
+                            "times, the largest depth and speed")
+    p_mesh.add_argument("file", help="A HEC-RAS plan file (*.p01.hdf) or a UGRID NetCDF file; or 'review' then the "
+                        "file, to check the run (#564)")
+    p_mesh.add_argument("review_file", nargs="?", default=None, metavar="FILE",
+                        help="With 'review': the model result to check")
+    p_mesh.add_argument("--crs", default=None, help="The coordinate system when the file states none (EPSG code)")
+    p_mesh.add_argument("--geometry", default=None, metavar="G01_HDF",
+                        help="The HEC-RAS geometry file (*.g01.hdf) for a stripped plan file that holds the "
+                             "results but not the mesh (a *.p01.timeseries.hdf)")
+    p_mesh.add_argument("--offline", action="store_true",
+                        help="With 'review': only the checks on the file (no observed floods, no gauges)")
+    p_mesh.add_argument("--top", type=int, default=5, help="With 'review': how many of the deepest places to list")
+    p_mesh.add_argument("--json", action="store_true")
+    # ── EPA SWMM models and results (#560) ──────────────────────────
+    p_swmm = sub.add_parser("swmm", help="What an EPA SWMM model (.inp) and its results (.out) hold: the network, "
+                            "the flooding nodes, the largest flows")
+    p_swmm.add_argument("files", nargs="+", help="A SWMM .inp file, its .out results file, or both")
+    p_swmm.add_argument("--crs", default=None, help="The model's coordinate system (EPSG code) to place it on the globe")
+    p_swmm.add_argument("--top", type=int, default=5, help="How many flooding nodes and links to list")
+    p_swmm.add_argument("--element", default=None, help="A node or link id: add its time series (with --json)")
+    p_swmm.add_argument("--json", action="store_true")
     # ── basins ───────────────────────────────────────────────────────
+    p_bul = sub.add_parser("bulletin", help="The month's state of the rivers: every Archive gauge against normal, "
+                           "HydroSOS classes")
+    p_bul.add_argument("month", nargs="?", default=None, help="YYYY-MM (default: the latest published, else the last full month)")
+    p_bul.add_argument("--sources", nargs="+", default=None, help="Only these sources (usgs, uk_ea, ...)")
+    p_bul.add_argument("--archive", default=None, help="A local copy of the Archive dataset instead of the Hub")
+    p_bul.add_argument("--rebuild", action="store_true", help="Build it even when a bulletin is published")
+    p_bul.add_argument("--top-up", type=int, default=0, help="Ask the agencies for up to N gauges' missing days")
+    p_bul.add_argument("--workers", type=int, default=4)
+    p_bul.add_argument("--out", default=None, help="Write bulletins/<month>/ (HTML, Markdown, map, status) here")
+    p_bul.add_argument("--no-map", action="store_true", help="Leave the map out (no matplotlib needed)")
+    p_bul.add_argument("--gauges", action="store_true", help="With --json, include every classed gauge")
+    p_bul.add_argument("--json", action="store_true")
+    p_warn = sub.add_parser("warnings", help="Floods ahead: river reaches the GEOGLOWS forecast expects to reach "
+                            "their 2-year flow in the next 15 days (model output, not an official warning)")
+    p_warn.add_argument("--bbox", nargs=4, type=float, default=None, metavar=("WEST", "SOUTH", "EAST", "NORTH"))
+    p_warn.add_argument("--min-rp", type=int, default=2, help="Only reaches at or above this return period (years)")
+    p_warn.add_argument("--limit", type=int, default=20, help="Reaches listed (highest class first)")
+    p_warn.add_argument("--local", default=None, help="Read an issue written by python -m aquascope.archive.warnings")
+    p_warn.add_argument("--json", action="store_true")
+    p_wb = sub.add_parser("waterbalance", help="Subbasins by monthly water balance: rain, evaporation, runoff and "
+                          "the closure error P - ET - Q (ERA5, GEOGLOWS v2; modelled)")
+    p_wb.add_argument("--basin", type=int, default=None, metavar="HYBAS_ID", help="A HydroBASINS level-4 subbasin")
+    p_wb.add_argument("--at", nargs=2, type=float, default=None, metavar=("LAT", "LON"),
+                      help="The subbasin holding this point")
+    p_wb.add_argument("--month", default=None, help="YYYY-MM (default the newest)")
+    p_wb.add_argument("--months", type=int, default=24, help="Months listed for a subbasin (24)")
+    p_wb.add_argument("--bbox", nargs=4, type=float, default=None, metavar=("WEST", "SOUTH", "EAST", "NORTH"))
+    p_wb.add_argument("--variable", default="p", choices=["p", "et", "q", "closure"],
+                      help="Without a subbasin: rank the month's subbasins by their anomaly in this")
+    p_wb.add_argument("--limit", type=int, default=20)
+    p_wb.add_argument("--local", default=None, help="Read a folder written by python -m aquascope.waterbalance")
+    p_wb.add_argument("--json", action="store_true")
+    p_fs = sub.add_parser("flowstatus", help="Flow against normal: every big river reach's forecast flow today "
+                          "against its normal for the month (GEOGLOWS, modelled)")
+    p_fs.add_argument("--bbox", nargs=4, type=float, default=None, metavar=("WEST", "SOUTH", "EAST", "NORTH"))
+    p_fs.add_argument("--river-id", type=int, default=None, help="One GEOGLOWS reach: its flow, class and normal")
+    p_fs.add_argument("--local", default=None, help="Read folders written by python -m aquascope.flowstatus")
+    p_fs.add_argument("--json", action="store_true")
+    p_now = sub.add_parser("now", help="Today against normal and the next 15 days (GEOGLOWS, GloFAS), corrected to a gauge")
+    p_now.add_argument("coords", nargs="*", type=float, metavar="LAT LON", help="A point, snapped to its river reach")
+    p_now.add_argument("--station", default=None, metavar="SOURCE/ID", help="A gauge: its status, and the forecast "
+                       "corrected to its record")
+    p_now.add_argument("--river-id", type=int, default=None, help="A GEOGLOWS river reach")
+    p_now.add_argument("--days", type=int, default=15, help="Forecast days (15)")
+    p_now.add_argument("--date", default=None, help="The status on another day (YYYY-MM-DD)")
+    p_now.add_argument("--raw", action="store_true", help="Do not correct the forecast to the gauge")
+    p_now.add_argument("--status-only", action="store_true", help="Only today against normal, no forecast")
+    p_now.add_argument("--quick", action="store_true",
+                       help="Only the two forecasts: no thresholds or correction (skips the simulated record)")
+    p_now.add_argument("--plume", action="store_true",
+                       help="The FEWS view of the reach: the 51-member plume day by day, its return-period classes "
+                       "and the members past each")
+    p_now.add_argument("--csv", default=None, help="Write the forecast to this CSV")
+    p_now.add_argument("--json", action="store_true")
+    p_watch = sub.add_parser("watch", help="What changed at watched gauges, reaches and areas since a date")
+    p_watch.add_argument("ids", nargs="+", metavar="ID",
+                         help="source/station_id, river:<reach id> or area:west,south,east,north")
+    p_watch.add_argument("--since", default=None, help="Last look, YYYY-MM-DD (default: a week ago)")
+    p_watch.add_argument("--threshold", action="append", metavar="ID=VALUE",
+                         help="Per item: a value (usgs/USGS-01646500=300) or a return period (=10y); repeatable. "
+                         "Without one, forecasts are checked against the 2-year flow")
+    p_watch.add_argument("--forecast", choices=["auto", "archive", "live", "off"], default="auto",
+                         help="Where the forecast comes from (auto: the forecast archive, else GEOGLOWS now)")
+    p_watch.add_argument("--no-forecast", action="store_true", help="Skip the forecast")
+    p_watch.add_argument("--no-floods", action="store_true", help="Skip flood events in the news")
+    p_watch.add_argument("--no-refresh", action="store_true", help="Do not ask the agency for its newest days")
+    p_watch.add_argument("--json", action="store_true")
+    p_river = sub.add_parser("river", help="River reaches (GEOGLOWS v2): snap a point, the modelled record, the trace")
+    river_sub = p_river.add_subparsers(dest="river_cmd", required=True)
+    p_rsnap = river_sub.add_parser("snap", help="The river reach a point stands for (the main channel within the "
+                                   "tolerance), or 'no stream within N m'")
+    p_rsnap.add_argument("lat", type=float)
+    p_rsnap.add_argument("lon", type=float)
+    p_rsnap.add_argument("--max-distance", type=float, default=1000.0, help="Snap tolerance in metres (1000)")
+    p_rsnap.add_argument("--nearest", action="store_true",
+                         help="Take the nearest line rather than the main channel within the tolerance")
+    p_rsnap.add_argument("--area", type=float, default=None,
+                         help="A gauge's catchment area in km2: take the reach whose upstream area matches it")
+    p_rsnap.add_argument("--json", action="store_true")
+    for name, helptext in (("record", "86 years of simulated daily flow for a reach, analysed like a gauge"),
+                           ("area", "The area draining to a reach"),
+                           ("trace", "Follow a reach to its outlet: length, path, gauges, dams and countries"),
+                           ("dams", "Dams upstream of a reach (Global Dam Watch) and the degree of regulation"),
+                           ("upstream", "The river_ids of every reach that drains to a reach"),
+                           ("downstream", "The river_ids from a reach to its outlet")):
+        p_r = river_sub.add_parser(name, help=helptext)
+        p_r.add_argument("river_id", nargs="?", type=int, default=None)
+        p_r.add_argument("--at", nargs=2, type=float, metavar=("LAT", "LON"), help="Snap this point first")
+        p_r.add_argument("--max-distance", type=float, default=1000.0, help="Snap tolerance in metres (1000)")
+        p_r.add_argument("--json", action="store_true")
+        if name == "record":
+            p_r.add_argument("--years", type=int, default=None, help="Only the last N years")
+            p_r.add_argument("--csv", default=None, help="Write the daily simulated series to this CSV")
+        if name == "trace":
+            p_r.add_argument("--gauge-km", type=float, default=2.0, help="List gauges this close to the path (2)")
+            p_r.add_argument("--dam-km", type=float, default=2.0, help="List dams this close to the path (2)")
+            p_r.add_argument("--geojson", default=None, help="Write the path to this GeoJSON file")
+        if name in ("upstream", "downstream"):
+            p_r.add_argument("--max", type=int, default=20_000 if name == "upstream" else 5_000,
+                             help="At most this many ids (upstream keeps the largest drainage areas)")
+        if name == "dams":
+            p_r.add_argument("--no-flow", action="store_true",
+                             help="Skip the mean-flow request (one ~10 s GEOGLOWS call) and the degree of regulation")
+
+    p_ev = sub.add_parser("evidence", help="Model skill at a gauge: GEOGLOWS, GloFAS, NWM and GRRR graded A to D")
+    ev_sub = p_ev.add_subparsers(dest="evidence_cmd", required=True)
+    p_evs = ev_sub.add_parser("skill", help="Score every global model against one gauge's record")
+    p_evs.add_argument("source", nargs="?", default=None, help="Station source (usgs, uk_ea, ...)")
+    p_evs.add_argument("station_id", nargs="?", default=None)
+    p_evs.add_argument("--at", nargs=2, type=float, metavar=("LAT", "LON"), help="The gauge position (with --csv)")
+    p_evs.add_argument("--csv", default=None, help="Your own daily discharge record: date,value in m3/s")
+    p_evs.add_argument("--area", type=float, default=None, help="The gauge's catchment area in km2")
+    p_evs.add_argument("--models", nargs="+", choices=["geoglows", "glofas", "nwm", "grrr"], default=None)
+    p_evs.add_argument("--years", type=int, default=30, help="Score the last N years of the record (30; 0 = all)")
+    p_evs.add_argument("--json", action="store_true")
+    p_evn = ev_sub.add_parser("near", help="Which model to lean on near a site, from the published skill")
+    p_evn.add_argument("lat", type=float)
+    p_evn.add_argument("lon", type=float)
+    p_evn.add_argument("--radius-km", type=float, default=150.0)
+    p_evn.add_argument("--json", action="store_true")
+    p_evb = ev_sub.add_parser("build", help="The monthly skill table for the Archive gauges (CI)")
+    p_evb.add_argument("--archive", required=True, help="A local copy of the dataset")
+    p_evb.add_argument("--out", required=True)
+    p_evb.add_argument("--max-gauges", type=int, default=4000)
+    p_evb.add_argument("--nwm-years", type=int, default=10)
+    p_evb.add_argument("--nwm-max-columns", type=int, default=24)
+    p_evb.add_argument("--grrr-max-chunks", type=int, default=2000)
+    p_evb.add_argument("--workers", type=int, default=8)
+    p_evb.add_argument("--smoke", action="store_true", help="Six gauges, never published")
+    p_evp = ev_sub.add_parser("publish", help="Upload the skill table to the Archive (skill/ only)")
+    p_evp.add_argument("--out", required=True)
+    p_evp.add_argument("--repo", default="Rekin226/aquascope-gauges")
+
     p_basins = sub.add_parser("basins", help="Catchments from BasinATLAS (HydroATLAS, CC BY 4.0) in the Archive")
     basins_sub = p_basins.add_subparsers(dest="basins_cmd", required=True)
     p_bat = basins_sub.add_parser("at", help="Describe the catchment upstream of a point")
@@ -2501,11 +4919,52 @@ def main() -> None:
     )
     p_assess.add_argument("lat", type=float)
     p_assess.add_argument("lon", type=float, help="Longitude (a negative value is fine as a positional)")
-    p_assess.add_argument("--problem", choices=sorted({p for m in _METHODS.values() for p in m.problems}), default=None,
-                          help="Only the methods for this problem kind")
+    p_assess.add_argument(
+        "--problem",
+        choices=sorted({p for m in _METHODS.values() for p in m.problems}),
+        default=None,
+        help="Only the methods for this problem kind",
+    )
     p_assess.add_argument("--radius-km", type=float, default=50.0, help="How far a gauge may be to count (default 50)")
     p_assess.add_argument("--return-period", type=float, default=None, help="The T (years) the question asks for")
     p_assess.add_argument("--json", action="store_true")
+
+    p_ctx = sub.add_parser(
+        "context",
+        help="Flood history, surface water, flood hazard, dams, rain gauge, actual ET and soil at a place",
+    )
+    p_ctx.add_argument("lat", type=float, nargs="?", default=None)
+    p_ctx.add_argument("lon", type=float, nargs="?", default=None,
+                       help="Longitude (a negative value is fine as a positional)")
+    p_ctx.add_argument("--bbox", default=None,
+                       help="west,south,east,north instead of a point (write --bbox=-77,38,-76,39 when it starts "
+                            "with a minus)")
+    p_ctx.add_argument("--layers", default=None,
+                       help="Comma-separated: flood_history, surface_water, flood_hazard, dams, rain_gauge, "
+                            "actual_et, soil (default all)")
+    p_ctx.add_argument("--floods-past", action="store_true",
+                       help="Floods past (#547): flood events in the news and floods seen by radar by month, "
+                            "worldwide or in --bbox; the latest 12 months on record unless --month or --from/--to")
+    p_ctx.add_argument("--month", default=None, help="With --floods-past: one month, YYYY-MM")
+    p_ctx.add_argument("--from", dest="start", default=None, help="With --floods-past: first month, YYYY-MM")
+    p_ctx.add_argument("--to", dest="end", default=None,
+                       help="With --floods-past: last month, YYYY-MM (at most 60 months)")
+    p_ctx.add_argument("--limit", type=int, default=20,
+                       help="With --floods-past: news events listed for a small box (default 20)")
+    p_ctx.add_argument("--json", action="store_true")
+
+    p_area = sub.add_parser(
+        "area-study", help="Study the gauges of an area together: per-site floods, trend field, regional growth curve"
+    )
+    p_area.add_argument("--bbox", default=None,
+                        help="west,south,east,north (write --bbox=-77,38,-76,39 when it starts with a minus)")
+    p_area.add_argument("--station", action="append", default=None, help="source/station_id (repeatable)")
+    p_area.add_argument("--question", default=None, help="A title for the study")
+    p_area.add_argument("--max-sites", type=int, default=60, help="Gauges studied at most (default 60)")
+    p_area.add_argument("--max-live", type=int, default=25,
+                        help="Gauges fetched live from an agency at most; the rest come from the Archive (default 25)")
+    p_area.add_argument("--output", "-o", default=None, help="Write .xlsx, .csv, .geojson or .json")
+    p_area.add_argument("--json", action="store_true")
 
     p_gym = sub.add_parser("gym", help="HydroGym: a gym-style calibration environment over real basins (#175)")
     gym_sub = p_gym.add_subparsers(dest="gym_cmd", required=True)
@@ -2536,27 +4995,40 @@ def main() -> None:
         p_g.add_argument("--out", default=None, help="leaderboard: write the table (CSV; Markdown for bench results)")
         p_g.add_argument("--json", action="store_true")
     p_g_lb = gym_sub.choices["leaderboard"]
-    p_g_lb.add_argument("results", nargs="*", metavar="RESULTS.jsonl",
-                        help="Bench result files (Phase 1): render their leaderboard instead of playing the baselines")
+    p_g_lb.add_argument(
+        "results",
+        nargs="*",
+        metavar="RESULTS.jsonl",
+        help="Bench result files (Phase 1): render their leaderboard instead of playing the baselines",
+    )
     p_g_lb.add_argument("--title", default=None, help="Heading of the Markdown leaderboard")
     p_gt = gym_sub.add_parser("tasks", help="Generate benchmark tasks from the playbooks on catalog sites (Phase 1)")
     p_gt.add_argument("--n", type=int, default=60, help="Number of tasks (default 60)")
     p_gt.add_argument("--seed", type=int, default=0)
     p_gt.add_argument("--source", action="append", help="Restrict sites to these sources (repeatable)")
     p_gt.add_argument("--playbook", action="append", help="Only these playbooks (repeatable; default all)")
-    p_gt.add_argument("--probes", default="1",
-                      help="Decline probes per site: an integer or 'all' (default 1, rotating over the rules)")
+    p_gt.add_argument(
+        "--probes",
+        default="1",
+        help="Decline probes per site: an integer or 'all' (default 1, rotating over the rules)",
+    )
     p_gt.add_argument("--ungauged-share", type=float, default=0.25, help="Share of sites that are bare points")
-    p_gt.add_argument("--no-check-land", action="store_true",
-                      help="Do not ask BasinATLAS whether a bare point is on land (offline; the gauge proxy still applies)")
+    p_gt.add_argument(
+        "--no-check-land",
+        action="store_true",
+        help="Do not ask BasinATLAS whether a bare point is on land (offline; the gauge proxy still applies)",
+    )
     p_gt.add_argument("--out", default="tasks.jsonl")
     p_gt.add_argument("--quiet", action="store_true")
     p_gp = gym_sub.add_parser("plans", help="The reference plans of the plan-quality benchmark (Phase 2)")
     gp_sub = p_gp.add_subparsers(dest="plans_cmd", required=True)
-    for name, help_ in (("list", "List the cases"), ("show", "Print one case"),
-                        ("validate", "Check every case against the catalogue, the registry and its recon"),
-                        ("score", "Score a plan (the tree's, or a JSON file) against one case"),
-                        ("rescore", "Score stored result rows again from the plans they carry (no model run)")):
+    for name, help_ in (
+        ("list", "List the cases"),
+        ("show", "Print one case"),
+        ("validate", "Check every case against the catalogue, the registry and its recon"),
+        ("score", "Score a plan (the tree's, or a JSON file) against one case"),
+        ("rescore", "Score stored result rows again from the plans they carry (no model run)"),
+    ):
         p_gpc = gp_sub.add_parser(name, help=help_)
         if name in ("show", "score"):
             p_gpc.add_argument("id", help="The case id")
@@ -2567,32 +5039,79 @@ def main() -> None:
             p_gpc.add_argument("--out", default=None, help="Write the re-scored rows here instead (one file only)")
         p_gpc.add_argument("--plans", default=None, help="A folder of reference plans (default: the package's)")
         p_gpc.add_argument("--json", action="store_true")
-    p_gbench = gym_sub.add_parser("bench", help="Play an agent on the tasks (Phase 1) or on the reference plans "
-                                  "(Phase 2) and score it")
+    p_gr = gym_sub.add_parser(
+        "reports", help="Score the report a finished study bundle carries, not just its plan (#382)"
+    )
+    gr_sub = p_gr.add_subparsers(dest="reports_cmd", required=True)
+    p_gr_list = gr_sub.add_parser("list", help="List the report-quality reference cases")
+    p_gr_show = gr_sub.add_parser("show", help="Print one reference case")
+    p_gr_show.add_argument("id", help="The case id")
+    p_gr_score = gr_sub.add_parser("score", help="Score one recorded study's workspace.json")
+    p_gr_score.add_argument("study_dir", help="A recorded study's directory (workspace.json sits inside it)")
+    p_gr_score.add_argument(
+        "--reference",
+        default=None,
+        help="A reference case id to score against (default: the reference, if any, whose "
+        "study matches the directory name)",
+    )
+    p_gr_bench = gr_sub.add_parser("bench", help="Score every recorded study under a directory")
+    p_gr_bench.add_argument(
+        "--dir",
+        default=None,
+        help="A directory of recorded studies (default: the Explorer's showcase, explorer/showcase/studies)",
+    )
+    p_gr_bench.add_argument("--study", action="append", help="Only these study ids (repeatable)")
+    p_gr_bench.add_argument("--out", default=None, help="Append results as JSONL")
+    p_gr_bench.add_argument("--quiet", action="store_true")
+    for p_grc in (p_gr_list, p_gr_show, p_gr_score, p_gr_bench):
+        p_grc.add_argument("--reports", default=None, help="A folder of report references (default: the package's)")
+        p_grc.add_argument("--json", action="store_true")
+    p_gbench = gym_sub.add_parser(
+        "bench", help="Play an agent on the tasks (Phase 1) or on the reference plans (Phase 2) and score it"
+    )
     p_gbench.add_argument("--tasks", default=None, help="Phase 1: tasks.jsonl from `gym tasks`")
-    p_gbench.add_argument("--agent", choices=["tree", "team", "ask", "methodologist", "file"], default="tree",
-                          help="Phase 1: tree, team, ask; Phase 2: tree, methodologist, file")
-    p_gbench.add_argument("--plans", default=None,
-                          help="Phase 2: a folder of reference plans (default: the package's); with --agent "
-                               "methodologist or file, or without --tasks, the bench scores plan quality")
+    p_gbench.add_argument(
+        "--agent",
+        choices=["tree", "team", "ask", "methodologist", "file"],
+        default="tree",
+        help="Phase 1: tree, team, ask; Phase 2: tree, methodologist, file",
+    )
+    p_gbench.add_argument(
+        "--plans",
+        default=None,
+        help="Phase 2: a folder of reference plans (default: the package's); with --agent "
+        "methodologist or file, or without --tasks, the bench scores plan quality",
+    )
     p_gbench.add_argument("--case", action="append", help="Phase 2: play these case ids only (repeatable)")
-    p_gbench.add_argument("--repeats", type=int, default=1,
-                          help="Phase 2: play every case this many times on a model (its spread)")
-    p_gbench.add_argument("--candidates", default=None,
-                          help="Phase 2, --agent file: a folder of <case id>.json plans produced elsewhere")
-    p_gbench.add_argument("--provider", default=None,
-                          help="LLM provider (anthropic, openai, groq, huggingface, ollama, ...); none: keyless team")
+    p_gbench.add_argument(
+        "--repeats", type=int, default=1, help="Phase 2: play every case this many times on a model (its spread)"
+    )
+    p_gbench.add_argument(
+        "--candidates", default=None, help="Phase 2, --agent file: a folder of <case id>.json plans produced elsewhere"
+    )
+    p_gbench.add_argument(
+        "--provider",
+        default=None,
+        help="LLM provider (anthropic, openai, groq, huggingface, ollama, ...); none: keyless team",
+    )
     p_gbench.add_argument("--model", default=None)
     p_gbench.add_argument("--api-key", default=None)
     p_gbench.add_argument("--base-url", default=None)
     p_gbench.add_argument("--limit", type=int, default=None, help="Play the first N tasks")
-    p_gbench.add_argument("--unsolvable", type=int, default=None,
-                          help="With --limit: at most this many unsolvable tasks among the N")
+    p_gbench.add_argument(
+        "--unsolvable", type=int, default=None, help="With --limit: at most this many unsolvable tasks among the N"
+    )
     p_gbench.add_argument("--task", action="append", help="Play these task ids only (repeatable)")
-    p_gbench.add_argument("--spread", action="store_true",
-                          help="With --limit: take tasks round robin over the sites rather than the first N")
-    p_gbench.add_argument("--resume", action="store_true",
-                          help="Skip tasks --out already holds a finished row for (errors and timeouts are replayed)")
+    p_gbench.add_argument(
+        "--spread",
+        action="store_true",
+        help="With --limit: take tasks round robin over the sites rather than the first N",
+    )
+    p_gbench.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip tasks --out already holds a finished row for (errors and timeouts are replayed)",
+    )
     p_gbench.add_argument("--timeout", type=float, default=900.0, help="Seconds per task (0: none)")
     p_gbench.add_argument("--max-steps", type=int, default=8, help="ask: tool-call steps")
     p_gbench.add_argument("--context-chars", type=int, default=40_000, help="ask: conversation budget in characters")
@@ -2649,13 +5168,23 @@ def main() -> None:
     p_solve.add_argument("--lat", type=float, default=None, help="Latitude of the site (with --lon: the team)")
     p_solve.add_argument("--lon", type=float, default=None, help="Longitude of the site")
     p_solve.add_argument("--playbook", default=None, help="Playbook id (see `aquascope playbooks`); else keyword rules")
-    p_solve.add_argument("--intake", action="append", default=[], metavar="KEY=VALUE",
-                         help="An intake field, e.g. --intake return_period=200 (repeatable)")
+    p_solve.add_argument(
+        "--intake",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="An intake field, e.g. --intake return_period=200 (repeatable)",
+    )
     p_solve.add_argument("--yes", "-y", action="store_true", help="Run the plan without asking")
-    p_solve.add_argument("--provider", choices=provider_ids(), default=None,
-                         help="Use a model for the rationale, fallbacks and prose (keyless otherwise)")
-    p_solve.add_argument("--model", default=None,
-                         help="Model name (with --lat/--lon: the LLM; otherwise the legacy forecast model)")
+    p_solve.add_argument(
+        "--provider",
+        choices=provider_ids(),
+        default=None,
+        help="Use a model for the rationale, fallbacks and prose (keyless otherwise)",
+    )
+    p_solve.add_argument(
+        "--model", default=None, help="Model name (with --lat/--lon: the LLM; otherwise the legacy forecast model)"
+    )
     p_solve.add_argument("--api-key", default=None)
     p_solve.add_argument("--base-url", default=None, help="Any OpenAI-compatible endpoint (or Anthropic's)")
     p_solve.add_argument("--out", "-o", default=None, help="Save the Markdown report here")
@@ -2669,22 +5198,71 @@ def main() -> None:
         help="A complete study at a place by a crew of roles: the brief you agree, the plan you approve, the "
         "run with gates, the report and the bundle (keyless by default)",
     )
-    p_studio.add_argument("query", nargs="?", default=None, help="The problem in plain language")
+    p_studio.add_argument(
+        "query", nargs="?", default=None,
+        help="The problem in plain language (run `aquascope studio` alone in a terminal and it asks), or a "
+             "finished study's bundle folder to revise, review and sign it on the Study Desk",
+    )
+    p_studio.add_argument(
+        "--at", default=None, metavar="PLACE",
+        help="Where: a gauge name or river words, a station id (USGS-01013500), or 'lat,lon'",
+    )
     p_studio.add_argument("--lat", type=float, default=None, help="Latitude of the site")
     p_studio.add_argument("--lon", type=float, default=None, help="Longitude of the site")
-    p_studio.add_argument("--data", action="append", default=[], metavar="FILE",
-                          help="A table of your own (CSV, Excel, JSON) the crew may use (repeatable)")
-    p_studio.add_argument("--intake", action="append", default=[], metavar="KEY=VALUE",
-                          help="An intake field, e.g. --intake return_period=200 (repeatable)")
-    p_studio.add_argument("--provider", choices=provider_ids(), default=None,
-                          help="Use a model for the brief, the methodology and the prose (keyless otherwise)")
+    p_studio.add_argument(
+        "--data",
+        action="append",
+        default=[],
+        metavar="FILE",
+        help="A table of your own (CSV, Excel, JSON) the crew may use (repeatable)",
+    )
+    p_studio.add_argument(
+        "--intake",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="An intake field, e.g. --intake return_period=200 (repeatable)",
+    )
+    p_studio.add_argument(
+        "--provider",
+        choices=provider_ids(),
+        default=None,
+        help="Use a model for the brief, the methodology and the prose (keyless otherwise)",
+    )
     p_studio.add_argument("--model", default=None, help="Model name")
     p_studio.add_argument("--api-key", default=None)
     p_studio.add_argument("--base-url", default=None, help="Any OpenAI-compatible endpoint (or Anthropic's)")
+    p_studio.add_argument(
+        "--max-usd",
+        type=float,
+        default=None,
+        metavar="USD",
+        help="A spend ceiling for the model calls: past it the roles run keyless and the "
+        "footer says so (models in the price table only)",
+    )
     p_studio.add_argument("--out", "-o", default=None, help="The bundle's directory (default ./studio-<id>/)")
     p_studio.add_argument("--yes", "-y", action="store_true", help="Answer the defaults, approve the plan, export")
+    p_studio.add_argument(
+        "--continue-without",
+        action="store_true",
+        help="When the crew asks for data you do not have, go on at the lower grade it names",
+    )
     p_studio.add_argument("--resume", default=None, metavar="WORKSPACE.JSON", help="Resume a saved workspace")
     p_studio.add_argument("--quiet", "-q", action="store_true", help="Do not print the timeline as it happens")
+    p_studio.add_argument("--verbose", "-v", action="store_true",
+                          help="Print every event the crew emits (every gate, figure and file), not the short log")
+    p_studio.add_argument("--style", default=None, metavar="STYLE.yaml",
+                          help="A house style for the documents: organisation, project, client, prepared_by, "
+                               "checked_by, logo, accent (YAML or JSON)")
+    _add_desk_args(p_studio, studio=True)
+
+    # ── desk ────────────────────────────────────────────────────────────
+    p_desk = sub.add_parser(
+        "desk",
+        help="Revise, review and sign a finished study (the same as `aquascope studio <bundle folder>`)",
+    )
+    p_desk.add_argument("workspace", help="The study's bundle folder or its workspace.json")
+    _add_desk_args(p_desk)
 
     # ── studio-showcase ───────────────────────────────────────────────
     p_show = sub.add_parser(
@@ -2700,11 +5278,48 @@ def main() -> None:
     p_show_rec.add_argument("--provider", default="anthropic")
     p_show_rec.add_argument("--model", default="claude-sonnet-5")
     p_show_rec.add_argument("--api-key", default=None)
-    p_show_rec.add_argument("--refresh-after", type=float, default=30.0, metavar="DAYS",
-                            help="Re-record a case only when its recording is older than this (0: every case)")
+    p_show_rec.add_argument(
+        "--refresh-after",
+        type=float,
+        default=30.0,
+        metavar="DAYS",
+        help="Re-record a case only when its recording is older than this (0: every case)",
+    )
     p_show_rec.add_argument("--quiet", "-q", action="store_true", help="Do not print the timeline as it happens")
     p_show_list = show_sub.add_parser("list", help="The recordings on disk, as a table")
     p_show_list.add_argument("--out", default="explorer/showcase/studies", help="The recordings' directory")
+
+    # ── update ────────────────────────────────────────────────────────
+    p_update = sub.add_parser(
+        "update", help="Upgrade aquascope to the newest release, the same way it was installed (uv, pipx, pip)")
+    p_update.add_argument("--check", action="store_true", help="Only say whether a newer release exists")
+    p_update.add_argument("--yes", "-y", action="store_true", help="Upgrade without asking")
+    # ── eval ──────────────────────────────────────────────────────────
+    p_eval = sub.add_parser(
+        "eval",
+        help="Evaluate finished studies from their bundles: a scorecard, a trace, stats across runs (no model)",
+    )
+    eval_sub = p_eval.add_subparsers(dest="eval_cmd")
+    p_eval_score = eval_sub.add_parser(
+        "score", help="One study's scorecard: outcome, gates, Critic, report quality, plan accuracy, time and cost")
+    p_eval_score.add_argument("study", nargs="+", help="A study bundle directory or its workspace.json (repeatable)")
+    p_eval_score.add_argument("--case", default=None,
+                              help="Score the plan against this HydroGym reference case (aquascope gym plans list)")
+    p_eval_score.add_argument("--json", action="store_true")
+    p_eval_trace = eval_sub.add_parser(
+        "trace", help="One study as a timeline: phases, steps with their gates, model calls per role")
+    p_eval_trace.add_argument("study", help="A study bundle directory or its workspace.json")
+    p_eval_trace.add_argument("--events", action="store_true", help="Also print every event, with its time")
+    p_eval_trace.add_argument("--json", action="store_true")
+    p_eval_stats = eval_sub.add_parser(
+        "stats", help="Many studies at once: grades, report scores, gate failure and skip rates, time and cost")
+    p_eval_stats.add_argument("paths", nargs="+", help="Directories to search for study bundles (recursively)")
+    p_eval_stats.add_argument("--by", default="playbook", choices=["playbook", "model", "date", "grade", "none"])
+    p_eval_stats.add_argument("--case", default=None, help="Score every plan against this reference case")
+    p_eval_stats.add_argument("--top", type=int, default=3, help="How many failing and skipped checks to name")
+    p_eval_stats.add_argument("--csv", default=None, metavar="FILE", help="Also write the rows as CSV")
+    p_eval_stats.add_argument("--json", action="store_true")
+    p_eval_stats.add_argument("--cards", action="store_true", help="With --json, include every study's scorecard")
 
     # ── forecast ──────────────────────────────────────────────────────
     p_forecast = sub.add_parser("forecast", help="Run a predictive model on time-series data")
@@ -2829,14 +5444,25 @@ def main() -> None:
     p_alerts.add_argument("--param-col", default="parameter", help="Column containing parameter names")
 
     # ── groundwater ──────────────────────────────────────────────────
-    p_gw = sub.add_parser("groundwater", help="Run groundwater analysis (trend, recession, recharge, Theis)")
+    p_gw = sub.add_parser("groundwater", help="Run groundwater analysis (trend, recession, recharge, Theis), or "
+                          "'groundwater surface': the head surface from the Archive's wells (#558)")
+    p_gw.add_argument("action", nargs="?", choices=["surface"], default=None,
+                      help="surface: a groundwater-level surface and its change from the Archive's wells")
     p_gw.add_argument(
         "--analysis",
-        required=True,
+        default=None,
         choices=["trend", "recession", "seasonal", "hydrograph", "recharge-wtf", "theis"],
-        help="Analysis type",
+        help="Analysis type (needed without 'surface')",
     )
-    p_gw.add_argument("--file", required=True, help="Path to well level data (CSV with DatetimeIndex)")
+    p_gw.add_argument("--file", default=None, help="Path to well level data (CSV with DatetimeIndex)")
+    p_gw.add_argument("--bbox", nargs=4, type=float, metavar=("W", "S", "E", "N"), default=None,
+                      help="surface: the box (default every well)")
+    p_gw.add_argument("--month", default=None, help="surface: the month, YYYY-MM (default the newest well covered)")
+    p_gw.add_argument("--mode", choices=["level", "change"], default="level",
+                      help="surface: the head (level) or its change against --compare (default 12 months earlier)")
+    p_gw.add_argument("--compare", default=None, help="surface: the earlier month for --mode change, YYYY-MM")
+    p_gw.add_argument("--geojson", default=None, help="surface: write the drawn cells, contours and wells here")
+    p_gw.add_argument("--json", action="store_true", help="surface: print the whole result as JSON")
     p_gw.add_argument(
         "--specific-yield", type=float, default=0.15, help="Specific yield for WTF recharge (default: 0.15)"
     )
@@ -2845,6 +5471,26 @@ def main() -> None:
     p_gw.add_argument("--pumping-rate", type=float, default=None, help="Pumping rate m³/day (Theis)")
     p_gw.add_argument("--distance", type=float, default=None, help="Distance from well in metres (Theis)")
     p_gw.add_argument("--output", default=None, help="Save results to JSON")
+
+    # ── modflow (#558) ───────────────────────────────────────────────
+    p_mf = sub.add_parser("modflow", help="Read MODFLOW heads (.hds) onto a map: cells in lon/lat, heads per "
+                          "layer and time, as a summary or GeoJSON (#558)")
+    p_mf.add_argument("hds", help="The binary head (or drawdown) file, MODFLOW-2005 or MODFLOW 6")
+    p_mf.add_argument("--grid", default=None, help="Its grid: .dis, .disv (text) or .dis.grb/.disv.grb (MODFLOW 6)")
+    p_mf.add_argument("--sidecar", action="append", default=None,
+                      help="Another file that says where or when (a .nam with FloPy's georeference, a .tdis)")
+    p_mf.add_argument("--origin", nargs=2, type=float, metavar=("X", "Y"), default=None,
+                      help="The grid's lower-left corner in --crs (overrides the grid file)")
+    p_mf.add_argument("--rotation", type=float, default=None, help="Degrees counter-clockwise (overrides the grid)")
+    p_mf.add_argument("--crs", default=None, help="The model's CRS, e.g. EPSG:27700 (needed if the files have none)")
+    p_mf.add_argument("--cell-size", nargs="+", type=float, default=None,
+                      help="Without --grid: the cell width (and height) of a regular grid")
+    p_mf.add_argument("--start-date", default=None, help="Model time 0 as YYYY-MM-DD, to give times as dates")
+    p_mf.add_argument("--time-units", default=None, help="days (default), hours, minutes, seconds or years")
+    p_mf.add_argument("--time", type=int, default=-1, help="Which time step (index, default the last)")
+    p_mf.add_argument("--layer", type=int, default=None, help="Which layer (1-based, default the first)")
+    p_mf.add_argument("--geojson", default=None, help="Write that time and layer's cells with their head here")
+    p_mf.add_argument("--json", action="store_true")
 
     # ── climate ──────────────────────────────────────────────────────
     p_climate = sub.add_parser("climate", help="Climate projections and indices")
@@ -2862,6 +5508,34 @@ def main() -> None:
     p_climate.add_argument("--output", default=None, help="Save results to JSON")
 
     # ── hydro ─────────────────────────────────────────────────────────
+    p_export = sub.add_parser(
+        "export", help="Inputs for HEC-HMS, HEC-RAS, HEC-SSP, HEC-DSS, SWMM, MODFLOW 6, Delft-FEWS or Raven (#519)"
+    )
+    p_export.add_argument("--to", required=True, choices=[*EXPORT_TOOLS, "all"], help="The tool to write inputs for")
+    p_export.add_argument("--station", default=None, help="A gauge as source/station_id, e.g. usgs/01646500")
+    p_export.add_argument("--file", default=None, help="Or a CSV: a date column, then the values")
+    p_export.add_argument("--column", default=None, help="The value column of --file (default: first numeric)")
+    p_export.add_argument("--variable", default=None,
+                          help="discharge (default), water_level, groundwater_level or precipitation")
+    p_export.add_argument("--unit", default=None, help="Unit of --file values (default m3/s, m or mm)")
+    p_export.add_argument("--location", default=None, help="Identifier for --file in the outputs")
+    p_export.add_argument("--years", type=int, default=None, help="Only the last N years of the gauge record")
+    p_export.add_argument("-o", "--out-dir", default="aquascope-export", help="Folder to write (default aquascope-export)")
+    p_export.add_argument("--zip", action="store_true", help="Write one zip (OUT_DIR.zip) instead of a folder")
+    p_export.add_argument("--no-dss", action="store_true", help="Write the DSS CSV even where hecdss loads")
+    p_export.add_argument("--regional-skew", type=float, default=None, help="HEC-SSP: weight the skew with this")
+    p_export.add_argument("--regional-skew-mse", type=float, default=None, help="HEC-SSP: MSE of the regional skew")
+    p_export.add_argument("--year-start-month", type=int, default=10, help="HEC-SSP: first month of the water year")
+    p_export.add_argument("--subbasin-id", type=int, default=1, help="Raven: the subbasin at the gauge")
+    p_export.add_argument("--cell", type=int, nargs=3, metavar=("LAYER", "ROW", "COL"), default=None,
+                          help="MODFLOW 6: the river or well cell (default 1 1 1)")
+    p_export.add_argument("--cond", type=float, default=None, help="MODFLOW 6 RIV: riverbed conductance")
+    p_export.add_argument("--rbot", type=float, default=None, help="MODFLOW 6 RIV: riverbed bottom elevation")
+    p_export.add_argument("--period", default=None, help="MODFLOW 6: resample first, e.g. MS for monthly")
+    p_export.add_argument("--engine", choices=["text", "flopy"], default="text",
+                          help="MODFLOW 6: write as text (default) or through FloPy")
+    p_export.add_argument("--json", action="store_true", help="Print the written paths and notes as JSON")
+
     p_hydro = sub.add_parser("hydro", help="Run hydrological analysis (FDC, baseflow, recession, flood-freq)")
     p_hydro.add_argument(
         "--analysis",
@@ -2889,7 +5563,22 @@ def main() -> None:
         "harvest": cmd_harvest,
         "mcp": cmd_mcp,
         "basins": cmd_basins,
+        "layers": cmd_layers,
+        "map": cmd_map,
+        "mesh": cmd_mesh,
+        "whatif": cmd_whatif,
+        "swmm": cmd_swmm,
+        "river": cmd_river,
+        "evidence": cmd_evidence,
+        "now": cmd_now,
+        "bulletin": cmd_bulletin,
+        "warnings": cmd_warnings,
+        "waterbalance": cmd_waterbalance,
+        "flowstatus": cmd_flowstatus,
+        "watch": cmd_watch,
         "assess": cmd_assess,
+        "context": cmd_context,
+        "area-study": cmd_area_study,
         "gym": cmd_gym,
         "caravan": cmd_caravan,
         "ask": cmd_ask,
@@ -2898,14 +5587,19 @@ def main() -> None:
         "solve": cmd_solve,
         "studio": cmd_studio,
         "studio-showcase": cmd_studio_showcase,
+        "desk": cmd_desk,
+        "update": cmd_update,
+        "eval": cmd_eval,
         "playbooks": cmd_playbooks,
         "forecast": cmd_forecast,
         "plot": cmd_plot,
         "hydro": cmd_hydro,
+        "export": cmd_export,
         "alerts": cmd_alerts,
         "dashboard": cmd_dashboard,
         "agri": cmd_agri,
         "groundwater": cmd_groundwater,
+        "modflow": cmd_modflow,
         "climate": cmd_climate,
         "completion": cmd_completion,
     }

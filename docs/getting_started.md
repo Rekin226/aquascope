@@ -1,150 +1,105 @@
-# Getting started
+# Get a useful result with AquaScope Hydrology
 
-A 10-minute walkthrough: install AquaScope, pull a real river-discharge record from USGS, run a Bulletin 17C flood-frequency analysis, and read the results.
+[Open Explorer](https://rekin226-aquascope-explorer.static.hf.space/) to find a
+river record, inspect the actual available period and missingness, then download
+CSV data or start a study. Core workflows need no installation or API key.
+Coverage and available variables differ by agency. A catalog pin alone does not
+prove that observations are accessible or suitable for an analysis.
 
-By the end you'll have a return-level table and a Q-Q diagnostic plot for a real US gauge. Same workflow FEMA, USACE, and state DOTs use.
+## Run a reproducible Python example
 
----
-
-## Install
-
-AquaScope is on PyPI. The **core install** gives you the collectors and the hydrology engine:
-
-```bash
-pip install aquascope
-```
-
-For visualization (matplotlib + seaborn + folium), add the `viz` extra:
+This example uses the committed **observed USGS annual-peak snapshot** for Fish
+River near Fort Kent, Maine (01013500), in cubic metres per second. It needs no
+network once installed. These are annual peaks, not the synthetic daily series
+in the adjacent benchmark folder, and not the daily-mean maxima used by Explorer.
+Consequently its return levels need not equal an Explorer analysis.
 
 ```bash
-pip install "aquascope[viz]"
+git clone https://github.com/Rekin226/aquascope.git
+cd aquascope
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[viz]"
 ```
 
-To get everything (ML, forecasting, spatial, Streamlit dashboard, scientific I/O), use `[all]`:
-
-```bash
-pip install "aquascope[all]"
-```
-
-Available extras: `ml`, `forecast`, `copernicus`, `viz`, `llm`, `scientific`, `dashboard`, `spatial`, `all`, `dev`. Full details in the [features guide](features.md).
-
-Python 3.10 or newer.
-
----
-
-## 1. Pull data from USGS
-
-The simplest collector. No API key required.
+Run this block from the repository root. It creates a return-level table, a
+Q–Q diagnostic figure, and provenance recording the precise input file hash.
 
 ```python
-from aquascope.collectors import USGSCollector
+import hashlib
+import json
+from pathlib import Path
 
-usgs = USGSCollector()
-records = usgs.collect(
-    station_id="01646500",   # Potomac River near Washington, DC
-    parameter="00060",       # daily mean discharge (cfs)
-    days=365,
-)
+import pandas as pd
 
-print(len(records), "records")
-print(records[0])
-```
-
-Every collector returns **typed Pydantic records**. Point-observation sources (river/groundwater level, water quality, reservoir status) share the unified `water_data` schema, so you can swap, for example, `USGSCollector` for any other point source and the rest of your code stays the same. Aggregate and gridded sources use purpose-built record types that fit their data: `AquastatCollector` returns country-level `AquastatRecord`, `SDG6Collector` returns `SDG6Indicator`, and `WaPORCollector` returns gridded `WaPORObservation`. See [Data sources](data_sources.md) for which schema each of the [20 sources](data_sources.md) emits.
-
----
-
-## 2. Run a flood-frequency analysis
-
-Fit a generalized extreme value (GEV) distribution to the annual peak series and get 10 / 50 / 100-year return levels:
-
-```python
+from aquascope import __version__
 from aquascope.api import flood_analysis
+from aquascope.viz import qq_plot
 
-result = flood_analysis(
-    daily_discharge,                      # pandas Series or DataFrame
-    method="gev",
-    return_periods=[10, 50, 100],
-)
-
-print(result.return_levels)
-#   return_period  return_level  lower_ci  upper_ci
-# 0           10        1840.2     1690.4    2010.6
-# 1           50        2530.7     2280.1    2820.9
-# 2          100        2870.4     2540.6    3260.5
+source = Path("data/camels_benchmark/peaks/01013500_peaks.csv")
+frame = pd.read_csv(source)
+# Already annual peaks: keep the numeric index to avoid reaggregating by calendar year.
+peaks = pd.Series(frame["peak_va"].to_numpy(), name="discharge_m3s").dropna()
+result = flood_analysis(peaks, method="gev_lmoments", return_periods=[10, 50, 100])
+table = pd.DataFrame([
+    {"return_period_years": period, "discharge_m3s": value}
+    for period, value in result.return_periods.items()
+])
+output = Path("quickstart-output")
+output.mkdir(exist_ok=True)
+table.to_csv(output / "return_levels.csv", index=False)
+figure = qq_plot(result.annual_max, "gev", result.params)
+figure.savefig(output / "qq_diagnostic.png", dpi=150)
+provenance = {
+    "software_version": __version__, "station": "USGS-01013500",
+    "data_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+    "input": str(source), "start": frame["date"].min(), "end": frame["date"].max(),
+    "variable": "annual peak discharge", "unit": "m3/s", "estimator": "gev_lmoments",
+    "n_peaks": len(peaks), "interval": None,
+}
+(output / "provenance.json").write_text(json.dumps(provenance, indent=2))
+print(table.to_string(index=False))
 ```
 
-Swap `method` for `"lp3"` (Bulletin 17C standard), `"gumbel"`, `"gpd"`, or `"ns_gev"` for non-stationary analysis. Pass `censored=True` for EMA on records with peak-over-threshold gaps.
+The L-moments fit does not provide an interval in this example. Do not attach an
+interval from a separate GEV maximum-likelihood fit. Supported convenience
+methods are `gev`, `gev_lmoments`, `lp3`, `gumbel`, and `gpd`; each has its own
+input assumptions. Nonstationary and EMA routines have separate APIs.
 
----
+A GEV fit is not a complete Bulletin 17C procedure. A regulatory flood study
+requires appropriate annual peaks, record screening, historical/censored-data
+handling and domain review. Neither this example nor a fit to daily mean maxima
+certifies a design flood. See the [validation scope](validation_scope.md).
 
-## 3. Look at the diagnostics
+## Retrieve a current record separately
 
-Q-Q and P-P plots come straight from `result.params` and `result.annual_max`:
+Live agency access can fail or return a different period. Inspect the returned
+period and units before fitting a model; one year of daily data cannot support
+a multiyear flood-frequency analysis. The dedicated live smoke workflow checks
+retrieval independently of the fixture-backed tutorial.
 
-```python
-from aquascope.viz import qq_diagnostic_plot
-
-fig = qq_diagnostic_plot(result)
-fig.savefig("qq_diagnostic.png", dpi=150)
+```bash
+python -m aquascope.cli --help
 ```
 
-The Q-Q plot is the reviewer's first check: does the fitted distribution actually match the upper tail? On real records (1936 St. Patrick's Day flood, anyone?) the diagnostic catches outliers that MLE estimators silently fold into the fit.
+In Python, use `aquascope.explore.analyze_station("usgs", "USGS-01013500")`
+for the same record analysis as Explorer. Its `start`, `end`, `n`, `fetch_note`,
+`data_snapshot`, and method eligibility describe the data actually analyzed.
+Use `store={}` as a keyword argument to retain the full Series for CSV export.
 
----
+## Take an Explorer result into your tools
 
-## 4. Compute hydrological signatures
+- **Python:** download the CSV and read it with `pandas.read_csv`; preserve units,
+  timestamps and provenance. The study bundle includes a replay notebook.
+- **R:** use `read.csv("record.csv")` for a downloaded record; see [readers](readers.md)
+  for archive Parquet and spatial workflows.
+- **QGIS:** add a downloaded station GeoParquet as a vector layer. A discharge CSV
+  is a time series, not a spatial layer unless you also supply station coordinates.
+  See [QGIS integration](integration_guides/qgis_integration.md).
+- **Repeat a study:** retain the entire bundle, including `workspace.json`, input
+  tables, `findings.json`, and the notebook. Use [Save complete study](adoption/sharing.md)
+  for reopening in Explorer. Reopening a saved study preserves its
+  result; rerunning against a live agency can produce new data.
 
-22 signatures across magnitude, variability, timing, recession, and flashiness, in one function call:
-
-```python
-from aquascope.api import baseflow_analysis, compute_all_signatures
-
-bf  = baseflow_analysis(daily_discharge, method="eckhardt")   # or "lyne_hollick"
-sig = compute_all_signatures(daily_discharge)
-
-print(bf.bfi)                  # baseflow index, e.g. 0.42
-print(sig["Q5"], sig["Q95"])   # high-flow / low-flow exceedances
-print(sig["flashiness"])       # Richards–Baker flashiness index
-```
-
----
-
-## 5. Ask the AI engine
-
-Describe your dataset and goal in plain English. The recommender scores 26 methodologies and ranks them by fit:
-
-```python
-from aquascope.ai_engine import recommend
-
-recs = recommend(
-    parameters=["DO", "BOD5", "COD"],
-    n_records=4_500,
-    temporal=True,
-    spatial=False,
-    goal="detect long-term pollution trends with seasonality",
-)
-
-for r in recs[:3]:
-    print(f"{r.score:.2f}  {r.method_id:<20}  {r.rationale}")
-# 0.92  mann_kendall          Strong fit: temporal data, >30 records, trend goal
-# 0.87  stl_decomposition     Seasonal patterns + multi-year data
-# 0.81  prophet               Forecasting-capable, handles seasonality natively
-```
-
-Then auto-execute the top result with `run_pipeline(recs[0].method_id, df)`.
-
----
-
-## Where to go next
-
-You've now done end-to-end: collect, analyze, diagnose, recommend. The natural next stops:
-
-- **[Potomac flood-frequency example](examples/potomac_flood_frequency.md)**: full case study with real numbers and validation against FEMA-published flood estimates.
-- **[Features](features.md)**: the complete capability catalog.
-- **[Methodology matrix](methodology_matrix.md)**: when to use which method, decision-tree style.
-- **[Theory guide](theory.md)**: equations, citations, and decision trees for every method (668 lines, the closest thing AquaScope has to a textbook).
-- **[Data sources](data_sources.md)**: all 20 collectors with endpoint details and API-key requirements.
-- **[Integration guides](integration_guides/xarray_integration.md)**: interop with xarray, QGIS, R.
-
-Stuck? Check the [FAQ](faq.md), [troubleshooting](troubleshooting.md), or open a [discussion](https://github.com/Rekin226/aquascope/discussions).
+Browse [data sources](data_sources.md), [methods](methodology_matrix.md), and
+[troubleshooting](troubleshooting.md) when selecting your next workflow.

@@ -62,23 +62,23 @@ def _scratch_repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     (root / "aquascope" / "collectors").mkdir(parents=True)
     (root / "tests" / "test_collectors").mkdir(parents=True)
-    (root / "aquascope" / "__init__.py").write_text("")
-    (root / "aquascope" / "collectors" / "__init__.py").write_text("")
+    (root / "aquascope" / "__init__.py").write_text("", encoding="utf-8")
+    (root / "aquascope" / "collectors" / "__init__.py").write_text("", encoding="utf-8")
     (root / "aquascope" / "collectors" / "demo.py").write_text(textwrap.dedent('''
         BASE = "https://old.example.org/api"
 
 
         def endpoint() -> str:
             return BASE + "/stations"
-    ''').lstrip("\n"))
+    ''').lstrip("\n"), encoding="utf-8")
     (root / "tests" / "test_collectors" / "test_demo.py").write_text(textwrap.dedent('''
         from aquascope.collectors.demo import endpoint
 
 
         def test_endpoint_moved():
             assert endpoint() == "https://new.example.org/api/stations"
-    ''').lstrip("\n"))
-    (root / "pyproject.toml").write_text("[tool.ruff]\nline-length = 120\n")
+    ''').lstrip("\n"), encoding="utf-8")
+    (root / "pyproject.toml").write_text("[tool.ruff]\nline-length = 120\n", encoding="utf-8")
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"], cwd=root, check=True)
     subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init"], cwd=root,
@@ -104,14 +104,15 @@ def test_apply_and_verify_accepts_a_good_patch_and_reverts_a_bad_one(tmp_path):
     good = repair.Proposal("patch", "moved endpoint", 0.9, GOOD_DIFF)
     v = repair.apply_and_verify(good, ev, repo_root=root, live_check=False)
     assert v.applied and v.lint_ok and v.tests_ok and v.ok, v.log
-    assert 'https://new.example.org/api' in (root / "aquascope" / "collectors" / "demo.py").read_text()
+    assert 'https://new.example.org/api' in (root / "aquascope" / "collectors" / "demo.py").read_text(encoding="utf-8")
 
     # reset, then a patch that applies but breaks the test: reverted
     subprocess.run(["git", "checkout", "-q", "--", "."], cwd=root, check=True)
     bad_diff = GOOD_DIFF.replace("https://new.example.org/api", "https://wrong.example.org/api")
     v2 = repair.apply_and_verify(repair.Proposal("patch", "x", 0.9, bad_diff), ev, repo_root=root, live_check=False)
     assert not v2.ok and v2.tests_ok is False and not v2.applied
-    assert 'https://old.example.org/api' in (root / "aquascope" / "collectors" / "demo.py").read_text()  # reverted
+    reverted = (root / "aquascope" / "collectors" / "demo.py").read_text(encoding="utf-8")
+    assert "https://old.example.org/api" in reverted  # reverted
 
     # a diff outside the allowed paths is refused before touching anything
     outside = GOOD_DIFF.replace("aquascope/collectors/demo.py", "aquascope/cli.py")

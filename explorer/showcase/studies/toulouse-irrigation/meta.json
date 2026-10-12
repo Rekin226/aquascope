@@ -23,37 +23,47 @@
  "error": null,
  "model": "claude-sonnet-5",
  "provider": "anthropic",
- "recorded": "2026-09-07T19:19:28+00:00",
- "seconds": 320.8,
+ "recorded": "2026-09-14T22:40:05+00:00",
+ "seconds": 504.7,
  "tokens": {
-  "prompt": 45674,
-  "completion": 21311,
-  "calls": 4,
+  "prompt": 87693,
+  "completion": 42805,
+  "calls": 7,
   "by_role": {
    "consultant": {
     "calls": 1,
-    "prompt_tokens": 3428,
-    "completion_tokens": 1639
+    "prompt_tokens": 3427,
+    "completion_tokens": 1464,
+    "cost_usd": 0.021494
    },
    "methodologist": {
     "calls": 1,
-    "prompt_tokens": 12017,
-    "completion_tokens": 5953
+    "prompt_tokens": 14152,
+    "completion_tokens": 4017,
+    "cost_usd": 0.068474
+   },
+   "interpreter": {
+    "calls": 1,
+    "prompt_tokens": 11781,
+    "completion_tokens": 8718,
+    "cost_usd": 0.110742
    },
    "author": {
-    "calls": 1,
-    "prompt_tokens": 15805,
-    "completion_tokens": 5677
+    "calls": 2,
+    "prompt_tokens": 33906,
+    "completion_tokens": 8945,
+    "cost_usd": 0.157262
    },
    "critic": {
-    "calls": 1,
-    "prompt_tokens": 14424,
-    "completion_tokens": 8042
+    "calls": 2,
+    "prompt_tokens": 24427,
+    "completion_tokens": 19661,
+    "cost_usd": 0.245464
    }
   },
-  "total": 66985
+  "total": 130498
  },
- "usd": 0.4567,
+ "usd": 0.9052,
  "usd_per_mtoken": [
   3.0,
   15.0
@@ -61,54 +71,40 @@
  "playbook": "irrigation_feasibility",
  "branch": null,
  "plan_author": "methodologist",
- "steps": 5,
+ "steps": 3,
  "gates": {
-  "passed": 13,
-  "total": 13
+  "passed": 8,
+  "total": 8
  },
  "checks": {
-  "passed": 7,
-  "total": 7
+  "passed": 10,
+  "total": 10
  },
  "replans": 0,
  "stop_reason": null,
- "headline": "A 40 ha maize crop planted in April needs a gross seasonal irrigation depth of about 564 mm (net 395 mm), or roughly 225,778 m3 over a 125-day season, with a peak-month rate of 0.033 m3/s against a mean-season rate of 0.021 m3/s (FAO-56...",
+ "headline": "Notice: the Critic's fix requests on site_data were not all resolved; read the report with the list of what this study does not establish.",
  "not_established": [],
  "figures": [
   {
    "name": "s1_demand_monthly.png",
    "id": "fig-s1-demand_monthly",
    "step": "s1",
-   "caption": "Crop evapotranspiration, effective rain and net and gross irrigation per season for maize on 40.0 ha planted on the first of month 4; the mean gross depth is 564.4 mm over the season.",
-   "bytes": 46617
+   "caption": "Crop evapotranspiration, effective rain and net and gross irrigation per season for maize on 40.0 ha planted on the first of month 4; the mean gross depth is 534.8 mm over the season.",
+   "bytes": 47354
   },
   {
    "name": "s2_fdc.png",
    "id": "fig-s2-fdc",
    "step": "s2",
    "caption": "Flow-duration curve of discharge at La Garonne à Portet-sur-Garonne (hubeau_hydrometrie O200001001) from the ranked daily flows, with Q95, Q50 and Q10 marked (log scale).",
-   "bytes": 64142
+   "bytes": 65807
   },
   {
    "name": "s3_reliability_curve.png",
    "id": "fig-s3-reliability_curve",
    "step": "s3",
    "caption": "The flow-duration curve at La Garonne à Portet-sur-Garonne (hubeau_hydrometrie O200001001) with the flow the demand needs (red), the reserve left in the river (orange) and Q95 (dashed); the demand is met on 97% of days.",
-   "bytes": 68261
-  },
-  {
-   "name": "s4_site_map.png",
-   "id": "fig-s4-site_map",
-   "step": "s4",
-   "caption": "The site, in longitude and latitude (no basemap); no catalogue station was listed with it.",
-   "bytes": 26458
-  },
-  {
-   "name": "s5_series.png",
-   "id": "fig-s5-series",
-   "step": "s5",
-   "caption": "Discharge at La Garonne à Portet-sur-Garonne (hubeau_hydrometrie O200001001), 2016 to 2026.",
-   "bytes": 85277
+   "bytes": 68885
   }
  ],
  "files": [
@@ -117,10 +113,8 @@
   "study.yaml",
   "figures/s1_demand_monthly.png",
   "figures/s2_fdc.png",
-  "figures/s3_reliability_curve.png",
-  "figures/s4_site_map.png",
-  "figures/s5_series.png"
+  "figures/s3_reliability_curve.png"
  ],
  "trimmed": [],
- "aquascope_version": "0.14.0"
+ "aquascope_version": "0.16.0"
 }

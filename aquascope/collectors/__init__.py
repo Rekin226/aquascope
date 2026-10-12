@@ -1,7 +1,7 @@
 """Data collectors for Taiwan and global water data sources."""
 
 from aquascope.collectors.aquastat import AquastatCollector
-from aquascope.collectors.base import BaseCollector
+from aquascope.collectors.base import BaseCollector, CollectorError
 from aquascope.collectors.bom import BOMCollector
 from aquascope.collectors.brazil_ana import BrazilANACollector
 from aquascope.collectors.camels_br import CAMELSBRCollector
@@ -44,6 +44,7 @@ from aquascope.collectors.wqp import WQPCollector
 __all__ = [
     "AquastatCollector",
     "BaseCollector",
+    "CollectorError",
     "BOMCollector",
     "BrazilANACollector",
     "CAMELSCLCollector",

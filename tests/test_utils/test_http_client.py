@@ -132,3 +132,54 @@ class TestRelaxStrictTLS:
         client = CachedHTTPClient(base_url="https://example.com")
         ctx = client._client._transport._pool._ssl_context
         assert ctx.verify_flags & ssl.VERIFY_X509_STRICT
+
+
+def _status_error(code: int, headers: dict | None = None) -> httpx.HTTPStatusError:
+    request = httpx.Request("GET", "https://example.test/data")
+    response = httpx.Response(code, headers=headers or {}, request=request)
+    return httpx.HTTPStatusError(f"{code}", request=request, response=response)
+
+
+class TestRateLimited:
+    """A spent quota (429) ends the request quickly with RateLimitedError, a RuntimeError subclass."""
+
+    def _client(self, tmp_path, monkeypatch, side_effect, retries=3):
+        sleeps: list[float] = []
+        monkeypatch.setattr("aquascope.utils.http_client.time.sleep", lambda s: sleeps.append(s))
+        client = CachedHTTPClient(cache_dir=tmp_path, retries=retries)
+        client._client = MagicMock()
+        client._client.get.side_effect = side_effect
+        return client, sleeps
+
+    def test_two_429s_without_a_header_stop_after_two_attempts(self, tmp_path, monkeypatch):
+        from aquascope.utils.http_client import RateLimitedError
+
+        client, sleeps = self._client(tmp_path, monkeypatch, [_status_error(429)] * 5, retries=5)
+        with pytest.raises(RateLimitedError) as info:
+            client.get_json("https://example.test/data", use_cache=False)
+        assert isinstance(info.value, RuntimeError)  # callers that catch RuntimeError still do
+        assert client._client.get.call_count == 2 and sleeps == [2]
+
+    def test_a_long_retry_after_is_not_slept_through(self, tmp_path, monkeypatch):
+        from aquascope.utils.http_client import RateLimitedError
+
+        client, sleeps = self._client(tmp_path, monkeypatch, [_status_error(429, {"Retry-After": "3600"})])
+        with pytest.raises(RateLimitedError) as info:
+            client.get_text("https://example.test/data", use_cache=False)
+        assert info.value.retry_after == 3600 and client._client.get.call_count == 1 and sleeps == []
+
+    def test_a_short_retry_after_is_honoured(self, tmp_path, monkeypatch):
+        ok = MagicMock(spec=httpx.Response)
+        ok.raise_for_status.return_value = None
+        ok.json.return_value = {"ok": True}
+        ok.headers = {"content-type": "application/json"}
+        ok.text = '{"ok": true}'
+        client, sleeps = self._client(tmp_path, monkeypatch, [_status_error(429, {"Retry-After": "5"}), ok])
+        assert client.get_json("https://example.test/data", use_cache=False) == {"ok": True}
+        assert sleeps == [5.0]
+
+    def test_other_errors_keep_the_old_retries_without_a_final_sleep(self, tmp_path, monkeypatch):
+        client, sleeps = self._client(tmp_path, monkeypatch, [_status_error(503)] * 3)
+        with pytest.raises(RuntimeError, match="All 3 attempts failed"):
+            client.get_json("https://example.test/data", use_cache=False)
+        assert client._client.get.call_count == 3 and sleeps == [2, 4]

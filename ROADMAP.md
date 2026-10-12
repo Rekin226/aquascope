@@ -2,6 +2,10 @@
 
 The roadmap reflects what's shipped, what's in-flight, and what's planned. Open items are reordered each release based on community demand in [Discussions](https://github.com/Rekin226/aquascope/discussions/categories/ideas).
 
+<!-- Counts in checked-off items ("30 data source collectors", "sixteen analyses", ...) are snapshots of
+     the release that shipped them, not live totals. Leave them as written; the current numbers live in the
+     code and in docs/data_sources.md, which tests/test_docs_counts.py keeps honest. See #453. -->
+
 ## Where this is going (August 2026 direction review)
 
 AquaScope is becoming **the open, continuously updated, citable record of the world's public water gauges, plus the zero-install place to look at them**; the Python library is the harvester and method engine underneath. Four layers, all on free infrastructure:

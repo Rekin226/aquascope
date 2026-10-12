@@ -172,7 +172,7 @@ class TestHECFormat:
         out = tmp_path / "dss.csv"
         write_hec_dss_csv([rec], out)
 
-        lines = out.read_text().strip().splitlines()
+        lines = out.read_text(encoding="utf-8").strip().splitlines()
         assert lines[0] == "pathname,timestamp,value,unit,type"
         assert len(lines) == 4  # header + 3 data rows
         assert "WATERSHED" in lines[1]
@@ -199,7 +199,7 @@ class TestHECFormat:
         out = tmp_path / "flow.u01"
         write_hec_ras_flow(discharge, timestamps, "TestRiver", "Reach1", "100", out)
 
-        text = out.read_text()
+        text = out.read_text(encoding="utf-8")
         assert "Flow Title=AquaScope Generated Flow Data" in text
         assert "River Rch & Prof=TestRiver,Reach1,100" in text
         assert "Flow Hydrograph= 3" in text
@@ -226,7 +226,7 @@ class TestSWMMFormat:
         out = tmp_path / "ts.dat"
         write_swmm_timeseries(df, "Rain1", out)
 
-        text = out.read_text()
+        text = out.read_text(encoding="utf-8")
         assert "[TIMESERIES]" in text
         assert ";;Name" in text
         assert "Rain1" in text
@@ -239,7 +239,7 @@ class TestSWMMFormat:
         out = tmp_path / "rain.dat"
         write_swmm_rainfall(df, "RG01", out)
 
-        text = out.read_text()
+        text = out.read_text(encoding="utf-8")
         lines = [ln for ln in text.strip().splitlines() if ln]
         assert len(lines) == 3
         first = lines[0]
@@ -257,7 +257,7 @@ class TestSWMMFormat:
         out = tmp_path / "fmt.dat"
         write_swmm_timeseries(df, "TS1", out)
 
-        text = out.read_text()
+        text = out.read_text(encoding="utf-8")
         assert "03/15/2024" in text
         assert "14:30" in text
 

@@ -19,6 +19,7 @@ result back to the peer-reviewed literature.
 9. [Rating Curves](#9-rating-curves)
 10. [Transfer Learning for Ungauged Basins](#10-transfer-learning-for-ungauged-basins)
 11. [Decision Trees — Choosing the Right Method](#11-decision-trees--choosing-the-right-method)
+12. [Budyko Framework](#12-budyko-framework)
 
 ---
 
@@ -630,6 +631,107 @@ $$w_{\text{spatial}} = \frac{1}{1 + d_{\text{geo}} / d_0}$$
 
 ---
 
+## 12. Budyko Framework
+
+The Budyko framework (Budyko 1974) partitions long-term mean annual
+precipitation $P$ between evapotranspiration and runoff.  It assumes the
+evaporative ratio $\varepsilon = E / P$ (with $E$ long-term actual/effective
+evapotranspiration) is a function of the **aridity index** alone,
+
+$$\phi = \frac{\mathrm{PET}}{P},$$
+
+where $\mathrm{PET}$ is long-term potential evapotranspiration.  The
+specific hydrology of the catchment disappears from the problem: only the
+climatic balance matters, which is what makes the framework so widely used
+for water-balance, climate-impact and land-use-change studies.
+`aquascope.hydrology.budyko` evaluates the curves below, reports the
+predicted evaporative ratio, and — given observed evapotranspiration or
+runoff (§12.4) — locates a catchment relative to the curve.
+
+### 12.1 The two limits
+
+Every Budyko curve is bounded by the same physical limits:
+
+- **Energy limit** (evapotranspiration capped by available energy):
+  as $\phi \to 0$,
+  $$\frac{\varepsilon}{\phi} \to 1, \qquad \varepsilon \to \phi, \qquad E \to \mathrm{PET}.$$
+- **Water limit** (evapotranspiration capped by available water):
+  as $\phi \to \infty$,
+  $$\varepsilon \to 1, \qquad E \to P.$$
+
+In between, the evaporative ratio rises monotonically with aridity; the
+curves differ only in *how fast*.
+
+### 12.2 The curves
+
+**Schreiber (1904)** is the exponential form:
+
+$$\varepsilon = 1 - e^{-\phi}$$
+
+**Ol'dekop (1911)** uses the hyperbolic tangent:
+
+$$\varepsilon = \phi \cdot \tanh\!\Bigl(\frac{1}{\phi}\Bigr)$$
+
+**Turc (1954) – Pike (1964)** is the rational form, the form the empirical
+runoff literature most often quotes:
+
+$$\varepsilon = \frac{\phi}{\sqrt{1 + \phi^{2}}}$$
+
+**Fu (1981), written with $n$ in Zhang et al. (2004):**
+
+$$\varepsilon = 1 + \phi - \bigl(1 + \phi^{\omega}\bigr)^{1/\omega}, \qquad \omega \ge 1$$
+
+> **Reference:** Zhang, L., Hickel, K., Dawes, W. R., Chiew, F. H. S.,
+> Western, A. W., & Briggs, P. R. (2004). A rational function approach for
+> estimating mean annual evapotranspiration. *Water Resources Research*,
+> 40(2), W02502.
+> [doi:10.1029/2003WR002710](https://doi.org/10.1029/2003WR002710)
+
+### 12.3 The Fu/Zhang parameter
+
+The Fu/Zhang shape parameter $\omega$ controls the partition between the two
+limits:
+
+- $\omega = 1$ degenerates the curve onto the zero line, with every drop of
+  precipitation running off ($\varepsilon \to 0$);
+- as $\omega \to \infty$ the curve approaches the perfect-limit envelope
+  $\varepsilon = \min(\phi, 1)$.
+
+In practice values of $1.5$–$3$ are typical, and the empirically calibrated
+$\omega$ is an index of how evaporatively "efficient" a catchment is.
+`fu_omega` defaults to $2$.
+
+### 12.4 Locating a catchment
+
+Over the long multi-decadal means the framework works with, storage change is
+negligible and the catchment water balance closes,
+
+$$P = E + Q,$$
+
+where $Q$ is mean annual runoff and $E$ long-term actual evapotranspiration.
+A catchment can therefore be placed from either of its two observable
+fluxes:
+
+- **from observed evapotranspiration**, the evaporative ratio is
+  $\varepsilon_{\text{obs}} = \mathrm{ET}/P$;
+- **from observed runoff**, the same ratio follows from the water balance,
+  $\varepsilon_{\text{obs}} = 1 - Q/P$.
+
+`budyko(...)` accepts exactly one of these through `observed_et`
+($0 \le \mathrm{ET} \le P$) or `observed_runoff` ($0 \le Q \le P$).  The
+catchment's position is the signed deviation from each curve,
+
+$$\Delta_k = \varepsilon_{\text{obs}} - \varepsilon_k(\phi),$$
+
+positive when the catchment is **above** the curve (more evaporative than the
+theory predicts), negative when below.  `budyko(...)` returns this as
+`observed_deviation` per curve; `plot_budyko(...)` draws the two limits, the
+requested curves and the observed point(s) together.
+
+> **Reference:** Budyko, M. I. (1974). *Climate and Life.* Academic Press, New York.
+
+---
+
 ## References (Consolidated)
 
 1. Addor, N., et al. (2017). The CAMELS data set. *HESS*, 21, 5293–5313.
@@ -666,3 +768,11 @@ $$w_{\text{spatial}} = \frac{1}{1 + d_{\text{geo}} / d_0}$$
 18. Rantz, S. E., et al. (1982). USGS Water-Supply Paper 2175.
 19. Vogel, R. M., & Fennessey, N. M. (1995). *Water Resour. Bull.*, 31(6), 1029–1039.
     [doi:10.1111/j.1752-1688.1995.tb04392.x](https://doi.org/10.1111/j.1752-1688.1995.tb04392.x)
+20. Budyko, M. I. (1974). *Climate and Life.* Academic Press, New York.
+21. Fu, B. (1981). On the calculation of the evaporation from land surface. *Scientia Atmospherica Sinica*, 5(1), 23–31. (in Chinese)
+22. Zhang, L., et al. (2004). *Water Resour. Res.*, 40(2), W02502.
+    [doi:10.1029/2003WR002710](https://doi.org/10.1029/2003WR002710)
+23. Schreiber, P. (1904). Über die Beziehungen zwischen dem Niederschlag und der Wasserführung der Flüsse in Mitteleuropa. *Zeitschrift für Meteorologie*, 21, 441–452.
+24. Ol'dekop, E. M. (1911). On evaporation from the surface of river basins. *Transactions of the Meteorological Observatory*, 4, 200–217.
+25. Turc, L. (1954). Le bilan d'eau des sols. *Annales Agronomiques*, 5, 491–596.
+26. Pike, J. G. (1964). The estimation of annual run-off from meteorological data in a tropical climate. *Journal of Hydrology*, 2(2), 116–123.

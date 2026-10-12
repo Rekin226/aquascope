@@ -63,6 +63,12 @@ class MethodPrecondition:
     problems: tuple[str, ...] = ()
     citation: str | None = None
     note: str | None = None
+    #: What the method takes for granted about the record: ``stationarity``, ``independence``, ``homogeneity``
+    #: (#376). A change point inside the record demotes a method that assumes stationarity to marginal.
+    assumes: tuple[str, ...] = ()
+    #: Conditions that make the result conditional where present (``regulation``, ``snow``): a caveat and a
+    #: demotion to marginal, never a block.
+    sensitive_to: tuple[str, ...] = ()
 
 
 @dataclass
@@ -79,7 +85,10 @@ class SiteContext:
     return_period: float | None = None
     #: Donor gauges a similarity search can offer.
     donors: int | None = None
-    #: Other inputs present: ``temperature``, ``forcing``, ``gcms>=3``, ``glofas``, ...
+    #: Years at which a change-point test found a shift inside the record (#376).
+    change_points: list[int] = field(default_factory=list)
+    #: Other inputs present: ``temperature``, ``forcing``, ``gcms>=3``, ``glofas``, ... and the conditions a
+    #: method can be sensitive to (``regulation``, ``snow``).
     available: set[str] = field(default_factory=set)
 
     @property
@@ -88,6 +97,24 @@ class SiteContext:
 
 
 _RES_RANK = {"daily": 2, "monthly": 1}
+
+#: The caveat each sensitivity adds when the site has it.
+_SENSITIVE_WORDS = {
+    "regulation": "reservoirs regulate the catchment: the result describes the river as operated, not its "
+    "natural regime",
+    "snow": "snow shapes the regime here: a method without a snow store misreads the timing of the flow",
+}
+
+#: The same sensitivities worded for what they do to a particular method, where the generic line is about
+#: something else (a flood fit has no snow store; what snow does to it is mix two kinds of flood).
+_SENSITIVE_WORDS_BY_METHOD = {
+    ("at_site_flood_frequency", "snow"): "snowmelt shapes the flood regime here: the annual maxima can mix "
+    "snowmelt and rainfall floods, which one fitted distribution represents less well",
+    ("pot_flood", "snow"): "snowmelt shapes the flood regime here: the peaks can mix snowmelt and rainfall floods, "
+    "which one fitted distribution represents less well",
+    ("baseflow_separation", "snow"): "snowmelt shapes the regime here: a recession filter can read slow melt as "
+    "baseflow",
+}
 
 
 METHODS: dict[str, MethodPrecondition] = {
@@ -105,6 +132,8 @@ METHODS: dict[str, MethodPrecondition] = {
             problems=("flood_risk", "climate_change"),
             citation="England et al. (2019) Bulletin 17C; Hosking (1990) L-moments",
             note="Rare quantiles move with the distribution and the estimator; quote the spread across fits.",
+            assumes=("stationarity", "independence"),
+            sensitive_to=("regulation", "snow"),
         ),
         MethodPrecondition(
             "flow_duration",
@@ -116,6 +145,8 @@ METHODS: dict[str, MethodPrecondition] = {
             tool="analyze_station",
             problems=("supply_reliability", "ungauged_flow", "drought", "irrigation"),
             citation="Vogel & Fennessey (1994)",
+            assumes=("stationarity",),
+            sensitive_to=("regulation",),
         ),
         MethodPrecondition(
             "supply_reliability",
@@ -129,6 +160,8 @@ METHODS: dict[str, MethodPrecondition] = {
             citation="Vogel & Fennessey (1994); Smakhtin & Eriyagama (2008) FDC-shift environmental flows",
             note="A screening rule: the fraction of days the flow exceeds the demand plus an environmental reserve "
             "(Q95 by default) under an abstraction share. Storage and yield are a separate analysis.",
+            assumes=("stationarity",),
+            sensitive_to=("regulation",),
         ),
         MethodPrecondition(
             "low_flow_frequency",
@@ -139,6 +172,8 @@ METHODS: dict[str, MethodPrecondition] = {
             resolution="daily",
             tool="analyze_station",
             problems=("supply_reliability", "drought"),
+            assumes=("stationarity", "independence"),
+            sensitive_to=("regulation",),
         ),
         MethodPrecondition(
             "baseflow_separation",
@@ -151,6 +186,7 @@ METHODS: dict[str, MethodPrecondition] = {
             problems=("supply_reliability", "drought", "groundwater_decline"),
             citation="Lyne & Hollick (1979); Eckhardt (2005)",
             note="Filter choice moves the index; run two filters and report the spread.",
+            sensitive_to=("regulation", "snow"),
         ),
         MethodPrecondition(
             "trend_mann_kendall",
@@ -163,6 +199,8 @@ METHODS: dict[str, MethodPrecondition] = {
             problems=("flood_risk", "drought", "groundwater_decline", "climate_change"),
             citation="Mann (1945); Kendall (1975); Sen (1968)",
             note="Says whether something is changing, never why.",
+            assumes=("independence",),
+            sensitive_to=("regulation",),
         ),
         MethodPrecondition(
             "spi",
@@ -174,6 +212,7 @@ METHODS: dict[str, MethodPrecondition] = {
             tool="drought_indices",
             problems=("drought",),
             citation="McKee et al. (1993); WMO (2012)",
+            assumes=("stationarity",),
         ),
         MethodPrecondition(
             "spei",
@@ -187,6 +226,7 @@ METHODS: dict[str, MethodPrecondition] = {
             problems=("drought",),
             citation="Vicente-Serrano et al. (2010)",
             note="Preferred over SPI where warming matters; needs a temperature or PET series.",
+            assumes=("stationarity",),
         ),
         MethodPrecondition(
             "spei_reanalysis",
@@ -197,6 +237,7 @@ METHODS: dict[str, MethodPrecondition] = {
             problems=("drought",),
             citation="Vicente-Serrano et al. (2010); Hersbach et al. (2020) ERA5",
             note="A 9 km cell's climate since 1940, not a gauge; the indices describe the area, not a point record.",
+            assumes=("stationarity",),
         ),
         MethodPrecondition(
             "sgi",
@@ -209,6 +250,7 @@ METHODS: dict[str, MethodPrecondition] = {
             problems=("drought", "groundwater_decline"),
             citation="Bloomfield & Marchant (2013)",
             note="With a rainfall index beside it, the SPI-to-SGI lag says how long a deficit takes to reach the well.",
+            assumes=("stationarity",),
         ),
         MethodPrecondition(
             "groundwater_trend",
@@ -221,6 +263,7 @@ METHODS: dict[str, MethodPrecondition] = {
             problems=("groundwater_decline",),
             citation="Jasechko et al. (2024)",
             note="Remove the seasonal cycle first; compare the recent decade with the full record.",
+            assumes=("independence",),
         ),
         MethodPrecondition(
             "recharge_wtf",
@@ -243,11 +286,80 @@ METHODS: dict[str, MethodPrecondition] = {
             resolution="daily",
             max_area_km2=10_000,
             needs=("forcing",),
-            tool="gr4j",
-            problems=("climate_change", "supply_reliability", "ungauged_flow"),
-            citation="Perrin et al. (2003)",
+            tool="catchment_model",
+            problems=("climate_change", "catchment_response", "supply_reliability", "ungauged_flow"),
+            citation="Perrin et al. (2003); Klemeš (1986) split-sample test",
             note="A lumped model; above the ceiling the structure is wrong, not the parameters (#273). "
-            "Weak on low flows next to GR5J/GR6J.",
+            "Weak on low flows next to GR5J/GR6J. A degree-day snow store is added where it snows.",
+            assumes=("stationarity",),
+            sensitive_to=("regulation", "snow"),
+        ),
+        MethodPrecondition(
+            "change_point_test",
+            "Change-point and trend tests (Pettitt, PELT, Mann-Kendall)",
+            None,
+            min_years=20,
+            marginal_years=10,
+            resolution="daily",
+            tool="change_points",
+            problems=("flood_risk", "flood_change", "climate_change"),
+            citation="Pettitt (1979); Killick et al. (2012); Mann (1945)",
+            note="Says whether the record is one sample, not why: dams, rating changes, land use and climate all "
+            "leave the same mark (#376).",
+            assumes=("independence",),
+            sensitive_to=("regulation",),
+        ),
+        MethodPrecondition(
+            "nonstationary_gev",
+            "Nonstationary GEV (time-varying location, likelihood-ratio test)",
+            "discharge",
+            min_years=30,
+            marginal_years=20,
+            resolution="daily",
+            tool="nonstationary_flood",
+            problems=("flood_change", "climate_change"),
+            citation="Coles (2001); Wasko et al. (2024) HESS",
+            note="A sensitivity next to the stationary estimate, not a replacement: fragile to the record's ends.",
+            assumes=("independence",),
+            sensitive_to=("regulation",),
+        ),
+        MethodPrecondition(
+            "pot_gpd",
+            "Peaks over threshold (Generalised Pareto)",
+            "discharge",
+            min_years=15,
+            marginal_years=10,
+            resolution="daily",
+            tool="pot_flood",
+            problems=("flood_change",),
+            citation="Lang et al. (1999)",
+            note="Uses every independent large flood; the threshold and the declustering window are choices to state.",
+            assumes=("stationarity", "independence"),
+            sensitive_to=("regulation", "snow"),
+        ),
+        MethodPrecondition(
+            "regional_index_flood",
+            "Regional index-flood frequency analysis (Hosking and Wallis)",
+            None,
+            tool="regional_flood",
+            problems=("flood_risk", "flood_change", "ungauged_flow"),
+            citation="Hosking & Wallis (1997)",
+            note="Pools the gauges around the site; heterogeneity H above 2 means the pooled curve is a weak guide.",
+            assumes=("stationarity", "homogeneity"),
+            sensitive_to=("regulation",),
+        ),
+        MethodPrecondition(
+            "gauge_comparison",
+            "Gauges side by side (regime, floods and low flows per unit area)",
+            "discharge",
+            min_years=5,
+            marginal_years=2,
+            resolution="daily",
+            tool="compare_gauges",
+            problems=("catchment_response", "regional_flood"),
+            note="A comparison, not a transfer: differences in area, climate and regulation explain as much as the "
+            "regime does.",
+            sensitive_to=("regulation",),
         ),
         MethodPrecondition(
             "similar_basins",
@@ -257,6 +369,7 @@ METHODS: dict[str, MethodPrecondition] = {
             tool="similar_basins",
             problems=("ungauged_flow", "flood_risk", "supply_reliability"),
             citation="Oudin et al. (2008)",
+            sensitive_to=("regulation",),
         ),
         MethodPrecondition(
             "regionalize_signatures",
@@ -267,6 +380,8 @@ METHODS: dict[str, MethodPrecondition] = {
             tool="regionalize_signatures",
             problems=("ungauged_flow", "flood_risk", "supply_reliability"),
             note="Quote the band and the leave-one-out skill with every number.",
+            assumes=("homogeneity",),
+            sensitive_to=("regulation",),
         ),
         MethodPrecondition(
             "glofas_cross_check",
@@ -276,13 +391,14 @@ METHODS: dict[str, MethodPrecondition] = {
             tool="anywhere",
             problems=("flood_risk", "ungauged_flow"),
             citation="Harrigan et al. (2020)",
+            sensitive_to=("regulation",),
         ),
         MethodPrecondition(
             "climate_projection",
             "CMIP6 ensemble change factors on the baseline statistic",
             None,
             needs=("gcms>=3",),
-            tool="climate",
+            tool="climate_projection",
             problems=("climate_change",),
             citation="Wasko et al. (2024) HESS",
             note="Report the ensemble spread, never the mean alone; design guidance under change is immature.",
@@ -423,6 +539,18 @@ def assess_method(method: MethodPrecondition | str, ctx: SiteContext) -> dict[st
         and "water_quality" not in ctx.available
     ):
         return {"method": pre.id, "status": NOT_DEFENSIBLE, "reason": "no water-quality samples here"}
+
+    # What the method assumes (#376): marginal, never a block. A stationary fit across a shift answers a narrower
+    # question; the point is to say which.
+    if "stationarity" in pre.assumes and ctx.change_points:
+        years = ", ".join(str(int(y)) for y in sorted(ctx.change_points)[:3])
+        status = MARGINAL
+        reasons.append(f"a regime shift around {years} sits inside the record; a stationary fit spans two regimes")
+    for cond in pre.sensitive_to:
+        if cond in ctx.available:
+            status = MARGINAL
+            reasons.append(_SENSITIVE_WORDS_BY_METHOD.get((pre.id, cond)) or
+                           _SENSITIVE_WORDS.get(cond, f"sensitive to {cond}, which is present here"))
 
     return {"method": pre.id, "status": status, "reason": "; ".join(reasons) if reasons else "the record supports it"}
 

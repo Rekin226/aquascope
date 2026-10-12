@@ -1,3 +1,6 @@
+import { metrics } from "./metrics.js?v=__BUILD__";
+import { claimEvidenceHtml } from "./claim-view.js?v=__BUILD__";
+import { studyText, studyWarningHtml } from "./study-language.js?v=__BUILD__";
 // Study: a complete study at a place, done by a crew of roles in the Pyodide
 // worker (aquascope.studio, the same Coordinator the CLI and the MCP tools
 // run). The page is a conversation and a board. The conversation is the
@@ -35,7 +38,12 @@ import { loadRecorded, recordedIndex, replayBrief, replayPlan } from "./studio-s
 import {
   recordedChipsHtml, recordedFigures, recordedFilesHtml, recordedNoteHtml, recordedPlanLine,
 } from "./studio-recorded.js?v=__BUILD__";
-import { writeUrl } from "./url.js?v=__BUILD__";
+import { canonicalUrl, writeUrl } from "./url.js?v=__BUILD__";
+import { fetchStudyYaml, linkUrl, sharedBoardHtml, sharedPlanLine } from "./study-link.js?v=__BUILD__";
+// study map: the crew's places drawn on the map (study-map.js)
+import { clearStudyMap, focusStudyStep, showStudyMapFor, studyMapArtifact } from "./study-map.js?v=__BUILD__";
+import { drawnOnMap, stepsOnMapHtml } from "./study-map-data.js?v=__BUILD__";
+import { initStudyControls, rememberPlain, steerHtml, stepChecksHtml } from "./study-controls.js?v=__BUILD__";
 
 const RECORDED_BASE = "./showcase/studies/";
 
@@ -70,6 +78,13 @@ const TOOL_LABEL = {
   wqi: "Water-quality index",
   iwqi: "Irrigation water-quality index",
   load_table: "Read your table",
+  change_points: "Test the record for change",
+  nonstationary_flood: "Fit a flood model with a trend",
+  pot_flood: "Peaks over threshold",
+  catchment_model: "Calibrate a catchment model (GR4J)",
+  climate_projection: "CMIP6 climate projections",
+  regional_flood: "Pool the region's gauges",
+  compare_gauges: "Compare the gauges",
   flow_duration: "Flow duration",
   baseflow: "Baseflow separation",
   recession: "Recession",
@@ -94,8 +109,11 @@ const ROLE_NAME = {
   coordinator: "coordinator", scout: "scout", analyst: "analysts", critic: "critic",
 };
 
-const DOCS = [["report-docx", "Word"], ["workbook", "Excel"], ["report-md", "Markdown"], ["notebook", "notebook"],
-  ["study", "study.yaml"]];
+const DOCS = [["report-docx", "Report (Word)"], ["memo-docx", "Memo (Word)"], ["workbook", "Excel"],
+  ["report-md", "Markdown"], ["notebook", "notebook"], ["study", "study.yaml"]];
+
+// The documents the board can open in its reader: the composed report and memo, as the worker built them.
+const READABLE = [["report-html", "Read the report"], ["memo-html", "Read the memo"]];
 
 const S = {
   ws: null,             // the workspace dict, without the artifact bytes
@@ -122,6 +140,7 @@ const S = {
   recorded: null,       // the recording on the board: { id, meta, workspace, report, figures, files }
   planSource: null,     // "recorded" while a re-run's plan is with the engine, for the words on the foot
   planModel: null,      // the model that wrote the recorded plan being re-run
+  shared: null,         // a shared study on the board: the worker's open_link reply, or { loading: true }
 };
 
 const note = (text, kind = "info") => setStatusEl($("study-status"), text, kind);
@@ -184,27 +203,43 @@ async function loadSiteInfo(w, my) {
 function boardStatus() {
   if (S.busy) return "running";
   if (S.declined) return "declined";
+  if (S.shared && !S.ws) return "shared";
   if (!S.ws) return "intake";
   const st = S.ws.status;
-  if (st === "declined" || st === "review" || st === "done") return st;
+  if (st === "declined" || st === "review" || st === "done" || st === "waiting") return st;
   if (["running", "critique", "authoring", "scouting", "planning"].includes(st)) return "running";
   return "intake";
+}
+
+// The file drop area once a study exists (any status but a running one, where it is not offered): the
+// tables already in the workspace (not S.files, which only stages tables before a study starts) and, at
+// waiting, review or done, a line saying what dropping one now does (#419).
+const DROP_NOTE = {
+  waiting: "A table dropped now is inventoried and the plan is written again.",
+  review: "A table dropped now is inventoried and the plan is written again.",
+  done: "A table dropped now runs as a follow-up.",
+};
+
+function fileDropHtml(status) {
+  const attached = Object.keys((S.ws && S.ws.tables) || {});
+  const note = DROP_NOTE[status];
+  return `<div class="study-data">` +
+    `<label class="link" for="study-file">Add a CSV or XLSX</label>` +
+    `<input type="file" id="study-file" accept=".csv,.txt,.xlsx,.xls,.json" multiple hidden>` +
+    (attached.length ? `<p class="study-line muted">with ${attached.map(escapeHtml).join(", ")}</p>` : "") +
+    (note ? `<p class="study-line muted">${escapeHtml(note)}</p>` : "") +
+    `</div>`;
 }
 
 function intakeHtml() {
   const w = S.ws ? S.site : where();
   const cfg = askModelConfig();
   const started = Boolean(S.ws);
-  const attached = [...S.files.map((f) => f.id), ...(S.useMyData && hasTable() ? [tableLabel()] : [])];
   let model;
-  if (!cfg) model = `<p class="study-line muted">No key: the playbook tree plans, templates write.</p>`;
-  else if (started) model = `<p class="study-line muted">${S.useKey ? escapeHtml(cfg.label) : "no model"}</p>`;
+  if (!cfg) model = `<p class="study-line muted">No API key needed. A predefined workflow runs the analysis and writes the report.</p>`;
+  else if (started) model = `<p class="study-line muted">${S.useKey ? escapeHtml(cfg.label) : "no AI model used"}</p>`;
   else model = `<label class="study-line ask-context-toggle"><input type="checkbox" data-opt="key" ${S.useKey ? "checked" : ""}> use ${escapeHtml(cfg.label)} for the prose</label>`;
-  let data;
-  if (started) {
-    data = attached.length ? `<p class="study-line muted">with ${attached.map(escapeHtml).join(", ")}</p>` : "";
-  } else {
-    data = `<div class="study-data">` +
+  const data = started ? fileDropHtml("intake") : `<div class="study-data">` +
       `<label class="link" for="study-file">Add a CSV or XLSX</label>` +
       `<input type="file" id="study-file" accept=".csv,.txt,.xlsx,.xls,.json" multiple hidden>` +
       (hasTable()
@@ -214,13 +249,35 @@ function intakeHtml() {
         ? `<ul class="study-files">${S.files.map((f, i) => `<li>${escapeHtml(f.id)} <button type="button" class="study-x" data-remove="${i}" aria-label="Remove ${escapeHtml(f.id)}">×</button></li>`).join("")}</ul>`
         : "") +
       `</div>`;
-  }
   // A study saved in this browser at this place (or, with nothing picked, the last one anywhere).
   const resume = !started && S.resume
     ? `<p class="study-resume"><button type="button" class="chip" data-act="resume" title="${escapeHtml(`${S.resume.site.text}, ${agoWords(S.resume.at)}`)}">Resume the last study${w ? "" : ` at ${escapeHtml(S.resume.site.text)}`}</button></p>`
     : "";
   const recorded = !started ? recordedChipsHtml(S.index, { showAll: S.moreRecorded }) : "";
-  return `<p class="study-where">${w ? w.html : `<span class="muted">Pick a gauge or a spot on the map first.</span>`}</p>${model}${data}${resume}${recorded}`;
+  const tries = !started && w ? tryChipsHtml(Boolean(state.selected)) : "";
+  return `<p class="study-where">${w ? w.html : `<span class="muted">Pick a gauge or a spot on the map first.</span>`}</p>${tries}${model}${data}${resume}${recorded}`;
+}
+
+// What a study can be, as questions to start one with: the design flow, and the studies that come after it
+// (is it changing, how will climate change move it, what if the rain changes). A gauge gets the model and change
+// studies; a bare point gets the ones that need no record at the spot. The engine routes each by its words.
+const TRY_GAUGE = [
+  "What is the 100-year flood here?",
+  "Is the 100-year flood getting worse?",
+  "How will climate change affect the flow and floods here by 2050?",
+  "What if rainfall drops 10% and it gets 2 degrees warmer?",
+];
+const TRY_POINT = [
+  "What flow can I expect here?",
+  "How will the climate here change by 2050?",
+  "Are floods in this region getting worse?",
+];
+
+function tryChipsHtml(gauge) {
+  const qs = gauge ? TRY_GAUGE : TRY_POINT;
+  return `<div class="study-try"><p class="study-line muted">Try a study:</p><div class="study-chips">` +
+    qs.map((q) => `<button type="button" class="chip" data-try="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join("") +
+    `</div></div>`;
 }
 
 const fmtArg = (v) => (typeof v === "string" ? v : JSON.stringify(v));
@@ -255,7 +312,7 @@ function stepHtml(s) {
     `<div class="step-main"><span class="step-tool">${escapeHtml(toolLabel(s.tool))}</span>` +
     (S.editing ? "" : ` <span class="step-args">${escapeHtml(argsWords(args))}</span>`) + `</div>` +
     (inputs ? `<div class="study-args">${inputs}</div>` : "") +
-    (gates ? `<div class="step-gates">${gates}</div>` : "") +
+    stepChecksHtml(s, gates) + // steering: the gates in plain words, the raw chips behind "details"
     (s.rationale ? `<details class="step-why"><summary>why</summary>${escapeHtml(s.rationale)}</details>` : "") +
     `</li>`;
 }
@@ -266,6 +323,17 @@ function shownSteps() {
   return ((S.ws && S.ws.study) || {}).steps || [];
 }
 
+// A compound brief: the companion playbook's steps, appended to the primary plan (#419).
+function companionsHtml(plan) {
+  const list = plan.companions;
+  if (!plan.compound || !Array.isArray(list) || !list.length) return "";
+  const bits = list.map((c) => {
+    const n = (c.steps || []).length;
+    return `${String(c.playbook || "").replace(/_/g, " ")} adds ${n} step${n === 1 ? "" : "s"}`;
+  });
+  return `<p class="study-line muted">This brief spans two analysis workflows: ${escapeHtml(bits.join("; "))}</p>`;
+}
+
 function planHtml() {
   const study = S.ws.study || {};
   const plan = S.proposal ? { ...study.plan, ...S.proposal.plan } : (study.plan || {});
@@ -273,11 +341,13 @@ function planHtml() {
   const notes = [...(plan.assumptions || []), ...(plan.caveats || [])];
   return `<article class="study-plan" tabindex="-1" aria-label="The plan">` +
     (plan.objective ? `<p class="study-objective">${escapeHtml(plan.objective)}</p>` : "") +
+    companionsHtml(plan) +
     `<ol class="study-steps">${steps.map(stepHtml).join("")}</ol>` +
     (notes.length
       ? `<details class="study-notes"><summary>${notes.length} note${notes.length === 1 ? "" : "s"}</summary><ul>${notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul></details>`
       : "") +
-    (S.planLine ? `<p class="study-by muted">${escapeHtml(S.planLine)}</p>` : "") +
+    (S.planLine ? `<p class="study-by muted">${escapeHtml(studyText(S.planLine))}</p>` : "") +
+    fileDropHtml("review") +
     `<div class="row-actions">` +
       `<button type="button" class="btn primary" data-act="approve">Approve</button>` +
       `<button type="button" class="btn" data-act="edit" aria-pressed="${S.editing}">${S.editing ? "Cancel edits" : "Edit"}</button>` +
@@ -303,16 +373,40 @@ function eventHtml(e) {
     if (m) text = `${e.event === "fallback" ? "fallback: " : ""}${toolLabel(m[1])}`;
   }
   if (e.event === "status") text = statusWord(detail);
-  return `<li class="${cls}"><span class="tl-role">${escapeHtml(e.role || "")}</span>` +
+  return `<li class="${cls}"${e.step ? ` data-map-step="${escapeHtml(e.step)}"` : ""}><span class="tl-role">${escapeHtml(e.role || "")}</span>` +
     `<span class="tl-text" title="${escapeHtml(detail)}">${e.step ? `<span class="tl-step">${escapeHtml(e.step)}</span> ` : ""}${escapeHtml(text)}</span></li>`;
 }
 
 function figHtml(f) {
+  if (drawnOnMap(f)) return "";   // study map: the map shows the site and the donors
   const cap = escapeHtml(f.caption || "");
   const img = f.src
     ? `<img src="${f.src}" alt="${cap}" loading="lazy">`
     : `<img data-art="${escapeHtml(f.id)}" alt="${cap}">`;
   return `<figure class="study-fig">${img}${cap ? `<figcaption>${cap}</figcaption>` : ""}</figure>`;
+}
+
+// Waiting for data (#419): what the crew needs, why, and what it changes; "Continue without" only when the
+// rule allows it, else a line saying the study cannot answer without the data. The file drop area is
+// offered here too, and dropping a table plans again on it (Studio.add_table).
+function waitingHtml() {
+  const req = S.ws.pending_request || {};
+  if (req.kind === "gauge") {
+    // The goal needs a longer record than this gauge has: the gauges nearby that do, as chips, then "keep".
+    const opts = [...(req.gauges || []).map((g) => g.label), req.keep].filter(Boolean);
+    return `<div class="study-waiting"><p class="study-line">${escapeHtml(req.ask || "")}</p>` +
+      `<p class="study-line muted">${escapeHtml(req.why || "")}</p>` +
+      `<div class="study-chips">${opts.map((o) => `<button type="button" class="chip" data-answer="${escapeHtml(o)}">${escapeHtml(o)}</button>`).join("")}</div></div>`;
+  }
+  return `<div class="study-waiting">` +
+    (req.what ? `<p class="study-line">${escapeHtml(req.what)}</p>` : "") +
+    (req.why ? `<p class="study-line muted">Why: ${escapeHtml(req.why)}</p>` : "") +
+    (req.effect ? `<p class="study-line muted">What it changes: ${escapeHtml(req.effect)}</p>` : "") +
+    (req.can_continue
+      ? `<div class="row-actions"><button type="button" class="btn" data-act="continue">Continue without</button></div>`
+      : `<p class="study-line muted">Without it, the study cannot answer this brief.</p>`) +
+    fileDropHtml("waiting") +
+    `</div>`;
 }
 
 function runningHtml() {
@@ -328,10 +422,12 @@ const numValue = (k) => `${typeof k.value === "number" ? fmt(k.value) : String(k
 function footLine() {
   const run = S.ws.run || {};
   const gates = (run.gates || []).length;
-  const failed = (run.failed_gates || []).length;
+  const passed = (run.gates || []).filter(g => g.passed && !g.skipped).length;
+  const skipped = (run.gates || []).filter(g => g.skipped).length;
   const steps = ((S.ws.study || {}).steps || []).length;
   const model = S.ws.model ? `${S.ws.model} via ${S.ws.provider}` : "no model";
-  return `${steps} step${steps === 1 ? "" : "s"} · ${gates - failed} of ${gates} gates passed · ${model}`;
+  return `${steps} step${steps === 1 ? "" : "s"} · ${passed} of ${gates} gates passed` +
+    (skipped ? `; ${skipped} skipped` : "") + ` · ${model}`;
 }
 
 // Who planned and who wrote, from the replies when they said, else from the workspace.
@@ -339,6 +435,55 @@ function crewLine() {
   const study = S.ws.study || {};
   const plan = S.planLine || planLine({ author: (study.plan || {}).author, model: deviceLabel() });
   return [plan, S.proseLine].filter(Boolean).join(" · ");
+}
+
+// The engineer's view, above the answer: the grade (with what it means on a title), the decision (the
+// headline value, what has to hold, what would change it, what the crew would ask for) and the findings,
+// collapsed (#417, #419). Absent on an older report (a recording made before this shipped): every helper
+// below is a no-op then, so nothing new renders and nothing breaks (studio-recorded.js).
+const GRADE_TITLE = {
+  established: "established: at-site result supported by its applicable checks; other steps may be unavailable",
+  indicative: "indicative: a fallback, marginal method, or unresolved check limits the answer",
+  screening: "screening: regional or reanalysis data only",
+  not_established: "not established: no number could be established for the decision",
+};
+
+function gradeBadgeHtml(grade) {
+  if (!grade) return "";
+  const word = String(grade).replace(/_/g, " ");
+  return `<p><span class="study-grade grade-${escapeHtml(String(grade))}" title="${escapeHtml(GRADE_TITLE[grade] || word)}">${escapeHtml(word)}</span></p>`;
+}
+
+function decisionHtml(report) {
+  const d = report.decision;
+  if (!d) return "";
+  const conditions = d.conditions || [];
+  const limitations = d.limitations || [];
+  const changes = d.what_would_change_it || [];
+  const requests = report.data_requests || [];
+  return `<div class="study-decision">` +
+    (d.answer ? `<p class="study-decision-answer">${escapeHtml(d.answer)}</p>` : "") +
+    (d.grade_scope ? `<p class="study-line muted">Grade applies to ${escapeHtml(d.grade_scope)}.</p>` : "") +
+    claimEvidenceHtml(d.evidence) +
+    (conditions.length
+      ? `<p class="study-line muted">Holds if:</p><ul>${conditions.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "") +
+    (limitations.length
+      ? `<p class="study-line muted">Limitations and unresolved checks:</p><ul>${limitations.map((c) => `<li>${studyWarningHtml(c)}</li>`).join("")}</ul>` : "") +
+    (changes.length
+      ? `<p class="study-line muted">Would change it:</p><ul>${changes.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>` : "") +
+    (requests.length
+      ? `<p class="study-line muted">Additional evidence needed:</p><ul>${requests.map((r) =>
+        `<li>${escapeHtml(r.what || "")}${r.effect_on_grade ? `: ${escapeHtml(r.effect_on_grade)}` : ""}</li>`).join("")}</ul>` : "") +
+    `</div>`;
+}
+
+function findingsHtml(report) {
+  const findings = report.findings || [];
+  if (!findings.length) return "";
+  const rows = findings.map((f) => `<li>[${escapeHtml(String(f.grade || "").replace(/_/g, " "))}] ${escapeHtml(f.claim || "")}` +
+    ((f.basis || []).length ? `<br><code class="study-basis">${escapeHtml((f.basis || []).join(", "))}</code>` : "") +
+    `</li>`).join("");
+  return `<details class="study-findings"><summary>Findings</summary><ul>${rows}</ul></details>`;
 }
 
 function doneHtml() {
@@ -349,21 +494,37 @@ function doneHtml() {
   if (S.recorded) return recordedDoneHtml(report, numbers, not);
   const figs = artifacts.filter((a) => a.kind === "figure" && a.media_type === "image/png");
   const docs = DOCS.filter(([id]) => artifacts.some((a) => a.id === id));
-  return `<article class="study-answer ask-result" tabindex="-1" aria-label="The answer">${mdToHtml(report.answer || "No answer was produced.")}</article>` +
+  const readable = READABLE.filter(([id]) => artifacts.some((a) => a.id === id));
+  return gradeBadgeHtml(report.grade) +
+    (readable.length
+      ? `<div class="study-docs-card"><strong>The documents are ready.</strong> A technical report and a short ` +
+        `memorandum, written from the results, with numbered figures and tables.<div class="row-actions">` +
+        readable.map(([id, label], i) => `<button type="button" class="btn${i ? "" : " primary"}" data-read="${id}">${label}</button>`).join("") +
+        `</div></div>`
+      : "") +
+    decisionHtml(report) +
+    findingsHtml(report) +
+    `<article class="study-answer ask-result" tabindex="-1" aria-label="The answer">${mdToHtml(report.answer || "No answer was produced.")}</article>` +
     (numbers.length
       ? `<table class="ffa study-numbers"><tbody>${numbers.map((k) => `<tr><td>${escapeHtml(k.label)}</td><td>${escapeHtml(numValue(k))}</td></tr>`).join("")}</tbody></table>`
       : "") +
     (figs.length
       ? `<div class="study-figs">${figs.map((a) => figHtml(S.figures.get(a.id) || { id: a.id, caption: a.caption })).join("")}</div>`
       : "") +
+    stepsOnMapHtml(S.ws, toolLabel) +
+    steerHtml(S.ws.study, { label: toolLabel, busy: S.busy }) + // steering: per-step controls
     (not.length
-      ? `<div class="ask-checks warn"><strong>Not established</strong><ul>${not.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul></div>`
+      ? `<div class="ask-checks warn"><strong>Not established</strong><ul>${not.map((t) => `<li>${studyWarningHtml(t)}</li>`).join("")}</ul></div>`
       : "") +
     `<div class="row-actions"><button type="button" class="btn primary" data-act="bundle">Download bundle</button>` +
+    `<button type="button" class="btn" data-file="portable">Save complete study</button>` +
+    `<button type="button" class="btn" data-act="copy-link" title="A link to this plan; whoever opens it reruns it keyless">Copy plan link</button>` +
     `<button type="button" class="btn" data-act="again">New study</button></div>` +
     (docs.length ? `<p class="study-docs muted">${docs.map(([id, label]) => `<a href="#" data-file="${id}">${label}</a>`).join(" · ")}</p>` : "") +
-    `<p class="study-foot muted">${escapeHtml(footLine())}</p>` +
-    `<p class="study-by muted">${escapeHtml(crewLine())}</p>`;
+    `<p class="muted">The complete study file includes your inputs, results and figures. Reopen it here without rerunning. Nothing is published; share the file or HTML report only when you intend to share its data.</p>` +
+    `<p class="study-export-help muted" hidden>Useful in your work? <a href="https://github.com/Rekin226/aquascope" target="_blank" rel="noopener">Star AquaScope on GitHub</a> or <a href="https://github.com/Rekin226/aquascope/issues" target="_blank" rel="noopener">report a problem</a>.</p>` +
+    `<p class="study-foot muted">${escapeHtml(studyText(footLine()))}</p>` +
+    `<p class="study-by muted">${escapeHtml(studyText(crewLine()))}</p>`;
 }
 
 // A recording, as recorded: the note first (the numbers are the recording's), the answer, the key numbers,
@@ -371,18 +532,22 @@ function doneHtml() {
 function recordedDoneHtml(report, numbers, not) {
   const rec = S.recorded;
   return recordedNoteHtml(rec.meta) +
+    gradeBadgeHtml(report.grade) +
+    decisionHtml(report) +
+    findingsHtml(report) +
     `<article class="study-answer ask-result" tabindex="-1" aria-label="The answer">${mdToHtml(report.answer || "No answer was produced.")}</article>` +
     (numbers.length
       ? `<table class="ffa study-numbers"><tbody>${numbers.map((k) => `<tr><td>${escapeHtml(k.label)}</td><td>${escapeHtml(numValue(k))}</td></tr>`).join("")}</tbody></table>`
       : "") +
     (S.figures.size ? `<div class="study-figs">${[...S.figures.values()].map(figHtml).join("")}</div>` : "") +
+    stepsOnMapHtml(S.ws, toolLabel) +
     (not.length
-      ? `<div class="ask-checks warn"><strong>Not established</strong><ul>${not.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul></div>`
+      ? `<div class="ask-checks warn"><strong>Not established</strong><ul>${not.map((t) => `<li>${studyWarningHtml(t)}</li>`).join("")}</ul></div>`
       : "") +
     `<div class="row-actions"><button type="button" class="btn primary" data-act="rerun" title="Run the recorded plan again here, keyless">Re-run live</button>` +
     `<button type="button" class="btn" data-act="again">New study</button></div>` +
     recordedFilesHtml(rec.files) +
-    `<p class="study-foot muted">${escapeHtml(footLine())}</p>`;
+    `<p class="study-foot muted">${escapeHtml(studyText(footLine()))}</p>`;
 }
 
 function declinedHtml() {
@@ -391,7 +556,11 @@ function declinedHtml() {
     `<div class="row-actions"><button type="button" class="btn primary" data-act="again">Start again</button></div>`;
 }
 
-const BOARDS = { intake: intakeHtml, review: planHtml, running: runningHtml, done: doneHtml, declined: declinedHtml };
+const BOARDS = {
+  intake: intakeHtml, review: planHtml, waiting: waitingHtml, running: runningHtml, done: doneHtml,
+  declined: declinedHtml,
+};
+BOARDS.shared = () => sharedBoardHtml(S.shared, { escapeHtml, stepHtml });   // study links (study-link.js)
 
 function renderBoard() {
   const status = boardStatus();
@@ -411,6 +580,7 @@ const PLACEHOLDER = {
   intake: "What do you need to know here?",
   questions: "Your answer",
   review: "Or say what to change",
+  waiting: "Say \"continue without\", or what you are attaching",
   done: "A question, or a change",
   declined: "Say it another way",
 };
@@ -456,7 +626,9 @@ function questionsHtml(m, live) {
     // With the options as chips and Just go beside Send, the question is the question: the sentence that
     // lists the options and says how to proceed is not repeated in prose.
     const text = opts.length && /\?/.test(q.text) ? q.text.slice(0, q.text.indexOf("?") + 1) : q.text;
-    return `<div class="study-q">${escapeHtml(text)}${chips}</div>`;
+    // A checklist question says in one line what the answer changes in the study.
+    const why = q.why ? `<div class="msg-sub muted">${escapeHtml(q.why)}</div>` : "";
+    return `<div class="study-q">${escapeHtml(text)}${why}${chips}</div>`;
   }).join("");
 }
 
@@ -530,6 +702,7 @@ function job(op, extra = {}) {
 
 function applyReply(res, op) {
   S.ws = res.workspace || S.ws;
+  rememberPlain(res.plain); // steering: the plan in plain words and the step controls
   S.busy = false;
   state.study.running = false;
   S.editing = false;
@@ -540,8 +713,11 @@ function applyReply(res, op) {
   if (r.kind === "plan" && p.errors) note(`The edit was not accepted: ${p.errors.join("; ")}`, "warn");
   if (r.kind === "plan") { S.proposal = null; S.planLine = null; S.proseLine = null; }
   if (r.kind === "report" && (op === "approve" || op === "follow_up")) {
+    metrics.record("study_ready", { kind: "study" });
     S.proposal = null;
-    if (p.plan_used && S.planSource === "recorded") {
+    if (p.plan_used && S.planSource === "shared") {
+      S.planLine = sharedPlanLine({ used: p.plan_used, errors: p.plan_errors || [] });
+    } else if (p.plan_used && S.planSource === "recorded") {
       S.planLine = recordedPlanLine({ used: p.plan_used, errors: p.plan_errors || [], model: S.planModel });
     } else if (p.plan_used) {
       S.planLine = planLine({ used: p.plan_used, errors: p.plan_errors || [], model: deviceLabel() });
@@ -550,6 +726,7 @@ function applyReply(res, op) {
     S.proseLine = null;
   }
   renderAll();
+  showStudyMapFor(S.ws);
   persist();
   if (r.kind === "plan") { focusBoard(".study-plan"); announce("The plan is ready to approve."); maybePlanOnDevice(); return; }
   if (r.kind === "report") {
@@ -732,11 +909,12 @@ async function start(text, { intake: given = null } = {}) {
   S.editing = false;
   S.events = [];
   S.figures.clear();
+  clearStudyMap();
   S.proposal = null;
   S.planLine = null;
   S.proseLine = null;
   setBusy(true);
-  note(state.workerReady ? "" : "Loading Python in your browser (about 15 MB, once)…");
+  note(state.workerReady ? "" : "Loading Python in your browser (about 30 MB, once)…");
   try {
     let intake = given, brief = null;
     if (!given && await deviceOnCrew()) {
@@ -769,7 +947,7 @@ async function callStudio(op, extra = {}) {
   S.declined = null;
   setBusy(true);
   try {
-    if (op === "approve" || op === "follow_up") {
+    if (op === "approve" || op === "follow_up" || op === "add_table" || op === "steer") {
       await ensureCatalogInWorker();
       // A resumed study (a reload, a dropped workspace.json) has not read its site yet.
       if (S.site && !S.siteReady) await loadSiteInfo(S.site, my);
@@ -799,7 +977,7 @@ function send(given) {
   if (!S.ws) { start(text); return; }
   const st = S.ws.status;
   if (st === "done") callStudio("follow_up", { text });
-  else if (st === "intake" || st === "review") callStudio("say", { text });
+  else if (st === "intake" || st === "review" || st === "waiting") callStudio("say", { text });
   else if (st === "declined") { reset(); start(text); }
 }
 
@@ -864,6 +1042,7 @@ function stop() {
   for (const [id, f] of S.figures) if (f.job === stoppedJob) S.figures.delete(id);
   S.events = [];
   renderAll();
+  showStudyMapFor(S.ws);
   note(S.ws ? "Stopped; the figures made so far are gone, the plan is kept." : "Stopped.", "warn");
 }
 
@@ -888,6 +1067,9 @@ function reset() {
   S.planSource = null;
   S.recorded = null;
   state.study.recorded = null;
+  clearStudyMap();
+  S.shared = null;
+  state.study.link = null;
   note("");
   renderAll();
   refreshResume();
@@ -947,6 +1129,7 @@ function openWorkspace(ws, figures, lines = {}) {
   state.study.recorded = null;
   note("");
   renderAll();
+  showStudyMapFor(ws);
   announce(`Study resumed: ${statusWord(ws.status)}.`);
 }
 
@@ -1002,6 +1185,7 @@ async function openRecorded(id) {
   S.planSource = null;
   note("");
   renderAll();
+  showStudyMapFor(S.ws);
   if (drawerOpen()) writeUrl();
   focusBoard(".study-answer");
   announce(`Recorded study opened: ${(rec.meta && rec.meta.title) || rec.id}.`);
@@ -1054,8 +1238,7 @@ function resumeWorkspace(obj) {
     if (a && a.data && a.media_type === "image/png") {
       figures.set(a.id, { id: a.id, src: `data:image/png;base64,${a.data}`, caption: a.caption || "", step: a.step, job: null });
     }
-    const { data: _bytes, ...rest } = a || {};
-    return rest;
+    return a;
   });
   S.resume = null;
   openWorkspace(ws, figures);
@@ -1063,6 +1246,12 @@ function resumeWorkspace(obj) {
 }
 
 const looksLikeWorkspace = (obj) => Boolean(obj && typeof obj === "object" && obj.id && obj.status && obj.brief && obj.site);
+
+export async function importCompletedStudy(file) {
+  if (S.busy) { note("Stop the running study before opening another.", "warn"); return; }
+  openDrawer({ mode: "study" });
+  await addFiles([file]);
+}
 
 // ── files in, files out ─────────────────────────────────────────────────────
 
@@ -1081,30 +1270,50 @@ function saveBytes(name, b64, type) {
   a.href = URL.createObjectURL(new Blob([bytes], { type }));
   a.download = name.replace(/[^\w.-]+/g, "_");
   a.click();
+  metrics.record("export_handoff", { kind: "study" });
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
 // A CSV goes in as it is; an Excel file is turned into CSV in the worker, so
 // every table travels in the workspace the same way and round-trips. A
-// workspace.json resumes the study it carries.
+// workspace.json resumes the study it carries. Before a study starts a table
+// only stages in S.files, sent along with "start"; once one exists, a table
+// is attached to it directly (Studio.add_table, #419) and the reply it comes
+// back with is applied like any other, so a plan or a report renders.
 async function addFiles(list) {
   for (const file of list) {
     const id = file.name.replace(/\s+/g, "_");
     try {
       if (/\.json$/i.test(file.name)) {
+        if (file.size > 50_000_000) throw new Error("Study files must be under 50 MB");
+        const originalText = await file.text();
         let obj = null;
-        try { obj = JSON.parse(await file.text()); } catch { obj = null; }
+        try { obj = JSON.parse(originalText); } catch { obj = null; }
+        if (obj && obj.format === "aquascope-completed-study") {
+          // Preserve Python's numeric representation (1.0 vs 1) for checksum validation.
+          const restored = await call("studio", { op: "import_portable", text: originalText });
+          if (restored.error) throw new Error(restored.error);
+          resumeWorkspace(restored.workspace);
+          return;
+        }
         if (!looksLikeWorkspace(obj)) throw new Error("not a workspace.json from a study bundle");
         resumeWorkspace(obj);
         return;
       }
-      if (S.ws) continue;   // tables are attached before a study starts
+      let csv, tableId = id;
       if (/\.xlsx?$|\.xls$/i.test(file.name)) {
         note(`Reading ${file.name}…`);
         const res = await call("studio", { op: "table", name: file.name, data: toBase64(await file.arrayBuffer()) });
-        S.files.push({ id: id.replace(/\.xlsx?$|\.xls$/i, ".csv"), csv: res.csv });
+        csv = res.csv;
+        tableId = id.replace(/\.xlsx?$|\.xls$/i, ".csv");
       } else {
-        S.files.push({ id, csv: await file.text() });
+        csv = await file.text();
+      }
+      if (S.ws) {
+        note(`Attaching ${tableId}…`);
+        await callStudio("add_table", { name: tableId, csv });
+      } else {
+        S.files.push({ id: tableId, csv });
       }
     } catch (err) {
       note(`Could not read ${file.name}: ${err.message}`, "error");
@@ -1120,15 +1329,254 @@ async function downloadArtifact(id) {
   if (!S.ws) return;
   note("Preparing the file…");
   try {
-    const res = await call("studio", id === "bundle"
+    const res = await call("studio", id === "portable"
+      ? { op: "portable", workspace: S.ws }
+      : id === "bundle"
       ? { op: "export", workspace: S.ws }
       : { op: "file", workspace: S.ws, artifact_id: id });
     if (!res || res.error) throw new Error((res && res.error) || "no file");
     const name = id === "bundle" ? `study-${S.ws.id}.zip` : String(res.name || id).split("/").pop();
     saveBytes(name, res.data, res.media_type);
+    const help = board().querySelector(".study-export-help");
+    if (help) help.hidden = false;
     note("");
   } catch (err) {
     note(`Could not prepare the file: ${err.message}`, "error");
+  }
+}
+
+// ── the reader ──────────────────────────────────────────────────────────────
+// The composed report (or memo) in a full-height panel: the worker's HTML in a sandboxed frame (it carries no
+// script), with Print / Save as PDF and the Word file beside it. The document is the product; the board above
+// is its summary.
+
+async function openReader(id) {
+  if (!S.ws) return;
+  note("Opening the document…");
+  try {
+    const res = await call("studio", { op: "file", workspace: S.ws, artifact_id: id });
+    if (!res || res.error) throw new Error((res && res.error) || "no document");
+    const bin = atob(res.data);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    showReader(new TextDecoder("utf-8").decode(bytes), id);
+    note("");
+  } catch (err) {
+    note(`Could not open the document: ${err.message}`, "error");
+  }
+}
+
+function showReader(html, id) {
+  let box = document.querySelector(".study-reader");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "study-reader";
+    box.className = "modal study-reader";
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-label", "Study document");
+    document.body.appendChild(box);
+    box.addEventListener("click", onReaderClick);
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !box.hidden) box.hidden = true; });
+  }
+  const word = id === "memo-html" ? "memo-docx" : "report-docx";
+  const hasWord = (S.ws.artifacts || []).some((a) => a.id === word);
+  box.dataset.doc = id;
+  box.innerHTML =
+    `<div class="modal-box study-reader-box"><div class="modal-head"><h2>${id === "memo-html" ? "Technical memorandum" : "Technical report"}</h2>` +
+    `<div class="row-actions"><button type="button" class="btn" data-reader="desk" aria-pressed="${S.deskOpen !== false}" title="Change assumptions, see the sensitivity, review and sign">Desk</button>` +
+    `<button type="button" class="btn" data-reader="print">Print or save as PDF</button>` +
+    (hasWord ? `<button type="button" class="btn" data-reader="word" data-word="${word}">Word</button>` : "") +
+    `<button type="button" class="btn" data-reader="close" aria-label="Close">Close</button></div></div>` +
+    `<div class="study-reader-body"><iframe title="Study document" sandbox="allow-same-origin allow-modals"></iframe>` +
+    `<aside class="desk-panel" aria-label="Study Desk"${S.deskOpen === false ? " hidden" : ""}><p class="muted">Opening the Desk…</p></aside></div></div>`;
+  box.querySelector("iframe").srcdoc = html;
+  box.hidden = false;
+  box.querySelector('[data-reader="close"]').focus();
+  if (S.deskOpen !== false) loadDesk();
+}
+
+// ── the Study Desk ──────────────────────────────────────────────────────────
+// Beside the document: the levers (return period, record window, years left out, the distribution quoted),
+// the sensitivity of the answer, the sign-off and the review. Every action is aquascope.studio.desk in the
+// worker; the page draws its view and reloads the document it rewrote.
+
+function deskBox() { return document.querySelector(".study-reader .desk-panel"); }
+
+async function deskCall(action, extra = {}) {
+  const panel = deskBox();
+  if (!panel || !S.ws) return null;
+  const status = panel.querySelector(".desk-status");
+  if (status) status.textContent = action === "revise" ? "Re-running the analyses and rewriting the documents…" :
+    action === "view" ? "" : "Rewriting the documents…";
+  panel.classList.add("busy");
+  try {
+    if (action === "revise") await ensureCatalogInWorker();
+    const res = await call("studio", { op: "desk", action, workspace: S.ws, ...extra });
+    if (!res) throw new Error("no reply");
+    if (res.workspace) S.ws = res.workspace;
+    if (res.plain) rememberPlain(res.plain);
+    S.desk = res.desk || S.desk;
+    renderDesk(res.error || "");
+    if (res.reply) {
+      renderBoard();
+      persist();
+      await refreshReaderDoc();
+    }
+    return res;
+  } catch (err) {
+    renderDesk(`Could not do that: ${err.message}`);
+    return null;
+  } finally {
+    panel.classList.remove("busy");
+  }
+}
+
+async function loadDesk() { await deskCall("view"); }
+
+async function refreshReaderDoc() {
+  const box = document.querySelector(".study-reader");
+  if (!box || box.hidden) return;
+  const res = await call("studio", { op: "file", workspace: S.ws, artifact_id: box.dataset.doc || "report-html" });
+  if (!res || res.error) return;
+  const bin = atob(res.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const frame = box.querySelector("iframe");
+  const y = frame.contentWindow ? frame.contentWindow.scrollY : 0;
+  frame.onload = () => { try { frame.contentWindow.scrollTo(0, y); } catch (_) { /* a fresh frame */ } };
+  frame.srcdoc = new TextDecoder("utf-8").decode(bytes);
+}
+
+const deskNum = (x) => (x == null ? "" : Math.abs(x) >= 100 ? Math.round(x).toLocaleString("en") : Number(x).toPrecision(3));
+
+function renderDesk(message = "") {
+  const panel = deskBox();
+  if (!panel) return;
+  const d = S.desk || {};
+  const levers = d.levers || [];
+  if (!levers.length && !(d.revisions || []).length) {
+    panel.innerHTML = `<p class="muted">This study has no adjustable flood fit; the Desk can still record review comments and sign-offs.</p>` + deskReviewHtml(d) + deskSignHtml(d);
+    return;
+  }
+  const lv = Object.fromEntries(levers.map((l) => [l.id, l]));
+  let html = `<h3>Assumptions</h3>`;
+  if (lv.return_period) {
+    html += `<label class="desk-field">${escapeHtml(lv.return_period.label)}<select data-lever="return_period">` +
+      lv.return_period.choices.map((c) => `<option value="${c}"${Number(c) === Number(lv.return_period.value) ? " selected" : ""}>${c}</option>`).join("") +
+      `</select></label>`;
+  }
+  if (lv.years) {
+    html += `<label class="desk-field">${escapeHtml(lv.years.label)}<input type="number" min="10" max="200" step="1" data-lever="years" placeholder="full record" value="${lv.years.value ?? ""}"></label>`;
+  }
+  if (lv.exclude_years) {
+    const out = new Set((lv.exclude_years.value || []).map(Number));
+    html += `<div class="desk-field"><span>${escapeHtml(lv.exclude_years.label)}</span><div class="desk-chips" data-lever="exclude_years">` +
+      (lv.exclude_years.candidates || []).map((c) => `<button type="button" class="chip${out.has(c.year) ? " off" : ""}" data-year="${c.year}" aria-pressed="${out.has(c.year)}" title="${out.has(c.year) ? "left out of the fit: click to put it back" : "click to leave this flood out of the fit"}">${c.year} · ${deskNum(c.value)}</button>`).join("") +
+      `</div><small class="muted">The largest floods on record. ${escapeHtml(lv.exclude_years.help || "")}</small></div>`;
+  }
+  if (lv.estimator) {
+    html += `<fieldset class="desk-field"><legend>${escapeHtml(lv.estimator.label)}</legend>` +
+      lv.estimator.choices.map((c) => `<label class="desk-radio"><input type="radio" name="desk-estimator" value="${c}"${c === lv.estimator.value ? " checked" : ""}> ${escapeHtml((lv.estimator.labels || {})[c] || c)}</label>`).join("") +
+      `</fieldset>`;
+  }
+  html += `<label class="desk-field">Your name (for the record)<input type="text" data-desk="by" value="${escapeHtml(S.deskBy || "")}" placeholder="e.g. A. Hydrologist"></label>`;
+  html += `<div class="row-actions"><button type="button" class="btn primary" data-desk="apply">Apply and rewrite</button></div>`;
+  html += `<p class="desk-status muted" role="status">${escapeHtml(message)}</p>`;
+  const sens = d.sensitivity || [];
+  if (sens.length > 1) {
+    html += `<h3>Sensitivity of the answer</h3><table class="desk-table"><tbody>` +
+      sens.map((r, i) => `<tr${i ? "" : ' class="em"'}><td>${escapeHtml(r.case)}</td><td class="r">${deskNum(r.value)}</td><td class="r">${i && r.change_pct != null ? `${r.change_pct > 0 ? "+" : ""}${Math.round(r.change_pct)} %` : ""}</td></tr>`).join("") +
+      `</tbody></table><small class="muted">In ${escapeHtml(d.unit || "the record's unit")}; computed from the stored annual maxima, no new data fetched.</small>`;
+  }
+  html += deskSignHtml(d) + deskReviewHtml(d);
+  const revs = d.revisions || [];
+  if (revs.length) {
+    html += `<h3>Revisions</h3><ol class="desk-revs">` + revs.slice().reverse().map((r) =>
+      `<li><b>${escapeHtml(r.rev)}</b> ${escapeHtml(r.description || "")}${r.by ? ` <span class="muted">(${escapeHtml(r.by)})</span>` : ""}</li>`).join("") + `</ol>`;
+  }
+  panel.innerHTML = html;
+}
+
+function deskSignHtml(d) {
+  const so = d.signoff || {};
+  const row = (role, label) => `<li><span>${label}</span><b>${so[role] ? escapeHtml(so[role]) : '<span class="muted">not yet</span>'}</b></li>`;
+  return `<h3>Sign-off <span class="desk-badge">${escapeHtml(d.status || "DRAFT")}</span></h3><ul class="desk-sign">` +
+    row("prepared_by", "Prepared") + row("checked_by", "Checked") + row("approved_by", "Approved") + `</ul>` +
+    `<div class="desk-inline"><select data-desk="role"><option value="prepared_by">Prepared</option><option value="checked_by">Checked</option><option value="approved_by">Approved</option></select>` +
+    `<input type="text" data-desk="signer" placeholder="Name"><button type="button" class="btn" data-desk="sign">Sign</button></div>`;
+}
+
+function deskReviewHtml(d) {
+  const cs = d.comments || [];
+  return `<h3>Review</h3>` + (cs.length ? `<ul class="desk-comments">` + cs.map((c) =>
+    `<li class="${c.status === "resolved" ? "done" : ""}"><b>${escapeHtml(c.id)}</b> ${escapeHtml(c.text)}` +
+    (c.section ? ` <span class="muted">(${escapeHtml(c.section)})</span>` : "") +
+    (c.status === "resolved" ? `<div class="muted">Response: ${escapeHtml(c.response || "resolved")}</div>` :
+      `<div class="desk-inline"><input type="text" data-response="${escapeHtml(c.id)}" placeholder="Response"><button type="button" class="btn tiny" data-resolve="${escapeHtml(c.id)}">Resolve</button></div>`) +
+    `</li>`).join("") + `</ul>` : `<p class="muted">No comments yet.</p>`) +
+    `<div class="desk-inline"><input type="text" data-desk="comment" placeholder="Add a review comment"><button type="button" class="btn" data-desk="add-comment">Add</button></div>`;
+}
+
+function onReaderClick(e) {
+  const box = e.currentTarget;
+  const act = e.target.closest("[data-reader]");
+  if (e.target === box || (act && act.dataset.reader === "close")) { box.hidden = true; return; }
+  if (act) {
+    if (act.dataset.reader === "print") {
+      const frame = box.querySelector("iframe");
+      if (frame && frame.contentWindow) frame.contentWindow.print();
+    } else if (act.dataset.reader === "word") {
+      downloadArtifact(act.dataset.word);
+    } else if (act.dataset.reader === "desk") {
+      S.deskOpen = S.deskOpen === false;
+      act.setAttribute("aria-pressed", String(S.deskOpen));
+      const panel = deskBox();
+      if (panel) { panel.hidden = !S.deskOpen; if (S.deskOpen && !S.desk) loadDesk(); }
+    }
+    return;
+  }
+  const chip = e.target.closest(".desk-chips [data-year]");
+  if (chip) {
+    const off = chip.getAttribute("aria-pressed") !== "true";
+    chip.setAttribute("aria-pressed", String(off));
+    chip.classList.toggle("off", off);
+    return;
+  }
+  const panel = deskBox();
+  const by = () => { const v = panel.querySelector('[data-desk="by"]'); S.deskBy = v ? v.value.trim() : (S.deskBy || ""); return S.deskBy; };
+  const resolveBtn = e.target.closest("[data-resolve]");
+  if (resolveBtn) {
+    const id = resolveBtn.dataset.resolve;
+    const input = panel.querySelector(`[data-response="${CSS.escape(id)}"]`);
+    deskCall("resolve", { id, response: input ? input.value : "", by: by() });
+    return;
+  }
+  const d = e.target.closest("[data-desk]");
+  if (!d || d.tagName === "INPUT" || d.tagName === "SELECT") return;
+  if (d.dataset.desk === "apply") {
+    const changes = {};
+    const lv = Object.fromEntries(((S.desk || {}).levers || []).map((l) => [l.id, l]));
+    const rp = panel.querySelector('[data-lever="return_period"]');
+    if (rp && lv.return_period && Number(rp.value) !== Number(lv.return_period.value)) changes.return_period = Number(rp.value);
+    const yr = panel.querySelector('[data-lever="years"]');
+    if (yr && lv.years && String(yr.value || "") !== String(lv.years.value ?? "")) changes.years = yr.value ? Number(yr.value) : "";
+    if (lv.exclude_years) {
+      const picked = [...panel.querySelectorAll('.desk-chips [aria-pressed="true"]')].map((b) => Number(b.dataset.year)).sort();
+      const now = (lv.exclude_years.value || []).map(Number).sort();
+      if (picked.join(",") !== now.join(",")) changes.exclude_years = picked.length ? picked : "";
+    }
+    const est = panel.querySelector('input[name="desk-estimator"]:checked');
+    if (est && lv.estimator && est.value !== lv.estimator.value) changes.estimator = est.value;
+    if (!Object.keys(changes).length) { renderDesk("Nothing changed yet: pick a different value first."); return; }
+    deskCall("revise", { changes, by: by() });
+  } else if (d.dataset.desk === "sign") {
+    const role = panel.querySelector('[data-desk="role"]').value;
+    const name = panel.querySelector('[data-desk="signer"]').value;
+    deskCall("sign", { role, name });
+  } else if (d.dataset.desk === "add-comment") {
+    const input = panel.querySelector('[data-desk="comment"]');
+    if (input && input.value.trim()) deskCall("comment", { text: input.value, author: by() });
   }
 }
 
@@ -1145,6 +1593,87 @@ function appendEvent(e) {
 function appendFigure(f) {
   const box = board().querySelector(".study-run .study-figs");
   if (box) box.insertAdjacentHTML("beforeend", figHtml(f));
+}
+
+// ── study links ─────────────────────────────────────────────────────────────
+// Copy link at the end of a study: the worker turns the approved plan (never
+// the results) into a token and checks it the way a recipient would. Opening
+// #study=<token> or ?study_url=<https study.yaml> shows the plan, checked
+// against the method catalogue in the worker, with a "shared study" label;
+// Run starts the same study at the same place and approves that plan, which
+// the engine validates again at the site, keyless (aquascope.study_link).
+
+async function copyStudyLink() {
+  if (!S.ws) return;
+  note("Making the link…");
+  let res;
+  try {
+    res = await call("studio", { op: "link", workspace: S.ws, name: S.site && S.site.text });
+  } catch (err) {
+    res = { ok: false, errors: [err.message] };
+  }
+  if (!res || !res.ok) { note(`No link: ${((res && res.errors) || ["unknown reason"])[0]}`, "warn"); return; }
+  const url = linkUrl(canonicalUrl(), res.token);
+  try {
+    await navigator.clipboard.writeText(url);
+    note("Link copied. Whoever opens it sees this plan and can rerun it in their browser.");
+  } catch {
+    window.prompt("Copy this link", url);
+    note("");
+  }
+}
+
+export async function openSharedStudy({ link = null, studyUrl = null } = {}) {
+  if (S.busy) { note("A study is running; stop it before opening a shared one.", "warn"); return; }
+  reset();
+  const my = S.run;
+  state.study.link = link;
+  S.shared = { loading: true };
+  openDrawer({ mode: "study" });
+  renderAll();
+  if (studyUrl && studyUrl.error) {
+    S.shared = { ok: false, errors: [studyUrl.error] };
+    renderAll();
+    return;
+  }
+  note(state.workerReady ? "" : "Loading Python in your browser (about 30 MB, once)…");
+  let res;
+  try {
+    res = await call("studio", link ? { op: "open_link", token: link }
+      : { op: "open_link", yaml: await fetchStudyYaml(studyUrl) });
+  } catch (err) {
+    res = { ok: false, errors: [err.message] };
+  }
+  if (my !== S.run) return;
+  S.shared = { ...(res || { ok: false, errors: ["no reply"] }), from: studyUrl || null };
+  note("");
+  if (S.shared.ok) {
+    try { actions.selectPoint(S.shared.study.lat, S.shared.study.lon, { fly: true, push: false }); } catch (err) { console.warn(err); }
+  }
+  openDrawer({ mode: "study" });
+  renderAll();
+  writeUrl();   // the point and the shared study, so a reload opens it again
+  focusBoard(".study-shared");
+  announce(S.shared.ok ? "A shared study is open; Run reruns it here." : "The shared study cannot be opened.");
+}
+
+// The shared plan, run here: the same brief at the same place, the defaults for any question, the plan
+// approved as source "shared" (the engine's validator decides whether it runs or the tree stands).
+async function runShared() {
+  const sh = S.shared && S.shared.ok ? S.shared.study : null;
+  if (!sh || S.busy) return;
+  S.shared = null;
+  S.ws = null;
+  S.figures = new Map();
+  S.files = [];
+  S.useMyData = false;
+  try { actions.selectPoint(sh.lat, sh.lon, { fly: true, push: true }); } catch (err) { console.warn(err); }
+  openDrawer({ mode: "study" });
+  await start(sh.text, { intake: sh.intake });
+  if (S.ws && S.ws.status === "intake" && openQuestions().length) await callStudio("say", { text: "just go" });
+  if (!S.ws || S.ws.status !== "review") return;
+  S.planSource = "shared";
+  await callStudio("approve", { plan: { ...sh.plan, source: "shared" }, edits: null });
 }
 
 // ── open, wire ──────────────────────────────────────────────────────────────
@@ -1166,12 +1695,15 @@ export function toggleStudy() {
 }
 
 function onBoardClick(e) {
+  const answer = e.target.closest("[data-answer]");   // a choice the board offers (a gauge with a long record)
+  if (answer) { send(answer.dataset.answer); return; }
   const act = e.target.closest("[data-act]");
   if (act) {
     const what = act.dataset.act;
     if (what === "approve") approve();
     else if (what === "edit") { S.editing = !S.editing; renderBoard(); }
     else if (what === "decline") decline();
+    else if (what === "continue") callStudio("say", { text: "continue without" });
     else if (what === "stop") stop();
     else if (what === "bundle") downloadArtifact("bundle");
     else if (what === "again") reset();
@@ -1179,12 +1711,20 @@ function onBoardClick(e) {
     else if (what === "resume") resumeSaved();
     else if (what === "rerun") rerunRecorded();
     else if (what === "more-recorded") { S.moreRecorded = true; renderBoard(); }
+    else if (what === "copy-link") copyStudyLink();
+    else if (what === "run-shared") runShared();
     return;
   }
+  const onMap = e.target.closest("[data-map-step]");
+  if (onMap) { focusStudyStep(onMap.dataset.mapStep); return; }
   const chip = e.target.closest("[data-recorded]");
   if (chip) { openRecorded(chip.dataset.recorded); return; }
+  const tryChip = e.target.closest("[data-try]");
+  if (tryChip) { $("study-text").value = tryChip.dataset.try; send(tryChip.dataset.try); return; }
   const file = e.target.closest("[data-file]");
   if (file) { e.preventDefault(); downloadArtifact(file.dataset.file); return; }
+  const read = e.target.closest("[data-read]");
+  if (read) { openReader(read.dataset.read); return; }
   const remove = e.target.closest("[data-remove]");
   if (remove) { S.files.splice(Number(remove.dataset.remove), 1); renderBoard(); }
 }
@@ -1209,6 +1749,7 @@ export function initStudy() {
   const el = board();
   el.addEventListener("click", onBoardClick);
   el.addEventListener("change", onBoardChange);
+  initStudyControls(el, (extra) => callStudio("steer", extra)); // steering: Rerun this step
   for (const type of ["dragenter", "dragover"]) {
     el.addEventListener(type, (e) => { if (S.busy || S.writing) return; e.preventDefault(); el.classList.add("over"); });
   }
@@ -1231,6 +1772,7 @@ export function initStudy() {
     appendEvent(event);
   });
   onStudioArtifact((artifact, id) => {
+    if (id === S.jobId && studyMapArtifact(artifact)) return;   // study map: drawn as the steps land
     if (id !== S.jobId || artifact.media_type !== "image/png" || !artifact.data) return;
     const f = { id: artifact.id, src: `data:image/png;base64,${artifact.data}`, caption: artifact.caption || "",
                 step: artifact.step, job: id };
@@ -1240,3 +1782,7 @@ export function initStudy() {
   actions.openStudy = openStudy;
   renderAll();
 }
+
+// Exported for explorer/tests/studio-requests.test.mjs: the board state, the status it maps to, the board
+// renderers by status and the file intake, none of which otherwise leave this module.
+export { S, boardStatus, BOARDS, addFiles };

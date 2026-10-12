@@ -1,0 +1,8 @@
+[
+  {"source":"hubeau","station_id":"A891030101","site_id":"A8910301","period_start":"1980-01-01","period_end":"1985-01-01"},
+  {"source":"hubeau","station_id":"A891030102","site_id":"A8910301","period_start":"2000-01-01","period_end":"2025-01-01"},
+  {"source":"other","station_id":"other","site_id":"A8910301"},
+  {"source":"test","station_id":"z","site_id":"ongoing","period_start":"2000-01-01"},
+  {"source":"test","station_id":"a","site_id":"ongoing","period_start":"2000-01-01"},
+  {"source":"test","station_id":"invalid","site_id":"ongoing","period_start":"2023-02-30"}
+]

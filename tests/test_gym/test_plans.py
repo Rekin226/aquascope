@@ -122,17 +122,24 @@ def test_a_perfect_plan_scores_one_and_an_empty_or_declining_plan_zero():
 
 
 def test_the_tree_scores_a_known_value_on_the_comparison_case():
+    from aquascope import playbooks as pbk
+
     ref = BY_ID["offtree_atsite_vs_regional_potomac"]
-    cand, _ = gp.tree_candidate(ref)
-    scored = gp.score_plan(ref, cand)
-    # required tools: analyze_station, flood_frequency, similar_basins, regionalize_signatures; the tree has two;
-    # methods likewise; gates: the tree carries five of the eight; nothing extraneous, nothing forbidden.
+    # One branch alone answers half the brief: the partial plan is the scorer's known value.
+    alone = pbk.plan(ref.playbook, gp.recon_for(ref), ref.intake, problem_text=ref.brief, compose=False)
+    scored = gp.score_plan(ref, gp.candidate_from(alone))
+    # required tools: analyze_station, flood_frequency, similar_basins, regionalize_signatures; the branch has two;
+    # methods likewise; gates: the branch carries five of the eight; nothing extraneous, nothing forbidden.
     assert scored["coverage_tools"] == 0.5 and scored["coverage_methods"] == 0.5 and scored["coverage_gates"] == 0.625
     assert scored["extraneous"] == 0.0 and scored["forbidden_used"] == 0 and scored["decline_correct"] is True
     assert scored["score"] == pytest.approx(0.30 * 0.5 + 0.25 * 0.5 + 0.20 * 0.625 + 0.15 + 0.10) == 0.65
     assert "missing tool similar_basins" in scored["explain"]
     assert "missing method regionalize_signatures" in scored["explain"]
     assert "missing gate min_donors on similar_basins (k)" in scored["explain"]
+    # The tree itself composes the regional branch for the compound brief (#383) and covers the reference.
+    cand, detail = gp.tree_candidate(ref)
+    full = gp.score_plan(ref, cand)
+    assert full["score"] == 1.0 and full["extraneous"] == 0.0 and full["coverage_tools"] == 1.0
 
 
 def test_forbidden_and_extraneous_steps_cost_their_parts():
@@ -273,7 +280,7 @@ def test_the_file_agent_scores_a_plan_json_and_reports_a_missing_one(tmp_path):
     ref = BY_ID["supply_gauged_vegre"]
     (tmp_path / f"{ref.id}.json").write_text(json.dumps({**_perfect(ref), "model": "device-4b", "provider": "local",
                                                           "usage": {"calls": 1, "prompt_tokens": 10,
-                                                                    "completion_tokens": 5}}))
+                                                                    "completion_tokens": 5}}), encoding="utf-8")
     results = gp.run_plan_bench(None, "file", candidates_dir=tmp_path,
                                 case_ids=[ref.id, "flood_at_site_potomac"], model="device-4b")
     by_id = {r.case_id: r for r in results}
@@ -311,9 +318,9 @@ def test_the_cli_plans_verbs_and_the_bench(monkeypatch, capsys, tmp_path):
     assert "0 with errors" in capsys.readouterr().out
     monkeypatch.setattr(sys, "argv", ["aquascope", "gym", "plans", "score", "offtree_atsite_vs_regional_potomac"])
     cli.main()
-    assert "score 0.65" in capsys.readouterr().out
+    assert "score 1.00" in capsys.readouterr().out
     plan = tmp_path / "plan.json"
-    plan.write_text(json.dumps(_perfect(BY_ID["gw_well_tetbury"])))
+    plan.write_text(json.dumps(_perfect(BY_ID["gw_well_tetbury"])), encoding="utf-8")
     monkeypatch.setattr(sys, "argv", ["aquascope", "gym", "plans", "score", "gw_well_tetbury", "--candidate",
                                       str(plan), "--json"])
     cli.main()
@@ -322,7 +329,8 @@ def test_the_cli_plans_verbs_and_the_bench(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(sys, "argv", ["aquascope", "gym", "bench", "--agent", "tree", "--limit", "4", "--out",
                                       str(out_file), "--quiet"])
     cli.main()
-    assert "aquascope gym bench: tree" in capsys.readouterr().out and len(out_file.read_text().splitlines()) == 4
+    assert "aquascope gym bench: tree" in capsys.readouterr().out
+    assert len(out_file.read_text(encoding="utf-8").splitlines()) == 4
     monkeypatch.setattr(sys, "argv", ["aquascope", "gym", "leaderboard", str(out_file), "--out",
                                       str(tmp_path / "lb.md")])
     cli.main()
@@ -369,15 +377,17 @@ def test_rescore_reads_the_stored_plans_again_without_running_the_agent(tmp_path
     out = tmp_path / "tree.jsonl"
     rows = gp.run_plan_bench(None, "tree", out=out, case_ids=["offtree_atsite_vs_regional_potomac",
                                                               "flood_inundation_declined_potomac"])
-    assert sorted(r.score for r in rows) == [0.65, 1.0]
+    assert sorted(r.score for r in rows) == [1.0, 1.0]
     easier = gp.Reference.from_dict({**BY_ID["offtree_atsite_vs_regional_potomac"].to_dict(), "steps": [
         {"tool": "analyze_station", "method": "trend_mann_kendall"},
         {"tool": "flood_frequency", "method": "at_site_flood_frequency"}]})
     stored = gp.load_plan_results([out], latest=False)
     again = gp.rescore_plans(stored, [easier, BY_ID["flood_inundation_declined_potomac"]])
-    assert {r.case_id: r.score for r in again} == {"offtree_atsite_vs_regional_potomac": 1.0,
-                                                   "flood_inundation_declined_potomac": 1.0}
+    by_case = {r.case_id: r.score for r in again}
+    assert by_case["flood_inundation_declined_potomac"] == 1.0
+    # the composed plan carries the two regional steps, which the easier reference counts as extraneous
+    assert by_case["offtree_atsite_vs_regional_potomac"] == pytest.approx(0.94, abs=0.01)
     assert again[0].explain and all(r.decline_correct for r in again)
     monkeypatch.setattr(sys, "argv", ["aquascope", "gym", "plans", "rescore", str(out)])
     cli.main()
-    assert sorted(r.score for r in gp.load_plan_results([out])) == [0.65, 1.0], "the package references again"
+    assert sorted(r.score for r in gp.load_plan_results([out])) == [1.0, 1.0], "the package references again"

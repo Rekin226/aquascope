@@ -1,20 +1,30 @@
 // The station inspector: pick a gauge, run aquascope on it in the worker, and
-// fill the tabs (Overview, Floods, Flows, Model, Catchment, Similar, Methods).
+// fill the tabs (Overview, Floods, Flows, Model, River, Evidence, Catchment, Similar, Methods).
 // The science is unchanged; what is new is that each tab reports its own state
 // and can be cancelled, and that the record and every table export.
 
-import { CONFIG } from "../config.js?v=__BUILD__";
 import {
   $, VAR_LABEL, actions, article, copyText, downloadBlob, escapeHtml, fmt, fmtP, sourceStyle, state, stationKey,
 } from "./core.js?v=__BUILD__";
 import { addTableDownload, emphasisColor, plot, surfaceColor } from "./charts.js?v=__BUILD__";
 import { requestAssess } from "./assess.js?v=__BUILD__";
+import { startRiver } from "./river.js?v=__BUILD__";
+import { resetNow, startNow } from "./now.js?v=__BUILD__";
 import { clearCatchment, requestBasin, requestCatchment, stationArea } from "./basins.js?v=__BUILD__";
 import { flyToStation, highlightStation, clearPointMarker } from "./map.js?v=__BUILD__";
 import { GR4J_METHODS, addMethodOnce, methodsOnPage, openCite, renderMethodList } from "./methods.js?v=__BUILD__";
 import { hideCard, selectTab, setCard, setStatusEl, setTab, showSurface } from "./shell.js?v=__BUILD__";
 import { Cancelled, call, callCancelable } from "./worker-client.js?v=__BUILD__";
-import { canonicalUrl, writeUrl } from "./url.js?v=__BUILD__";
+import { canonicalUrl, defaultPeriod, writeUrl } from "./url.js?v=__BUILD__";
+import { siteKey } from "./sites.js?v=__BUILD__";
+import { syncPlaceButton } from "./places.js?v=__BUILD__";  // My places: the ☆ Save button
+import { syncWatchButtons } from "./watch.js?v=__BUILD__";  // Watch (#521): the ☆ Watch button and its threshold
+import { metrics } from "./metrics.js?v=__BUILD__";
+import { catalogOnly, observationMetadata } from "./availability.js?v=__BUILD__";
+import { base64ToBytes, exportOptions, exportSummary } from "./export-menu.js?v=__BUILD__";
+import { annualMaxPoints } from "./timeline.js?v=__BUILD__";
+import { resetEvidence, showSkillBadge, startEvidence } from "./evidence.js?v=__BUILD__";
+import { loadPlaceContext, resetPlaceContext } from "./context.js?v=__BUILD__";
 
 let analysisRun = 0;
 let gr4jRun = 0;
@@ -37,6 +47,9 @@ const dUnit = (rawUnit) => (cfsOn(rawUnit) ? "ft³/s" : rawUnit);
 const dVal = (x, rawUnit) => (cfsOn(rawUnit) && x !== null && x !== undefined ? x * CFS_PER_CMS : x);
 const dArr = (a, rawUnit) => (cfsOn(rawUnit) ? Array.from(a, (v) => (v === null || v === undefined ? v : v * CFS_PER_CMS)) : a);
 
+// The selected gauge's river snap (river.js), which the Now tab's forecast waits on for the reach.
+let stationSnap = null;
+
 export function selectStation(key, { fly = false, tab = null, push = true } = {}) {
   const r = state.byKey.get(key);
   if (!r) return;
@@ -48,18 +61,35 @@ export function selectStation(key, { fly = false, tab = null, push = true } = {}
   clearPointMarker();
   if (fly) flyToStation(r);
 
-  showSurface("panel-station");
+  // Map first (#548): the panel unfolds for a link that names a tab; a click answers in the map card.
+  showSurface("panel-station", { reveal: Boolean(tab) });
   const st = sourceStyle(r.source);
   const badge = $("st-source");
   badge.textContent = st.label;
   badge.style.background = st.color;
   $("st-name").textContent = r.name || r.station_id;
   $("st-id").textContent = r.station_id;
+  syncPlaceButton();  // My places
+  syncWatchButtons();  // Watch (#521)
+  const members = state.stations.filter((record) => siteKey(record) === siteKey(r));
+  const selector = $("st-site-select");
+  selector.replaceChildren();
+  $("st-site-records").hidden = members.length < 2;
+  if (members.length > 1) {
+    $("st-site-count").textContent = `${members.length} records at this site`;
+    for (const record of members) {
+      const span = record.period_start ? `${record.period_start} to ${record.period_end || "present"}` : "dates unknown";
+      selector.add(new Option(`${record.station_id} (${span})`, stationKey(record)));
+    }
+    selector.value = key;
+    selector.onchange = () => selectStation(selector.value);
+  }
   $("st-vars").textContent = (r.variables || []).map((v) => VAR_LABEL[v] || v).join(", ") || "—";
   $("st-period").textContent = r.period_start ? ` · ${r.period_start} → ${r.period_end || "present"}` : "";
   const agency = $("st-agency");
   if (r.url) { agency.href = r.url; agency.hidden = false; } else agency.hidden = true;
   $("btn-csv").disabled = true;
+  hideExportMenu();
   $("btn-unit").hidden = true;
 
   // Reset the tabs to "loading" so nothing from the last station lingers.
@@ -69,10 +99,17 @@ export function selectStation(key, { fly = false, tab = null, push = true } = {}
   renderMethodList("methods", []);
   $("attribution").textContent = "";
   resetGr4j();
+  resetEvidence();
+  void showSkillBadge(r);
   clearCatchment();
-  for (const name of ["floods", "flows", "model", "catchment", "similar"]) {
+  for (const name of ["floods", "flows", "model", "river", "evidence", "catchment", "similar"]) {
     setTab(root(), name, { enabled: false, reason: "Loading the record…", count: null });
   }
+  resetNow("st", "Loading the record…");
+  // The place's context (#520) at the gauge: it needs only the position, not the record.
+  resetPlaceContext("st");
+  const placed = Number.isFinite(r.lat) && Number.isFinite(r.lon);
+  setTab(root(), "context", placed ? { enabled: true } : { enabled: false, reason: "The catalog has no position for this gauge." });
   setTab(root(), "overview", { enabled: true });
   setTab(root(), "methods", { enabled: true });
   // Record the selection before the tab is applied: the tab change only ever
@@ -81,11 +118,70 @@ export function selectStation(key, { fly = false, tab = null, push = true } = {}
   writeUrl({ push });
   selectTab(root(), state.activeTab);
 
-  setCard($("st-kpis-card"), "loading", { message: state.workerReady ? "Fetching the record from the agency…" : "Loading Python in your browser (about 15 MB, once)…" });
+  setCard($("st-kpis-card"), "loading", { message: state.workerReady ? fetchingMessage() : "Loading Python in your browser (about 30 MB, once)…" });
   requestAnalysis(r, my);
   requestCatchment({ station: r, target: "st" });
   requestBasin(r.lat, r.lon, "st");
+  // The gauge's reach: the one whose upstream area matches its catchment when the area is known (#518's
+  // rule, aquascope.rivers.match_by_area), else the nearest line, since a gauge sits on its own river.
+  stationSnap = startRiver("st", r.lat, r.lon, { gauge: true, area: stationArea(key) });
   requestAssess({ lat: r.lat, lon: r.lon, target: "st", key });
+}
+
+// Context is fetched when its tab is opened (selecting a gauge on that tab opens it too), as for a point.
+function loadStationContext() {
+  const r = state.selected;
+  if (!r || !Number.isFinite(r.lat) || !Number.isFinite(r.lon)) return;
+  const key = stationKey(r);
+  void loadPlaceContext("st", r.lat, r.lon, () => Boolean(state.selected && stationKey(state.selected) === key));
+}
+
+// The analysis period (#270): the full record by default, or the last 40 or 20 years. A full USGS record
+// can be a century of daily values, so the loading line says which one is on its way.
+const fetchingMessage = () => (state.period
+  ? `Fetching the last ${state.period} years from the agency…`
+  : "Fetching the full record from the agency…");
+
+function syncPeriodSelect() {
+  const sel = $("st-period-select");
+  if (sel) sel.value = state.period === null ? "all" : String(state.period);
+}
+
+// Set the period from a link or Back (undefined means the page default). True when it changed.
+export function setPeriod(period) {
+  const next = period === undefined ? defaultPeriod() : period;
+  const changed = next !== state.period;
+  state.period = next;
+  syncPeriodSelect();
+  return changed;
+}
+
+// Fetch the selected station again for a new period. The catchment, basin and assessment do not depend on
+// the period, so only the record and what is computed from it are reset.
+export function reanalyze() {
+  const r = state.selected;
+  if (!r) return;
+  const my = ++analysisRun;
+  state.result = null;
+  $("btn-csv").disabled = true;
+  hideExportMenu();
+  for (const id of ["st-hydro-card", "st-ffa-card", "st-fdc-card", "st-trend-card", "st-gr4j-card", "st-notes-card"]) {
+    hideCard($(id));
+  }
+  resetGr4j();
+  resetEvidence();
+  for (const name of ["floods", "flows", "model", "evidence"]) {
+    setTab(root(), name, { enabled: false, reason: "Loading the record…", count: null });
+  }
+  resetNow("st", "Loading the record…");
+  setCard($("st-kpis-card"), "loading", { message: fetchingMessage() });
+  requestAnalysis(r, my);
+}
+
+// The record's arrival, as an event on the panel ("analysis", detail { key, result } or { key, message }):
+// the map card (#548) draws its sparkline from it without importing this module.
+function told(key, detail) {
+  root().dispatchEvent(new CustomEvent("analysis", { detail: { key, ...detail } }));
 }
 
 function tabExists(name) {
@@ -94,26 +190,89 @@ function tabExists(name) {
 
 async function requestAnalysis(r, my) {
   const key = stationKey(r);
+  $("st-observation-status").textContent = "Checking archive observation refresh metadata…";
+  $("st-analysis-period").textContent = "No analysis period established yet.";
+  void observationMetadata(r.source, r.station_id, r.variables).then((text) => {
+    if (my === analysisRun) $("st-observation-status").textContent = text;
+  });
   setStatus("");
+  $("st-period-pick").hidden = catalogOnly(r.source);
+  if (catalogOnly(r.source)) {
+    told(key, { message: "The Explorer has no way to fetch this source's observations yet." });
+    resetNow("st", "No record here to compare with.");
+    setCard($("st-kpis-card"), "empty", { message: "Catalog-only station: Explorer has no observation retrieval path for this source yet. Open the agency page, or import your own downloaded table." });
+    return;
+  }
   try {
     const result = await call("analyze", {
-      source: r.source, station_id: r.station_id, years: CONFIG.years, period_start: r.period_start || null,
+      source: r.source, station_id: r.station_id, years: state.period, period_start: r.period_start || null,
     });
     if (my !== analysisRun || !state.selected || stationKey(state.selected) !== key) return; // user moved on
     state.result = result;
+    syncWatchButtons();  // the threshold menu follows the record's variable
     render(result, r);
+    told(key, { result });
+    startNow("st", { station: r, result, snap: stationSnap });
   } catch (err) {
     if (my !== analysisRun) return;
+    resetNow("st", "The record did not load.");
     const msg = String((err && err.message) || err);
     // A refused cross-origin call reaches here as a bare NetworkError from the
     // worker's XHR. Say what it means rather than echo it (#408).
     const refused = /NetworkError|Failed to fetch|XMLHttpRequest|cross-origin|CORS/i.test(msg);
+    told(key, { message: refused ? "This agency's API cannot be reached from a browser." : "The record did not load." });
     setCard($("st-kpis-card"), "error", {
       message: refused
         ? "This agency's API could not be reached from your browser: it does not allow cross-origin requests from web pages. The record is still reachable from the Python package (pip install aquascope)."
         : `Could not analyse this station: ${msg}`,
       retry: () => requestAnalysis(r, my),
     });
+  }
+}
+
+// "Export for..." (#519): the worker says which tools take this record; picking one downloads that tool's
+// files as a zip built by aquascope.io.engineering.
+function hideExportMenu() {
+  const sel = $("st-export");
+  sel.hidden = true;
+  sel.replaceChildren();
+}
+
+async function loadExportMenu(my) {
+  let menu;
+  try {
+    menu = await call("engineering", { op: "menu" });
+  } catch {
+    return;  // the menu is an extra; the record and its CSV are already there
+  }
+  if (my !== analysisRun) return;
+  const sel = $("st-export");
+  sel.replaceChildren();
+  for (const o of exportOptions(menu)) {
+    const opt = new Option(o.label, o.value);
+    opt.title = o.title;
+    if (o.prompt) { opt.disabled = true; opt.selected = true; }
+    sel.add(opt);
+  }
+  sel.hidden = sel.options.length === 0;
+}
+
+async function exportFor(tool) {
+  const r = state.selected;
+  const sel = $("st-export");
+  if (!tool || !r || !state.result) return;
+  sel.disabled = true;
+  setStatus("Writing the files…");
+  try {
+    const out = await call("engineering", { op: "export", tool, name: r.name || r.station_id, lat: r.lat, lon: r.lon });
+    downloadBlob(out.filename, base64ToBytes(out.zip_base64), "application/zip");
+    setStatus(exportSummary(out));
+    $("st-export-help").hidden = false;
+  } catch (err) {
+    setStatus(`Could not export: ${err.message}`, "error");
+  } finally {
+    sel.disabled = false;
+    sel.selectedIndex = 0;
   }
 }
 
@@ -135,6 +294,11 @@ function render(res, r) {
     return;
   }
   $("btn-csv").disabled = false;
+  void loadExportMenu(analysisRun);
+  metrics.record("usable_record", { kind: "station" });
+  const eligibility = res.eligibility;
+  $("st-analysis-period").textContent = `Analyzed ${res.start}–${res.end}: ${Number(res.n).toLocaleString()} observations, ${res.variable} in ${res.unit}. ` +
+    (eligibility ? `Daily-flow flood screening ${eligibility.flood_frequency ? "eligible" : "not eligible"}: ${eligibility.complete_years} complete years (minimum ${eligibility.minimum_years}).` : "");
 
   // Overview: KPIs + hydrograph
   const k = res.stats || {};
@@ -155,14 +319,18 @@ function render(res, r) {
     hovertemplate: "%{x}<br>%{y:.3~f} " + unit + "<extra></extra>",
   }];
   if (res.annual_max && res.annual_max.year.length > 1) {
+    const peaks = annualMaxPoints(res.annual_max);
     traces.push({
-      x: res.annual_max.year.map((y) => `${y}-07-01`), y: dArr(res.annual_max.v, rawUnit), mode: "markers",
+      x: peaks.x, y: dArr(res.annual_max.v, rawUnit), mode: "markers",
       // Ink with a ring punched out of the card, not a second hue: these mark
       // the same series, and they have to read beside any of the six agency
       // colours (red markers on the UK's green line are ΔE 5.5 under protanopia).
       marker: { color: emphasisColor(), size: 6, line: { color: surfaceColor(), width: 1.5 } },
       name: "annual max",
-      hovertemplate: "%{x|%Y} annual max<br>%{y:.3~f} " + unit + "<extra></extra>",
+      // On the day of the peak, so a click takes the map to that flood (#522); an older result without the
+      // days draws them at 1 July and opts out.
+      meta: { mapDate: peaks.onDay },
+      hovertemplate: (peaks.onDay ? "%{x|%d %b %Y}" : "%{x|%Y}") + " annual max<br>%{y:.3~f} " + unit + "<extra></extra>",
     });
   }
   setCard($("st-hydro-card"), "ready");
@@ -217,6 +385,13 @@ function render(res, r) {
     ? { enabled: true }
     : { enabled: false, reason: "GR4J needs four or more years of daily discharge in m³/s." });
   if (modelOk) setCard($("st-gr4j-card"), "ready");
+
+  // Evidence (#518): the global models scored against this record, computed when the tab is opened.
+  const evidenceOk = res.variable === "discharge" && isCms(rawUnit) && res.series && res.series.t.length > 365 * 3;
+  setTab(root(), "evidence", evidenceOk
+    ? { enabled: true }
+    : { enabled: false, reason: "Model skill needs three or more years of daily discharge in m³/s." });
+  if (evidenceOk && state.activeTab === "evidence") void startEvidence(r);
 
   renderNotes(res);
   renderMethods(res);
@@ -435,11 +610,21 @@ async function runGr4j() {
 
 export function initStationPanel() {
   const r = root();
+  state.period = defaultPeriod();
+  syncPeriodSelect();
+  $("st-period-select").addEventListener("change", (e) => {
+    const v = e.target.value;
+    if (!setPeriod(v === "all" ? null : Number(v))) return;
+    writeUrl();
+    reanalyze();
+  });
   r.addEventListener("tabchange", (e) => {
     state.activeTab = e.detail.tab;
     writeUrl();
+    if (e.detail.tab === "evidence" && state.selected && state.result) void startEvidence(state.selected);
+    if (e.detail.tab === "context") loadStationContext();
     // Plotly needs a nudge when a figure becomes visible for the first time.
-    for (const id of ["plot-hydro", "plot-ffa", "plot-fdc", "plot-gr4j"]) {
+    for (const id of ["plot-hydro", "plot-ffa", "plot-fdc", "plot-gr4j", "plot-evidence", "plot-st-context"]) {
       const el = $(id);
       if (el && el.offsetParent !== null && el.data) Plotly.Plots.resize(el);
     }
@@ -464,12 +649,15 @@ export function initStationPanel() {
     try {
       const csv = await call("csv", {});
       downloadBlob(`${state.selected.source}_${state.selected.station_id}.csv`, csv, "text/csv");
+      $("st-export-help").hidden = false;
     } catch (err) {
       setStatus(`Could not build the CSV: ${err.message}`, "error");
     } finally {
       btn.disabled = false;
     }
   });
+
+  $("st-export").addEventListener("change", (e) => exportFor(e.currentTarget.value));
 
   $("btn-gr4j").addEventListener("click", () => runGr4j());
   $("btn-gr4j-stop").addEventListener("click", () => { if (gr4jCancel) gr4jCancel(); });

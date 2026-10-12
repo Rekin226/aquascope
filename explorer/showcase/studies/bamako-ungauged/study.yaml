@@ -1,10 +1,10 @@
 # An AquaScope study (version 3): the plan behind an answer, its gates, and what happened.
 #   aquascope run study.yaml
 version: 3
-title: "Provide a mean annual flow and Q95 low-flow estimate, in m3/: 12.6, -8.0"
+title: "Estimate the mean annual flow, Q95 and Q05 that a proposed w: 12.6, -8.0"
 question: "No gauge I can reach on the Niger at Bamako: what mean flow and Q95 should a water-supply offtake expect?"
-created: "2026-09-07T13:49:52+00:00"
-aquascope_version: "0.14.0"
+created: "2026-09-14T21:48:54+00:00"
+aquascope_version: "0.16.0"
 author: "methodologist"
 model: "claude-sonnet-5"
 problem:
@@ -15,21 +15,20 @@ problem:
 plan:
   author: "methodologist"
   playbook: "ungauged_flow"
-  objective: "Provide a mean annual flow and Q95 low-flow estimate, in m3/s, for the Niger at the Bamako offtake site to support sizing a water-supply intake where no gauge record is reachable."
-  decision: "Use donor-basin regionalisation of flow signatures, converted to m3/s with the site's BasinATLAS upstream area, cross-checked against GloFAS modelled discharge, as the basis for offtake sizing since at-site flow-duration and GR4J calibration are not defensible without a discharge record at this site."
-  methodology: ["Delineate and characterise the catchment upstream of the site (lat 12.6, lon -8.0) using BasinATLAS/HydroATLAS to obtain the upstream area and attributes needed for donor matching and unit conversion.", "Identify the 10 gauged donor basins most similar to this catchment in attribute space from the 37,071-gauge pool.", "Transfer mean, median, Q95 and Q05 flow signatures (in mm/d) from the donor set to the site, each reported with its cross-donor band and leave-one-out skill.", "Convert the regionalised mean and Q95 signatures from mm/d to m3/s using the BasinATLAS upstream area (115,012.9 km2).", "Pull ERA5 climate and GloFAS modelled discharge for the site coordinates as an independent cross-check of the regionalised mean flow and Q95.", "Compare the regionalised m3/s estimates against the GloFAS-derived mean and low-flow statistics and report agreement or divergence as part of the confidence statement.", "Recommend the offtake design flows only with the accompanying donor band, leave-one-out skill, and GloFAS cross-check attached, not as bare point numbers."]
-  assumptions: ["catchment delineation and area (115,012.9 km2 upstream) taken from BasinATLAS HydroATLAS v1.0 at the given coordinates", "regionalisation draws on the 10 donor gauges identified from the 37,071-gauge pool as hydrologically similar", "GloFAS discharge is reachable for this location for cross-checking regionalised estimates", "no local abstraction, dam operation, or channel modification data beyond the HydroATLAS dam index (6.3) is available to adjust the natural-flow estimate", "The catchment delineation and upstream area (115,012.9 km2) from BasinATLAS HydroATLAS v1.0 at 12.6N, -8.0E is representative of the actual offtake location.", "The 10 donor gauges identified by catchment similarity are hydrologically comparable to the Niger at Bamako despite geographic distance.", "GloFAS discharge is reachable and reasonably representative of the natural flow regime at this grid cell for cross-checking purposes.", "The HydroATLAS dam index (6.3) is the only regulation signal available and no further abstraction or dam-operation adjustment is applied to the natural-flow estimate.", "Converting regionalised mm/d signatures to m3/s using the BasinATLAS upstream area introduces no significant additional error beyond the donor-transfer uncertainty."]
-  alternatives: [{"method": "flow_duration", "why_not": "marked not_defensible in the sufficiency table: no discharge record exists at this site to build a flow-duration curve"}, {"method": "gr4j_calibration", "why_not": "marked not_defensible in the sufficiency table: rainfall-runoff calibration requires an observed discharge record at the site, which is absent"}]
-  limitations_expected: ["Every transferred signature carries a donor band and a leave-one-out skill; a bare regionalised number is not by itself a defensible estimate.", "Donor regionalisation is validated at national scale (HESS 2024) which shows the method works on average, not specifically at this point; the band and skill are the local evidence of fit.", "GloFAS discharge is a ~5 km grid-cell model output, not an observation, so it serves only as a cross-check and can diverge from the true local regime, especially for low flows (Q95) which models often underrepresent.", "No local abstraction, irrigation withdrawal or detailed dam-operation data beyond the HydroATLAS dam index is available, so the natural-flow estimate may not fully reflect current regulated conditions at Bamako."]
+  objective: "Estimate the mean annual flow, Q95 and Q05 that a proposed water-supply offtake on the Niger at Bamako should plan around, using regionalization from donor gauges cross-checked against GloFAS, since no gauge record exists at or near the site."
+  decision: "estimate the mean flow and low-flow (Q95) that a proposed water-supply offtake on the Niger at Bamako should plan around, given no usable gauge record at the site"
+  methodology: ["Delineate and characterize the contributing catchment at the site from BasinATLAS (HydroATLAS) to anchor the transfer in physical attributes.", "Identify the 10 donor gauges whose catchments most resemble this one in attribute space, drawn from the 34,786-gauge pool.", "Transfer mean, median, Q95 and Q05 flow signatures from those donors to the site, each reported with its cross-donor band and leave-one-out skill.", "Cross-check the transferred flow regime against GloFAS modelled discharge and the ERA5 water balance for the same grid cell as an independent, model-based estimate.", "Report all quantities with their uncertainty bands and skill scores rather than as bare numbers, since no at-site calibration or flow-duration analysis is defensible without a discharge record."]
+  assumptions: ["site drainage area and catchment attributes taken from BasinATLAS (HydroATLAS v1.0) delineation at lat 12.6, lon -8.0", "flow estimate will be built by regionalizing signatures from the 10 donor gauges and cross-checked against GloFAS reanalysis discharge, since no local gauge or calibration is possible", "no specific historical analysis period was given by the client, so the regionalization will use whatever period the donor gauges and GloFAS record support"]
+  alternatives: [{"method": "flow_duration", "why_not": "not_defensible: no discharge record at this site to build a flow-duration curve"}, {"method": "gr4j_calibration", "why_not": "not_defensible: no discharge record at this site to calibrate against"}]
+  limitations_expected: ["Every transferred number is quoted with its band across donors and the leave-one-out skill of that signature; a bare regionalised number is not an estimate.", "Donor regionalisation is validated at national scale (HESS 2024, doi:10.5194/hess-28-3367-2024), which says the method works on average, not that it works at this point; the band and the skill are the local evidence.", "GloFAS discharge is a model output for a grid cell of about 5 km, not a gauge reading; it is a cross-check, not an observation."]
   citations: ["Oudin, L. et al. (2008). Spatial proximity, physical similarity, regression and ungaged catchments. Water Resour. Res. 44, W03413.", "National-scale validation of donor regionalisation: Hydrol. Earth Syst. Sci. 28 (2024), doi:10.5194/hess-28-3367-2024", "Parameter regionalisation at national scale: Sci. Rep. (2026), doi:10.1038/s41598-026-49424-z", "Vogel, R. M. and Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage. 120, 485-504.", "Harrigan, S. et al. (2020). GloFAS-ERA5 operational global river discharge reanalysis 1979-present. Earth Syst. Sci. Data 12, 2043-2060.", "HESS 2024, doi:10.5194/hess-28-3367-2024"]
   caveats: ["Every transferred number is quoted with its band across donors and the leave-one-out skill of that signature; a bare regionalised number is not an estimate.", "Donor regionalisation is validated at national scale (HESS 2024, doi:10.5194/hess-28-3367-2024), which says the method works on average, not that it works at this point; the band and the skill are the local evidence.", "GloFAS discharge is a model output for a grid cell of about 5 km, not a gauge reading; it is a cross-check, not an observation."]
-  rationale: "Provide a mean annual flow and Q95 low-flow estimate, in m3/s, for the Niger at the Bamako offtake site to support sizing a water-supply intake where no gauge record is reachable."
-  recon_notes: ["No catalog gauge within 50 km; the nearest is Le Blavet \u00e0 Neulliac - Blavet Auquinian (hubeau_hydrometrie/J543211003) at 2,656 km.", "10 donor gauges from a pool of 37,071 gauged catchments.", "ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land (Open-Meteo); not checked here.", "CMIP6 change factors need model output you supply (aquascope.climate works on downloaded data); not counted.", "No gauge with a usable record within 50 km: at-site methods are not defensible; what remains is the regionalisation path (similar_basins, regionalize_signatures) and the GloFAS cross-check."]
-  replans: [{"step": "s4", "reason": "gate failed: spread_within (spread_within needs two or more paths and a value)", "fallback": {"tool": "regionalize_signatures", "arguments": {"lat": 12.6, "lon": -8.0, "k": 10, "method": "both"}, "rationale": "Re-run the regionalisation with method both to obtain a robust mean_m3s and Q95 estimate that can be paired with the GloFAS mean_m3s (0.571 m3/s) for the spread_within cross-check.", "expects": []}}]
+  rationale: "Estimate the mean annual flow, Q95 and Q05 that a proposed water-supply offtake on the Niger at Bamako should plan around, using regionalization from donor gauges cross-checked against GloFAS, since no gauge record exists at or near the site."
+  recon_notes: ["No catalog gauge within 50 km; the nearest is Le Blavet \u00e0 Neulliac - Blavet Auquinian (hubeau_hydrometrie/J543211003) at 2,656 km.", "10 donor gauges from a pool of 34,786 gauged catchments.", "ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land (Open-Meteo); not checked here.", "CMIP6 change factors need model output you supply (aquascope.climate works on downloaded data); not counted.", "No gauge with a usable record within 50 km: at-site methods are not defensible; what remains is the regionalisation path (similar_basins, regionalize_signatures) and the GloFAS cross-check."]
 steps:
   - tool: "describe_catchment"
     id: "s1"
-    rationale: "Establishes the catchment area and attributes needed for donor similarity matching and for converting mm/d signatures to m3/s."
+    rationale: "Establish the catchment (area, elevation, climate, land cover, soils, dams) that the regionalization transfer is for."
     arguments:
       lat: 12.6
       lon: -8.0
@@ -40,7 +39,7 @@ steps:
     outputs: [{"kind": "figure", "id": "s1_site_map", "caption": "site map from describe_catchment"}, {"kind": "table", "id": "s1_catchment_attributes", "caption": "catchment attributes from describe_catchment"}]
   - tool: "similar_basins"
     id: "s2"
-    rationale: "Selects the 10 gauged donor catchments most hydrologically similar to the site for signature transfer."
+    rationale: "Select the 10 donor gauges whose catchments most resemble this one by BasinATLAS attribute distance, as specified by the brief."
     method: "similar_basins"
     arguments:
       lat: 12.6
@@ -53,7 +52,7 @@ steps:
     outputs: [{"kind": "figure", "id": "s2_donors_map", "caption": "donors map from similar_basins"}, {"kind": "table", "id": "s2_donors", "caption": "donors from similar_basins"}]
   - tool: "regionalize_signatures"
     id: "s3"
-    rationale: "Transfers mean, median, Q95 and Q05 flow signatures from the 10 donors to the ungauged site with an uncertainty band and leave-one-out skill."
+    rationale: "Transfer mean, median, Q95 and Q05 flow signatures from the 10 donors, with a band and leave-one-out skill, to answer the water-supply quantities directly."
     method: "regionalize_signatures"
     arguments:
       lat: 12.6
@@ -66,21 +65,18 @@ steps:
     outputs: [{"kind": "figure", "id": "s3_signatures_band", "caption": "signatures band from regionalize_signatures"}, {"kind": "table", "id": "s3_signatures", "caption": "signatures from regionalize_signatures"}, {"kind": "table", "id": "s3_donors", "caption": "donors from regionalize_signatures"}]
   - tool: "anywhere"
     id: "s4"
-    rationale: "Provides GloFAS modelled discharge and ERA5 water balance for the cell as an independent check on the regionalised mean flow and Q95."
+    rationale: "Cross-check the regionalized flow regime against GloFAS modelled discharge and ERA5 water balance for the same cell, as an independent estimate not derived from the donor transfer."
     method: "glofas_cross_check"
     arguments:
       lat: 12.6
       lon: -8.0
-      years: 20
+      years: 30
     expects:
       - {"check": "not_empty", "path": "climate"}
-      - {"check": "not_empty", "path": "climate", "repaired_from": "glofas"}
-      - {"check": "spread_within", "path": ["s3.signatures.mean_m3s", "s4.glofas.mean_m3s"], "value": 0.5}
-    fallback: {"step": {"tool": "regionalize_signatures", "arguments": {"lat": 12.6, "lon": -8.0, "k": 10, "method": "both"}, "rationale": "Re-run the regionalisation with method both to obtain a robust mean_m3s and Q95 estimate that can be paired with the GloFAS mean_m3s (0.571 m3/s) for the spread_within cross-check.", "expects": []}}
-    depends_on: ["s1", "s3"]
+    depends_on: ["s3"]
     outputs: [{"kind": "figure", "id": "s4_monthly_climate", "caption": "monthly climate from anywhere"}, {"kind": "figure", "id": "s4_glofas_series", "caption": "glofas series from anywhere"}, {"kind": "table", "id": "s4_monthly_climate", "caption": "monthly climate from anywhere"}, {"kind": "table", "id": "s4_glofas_summary", "caption": "glofas summary from anywhere"}]
 results:
   s1: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'sub_basin' is present"}, {"check": "max_area_km2", "passed": true, "detail": "catchment of 115,013 km2 against a ceiling of 200,000 km2"}], "summary": "latitude=12.6, longitude=-8.0, license=CC-BY-4.0, attribution=HydroATLAS v1.0 (BasinATLAS), CC BY 4.0. Linke, S., Lehner, B., Ouellet Dallaire, C., et al. (2019). Global hydro-environmental sub-basin ", "fallback_used": false, "sha256": "6fde09031ecf7058"}
-  s2: {"ok": true, "gates": [{"check": "min_donors", "passed": true, "detail": "10 donors, 3 needed"}, {"check": "not_empty", "passed": true, "detail": "'stations' is present"}], "summary": "k=10, method=combined", "fallback_used": false, "sha256": "bed6e55a05fc28ab"}
-  s3: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'estimates' is present"}, {"check": "not_empty", "passed": true, "detail": "'skill' is present"}], "summary": "method=similarity", "fallback_used": false, "sha256": "93eacdb831e7ae0b"}
-  s4: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'climate' is present"}, {"check": "not_empty", "passed": true, "detail": "'climate' is present"}, {"check": "spread_within", "passed": false, "detail": "spread_within needs two or more paths and a value"}], "summary": "years=20, start=2006-08-31, end=2026-08-31", "fallback_used": true, "sha256": "01972c6896e0c5f9", "fallback": {"tool": "regionalize_signatures", "arguments": {"lat": 12.6, "lon": -8.0, "k": 10, "method": "both"}, "ok": true, "gates": [], "summary": "method=both"}}
+  s2: {"ok": true, "gates": [{"check": "min_donors", "passed": true, "detail": "10 donors, 3 needed"}, {"check": "not_empty", "passed": true, "detail": "'stations' is present"}], "summary": "k=10, method=combined", "fallback_used": false, "sha256": "f92e291ebd6352f2"}
+  s3: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'estimates' is present"}, {"check": "not_empty", "passed": true, "detail": "'skill' is present"}], "summary": "method=similarity", "fallback_used": false, "sha256": "ff95d9992706116e"}
+  s4: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'climate' is present"}], "summary": "years=30, start=1996-09-07, end=2026-09-07", "fallback_used": false, "sha256": "989c0be005499550"}

@@ -20,42 +20,53 @@
  "error": null,
  "model": "claude-sonnet-5",
  "provider": "anthropic",
- "recorded": "2026-09-07T13:48:10+00:00",
- "seconds": 279.9,
+ "recorded": "2026-09-14T23:14:30+00:00",
+ "seconds": 574.5,
  "tokens": {
-  "prompt": 37780,
-  "completion": 20565,
-  "calls": 6,
+  "prompt": 86276,
+  "completion": 52264,
+  "calls": 8,
   "by_role": {
    "consultant": {
     "calls": 1,
-    "prompt_tokens": 3245,
-    "completion_tokens": 943
+    "prompt_tokens": 3244,
+    "completion_tokens": 825,
+    "cost_usd": 0.014738
    },
    "methodologist": {
     "calls": 1,
-    "prompt_tokens": 9461,
-    "completion_tokens": 6253
+    "prompt_tokens": 11519,
+    "completion_tokens": 4987,
+    "cost_usd": 0.072908
    },
    "analyst": {
     "calls": 1,
-    "prompt_tokens": 3255,
-    "completion_tokens": 190
+    "prompt_tokens": 3477,
+    "completion_tokens": 312,
+    "cost_usd": 0.010074
+   },
+   "interpreter": {
+    "calls": 1,
+    "prompt_tokens": 10910,
+    "completion_tokens": 7964,
+    "cost_usd": 0.10146
    },
    "author": {
     "calls": 2,
-    "prompt_tokens": 16807,
-    "completion_tokens": 7342
+    "prompt_tokens": 34050,
+    "completion_tokens": 16286,
+    "cost_usd": 0.23096
    },
    "critic": {
-    "calls": 1,
-    "prompt_tokens": 5012,
-    "completion_tokens": 5837
+    "calls": 2,
+    "prompt_tokens": 23076,
+    "completion_tokens": 21890,
+    "cost_usd": 0.265052
    }
   },
-  "total": 58345
+  "total": 138540
  },
- "usd": 0.4218,
+ "usd": 1.0428,
  "usd_per_mtoken": [
   3.0,
   15.0
@@ -63,23 +74,23 @@
  "playbook": "groundwater_decline",
  "branch": null,
  "plan_author": "methodologist",
- "steps": 4,
+ "steps": 8,
  "gates": {
-  "passed": 5,
-  "total": 8
+  "passed": 11,
+  "total": 14
  },
  "checks": {
-  "passed": 6,
-  "total": 6
+  "passed": 7,
+  "total": 8
  },
  "replans": 1,
- "stop_reason": "gate failed: min_years (9.7 years of record, 10 needed: too short); not_empty (nothing at 'trend'); the fallback analyze_station did not pass its own gates",
- "headline": "The full 48.7-year record at Haggis Farm (uk_ea, station b3272d5b-f4fd-48eb-8bc7-67c102d65943, 1977-09-29 to 2026-06-08) shows a statistically significant increasing trend by Mann-Kendall test (tau = 0.86, p = 0.0) with a Sen's slope of...",
+ "stop_reason": null,
+ "headline": "Notice: this report did not pass the Critic's checks (trend_matches_the_test); read its numbers with the list of what this study does not establish.",
  "not_established": [
   "Step s2, gate min_years: 9.7 years of record, 10 needed: too short",
   "Step s2, gate not_empty: nothing at 'trend'",
   "Step s2.fallback, gate min_years: no record length at 'years'",
-  "The study stopped at s2: gate failed: min_years (9.7 years of record, 10 needed: too short); not_empty (nothing at 'trend'); the fallback analyze_station did not pass its own gates"
+  "The answer's wording about significance does not match the test (p = 0.0)."
  ],
  "figures": [
   {
@@ -87,35 +98,84 @@
    "id": "fig-s1-series",
    "step": "s1",
    "caption": "Groundwater level at Haggis Farm (uk_ea b3272d5b-f4fd-48eb-8bc7-67c102d65943), 1977 to 2026.",
-   "bytes": 83127
+   "bytes": 77700
   },
   {
    "name": "s1_trend.png",
    "id": "fig-s1-trend",
    "step": "s1",
    "caption": "Annual mean groundwater level at Haggis Farm (uk_ea b3272d5b-f4fd-48eb-8bc7-67c102d65943) with the Sen slope line; the Mann-Kendall test finds increasing (p = 0.000, 40 years).",
-   "bytes": 79491
+   "bytes": 68319
   },
   {
    "name": "s2_series.png",
    "id": "fig-s2-series",
    "step": "s2",
    "caption": "Groundwater level at Haggis Farm (uk_ea b3272d5b-f4fd-48eb-8bc7-67c102d65943), 2016 to 2026.",
-   "bytes": 86122
+   "bytes": 79855
+  },
+  {
+   "name": "s3_series.png",
+   "id": "fig-s3-series",
+   "step": "s3",
+   "caption": "Groundwater level at Haggis Farm (uk_ea b3272d5b-f4fd-48eb-8bc7-67c102d65943), 1977 to 2026.",
+   "bytes": 77837
+  },
+  {
+   "name": "s4_drought_strip.png",
+   "id": "fig-s4-drought_strip",
+   "step": "s4",
+   "caption": "Standardised Groundwater Index at the site at 52.20 N, 0.12 E, 1977 to 2026: blue above zero is above the monthly norm, red below; shaded spans are the droughts at or below -1.",
+   "bytes": 54135
+  },
+  {
+   "name": "s5_series.png",
+   "id": "fig-s5-series",
+   "step": "s5",
+   "caption": "Groundwater level at Haggis Farm (uk_ea b3272d5b-f4fd-48eb-8bc7-67c102d65943), 2021 to 2026.",
+   "bytes": 76976
+  },
+  {
+   "name": "s6_recharge.png",
+   "id": "fig-s6-recharge",
+   "step": "s6",
+   "caption": "Recharge of 40 mm/yr by the water-table fluctuation method at a specific yield of 0.15; the level record itself was not in the payload, so only the estimate is drawn.",
+   "bytes": 23363
+  },
+  {
+   "name": "s7_fdc.png",
+   "id": "fig-s7-fdc",
+   "step": "s7",
+   "caption": "Flow-duration curve of discharge at Stapleford (uk_ea 1c1e42b5-f8e3-4811-b5cc-37330e028d61) from the 7 percentiles the tool reported, with Q95, Q50 and Q10 marked (log scale).",
+   "bytes": 68019
+  },
+  {
+   "name": "s8_series.png",
+   "id": "fig-s8-series",
+   "step": "s8",
+   "caption": "Monthly groundwater level at Stapleford (uk_ea 996023f9-5a1d-42c6-8ba4-6889e0ed6de6), 1980 to 2026.",
+   "bytes": 114648
+  },
+  {
+   "name": "s8_trend.png",
+   "id": "fig-s8-trend",
+   "step": "s8",
+   "caption": "Annual mean groundwater level at Stapleford (uk_ea 996023f9-5a1d-42c6-8ba4-6889e0ed6de6) with the Sen slope line; the Mann-Kendall test finds no trend (p = 0.842, 35 years).",
+   "bytes": 84617
   },
   {
    "name": "s2.fallback_series.png",
    "id": "fig-s2.fallback-series",
    "step": "s2.fallback",
-   "caption": "Groundwater level at Haggis Farm (uk_ea b3272d5b-f4fd-48eb-8bc7-67c102d65943), 1978 to 2026.",
-   "bytes": 82859
+   "caption": "Groundwater level at Haggis Farm (uk_ea b3272d5b-f4fd-48eb-8bc7-67c102d65943), 1977 to 2026.",
+   "bytes": 77700
   },
   {
    "name": "s2.fallback_trend.png",
    "id": "fig-s2.fallback-trend",
    "step": "s2.fallback",
-   "caption": "Annual mean groundwater level at Haggis Farm (uk_ea b3272d5b-f4fd-48eb-8bc7-67c102d65943) with the Sen slope line; the Mann-Kendall test finds increasing (p = 0.000, 39 years).",
-   "bytes": 82275
+   "caption": "Annual mean groundwater level at Haggis Farm (uk_ea b3272d5b-f4fd-48eb-8bc7-67c102d65943) with the Sen slope line; the Mann-Kendall test finds increasing (p = 0.000, 40 years).",
+   "bytes": 68319
   }
  ],
  "files": [
@@ -125,9 +185,16 @@
   "figures/s1_series.png",
   "figures/s1_trend.png",
   "figures/s2_series.png",
+  "figures/s3_series.png",
+  "figures/s4_drought_strip.png",
+  "figures/s5_series.png",
+  "figures/s6_recharge.png",
+  "figures/s7_fdc.png",
+  "figures/s8_series.png",
+  "figures/s8_trend.png",
   "figures/s2.fallback_series.png",
   "figures/s2.fallback_trend.png"
  ],
  "trimmed": [],
- "aquascope_version": "0.14.0"
+ "aquascope_version": "0.16.0"
 }

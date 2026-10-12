@@ -129,6 +129,7 @@ def test_archive_files_monthly_then_yearly_and_clamped_to_1951():
         (_zip("a.csv", LINES_2020_12, "cp1250"), date(2020, 10, 1), "149180020"),
         (_zip("a.csv", LINES_2025, "cp1250"), date(2024, 11, 1), "149180020"),
     ],
+    ids=["2024-wrapped-lines", "2023-semicolon-bom", "2020-cp1250-monthly", "2025-cp1250-yearly"],
 )
 def test_every_archive_format_parses_to_calendar_dates(raw, first_date, first_id):
     with zipfile.ZipFile(io.BytesIO(raw)) as z:
@@ -241,3 +242,33 @@ def test_explorer_fetch_path_reads_the_archive(monkeypatch, tmp_path):
     assert out["variable"] == "discharge" and out["unit"] == "m3/s"
     assert out["series"].index.min().date() == date(2023, 11, 1)
     assert "hydrological-year" in out["note"] and "last October" in out["note"]
+
+
+def test_a_second_collector_reuses_the_parsed_archive(tmp_path, monkeypatch):
+    """The harvest builds a collector per station; each used to re-read and re-parse every zip (~3 min a station)."""
+    import aquascope.collectors.poland_imgw as imgw
+
+    first = _Collector(tmp_path)
+    first.collect(variable="discharge", station_ids=["149180020"], start="2023-11-01", end="2024-01-31")
+    parsed = []
+    real = imgw.parse_archive
+    monkeypatch.setattr(imgw, "parse_archive", lambda text: parsed.append(1) or real(text))
+    second = _Collector(tmp_path)
+    recs = second.collect(variable="water_level", station_ids=["150180030"], start="2023-11-01", end="2023-11-30")
+    assert recs and parsed == [] and second.downloads == []
+
+
+def test_a_recent_year_is_parsed_again_once_its_cache_has_expired(tmp_path, monkeypatch):
+    import aquascope.collectors.poland_imgw as imgw
+
+    c = _Collector(tmp_path)
+    c.collect(variable="discharge", station_ids=["149180020"], start="2024-11-01", end="2025-01-31")
+    key = (str(tmp_path), "codz_2025.zip")
+    loaded_at, frame = imgw.PolandIMGWCollector._shared_frames[key]
+    imgw.PolandIMGWCollector._shared_frames[key] = (loaded_at - imgw.RECENT_TTL_SECONDS - 1, frame)
+    parsed = []
+    real = imgw.parse_archive
+    monkeypatch.setattr(imgw, "parse_archive", lambda text: parsed.append(1) or real(text))
+    _Collector(tmp_path).collect(variable="discharge", station_ids=["149180020"], start="2024-11-01",
+                                 end="2025-01-31")
+    assert parsed  # the recent year was read again

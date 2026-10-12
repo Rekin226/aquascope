@@ -197,7 +197,7 @@ class TestAgriProductivityCli:
         output = capsys.readouterr().out
         assert "AquaScope — WaPOR Productivity" in output
         assert output_path.exists()
-        data = json.loads(output_path.read_text())
+        data = json.loads(output_path.read_text(encoding="utf-8"))
         assert data["metric_id"] == "biomass_water_productivity"
         assert data["aggregate_value"] > 0
         assert len(data["aquastat_context"]) == 2

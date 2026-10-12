@@ -1,6 +1,6 @@
-site_name: AquaScope
+site_name: AquaScope Hydrology
 site_url: https://rekin226.github.io/aquascope/
-site_description: Hydrology toolkit for Python — flood frequency, baseflow, FAO-56 crop water, AI methodology recommender, 15 data sources
+site_description: Explore river records, inspect usable coverage, and export reproducible water analyses with AquaScope Hydrology.
 site_author: Rekin226
 repo_url: https://github.com/Rekin226/aquascope
 repo_name: Rekin226/aquascope
@@ -103,23 +103,41 @@ extra:
 nav:
   - Home: index.md
   - Getting Started: getting_started.md
+  - Validation scope: validation_scope.md
+  - Observed examples:
+    - Fish River, United States: adoption/fish-river-us.md
+    - Thames at Kingston, England: adoption/kingston-uk.md
+    - Seine at Paris, France: adoption/seine-fr.md
   - User Guide:
     - Features: features.md
     - Methodology matrix: methodology_matrix.md
     - Theory: theory.md
     - Data sources: data_sources.md
     - The Archive (open gauge catalog): archive.md
+    - Archive layout (the contract): archive-layout.md
     - Caravan export (large-sample datasets): caravan.md
+    - Engineering exports (HEC, SWMM, MODFLOW, FEWS, Raven): engineering_exports.md
+    - Model results on a mesh (HEC-RAS 2D, UGRID): mesh.md
+    - SWMM in the browser (assessment): assessments/swmm.md
+    - A real HEC-RAS 2D run (assessment): assessments/hec-ras.md
     - Use the Archive from R, QGIS, DuckDB: readers.md
+    - MODFLOW heads on the map: modflow.md
     - The Explorer (click any gauge): explorer.md
+    - The evidence ladder (model skill at gauges): evidence.md
+    - The monthly bulletin (state of the rivers): bulletin.md
+    - Save and share a study: adoption/sharing.md
+    - Adoption measurement: adoption/measurement.md
+    - Practitioner pilot: adoption/pilot.md
     - MCP server (tools for assistants): mcp.md
     - The Analyst (ask, ingest): analyst.md
     - Solve (a problem at a place, planned first): solve.md
     - Solve design contract: solve-design.md
     - Studio (a complete study at a place, by a crew): studio.md
+    - Advanced studies (change, climate, what if): advanced_studies.md
     - Studio design contract: studio-design.md
     - HydroGym (an environment for hydrologic agents): gym.md
     - HydroGym benchmark (agents on the playbooks): hydrogym.md
+    - Evaluating studies (aquascope eval): evaluation.md
     - Use cases: use_cases.md
   - Examples:
     - Potomac flood frequency: examples/potomac_flood_frequency.md
@@ -135,5 +153,6 @@ nav:
     - R: integration_guides/r_integration.md
     - xarray and GeoPandas: integration_guides/xarray_integration.md
   - API Reference: api.md
+  - Stability and deprecation: stability.md
   - FAQ: faq.md
   - Troubleshooting: troubleshooting.md

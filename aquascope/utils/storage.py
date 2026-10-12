@@ -54,7 +54,7 @@ def save_records(
     dicts = [r.model_dump(mode="json") for r in records]
 
     if fmt == "json":
-        filepath.write_text(json.dumps(dicts, ensure_ascii=False, indent=2, default=str))
+        filepath.write_text(json.dumps(dicts, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     elif fmt == "csv":
         try:
             import pandas as pd
@@ -182,7 +182,7 @@ def export_geojson(records: Sequence[BaseModel], path: str | Path) -> Path:
         logger.warning("Skipped %d records without a valid location attribute", skipped)
 
     collection = {"type": "FeatureCollection", "features": features}
-    filepath.write_text(json.dumps(collection, ensure_ascii=False, indent=2, default=str))
+    filepath.write_text(json.dumps(collection, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     logger.info("Exported GeoJSON (%d features) → %s", len(features), filepath)
     return filepath
 

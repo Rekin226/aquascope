@@ -1,0 +1,60 @@
+# HydroGym report-quality references (#382); the scorer is aquascope.gym.reports.
+#
+# One file per case, `<id>.yaml`, read by aquascope.gym.reports; a file whose name starts with `_` (this one) is
+# not a case. Unlike a Phase 2 plan reference (aquascope/gym/plans/_authoring.yaml), which is written before any
+# run against a saved reconnaissance, a report reference is written *after* a study: it names the recorded study
+# under explorer/showcase/studies/<study>/ (workspace.json, report.md) and states, as a hydrologist reading that
+# recorded report would, what a faithful report of it must and must not say. The scorer never reads report.md
+# itself; everything comes from workspace.json (the answer and sections `score_report` builds its own text from,
+# the run's results and gates).
+#
+# The keys of a case:
+#   id             the file name
+#   study          the recorded study's folder name under explorer/showcase/studies/
+#   title          one line: what the case is testing
+#   rationale      why these assertions, in a few sentences: what a hydrologist would flag reading the recording
+#   tags           free-form (e.g. failed_step, direction_inversion, cause_attribution)
+#   must_say       a list of Assertion (below) the report must satisfy
+#   must_not_say   a list of Assertion the report must not satisfy
+#   decision       {value, unit, tolerance, grade}: the headline answer a faithful report reaches. `value` is
+#                  checked as a claimed number within `tolerance` (relative, default 0.05) anywhere in the
+#                  report; `grade` (one of established, indicative, screening, not_established) is checked as a
+#                  phrase for that grade (aquascope.gym.reports._GRADE_PHRASES) anywhere in the report. Either
+#                  may be omitted when the case has no natural single number or no explicit grade language.
+#   findings       optional: {decision: {grade, value, unit, tolerance}, data_requests: [keyword, ...]}, scored
+#                  against a workspace's `findings` block (#417) when one is present; a case written before #417
+#                  lands simply omits this, and findings scoring against it is skipped, not failed.
+#
+# An Assertion is {kind, ...}, one of:
+#   phrase             any: [str, ...] — at least one appears (must_say) or none does (must_not_say),
+#                      case-insensitive substring, optionally scoped to `section` (a report section id, or
+#                      "answer" for the headline answer alone).
+#   number             value, tol (relative, default 0.02), optionally unit and section — a claimed number
+#                      within tolerance appears (must_say) or does not (must_not_say).
+#   failed_step_named  step (a step id, e.g. "s4") — the step is named within `section` (default "limitations"):
+#                      by its id, its tool, or a quoted field from its own failed gate ("nothing at 'climate'"
+#                      makes "climate" count). must_say only, in practice.
+#   no_number_near     keyword — no claimed number that fails to trace to the run's own results appears in a
+#                      sentence mentioning `keyword`; the standard shape for "no fabricated cross-check number",
+#                      must_not_say.
+#   grade              grade (one of established, indicative, screening, not_established) — a phrase for that
+#                      grade appears in the report (or `section` when given).
+#
+# The rules:
+#   1. Write assertions from the recorded workspace.json, not from what a report "should" have said in the
+#      abstract: `must_say` states what the recorded report actually does right (so a candidate that matches it
+#      is not punished for the real study's own choices), `must_not_say` states a specific way a report of this
+#      case could go wrong, chosen because the case's own results make it tempting (a failed step whose number
+#      would be easy to fabricate, a non-significant trend whose sign is easy to over-read as a direction).
+#   2. A `failed_step_named` assertion needs the step to actually have failed in the recorded run (a gate failed,
+#      or the tool did); check `aquascope.gym.reports._effective_failed_steps` on the loaded workspace, or read
+#      `run.failed_gates` / `run.failed_steps` directly.
+#   3. A `number` assertion's tolerance should cover the prose's own rounding (a value reported to 3-4 significant
+#      figures typically wants tol 0.01-0.03) without being so loose it would also match an unrelated number at
+#      the site.
+#   4. `decision` is the case's headline, not every key number; pick the one value (or rate) the brief's question
+#      turns on. Prefer a number that is genuinely singular at the site (a design Q100, a trend's Sen's slope)
+#      over one that could coincide with something else in the record.
+#   5. A case should carry at least one must_say and, where the recorded study makes a mistake worth guarding
+#      against or has a result a wrong report could easily overclaim, at least one must_not_say.
+schema_version: 1

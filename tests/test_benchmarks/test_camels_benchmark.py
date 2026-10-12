@@ -150,29 +150,22 @@ def _write_cff(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, body: st
             "authors:\n"
             "  - family-names: Ouedraogo\n"
             "    given-names: Abdoul Rachid\n"
-            "    orcid: \"https://orcid.org/0000-0002-4616-4153\"\n"
-            "    affiliation: \"National Central University, Taiwan\"\n",
+            '    orcid: "https://orcid.org/0000-0002-4616-4153"\n'
+            '    affiliation: "National Central University, Taiwan"\n',
             ("0.16.0", "10.5281/zenodo.21903143", "Abdoul Rachid Ouedraogo"),
         ),
         ("version: 0.16.0\n", ("0.16.0", None, None)),
         ("doi: 10.5281/zenodo.21903143\n", (None, "10.5281/zenodo.21903143", None)),
         (
-            "authors:\n"
-            "  - given-names: Jane\n"
-            "    family-names: Doe\n",
+            "authors:\n  - given-names: Jane\n    family-names: Doe\n",
             (None, None, "Jane Doe"),
         ),
         (
-            "authors:\n"
-            "  - name: AquaScope Team\n",
+            "authors:\n  - name: AquaScope Team\n",
             (None, None, "AquaScope Team"),
         ),
         (
-            "version: \"1.2.3\"\n"
-            "doi: \"10.5281/zenodo.42\"\n"
-            "authors:\n"
-            "  - family-names: Doe\n"
-            "    given-names: Jane\n",
+            'version: "1.2.3"\ndoi: "10.5281/zenodo.42"\nauthors:\n  - family-names: Doe\n    given-names: Jane\n',
             ("1.2.3", "10.5281/zenodo.42", "Jane Doe"),
         ),
         (
@@ -198,21 +191,20 @@ def _write_cff(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, body: st
             ("0.1.0", "10.5281/zenodo.1", "Jane Doe"),
         ),
         (
-            "some-unknown-key: value\n"
-            "version: 0.2\n",
+            "some-unknown-key: value\nversion: 0.2\n",
             ("0.2", None, None),
         ),
     ],
 )
-def test_read_citation_cff_variants(body: str, expected: tuple, tmp_path: pathlib.Path,
-                                   monkeypatch: pytest.MonkeyPatch) -> None:
+def test_read_citation_cff_variants(
+    body: str, expected: tuple, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """``_read_citation_cff`` tolerates missing fields, quoting and nested blocks."""
     _write_cff(tmp_path, monkeypatch, body)
     assert cb._read_citation_cff() == expected
 
 
-def test_read_citation_cff_multiple_authors(tmp_path: pathlib.Path,
-                                            monkeypatch: pytest.MonkeyPatch) -> None:
+def test_read_citation_cff_multiple_authors(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Multiple CFF author entries are formatted and joined."""
     _write_cff(
         tmp_path,
@@ -228,15 +220,13 @@ def test_read_citation_cff_multiple_authors(tmp_path: pathlib.Path,
     assert cb._read_citation_cff()[2] == "Jane Doe, AquaScope Team, John von Neumann"
 
 
-def test_read_citation_cff_missing_file(tmp_path: pathlib.Path,
-                                        monkeypatch: pytest.MonkeyPatch) -> None:
+def test_read_citation_cff_missing_file(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A missing ``CITATION.cff`` reads as ``(None, None, None)`` rather than erroring."""
     monkeypatch.setattr(cb, "_REPO_ROOT", tmp_path)
     assert cb._read_citation_cff() == (None, None, None)
 
 
-def test_build_results_with_missing_cff_falls_back(tmp_path: pathlib.Path,
-                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_results_with_missing_cff_falls_back(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """No ``CITATION.cff``: the software block falls back to the package identity."""
     from aquascope import __version__
 
@@ -249,8 +239,7 @@ def test_build_results_with_missing_cff_falls_back(tmp_path: pathlib.Path,
     assert "https://doi.org" not in software["citation"]
 
 
-def test_build_results_with_partial_cff_falls_back(tmp_path: pathlib.Path,
-                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_results_with_partial_cff_falls_back(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Only a version recorded: author and DOI fall back to their defaults."""
     _write_cff(tmp_path, monkeypatch, "version: 9.9.9\n")
     software = cb.build_results(gauge_ids=["01013500"])["software"]
@@ -355,10 +344,69 @@ def test_cli_from_json_rejects_no_reports(tmp_path) -> None:
         cb.main(["--from-json", str(run_dir / "results.json"), "--no-reports"])
 
 
-def test_cli_strict_exits_nonzero_when_unmet(tmp_path) -> None:
-    """--strict fails the run when any recorded check is unmet."""
+def test_cli_from_json_rejects_strict(tmp_path) -> None:
+    """--from-json re-renders a recorded run; --strict asserts only on a fresh run."""
+    run_dir = tmp_path / "run"
+    cb.main(["--output-dir", str(run_dir), "--gauge-id", "01013500"])
+    with pytest.raises(ValueError):
+        cb.main(["--from-json", str(run_dir / "results.json"), "--strict"])
+
+
+def test_cli_from_json_rejects_gauge_id(tmp_path) -> None:
+    """--from-json renders the gauges already in the JSON"""
+    run_dir = tmp_path / "run"
+    cb.main(["--output-dir", str(run_dir), "--gauge-id", "01013500"])
+    with pytest.raises(ValueError):
+        cb.main(["--from-json", str(run_dir / "results.json"), "--gauge-id", "01664000"])
+
+
+def test_cli_fresh_run_flags_combine(tmp_path) -> None:
+    """--gauge-id --no-reports --strict are compatible on a fresh run."""
+    rc = cb.main(["--output-dir", str(tmp_path), "--gauge-id", "03451500", "--no-reports", "--strict"])
+    assert rc == 0
+    assert (tmp_path / "results.json").exists()
+    assert not (tmp_path / "results.md").exists()
+    assert not (tmp_path / "results.html").exists()
+
+
+def test_cli_strict_passes_on_committed_data(tmp_path) -> None:
+    """--strict exits 0 on committed data: known baseline misses pass and gates are met."""
     rc = cb.main(["--output-dir", str(tmp_path), "--strict"])
+    assert rc == 0
+
+
+def test_cli_strict_passes_on_data_limitation_only(tmp_path) -> None:
+    """--strict exits 0 when a gauge's only misses are data-limitation findings."""
+    rc = cb.main(["--output-dir", str(tmp_path), "--gauge-id", UNSTABLE_GAUGE, "--strict"])
+    assert rc == 0
+
+
+def test_cli_strict_passes_with_known_misses_baseline(tmp_path) -> None:
+    """--strict exits 0 for gauge 06803500 when its BFI miss is tracked in known_misses."""
+    rc = cb.main(["--output-dir", str(tmp_path), "--gauge-id", "06803500", "--strict"])
+    assert rc == 0
+
+
+def test_cli_strict_fails_on_unexpected_miss(tmp_path, monkeypatch, capsys) -> None:
+    """--strict exits 1 when a genuine miss is not in the known_misses baseline."""
+    empty_known = tmp_path / "empty_known.json"
+    empty_known.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(cb, "KNOWN_MISSES_FILE", empty_known)
+    rc = cb.main(["--output-dir", str(tmp_path), "--gauge-id", "06803500", "--strict"])
     assert rc == 1
+    assert "1 unexpected miss(es), 0 integrity failure(s)" in capsys.readouterr().out
+
+
+def test_load_known_misses_committed_file() -> None:
+    """The committed known_misses.json loads and contains baseline entries."""
+    misses = cb.load_known_misses()
+    assert len(misses) >= 3
+    keys = {(m["gauge_id"], m["stage"], m["metric"]) for m in misses}
+    assert ("06803500", "baseflow", "bfi_eckhardt") in keys
+    assert ("09510200", "baseflow", "bfi_eckhardt") in keys
+    assert ("08181500", "signatures", "q5") in keys
+    for m in misses:
+        assert "reason" in m and len(m["reason"]) > 20
 
 
 def test_cli_rejects_unknown_gauge(tmp_path) -> None:
@@ -374,6 +422,36 @@ def test_strict_flags_integrity_failures() -> None:
     assert results["summary"]["n_integrity_failures"] == 0
     assert cb._strict_failed(results) is False
     summary = dict(results["summary"], n_integrity_failures=1)
+    assert cb._strict_failed(dict(results, summary=summary)) is True
+
+
+def test_strict_ignores_data_limitation_findings() -> None:
+    """--strict does not fail a run whose only misses are data-limitation findings."""
+    results = cb.build_results(gauge_ids=[UNSTABLE_GAUGE])
+    assert results["summary"]["n_unmet"] > 0
+    assert results["summary"]["n_unmet"] == results["summary"]["n_data_limitation_findings"]
+    assert all(g for k, g in results["summary"]["gates"].items() if k.endswith("_met"))
+    assert cb._strict_failed(results) is False
+
+
+def test_strict_fails_on_genuine_misses_besides_data_limitation() -> None:
+    """One unexpected genuine miss beyond the data-limitation findings fails --strict."""
+    results = cb.build_results(gauge_ids=["03451500"])
+    assert cb._strict_failed(results) is False
+
+    cres = results["catchments"]["03451500"]
+    broken_check = dict(cres["signatures"]["checks"][0], check_passes=False, metric="unexpected_metric")
+    broken_catchment = dict(cres, signatures=dict(cres["signatures"], checks=[broken_check]))
+    broken_results = dict(results, catchments={"03451500": broken_catchment})
+    assert cb._strict_failed(broken_results) is True
+
+
+def test_strict_fails_on_gate_unmet_even_clean() -> None:
+    """An unmet aggregate gate fails --strict even with no per-check misses."""
+    results = cb.build_results(gauge_ids=["03451500"])
+    summary = dict(results["summary"])
+    gates = dict(results["summary"]["gates"], q_mean_gate_met=False)
+    summary["gates"] = gates
     assert cb._strict_failed(dict(results, summary=summary)) is True
 
 

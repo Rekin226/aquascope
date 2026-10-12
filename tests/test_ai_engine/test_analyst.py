@@ -81,7 +81,9 @@ def test_ask_stops_at_max_steps():
 
 
 def test_resolve_llm_env_and_errors(monkeypatch):
-    for k in ("OPENAI_API_KEY", "GROQ_API_KEY", "HF_TOKEN", "AQUASCOPE_LLM_API_KEY", "AQUASCOPE_LLM_BASE_URL"):
+    # every provider's variable, not a hand-picked few: an ANTHROPIC_API_KEY in the shell must not answer here
+    provider_vars = {cfg["env"] for cfg in analyst.PROVIDERS.values() if cfg["env"]}
+    for k in provider_vars | {"AQUASCOPE_LLM_API_KEY", "AQUASCOPE_LLM_BASE_URL", "AQUASCOPE_LLM_MODEL"}:
         monkeypatch.delenv(k, raising=False)
     with pytest.raises(RuntimeError, match="No LLM configured"):
         analyst.resolve_llm()
@@ -112,7 +114,14 @@ def test_tool_specs_cover_the_mcp_surface():
                      "list_playbooks", "describe_playbook", "solve_plan", "solve_run",
                      # the site-level tools of the drought, supply and irrigation playbooks (#309)
                      "drought_indices", "drought_propagation", "low_flow_context", "supply_reliability",
-                     "crop_water_demand"}
+                     "crop_water_demand",
+                     # the map's signature filter over signatures.parquet
+                     "filter_gauges",
+                     # the advanced study steps: change, nonstationary floods, models, projections, regions
+                     "change_points", "nonstationary_flood", "pot_flood", "catchment_model", "climate_projection",
+                     "regional_flood", "compare_gauges",
+                     # the river reach at a point and its simulated record (#516)
+                     "reach_record"}
     tools = analyst._openai_tools(analyst._tool_specs())
     assert all(t["type"] == "function" and "parameters" in t["function"] for t in tools)
 

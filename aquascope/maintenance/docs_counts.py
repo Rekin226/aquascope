@@ -34,11 +34,10 @@ SOURCE_COUNT_PATTERNS = {
     ],
     "docs/features.md": [r"## Data Collection \((\d+) sources\)"],
     "docs/data_sources.md": [r"\*\*(\d+) collectors\*\*"],
+    "docs/api.md": [r"(\d+) unified collectors\. Every collector"],
+    "docs/faq.md": [r"hydrology data from (\d+) global sources"],
     "docs/i18n/README.fr.md": [
         r"espace de travail multipage avec (\d+) sources"
-    ],
-    "CITATION.cff": [
-        r"interface to (\d+) global water data sources"
     ],
 }
 

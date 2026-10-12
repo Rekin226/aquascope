@@ -11,7 +11,7 @@ intake ──► recon ──► plan ──► review ──► execute ──�
 (form or   (assess_  (playbook  (the user  (aquascope   (answer + what it
  model)     site)     tree, a    sees the   run, gates   does not establish
                       model may  plan)      per step,    + study.yaml)
-                      fill it)              replan once)
+                      fill it)              replan per step)
 ```
 
 Every capability is a plain Python function in the package (one engine,
@@ -102,12 +102,22 @@ results:                           # written by the runner, one per step
 Gates live in `aquascope/gates.py`: `evaluate(expects, payload) -> list[dict]`.
 Check vocabulary v1: `min_years`, `max_return_period_factor`, `ci_finite`,
 `spread_within`, `nse_min` (validation split), `kge_min`, `not_empty`,
+`fit_envelopes_max` (the fit at the record maximum's own return period against the
+observed maximum), `sampling_density` (observations a year against the resolution
+claimed), `trend_on_series` (the Mann-Kendall on the series the test names, the
+annual maxima for a flood fit), `cross_check_ratio` (a cross-check against a
+reference number, which may be an earlier step's result: `{{ result.s3.<path> }}`
+in a gate is resolved by the runner),
 `unit_present`, `max_area_km2`, `min_donors`, `status_is` (for sufficiency
 rows). Each check has a `path` (dotted, into the tool payload) and a
 `value`. Version-1 studies (a list of steps, no `version`) keep running.
 
 `run_study` executes steps in order, evaluates `expects`, and on a failed
-gate runs the `fallback` step once (recording `fallback_used`) or stops the
+gate runs the `fallback` step once (recording `fallback_used`); if that fails too the step is
+recorded as not established (`failed_reason`, and `run.failed_steps` / `run.summary`) and the run goes on:
+independent steps run, dependents are skipped with the reason, a reference to the failed result skips the
+referencing step. Only an explicit `fallback: stop` ends the run early. Recovery is per failed step: each
+gets its branch replan or its Specialist fallback at most `max_replans` times. The old behaviour stopped the
 study with the reason. `on_event` receives `{"role", "step", "event", …}`.
 
 ### Playbooks (`aquascope/playbooks/*.yaml`)
@@ -120,6 +130,8 @@ intake:
   - {name: return_period, label: Return period (years), type: int, default: 100}
   - {name: decision, label: What is being decided, type: choice, options: [design flow, risk screening, insurance], default: design flow}
 branches:                          # first match wins; conditions are over the recon dict
+                                   # (a compound brief also plans the companion playbooks it names,
+                                   #  see playbooks.companions, and appends their new steps, #383)
   - id: at_site
     when: [{path: context.years_by_variable.discharge, op: ">=", value: 20}]
     steps: [...]                   # study-v2 steps with {{ intake.return_period }} and {{ station.source }} placeholders

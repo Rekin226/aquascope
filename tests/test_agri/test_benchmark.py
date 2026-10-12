@@ -165,6 +165,6 @@ class TestAgriBenchmarkCli:
         output = capsys.readouterr().out
         assert "AquaScope — Agriculture Benchmark" in output
         assert output_path.exists()
-        data = json.loads(output_path.read_text())
+        data = json.loads(output_path.read_text(encoding="utf-8"))
         assert data["metric_id"] == "agricultural_withdrawal_share_pct"
         assert data["table"]

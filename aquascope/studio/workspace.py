@@ -5,7 +5,8 @@ crew needs a shared, serialisable memory: the brief the Consultant wrote, the
 inventory the Scout built, the plan the Methodologist proposed (a version-3
 :class:`aquascope.study.Study`), the run and its gates, the Critic's findings,
 the report the Author assembled, every artifact as bytes, the messages, the
-events and the token ledger per role. That is this module.
+events and the ledger per role (calls, tokens and, when the model is priced,
+USD). That is this module.
 
 It is plain dataclasses with ``to_dict`` / ``from_dict`` (bytes travel as
 base64), so the browser can hold it between worker calls, the CLI can write
@@ -24,7 +25,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 #: The Coordinator's states, in the order a study normally passes through them.
-STATES = ("intake", "scouting", "planning", "review", "running", "critique", "authoring", "done", "declined")
+STATES = ("intake", "scouting", "planning", "waiting", "review", "running", "critique", "authoring", "done",
+          "declined")
 
 #: Who writes into the workspace. The names are the ones the events and the ledger use.
 ROLES = ("consultant", "scout", "methodologist", "analyst", "critic", "author", "coordinator", "runner", "reviewer")
@@ -48,6 +50,10 @@ class Question:
     options: list[str] | None = None
     default: Any = None
     answer: Any = None
+    #: One line on what the answer changes in the study (a checklist question's ``why``).
+    why: str | None = None
+    #: Why the last reply could not be used, said when the question is asked again.
+    retry: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -56,7 +62,8 @@ class Question:
     def from_dict(cls, d: dict[str, Any]) -> Question:
         return cls(id=str(d.get("id") or ""), text=str(d.get("text") or ""),
                    options=list(d["options"]) if d.get("options") else None,
-                   default=d.get("default"), answer=d.get("answer"))
+                   default=d.get("default"), answer=d.get("answer"), why=d.get("why") or None,
+                   retry=d.get("retry") or None)
 
 
 @dataclass
@@ -75,6 +82,9 @@ class Brief:
     #: The problem kind the registry knows (flood_risk, drought, ...) and the playbook it maps to, when one does.
     kind: str | None = None
     playbook: str | None = None
+    #: Every playbook the brief asks for, the primary first: a compound brief names more than one and the tree
+    #: composes their branches (#383).
+    kinds: list[str] = field(default_factory=list)
     #: The playbook's intake fields, when a playbook applies (return_period, timescales, crop, ...).
     intake: dict[str, Any] = field(default_factory=dict)
     #: What the Consultant assumed rather than asked.
@@ -83,6 +93,9 @@ class Brief:
     ready: bool = False
     #: Who wrote it: "rules" (keyword rules and intake hints), "device" (an on-device model), "model".
     source: str = "rules"
+    #: The intake fields the client stated (in the text, in an answer, or as a model read them): the checklist
+    #: counts these as known, never a field that only holds its default.
+    stated: list[str] = field(default_factory=list)
 
     @property
     def open_questions(self) -> list[Question]:
@@ -111,7 +124,7 @@ class Dataset:
     """One row of the data inventory: a gauge, a well, a rain gauge, the ERA5 cell, the catchment, a user's table."""
 
     id: str
-    #: station | upload | reanalysis | catchment | donors | samples
+    #: station | upload | reanalysis | modelled | catchment | donors | samples
     kind: str
     variable: str | None = None
     source: str | None = None
@@ -150,6 +163,12 @@ class Inventory:
     catchment: dict[str, Any] | None = None
     donors: int | None = None
     notes: list[str] = field(default_factory=list)
+    #: The place-context layers that cover the site (#520): ``{layer, label, sources, licences, summary?}``.
+    #: Listed, not counted as datasets: they describe the place, they are not a record to analyse.
+    context: list[dict[str, Any]] = field(default_factory=list)
+    #: Which global model to lean on near the site (#518): :func:`aquascope.evidence.lean_on` over the published
+    #: skill table, ``{"model", "label", "median_kge", "n_gauges", "sentence", ...}``; None when not read.
+    models: dict[str, Any] | None = None
 
     @property
     def sufficiency(self) -> list[dict[str, Any]]:
@@ -167,8 +186,13 @@ class Inventory:
         return [d for d in self.datasets if d.kind == "upload"]
 
     def to_dict(self) -> dict[str, Any]:
-        return {"site": dict(self.site), "datasets": [d.to_dict() for d in self.datasets], "recon": self.recon,
-                "catchment": self.catchment, "donors": self.donors, "notes": list(self.notes)}
+        out = {"site": dict(self.site), "datasets": [d.to_dict() for d in self.datasets], "recon": self.recon,
+               "catchment": self.catchment, "donors": self.donors, "notes": list(self.notes)}
+        if self.context:
+            out["context"] = [dict(c) for c in self.context]
+        if self.models:
+            out["models"] = dict(self.models)
+        return out
 
     @classmethod
     def from_dict(cls, d: dict[str, Any] | None) -> Inventory | None:
@@ -177,7 +201,9 @@ class Inventory:
         return cls(site=dict(d.get("site") or {}),
                    datasets=[Dataset.from_dict(x) for x in (d.get("datasets") or []) if isinstance(x, dict)],
                    recon=dict(d.get("recon") or {}), catchment=d.get("catchment"), donors=d.get("donors"),
-                   notes=[str(n) for n in (d.get("notes") or [])])
+                   notes=[str(n) for n in (d.get("notes") or [])],
+                   context=[dict(c) for c in (d.get("context") or []) if isinstance(c, dict)],
+                   models=dict(d["models"]) if isinstance(d.get("models"), dict) else None)
 
 
 # ── artifacts and messages ──────────────────────────────────────────────────
@@ -189,6 +215,7 @@ MEDIA_TYPES = {
     "md": "text/markdown",
     "html": "text/html",
     "json": "application/json",
+    "geojson": "application/geo+json",
     "yaml": "application/yaml",
     "ipynb": "application/x-ipynb+json",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -271,6 +298,10 @@ class Workspace:
     #: The run: ``{"ok", "results": [...], "gates": [...], "stopped_at", "stop_reason", "started", "finished"}``.
     run: dict[str, Any] | None = None
     #: The Critic's findings: ``{"checks": [...], "issues": [...], "not_established": [...]}``.
+    #: The Interpreter's findings: claims with basis paths, consistency, the decision block, data requests.
+    findings: dict[str, Any] | None = None
+    #: The data request the study is waiting on (status ``waiting``): what, why, effect, continue_without.
+    pending_request: dict[str, Any] | None = None
     critique: dict[str, Any] | None = None
     #: The Author's report: ``{"title", "answer", "key_numbers": [...], "sections": [...], "not_established": [...],
     #: "references": [...], "footer"}``. A section is ``{"id", "title", "text", "figures": [ids], "tables": [ids]}``.
@@ -278,15 +309,25 @@ class Workspace:
     artifacts: list[Artifact] = field(default_factory=list)
     messages: list[Message] = field(default_factory=list)
     events: list[dict[str, Any]] = field(default_factory=list)
-    #: Tokens per role: ``{"consultant": {"calls", "prompt_tokens", "completion_tokens"}, ...}``.
-    ledger: dict[str, dict[str, int]] = field(default_factory=dict)
+    #: Calls and tokens per role: ``{"consultant": {"calls", "prompt_tokens", "completion_tokens"}, ...}``, plus
+    #: ``cost_usd`` when the model is in the price table (:data:`aquascope.ai_engine.providers.PRICES`).
+    ledger: dict[str, dict[str, Any]] = field(default_factory=dict)
     model: str | None = None
     provider: str | None = None
+    #: The spend ceiling, once one was reached: ``{"max_usd", "spent_usd", "role", "at"}``. The roles run
+    #: keyless from that point; the event with the same words is in ``events``.
+    budget: dict[str, Any] | None = None
     #: The user's tables as CSV text by dataset id, so they round-trip with the workspace.
     tables: dict[str, str] = field(default_factory=dict)
     #: Follow-ups after the report: ``{"text", "at", "kind": "question" | "change", "steps": [...]}``.
     follow_ups: list[dict[str, Any]] = field(default_factory=list)
     declined_reason: str | None = None
+    #: The house style the documents are dressed in (:class:`aquascope.studio.document.HouseStyle` as a dict:
+    #: organisation, project, the people who prepared and checked it, the logo as ``logo_b64``).
+    house_style: dict[str, Any] | None = None
+    #: The Study Desk's state (:mod:`aquascope.studio.desk`): ``{"revisions": [...], "comments": [...],
+    #: "estimator": "gev_lmoments" | "lp3" | "gev_bootstrap"}``.
+    desk: dict[str, Any] | None = None
     version: int = WORKSPACE_VERSION
     #: A face's callback for every event as it happens (the Coordinator sets it); not serialised.
     listener: Any = field(default=None, repr=False, compare=False)
@@ -364,15 +405,29 @@ class Workspace:
 
     # ── the ledger ──
 
-    def charge(self, role: str, prompt_tokens: int = 0, completion_tokens: int = 0) -> None:
+    def charge(self, role: str, prompt_tokens: int = 0, completion_tokens: int = 0,
+               cost_usd: float | None = None) -> None:
         entry = self.ledger.setdefault(role, {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0})
         entry["calls"] += 1
         entry["prompt_tokens"] += int(prompt_tokens or 0)
         entry["completion_tokens"] += int(completion_tokens or 0)
+        if cost_usd is not None:
+            self.charge_usd(role, cost_usd)
+
+    def charge_usd(self, role: str, cost_usd: float) -> None:
+        """Add ``cost_usd`` to the role's line (the tokens were counted by the transport)."""
+        entry = self.ledger.setdefault(role, {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0})
+        entry["cost_usd"] = round(float(entry.get("cost_usd") or 0.0) + float(cost_usd), 6)
 
     @property
     def tokens(self) -> int:
         return sum(v.get("prompt_tokens", 0) + v.get("completion_tokens", 0) for v in self.ledger.values())
+
+    @property
+    def total_usd(self) -> float | None:
+        """The USD spent across the roles, or None when no line is priced (an unknown model: tokens only)."""
+        priced = [float(v["cost_usd"]) for v in self.ledger.values() if v.get("cost_usd") is not None]
+        return round(sum(priced), 6) if priced else None
 
     # ── (de)serialisation ──
 
@@ -389,6 +444,8 @@ class Workspace:
             "inventory": self.inventory.to_dict() if self.inventory else None,
             "study": self.study,
             "run": self.run,
+            "findings": self.findings,
+            "pending_request": self.pending_request,
             "critique": self.critique,
             "report": self.report,
             "artifacts": [a.to_dict(with_data=with_artifacts) for a in self.artifacts],
@@ -397,9 +454,12 @@ class Workspace:
             "ledger": {k: dict(v) for k, v in self.ledger.items()},
             "model": self.model,
             "provider": self.provider,
+            "budget": dict(self.budget) if self.budget else None,
             "tables": dict(self.tables),
             "follow_ups": list(self.follow_ups),
             "declined_reason": self.declined_reason,
+            "house_style": dict(self.house_style) if self.house_style else None,
+            "desk": dict(self.desk) if self.desk else None,
         }
 
     @classmethod
@@ -413,6 +473,8 @@ class Workspace:
             inventory=Inventory.from_dict(d.get("inventory")),
             study=dict(d["study"]) if isinstance(d.get("study"), dict) else None,
             run=dict(d["run"]) if isinstance(d.get("run"), dict) else None,
+            findings=dict(d["findings"]) if isinstance(d.get("findings"), dict) else None,
+            pending_request=dict(d["pending_request"]) if isinstance(d.get("pending_request"), dict) else None,
             critique=dict(d["critique"]) if isinstance(d.get("critique"), dict) else None,
             report=dict(d["report"]) if isinstance(d.get("report"), dict) else None,
             artifacts=[Artifact.from_dict(a) for a in (d.get("artifacts") or []) if isinstance(a, dict)],
@@ -421,9 +483,12 @@ class Workspace:
             ledger={str(k): dict(v) for k, v in (d.get("ledger") or {}).items() if isinstance(v, dict)},
             model=d.get("model"),
             provider=d.get("provider"),
+            budget=dict(d["budget"]) if isinstance(d.get("budget"), dict) else None,
             tables={str(k): str(v) for k, v in (d.get("tables") or {}).items()},
             follow_ups=[dict(f) for f in (d.get("follow_ups") or []) if isinstance(f, dict)],
             declined_reason=d.get("declined_reason"),
+            house_style=dict(d["house_style"]) if isinstance(d.get("house_style"), dict) else None,
+            desk=dict(d["desk"]) if isinstance(d.get("desk"), dict) else None,
             version=int(d.get("version") or WORKSPACE_VERSION),
         )
         return ws
@@ -447,6 +512,6 @@ class Workspace:
             "datasets": len(self.inventory.datasets) if self.inventory else 0,
             "steps": len((self.study or {}).get("steps") or []),
             "artifacts": [a.to_dict(with_data=False) for a in self.artifacts],
-            "tokens": self.tokens, "model": self.model, "provider": self.provider,
-            "declined_reason": self.declined_reason,
+            "tokens": self.tokens, "usd": self.total_usd, "model": self.model, "provider": self.provider,
+            "budget": self.budget, "declined_reason": self.declined_reason,
         }

@@ -16,6 +16,7 @@ import argparse
 import glob
 import json
 import os
+import runpy
 import shutil
 import subprocess
 import sys
@@ -27,7 +28,8 @@ SRC = ROOT / "explorer"
 # recorded Analyst traces in explorer/showcase/ that the page replays (#233),
 # and the recorded studies under explorer/showcase/studies/ (#366).
 TEXT_GLOBS = ("*.html", "*.js", "*.css", "*.json", "src/*.js", "showcase/*.json", "showcase/studies/*.json",
-              "showcase/studies/*/*.json", "showcase/studies/*/*.md", "showcase/studies/*/*.yaml")
+              "showcase/studies/*/*.json", "showcase/studies/*/*.md", "showcase/studies/*/*.yaml",
+              "showcase/studies/*/*.html", "showcase/studies/*/*.csv", "samples/*.csv")
 # Assets copied byte for byte: the social preview card (og.png, drawn by
 # make_og_image.py) is referenced by the page's og:image, and the recorded
 # studies' figures.
@@ -87,6 +89,11 @@ def assemble(out: Path, wheel: Path, build: str, space_readme: bool = True) -> N
         shutil.copy2(SRC / rel, dest)
     shutil.copy2(wheel, out / wheel.name)
     (out / "wheels.json").write_text(json.dumps({"wheel": wheel.name, "build": build}), encoding="utf-8")
+    # Read the shared stdlib-only metadata without importing the scientific runtime.
+    capabilities = runpy.run_path(str(ROOT / "aquascope" / "explorer_capabilities.py"))
+    (out / "source-capabilities.json").write_text(json.dumps({
+        "record_sources": sorted(capabilities["EXPLORER_SOURCES"]),
+    }), encoding="utf-8")
     if space_readme:
         shutil.copy2(SRC / "SPACE_README.md", out / "README.md")
     plugin_src = ROOT / "integrations" / "geolibre"

@@ -16,7 +16,7 @@ from collections.abc import Iterator, Sequence
 from datetime import datetime
 from typing import Any
 
-from aquascope.collectors.base import BaseCollector
+from aquascope.collectors.base import BaseCollector, CollectorError
 from aquascope.schemas.water_data import (
     DataSource,
     GeoLocation,
@@ -96,8 +96,9 @@ class WQPCollector(BaseCollector):
         if state_code:
             params["statecode"] = state_code
         if characteristic_name:
-            params["characteristicName"] = (list(characteristic_name) if isinstance(characteristic_name, (list, tuple))
-                                            else characteristic_name)
+            params["characteristicName"] = (
+                list(characteristic_name) if isinstance(characteristic_name, (list, tuple)) else characteristic_name
+            )
         if site_id:
             params["siteid"] = list(site_id) if isinstance(site_id, (list, tuple)) else site_id
         if start_date:
@@ -121,9 +122,7 @@ class WQPCollector(BaseCollector):
                 "WQP streaming is not available; falling back to a buffered request. "
                 "This may transfer a very large body and the fetch may time out."
             )
-            line_source = iter(
-                self.client.get_text("/Result/search", params=params, use_cache=False).splitlines()
-            )
+            line_source = iter(self.client.get_text("/Result/search", params=params, use_cache=False).splitlines())
 
         records: list[dict] = []
         try:
@@ -132,9 +131,17 @@ class WQPCollector(BaseCollector):
                 if len(records) >= max_results:
                     break
                 records.append(dict(row))
+        except CollectorError:
+            raise
         except Exception as exc:
             logger.error("WQP fetch failed: %s", exc)
-            raise
+            target_url = f"{self.client.base_url}/Result/search"
+            raise CollectorError(
+                f"WQP fetch failed for {target_url}: {exc}",
+                source=self.name,
+                url=target_url,
+                cause=exc,
+            ) from exc
 
         logger.info("WQP fetch returned %d raw rows (max_results=%d).", len(records), max_results)
         return records
@@ -156,9 +163,7 @@ class WQPCollector(BaseCollector):
         if self.client.rate_limiter:
             self.client.rate_limiter.wait_if_needed()
         url = f"{self.client.base_url}/Result/search"
-        with self.client._client.stream(
-            "GET", url, params=params, headers={"Accept": "text/csv"}
-        ) as resp:
+        with self.client._client.stream("GET", url, params=params, headers={"Accept": "text/csv"}) as resp:
             resp.raise_for_status()
             yield from resp.iter_lines()
 

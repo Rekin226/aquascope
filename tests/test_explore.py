@@ -28,6 +28,30 @@ def _daily_flow(years: int = 30, seed: int = 7) -> pd.Series:
     return pd.Series(np.exp(rng.normal(0, 0.5, len(idx))) * base, index=idx)
 
 
+def test_full_export_preserves_long_records_and_original_precision():
+    import io
+
+    series = _daily_flow(90)
+    out = analysis.analyze_series(series, "discharge", "m3/s")
+    assert len(out["series"]["t"]) < out["n"] and out["series_downsampled"]
+    with pytest.raises(ValueError, match="downsampled"):
+        analysis.to_csv(out)
+    exported = pd.read_csv(io.StringIO(analysis.to_csv(out, series=series)), float_precision="round_trip")
+    assert len(exported) == len(series) == out["n"]
+    np.testing.assert_array_equal(exported["discharge_m3_per_s"], series.to_numpy())
+    pd.testing.assert_index_equal(pd.DatetimeIndex(exported["date"]).rename(None), series.index)
+
+
+def test_snapshot_hash_distinguishes_values_beyond_display_precision():
+    series = _daily_flow(1)
+    changed = series.copy()
+    changed.iloc[0] += 0.0000001
+    before = analysis.analyze_series(series, "discharge", "m3/s")
+    after = analysis.analyze_series(changed, "discharge", "m3/s")
+    assert before["series"] == after["series"]
+    assert before["data_snapshot"] != after["data_snapshot"]
+
+
 def test_analyze_series_full_contract():
     s = _daily_flow(30)
     out = analysis.analyze_series(s, "discharge", "m3/s")
@@ -70,6 +94,17 @@ def test_partial_years_are_dropped_from_annual_maxima():
     s = s[s.index >= "1990-11-01"]  # first year has only two months
     am = analysis._annual_max(s)
     assert 1990 not in list(am.index.year)
+
+
+def test_annual_maxima_carry_the_day_of_each_peak():
+    s = _daily_flow(12)
+    s.loc["1995-03-17"] = s.max() * 3  # a flood on a known day
+    out = analysis.analyze_series(s, "discharge", "m3/s")
+    am = out["annual_max"]
+    assert len(am["date"]) == len(am["year"]) == len(am["v"])
+    assert am["date"][am["year"].index(1995)] == "1995-03-17"
+    assert all(d.startswith(str(y)) for y, d in zip(am["year"], am["date"]))
+    json.dumps(out)
 
 
 def test_records_to_series_handles_models():
@@ -323,7 +358,9 @@ def test_analyze_station_asks_usgs_for_the_whole_catalog_span():
 def test_the_archive_copy_is_served_whole_by_default_and_capped_on_request():
     idx = pd.date_range(end=_today(), periods=int(365.25 * 30), freq="D")
     hit = pd.Series(np.linspace(1, 2, len(idx)), index=idx)
-    with patch("aquascope.archive.observations.fetch_archived_series", return_value=hit):
+    agency = _FakeUSGS(pd.Series(dtype="float64"))  # the agency has nothing earlier: the archive copy stands
+    with patch("aquascope.archive.observations.fetch_archived_series", return_value=hit), \
+            patch.object(analysis, "build_collector", return_value=agency):
         whole = analysis.fetch_series("usgs", "USGS-1", period_start="1930-01-01")
         capped = analysis.fetch_series("usgs", "USGS-1", years=5, period_start="1930-01-01")
     assert len(whole["series"]) == len(hit) and "full record requested" in whole["note"]
@@ -391,10 +428,10 @@ def test_catalog_period_uses_a_cached_copy_whatever_its_age(monkeypatch, tmp_pat
 
 
 #: Catalog sources whose stations reach the Explorer map but whose click still
-#: raises "no Explorer fetch path yet". Both predate this guard. Shrink this
-#: set, never grow it: adding a source here means shipping pins a user can
-#: click and get an error from.
-EXPLORER_FETCH_GAPS = {"bom", "brazil_ana"}
+#: raises "no Explorer fetch path yet". BOM and ANA were the last two. Keep it
+#: empty: adding a source here means shipping pins a user can click and get an
+#: error from.
+EXPLORER_FETCH_GAPS: set[str] = set()
 
 
 def test_every_catalog_source_has_an_explorer_fetch_path():
@@ -417,6 +454,7 @@ def test_every_catalog_source_has_an_explorer_fetch_path():
             broken.add(source)
             continue
         assert out["note"], f"{source} produced no provenance note"
+        assert source in analysis.DIRECT_FETCH_SOURCES, f"{source} has a fetch path but is not in DIRECT_FETCH_SOURCES"
 
     assert broken == EXPLORER_FETCH_GAPS, (
         f"Explorer fetch paths drifted. Newly broken: {sorted(broken - EXPLORER_FETCH_GAPS)}; "
@@ -449,6 +487,151 @@ def test_greek_sources_push_the_window_down_and_try_variables_in_order():
             analysis.fetch_series(source, "100200045", years=2, prefer_archive=False)
         assert [v for v, *_ in seen] == ["discharge", "water_level", "precipitation"], source
         assert all(ids == ["100200045"] and has_start and has_end for _, ids, has_start, has_end in seen), source
+
+
+def _bom_client(level_only: bool = True):
+    """A KiWIS stand-in: A4261794 lists level series only, and a level value is stamped 00:30 local time."""
+    from unittest.mock import MagicMock
+
+    header = ["station_name", "station_no", "station_id", "ts_id", "ts_name", "parametertype_id",
+              "parametertype_name"]
+    calls = []
+
+    def get_json(url, params=None, **kw):
+        calls.append(dict(params or {}))
+        if params["request"] == "getTimeseriesList":
+            if params["parametertype_name"] == "Water Course Discharge" and level_only:
+                return ["No matches."]
+            return [header, ["Paris Creek Tributary", "A4261794", "30629532", "763742010",
+                             params["ts_name"], "11763", params["parametertype_name"]]]
+        return [{
+            "ts_id": params["ts_id"], "station_latitude": "-35.215647", "station_longitude": "138.833176",
+            "ts_unitsymbol": "m", "columns": "Timestamp,Value,Quality Code",
+            "data": [["2021-06-10T00:30:00.000+10:00", None, -1],
+                     ["2021-06-11T00:30:00.000+10:00", 0.92, 140],
+                     ["2021-06-12T00:30:00.000+10:00", 0.916, 140]],
+        }]
+
+    client = MagicMock()
+    client.get_json.side_effect = get_json
+    return client, calls
+
+
+def test_bom_fetches_the_daily_mean_and_falls_back_to_level():
+    """A BOM gauge often carries level only (A4261794): discharge comes back empty and level is served."""
+    from aquascope.collectors.bom import BOMCollector
+
+    client, calls = _bom_client()
+    with patch.object(analysis, "build_collector", return_value=BOMCollector(client=client)):
+        out = analysis.fetch_series("bom", "A4261794", prefer_archive=False, period_start="2021-06-01")
+    assert out["variable"] == "water_level" and out["unit"] == "m"
+    s = out["series"]
+    assert list(s.index) == [pd.Timestamp("2021-06-11"), pd.Timestamp("2021-06-12")]  # by day, the null dropped
+    assert s.iloc[0] == pytest.approx(0.92)
+    lists = [c for c in calls if c["request"] == "getTimeseriesList"]
+    assert [c["parametertype_name"] for c in lists] == ["Water Course Discharge", "Water Course Level"]
+    assert all(c["ts_name"] == "DMQaQc.Merged.DailyMean.24HR" for c in lists)
+    values = next(c for c in calls if c["request"] == "getTimeseriesValues")
+    assert values["from"] == "2021-06-01" and values["to"] == out["requested"]["end"]
+    assert "BOM Water Data Online" in out["note"] and "trails real time" in out["note"]
+
+    # Asked for discharge only, a level-only gauge has no record of it.
+    client, _ = _bom_client()
+    with patch.object(analysis, "build_collector", return_value=BOMCollector(client=client)):
+        out = analysis.fetch_series("bom", "A4261794", prefer_archive=False, variable="discharge", years=5)
+    assert out["series"] is None and out["variable"] == ""
+
+
+def test_bom_cannot_be_reached_from_the_browser(monkeypatch):
+    """KiWIS answers a request carrying an Origin header with 403; the card must say so, not "no data"."""
+    monkeypatch.setattr(analysis, "IS_EMSCRIPTEN", True)
+    with patch.object(analysis, "build_collector", return_value=_AgencyMustNotBeCalled()), \
+         pytest.raises(analysis.BrowserUnreachableError) as err:
+        analysis.fetch_series("bom", "A4261794")
+    assert "does not mirror BOM Water Data Online" in str(err.value)
+    assert "publishes no terms" not in str(err.value)  # BOM is CC BY 3.0 AU; it is just not harvested
+
+
+_ANA_XML = """<?xml version="1.0" encoding="utf-8"?>
+<DataTable xmlns="http://MRCS/">
+  <diffgr:diffgram xmlns:msdata="urn:schemas-microsoft-com:xml-msdata" \
+xmlns:diffgr="urn:schemas-microsoft-com:xml-diffgram-v1">
+    <DocumentElement xmlns="">
+      <SerieHistorica diffgr:id="SerieHistorica1" msdata:rowOrder="0">
+        <EstacaoCodigo>58880001</EstacaoCodigo>
+        <NivelConsistencia>2</NivelConsistencia>
+        <DataHora>1973-01-01 00:00:00</DataHora>
+        <{p}01>1087.38</{p}01>
+        <{p}02>1192.48</{p}02>
+      </SerieHistorica>
+      <SerieHistorica diffgr:id="SerieHistorica2" msdata:rowOrder="1">
+        <EstacaoCodigo>58880001</EstacaoCodigo>
+        <NivelConsistencia>1</NivelConsistencia>
+        <DataHora>1973-01-01 00:00:00</DataHora>
+        <{p}01>9999</{p}01>
+      </SerieHistorica>
+    </DocumentElement>
+  </diffgr:diffgram>
+</DataTable>
+"""
+
+_ANA_NO_DATA = """<?xml version="1.0" encoding="utf-8"?>
+<DataTable xmlns="http://MRCS/">
+  <diffgr:diffgram xmlns:diffgr="urn:schemas-microsoft-com:xml-diffgram-v1">
+    <DocumentElement xmlns=""><ErrorTable><Error>Sem dados para esta estação (Código: 80360600) no período \
+solicitado!</Error></ErrorTable></DocumentElement>
+  </diffgr:diffgram>
+</DataTable>
+"""
+
+
+def _ana_collector(answers: dict[str, str]):
+    """ANA with no credentials: only the conventional network answers, and the catalog must not be paged."""
+    from unittest.mock import MagicMock
+
+    from aquascope.collectors.brazil_ana import BrazilANACollector
+
+    calls = []
+
+    def get_text(path, params=None, **kw):
+        calls.append(dict(params or {}))
+        return answers.get(params["tipoDados"], _ANA_NO_DATA)
+
+    legacy = MagicMock()
+    legacy.get_text.side_effect = get_text
+    main = MagicMock()
+    return BrazilANACollector(client=main, legacy_client=legacy), calls
+
+
+def test_ana_reads_the_conventional_network_without_credentials(monkeypatch):
+    monkeypatch.delenv("ANA_HIDROWEB_IDENTIFICADOR", raising=False)
+    monkeypatch.delenv("ANA_HIDROWEB_SENHA", raising=False)
+    c, calls = _ana_collector({"3": _ANA_XML.format(p="Vazao")})
+    with patch.object(analysis, "build_collector", return_value=c):
+        out = analysis.fetch_series("brazil_ana", "58880001", prefer_archive=False, period_start="1970-01-01")
+    assert out["variable"] == "discharge" and out["unit"] == "m3/s"
+    s = out["series"]
+    assert list(s.index) == [pd.Timestamp("1973-01-01"), pd.Timestamp("1973-01-02")]
+    assert s.iloc[0] == pytest.approx(1087.38)  # the reviewed (Consistido) month wins over the provisional one
+    assert calls == [{"codEstacao": "58880001", "tipoDados": "3", "nivelConsistencia": "",
+                      "dataInicio": "1970-01-01", "dataFim": out["requested"]["end"]}]
+    assert "HidroSerieHistorica" in out["note"] and "months behind" in out["note"]
+    assert not c.client.get_json.called  # enrichment would page the whole SNIRH catalog (and swallow a failure)
+
+
+def test_ana_falls_back_to_stage_and_says_when_there_is_nothing(monkeypatch):
+    monkeypatch.delenv("ANA_HIDROWEB_IDENTIFICADOR", raising=False)
+    c, calls = _ana_collector({"1": _ANA_XML.format(p="Cota")})
+    with patch.object(analysis, "build_collector", return_value=c):
+        out = analysis.fetch_series("brazil_ana", "58880001", prefer_archive=False, years=60)
+    assert [p["tipoDados"] for p in calls] == ["3", "1"]
+    assert out["variable"] == "water_level" and out["series"].iloc[0] == pytest.approx(10.8738)  # cm -> m
+
+    # A water-quality telemetry station (80360600 CUBATÃO) has no conventional record at all.
+    c, _ = _ana_collector({})
+    with patch.object(analysis, "build_collector", return_value=c):
+        out = analysis.fetch_series("brazil_ana", "80360600", prefer_archive=False, years=10)
+    assert out["series"] is None and "water-quality networks only have no record here" in out["note"]
 
 
 class _AgencyMustNotBeCalled:
@@ -500,3 +683,19 @@ def test_browser_unreachable_but_mirrored_source_reads_the_archive(monkeypatch):
     assert out["series"] is not None and out["variable"] == "discharge"
     assert "From the AquaScope archive" in out["note"]
     assert archived.call_args[0][:3] == ("greece_openhi", "8425", "discharge")
+
+
+def test_fetch_series_skips_the_usgs_area_lookup():
+    """The series drops the drainage area, so its one-request-per-station lookup is turned off (harvest 429s)."""
+    from unittest.mock import MagicMock, patch
+
+    import aquascope.explore as ex
+
+    fake = MagicMock()
+    fake.collect.return_value = []
+    with patch("aquascope.explore.build_collector", return_value=fake):
+        try:
+            ex.fetch_series("usgs", "USGS-01013500", years=5, prefer_archive=False, variable="discharge")
+        except Exception:  # noqa: BLE001 - an empty record may raise; the flag is what is under test
+            pass
+    assert fake.lookup_catchment_area is False

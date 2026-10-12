@@ -103,7 +103,7 @@ def test_build_and_lookup_roundtrip(tmp_path, monkeypatch):
     assert list(topo["hybas_id"]) == [1, 2, 3, 4, 9] and topo.loc[0, "lat"] == pytest.approx(1.5)
     attrs = pd.read_parquet(out / "lev12_attributes.parquet")
     assert "ele_mt_sav" in attrs.columns and "hybas_id" in attrs.columns and len(attrs) == 5
-    build = json.loads((out / "build.json").read_text())
+    build = json.loads((out / "build.json").read_text(encoding="utf-8"))
     assert build["license"] == "CC-BY-4.0" and "Linke" in build["attribution"]
 
     # point lookups against the local FlatGeobuf

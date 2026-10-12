@@ -23,7 +23,7 @@ def _nwis_like(tmp_path, n_years=12, sentinel=True):
     lines += [f"USGS\t01646500\t{d.strftime('%m/%d/%Y')}\t{v:.1f}\tA" for d, v in zip(idx, q)]
     lines.insert(10, lines[9])  # a duplicated row
     p = tmp_path / "nwis.txt"
-    p.write_text("\n".join(lines))
+    p.write_text("\n".join(lines), encoding="utf-8")
     return p
 
 
@@ -54,9 +54,9 @@ def test_ingest_end_to_end_qa(tmp_path):
     assert (r["series"] < 0).sum() == 0
     paths = ing.write_outputs(r, tmp_path / "out" / "potomac")
     assert (tmp_path / "out" / "potomac.csv").exists()
-    md = (tmp_path / "out" / "potomac.qa.md").read_text()
+    md = (tmp_path / "out" / "potomac.qa.md").read_text(encoding="utf-8")
     assert "30 sentinel" in md and "Flood frequency" in md
-    qa = json.loads((tmp_path / "out" / "potomac.qa.json").read_text())
+    qa = json.loads((tmp_path / "out" / "potomac.qa.json").read_text(encoding="utf-8"))
     assert qa["mapping"]["value_column"] == "flow_cfs" and paths["qa_md"].endswith(".qa.md")
 
 
@@ -64,7 +64,7 @@ def test_ingest_overrides_and_semicolon_csv(tmp_path):
     p = tmp_path / "level.csv"
     rows = ["Datum;Pegel [cm];Bemerkung"] + [f"{d.strftime('%d.%m.%Y')};{100 + i % 7};ok" for i, d in
                                              enumerate(pd.date_range("2021-01-01", periods=400, freq="D"))]
-    p.write_text("\n".join(rows))
+    p.write_text("\n".join(rows), encoding="utf-8")
     r = ing.ingest(p, variable="water_level", date_column="Datum", value_column="Pegel [cm]", unit="cm")
     assert r["mapping"]["variable"] == "water_level" and r["mapping"]["unit"] == "m"
     assert r["series"].iloc[0] == pytest.approx(1.0)  # 100 cm -> 1 m
@@ -75,7 +75,10 @@ def test_ingest_gaps_and_warnings(tmp_path):
     idx = pd.date_range("2010-01-01", periods=1000, freq="D")
     keep = [d for i, d in enumerate(idx) if not (200 <= i < 450)]  # a 250-day hole
     p = tmp_path / "gappy.csv"
-    p.write_text("date,discharge_m3s\n" + "\n".join(f"{d.date()},{5 + (i % 3)}" for i, d in enumerate(keep)))
+    p.write_text(
+        "date,discharge_m3s\n" + "\n".join(f"{d.date()},{5 + (i % 3)}" for i, d in enumerate(keep)),
+        encoding="utf-8",
+    )
     r = ing.ingest(p)
     assert r["qa"]["gaps"][0]["days"] == 250
     assert any("coverage" in w for w in r["qa"]["warnings"])
@@ -83,7 +86,7 @@ def test_ingest_gaps_and_warnings(tmp_path):
 
 def test_ingest_without_a_date_column_is_explicit(tmp_path):
     p = tmp_path / "nodate.csv"
-    p.write_text("a,b\n1,2\n3,4\n")
+    p.write_text("a,b\n1,2\n3,4\n", encoding="utf-8")
     with pytest.raises(ValueError, match="date/time column"):
         ing.ingest(p)
 

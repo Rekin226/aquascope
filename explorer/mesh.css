@@ -1,0 +1,92 @@
+/* Your model results on the globe (#555): the drop target, the reading card, the legend row's extras, the
+   particle canvas and the time bar on the model's own clock. The ramp and ticks reuse flood-depth.css. */
+
+.mesh-drop {
+  position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; pointer-events: none;
+  background: rgba(11, 107, 184, .10); border: 2px dashed var(--blue); border-radius: 6px;
+}
+.mesh-drop[hidden] { display: none; }
+.md-box {
+  max-width: 22rem; padding: 14px 18px; text-align: center; background: var(--surface-solid); color: var(--ink-2);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-2); font-size: .8rem; line-height: 1.4;
+}
+.md-box p { margin: 0; }
+.md-box .md-title { color: var(--ink); font-weight: 650; font-size: .92rem; margin-bottom: .3rem; }
+
+.mesh-status {
+  position: absolute; top: 54px; left: 50%; transform: translateX(-50%); z-index: 9;
+  width: max-content; max-width: min(27rem, calc(100% - 24px)); padding: 9px 12px 10px;
+  background: var(--surface-solid); color: var(--ink); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-2); font-size: .8rem; line-height: 1.4;
+}
+.mesh-status[hidden] { display: none; }
+.mesh-status.error { border-color: color-mix(in srgb, var(--err-ink) 40%, var(--line)); }
+.mesh-status .ms-line { display: flex; align-items: flex-start; gap: .5rem; }
+.mesh-status .ms-line p { margin: 0; flex: 1; }
+.mesh-status.error .ms-line p { color: var(--err-ink); }
+.ms-close {
+  font: inherit; font-size: 1rem; line-height: 1; border: 0; background: none; color: var(--muted); cursor: pointer;
+  padding: 0 2px; margin: -2px -4px 0 0;
+}
+.ms-hint { margin: .35rem 0 0; color: var(--muted); font-size: .7rem; }
+.ms-row { margin-top: .45rem; }
+.ms-crs { display: flex; align-items: center; gap: .4rem; margin-top: .5rem; flex-wrap: wrap; }
+.ms-crs label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 650; }
+.ms-crs input {
+  font: inherit; width: 9rem; padding: .28rem .4rem; border: 1px solid var(--line); border-radius: var(--radius-xs);
+  background: var(--bg); color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.ms-spin {
+  flex: none; width: 12px; height: 12px; margin-top: 3px; border-radius: 50%;
+  border: 2px solid var(--blue-soft); border-top-color: var(--blue); animation: ms-turn .8s linear infinite;
+}
+@keyframes ms-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ms-spin { animation: none; } }
+
+/* the legend row */
+.fd-ticks em { position: absolute; right: -1.3rem; top: 2px; font-style: normal; }
+.mv-opts { display: flex; gap: .9rem; margin: .45rem 0 0; font-size: .74rem; }
+.mv-opts label { display: inline-flex; align-items: center; gap: .3rem; cursor: pointer; }
+.ml-body .mv-line, .ml-body .mv-note { margin: .25rem 0 0; line-height: 1.35; font-size: .7rem; }
+.ml-body .mv-note { color: var(--ink-2); }
+.ml-body .mv-actions { display: flex; flex-wrap: wrap; gap: .25rem .8rem; margin: .4rem 0 0; }
+
+.mesh-particles { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 1; }
+
+/* the time bar on the model's own clock */
+.tb-model {
+  display: inline-block; min-width: 9.6rem; padding: .28rem .45rem; font-size: .78rem; text-align: center;
+  font-variant-numeric: tabular-nums; border: 1px solid var(--blue); border-radius: var(--radius-xs);
+  background: var(--blue-soft); color: var(--blue-dark); white-space: nowrap;
+}
+.tb-model[hidden], .timebar .tb-btn[hidden], .timebar input[hidden] { display: none; }
+.timebar.tb-clock .tb-note { max-width: 26rem; }
+
+/* While a file is read (or turned away), the reading card has the top of the map: the map's lead steps aside. */
+@media (min-width: 641px) {
+  body:has(#mesh-status:not([hidden])) .map-lead { visibility: hidden; }
+}
+/* A phone: the model's clock stays as narrow as the date bar, clear of the round buttons on the right. */
+@media (max-width: 640px) {
+  .timebar.tb-clock .tb-note { max-width: 15rem; }
+  .tb-model { min-width: 8.4rem; }
+}
+
+/* Review my model results (#564): the pins wear their severity, the legend row lists the checks. */
+.ma-pin.review svg path { fill: var(--pin, #3b4a5c); }
+.ma-pin.review:hover svg path, .ma-pin.review:focus-visible svg path { fill: color-mix(in srgb, var(--pin, #3b4a5c) 78%, #000); }
+.ml-body .mv-review { margin: .5rem 0 0; padding: .4rem 0 0; border-top: 1px solid var(--line); font-size: .72rem; line-height: 1.35; }
+.mv-review .mr-head { margin: 0; color: var(--ink); font-weight: 600; }
+.mv-review .mr-who { margin: .15rem 0 0; color: var(--muted); font-size: .68rem; }
+.mv-review details { margin: .3rem 0 0; }
+.mv-review summary { cursor: pointer; color: var(--blue-dark); font-size: .7rem; }
+.mv-review ul { list-style: none; margin: .3rem 0 0; padding: 0; display: grid; gap: .25rem; }
+.mv-review li { display: grid; grid-template-columns: 1rem 1fr; gap: .1rem .35rem; }
+.mv-review li b { font-weight: 650; color: var(--ink); }
+.mv-review li span { grid-column: 2; color: var(--ink-2); }
+.mv-review .mr-mark { grid-column: 1; grid-row: 1 / span 2; text-align: center; font-style: normal; font-weight: 700; color: var(--muted); }
+.mv-review li b { grid-column: 2; }
+.mv-review li.flagged .mr-mark { color: #b45309; }
+.mv-review li.ok .mr-mark { color: #2f7d4f; }
+.mv-review .mr-key { display: flex; flex-wrap: wrap; gap: .2rem .7rem; margin: .3rem 0 0; color: var(--ink-2); font-size: .68rem; }
+.mv-review .mr-key i { display: inline-block; width: .65rem; height: .65rem; border-radius: 2px; margin-right: .25rem; vertical-align: -1px; }

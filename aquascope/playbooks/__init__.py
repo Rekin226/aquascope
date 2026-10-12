@@ -41,11 +41,15 @@ from pydantic import BaseModel, Field
 from aquascope.study import Step, Study
 
 __all__ = [
+    "COMPANIONS",
+    "companions",
     "Branch",
+    "ChecklistItem",
     "Declined",
     "Playbook",
     "PlaybookError",
     "as_json",
+    "checklist_open",
     "coerce_intake",
     "describe",
     "evaluation_context",
@@ -107,6 +111,46 @@ class IntakeField(BaseModel):
     max: float | None = None
 
 
+class ChecklistOption(BaseModel):
+    """One answer a checklist question offers: the intake value, the words shown, and the words in the
+    client's own text that pick it without asking."""
+
+    value: Any
+    label: str | None = None
+    match: str | None = None
+
+
+class ChecklistItem(BaseModel):
+    """One thing the study must know before it plans, asked only when the text, the site and the earlier
+    answers leave it open. ``field`` is the intake field it fills; ``why`` is the one line that says what the
+    answer changes; ``when`` (conditions over ``intake.*``) says when the item applies at all."""
+
+    field: str
+    ask: str
+    why: str | None = None
+    options: list[ChecklistOption] = Field(default_factory=list)
+    when: list[Condition] = Field(default_factory=list)
+
+    def label_of(self, value: Any) -> str | None:
+        for o in self.options:
+            if o.value == value or str(o.value).lower() == str(value).lower():
+                return o.label or str(o.value)
+        return None
+
+    def pick(self, text: Any) -> ChecklistOption | None:
+        """The option a reply names (its label, its value, or its ``match`` words), else None."""
+        low = str(text if text is not None else "").strip().lower()
+        if not low:
+            return None
+        for o in self.options:
+            if low in (str(o.value).lower(), str(o.label or "").lower()):
+                return o
+        for o in self.options:
+            if o.match and re.search(o.match, str(text), re.I):
+                return o
+        return None
+
+
 class StepTemplate(BaseModel):
     id: str
     tool: str
@@ -150,6 +194,8 @@ class Playbook(BaseModel):
     variable: str | None = None
     version: int = 1
     intake: list[IntakeField] = Field(default_factory=list)
+    #: What the study must know before it plans, in the order it is asked (aquascope.studio's Consultant).
+    checklist: list[ChecklistItem] = Field(default_factory=list)
     branches: list[Branch]
     declines: list[Decline] = Field(default_factory=list)
     caveats: list[str | Caveat] = Field(default_factory=list)
@@ -262,6 +308,23 @@ def validate(playbook: str | Playbook | dict[str, Any]) -> list[str]:
             errors.append(f"intake {f.name}: min/max apply to int and float fields only")
         if f.min is not None and f.max is not None and f.min > f.max:
             errors.append(f"intake {f.name}: min {f.min!r} is above max {f.max!r}")
+    for item in pb.checklist:
+        field = next((f for f in pb.intake if f.name == item.field), None)
+        if field is None:
+            errors.append(f"checklist {item.field}: not an intake field")
+            continue
+        errors += [f"checklist {item.field}: {e}" for e in _check_conditions(item.when)]
+        for o in item.options:
+            try:
+                if o.value is not None:  # None: the field's own "no value" (the whole record)
+                    _coerce(o.value, field)
+            except (TypeError, ValueError, OverflowError):
+                errors.append(f"checklist {item.field}: option {o.value!r} is not a value the field takes")
+            if o.match:
+                try:
+                    re.compile(o.match)
+                except re.error as exc:
+                    errors.append(f"checklist {item.field}: match {o.match!r} is not a pattern ({exc})")
     if not pb.branches:
         errors.append("a playbook needs at least one branch")
     seen_branches: set[str] = set()
@@ -383,6 +446,10 @@ def coerce_intake(pb: str | Playbook | dict[str, Any], values: dict[str, Any] | 
 
 
 def _coerce(raw: Any, f: IntakeField) -> Any:
+    if isinstance(raw, str) and "{{" in raw and "result." in raw:
+        # A quantity an earlier step of the plan computes (a companion playbook reads the primary plan's
+        # derived values this way); the runner resolves it, the coercion cannot.
+        return raw
     if f.type in ("int", "float"):
         if isinstance(raw, bool):
             raise ValueError(f"{raw!r} is not a number")
@@ -535,6 +602,17 @@ def _all_hold(conds: list[Condition], ctx: dict[str, Any]) -> bool:
     return all(_holds(c, ctx) for c in conds)
 
 
+def checklist_open(pb: str | Playbook | dict[str, Any], intake: dict[str, Any] | None,
+                   stated: list[str] | set[str] | None = None) -> list[ChecklistItem]:
+    """The checklist items still open, in order: those whose ``when`` holds over ``intake`` and whose field the
+    client has not stated (``stated``: the fields read off the text or answered). A default in ``intake`` does
+    not close an item; only the client's words do."""
+    pb = load(pb)
+    done = set(stated or ())
+    ctx = {"intake": dict(intake or {})}
+    return [item for item in pb.checklist if item.field not in done and _all_hold(item.when, ctx)]
+
+
 def _fill(obj: Any, ctx: dict[str, Any]) -> Any:
     """Resolve placeholders; a string that is one placeholder keeps the value's type.
 
@@ -575,6 +653,51 @@ def _lookup(ns: str, key: str, ctx: dict[str, Any]) -> Any:
 
 
 # ── the tree ────────────────────────────────────────────────────────────────
+
+
+#: A compound brief asks for more than one playbook's answer. Each row is a playbook that can be a companion
+#: to another, the branch to take for it (None: whichever the site supports) and the pattern that names its
+#: intent outright. These are stronger than the keyword rules that pick the primary playbook: a companion is
+#: only added when the brief plainly asks for it, and only when the brief asks more than one thing.
+COMPANIONS: list[tuple[str, str | None, str]] = [
+    ("ungauged_flow", "regional",
+     r"regional(?:i[sz](?:ed|ation))?\s+(?:estimate|transfer|figure|value)|similar (?:gauged )?(?:catchments|basins)|"
+     r"donor (?:catchments|basins|gauges)|transferred from"),
+    ("groundwater_decline", None,
+     r"borehole|piezometer|groundwater levels?|water[- ]table|observation well|monitored well"),
+    ("supply_reliability", None,
+     r"\breliab|run-of-river|\bbe met\b|percent of (?:the )?(?:days|time)"),
+    ("irrigation_feasibility", None, r"\bhectares?\b|crop water (?:demand|requirement|need)|planted in"),
+    ("drought_status", None, r"\bin drought\b|rainfall deficit|\bspi\b|\bspei\b|drought (?:status|index|indices)"),
+    ("flood_risk", None, r"\bflood\b|design (?:flow|flood)|\d+\s*-?\s*year\s+(?:flow|flood|design|return)"),
+    ("water_quality", None, r"water quality|drinking-water guidelines|\bwqi\b"),
+]
+
+_ASKS = re.compile(r"\?|[,;]\s+(?:and\s+)?(?:what|how|is|are|does|do|would|where|which|can)\b|"
+                   r"\b(?:and|also)\s+(?:what|how|is|are|does|do|would|where|which|can)\b", re.I)
+_COMPOUND = re.compile(r"two (?:independent |separate |different )?(?:estimates|answers|figures|methods)|\bboth\b|"
+                       r"\bcompare\b|\bagree\b|side by side|as well as|in addition", re.I)
+MAX_COMPANIONS = 2
+
+
+def companions(problem_text: str | None, primary: str | None) -> list[tuple[str, str | None]]:
+    """The playbooks a compound brief asks for besides ``primary``, with the branch to take (None: the site's).
+
+    A brief is compound when it asks more than one thing (two question clauses, or a comparison cue) and names
+    another playbook's intent outright (``COMPANIONS``). At most ``MAX_COMPANIONS``, in table order.
+    """
+    text = problem_text or ""
+    if not text.strip():
+        return []
+    if len(_ASKS.findall(text)) < 2 and not _COMPOUND.search(text):
+        return []
+    out: list[tuple[str, str | None]] = []
+    for pid, branch, pattern in COMPANIONS:
+        if pid == primary:
+            continue
+        if re.search(pattern, text, re.I):
+            out.append((pid, branch))
+    return out[:MAX_COMPANIONS]
 
 
 def select_branch(pb: str | Playbook, recon: dict[str, Any], intake: dict[str, Any] | None = None) -> Branch | None:
@@ -647,12 +770,18 @@ def plan(
     *,
     branch: str | None = None,
     problem_text: str | None = None,
+    compose: bool = True,
 ) -> Study:
     """Fill a study from the tree alone: no model, and every placeholder resolved.
 
     Raises :class:`Declined` when a decline rule matches, when no branch
     applies, or when the registry calls a required step's method not
     defensible at this site (an optional step is dropped with a note instead).
+
+    With ``compose`` (the default) and a ``problem_text`` that asks more than
+    one thing, the branches of the companion playbooks the brief names
+    (:func:`companions`) are planned too and their new steps appended, so a
+    compound brief gets every part of its answer (#383).
     """
     pb = load(pb)
     recon = dict(recon or {})
@@ -722,7 +851,7 @@ def plan(
         plan_block["notes"] = notes
     if recon.get("notes"):
         plan_block["recon_notes"] = [str(n) for n in recon["notes"]]
-    return Study(
+    study = Study(
         question=question,
         title=f"{pb.title}: {where}",
         steps=steps,
@@ -733,3 +862,126 @@ def plan(
         plan=plan_block,
         created=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
+    if compose and problem_text:
+        for cid, cbranch in companions(problem_text, pb.id):
+            _add_companion(study, cid, cbranch, recon, intake)
+    return study
+
+
+_REF = re.compile(r"\{\{\s*result\.([A-Za-z0-9_]+)\.")
+
+
+def _rename_refs(value: Any, mapping: dict[str, str]) -> Any:
+    if isinstance(value, str):
+        return _REF.sub(lambda m: m.group(0).replace(m.group(1), mapping.get(m.group(1), m.group(1))), value)
+    if isinstance(value, dict):
+        return {k: _rename_refs(v, mapping) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_rename_refs(v, mapping) for v in value]
+    return value
+
+
+def _add_companion(study: Study, cid: str, branch: str | None, recon: dict[str, Any], intake: dict[str, Any]) -> None:
+    """Append what the companion playbook's branch adds to ``study``: the steps whose tool and method the plan
+    does not have yet (optional steps and framing steps the plan already has are left out), re-numbered after
+    the plan's own, references renamed, and the plan block saying what was added and why. A companion that
+    declines or has no branch at this site adds a note instead."""
+    plan_block = study.plan if isinstance(study.plan, dict) else {}
+    # What the primary plan derives counts as given for the companion: a demand the crop step computes is a
+    # demand the supply playbook may screen against, so its "state the demand" rule does not fire.
+    derived = dict(intake)
+    for s in study.steps:
+        for k, v in (s.arguments or {}).items():
+            if isinstance(v, str) and _REF.search(v) and k not in derived:
+                derived[k] = v
+    try:
+        other = plan(cid, recon, derived, branch=branch, compose=False)
+    except (Declined, PlaybookError) as exc:
+        reason = getattr(exc, "reason", None) or str(exc)
+        plan_block.setdefault("notes", []).append(f"the brief also asks for {cid.replace('_', ' ')}: {reason}")
+        return
+    have_tools = {s.tool for s in study.steps}
+    have_pairs = {(s.tool, s.method) for s in study.steps}
+    have_methods = {s.method for s in study.steps if s.method}
+    other_ids = {s.id for s in other.steps if s.id}
+    template = load(cid).branch(str((other.plan or {}).get("branch") or ""))
+    optional_ids = {t.id for t in (template.steps if template else []) if t.optional}
+    # Which of the companion's steps feed which: a helper step with no method of its own (a series fetch) is
+    # only worth adding when a step that is added needs it.
+    needs: dict[str, set[str]] = {}
+    for t in other.steps:
+        wants = set(t.depends_on)
+        src = (t.arguments or {}).get("from_step")
+        if src:
+            wants.add(str(src))
+        for v in (t.arguments or {}).values():
+            if isinstance(v, str):
+                wants.update(m.group(1) for m in _REF.finditer(v))
+        for w in wants:
+            needs.setdefault(w, set()).add(t.id or "")
+    chosen: list[Step] = []
+    for t in other.steps:
+        if t.tool == "describe_catchment" and "describe_catchment" in have_tools:
+            continue
+        if (t.tool, t.method) in have_pairs or (t.method and t.method in have_methods):
+            continue
+        if t.id in optional_ids:
+            continue
+        chosen.append(t)
+    # A helper step (one another companion step reads) is only worth adding while a reader is added too.
+    changed = True
+    while changed:
+        changed = False
+        ids = {t.id for t in chosen}
+        for t in list(chosen):
+            readers = needs.get(t.id or "")
+            if readers and not t.method and not (readers & ids):
+                chosen.remove(t)
+                changed = True
+    mapping: dict[str, str] = {}
+    added: list[Step] = []
+    n = len(study.steps)
+    for t in chosen:
+        n += 1
+        new_id = f"s{n}"
+        mapping[t.id or new_id] = new_id
+        added.append(Step(
+            tool=t.tool, arguments=dict(t.arguments), id=new_id, rationale=t.rationale, method=t.method,
+            expects=[dict(g) for g in t.expects], fallback=t.fallback,
+            depends_on=[d for d in t.depends_on],
+        ))
+    if not added:
+        return
+    kept = {s.id for s in added} | mapping.keys()
+    for s in added:
+        s.arguments = _rename_refs(s.arguments, mapping)
+        s.expects = _rename_refs(s.expects, mapping)
+        s.fallback = _rename_refs(s.fallback, mapping) if isinstance(s.fallback, dict) else s.fallback
+        s.depends_on = [mapping.get(d, d) for d in s.depends_on if d in kept or d in mapping or d not in other_ids]
+        s.depends_on = [d for d in s.depends_on if d in {a.id for a in added} | {p.id for p in study.steps}]
+    study.steps.extend(added)
+    other_plan = other.plan or {}
+    tools = ", ".join(s.tool for s in added)
+    plan_block.setdefault("companions", []).append({
+        "playbook": cid, "branch": other_plan.get("branch"), "steps": [s.id for s in added],
+        "rationale": other_plan.get("rationale"),
+    })
+    plan_block["compound"] = True
+    lead = (plan_block.get("rationale") or "").rstrip()
+    plan_block["rationale"] = (lead + " " if lead else "") + (
+        f"The brief also asks for what the {cid.replace('_', ' ')} playbook establishes, so its "
+        f"{other_plan.get('branch') or 'own'} branch adds {tools}; the answers are set side by side in the report."
+    )
+    for key in ("caveats", "citations"):
+        merged = list(dict.fromkeys([*(plan_block.get(key) or []), *(other_plan.get(key) or [])]))
+        if merged:
+            plan_block[key] = merged
+    for note in other_plan.get("notes") or []:
+        plan_block.setdefault("notes", []).append(f"{cid}: {note}")
+    if study.problem is not None:
+        params = dict(study.problem.get("params") or {})
+        for k, v in ((other.problem or {}).get("params") or {}).items():
+            if v is None or (isinstance(v, str) and _REF.search(v)):
+                continue  # unset, or a quantity the primary plan derives rather than a parameter
+            params.setdefault(k, v)
+        study.problem["params"] = params

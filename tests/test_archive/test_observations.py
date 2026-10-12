@@ -55,7 +55,7 @@ def test_harvest_writes_files_manifest_and_report(tmp_path):
     assert (h.attempted, h.harvested, h.empty, h.failed) == (3, 2, 1, 0)
     f = tmp_path / "obs" / "discharge" / "hubeau_hydrometrie" / "A1.csv.gz"
     assert f.exists() and obs.read_csv_gz(f.read_bytes()).shape[0] == 800
-    manifest = json.loads((tmp_path / "obs" / "manifest.json").read_text())
+    manifest = json.loads((tmp_path / "obs" / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["version"] == 2
     entry = manifest["sources"]["hubeau_hydrometrie/discharge"]
     assert entry["variable"] == "discharge" and entry["license"] == "etalab-2.0" and entry["n_stations"] == 2
@@ -96,11 +96,14 @@ def test_every_harvestable_variable_gets_its_own_budget_and_cursor(tmp_path):
 
 
 def test_manifest_v1_is_migrated_in_place(tmp_path):
-    station = {"n": 10, "harvested_at": "2026-08-17T00:00:00+00:00"}
+    # Derived from now(), never hard-coded: refresh_days is 30, so a fixed date silently stops being "fresh"
+    # thirty days after it is written and the freshness half of this test starts failing on a clock tick.
+    harvested = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(timespec="seconds")
+    station = {"n": 10, "harvested_at": harvested}
     v1 = {"version": 1, "sources": {"usgs": {"variable": "discharge", "license": "US-PD",
                                              "stations": {"USGS-1": station}}}}
     (tmp_path / "obs").mkdir()
-    (tmp_path / "obs" / "manifest.json").write_text(json.dumps(v1))
+    (tmp_path / "obs" / "manifest.json").write_text(json.dumps(v1), encoding="utf-8")
     m = obs.load_manifest(tmp_path)
     assert m["version"] == 2 and "usgs" not in m["sources"]
     assert m["sources"]["usgs/discharge"]["stations"]["USGS-1"]["n"] == 10
@@ -221,6 +224,64 @@ def test_a_full_record_harvest_keeps_closed_stations_and_a_capped_one_skips_them
     assert [r["station_id"] for r in picked] == ["NEW"]
 
 
+def test_the_files_the_40_year_cap_truncated_are_refreshed_first():
+    """#270: a mirror file that starts decades after the catalog's first date goes to the front of the stale queue,
+    so the full-record fetch merges the missing years in within the fewest runs."""
+    old = "2020-01-01T00:00:00+00:00"
+    rows = [{"source": "usgs", "station_id": sid, "variables": ["discharge"], "period_start": start}
+            for sid, start in (("WHOLE", "1986-01-01"), ("CUT", "1898-03-01"), ("BIT", "1970-01-01"))]
+    stations = {"WHOLE": {"first": "1986-01-02", "harvested_at": old, "last_attempt_status": "ok"},
+                "CUT": {"first": "1986-08-23", "harvested_at": old, "last_attempt_status": "ok"},
+                "BIT": {"first": "1986-08-23", "harvested_at": old, "last_attempt_status": "ok"}}
+    manifest = {"sources": {obs.entry_key("usgs", "discharge"): {"stations": stations}}}
+    picked = obs._pick_stations(rows, manifest, "usgs", "discharge", 10, 7, None)
+    assert [r["station_id"] for r in picked] == ["CUT", "BIT", "WHOLE"]
+    assert obs._missing_years(rows[0], stations["WHOLE"]) == 0.0
+
+
+def test_truncated_files_go_ahead_of_a_backlog_of_never_harvested_stations():
+    """#501: USGS has ~25,000 stations never harvested; ahead of them, the truncated files never came up."""
+    old = "2020-01-01T00:00:00+00:00"
+    fresh = [{"source": "usgs", "station_id": f"NEW{i}", "variables": ["discharge"], "period_start": "2000-01-01"}
+             for i in range(20)]
+    rows = fresh + [
+        {"source": "usgs", "station_id": "CUT", "variables": ["discharge"], "period_start": "1898-03-01"},
+        {"source": "usgs", "station_id": "WHOLE", "variables": ["discharge"], "period_start": "1986-01-01"},
+    ]
+    stations = {"CUT": {"first": "1986-08-23", "harvested_at": old, "last_attempt_status": "ok"},
+                "WHOLE": {"first": "1986-01-02", "harvested_at": old, "last_attempt_status": "ok"}}
+    manifest = {"sources": {obs.entry_key("usgs", "discharge"): {"stations": stations}}}
+    picked = [r["station_id"] for r in obs._pick_stations(rows, manifest, "usgs", "discharge", 5, 7, None)]
+    assert picked == ["CUT", "NEW0", "NEW1", "NEW2", "NEW3"], "the truncated file comes first; a whole one waits"
+
+
+def test_the_reference_stations_are_harvested_first():
+    """#501: the stations the Explorer's live check reads go before everything else while new, stale or cut."""
+    old = "2020-01-01T00:00:00+00:00"
+    rows = [{"source": "usgs", "station_id": sid, "variables": ["discharge"], "period_start": start}
+            for sid, start in (("CUT", "1880-01-01"), ("NEW", "2000-01-01"), ("USGS-01013500", "1903-07-29"))]
+    stations = {"CUT": {"first": "1986-08-23", "harvested_at": old, "last_attempt_status": "ok"},
+                "USGS-01013500": {"first": "1986-08-24", "harvested_at": old, "last_attempt_status": "ok"}}
+    manifest = {"sources": {obs.entry_key("usgs", "discharge"): {"stations": stations}}}
+    picked = [r["station_id"] for r in obs._pick_stations(rows, manifest, "usgs", "discharge", 2, 7, None)]
+    assert picked == ["USGS-01013500", "CUT"], "the reference station first, though CUT is more truncated"
+    # freshly harvested and whole, a reference station waits its turn like any other
+    stations["USGS-01013500"] = {"first": "1903-07-29", "harvested_at": datetime.now(timezone.utc).isoformat(),
+                                 "last_attempt_status": "ok"}
+    picked = [r["station_id"] for r in obs._pick_stations(rows, manifest, "usgs", "discharge", 5, 7, None)]
+    assert picked == ["CUT", "NEW"]
+
+
+def test_the_reference_stations_match_the_live_check() -> None:
+    """The list in observations.py is the one the Explorer's daily check reads (#501)."""
+    import re
+    from pathlib import Path
+
+    smoke = (Path(__file__).resolve().parents[2] / ".github" / "scripts" / "explorer_smoke.mjs").read_text()
+    cases = set(re.findall(r'source: "([^"]+)", station: "([^"]+)"', smoke))
+    assert cases and cases == set(obs.REFERENCE_STATIONS)
+
+
 def test_sub_daily_rainfall_folds_to_daily_totals_and_flow_to_means():
     """OpenHi telemetry is 15-minute: a day of rainfall is its sum, a day of flow its mean (#408)."""
     idx = pd.date_range("2024-01-01", periods=96 * 2, freq="15min")
@@ -266,3 +327,91 @@ def test_openhi_is_harvestable_because_the_browser_cannot_call_it():
     assert meta.redistributable and not meta.browser_reachable
     assert set(obs.HARVESTABLE["greece_openhi"]) <= set(meta.variables)
     assert all(SOURCES[k].redistributable for k in obs.HARVESTABLE)
+
+
+def test_csv_gz_roundtrip_with_quality():
+    s = _series(5)
+    quality = pd.Series(
+        ["approved", "approved", "provisional", "suspect", "unknown"],
+        index=s.resample("D").mean().dropna().index,
+    )
+    payload = obs.series_to_csv_gz(s, quality=quality)
+    assert gzip.decompress(payload).decode().startswith("date,value,quality\n")
+    value, back_quality = obs.read_csv_gz(payload, include_quality=True)
+    assert list(back_quality) == ["approved", "approved", "provisional", "suspect", "unknown"]
+    assert len(value) == 5
+
+
+def test_read_csv_gz_without_quality_arg_is_unchanged():
+    # every pre-existing call site must keep behaving exactly like today
+    s = _series(5)
+    payload = obs.series_to_csv_gz(s)  # no quality passed
+    assert obs.read_csv_gz(payload).shape[0] == 5  # plain Series, as before
+
+
+def test_read_csv_gz_old_file_without_quality_column_defaults_to_unknown():
+    s = _series(5)
+    payload = obs.series_to_csv_gz(s)  # a file written before this feature existed
+    value, quality = obs.read_csv_gz(payload, include_quality=True)
+    assert list(quality) == ["unknown"] * 5
+
+
+def _rate_limited_error():
+    from aquascope.utils.http_client import RateLimitedError
+
+    try:
+        raise RateLimitedError("https://api.waterdata.usgs.gov/ogcapi/v0/collections/daily/items")
+    except RateLimitedError as inner:
+        try:
+            raise RuntimeError("collector wrapped it") from inner
+        except RuntimeError as outer:
+            return outer
+
+
+def test_a_rate_limited_source_stops_for_the_run_and_leaves_the_rest_for_next_time(tmp_path):
+    """The 2026-09-14 and 09-21 harvests spent two hours retrying a spent USGS quota, station after station."""
+    calls = []
+
+    def fake_fetch(source, sid, *, years, prefer_archive, variable=None):
+        calls.append(sid)
+        if sid == "A2":
+            raise _rate_limited_error()
+        return {"series": _series(), "variable": "discharge", "unit": "m3/s", "note": ""}
+
+    with patch("aquascope.explore.fetch_series", side_effect=fake_fetch):
+        report = obs.harvest_observations(tmp_path, sources=["hubeau_hydrometrie"], variable="discharge",
+                                          catalog=CATALOG, max_stations=10)
+    h = report.sources[0]
+    assert calls == ["A1", "A2"]  # A3 never asked
+    assert (h.harvested, h.failed, h.stopped) == (1, 1, "rate limited")
+    stations = json.loads((tmp_path / "obs" / "manifest.json").read_text())["sources"][
+        "hubeau_hydrometrie/discharge"]["stations"]
+    assert set(stations) == {"A1"}  # A2 and A3 stay fresh, so the next run picks them first
+
+    with patch("aquascope.explore.fetch_series", side_effect=lambda *a, **k: {
+            "series": _series(), "variable": "discharge", "unit": "m3/s", "note": ""}) as again:
+        obs.harvest_observations(tmp_path, sources=["hubeau_hydrometrie"], variable="discharge",
+                                 catalog=CATALOG, max_stations=2)
+    assert [c.args[1] for c in again.call_args_list] == ["A2", "A3"]
+
+
+def test_an_ordinary_failure_does_not_stop_the_source(tmp_path):
+    def fake_fetch(source, sid, *, years, prefer_archive, variable=None):
+        if sid == "A1":
+            raise RuntimeError("All 3 attempts failed for https://example.test")
+        return {"series": _series(), "variable": "discharge", "unit": "m3/s", "note": ""}
+
+    with patch("aquascope.explore.fetch_series", side_effect=fake_fetch):
+        report = obs.harvest_observations(tmp_path, sources=["hubeau_hydrometrie"], variable="discharge",
+                                          catalog=CATALOG, max_stations=10)
+    h = report.sources[0]
+    assert (h.attempted, h.harvested, h.failed, h.stopped) == (3, 2, 1, "")
+
+
+def test_the_time_budget_stops_a_source(tmp_path):
+    with patch("aquascope.explore.fetch_series") as fake:
+        fake.return_value = {"series": _series(), "variable": "discharge", "unit": "m3/s", "note": ""}
+        report = obs.harvest_observations(tmp_path, sources=["hubeau_hydrometrie"], variable="discharge",
+                                          catalog=CATALOG, max_stations=10, max_seconds=0)
+    h = report.sources[0]
+    assert fake.call_count == 0 and h.stopped == "time budget"  # a spent budget asks nothing more

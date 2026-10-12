@@ -24,7 +24,8 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-__all__ = ["PROVIDERS", "Provider", "as_json", "default_model", "env_var", "provider_ids", "write_json"]
+__all__ = ["PRICES", "PROVIDERS", "Provider", "as_json", "default_model", "env_var", "price_for", "provider_ids",
+           "usd_for", "write_json"]
 
 
 @dataclass(frozen=True)
@@ -144,6 +145,31 @@ PROVIDERS: dict[str, Provider] = {
 
 #: The order the CLI scans the environment in when no provider was named.
 ENV_SCAN_ORDER = ("anthropic", "openai", "groq", "nvidia", "huggingface", "mistral", "openrouter")
+
+#: USD per million tokens (input, output) by model id, for the cost column of a Studio ledger. Anthropic's
+#: first-party rates for the Claude models the registry offers (Sonnet 5, Haiku 4.5, Opus 5); Groq's
+#: production models cost nothing on its free tier. A model that is not listed is counted in tokens only:
+#: :func:`usd_for` returns None for it and no spend ceiling can be enforced on it.
+PRICES: dict[str, tuple[float, float]] = {
+    "claude-opus-5": (5.0, 25.0),
+    "claude-sonnet-5": (2.0, 10.0),
+    "claude-haiku-4-5": (1.0, 5.0),
+    "openai/gpt-oss-120b": (0.0, 0.0),
+    "openai/gpt-oss-20b": (0.0, 0.0),
+}
+
+
+def price_for(model: str | None) -> tuple[float, float] | None:
+    """The (input, output) USD per million tokens of a model id, or None when the table does not price it."""
+    return PRICES.get(str(model or "").strip())
+
+
+def usd_for(prompt_tokens: int, completion_tokens: int, model: str | None) -> float | None:
+    """The cost of one call (or a ledger's worth of tokens) at the model's rate; None for an unpriced model."""
+    rate = price_for(model)
+    if rate is None:
+        return None
+    return round(int(prompt_tokens or 0) * rate[0] / 1e6 + int(completion_tokens or 0) * rate[1] / 1e6, 6)
 
 
 def provider_ids(*, browser_only: bool = False) -> list[str]:

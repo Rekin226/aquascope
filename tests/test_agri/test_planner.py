@@ -153,7 +153,7 @@ class TestAgriCli:
         assert output_path.exists()
 
         if output_format == "json":
-            data = json.loads(output_path.read_text())
+            data = json.loads(output_path.read_text(encoding="utf-8"))
             assert data["crop"] == "maize"
             assert data["schedule"]
             assert data["balance"]

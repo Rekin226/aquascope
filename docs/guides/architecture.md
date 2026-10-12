@@ -7,14 +7,14 @@ AquaScope follows a modular, layered architecture designed for extensibility and
 ```mermaid
 flowchart TB
     subgraph Interface["User Interface"]
-        CLI["CLI<br/>14 commands"]
+        CLI["CLI<br/>every verb"]
         API["Python API"]
-        DASH["Streamlit Dashboard<br/>7 pages"]
+        DASH["Streamlit Dashboard<br/>local only"]
     end
 
     subgraph Intelligence["Intelligence Layer"]
-        AI["AI Engine<br/>26 methodologies"]
-        PIPE["Pipelines<br/>7 auto-executable"]
+        AI["AI Engine<br/>methodology recommender"]
+        PIPE["Pipelines<br/>26 auto-executable"]
         CHAL["Challenges<br/>flood / drought / WQ"]
     end
 
@@ -27,13 +27,13 @@ flowchart TB
     end
 
     subgraph Data["Data Layer"]
-        COL["Collectors · 20 sources<br/>Taiwan · USA · Global · FAO"]
+        COL["Collectors<br/>one per source in the registry"]
         SCHEMA["Unified Pydantic Schemas"]
         IO["Scientific I/O<br/>WaterML · HEC · SWMM · NetCDF · HDF5"]
     end
 
     subgraph Output["Output"]
-        VIZ["Viz · 16 plots + Q-Q/P-P diagnostics"]
+        VIZ["Viz · plots + Q-Q/P-P diagnostics"]
         REP["Reports · Markdown + HTML"]
         ALERT["Alerts · WHO · EPA · EU WFD"]
     end
@@ -88,7 +88,7 @@ Each pipeline returns a `PipelineResult` with summary text, structured metrics, 
 
 ### 5. AI Engine (`aquascope/ai_engine/`)
 
-- **Knowledge Base** — 26 research methodologies with metadata: applicable parameters, data requirements, complexity, references, tags.
+- **Knowledge Base**: the research methodologies, each with metadata: applicable parameters, data requirements, complexity, references, tags.
 - **Recommender** — Scores each methodology against a `DatasetProfile` using a multi-criteria rule engine. Optional LLM mode for deeper reasoning via OpenAI-compatible APIs (including local Ollama).
 
 ### 6. CLI (`aquascope/cli.py`)

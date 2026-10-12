@@ -7,7 +7,8 @@
 // mode: Plotly's defaults are #444 text on #EBF0F8 gridlines, which on a dark
 // card is grey-on-grey text under glaring white rules.
 
-import { downloadBlob, toCsv } from "./core.js?v=__BUILD__";
+import { downloadBlob, setTime, toCsv } from "./core.js?v=__BUILD__";
+import { chartDate, todayIso } from "./timeline.js?v=__BUILD__";
 
 const token = (name, fallback) => {
   if (typeof getComputedStyle !== "function") return fallback;
@@ -134,12 +135,47 @@ function mergeLayout(base, extra) {
   return out;
 }
 
+// ── peak to map (#522) ──────────────────────────────────────────────────────
+// Clicking a day on any dated chart (a hydrograph, a model run, a comparison)
+// moves the map date there, so the rain, soil moisture and satellite layers show
+// that day. A trace whose x is not the real day (annual maxima are drawn at 1
+// July) opts out with meta: { mapDate: false }.
+
+const mapDateTrace = (t) => Boolean(t && !(t.meta && t.meta.mapDate === false) &&
+  Array.isArray(t.x) && t.x.length && chartDate(t.x[0]));
+
+const HINT = '<br><span style="font-size:10px;opacity:.75">click: map to this day</span>';
+
+/** The day a Plotly click event points at, or null. Exported for the tests' sake. */
+export function clickedDay(points) {
+  for (const pt of points || []) {
+    const t = pt && (pt.data || pt.fullData);
+    if (t && t.meta && t.meta.mapDate === false) continue;
+    const day = chartDate(pt && pt.x);
+    if (day) return day;
+  }
+  return null;
+}
+
+function wireMapDate(id, traces) {
+  const el = typeof document !== "undefined" && document.getElementById(id);
+  if (!el || el.__aqMapDate || !(traces || []).some(mapDateTrace) || typeof el.on !== "function") return;
+  el.__aqMapDate = true;
+  el.on("plotly_click", (ev) => {
+    const day = clickedDay(ev && ev.points);
+    if (day && day <= todayIso()) setTime({ date: day }, { source: "chart" });
+  });
+}
+
 // Series colours are lifted for the current theme here rather than at each call
 // site, so a new chart cannot forget to do it.
 function themeTraces(traces) {
   return (traces || []).map((t) => {
     if (!t || typeof t !== "object") return t;
     const next = { ...t };
+    if (mapDateTrace(t) && typeof next.hovertemplate === "string" && next.hovertemplate.includes("<extra>")) {
+      next.hovertemplate = next.hovertemplate.replace("<extra>", `${HINT}<extra>`);
+    }
     if (next.line && typeof next.line.color === "string") {
       next.line = { ...next.line, color: seriesColor(next.line.color) };
     }
@@ -159,7 +195,10 @@ export function plot(id, traces, layout, filename) {
     ? { ...PLOT_CONFIG, toImageButtonOptions: { ...PLOT_CONFIG.toImageButtonOptions, filename } }
     : PLOT_CONFIG;
   drawn.set(id, { traces, layout, filename });
-  return Plotly.react(id, themeTraces(traces), mergeLayout(plotLayout(), layout), config);
+  const out = Plotly.react(id, themeTraces(traces), mergeLayout(plotLayout(), layout), config);
+  // Plotly adds .on() to the element as it draws; wire the click once that is done.
+  Promise.resolve(out).then(() => wireMapDate(id, traces)).catch(() => {});
+  return out;
 }
 
 /** Re-draw every figure on the page against the current theme. */

@@ -12,15 +12,9 @@ on:
       - ".github/workflows/docs.yml"
   # Build (not deploy) on PRs too: --strict fails on any warning, and a broken
   # build used to surface only after the merge, leaving the site stale for days.
-  # The path list is repeated because Actions does not support YAML anchors.
+  # Every PR, with no path filter: docs-build is a required check on main, and a
+  # required check that never runs leaves a PR unable to merge.
   pull_request:
-    paths:
-      - "docs/**"
-      - "mkdocs.yml"
-      - "pyproject.toml"
-      - "aquascope/**"
-      - "explorer/**"
-      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -37,7 +31,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  docs-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,7 +65,7 @@ jobs:
           path: site
 
   deploy:
-    needs: build
+    needs: docs-build
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:

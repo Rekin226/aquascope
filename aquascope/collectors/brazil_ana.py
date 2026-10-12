@@ -251,6 +251,9 @@ class BrazilANACollector(BaseCollector):
         self._token: str | None = None
         self._token_expiry: float = 0.0
         self._station_meta_cache: dict[str, dict] | None = None
+        #: Attach station names and coordinates to readings from the public catalog. Building that lookup pages
+        #: the whole SNIRH catalog, so a caller that only wants the series (``explore.fetch_series``) turns it off.
+        self.enrich_from_catalog = True
 
     # ── auth ─────────────────────────────────────────────────────────
     def _get_token(self) -> str:
@@ -367,6 +370,8 @@ class BrazilANACollector(BaseCollector):
         per row. Failure to load the catalog (e.g. offline) degrades to no
         enrichment rather than breaking normalisation.
         """
+        if not self.enrich_from_catalog:
+            return None
         if self._station_meta_cache is None:
             cache: dict[str, dict] = {}
             try:

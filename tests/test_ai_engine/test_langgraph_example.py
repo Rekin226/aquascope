@@ -52,7 +52,7 @@ def test_the_nodes_run_as_plain_functions_keyless(example, monkeypatch):
     assert state["study"]["plan"]["branch"] == "at_site" and state["study"]["problem"]["params"]["return_period"] == 50
     assert example._after_plan(state) == "review"
     text = example.plan_text(state["study"])
-    assert "branch at_site, 3 step(s)" in text and "gate spread_within 0.25" in text
+    assert "branch at_site, 4 step(s)" in text and "gate spread_within 0.25" in text
 
     # no langgraph: the review is the callback; approve as is
     state.update(example.review_node(state))
@@ -60,7 +60,7 @@ def test_the_nodes_run_as_plain_functions_keyless(example, monkeypatch):
 
     calls: list = []
     state.update(example.run_node(state, tools=_tools(calls)))
-    assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency"]
+    assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency", "anywhere"]
     assert all(g["passed"] for g in state["result"]["gates"])
 
     state.update(example.report_node(state))

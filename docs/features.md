@@ -33,7 +33,7 @@ See [docs/data_sources.md](data_sources.md) for the full list with endpoints and
 
 - **FAO-56 Penman-Monteith ET₀** — reference evapotranspiration with all intermediate steps
 - **Hargreaves ET₀** — temperature-only alternative
-- **Crop water requirements** — 26 crops with FAO-56 Kc coefficients and growth stages; single (Kc) and dual (Kcb + Ke) coefficient modes
+- **Crop water requirements** — 26 crops with FAO-56 Kc coefficients and growth stages; single (Kc) and dual (Kcb + Ke) coefficient modes; olive, grape, citrus and winter wheat resolve to 32 FAO-56 Rev.1 sub-classes by variety, planting density and ground cover
 - **Irrigation scheduling** — effective rainfall, net/gross demand, efficiency
 - **Soil water balance** — daily tracking, depletion, auto-irrigation triggers
 - **WaPOR productivity workflows** — biomass water productivity and AETI-to-RET performance metrics
@@ -55,17 +55,20 @@ See [docs/data_sources.md](data_sources.md) for the full list with endpoints and
 
 - **Spatial hydrology** — DEM processing, D8 flow direction, watershed delineation, Strahler ordering
 - **Scientific I/O** — WaterML 2.0, HEC-DSS/RAS, EPA SWMM, NetCDF, HDF5, GeoJSON
+- **Place context** (`aquascope.context`, `aquascope context LAT LON`, MCP `place_context`): flood events in the news (Groundsource) and Sentinel-1 radar floods 2014-2024, JRC Global Surface Water since 1984, JRC GloFAS flood depth at return periods, Global Dam Watch dams, SoilGrids texture and available water, FAO WaPOR actual ET and the nearest NOAA GHCN-Daily rain gauge, at a point or over a box, each with its licence
+- **Cloud-Optimized GeoTIFF point reads** (`aquascope.utils.cog`): pure Python (TIFF and BigTIFF, Deflate, LZW, predictors, overviews) over HTTP range requests, so it runs in the browser too
+- **Engineering exports**: any record as inputs for HEC-HMS, HEC-RAS, HEC-SSP (with a Bulletin 17C check against the published examples), HEC-DSS, SWMM, MODFLOW 6, Delft-FEWS and Raven ([details](engineering_exports.md))
 
 ---
 
 ## AI Engine & Workflows
 
-- **26 research methodologies** — scored and ranked against dataset profiles
-- **7 auto-executable pipelines** — trend analysis, WQI, PCA, RF, XGBoost, ARIMA, correlation
+- **27 research methodologies** — scored and ranked against dataset profiles
+- **26 auto-executable pipelines** — including trend analysis, WQI, PCA and ARIMA
 - **Challenge workflows** — flood risk (GEV), drought severity (SPI), water quality (WHO)
 - **Natural-language agent** — describe your goal, get recommendations + execution
 
-### Built-in Research Methodologies (26)
+### Built-in Research Methodologies (27)
 
 | Category | Methodologies | Pipelines |
 | :--- | :--- | :--- |
@@ -74,7 +77,7 @@ See [docs/data_sources.md](data_sources.md) for the full list with endpoints and
 | Time-Series | ARIMA/SARIMA Forecasting | 1 |
 | Process Engineering | MBBR Pilot, MBR Fouling, A2O Nutrient Removal, SWMM, QUAL2K | — |
 | Spatial Analysis | Satellite Eutrophication, GIS Watershed, Kriging Interpolation | — |
-| Hydrological | SWAT Modelling, Isotope Hydrology, Paired Watershed Design | — |
+| Hydrological | SWAT Modelling, Isotope Hydrology, Paired Watershed Design, Budyko Framework | — |
 | Policy | SDG 6 Benchmarking, IWRM Assessment | — |
 
 For when-to-use-which guidance, see the [methodology matrix](methodology_matrix.md).
@@ -83,7 +86,7 @@ For when-to-use-which guidance, see the [methodology matrix](methodology_matrix.
 
 ## Visualization & Reporting
 
-- **16 plot functions** — time-series, box plots, heatmaps, spatial maps (Folium), FDC, hydrographs
+- **17 plot functions** — time-series, box plots, heatmaps, spatial maps (Folium), FDC, hydrographs
 - **Diagnostic plots** — Q-Q, P-P, return level, 4-panel diagnostic panel
 - **Automated reports** — Markdown & HTML with embedded plots, metrics, TOC
 - **Alerts** — WHO, US EPA, EU WFD threshold checking
@@ -92,7 +95,9 @@ For when-to-use-which guidance, see the [methodology matrix](methodology_matrix.
 
 ## Infrastructure
 
-- **2,500+ tests** with CAMELS benchmark validation
+- **Regression tests and numerical benchmarks** — see the [observed/synthetic validation scope](validation_scope.md)
 - **Interactive dashboard** — 10-page Streamlit app
-- **29 CLI commands** — `collect`, `recommend`, `eda`, `quality`, `run`, `completion`, `list-methods`, `list-sources`, `stations`, `harvest`, `ask`, `ingest`, `basins`, `assess`, `gym`, `caravan`, `mcp`, `playbooks`, `solve`, `studio`, `studio-showcase`, `forecast`, `plot`, `dashboard`, `agri`, `alerts`, `groundwater`, `climate`, `hydro`
+- **Rivers as objects**: `aquascope.rivers` snap any point to its GEOGLOWS v2 river reach (or say no stream is near), the reach's simulated daily flow since 1940 with return periods and the flow-duration curve (modelled, CC BY 4.0), its upstream area, the trace to the sea with the gauges and Global Dam Watch dams on the way and the countries it crosses, and the dams upstream of a reach with the degree of regulation (`aquascope.river_path`). The Explorer's River tab, `aquascope river`, MCP and the Studio share it.
+- **The evidence ladder**: `aquascope.evidence` scores GEOGLOWS v2, GloFAS, NWM v3 (US) and Google's GRRR reanalysis against a gauge's own record (KGE and its parts, NSE, bias, the error at the 2-, 10- and 100-year flows), grades each A to D and says where they disagree; a monthly CI table in the Archive, the Explorer's Evidence tab and map colouring, `aquascope evidence` and MCP share it ([evidence.md](evidence.md)).
+- **49 CLI commands**: `collect`, `recommend`, `eda`, `quality`, `run`, `completion`, `list-methods`, `list-sources`, `stations`, `harvest`, `ask`, `ingest`, `basins`, `river`, `evidence`, `now`, `bulletin`, `warnings`, `flowstatus`, `waterbalance`, `watch`, `assess`, `context`, `gym`, `caravan`, `mcp`, `playbooks`, `solve`, `studio`, `desk`, `studio-showcase`, `eval`, `forecast`, `plot`, `dashboard`, `agri`, `alerts`, `groundwater`, `modflow`, `climate`, `hydro`, `area-study`, `layers`, `map`, `mesh`, `swmm`, `whatif`, `export`, `update`
 - **[Theory guide](theory.md)** — mathematical equations, DOI citations, decision trees

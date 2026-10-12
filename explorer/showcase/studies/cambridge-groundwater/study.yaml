@@ -3,8 +3,8 @@
 version: 3
 title: "Determine whether groundwater levels in the Chalk aquifer ne: 52.2, 0.12"
 question: "Are groundwater levels in the Chalk near Cambridge declining over the last ten years compared with the full record? Public supply depends on the boreholes."
-created: "2026-09-07T13:45:35+00:00"
-aquascope_version: "0.14.0"
+created: "2026-09-14T23:06:36+00:00"
+aquascope_version: "0.16.0"
 author: "methodologist"
 model: "claude-sonnet-5"
 problem:
@@ -15,34 +15,35 @@ problem:
 plan:
   author: "methodologist"
   playbook: "groundwater_decline"
-  objective: "Determine whether groundwater levels in the Chalk aquifer near Cambridge (lat 52.2, lon 0.12) show a statistically defensible declining trend over the most recent 10 years relative to the full available record, and characterise current drought status, to support public supply borehole planning."
-  decision: "assess whether Chalk groundwater levels near Cambridge show a declining trend over the last 10 years relative to the full record, to inform public supply borehole planning"
-  methodology: ["Compute the Mann-Kendall trend and Sen's slope on the full groundwater-level record at Haggis Farm (uk_ea b3272d5b-f4fd-48eb-8bc7-67c102d65943), the nearest and longest Chalk borehole record, as the baseline.", "Repeat the trend computation restricted to the most recent 10 years at the same station to isolate the recent-decade signal and read off the recent-decade mean level for comparison with the full-record mean.", "Cross-check the direction and magnitude of the trend at a second nearby Chalk borehole, Stapleford (uk_ea 996023f9-5a1d-42c6-8ba4-6889e0ed6de6), to test whether the signal is local or regional.", "Compute the Standardised Groundwater Index (SGI) at Haggis Farm to place the current level in its historical drought/surplus context.", "Compare the recent-10-year statistics against the full-record statistics and the SGI status to answer the decline question, noting that no cause attribution is attempted."]
-  assumptions: ["Haggis Farm (uk_ea b3272d5b-f4fd-48eb-8bc7-67c102d65943, 3.5 km away, 48.9 years) and Stapleford (uk_ea 996023f9-5a1d-42c6-8ba4-6889e0ed6de6, 5.9 km away, 46.7 years) are used as representative Chalk groundwater level records for the site", "daily resolution is assumed for the groundwater level records as the catalog does not state resolution", "the full record length (about 48.9 years at Haggis Farm) is taken as the baseline against which the last 10 years is compared", "no cause attribution (e.g. abstraction vs climate) is requested beyond the standard trend and recharge diagnostics", "Haggis Farm (uk_ea b3272d5b-f4fd-48eb-8bc7-67c102d65943, 3.5 km, 48.9 years) and Stapleford (uk_ea 996023f9-5a1d-42c6-8ba4-6889e0ed6de6, 5.9 km, 46.7 years) are representative Chalk groundwater level records for the public supply boreholes near the site.", "Daily resolution is assumed for both groundwater-level records since the catalog does not state resolution.", "The full record length at Haggis Farm (about 48.9 years) is taken as the baseline against which the last 10 years is compared.", "No cause attribution (e.g. abstraction versus climate) is requested or attempted beyond the trend and drought-index diagnostics.", "A water-table-fluctuation recharge estimate, though named in the brief, cannot be produced because no catalogue tool implements the recharge_wtf method; it is therefore omitted rather than fabricated."]
-  alternatives: [{"method": "recharge_wtf (water-table fluctuation recharge)", "why_not": "Listed as defensible in the sufficiency table but no tool in the catalogue implements it, so it cannot be executed without inventing a tool."}, {"method": "baseflow_separation via low_flow_context", "why_not": "Not requested by the brief's quantities, which focus on level trend, recent-vs-full mean, and SGI rather than streamflow baseflow."}]
-  limitations_expected: ["The recharge estimate from the water-table fluctuation method requested in the brief could not be produced, as no tool in the catalogue supports it; this quantity is left unreported rather than guessed.", "Trend results describe rate and direction of change only, not cause; distinguishing abstraction-driven decline from climate variability would need abstraction records not available here.", "Two boreholes (Haggis Farm, Stapleford) are used as representative of the wider Chalk aquifer near Cambridge; local heterogeneity in transmissivity or pumping stress near individual supply boreholes is not captured.", "Record resolution is assumed daily since the catalogue does not state it explicitly."]
-  citations: ["Jasechko, S. et al. (2024). Rapid groundwater decline and some cases of recovery in aquifers globally. Nature 625, 715-721. doi:10.1038/s41586-023-06879-8", "Scanlon, B. R. et al. (2023). Global water resources and the role of groundwater in a resilient water future. Nat. Rev. Earth Environ. 4, 87-101. doi:10.1038/s43017-022-00378-6", "Kuang, X. et al. (2024). The changing nature of groundwater in the global water cycle. Science 383, eadf0630. doi:10.1126/science.adf0630", "Bloomfield, J. P. and Marchant, B. P. (2013). Analysis of groundwater drought building on the standardised precipitation index approach. Hydrol. Earth Syst. Sci. 17, 4769-4787.", "Healy, R. W. and Cook, P. G. (2002). Using groundwater levels to estimate recharge. Hydrogeology Journal 10, 91-109.", "Mann, H. B. (1945); Kendall, M. G. (1975); Sen, P. K. (1968): the Mann-Kendall test and Sen's slope.", "Bloomfield, J.P. and Marchant, B.P. (2013), Standardised Groundwater Index (SGI)", "Jasechko et al. (2024), attribution of widespread groundwater decline to pumping where abstraction records exist"]
+  objective: "Determine whether groundwater levels in the Chalk aquifer near Cambridge have declined over the last 10 years relative to the full period of record, to support public supply borehole planning."
+  decision: "whether groundwater levels in the Chalk near Cambridge have declined over the last 10 years relative to the full historical record, to inform public supply borehole planning"
+  methodology: ["Compute the Sen's slope and Mann-Kendall significance on the full 49-year record at Haggis Farm to establish the long-term baseline trend.", "Compute the same Sen's slope and Mann-Kendall significance restricted to the last 10 years at Haggis Farm to see whether the recent trajectory departs from the baseline.", "Build a monthly level series over the full record for the Standardised Groundwater Index (SGI) computation.", "Compute the SGI and identify drought events to characterise current groundwater status against the historical distribution.", "Extract the last five years of daily levels for a water-table-fluctuation recharge estimate.", "Compute recharge by water-table fluctuation with a stated specific yield of 0.15.", "Compute the baseflow index at the nearby Stapleford discharge gauge as a hydrological cross-check on aquifer discharge behaviour.", "Cross-check the decline signal with an independent trend computed at the second nearby Chalk borehole, Stapleford."]
+  assumptions: ["record resolution is daily for all variables, per catalog note", "primary groundwater record is UK EA station Haggis Farm (b3272d5b-f4fd-48eb-8bc7-67c102d65943), 3.5 km from site, 49 years of record", "secondary/cross-check record is UK EA station Stapleford (996023f9-5a1d-42c6-8ba4-6889e0ed6de6), 5.9 km away, 46.7 years of record", "attribute_cause left at default false since the client asks only whether decline is occurring, not its cause", "Record resolution is daily for all variables, per catalog note.", "Primary groundwater record is UK EA station Haggis Farm (b3272d5b-f4fd-48eb-8bc7-67c102d65943), 3.5 km from site, 49 years of record.", "Secondary/cross-check record is UK EA station Stapleford (996023f9-5a1d-42c6-8ba4-6889e0ed6de6), 5.9 km away, 46.7 years of record.", "attribute_cause is left at default false since the client asks only whether decline is occurring, not its cause.", "Water-table-fluctuation recharge uses a specific yield of 0.15 as a stated assumption; the estimate scales with it one to one and is not a measurement.", "The Stapleford discharge gauge (1c1e42b5-f8e3-4811-b5cc-37330e028d61) is used as a nearby baseflow proxy since no discharge record exists directly at the borehole."]
+  alternatives: [{"method": "regional donor-basin trend transfer", "why_not": "A 49-year on-site groundwater record at Haggis Farm makes an at-site trend directly defensible, so a donor-based regional estimate is unnecessary."}, {"method": "GloFAS or ERA5 reanalysis-driven proxy", "why_not": "In-situ daily groundwater records exist near the site with sufficient length, so a reanalysis path is not needed to establish the decline question."}]
+  limitations_expected: ["A trend says whether the level is changing and how fast, never why; attribution to abstraction would need pumping/abstraction records not present in the inventory.", "The water-table-fluctuation recharge estimate scales one to one with the assumed specific yield of 0.15 and is not itself measured.", "Baseflow index is drawn from a nearby river gauge, not from the borehole itself, and so is an indirect cross-check of aquifer discharge, not a direct property of the well."]
+  citations: ["Jasechko, S. et al. (2024). Rapid groundwater decline and some cases of recovery in aquifers globally. Nature 625, 715-721. doi:10.1038/s41586-023-06879-8", "Scanlon, B. R. et al. (2023). Global water resources and the role of groundwater in a resilient water future. Nat. Rev. Earth Environ. 4, 87-101. doi:10.1038/s43017-022-00378-6", "Kuang, X. et al. (2024). The changing nature of groundwater in the global water cycle. Science 383, eadf0630. doi:10.1126/science.adf0630", "Bloomfield, J. P. and Marchant, B. P. (2013). Analysis of groundwater drought building on the standardised precipitation index approach. Hydrol. Earth Syst. Sci. 17, 4769-4787.", "Healy, R. W. and Cook, P. G. (2002). Using groundwater levels to estimate recharge. Hydrogeology Journal 10, 91-109.", "Mann, H. B. (1945); Kendall, M. G. (1975); Sen, P. K. (1968): the Mann-Kendall test and Sen's slope.", "Bloomfield and Marchant 2013", "Healy and Cook 2002", "Jasechko et al. 2024"]
   caveats: ["A trend says whether the level is changing and how fast, never why; attribution needs abstraction records (Jasechko et al. 2024 attribute widespread decline to pumping only where such records exist).", "Recharge by water-table fluctuation uses a specific yield of 0.15 unless one is given; the estimate scales with it one to one and is a stated assumption, not a measurement."]
-  rationale: "Determine whether groundwater levels in the Chalk aquifer near Cambridge (lat 52.2, lon 0.12) show a statistically defensible declining trend over the most recent 10 years relative to the full available record, and characterise current drought status, to support public supply borehole planning."
-  recon_notes: ["Record resolution is not in the catalog; daily is assumed for every variable.", "10 donor gauges from a pool of 37,071 gauged catchments.", "ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land (Open-Meteo); not checked here.", "CMIP6 change factors need model output you supply (aquascope.climate works on downloaded data); not counted."]
-  replans: [{"step": "s2", "reason": "gate failed: min_years (9.7 years of record, 10 needed: too short); not_empty (nothing at 'trend')", "fallback": {"tool": "analyze_station", "arguments": {"source": "uk_ea", "station_id": "b3272d5b-f4fd-48eb-8bc7-67c102d65943", "variable": "groundwater_level", "years": 48.9}, "rationale": "The requested 10-year window falls short of the min_years gate at 9.7 years, so use the full available record of 48.9 years for this station to compute a defensible trend for comparison.", "expects": [{"check": "min_years", "path": "years"}, {"check": "not_empty", "path": "trend"}]}}]
+  rationale: "Determine whether groundwater levels in the Chalk aquifer near Cambridge have declined over the last 10 years relative to the full period of record, to support public supply borehole planning."
+  recon_notes: ["Record resolution is not in the catalog; daily is assumed for every variable.", "10 donor gauges from a pool of 34,786 gauged catchments.", "ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land (Open-Meteo); not checked here.", "CMIP6 change factors need model output you supply (aquascope.climate works on downloaded data); not counted."]
+  replans: [{"step": "s2", "reason": "gate failed: min_years (9.7 years of record, 10 needed: too short); not_empty (nothing at 'trend')", "fallback": {"tool": "analyze_station", "arguments": {"source": "uk_ea", "station_id": "b3272d5b-f4fd-48eb-8bc7-67c102d65943", "variable": "groundwater_level", "years": 49}, "rationale": "The station catalog lists 49 years of groundwater_level record at Haggis Farm, so using the full available span satisfies the min_years gate and yields a usable trend where the 10-year window did not.", "expects": [{"check": "min_years", "path": "years"}, {"check": "not_empty", "path": "trend"}]}}]
 steps:
   - tool: "analyze_station"
     id: "s1"
-    rationale: "Establishes the full-record (about 48.9 years) Mann-Kendall trend, Sen's slope and mean level at the longest nearby Chalk borehole as the baseline for comparison."
+    rationale: "Sen's slope and Mann-Kendall p-value over the full 49-year Haggis Farm record give the historical baseline trend."
     method: "groundwater_trend"
     arguments:
       source: "uk_ea"
       station_id: "b3272d5b-f4fd-48eb-8bc7-67c102d65943"
       variable: "groundwater_level"
+      years: 49
     expects:
       - {"check": "min_years", "path": "years", "value": 10}
       - {"check": "not_empty", "path": "trend"}
       - {"check": "unit_present", "path": "unit"}
-    outputs: [{"kind": "table", "id": "s1_summary", "caption": "Full-record summary statistics (including mean level) at Haggis Farm"}, {"kind": "table", "id": "s1_trend", "caption": "Mann-Kendall trend and Sen's slope (m/yr) on the full groundwater-level record at Haggis Farm"}]
+    outputs: [{"kind": "figure", "id": "s1_series", "caption": "full-record groundwater level series at Haggis Farm"}, {"kind": "table", "id": "s1_trend", "caption": "full-period Sen's slope and Mann-Kendall trend at Haggis Farm"}]
   - tool: "analyze_station"
     id: "s2"
-    rationale: "Restricts the same trend computation to the last 10 years so its slope and mean level can be compared directly against the full-record baseline from s1."
+    rationale: "The same trend statistic restricted to the last 10 years isolates the recent rate for comparison with the full-record baseline."
     method: "groundwater_trend"
     arguments:
       source: "uk_ea"
@@ -53,34 +54,82 @@ steps:
       - {"check": "min_years", "path": "years", "value": 10}
       - {"check": "not_empty", "path": "trend"}
       - {"check": "unit_present", "path": "unit"}
-    fallback: {"step": {"tool": "analyze_station", "arguments": {"source": "uk_ea", "station_id": "b3272d5b-f4fd-48eb-8bc7-67c102d65943", "variable": "groundwater_level", "years": 48.9}, "rationale": "The requested 10-year window falls short of the min_years gate at 9.7 years, so use the full available record of 48.9 years for this station to compute a defensible trend for comparison.", "expects": [{"check": "min_years", "path": "years"}, {"check": "not_empty", "path": "trend"}]}}
-    depends_on: ["s1"]
-    outputs: [{"kind": "table", "id": "s2_summary", "caption": "Recent 10-year summary statistics (including mean level) at Haggis Farm"}, {"kind": "table", "id": "s2_trend", "caption": "Mann-Kendall trend and Sen's slope (m/yr) over the last 10 years at Haggis Farm"}]
-  - tool: "analyze_station"
+    fallback: {"step": {"tool": "analyze_station", "arguments": {"source": "uk_ea", "station_id": "b3272d5b-f4fd-48eb-8bc7-67c102d65943", "variable": "groundwater_level", "years": 49}, "rationale": "The station catalog lists 49 years of groundwater_level record at Haggis Farm, so using the full available span satisfies the min_years gate and yields a usable trend where the 10-year window did not.", "expects": [{"check": "min_years", "path": "years"}, {"check": "not_empty", "path": "trend"}]}}
+    outputs: [{"kind": "figure", "id": "s2_series", "caption": "last-10-year groundwater level series at Haggis Farm"}, {"kind": "table", "id": "s2_trend", "caption": "last-10-year Sen's slope and Mann-Kendall trend at Haggis Farm"}]
+  - tool: "get_timeseries"
     id: "s3"
-    rationale: "Cross-checks the trend direction and rate at a second nearby Chalk borehole (Stapleford, 46.7 years) to test whether any decline is local to Haggis Farm or reflects a wider aquifer signal."
+    rationale: "A monthly level series over the full record is the input the SGI is computed on."
+    arguments:
+      source: "uk_ea"
+      station_id: "b3272d5b-f4fd-48eb-8bc7-67c102d65943"
+      variable: "groundwater_level"
+      years: 60
+      resample: "M"
+      max_points: 2000
+    expects:
+      - {"check": "not_empty", "path": "points"}
+    outputs: [{"kind": "table", "id": "s3_series", "caption": "monthly groundwater level series at Haggis Farm"}]
+  - tool: "sgi_drought"
+    id: "s4"
+    rationale: "The Standardised Groundwater Index (Bloomfield and Marchant 2013) places current levels within the historical distribution and flags drought events."
+    method: "sgi"
+    arguments:
+      from_step: "s3"
+    depends_on: ["s3"]
+    outputs: [{"kind": "figure", "id": "s4_drought_strip", "caption": "SGI drought strip at Haggis Farm"}, {"kind": "table", "id": "s4_sgi_monthly", "caption": "monthly SGI values and drought events at Haggis Farm"}]
+  - tool: "get_timeseries"
+    id: "s5"
+    rationale: "The last five years of daily levels are needed to resolve individual recharge rises for the water-table-fluctuation method."
+    arguments:
+      source: "uk_ea"
+      station_id: "b3272d5b-f4fd-48eb-8bc7-67c102d65943"
+      variable: "groundwater_level"
+      years: 5
+      resample: "D"
+      max_points: 2000
+    expects:
+      - {"check": "not_empty", "path": "points"}
+    outputs: [{"kind": "table", "id": "s5_series", "caption": "last-5-year daily groundwater level series at Haggis Farm"}]
+  - tool: "recharge"
+    id: "s6"
+    rationale: "Recharge by water-table fluctuation (Healy and Cook 2002) with a stated specific yield of 0.15 gives a defensible recharge estimate that scales one to one with that assumption."
+    method: "recharge_wtf"
+    arguments:
+      from_step: "s5"
+      specific_yield: 0.15
+    depends_on: ["s5"]
+    outputs: [{"kind": "table", "id": "s6_recharge_events", "caption": "water-table-fluctuation recharge events at Haggis Farm"}]
+  - tool: "low_flow_context"
+    id: "s7"
+    rationale: "Baseflow index at the nearby Stapleford discharge gauge (77.6-year record) cross-checks the aquifer's discharge behaviour supporting the level trend."
+    method: "baseflow_separation"
+    arguments:
+      source: "uk_ea"
+      station_id: "1c1e42b5-f8e3-4811-b5cc-37330e028d61"
+      years: 64
+    expects:
+      - {"check": "min_years", "path": "years", "value": 10}
+    outputs: [{"kind": "table", "id": "s7_low_flow", "caption": "low-flow and baseflow index at Stapleford discharge gauge"}]
+  - tool: "analyze_station"
+    id: "s8"
+    rationale: "An independent trend at the second nearby Chalk borehole, Stapleford, cross-checks the decline signal seen at Haggis Farm."
     method: "groundwater_trend"
     arguments:
       source: "uk_ea"
       station_id: "996023f9-5a1d-42c6-8ba4-6889e0ed6de6"
       variable: "groundwater_level"
+      years: 46
     expects:
       - {"check": "min_years", "path": "years", "value": 10}
       - {"check": "not_empty", "path": "trend"}
       - {"check": "unit_present", "path": "unit"}
-    outputs: [{"kind": "table", "id": "s3_summary", "caption": "Full-record summary statistics at Stapleford"}, {"kind": "table", "id": "s3_trend", "caption": "Mann-Kendall trend and Sen's slope (m/yr) at Stapleford"}]
-  - tool: "drought_propagation"
-    id: "s4"
-    rationale: "Computes the Standardised Groundwater Index at Haggis Farm to place the current and recent level in its full historical drought/surplus context alongside the trend statistics."
-    method: "sgi"
-    arguments:
-      source: "uk_ea"
-      station_id: "b3272d5b-f4fd-48eb-8bc7-67c102d65943"
-      lat: 52.2
-      lon: 0.12
-    expects:
-      - {"check": "not_empty", "path": "sgi"}
-    outputs: [{"kind": "figure", "id": "s4_sgi", "caption": "Standardised Groundwater Index time series at Haggis Farm"}, {"kind": "table", "id": "s4_sgi_table", "caption": "SGI values and drought events at Haggis Farm"}]
+    outputs: [{"kind": "table", "id": "s8_trend", "caption": "full-period trend at Stapleford groundwater borehole"}]
 results:
-  s1: {"ok": true, "gates": [{"check": "min_years", "passed": true, "detail": "48.7 years of record, 10 needed"}, {"check": "not_empty", "passed": true, "detail": "'trend' is present"}, {"check": "unit_present", "passed": true, "detail": "unit mAOD (metres Above Ordnance Datum)"}], "summary": "source=uk_ea, station_id=b3272d5b-f4fd-48eb-8bc7-67c102d65943, name=Haggis Farm, variable=groundwater_level, unit=mAOD (metres Above Ordnance Datum), years=48.7, start=1977-09-29, end=2026-06-08", "fallback_used": false, "sha256": "d954e5222f77d0a3"}
-  s2: {"ok": true, "gates": [{"check": "min_years", "passed": false, "detail": "9.7 years of record, 10 needed: too short"}, {"check": "not_empty", "passed": false, "detail": "nothing at 'trend'"}, {"check": "unit_present", "passed": true, "detail": "unit mAOD (metres Above Ordnance Datum)"}], "summary": "source=uk_ea, station_id=b3272d5b-f4fd-48eb-8bc7-67c102d65943, variable=groundwater_level, unit=mAOD (metres Above Ordnance Datum), years=9.7, start=2016-09-15, end=2026-06-08", "fallback_used": true, "sha256": "48d4f2694df2d654", "fallback": {"tool": "analyze_station", "arguments": {"source": "uk_ea", "station_id": "b3272d5b-f4fd-48eb-8bc7-67c102d65943", "variable": "groundwater_level", "years": 48.9}, "ok": true, "gates": [{"check": "min_years", "passed": false, "detail": "no record length at 'years'"}, {"check": "not_empty", "passed": true, "detail": "'trend' is present"}], "summary": "source=uk_ea, station_id=b3272d5b-f4fd-48eb-8bc7-67c102d65943, variable=groundwater_level, unit=mAOD (metres Above Ordnance Datum), years=47.7, start=1978-09-21, end=2026-06-08"}}
+  s1: {"ok": true, "gates": [{"check": "min_years", "passed": true, "detail": "48.7 years of record, 10 needed"}, {"check": "not_empty", "passed": true, "detail": "'trend' is present"}, {"check": "unit_present", "passed": true, "detail": "unit mAOD (metres Above Ordnance Datum)"}], "summary": "source=uk_ea, station_id=b3272d5b-f4fd-48eb-8bc7-67c102d65943, name=Haggis Farm, variable=groundwater_level, unit=mAOD (metres Above Ordnance Datum), years=48.7, start=1977-09-29, end=2026-06-08", "fallback_used": false, "sha256": "79558466fae003e5"}
+  s2: {"ok": true, "gates": [{"check": "min_years", "passed": false, "detail": "9.7 years of record, 10 needed: too short"}, {"check": "not_empty", "passed": false, "detail": "nothing at 'trend'"}, {"check": "unit_present", "passed": true, "detail": "unit mAOD (metres Above Ordnance Datum)"}], "summary": "source=uk_ea, station_id=b3272d5b-f4fd-48eb-8bc7-67c102d65943, variable=groundwater_level, unit=mAOD (metres Above Ordnance Datum), years=9.7, start=2016-09-15, end=2026-06-08", "fallback_used": true, "sha256": "b8341fb70aeb6857", "failed_reason": "gate failed: min_years (9.7 years of record, 10 needed: too short); not_empty (nothing at 'trend'); the fallback analyze_station did not pass its own gates", "fallback": {"tool": "analyze_station", "arguments": {"source": "uk_ea", "station_id": "b3272d5b-f4fd-48eb-8bc7-67c102d65943", "variable": "groundwater_level", "years": 49}, "ok": true, "gates": [{"check": "min_years", "passed": false, "detail": "no record length at 'years'"}, {"check": "not_empty", "passed": true, "detail": "'trend' is present"}], "summary": "source=uk_ea, station_id=b3272d5b-f4fd-48eb-8bc7-67c102d65943, variable=groundwater_level, unit=mAOD (metres Above Ordnance Datum), years=48.7, start=1977-09-29, end=2026-06-08"}}
+  s3: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'points' is present"}], "summary": "source=uk_ea, station_id=b3272d5b-f4fd-48eb-8bc7-67c102d65943, name=Haggis Farm, variable=groundwater_level, unit=mAOD (metres Above Ordnance Datum), start=1977-09-29, end=2026-06-08", "fallback_used": false, "sha256": "c4afe099fdfb73a0"}
+  s4: {"ok": true, "gates": [], "summary": "variable=groundwater_level, unit=mAOD (metres Above Ordnance Datum), current=0.9982011721528863", "fallback_used": false, "sha256": "8b515a5e10b11119"}
+  s5: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'points' is present"}], "summary": "source=uk_ea, station_id=b3272d5b-f4fd-48eb-8bc7-67c102d65943, name=Haggis Farm, variable=groundwater_level, unit=mAOD (metres Above Ordnance Datum), start=2021-12-13, end=2026-06-08", "fallback_used": false, "sha256": "de3eec0621c22e2f"}
+  s6: {"ok": true, "gates": [], "summary": "variable=groundwater_level, unit=mAOD (metres Above Ordnance Datum), value_mm_per_year=40.13736263736261, method=water_table_fluctuation", "fallback_used": false, "sha256": "9475cb4468e6830b"}
+  s7: {"ok": true, "gates": [{"check": "min_years", "passed": true, "detail": "40 years of record, 10 needed"}], "summary": "source=uk_ea, station_id=1c1e42b5-f8e3-4811-b5cc-37330e028d61, name=Stapleford, variable=discharge, unit=m3/s, years=40.0, start=1986-08-24, end=2026-08-22", "fallback_used": false, "sha256": "730e7254b4067fa9"}
+  s8: {"ok": true, "gates": [{"check": "min_years", "passed": true, "detail": "45.7 years of record, 10 needed"}, {"check": "not_empty", "passed": true, "detail": "'trend' is present"}, {"check": "unit_present", "passed": true, "detail": "unit mAOD (metres Above Ordnance Datum)"}], "summary": "source=uk_ea, station_id=996023f9-5a1d-42c6-8ba4-6889e0ed6de6, name=Stapleford, variable=groundwater_level, unit=mAOD (metres Above Ordnance Datum), years=45.7, start=1980-10-06, end=2026-06-09", "fallback_used": false, "sha256": "263efa5bc6709afc"}

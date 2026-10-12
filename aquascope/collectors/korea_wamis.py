@@ -15,7 +15,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from aquascope.collectors.base import BaseCollector
+from aquascope.collectors.base import BaseCollector, CollectorError
 from aquascope.schemas.water_data import (
     DataSource,
     GeoLocation,
@@ -203,10 +203,7 @@ class KoreaWAMISCollector(BaseCollector):
             If *parameter* is not one of the supported types.
         """
         if parameter not in _PARAM_ENDPOINT:
-            raise ValueError(
-                f"Unsupported parameter '{parameter}'. "
-                f"Choose from: {list(_PARAM_ENDPOINT.keys())}"
-            )
+            raise ValueError(f"Unsupported parameter '{parameter}'. Choose from: {list(_PARAM_ENDPOINT.keys())}")
 
         endpoint = _PARAM_ENDPOINT[parameter]
         url = f"{self.BASE_URL}{endpoint}.do"
@@ -227,14 +224,20 @@ class KoreaWAMISCollector(BaseCollector):
 
         try:
             data = self.client.get_json(url, params=params)
-            if isinstance(data, list):
-                return data
-            if isinstance(data, dict):
-                return data.get("list", data.get("data", data.get("results", [data])))
-            return []
-        except Exception:
-            logger.warning("WAMIS API request failed for %s", url, exc_info=True)
-            return []
+        except Exception as exc:
+            logger.warning("WAMIS API request failed for %s: %s", url, exc, exc_info=True)
+            raise CollectorError(
+                f"WAMIS API request failed for {url}: {exc}",
+                source=self.name,
+                url=url,
+                cause=exc,
+            ) from exc
+
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return data.get("list", data.get("data", data.get("results", [data])))
+        return []
 
     # ------------------------------------------------------------------ #
     # normalise

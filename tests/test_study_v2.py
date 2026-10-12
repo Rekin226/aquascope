@@ -118,7 +118,7 @@ def test_a_failed_gate_runs_the_fallback_once_and_records_it():
     assert "fallback `donors(k=4)`: ok" in run.to_markdown()
 
 
-def test_a_fallback_that_fails_its_own_gate_stops_the_study():
+def test_a_fallback_that_fails_its_own_gate_fails_the_step_and_the_study_goes_on():
     study = _plan()
     study.steps[1].arguments = {"k": 1}
     study.steps[1].fallback = {"step": {"tool": "donors", "arguments": {"k": 2},
@@ -126,18 +126,74 @@ def test_a_fallback_that_fails_its_own_gate_stops_the_study():
     study.steps.append(Step(tool="probe", id="s3"))
     with patch("aquascope.study._tools", return_value=_fake_tools()):
         run = run_study(study)
-    assert not run.ok and run.stopped_at == "s2" and "did not pass its own gates" in run.stop_reason
-    assert [r["id"] for r in run.results] == ["s1", "s2"], "nothing after the stop runs"
+    assert not run.ok and run.stopped_at is None and run.stop_reason is None
+    assert [r["id"] for r in run.results] == ["s1", "s2", "s3"], "an independent step after the failure still runs"
+    assert run.results[2]["ok"] and run.results[2]["gates_passed"]
+    failed = run.failed_steps
+    assert [f["id"] for f in failed] == ["s2"] and "did not pass its own gates" in failed[0]["reason"]
+    assert run.summary == {"planned": 3, "ran": 3, "ok": 2, "failed": 1, "skipped": 0}
+    assert study.results["s2"]["failed_reason"].startswith("gate failed")
 
 
-def test_a_failed_gate_without_a_fallback_stops_with_the_reason():
+def test_a_failed_gate_without_a_fallback_fails_the_step_with_the_reason():
     study = _plan()
     study.steps[1].arguments = {"k": 1}
     study.steps.append(Step(tool="probe", id="s3"))
     with patch("aquascope.study._tools", return_value=_fake_tools()):
         run = run_study(study)
-    assert run.stopped_at == "s2" and "min_donors" in run.stop_reason and "1 donors, 3 needed" in run.stop_reason
-    assert len(run.results) == 2 and run.replan is None
+    assert run.stopped_at is None and run.replan is None and not run.ok
+    assert len(run.results) == 3
+    reason = run.failed_steps[0]["reason"]
+    assert "min_donors" in reason and "1 donors, 3 needed" in reason
+    md = run.to_markdown()
+    assert "**Steps:** 2 of 3 established, 1 failed." in md and "s2 (donors)" in md and "Stopped at" not in md
+
+
+def test_a_dependent_of_a_gate_failed_step_is_skipped_with_the_reason():
+    calls: list = []
+    study = _plan()
+    study.steps[1].arguments = {"k": 1}
+    study.steps.append(Step(tool="probe", id="s3", depends_on=["s2"], arguments={"years": "{{ result.s2.k }}"}))
+    study.steps.append(Step(tool="probe", id="s4"))
+    with patch("aquascope.study._tools", return_value=_fake_tools(calls)):
+        run = run_study(study)
+    assert [r["id"] for r in run.results] == ["s1", "s2", "s3", "s4"]
+    assert run.results[2]["skipped"] and "s2 (failed its gate)" in run.results[2]["error"]
+    assert run.results[3]["ok"], "a step that does not depend on the failure still runs"
+    assert run.summary == {"planned": 4, "ran": 3, "ok": 2, "failed": 1, "skipped": 1}
+    assert [f["id"] for f in run.failed_steps] == ["s2", "s3"] and run.failed_steps[1]["skipped"]
+
+
+def test_a_reference_to_a_gate_failed_result_is_not_built_on():
+    study = _plan()
+    study.steps[1].arguments = {"k": 1}
+    study.steps.append(Step(tool="probe", id="s3", arguments={"years": "{{ result.s2.k }}"}))
+    with patch("aquascope.study._tools", return_value=_fake_tools()):
+        run = run_study(study)
+    assert not run.results[2]["ok"] and "failed its gate" in run.results[2]["error"]
+
+
+def test_a_passing_fallback_is_what_a_later_reference_reads():
+    study = _plan()
+    study.steps[1].arguments = {"k": 1}
+    study.steps[1].fallback = {"step": {"tool": "donors", "arguments": {"k": 4},
+                                        "expects": [{"check": "min_donors", "value": 3, "path": "k"}]}}
+    study.steps.append(Step(tool="probe", id="s3", arguments={"years": "{{ result.s2.k }}"}))
+    with patch("aquascope.study._tools", return_value=_fake_tools()):
+        run = run_study(study)
+    assert run.ok and run.results[2]["ok"] and run.results[2]["arguments"] == {"years": "{{ result.s2.k }}"}
+    assert run.results[2]["result"]["years"] == 4, "the fallback's result, not the failed primary's"
+
+
+def test_an_explicit_stop_fallback_still_ends_the_run():
+    study = _plan()
+    study.steps[1].arguments = {"k": 1}
+    study.steps[1].fallback = "stop"
+    study.steps.append(Step(tool="probe", id="s3"))
+    with patch("aquascope.study._tools", return_value=_fake_tools()):
+        run = run_study(study)
+    assert run.stopped_at == "s2" and "the plan stops here" in run.stop_reason
+    assert [r["id"] for r in run.results] == ["s1", "s2"], "nothing after an explicit stop runs"
     assert "**Stopped at s2:**" in run.to_markdown()
 
 
@@ -145,10 +201,12 @@ def test_a_branch_fallback_is_handed_up_as_a_replan_request():
     study = _plan()
     study.steps[1].arguments = {"k": 1}
     study.steps[1].fallback = {"branch": "regional"}
+    study.steps.append(Step(tool="probe", id="s3"))
     with patch("aquascope.study._tools", return_value=_fake_tools()):
         run = run_study(study)
     assert run.replan == {"step": "s2", "branch": "regional", "reason": run.replan["reason"]}
-    assert "regional" in run.stop_reason
+    assert run.stop_reason is None and len(run.results) == 3, "the rest of the plan runs while the replan waits"
+    assert "regional" in run.failed_steps[0]["reason"]
 
 
 def test_a_step_whose_dependency_failed_is_skipped_not_run():
@@ -196,9 +254,9 @@ def test_write_outputs_adds_the_study_file_for_a_plan(tmp_path):
         run = run_study(study)
     paths = write_outputs(run, tmp_path / "out")
     assert set(paths) == {"report.md", "manifest.json", "results.json", "study.yaml"}
-    manifest = json.loads((tmp_path / "out" / "manifest.json").read_text())
+    manifest = json.loads((tmp_path / "out" / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["steps"][0]["gates"][0]["check"] == "min_years" and manifest["stop_reason"] is None
-    assert loads((tmp_path / "out" / "study.yaml").read_text()).results["s1"]["ok"]
+    assert loads((tmp_path / "out" / "study.yaml").read_text(encoding="utf-8")).results["s1"]["ok"]
 
 
 def test_the_subset_parser_reads_block_scalars_flow_collections_and_comments():
@@ -224,3 +282,15 @@ i: 'single ''quoted'''
     assert got["a"] == 1 and got["b"] == ["x", "y", 3] and got["c"] == {"k": "v", "n": 2}
     assert got["d"] == "folded text on two lines" and got["e"] == "literal\nlines\n"
     assert got["f"] == [{"g": 1, "h": [1, 2]}, "item text", "plain item"] and got["i"] == "single 'quoted'"
+
+
+def test_a_gate_failed_dependency_only_blocks_the_steps_that_read_its_result():
+    calls: list = []
+    study = _plan()
+    study.steps[1].arguments = {"k": 1}                                # s2 fails its gate, the tool ran
+    study.steps.append(Step(tool="probe", id="s3", depends_on=["s2"]))
+    study.steps.append(Step(tool="probe", id="s4", depends_on=["s2"], arguments={"years": "{{ result.s2.k }}"}))
+    with patch("aquascope.study._tools", return_value=_fake_tools(calls)):
+        run = run_study(study)
+    assert run.results[2]["ok"], "s3 orders itself after s2 but reads nothing from it"
+    assert run.results[3]["skipped"] and "s2 (failed its gate)" in run.results[3]["error"]

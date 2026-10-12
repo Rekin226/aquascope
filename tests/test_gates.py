@@ -106,8 +106,92 @@ def test_unknown_or_malformed_gates_fail_loudly():
     assert [r["passed"] for r in rows] == [False, False, False]
     assert "unknown check" in rows[0]["detail"] and "min_years" in rows[0]["detail"]
     assert set(CHECKS) == {"min_years", "max_return_period_factor", "ci_finite", "spread_within", "nse_min", "kge_min",
-                           "not_empty", "unit_present", "max_area_km2", "min_donors", "status_is", "min_samples"}
+                           "not_empty", "unit_present", "max_area_km2", "min_donors", "status_is", "min_samples",
+                           "fit_envelopes_max", "sampling_density", "trend_on_series", "cross_check_ratio",
+                           "stationary", "min_models", "min_sites"}
 
 
 def test_empty_expects_is_no_gate():
     assert evaluate([], PAYLOAD) == [] and evaluate(None, PAYLOAD) == []
+
+
+# ── reviewer's-eye checks (#416) ──
+
+FFA = {"record_max": {"value": 800.0, "year": 1894, "empirical_return_period": 144.0, "n_years": 143},
+       "return_periods": [2, 5, 10, 25, 50, 100],
+       "fits": {"gev_lmoments": {"q": [300, 400, 460, 540, 600, 652], "at_record_max": 690.0,
+                                 "q_by_T": {"100": 652.0}},
+                "lp3": {"q": [310, 405, 470, 550, 590, 624], "at_record_max": 660.0}},
+       "amax_trend": {"on": "annual maxima", "p_value": 0.41, "tau": 0.05}}
+
+
+def test_fit_envelopes_max_compares_the_record_maximum_with_the_fit_at_its_return_period():
+    ok = evaluate([{"check": "fit_envelopes_max", "path": "ffa", "value": 0.25}], {"ffa": FFA})[0]
+    assert ok["passed"] and "ratio 1.16" in ok["detail"] and "1894" in ok["detail"] and "144" in ok["detail"]
+    bad = evaluate([{"check": "fit_envelopes_max", "path": "ffa", "value": 0.10}], {"ffa": FFA})[0]
+    assert not bad["passed"] and "sits above the fit" in bad["detail"]
+    lp3 = evaluate([{"check": "fit_envelopes_max", "path": "ffa", "value": 0.25, "fit": "lp3"}], {"ffa": FFA})[0]
+    assert lp3["passed"] and "lp3" in lp3["detail"] and "ratio 1.21" in lp3["detail"]
+    none = evaluate([{"check": "fit_envelopes_max", "path": "ffa"}], {"ffa": {"fits": {}}})[0]
+    assert not none["passed"] and "no record maximum" in none["detail"]
+
+
+def test_sampling_density_refuses_a_resolution_the_record_cannot_carry():
+    sparse = {"sampling": {"n": 227, "span_years": 48.7, "per_year": 4.66, "inferred_resolution": "sparse"}}
+    daily = {"sampling": {"n": 51943, "span_years": 142.9, "per_year": 363.5, "inferred_resolution": "daily"}}
+    bad = evaluate([{"check": "sampling_density", "value": "daily"}], sparse)[0]
+    assert not bad["passed"] and "4.66 a year" in bad["detail"] and "daily claimed" in bad["detail"]
+    assert "sparser than the resolution assumed" in bad["detail"]
+    ok = evaluate([{"check": "sampling_density", "value": "daily"}], daily)[0]
+    assert ok["passed"] and "about daily" in ok["detail"]
+    monthly = evaluate([{"check": "sampling_density", "value": "monthly"}], sparse)[0]
+    assert not monthly["passed"], "five a year is not monthly either"
+    rate = evaluate([{"check": "sampling_density", "value": 4}], sparse)[0]
+    assert rate["passed"] and "4 a year needed" in rate["detail"]
+    assert not evaluate([{"check": "sampling_density", "value": "daily"}], {})[0]["passed"]
+
+
+def test_trend_on_series_reads_the_test_on_the_series_it_names():
+    ok = evaluate([{"check": "trend_on_series", "value": 0.05}], {"ffa": FFA})[0]
+    assert ok["passed"] and "annual maxima" in ok["detail"] and "p = 0.41" in ok["detail"]
+    trending = {"ffa": {"amax_trend": {"on": "annual maxima", "p_value": 0.004, "tau": 0.31}}}
+    bad = evaluate([{"check": "trend_on_series", "value": 0.05}], trending)[0]
+    assert not bad["passed"] and "significant trend in the annual maxima" in bad["detail"] and "caveat" in bad["detail"]
+    other = evaluate([{"check": "trend_on_series", "path": "trend", "value": 0.05}],
+                     {"trend": {"on": "annual mean", "p_value": 0.9, "tau": 0.0}})[0]
+    assert other["passed"] and "annual mean" in other["detail"]
+    assert not evaluate([{"check": "trend_on_series"}], {"ffa": {}})[0]["passed"]
+
+
+def test_cross_check_ratio_compares_a_cross_check_with_a_reference_number():
+    gev = {"q": [200, 540], "q_by_T": {"2": 200, "100": 540}}
+    payload = {"glofas": {"ffa": {"return_periods": [2, 100], "fits": {"gev_lmoments": gev}}}}
+    gate = {"check": "cross_check_ratio", "path": "glofas.ffa.fits.gev_lmoments.q_by_T", "value": 0.5,
+            "reference": {"100": 652.0}, "return_period": 100}
+    ok = evaluate([gate], payload)[0]
+    assert ok["passed"] and "ratio 0.83" in ok["detail"] and "T = 100" in ok["detail"]
+    far = evaluate([dict(gate, reference={"100": 2000.0})], payload)[0]
+    assert not far["passed"] and "disagrees" in far["detail"]
+    assert "within the allowed factor of 1.50" in ok["detail"]
+    assert "outside the allowed factor of 1.50" in far["detail"] and "within" not in far["detail"]
+    scalar = evaluate([{"check": "cross_check_ratio", "path": "glofas.ffa.fits.gev_lmoments.q",
+                        "reference": 600.0, "return_period": 100, "value": 0.5}], payload)[0]
+    assert scalar["passed"] and "540" in scalar["detail"]
+    missing = evaluate([dict(gate, reference=None)], payload)[0]
+    assert not missing["passed"] and "did not resolve" in missing["detail"]
+
+
+def test_stationary_gate_reads_the_change_point_verdict():
+    ok = evaluate([{"check": "stationary"}], {"stationary": True, "verdict": "No significant step change."})
+    assert ok[0]["passed"] and "No significant" in ok[0]["detail"]
+    bad = evaluate([{"check": "stationary"}], {"stationary": False, "verdict": "A step change around 1970."})
+    assert not bad[0]["passed"] and "not one sample" in bad[0]["detail"]
+    missing = evaluate([{"check": "stationary"}], {"n": 40})
+    assert not missing[0]["passed"] and "no change-point verdict" in missing[0]["detail"]
+
+
+def test_model_and_site_count_gates():
+    assert evaluate([{"check": "min_models", "value": 3}], {"n_models": 7})[0]["passed"]
+    assert not evaluate([{"check": "min_models", "value": 3}], {"n_models": 2})[0]["passed"]
+    assert evaluate([{"check": "min_sites", "value": 5}], {"n_pooled": 9})[0]["passed"]
+    assert not evaluate([{"check": "min_sites", "value": 5}], {"n_pooled": 2})[0]["passed"]

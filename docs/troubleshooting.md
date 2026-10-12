@@ -97,7 +97,7 @@ display(m)
 Three options, cheapest first:
 
 1. **Do nothing.** The rule-based scorer needs no key, no account, and no
-   network. It is the default and it scores all 26 methodologies.
+   network. It is the default and it scores every methodology in the knowledge base.
 2. **Free HuggingFace token.** Create one at
    <https://huggingface.co/settings/tokens> (read access, no credit card),
    then paste it under **⚙️ LLM enhancement → HuggingFace**. Models known to

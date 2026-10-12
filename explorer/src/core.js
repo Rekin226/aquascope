@@ -3,6 +3,8 @@
 // module (the map, the Ask drawer, a similar-basins list) open a station
 // without importing the panel that owns it.
 
+import { metrics } from "./metrics.js?v=__BUILD__";
+
 export const $ = (id) => document.getElementById(id);
 export const EMPTY_FC = { type: "FeatureCollection", features: [] };
 
@@ -27,7 +29,19 @@ export const VAR_LABEL = {
   groundwater_level: "groundwater", climate: "climate", water_quality: "water quality",
 };
 
-export const sourceStyle = (src) => SOURCE_STYLE[src] || { label: src, color: FALLBACK_COLOR, shape: FALLBACK_SHAPE };
+// Names for the catalogue's other sources, in the same "agency (country)" form, so the legend and the panel never
+// show a registry key like "brazil_ana". They keep the neutral colour and the circle; the keys must be in
+// aquascope.registry.SOURCES (tests/test_explorer/test_explorer_assets.py checks).
+export const SOURCE_LABEL = {
+  bom: "BOM (AU)",
+  brazil_ana: "ANA (BR)",
+  greece_hydroscope: "Hydroscope (GR)",
+  greece_openhi: "OpenHi (GR)",
+  poland_imgw: "IMGW-PIB (PL)",
+};
+
+export const sourceStyle = (src) => SOURCE_STYLE[src] ||
+  { label: SOURCE_LABEL[src] || src, color: FALLBACK_COLOR, shape: FALLBACK_SHAPE };
 export const stationKey = (r) => `${r.source}/${r.station_id}`;
 
 // Debug hooks (harmless in production): window.__aq.state, window.__aq.log.
@@ -48,17 +62,42 @@ export const LAYER_DEFAULTS = {
   hillshade: true,
   // Sparse worldwide coverage, so the world view is a globe (#281).
   globe: true,
-  gaugeStyle: "source",
+  // Today against normal where the daily snapshot covers a gauge, its agency
+  // colour elsewhere (#544): the map opens on the state of the rivers.
+  gaugeStyle: "now",
   heat: false,
+  // Floods past (#547): news and radar flood events, on from the start.
+  floodsPast: true,
+  // The world river status under the gauges, month by month (status-layer.js, #544).
+  status: true,
+  // Groundwater (#558): the wells' head surface, off until asked for.
+  groundwater: false,
+  // Flow vs normal on the rivers (#559): off until asked for, from the Rivers row of the legend.
+  flowNormal: false,
+  // Water balance (#557): subbasins by monthly rain, evaporation, runoff and closure, off until asked for.
+  waterBalance: false,
 };
 
 export const state = {
   stations: [], byKey: new Map(), hidden: new Set(),
   selected: null, result: null, point: null,
+  panelOpen: false,   // map first (#548): the panel opens from the map card's Details or a tab= link
+  period: null,   // the station's analysis period (#270): null = full record, else the last N years
   workerReady: false, booting: true, pending: new Map(), reqId: 0,
   mapOk: false, marker: null, basinsOn: false,
+  // the river network is on from the start (#545); flowOn (river-map.js) follows prefers-reduced-motion
+  riversOn: true,
+  gaugesOn: true,      // the legend's Gauges row can hide every gauge mark (map.js setGaugesVisible)
+  flowNormalShown: false,   // Flow vs normal's classes are drawn on the rivers now (flowstatus-layer.js, #559)
   // layers (#232)
   overlays: new Set(), opacity: {}, date: null,
+  // time (#522): the map date above is the one every dated layer follows; these
+  // say how it moves. Change any of them through setTime(), never directly.
+  timeStep: "day", timeRange: null, compare: null, playing: false,
+  // today against normal (#517): the daily status snapshot, read when the gauges are coloured by it
+  nowStatus: null, nowMeta: null,
+  // last month's status (#523): the monthly bulletin's status.parquet, read when the gauges are coloured by it
+  bulletinStatus: null, bulletinMeta: null,
   ...LAYER_DEFAULTS,
   ask: { running: false, catalogSent: false, markdown: null, run: 0 },
   // One drawer, two modes (Ask, Study); an open Study drawer is part of the URL.
@@ -66,6 +105,63 @@ export const state = {
   study: { running: false, recorded: null },
 };
 dbg.state = state;
+
+// ── the map date (#522) ─────────────────────────────────────────────────────
+// One date drives every dated layer. It is state.date, and it changes only
+// through setTime(), which tells every subscriber: the time bar and the map
+// layers today; the forecast (#517) and the "now" colouring of the gauges can
+// subscribe the same way. `source` says who moved it ("bar", "play", "chart",
+// "url", "gif", "agent"), so a listener can react to a chart click differently
+// from a play tick.
+const timeListeners = new Set();
+
+export function onTime(fn) {
+  timeListeners.add(fn);
+  return () => timeListeners.delete(fn);
+}
+
+export const timeState = () => ({
+  date: state.date, step: state.timeStep, range: state.timeRange, compare: state.compare, playing: state.playing,
+});
+
+const sameRange = (a, b) => (a && b ? a.from === b.from && a.to === b.to : a === b);
+const sameCompare = (a, b) => (a && b ? a.date === b.date && (a.layer || null) === (b.layer || null) : a === b);
+
+export function setTime(patch = {}, { source = "bar" } = {}) {
+  const prev = timeState();
+  if ("date" in patch && patch.date) state.date = patch.date;
+  if ("step" in patch && patch.step) state.timeStep = patch.step;
+  if ("range" in patch) state.timeRange = patch.range || null;
+  if ("compare" in patch) state.compare = patch.compare || null;
+  if ("playing" in patch) state.playing = Boolean(patch.playing);
+  const next = timeState();
+  const changed = next.date !== prev.date || next.step !== prev.step || next.playing !== prev.playing ||
+    !sameRange(next.range, prev.range) || !sameCompare(next.compare, prev.compare);
+  if (!changed) return false;
+  for (const fn of timeListeners) {
+    try { fn({ ...next, prev, source }); } catch (err) { console.error("time listener failed", err); }
+  }
+  return true;
+}
+
+// Map layers outside the overlay catalogue that follow the map date while they
+// are on (#543), by id: { label, time: true, monthly, since, until }, the shape
+// of a dated overlay. The time bar shows itself for them as for an overlay.
+export const datedExtras = new Map();
+// Map layers whose features take a click before the map's own "select this
+// point" does (#543). The module that owns the layer handles the click.
+export const clickLayers = new Set();
+// A layer the reader brought to the map (their own model results, #555) answers a click on itself before the
+// background layers do: it registers a claim (lngLat -> bool), and Floods ahead and Floods past step aside for
+// a click it claims. Gauges still come first.
+const clickClaims = new Set();
+export function claimClicks(fn) { clickClaims.add(fn); return () => clickClaims.delete(fn); }
+export function clickClaimed(e) {
+  for (const fn of clickClaims) {
+    try { if (fn(e.lngLat)) return true; } catch (err) { console.warn("click claim:", err && err.message); }
+  }
+  return false;
+}
 
 // Filled in by the modules that own each behaviour (breaks import cycles).
 export const actions = {
@@ -75,6 +171,12 @@ export const actions = {
   openStudy: () => {},
   applyUrl: () => {},
   refreshMapData: () => {},
+  setOverlay: () => {},       // layer-ui.js: turn an overlay on or off as if from the rail
+  setBasemap: () => {},       // layer-ui.js: switch the basemap as if from the rail
+  showArea: () => {},         // layer-ui.js: show a box's result in the rail, as if just drawn
+  openMapCard: () => {},      // map-card.js: a card on the map for anything clicked (a flood cell, a reach)
+  closeMapCard: () => {},
+  setStatus: () => {},        // status-layer.js: the world river status on or off (#544)
 };
 
 export function escapeHtml(s) {
@@ -124,6 +226,7 @@ export function downloadBlob(name, text, type = "text/plain") {
   a.href = URL.createObjectURL(new Blob([text], { type }));
   a.download = name.replace(/[^\w.-]+/g, "_");
   a.click();
+  metrics.record("export_handoff", { kind: type === "text/csv" ? "csv" : type === "application/json" ? "json" : "other" });
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 

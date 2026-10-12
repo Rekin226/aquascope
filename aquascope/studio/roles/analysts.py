@@ -25,13 +25,14 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from aquascope import study_map
 from aquascope.studio import catalogue
 from aquascope.studio.model import Model, compact
 from aquascope.studio.prompts import SPECIALIST
 from aquascope.studio.workspace import Artifact, Workspace
 from aquascope.study import Study, StudyRun, run_study
 
-__all__ = ["KINDS_BY_METHOD", "analyze_station_full", "load_table", "prior_run", "run"]
+__all__ = ["KINDS_BY_METHOD", "analyze_station_full", "flood_frequency_full", "load_table", "prior_run", "run"]
 
 #: The figure kinds a station step draws when its plan names a method (E); no method draws every kind of the tool.
 KINDS_BY_METHOD: dict[str, list[str]] = {
@@ -42,14 +43,15 @@ KINDS_BY_METHOD: dict[str, list[str]] = {
     "groundwater_trend": ["series", "trend"],
 }
 #: Payload keys stripped before a result goes into the workspace (the figures read them first).
-_BULK_KEYS = ("series",)
+_BULK_KEYS = ("series", "observations")
 
 
 # ── the station analysis with its series kept for the figures ───────────────
 
 
 def analyze_station_full(source: str, station_id: str, years: int | None = None, bootstrap_ci: bool = False,
-                         variable: str | None = None, return_periods: list[float] | None = None) -> dict[str, Any]:
+                         variable: str | None = None, return_periods: list[float] | None = None,
+                         exclude_years: list[int] | None = None) -> dict[str, Any]:
     """``aquascope.explore.analyze_station`` with the daily series and the full flow-duration curve kept in the
     payload (the runner's own ``analyze_station`` drops them, so the hydrograph, trend and FDC figures never
     drew); the bootstrap band as the runner adds it. The Analysts strip the series before the payload is stored."""
@@ -64,18 +66,41 @@ def analyze_station_full(source: str, station_id: str, years: int | None = None,
     if variable and variables is not None and variable not in variables:
         return {"error": f"unknown variable {variable!r}; allowed: {list(variables)}"}
     store: dict[str, Any] = {}
-    extra = {"return_periods": return_periods} if return_periods else {}
+    extra: dict[str, Any] = {"return_periods": return_periods} if return_periods else {}
+    if exclude_years:
+        extra["exclude_years"] = [int(y) for y in exclude_years]
     res = _analyze(source, station_id, years=int(years) if years else None, store=store, variable=variable, **extra)
+    if store.get("series") is not None:
+        observed = store["series"].dropna()
+        # Figures may use daily, decimated points. The retained input table must
+        # preserve the observations actually hashed and analyzed, including subdaily timestamps.
+        res["observations"] = {"t": [t.isoformat() for t in observed.index],
+                               "v": [float(v) for v in observed.values]}
     if bootstrap_ci and res.get("ffa") and store.get("series") is not None:
         try:
             ci = flood_ci(store["series"], **extra)
             res["ffa"]["fits"]["gev_bootstrap"] = {
-                k: ci[k] for k in ("q", "ci", "params", "n_bootstrap", "n_bootstrap_discarded") if k in ci
+                k: ci[k] for k in ("q", "ci", "params", "n_bootstrap", "n_bootstrap_discarded",
+                                     "estimator", "interval_method", "ci_level") if k in ci
             }
             res.setdefault("methods", []).append(ci["method"])
         except Exception as exc:  # noqa: BLE001 - the band is optional
             res.setdefault("notes", []).append(f"bootstrap CI failed: {exc}")
     return res
+
+
+def flood_frequency_full(source: str, station_id: str, years: int | None = None, bootstrap_ci: bool = False,
+                         return_periods: list[float] | None = None,
+                         exclude_years: list[int] | None = None) -> dict[str, Any]:
+    """Keep the exact observations used by this flood fit, even if an earlier station step differs."""
+    from aquascope.mcp_server import _flood_result
+
+    full = analyze_station_full(source, station_id, years=years, bootstrap_ci=bootstrap_ci,
+                                return_periods=return_periods, exclude_years=exclude_years)
+    result = _flood_result(full)
+    if "observations" in full:
+        result["observations"] = full["observations"]
+    return result
 
 
 def _name_stations(ws: Workspace, run: StudyRun) -> None:
@@ -99,6 +124,23 @@ def _name_stations(ws: Workspace, run: StudyRun) -> None:
                 p.setdefault("station_name", name)
                 if not p.get("name"):
                     p["name"] = name
+
+
+def _report_the_asked_trend(ws: Workspace, run: StudyRun, study: Study) -> None:
+    """A flood question ("is it getting worse?") is answered with the Mann-Kendall test on the annual maxima,
+    not on the annual means: every station payload is marked with the trend the report quotes
+    (``trend_reported``), so the key numbers, the sentences and the trend figure use the same series."""
+    from aquascope.trend_series import is_flood_question, mark_reported_trend
+
+    plan = study.plan or {}
+    flood = is_flood_question(ws.brief.kind, ws.brief.problem, ws.brief.playbook or plan.get("playbook"))
+    if not flood:
+        return
+    for r in run.results:
+        mark_reported_trend(r.get("result"), flood=True)
+        fb = r.get("fallback")
+        if isinstance(fb, dict):
+            mark_reported_trend(fb.get("result"), flood=True)
 
 
 def _ask_for_the_return_period(ws: Workspace, study: Study) -> None:
@@ -359,7 +401,7 @@ def _carry(old: Study, new: Study) -> Study:
 
 
 def run(ws: Workspace, model: Model | None, *, tools: dict[str, Any] | None = None, on_artifact: Any = None,
-        max_replans: int = 1, prior: StudyRun | None = None) -> StudyRun:
+        max_replans: int = 1, prior: StudyRun | None = None, reuse: list[str] | None = None) -> StudyRun:
     """Run ``ws.study`` with gates, figures and one bounded replan; write ``ws.run`` and the study's results."""
     from aquascope import playbooks as pbk
 
@@ -388,46 +430,75 @@ def run(ws: Workspace, model: Model | None, *, tools: dict[str, Any] | None = No
             registry_analyze = None
         if callables.get("analyze_station") is registry_analyze:
             callables["analyze_station"] = analyze_station_full
+    if "flood_frequency" not in (tools or {}):
+        try:
+            from aquascope.mcp_server import flood_frequency as registry_flood
+        except ImportError:  # pragma: no cover
+            registry_flood = None
+
+        if callables.get("flood_frequency") is registry_flood:
+            callables["flood_frequency"] = flood_frequency_full
     prior = _reusable(prior, study)
     drawn: set[str] = set()
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
     ws.event("analyst", "start", f"{len(study.steps)} step(s)")
     _ask_for_the_return_period(ws, study)
-    run_ = run_study(study, on_event=say, prior=prior, tools=callables)
+    run_ = run_study(study, on_event=say, prior=prior, tools=callables, reuse=reuse)  # reuse: a steered rerun
     _name_stations(ws, run_)
     _inherit_units(ws, run_, study)
+    _report_the_asked_trend(ws, run_, study)  # study-trust-fixes: flood questions quote the annual-maxima trend
     _draw(ws, run_, drawn, on_artifact, study)
+    study_map.publish(ws, run_.results, on_artifact)  # the study on the map (study_map.geojson)
     replans = 0
-    attempts = 0
-    while run_.stop_reason and attempts < max_replans:
-        attempts += 1
-        if run_.replan:
+    #: Recovery attempts per step id: each failed step gets its branch replan or its Specialist fallback at most
+    #: ``max_replans`` times, then it stays not established and the crew moves to the next failed step.
+    attempted: dict[str, int] = {}
+
+    def rerun(new_study: Study) -> StudyRun:
+        nonlocal study
+        study = new_study
+        out = run_study(study, on_event=say, prior=run_, tools=callables)
+        _name_stations(ws, out)
+        _inherit_units(ws, out, study)
+        _report_the_asked_trend(ws, out, study)
+        _draw(ws, out, drawn, on_artifact, study)
+        study_map.publish(ws, out.results, on_artifact)
+        return out
+
+    while not run_.stop_reason:
+        if run_.replan and attempted.get(str(run_.replan["step"]), 0) < max_replans:
+            sid = str(run_.replan["step"])
+            attempted[sid] = attempted.get(sid, 0) + 1
             branch = run_.replan["branch"]
             if pb is None:
-                ws.event("analyst", "replan_declined", "no playbook to fill the branch from", step=run_.stopped_at)
-                break
+                ws.event("analyst", "replan_declined", "no playbook to fill the branch from", step=sid)
+                run_.replan = None
+                continue
             try:
                 new = pbk.plan(pb, recon, intake, branch=branch, problem_text=text)
             except pbk.Declined as exc:
-                ws.event("analyst", "replan_declined", exc.reason, step=run_.stopped_at)
-                break
+                ws.event("analyst", "replan_declined", exc.reason, step=sid)
+                run_.replan = None
+                continue
             new = _carry(study, new)
-            new.plan["replanned_from"] = {"branch": plan.get("branch"), "step": run_.stopped_at,
+            new.plan["replanned_from"] = {"branch": plan.get("branch"), "step": sid,
                                           "reason": run_.replan.get("reason")}
-            ws.event("analyst", "replan", f"branch {branch} after {run_.stop_reason}", step=run_.stopped_at)
-            study = new
+            ws.event("analyst", "replan", f"branch {branch} after {run_.replan.get('reason')}", step=sid)
             replans += 1
-            run_ = run_study(study, on_event=say, prior=run_, tools=callables)
-            _name_stations(ws, run_)
-            _inherit_units(ws, run_, study)
-            _draw(ws, run_, drawn, on_artifact, study)
+            run_ = rerun(new)
             continue
         if not model:
             break
-        failed = next((r for r in run_.results if r.get("id") == run_.stopped_at), None)
-        step = study.step_by_id(run_.stopped_at or "")
-        if failed is None or step is None:
+        pending = [f for f in run_.failed_steps
+                   if not f.get("skipped") and attempted.get(str(f["id"]), 0) < max_replans]
+        if not pending:
             break
+        target = str(pending[0]["id"])
+        attempted[target] = attempted.get(target, 0) + 1
+        failed = next((r for r in run_.results if r.get("id") == target), None)
+        step = study.step_by_id(target)
+        if failed is None or step is None:
+            continue
         from aquascope.ai_engine.team import SPECIALIST_PROMPTS, _recon_summary
 
         proposal = model.call_json("analyst", f"{SPECIALIST_PROMPTS.get(kind, SPECIALIST_PROMPTS['default'])}\n"
@@ -436,16 +507,18 @@ def run(ws: Workspace, model: Model | None, *, tools: dict[str, Any] | None = No
             "failed_step": {"id": step.id, "tool": step.tool, "arguments": step.arguments,
                             "rationale": step.rationale},
             "failed_gates": [g for g in failed.get("gates") or [] if not g.get("passed")],
+            "error": failed.get("error"),
             "result": compact(failed.get("result")),
             "earlier_fallback": compact(failed.get("fallback")) if failed.get("fallback") else None,
             "recon": _recon_summary(recon),
-            "tools": [{"tool": e["tool"], "arguments": list(e["arguments"]), "gates": e["gates"]}
+            "tools": [{"tool": e["tool"], "arguments": list(e["arguments"]), "gates": e["gates"],
+                       "allowed": e.get("allowed") or {}}
                       for e in catalogue.compact(ws.brief.kind)[:20]],
         }, step=step.id)
         if not proposal or not proposal.get("tool"):
             ws.event("analyst", "no_fallback", (proposal or {}).get("rationale")
                      or "the specialist proposed no usable fallback", step=step.id)
-            break
+            continue
         fb_step = {"tool": str(proposal["tool"]), "arguments": dict(proposal.get("arguments") or {}),
                    "rationale": str(proposal.get("rationale") or "proposed by the specialist after the gate failed"),
                    "expects": [g for g in (proposal.get("expects") or []) if isinstance(g, dict)]}
@@ -457,16 +530,14 @@ def run(ws: Workspace, model: Model | None, *, tools: dict[str, Any] | None = No
         if errors:
             ws.event("analyst", "no_fallback", "the proposal did not pass the validator: " + "; ".join(errors[:3]),
                      step=step.id)
-            break
+            continue
         step.fallback = {"step": fb_step}
         study.plan = dict(study.plan or {})
-        study.plan.setdefault("replans", []).append({"step": step.id, "reason": run_.stop_reason, "fallback": fb_step})
+        study.plan.setdefault("replans", []).append({"step": step.id, "reason": pending[0]["reason"],
+                                                     "fallback": fb_step})
         ws.event("analyst", "replan", f"fallback {fb_step['tool']}: {fb_step['rationale']}", step=step.id)
         replans += 1
-        run_ = run_study(study, on_event=say, prior=run_, tools=callables)
-        _name_stations(ws, run_)
-        _inherit_units(ws, run_, study)
-        _draw(ws, run_, drawn, on_artifact, study)
+        run_ = rerun(study)
 
     _strip_bulk(run_, study)
     ws.set_study(study)
@@ -474,8 +545,15 @@ def run(ws: Workspace, model: Model | None, *, tools: dict[str, Any] | None = No
         "ok": bool(run_.ok), "results": [dict(r) for r in run_.results], "gates": run_.gates,
         "failed_gates": run_.failed_gates, "stopped_at": run_.stopped_at, "stop_reason": run_.stop_reason,
         "started": started, "finished": run_.finished or datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "replans": replans,
+        "replans": replans, "failed_steps": run_.failed_steps, "summary": run_.summary,
     }
-    ws.event("analyst", "gates", f"{len(run_.gates) - len(run_.failed_gates)} of {len(run_.gates)} gates passed"
+    summ = run_.summary
+    passed = sum(bool(g.get("passed")) and not g.get("skipped") for g in run_.gates)
+    skipped = sum(bool(g.get("skipped")) for g in run_.gates)
+    ws.event("analyst", "gates", f"{passed} of {len(run_.gates)} gates passed; "
+             + (f"{skipped} gates skipped; " if skipped else "")
+             + f"{summ['ok']} of {summ['planned']} step(s) established"
+             + (f", {summ['failed']} failed" if summ["failed"] else "")
+             + (f", {summ['skipped']} skipped" if summ["skipped"] else "")
              + (f"; stopped at {run_.stopped_at}" if run_.stop_reason else ""))
     return run_

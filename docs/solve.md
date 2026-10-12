@@ -31,9 +31,11 @@ intake ──► recon ──► plan ──► review ──► execute ──�
 4. **Review.** The CLI prints the plan as a numbered checklist and asks
    `y/N`; the API gives it to a callback that may edit it or decline it.
 5. **Execute.** `run_study` runs the steps in order and evaluates the gates
-   after each one. A failed gate runs the step's fallback once, or stops the
-   study with the reason. When a model is present, a Specialist may propose
-   one more fallback step; the replan is bounded (`max_replans=1`).
+   after each one. A failed gate runs the step's fallback once; if that fails too the step is recorded as
+   not established and the run goes on (the steps that depend on it are skipped with the reason; only an
+   explicit `fallback: stop` ends the run). When a model is present, a Specialist
+   may propose one more fallback step for each failed step; the recovery is
+   bounded per step (`max_replans=1`).
 6. **Report.** The answer, the plan and its rationale, every step with its
    gate outcomes, "what this answer does not establish", the playbook's
    caveats verbatim, Data and Methods assembled from the tool results, and

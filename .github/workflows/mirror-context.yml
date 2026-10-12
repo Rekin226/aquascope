@@ -1,0 +1,249 @@
+name: Mirror place-context data
+
+# The place-context mirrors (#520) in the Archive dataset, under context/:
+#   floods/groundsource      Google Groundsource flood events from news (CC BY 4.0, Zenodo 18647054)
+#   floods/microsoft         Microsoft AI for Good Sentinel-1 floods 2014-2024 (MIT), as filtered monthly
+#                            detection counts on a 0.05 degree grid (the source is about 400 GB of Parquet,
+#                            so it is read in parallel shards and merged)
+#   dams                     Global Dam Watch v1.0 barriers (CC BY 4.0, figshare 25988293)
+#   ghcn                     the NOAA GHCN-Daily stations that record precipitation (CC0)
+#   floods/monthly           Floods past (#547): both flood sources per half-degree cell and month (a few MB),
+#                            built from the two flood mirrors for the Explorer's globe
+# Each dataset is a cell-sorted Parquet (DuckDB-WASM and range reads fetch a box) plus one small gzipped CSV
+# per 2-degree cell for the Explorer's Python worker, and context/manifest.json says what is published.
+# Global Water Watch is not mirrored: its data licence is not confirmed.
+#
+# Manual: run once, and again when a source releases a new version. Uses the same HF_TOKEN secret as the
+# harvest. Every step is also `python -m aquascope.archive.context_mirror <step>`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to the Hugging Face dataset"
+        type: boolean
+        default: true
+      microsoft:
+        description: "Include the Microsoft Sentinel-1 floods (the long part: about 400 GB read in 32 shards)"
+        type: boolean
+        default: true
+      max_files:
+        description: "Microsoft tiles per shard, for a smoke run that never publishes (empty = all)"
+        type: string
+        default: ""
+      groundsource_max_rows:
+        description: "Groundsource rows, for a smoke run that never publishes (empty = all)"
+        type: string
+        default: ""
+      floods_monthly_only:
+        description: "Only rebuild the Floods past monthly grid from the published flood mirrors (minutes, not hours)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-context
+  cancel-in-progress: false
+
+env:
+  HF_DATASET: Rekin226/aquascope-gauges
+
+jobs:
+  small:
+    name: Groundsource, dams and rain gauges
+    if: ${{ !inputs.floods_monthly_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install aquascope with the archive extra and shapely
+        run: python -m pip install -q ".[archive]" shapely
+
+      - name: Groundsource flood events
+        run: |
+          ARGS="--out build"
+          if [ -n "${{ inputs.groundsource_max_rows }}" ]; then ARGS="$ARGS --max-rows ${{ inputs.groundsource_max_rows }}"; fi
+          python -m aquascope.archive.context_mirror groundsource $ARGS
+
+      - name: Global Dam Watch barriers
+        run: python -m aquascope.archive.context_mirror dams --out build
+
+      - name: GHCN-Daily precipitation stations
+        run: python -m aquascope.archive.context_mirror ghcn --out build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: context-small
+          path: build/context
+          retention-days: 2
+
+  microsoft:
+    name: Microsoft floods, shard ${{ matrix.shard }}
+    if: inputs.microsoft && !inputs.floods_monthly_only
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install aquascope with the archive extra
+        run: python -m pip install -q ".[archive]"
+
+      - name: Aggregate this shard's tiles
+        env:
+          HF_HUB_DISABLE_PROGRESS_BARS: "1"
+        run: |
+          ARGS="--out work --shard ${{ matrix.shard }} --shards 32"
+          if [ -n "${{ inputs.max_files }}" ]; then ARGS="$ARGS --max-files ${{ inputs.max_files }}"; fi
+          python -m aquascope.archive.context_mirror microsoft-shard $ARGS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ms-part-${{ matrix.shard }}
+          path: work/ms_parts
+          retention-days: 2
+
+  publish:
+    name: Merge, write the manifest and publish
+    needs: [small, microsoft]
+    # The small datasets publish even when a Microsoft shard failed; the Microsoft merge only runs on a full set.
+    # floods_monthly_only skips both and rebuilds just the monthly grid from what is already published.
+    if: always() && (needs.small.result == 'success' || inputs.floods_monthly_only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install aquascope with the archive extra
+        run: python -m pip install -q ".[archive]"
+
+      - uses: actions/download-artifact@v4
+        if: ${{ !inputs.floods_monthly_only }}
+        with:
+          name: context-small
+          path: build/context
+
+      - uses: actions/download-artifact@v4
+        if: needs.microsoft.result == 'success'
+        with:
+          pattern: ms-part-*
+          path: parts
+          merge-multiple: true
+
+      - name: Merge the Microsoft shards
+        if: needs.microsoft.result == 'success'
+        run: python -m aquascope.archive.context_mirror microsoft-merge --out build --parts parts
+
+      # Floods past (#547): reads this run's flood parquets, or the published ones it did not rebuild, and writes
+      # only build/context/floods/monthly/ (grid.parquet, index.json, months/YYYY-MM.json.gz).
+      # A failure here must not hold back the mirrors this run rebuilt: the grid is built aside and swapped in
+      # whole, so a failed step leaves the published grid as it was. floods_monthly_only still shows it red.
+      - name: Floods past, the monthly grid
+        continue-on-error: ${{ !inputs.floods_monthly_only }}
+        run: python -m aquascope.archive.context_mirror floods-monthly --out build --repo "$HF_DATASET"
+
+      - name: Write the manifest
+        run: python -m aquascope.archive.context_mirror manifest --out build --repo "$HF_DATASET"
+
+      - name: Keep the manifest for the health record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: context-manifest
+          path: build/context/manifest.json
+          if-no-files-found: ignore
+          retention-days: 2
+
+      - name: Summary
+        run: |
+          {
+            echo "### Place-context mirrors"
+            echo
+            python -c "import json; m = json.load(open('build/context/manifest.json')); [print(f'- {k}: {v.get(\"rows\")} rows, {len(v.get(\"cells\") or [])} cells, {v.get(\"licence\")}') for k, v in m['datasets'].items()]"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A smoke run (max_files or groundsource_max_rows set) never publishes: its partial datasets would replace
+      # the full ones in the manifest, as a capped harvest once replaced the live catalogue.
+      - name: Publish to Hugging Face
+        if: env.HF_TOKEN != '' && inputs.publish && inputs.max_files == '' && inputs.groundsource_max_rows == ''
+        run: python -m aquascope.archive.context_mirror publish --out build --repo "$HF_DATASET"
+
+      - name: Say why a smoke run was not published
+        if: inputs.publish && (inputs.max_files != '' || inputs.groundsource_max_rows != '')
+        run: echo "::notice::A smoke run (max_files or groundsource_max_rows set) builds and summarises but does not publish."
+
+      - name: Warn when HF_TOKEN is missing
+        if: env.HF_TOKEN == '' && inputs.publish
+        run: |
+          echo "::error::HF_TOKEN is not set, so nothing was published. Set the repository secret HF_TOKEN to a \
+          Hugging Face token with write access to $HF_DATASET."
+          exit 1
+
+  # Job health (#593): health/jobs/mirror-context.json and health/jobs/index.json, written only under health/jobs/,
+  # from the three jobs' results. The mirror only runs when dispatched, so it files no issue and is never stale; a
+  # smoke run's record stays in the job summary.
+  health:
+    name: Job health
+    needs: [small, microsoft, publish]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: read
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install huggingface_hub
+        run: python -m pip install -q "huggingface_hub>=0.20"
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: context-manifest
+          path: build/context
+
+      - name: Record the run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH: ${{ env.HF_TOKEN != '' && inputs.publish && inputs.max_files == '' && inputs.groundsource_max_rows == '' }}
+          STATUS: >-
+            ${{ needs.publish.result == 'success' && needs.small.result != 'failure' &&
+            needs.microsoft.result != 'failure' && 'success' || 'failure' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          STARTED=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .run_started_at || true)
+          python3 .github/scripts/job_health.py report mirror-context --root build --status "$STATUS" \
+            --started "$STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue false

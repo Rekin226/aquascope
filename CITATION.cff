@@ -5,18 +5,16 @@ message: >-
 type: software
 title: AquaScope
 abstract: >-
-  AquaScope is an open-source Python toolkit for unified water data
-  aggregation, hydrological analysis, agricultural water management,
-  and AI-powered research methodology recommendations. It provides a
-  single, coherent interface to 37 global water data sources and
-  implements 26 hydrological, statistical, and agri-water methods.
+  AquaScope Hydrology combines a browser river-data Explorer with Python tools
+  for checking observation coverage, analyzing water records and exporting
+  reproducible results. Agency coverage and method suitability vary by task.
 authors:
   - family-names: Ouédraogo
     given-names: Abdoul Rachid
     orcid: "https://orcid.org/0000-0002-4616-4153"
     affiliation: "National Central University, Taiwan"
-version: 0.16.0
-date-released: "2026-09-11"
+version: 0.27.0
+date-released: "2026-10-12"
 doi: 10.5281/zenodo.21903143
 license: MIT
 repository-code: https://github.com/Rekin226/aquascope
@@ -36,6 +34,42 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.21903143
     description: Concept DOI, resolves to the latest archived version
+  - type: doi
+    value: 10.5281/zenodo.23301359
+    description: Version DOI for v0.27.0
+  - type: doi
+    value: 10.5281/zenodo.23246553
+    description: Version DOI for v0.26.0
+  - type: doi
+    value: 10.5281/zenodo.23219118
+    description: Version DOI for v0.25.0
+  - type: doi
+    value: 10.5281/zenodo.23214018
+    description: Version DOI for v0.24.0
+  - type: doi
+    value: 10.5281/zenodo.23200452
+    description: Version DOI for v0.23.0
+  - type: doi
+    value: 10.5281/zenodo.23132668
+    description: Version DOI for v0.22.0
+  - type: doi
+    value: 10.5281/zenodo.23048856
+    description: Version DOI for v0.21.0
+  - type: doi
+    value: 10.5281/zenodo.23009178
+    description: Version DOI for v0.20.0
+  - type: doi
+    value: 10.5281/zenodo.22930129
+    description: Version DOI for v0.19.0
+  - type: doi
+    value: 10.5281/zenodo.22787700
+    description: Version DOI for v0.18.0
+  - type: doi
+    value: 10.5281/zenodo.22772303
+    description: Version DOI for v0.17.0
+  - type: doi
+    value: 10.5281/zenodo.22706070
+    description: Version DOI for v0.16.0
   - type: doi
     value: 10.5281/zenodo.22637405
     description: Version DOI for v0.15.1
@@ -74,9 +108,9 @@ preferred-citation:
     - family-names: Ouédraogo
       given-names: Abdoul Rachid
       orcid: "https://orcid.org/0000-0002-4616-4153"
-  version: 0.16.0
-  date-released: "2026-09-11"
-  doi: 10.5281/zenodo.21903143
+  version: 0.27.0
+  date-released: "2026-10-12"
+  doi: 10.5281/zenodo.23301359
   license: MIT
   repository-code: https://github.com/Rekin226/aquascope
   url: https://rekin226.github.io/aquascope

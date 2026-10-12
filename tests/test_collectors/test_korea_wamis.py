@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
+from aquascope.collectors.base import CollectorError
 from aquascope.collectors.korea_wamis import (
     KOREA_DAM_LIST,
     KOREA_MAJOR_BASINS,
@@ -187,8 +190,10 @@ class TestKoreaWAMISFetchRaw:
         mock_client = MagicMock()
         mock_client.get_json.side_effect = ConnectionError("test error")
         collector = KoreaWAMISCollector(client=mock_client)
-        result = collector.fetch_raw(station_id="12345")
-        assert result == []
+        with pytest.raises(CollectorError) as exc_info:
+            collector.fetch_raw(station_id="12345")
+        assert exc_info.value.source == "korea_wamis"
+        assert isinstance(exc_info.value.cause, ConnectionError)
 
     def test_fetch_raw_builds_station_param(self):
         mock_client = MagicMock()

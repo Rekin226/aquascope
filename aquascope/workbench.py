@@ -249,9 +249,17 @@ def pick_column(df: pd.DataFrame, column: str | None = None, *, prefer: str = "v
     """
     prof = prof or profile(df)
     if column:
-        if column not in df.columns:
-            raise ValueError(f"No column {column!r}; columns are {list(df.columns)}")
-        return column
+        if column in df.columns:
+            return column
+        # A plan often names the quantity ("discharge") where the frame names the column ("value"): when the
+        # frame has one numeric column, or a column that carries the name, that is the one meant.
+        lowered = str(column).lower()
+        hinted = [c for c in prof.numeric_cols if lowered in str(c).lower() or str(c).lower() in lowered]
+        if len(hinted) == 1:
+            return hinted[0]
+        if len(prof.numeric_cols) == 1:
+            return prof.numeric_cols[0]
+        raise ValueError(f"No column {column!r}; columns are {list(df.columns)}")
     numeric = prof.numeric_cols
     if not numeric:
         raise ValueError("This table has no numeric column to analyse.")

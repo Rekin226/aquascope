@@ -155,6 +155,23 @@ def test_station_catalogs_keeps_failures_visible():
     assert empty == []
 
 
+def test_a_wrapped_catalog_failure_keeps_its_cause():
+    """BOM wraps every failed parameter type in one RuntimeError; the 503 under it must reach the health report
+    (#498), or the harvest files the outage as an unclassified code fault."""
+
+    class _Wrapped:
+        def stations(self, **kw):
+            try:
+                raise RuntimeError("All 3 attempts failed for https://www.bom.gov.au/waterdata/services (status 503)")
+            except RuntimeError as exc:
+                raise RuntimeError("BOM getStationList failed for all 10 parameter type(s)") from exc
+
+    with patch("aquascope.registry.build_collector", return_value=_Wrapped()):
+        cat = station_catalogs(sources=["bom"])["bom"]
+    assert cat.error.startswith("RuntimeError: BOM getStationList failed for all 10")
+    assert "(from RuntimeError: All 3 attempts failed" in cat.error and "status 503" in cat.error
+
+
 def test_station_catalogs_rejects_unknown_source():
     with pytest.raises(ValueError):
         station_catalogs(sources=["nope"])
@@ -201,4 +218,4 @@ def test_plain_http_catalog_sources_are_declared_browser_unreachable(built):
 
 def test_browser_reachable_defaults_on():
     unreachable = sorted(k for k, m in SOURCES.items() if not m.browser_reachable)
-    assert unreachable == ["greece_hydroscope", "greece_openhi", "poland_imgw"], unreachable
+    assert unreachable == ["bom", "greece_hydroscope", "greece_openhi", "poland_imgw"], unreachable

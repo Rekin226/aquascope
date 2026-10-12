@@ -1,6 +1,90 @@
 {
   "playbooks": [
     {
+      "id": "catchment_response",
+      "title": "What if the rain or the temperature changes?",
+      "problem": "catchment_response",
+      "description": "Calibrate GR4J at a gauge, test it on years it never saw, and run \"what if\" changes in rainfall and temperature.",
+      "variable": "discharge",
+      "intake": [
+        {
+          "name": "dp_pct",
+          "label": "Change in rainfall (%)",
+          "type": "float",
+          "default": -10,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": -50.0,
+          "max": 50.0
+        },
+        {
+          "name": "dt_c",
+          "label": "Warming (degrees C)",
+          "type": "float",
+          "default": 2,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": 0.0,
+          "max": 6.0
+        }
+      ],
+      "branches": [
+        "gauged"
+      ]
+    },
+    {
+      "id": "climate_change",
+      "title": "Climate change and the river",
+      "problem": "climate_change",
+      "description": "How rainfall, evaporation, mean flow, low flow and floods change by 2050 in seven CMIP6 models, through a calibrated GR4J.",
+      "variable": "discharge",
+      "intake": [
+        {
+          "name": "return_period",
+          "label": "Flood return period to project (years)",
+          "type": "int",
+          "default": 20,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": 2.0,
+          "max": 100.0
+        },
+        {
+          "name": "decision",
+          "label": "What is being decided",
+          "type": "choice",
+          "default": "adaptation screening",
+          "options": [
+            "design flow",
+            "water supply",
+            "adaptation screening"
+          ],
+          "required": false,
+          "help": null,
+          "min": null,
+          "max": null
+        },
+        {
+          "name": "horizon_year",
+          "label": "Horizon year",
+          "type": "int",
+          "default": 2050,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": 2030.0,
+          "max": 2100.0
+        }
+      ],
+      "branches": [
+        "gauged",
+        "climate_only"
+      ]
+    },
+    {
       "id": "drought_status",
       "title": "Drought status at a place",
       "problem": "drought",
@@ -58,6 +142,52 @@
       ]
     },
     {
+      "id": "flood_change",
+      "title": "Is the flood hazard changing?",
+      "problem": "flood_change",
+      "description": "Test a gauge's floods for change, fit a nonstationary model beside the stationary one, and check the neighbours.",
+      "variable": "discharge",
+      "intake": [
+        {
+          "name": "return_period",
+          "label": "Return period (years)",
+          "type": "int",
+          "default": 100,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": 2.0,
+          "max": null
+        },
+        {
+          "name": "horizon_year",
+          "label": "Horizon year for the trend",
+          "type": "int",
+          "default": 2050,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": 2026.0,
+          "max": 2100.0
+        },
+        {
+          "name": "years",
+          "label": "Years of record to use (empty for the whole record; a trend needs at least 20)",
+          "type": "int",
+          "default": null,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": 20.0,
+          "max": null
+        }
+      ],
+      "branches": [
+        "long_record",
+        "regional_only"
+      ]
+    },
+    {
       "id": "flood_risk",
       "title": "Flood risk at a site",
       "problem": "flood_risk",
@@ -81,6 +211,7 @@
           "type": "choice",
           "default": "design flow",
           "options": [
+            "flood trend",
             "design flow",
             "risk screening",
             "insurance",
@@ -90,9 +221,21 @@
           "help": null,
           "min": null,
           "max": null
+        },
+        {
+          "name": "years",
+          "label": "Years of record to use (empty for the whole record; a trend needs at least 20)",
+          "type": "int",
+          "default": null,
+          "options": [],
+          "required": false,
+          "help": null,
+          "min": 20.0,
+          "max": null
         }
       ],
       "branches": [
+        "trend",
         "at_site",
         "short_record",
         "regional"

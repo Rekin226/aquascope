@@ -1,10 +1,10 @@
 # An AquaScope study (version 3): the plan behind an answer, its gates, and what happened.
 #   aquascope run study.yaml
 version: 3
-title: "Screen the most recent 5 years of water-quality samples from: 38.95, -77.13"
+title: "Screen the last five years of water-quality samples of the P: 38.95, -77.13"
 question: "Screen the last five years of water-quality samples of the Potomac at Little Falls against the drinking-water guidelines: which parameters exceed, and what is the index?"
-created: "2026-09-07T14:19:48+00:00"
-aquascope_version: "0.14.0"
+created: "2026-09-14T22:20:58+00:00"
+aquascope_version: "0.16.0"
 author: "methodologist"
 model: "claude-sonnet-5"
 problem:
@@ -15,21 +15,20 @@ problem:
 plan:
   author: "methodologist"
   playbook: "water_quality"
-  objective: "Screen the most recent 5 years of water-quality samples from the Potomac River at Little Falls (USGS-01646500) against drinking-water guidelines, identify which parameters exceed thresholds, and quantify an aggregate water quality index, with an irrigation-index cross-check."
-  decision: "screen whether Potomac water quality at Little Falls meets drinking-water guidelines and quantify the index for a risk screening"
-  methodology: ["Pull the last five years of sampled water-quality parameters at USGS-01646500 (Potomac River near Wash DC, Little Falls Pump Sta), the only water-quality record in the inventory at 0.2 km from the site.", "Screen each recognised parameter's samples against the WHO (2022) drinking-water guideline to flag warnings (any exceedance) and alerts (over 10 percent of samples exceeding).", "Compute the CCME WQI 1.0 (with NSF WQI added where enough of its nine parameters are present) over the same sampled parameters and guidelines to get a 0-100 score and category.", "Compute the irrigation water quality index (IWQI) on the same sample set as a secondary cross-check, since the brief asks for it if relevant, while the primary intake use remains drinking.", "Report the exceedance list and both indices together, noting that the score covers only the parameters actually sampled."]
-  assumptions: ["USGS-01646500 (Little Falls Pump Sta) is the intended 'Potomac at Little Falls' station given its 0.2 km distance and water_quality variable", "sample resolution is daily as noted in the catalog, though not independently verified", "health_verdict left at default false since the client asked for exceedance screening and an index, not a pass/fail health call", "USGS-01646500 (Little Falls Pump Sta) is the intended 'Potomac at Little Falls' water-quality station given its 0.2 km distance and being the only water_quality dataset at this location.", "Sample resolution is daily as noted in the catalog, though the actual sampling frequency within the water-quality record is not independently confirmed.", "health_verdict is left false per the brief's request for exceedance screening and an index rather than a pass/fail health call.", "The IWQI cross-check is informative only, since the stated intake use is drinking, not irrigation."]
-  alternatives: [{"method": "NSF WQI alone (without CCME)", "why_not": "not all nine NSF parameters may be present in the sampled record, so it is only added when coverage allows, per the sufficiency table."}, {"method": "single-parameter threshold screening only", "why_not": "answers exceedance but not the aggregate index the brief explicitly asks for."}]
-  limitations_expected: ["The index covers only the parameters that were sampled; an unsampled parameter is not cleared, it is unknown.", "A Good or Excellent WQI score is a statement about the sampled parameters, not a verdict that the water is safe for the stated use.", "NSF sub-index curves are digitised approximations of the published rating curves (Brown et al. 1970), and weights are renormalised when parameters are missing.", "Guideline values are the WHO (2022) drinking-water guidelines (4th edition with addenda) for the drinking screen; the IWQI cross-check uses a different guideline basis and is secondary.", "USGS daily water-quality values are continuous-monitor daily means for temperature, specific conductance, dissolved oxygen and pH; nutrients, metals and bacteria come from discrete sampling and may be sparser."]
-  citations: ["CCME (2001). Canadian water quality guidelines for the protection of aquatic life: CCME Water Quality Index 1.0, User's Manual. Canadian Council of Ministers of the Environment, Winnipeg.", "Brown, R. M., McClelland, N. I., Deininger, R. A. and Tozer, R. G. (1970). A water quality index: do we dare? Water and Sewage Works 117, 339-343.", "World Health Organization (2022). Guidelines for drinking-water quality, 4th edition, incorporating the first and second addenda. WHO, Geneva.", "Ayers, R. S. and Westcot, D. W. (1985). Water quality for agriculture. FAO Irrigation and Drainage Paper 29, Rev. 1. FAO, Rome.", "Richards, L. A. (ed.) (1954). Diagnosis and improvement of saline and alkali soils. USDA Handbook 60; Wilcox, L. V. (1955). Classification and use of irrigation waters. USDA Circular 969.", "WQI with PCA as the descriptive pair in current applications: Sustainability 16 (2024), doi:10.3390/su16135644; Water 16 (2024), doi:10.3390/w16111570.", "Irrigation suitability indices (SAR, RSC, sodium percentage) in current applications: Water 16 (2024), doi:10.3390/w16020264.", "WHO (2022) Guidelines for Drinking-water Quality, 4th edition with addenda", "CCME Water Quality Index 1.0", "Brown et al. 1970 (NSF WQI rating curves)"]
+  objective: "Screen the last five years of water-quality samples of the Potomac River near Washington, DC at Little Falls Pump Station (USGS-01646500) against the WHO (2022) drinking-water guidelines, identify which parameters exceed, and compute a water quality index (WQI)."
+  decision: "risk screening"
+  methodology: ["Pull the last 5 years of sampled water-quality parameters at USGS-01646500 for the drinking-water use, as tidy rows with per-parameter counts and units.", "Screen each sampled parameter against the WHO (2022) drinking-water guideline to flag warnings and alerts.", "Compute the CCME WQI 1.0 (and NSF WQI where enough of its nine parameters are present) over the sampled parameters against the WHO (2022) drinking-water guidelines to produce a single index and category."]
+  assumptions: ["station USGS-01646500 (Potomac River near Wash, DC, Little Falls Pump Sta) is the water-quality record used, being the named Little Falls site with a water_quality variable at 0.2 km from the point", "daily resolution assumed for the water-quality record per catalog note", "health_verdict left at its default (false) since the client did not ask for a health-risk narrative", "Station USGS-01646500 (Potomac River near Wash, DC, Little Falls Pump Sta) is the water-quality record used, being the named Little Falls site with a water_quality variable at 0.2 km from the point.", "Daily resolution is assumed for the water-quality record per catalog note.", "IWQI is not computed because the brief's use is drinking, not irrigation; no crop or irrigation context was supplied, so IWQI is not relevant here.", "health_verdict is left at its default (false) since the client asked for a screening and index, not a health-risk narrative."]
+  alternatives: [{"method": "iwqi", "why_not": "The brief's use is drinking-water screening, not irrigation suitability; no crop or irrigation context makes IWQI relevant here."}]
+  limitations_expected: ["The index covers only the parameters that were sampled; anything not sampled is unknown, not cleared.", "A Good or Excellent WQI score is a statement about the sampled parameters against the guideline set, not a verdict that the water is safe to drink.", "NSF sub-index curves, when used, are digitised approximations of the published rating curves and weights are renormalised when parameters are missing.", "USGS daily water-quality values are continuous-monitor daily means for temperature, specific conductance, dissolved oxygen and pH; nutrients, metals and bacteria come from discrete sampling and may have sparser counts."]
+  citations: ["CCME (2001). Canadian water quality guidelines for the protection of aquatic life: CCME Water Quality Index 1.0, User's Manual. Canadian Council of Ministers of the Environment, Winnipeg.", "Brown, R. M., McClelland, N. I., Deininger, R. A. and Tozer, R. G. (1970). A water quality index: do we dare? Water and Sewage Works 117, 339-343.", "World Health Organization (2022). Guidelines for drinking-water quality, 4th edition, incorporating the first and second addenda. WHO, Geneva.", "Ayers, R. S. and Westcot, D. W. (1985). Water quality for agriculture. FAO Irrigation and Drainage Paper 29, Rev. 1. FAO, Rome.", "Richards, L. A. (ed.) (1954). Diagnosis and improvement of saline and alkali soils. USDA Handbook 60; Wilcox, L. V. (1955). Classification and use of irrigation waters. USDA Circular 969.", "WQI with PCA as the descriptive pair in current applications: Sustainability 16 (2024), doi:10.3390/su16135644; Water 16 (2024), doi:10.3390/w16111570.", "Irrigation suitability indices (SAR, RSC, sodium percentage) in current applications: Water 16 (2024), doi:10.3390/w16020264.", "WHO (2022) Guidelines for drinking-water quality, 4th edition with addenda", "CCME Water Quality Index 1.0", "Brown et al. 1970 (NSF WQI rating curves)"]
   caveats: ["The index covers the parameters that were sampled and nothing else; a parameter that was not sampled is not cleared, it is unknown, and a Good or Excellent score is a statement about the sampled parameters, not a verdict that the water is safe for the use.", "The NSF sub-index curves used here are digitised approximations of the published rating curves (Brown et al. 1970), and the weights are renormalised when some of the nine parameters are missing.", "Guideline values are the WHO (2022) drinking-water guidelines (4th edition with addenda), as the WHO screen carries them.", "USGS daily water-quality values are a continuous monitor's daily means for temperature, specific conductance, dissolved oxygen and pH; nutrients, metals and bacteria come from discrete sampling (the Water Quality Portal) and are not in a USGS daily record."]
-  rationale: "Screen the most recent 5 years of water-quality samples from the Potomac River at Little Falls (USGS-01646500) against drinking-water guidelines, identify which parameters exceed thresholds, and quantify an aggregate water quality index, with an irrigation-index cross-check."
-  notes: ["step s4: method 'iwqi' is not one wqi applies; 'water_quality_index' stands in"]
-  recon_notes: ["Record resolution is not in the catalog; daily is assumed for every variable.", "10 donor gauges from a pool of 37,071 gauged catchments.", "ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land (Open-Meteo); not checked here.", "CMIP6 change factors need model output you supply (aquascope.climate works on downloaded data); not counted."]
+  rationale: "Screen the last five years of water-quality samples of the Potomac River near Washington, DC at Little Falls Pump Station (USGS-01646500) against the WHO (2022) drinking-water guidelines, identify which parameters exceed, and compute a water quality index (WQI)."
+  recon_notes: ["Record resolution is not in the catalog; daily is assumed for every variable.", "10 donor gauges from a pool of 34,786 gauged catchments.", "ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land (Open-Meteo); not checked here.", "CMIP6 change factors need model output you supply (aquascope.climate works on downloaded data); not counted."]
 steps:
   - tool: "water_quality_samples"
     id: "s1"
-    rationale: "Fetch the last 5 years of sampled parameters at the only water-quality station in the inventory near the site."
+    rationale: "Fetches the last 5 years of sampled parameters at the named Little Falls station (0.2 km from the point) as a tidy screening record with counts and units."
     arguments:
       source: "usgs"
       station_id: "USGS-01646500"
@@ -41,14 +40,14 @@ steps:
     outputs: [{"kind": "figure", "id": "s1_samples_by_parameter", "caption": "samples by parameter from water_quality_samples"}, {"kind": "table", "id": "s1_samples", "caption": "samples from water_quality_samples"}, {"kind": "table", "id": "s1_sample_counts", "caption": "sample counts from water_quality_samples"}]
   - tool: "who_screen"
     id: "s2"
-    rationale: "Flag which sampled parameters exceed the WHO (2022) drinking-water guideline and how often."
+    rationale: "Flags each recognised parameter whose share of samples outside the WHO (2022) guideline exceeds 10 percent as an alert and any exceedance as a warning."
     arguments:
       from_step: "s1"
     depends_on: ["s1"]
     outputs: [{"kind": "figure", "id": "s2_who_exceedances", "caption": "who exceedances from who_screen"}, {"kind": "table", "id": "s2_who_screen", "caption": "who screen from who_screen"}]
   - tool: "wqi"
     id: "s3"
-    rationale: "Aggregate the sampled parameters into a single CCME/NSF-based water quality index and category against the drinking-water guidelines."
+    rationale: "Produces the CCME WQI 1.0 score and category (and NSF WQI when sufficient parameters are present) against the WHO (2022) drinking-water guidelines, summarising scope, frequency and amplitude of exceedance."
     method: "water_quality_index"
     arguments:
       from_step: "s1"
@@ -56,22 +55,10 @@ steps:
     expects:
       - {"check": "not_empty", "path": "ccme.score"}
       - {"check": "min_samples", "path": "ccme.sample_counts", "value": 4}
+    fallback: {"step": {"tool": "who_screen", "arguments": {"from_step": "s1"}, "rationale": "If the index gate is not met, fall back to reporting the per-parameter WHO exceedance screen alone.", "expects": []}}
     depends_on: ["s1"]
     outputs: [{"kind": "figure", "id": "s3_wqi_bars", "caption": "wqi bars from wqi"}, {"kind": "table", "id": "s3_wqi", "caption": "wqi from wqi"}]
-  - tool: "wqi"
-    id: "s4"
-    rationale: "Provide the irrigation water quality index as a secondary cross-check on the same sample set, as the brief requests if relevant."
-    method: "water_quality_index"
-    arguments:
-      from_step: "s1"
-      use: "irrigation"
-    expects:
-      - {"check": "not_empty", "path": "ccme.score", "repaired_from": "iwqi.score"}
-      - {"check": "min_samples", "path": "ccme.sample_counts", "value": 4, "repaired_from": "iwqi.sample_counts"}
-    depends_on: ["s1"]
-    outputs: [{"kind": "figure", "id": "s4_iwqi_bars", "caption": "iwqi bars from wqi (irrigation cross-check)"}, {"kind": "table", "id": "s4_iwqi", "caption": "iwqi from wqi (irrigation cross-check)"}]
 results:
-  s1: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'samples' is present"}, {"check": "unit_present", "passed": true, "detail": "unit uS/cm @25C"}], "summary": "source=usgs, station_id=USGS-01646500, unit=uS/cm @25C, years=5.0, start=2021-09-07, end=2026-09-06", "fallback_used": false, "sha256": "4d21925e86c2e4d6"}
+  s1: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'samples' is present"}, {"check": "unit_present", "passed": true, "detail": "unit uS/cm @25C"}], "summary": "source=usgs, station_id=USGS-01646500, unit=uS/cm @25C, years=5.0, start=2021-09-14, end=2026-09-13", "fallback_used": false, "sha256": "96689b3096ed3a14"}
   s2: {"ok": true, "gates": [], "summary": "n_alerts=0, n_warnings=0", "fallback_used": false, "sha256": "4d9e192249f9fd1b"}
-  s3: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'ccme.score' is present"}, {"check": "min_samples", "passed": true, "detail": "1 parameter(s) with at least 4 samples each"}], "summary": "unit=index, 0 to 100", "fallback_used": false, "sha256": "fbbcf6e0ee74800b"}
-  s4: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'ccme.score' is present"}, {"check": "min_samples", "passed": true, "detail": "1 parameter(s) with at least 4 samples each"}], "summary": "unit=index, 0 to 100", "fallback_used": false, "sha256": "b55bacb694944fac"}
+  s3: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'ccme.score' is present"}, {"check": "min_samples", "passed": true, "detail": "1 parameter(s) with at least 4 samples each"}], "summary": "unit=index, 0 to 100", "fallback_used": false, "sha256": "df6be9458bb65adc"}

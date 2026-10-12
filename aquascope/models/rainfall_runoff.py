@@ -375,6 +375,92 @@ def calibrate(
     )
 
 
+# ── Snow: a degree-day store in front of GR4J ─────────────────────────────
+
+#: Bounds for the two snow parameters: the degree-day factor (mm per degree C per day) and the
+#: temperature (degree C) around which precipitation turns to snow and the pack melts.
+SNOW_PARAM_BOUNDS: dict[str, tuple[float, float]] = {
+    "DDF": (0.5, 8.0),
+    "T0": (-2.0, 3.0),
+}
+
+
+def degree_day_snow(precip: pd.Series, temperature: pd.Series, ddf: float = 3.0, t0: float = 0.0) -> pd.Series:
+    """Liquid water reaching the ground (rain plus melt, mm/day) from a single-layer degree-day snow store.
+
+    Precipitation is snow below ``t0 - 1`` degrees C, rain above ``t0 + 1``
+    and a linear mix between; the pack melts at ``ddf * (T - t0)`` mm/day
+    when the day is warmer than ``t0``. This is the temperature-index approach
+    that snow-affected catchments put in front of GR4J (Hock 2003; the
+    CemaNeige module of airGR is a refinement of it). Without it GR4J turns
+    winter snowfall into winter runoff and misses the spring freshet.
+
+    Hock, R. (2003). Temperature index melt modelling in mountain areas. J. Hydrol., 282, 104-115.
+    """
+    p = precip.to_numpy(dtype=float)
+    t = temperature.reindex(precip.index).to_numpy(dtype=float)
+    out = np.empty(len(p))
+    pack = 0.0
+    lo, hi = t0 - 1.0, t0 + 1.0
+    for i in range(len(p)):
+        pi, ti = p[i], t[i]
+        if not math.isfinite(pi):
+            pi = 0.0
+        if not math.isfinite(ti):
+            ti = t0 + 1.0
+        frac = 1.0 if ti <= lo else 0.0 if ti >= hi else (hi - ti) / (hi - lo)
+        pack += pi * frac
+        melt = ddf * (ti - t0) if ti > t0 else 0.0
+        if melt > pack:
+            melt = pack
+        pack -= melt
+        out[i] = pi * (1.0 - frac) + melt
+    return pd.Series(out, index=precip.index, name="liquid_input")
+
+
+def calibrate_snow(
+    precip: pd.Series,
+    pet: pd.Series,
+    temperature: pd.Series,
+    observed: pd.Series,
+    objective: str = "kge",
+    warmup_days: int = 365,
+    seed: int | None = 42,
+    maxiter: int = 100,
+) -> CalibrationResult:
+    """Calibrate GR4J with the degree-day snow store (six parameters: X1-X4, DDF, T0) against observed flow.
+
+    The same differential-evolution search as :func:`calibrate`; the result's
+    ``params`` carries all six, and :func:`degree_day_snow` with DDF and T0
+    reproduces the liquid input the four GR4J parameters were fitted to.
+    """
+    from scipy.optimize import differential_evolution
+
+    from aquascope.analysis import metrics as metrics_module
+
+    objective_fns = {"nse": metrics_module.nse, "kge": metrics_module.kge, "log_nse": metrics_module.log_nse}
+    if objective not in objective_fns:
+        raise ValueError(f"Unknown objective '{objective}'. Choose from {list(objective_fns)}.")
+    objective_fn = objective_fns[objective]
+    order = ["X1", "X2", "X3", "X4", "DDF", "T0"]
+    bounds = {**GR4J_PARAM_BOUNDS, **SNOW_PARAM_BOUNDS}
+    obs_eval = observed.values[warmup_days:]
+
+    def run(x: np.ndarray) -> pd.Series:
+        liquid = degree_day_snow(precip, temperature, ddf=x[4], t0=x[5])
+        return GR4J(x1=x[0], x2=x[1], x3=x[2], x4=x[3]).simulate(liquid, pet, warmup_days=warmup_days).streamflow
+
+    def neg_objective(x: np.ndarray) -> float:
+        score = objective_fn(obs_eval, run(x).values[warmup_days:])
+        return 1e6 if np.isnan(score) else -score
+
+    opt = differential_evolution(neg_objective, bounds=[bounds[k] for k in order], seed=seed, maxiter=maxiter,
+                                 polish=False, tol=1e-6)
+    best = dict(zip(order, (float(v) for v in opt.x), strict=True))
+    return CalibrationResult(params=best, objective_value=float(-opt.fun), objective_name=objective,
+                             n_iterations=int(opt.nit), simulated=run(opt.x))
+
+
 # ── Uncertainty quantification ────────────────────────────────────────────
 
 

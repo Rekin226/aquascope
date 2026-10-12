@@ -335,7 +335,9 @@ def infer_branch(playbook: str, tools_called: Iterable[str]) -> str | None:
     """The playbook branch whose tools the calls cover best (ties to the earlier branch, as the tree would).
 
     None when no tool of any branch was called. For an agent with no plan of
-    its own (``ask``), this is how its branch is read.
+    its own (``ask``), this is how its branch is read. A branch is known by its
+    required steps: an optional cross-check (GloFAS, the GEOGLOWS reach record)
+    is extra evidence, not what tells one branch from another.
     """
     from aquascope import playbooks as pbk
 
@@ -346,9 +348,9 @@ def infer_branch(playbook: str, tools_called: Iterable[str]) -> str | None:
         return None
     best: tuple[float, str] | None = None
     for b in pb.branches:
-        mine = {s.tool for s in b.steps}
-        if not mine:
-            continue
+        mine = {s.tool for s in b.steps if not s.optional} or {s.tool for s in b.steps}
+        if not mine or any(c.path.startswith("intake.") for c in b.when):
+            continue      # a branch the client's goal picks (a flood trend) cannot be told from the tools alone
         score = len(mine & called) / len(mine)
         if score > 0 and (best is None or score > best[0]):
             best = (score, b.id)

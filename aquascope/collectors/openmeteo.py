@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 _ARCHIVE_URL = "https://archive-api.open-meteo.com/v1"
 _FORECAST_URL = "https://api.open-meteo.com/v1"
 _FLOOD_URL = "https://flood-api.open-meteo.com/v1/flood"
+_CLIMATE_URL = "https://climate-api.open-meteo.com/v1/climate"
 
 
 class OpenMeteoCollector(BaseCollector):
@@ -33,7 +34,8 @@ class OpenMeteoCollector(BaseCollector):
     Parameters
     ----------
     mode : str
-        ``"weather"`` (default), ``"forecast"``, or ``"flood"`` (GloFAS discharge).
+        ``"weather"`` (default), ``"forecast"``, ``"flood"`` (GloFAS discharge) or ``"climate"``
+        (CMIP6 HighResMIP daily projections, 1950-2050; ``models`` is a comma-separated list).
 
     Example
     -------
@@ -105,6 +107,16 @@ class OpenMeteoCollector(BaseCollector):
                 params["start_date"] = start_date
                 params["end_date"] = end_date
             params["daily"] = ",".join(daily or ["river_discharge"])
+        elif self.mode == "climate":
+            # CMIP6 HighResMIP, bias-corrected onto ERA5-Land by Open-Meteo (1950-2050).
+            url = _CLIMATE_URL
+            if not (start_date and end_date and models):
+                raise ValueError("start_date, end_date and models are required for climate mode")
+            params["start_date"] = start_date
+            params["end_date"] = end_date
+            params["models"] = models
+            params["daily"] = ",".join(daily or ["precipitation_sum"])
+            params.pop("timezone", None)
         else:
             raise ValueError(f"Unknown mode: {self.mode!r}")
 

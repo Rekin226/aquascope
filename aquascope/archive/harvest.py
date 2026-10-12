@@ -8,14 +8,17 @@ DuckDB-WASM in a browser all read without help.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import struct
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
 from aquascope import __version__
+from aquascope.archive.catalog import fold_text
 from aquascope.registry import SOURCES, StationCatalog, station_catalogs, station_sources
 from aquascope.schemas.station import Station
 from aquascope.utils.imports import require
@@ -25,6 +28,7 @@ logger = logging.getLogger(__name__)
 STATIONS_COLUMNS = [
     "source",
     "station_id",
+    "site_id",
     "name",
     "latitude",
     "longitude",
@@ -52,6 +56,7 @@ class SourceHealth:
     license: str
     redistributable: bool
     agency: str
+    retained_stations: int = 0
 
 
 @dataclass
@@ -92,6 +97,54 @@ def _bbox(stations: list[Station]) -> list[float] | None:
     return [min(lons), min(lats), max(lons), max(lats)]
 
 
+def infer_site_ids(stations: list[Station], precision: int = 3) -> list[Station]:
+    """Infer shared site_id for co-located stations with matching source, folded name, and rounded coordinates.
+
+    Only updates records where ``site_id == station_id`` (or empty) so that
+    collector-supplied agency site IDs (such as Hub'Eau code_site or UK EA
+    stationGuid) are never overwritten. Stations without a name (or with an
+    empty folded name) are skipped so coordinates alone do not fuse distinct
+    nameless sensors.
+
+    Note: rounding coordinates can split pairs that straddle a cell boundary,
+    so nearby pairs group in practice rather than by guarantee.
+    """
+    groups: dict[tuple[str, str, float, float], list[Station]] = defaultdict(list)
+    for st in stations:
+        if st.latitude is None or st.longitude is None:
+            continue
+        fname = fold_text(st.name)
+        if not fname:
+            continue
+        key = (
+            st.source,
+            fname,
+            round(st.latitude, precision),
+            round(st.longitude, precision),
+        )
+        groups[key].append(st)
+
+    for (source, fname, rlat, rlon), members in groups.items():
+        if len(members) < 2:
+            continue
+        agency_site = next(
+            (s.site_id for s in members if s.site_id and s.site_id != s.station_id),
+            None,
+        )
+        if agency_site:
+            target_site_id = agency_site
+        else:
+            raw_key = f"{source}|{fname}|{rlat:.{precision}f}|{rlon:.{precision}f}"
+            digest = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()[:10]
+            target_site_id = f"syn:{source}:{digest}"
+
+        for st in members:
+            if not st.site_id or st.site_id == st.station_id:
+                st.site_id = target_site_id
+
+    return stations
+
+
 def stations_to_table(stations: list[Station]):
     """Build a pyarrow Table with GeoParquet metadata from Station records."""
     pa = require("pyarrow", feature="archive parquet output", group="archive")
@@ -101,6 +154,7 @@ def stations_to_table(stations: list[Station]):
         meta = SOURCES.get(st.source)
         rows["source"].append(st.source)
         rows["station_id"].append(st.station_id)
+        rows["site_id"].append(st.site_id)
         rows["name"].append(st.name)
         rows["latitude"].append(st.latitude)
         rows["longitude"].append(st.longitude)
@@ -120,6 +174,7 @@ def stations_to_table(stations: list[Station]):
         [
             ("source", pa.string()),
             ("station_id", pa.string()),
+            ("site_id", pa.string()),
             ("name", pa.string()),
             ("latitude", pa.float64()),
             ("longitude", pa.float64()),
@@ -163,7 +218,7 @@ def write_stations_parquet(stations: list[Station], path: Path) -> Path:
     return path
 
 
-GEOJSON_PROPERTIES = ("source", "station_id", "name", "variables", "period_start", "period_end", "url")
+GEOJSON_PROPERTIES = ("source", "station_id", "site_id", "name", "variables", "period_start", "period_end", "url")
 
 
 def write_stations_geojson(stations: list[Station], path: Path) -> Path:
@@ -220,6 +275,7 @@ def harvest_stations(
     max_workers: int = 4,
     write_geojson: bool = True,
     write_card: bool = True,
+    write_signatures: bool = True,
 ) -> HarvestReport:
     """Harvest every station catalog into ``out_dir``.
 
@@ -228,6 +284,9 @@ def harvest_stations(
     are the registry's station-capable ones (all of them, whatever their
     observation terms: a station *catalog* is factual metadata and always
     links back to the agency). Per-source failures are recorded, never raised.
+    With ``write_signatures`` (the default) and mirrored discharge under
+    ``out_dir/obs``, ``signatures.parquet`` is rebuilt next to the catalog; a
+    failure there is logged, never raised.
     """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -237,13 +296,27 @@ def harvest_stations(
     stations: list[Station] = []
     for key in sorted(catalogs):
         stations.extend(catalogs[key].stations)
+    health = _health(catalogs)
+    previous_path = out / "stations.parquet"
+    if previous_path.exists():
+        from aquascope.archive.catalog import load_stations
+
+        previous = load_stations(path=previous_path)
+        failed = {key for key, cat in catalogs.items() if not cat.ok}
+        retained = [Station.model_validate(row) for row in previous
+                    if row["source"] in failed or row["source"] not in catalogs]
+        current_ids = {(s.source, s.station_id) for s in stations}
+        stations.extend(s for s in retained if (s.source, s.station_id) not in current_ids)
+        for row in health:
+            row.retained_stations = sum(s.source == row.source for s in retained)
+    infer_site_ids(stations)
     stations.sort(key=lambda s: (s.source, s.station_id))
 
     report = HarvestReport(
         run_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         aquascope_version=__version__,
         n_stations=len(stations),
-        sources=_health(catalogs),
+        sources=health,
     )
 
     parquet_path = write_stations_parquet(stations, out / "stations.parquet")
@@ -251,6 +324,8 @@ def harvest_stations(
     if write_geojson:
         geojson_path = write_stations_geojson(stations, out / "stations.geojson")
         report.files["stations.geojson"] = geojson_path.name
+    if write_signatures:  # per-station flow signatures (archive/signatures.py)
+        _write_signatures(out, stations, report)
     (out / "health.json").write_text(json.dumps(report.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
     report.files["health.json"] = "health.json"
     if write_card:
@@ -266,6 +341,33 @@ def harvest_stations(
         "Harvested %d stations from %d/%d sources into %s", len(stations), report.n_ok, len(report.sources), out
     )
     return report
+
+
+def _write_signatures(out: Path, stations: list[Station], report: HarvestReport) -> None:
+    """Rebuild ``signatures.parquet`` from the mirrored discharge files; skipped quietly when there are none."""
+    if not (out / "obs" / "discharge").exists():
+        return
+    try:
+        from aquascope.archive.signatures import SIGNATURES_FILE, build_signatures_file
+
+        summary = build_signatures_file(out, stations=stations)
+    except Exception as exc:  # noqa: BLE001 - signatures are a derived extra; the catalog must still publish
+        logger.warning("signatures.parquet not written: %s: %s", type(exc).__name__, exc)
+        return
+    if summary.get("file"):
+        report.files[SIGNATURES_FILE] = SIGNATURES_FILE
+        logger.info("signatures.parquet: %d stations", summary["n_stations"])
+
+
+def _signatures_section(out_dir: Path) -> str:
+    if not (out_dir / "signatures.parquet").exists():
+        return ""
+    return (
+        "- `signatures.parquet`: flow signatures of every mirrored discharge station (`source`, `station_id`, "
+        "record span and completeness, mean flow, Q5/Q50/Q95, baseflow index, Mann-Kendall p and Sen slope of the "
+        "annual maxima with `amax_trend` rising/falling/none, GEV L-moments Q100, mean day of the annual maximum, "
+        "and `notes` saying why a value is empty). Join on `(source, station_id)`.\n"
+    )
 
 
 def _obs_section(out_dir: Path, repo_id: str) -> str:
@@ -363,10 +465,13 @@ can reach, harvested on a schedule and published as GeoParquet. Last run
 Files:
 
 - `stations.parquet`: GeoParquet 1.0 (WKB point geometry, WGS84). One row per station: `source`,
-  `station_id`, `name`, `latitude`, `longitude`, `variables`, `period_start`, `period_end`, `url`
+  `station_id`, `site_id`, `name`, `latitude`, `longitude`, `variables`, `period_start`, `period_end`, `url`
   (deep link to the agency page), `river`, `country`, `agency`, `license`, `redistributable`, `extra`.
 - `stations.geojson`: the same rows as GeoJSON for tools that don't read parquet.
 - `health.json`: per-source status of the last run (station count, seconds, error if any).
+{_signatures_section(path.parent)}
+`site_id` identifies a physical site within a source and defaults to `station_id`.
+Group by `(source, site_id)` to associate sub-stations while preserving every station record.
 
 ## Query it in place
 

@@ -25,9 +25,122 @@ intake:
   - name: decision
     label: What is being decided
     type: choice
-    options: [design flow, risk screening, insurance, inundation extent]
+    options: [flood trend, design flow, risk screening, insurance, inundation extent]
     default: design flow
+  - name: years
+    label: Years of record to use (empty for the whole record; a trend needs at least 20)
+    type: int
+    default: null
+    min: 20
+# What the study must know before it plans, asked one at a time and only when the question, the site and the
+# earlier answers leave it open. Each answer changes the plan: the goal picks the branch (a trend test or a
+# frequency fit), the return period the quantile, the window the record the trend is read on.
+checklist:
+  - field: decision
+    ask: What do you need to know about flooding here?
+    why: Each goal takes a different method, a trend test, a design estimate or a quick screen.
+    options:
+      - value: flood trend
+        label: Whether floods are getting bigger (trend)
+        match: \b(worse|bigger|larger|more (often|frequent|severe)|increas\w*|ris(e|es|ing)|trend\w*)\b
+      - value: design flow
+        label: The flow to design for (bridge, culvert, levee)
+        match: \b(design|culvert|bridge|crossing|spillway|levee|embankment|siz(e|ing))\b
+      - value: risk screening
+        label: How exposed this place is (screening)
+        match: \b(screen\w*|how risky|at risk|exposed)\b
+      - value: insurance
+        label: A flood figure for insurance
+        match: \binsur\w*
+  - field: return_period
+    when:
+      - path: intake.decision
+        op: in
+        value: [design flow, risk screening, insurance]
+    ask: Which flood size do you need?
+    why: It sets the quantile the fit is read at, and how far past the record the estimate has to reach.
+    options:
+      - value: 100
+        label: 100-year (a common design standard)
+      - value: 50
+        label: 50-year
+      - value: 200
+        label: 200-year
+      - value: 1000
+        label: 1000-year (dams, critical sites)
+      - value: 10
+        label: 10-year (frequent floods)
+  - field: years
+    when:
+      - path: intake.decision
+        op: "=="
+        value: flood trend
+    ask: Which period should the trend cover?
+    why: A trend over the whole record and one over recent decades can disagree; the test is run on the one you pick.
+    options:
+      - value: null
+        label: The whole record
+        match: \b(whole|entire|full|all)\b
+      - value: 50
+        label: The last 50 years
+      - value: 30
+        label: The last 30 years
 branches:
+  - id: trend
+    when:
+      - path: intake.decision
+        op: "=="
+        value: flood trend
+      - path: context.years_by_variable.discharge
+        op: ">="
+        value: 20
+    station_variable: discharge
+    rationale: >-
+      The question is whether floods at {{ station.name }} are getting bigger. {{ station.years }} years of daily
+      discharge ({{ station.source }} {{ station.station_id }}, {{ station.distance_km }} km from the point) are
+      enough for a trend test on the annual flood peaks: Mann-Kendall for whether there is a trend, Sen's slope
+      for how fast. A frequency fit on the same peaks says how big a 100-year flood is today, for scale.
+    steps:
+      - id: s1
+        tool: describe_catchment
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: Dams upstream change the flood peaks; the catchment says whether a trend is the river's or its operators'.
+      - id: s2
+        tool: analyze_station
+        method: trend_mann_kendall
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          years: "{{ intake.years }}"
+        rationale: >-
+          The answer: Mann-Kendall with Sen's slope on the annual flood peaks. A p-value under 0.05 is a trend,
+          the slope is its size in the gauge's units per year.
+        expects:
+          - check: min_years
+            value: 20
+            path: years
+          - check: not_empty
+            path: ffa.amax_trend
+          - check: unit_present
+            path: unit
+          - check: sampling_density
+            value: daily
+            path: sampling
+      - id: s3
+        tool: flood_frequency
+        method: at_site_flood_frequency
+        optional: true
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          years: "{{ intake.years }}"
+        rationale: For scale, the 100-year flood the same peaks give today (GEV and Log-Pearson III).
+        expects:
+          - check: min_years
+            value: 20
+            path: years
   - id: at_site
     when:
       - path: context.years_by_variable.discharge
@@ -37,8 +150,8 @@ branches:
     rationale: >-
       {{ station.years }} years of daily discharge at {{ station.name }} ({{ station.source }}
       {{ station.station_id }}, {{ station.distance_km }} km from the point): an at-site frequency fit is
-      defensible. The plan checks the record for a trend first, fits two distributions (GEV by L-moments and
-      Log-Pearson III) with a bootstrap band, and quotes the spread. The estimate is stationary; climate change
+      a candidate for screening, subject to enough complete annual maxima. Check the maxima for a trend,
+      compare GEV L-moments and Log-Pearson III, and keep each estimator's uncertainty separate. Climate change
       enters as a caveat, not as a nonstationary fit, because design-flood guidance under change is immature.
     steps:
       - id: s1
@@ -54,9 +167,9 @@ branches:
           source: "{{ station.source }}"
           station_id: "{{ station.station_id }}"
         rationale: >-
-          Trend pre-test. Mann-Kendall with Sen's slope on the annual means says whether the record is
-          stationary enough for a stationary fit; a significant trend is reported as a scenario caveat on the
-          stationary estimate, never turned into a nonstationary model.
+          Trend pre-test. Mann-Kendall with Sen's slope on the annual means, and on the annual maxima, which
+          is the series a stationary flood fit assumes has no trend; a significant trend is reported as a
+          scenario caveat on the stationary estimate, never turned into a nonstationary model.
         expects:
           - check: min_years
             value: 20
@@ -65,25 +178,32 @@ branches:
             path: trend
           - check: unit_present
             path: unit
+          - check: sampling_density
+            value: daily
+            path: sampling
+          - check: trend_on_series
+            value: 0.05
+            path: ffa.amax_trend
       - id: s3
         tool: flood_frequency
         method: at_site_flood_frequency
-        depends_on: [s2]
         arguments:
           source: "{{ station.source }}"
           station_id: "{{ station.station_id }}"
           bootstrap_ci: true
         rationale: >-
-          Return levels from GEV (L-moments) and Log-Pearson III (Bulletin 17C), with a bootstrap band on the
-          GEV. The T = {{ intake.return_period }} year quantile is quoted from both fits with its interval and
-          the spread between them.
+          Compare the T = {{ intake.return_period }} year daily-mean return levels from GEV L-moments and
+          Log-Pearson III. The LP3 interval belongs to that fit. GEV MLE, with a possible L-moments fallback,
+          has its own bootstrap interval; that interval is not attached to the separate GEV L-moments estimate.
+          This daily-flow screening is not a complete Bulletin 17C procedure. Check fit spread and whether
+          the fitted curve reaches the largest observed daily-mean flood at its empirical return period.
         expects:
           - check: min_years
             value: 20
-            path: years
+            path: ffa.n_years
           - check: max_return_period_factor
             value: 3
-            path: years
+            path: ffa.n_years
             return_period: "{{ intake.return_period }}"
           - check: ci_finite
             path: ffa.fits.gev_bootstrap.ci
@@ -92,6 +212,9 @@ branches:
             value: 0.25
             paths: [ffa.fits.gev_lmoments.q, ffa.fits.lp3.q]
             return_period: "{{ intake.return_period }}"
+          - check: fit_envelopes_max
+            value: 0.25
+            path: ffa
         fallback:
           step:
             tool: similar_basins
@@ -104,6 +227,29 @@ branches:
               - check: min_donors
                 value: 3
                 path: k
+      - id: s4
+        tool: anywhere
+        method: glofas_cross_check
+        optional: true
+        depends_on: [s3]
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          years: 40
+          match_mean_flow: "{{ result.s3.stats.mean }}"
+        rationale: >-
+          Inspect GloFAS modelled discharge and its own indicative frequency fit. Nearby mean-flow matches
+          are diagnostics only. A ratio can support a cross-check only after independent evidence establishes
+          the same catchment, river topology and comparable upstream area. Without that evidence, mark the
+          comparison unverified and skip it; a similar mean flow cannot establish catchment comparability.
+        expects:
+          - check: not_empty
+            path: glofas
+          - check: cross_check_ratio
+            value: 0.5
+            path: glofas.ffa.fits.gev_lmoments.q_by_T
+            reference: "{{ result.s3.ffa.fits.gev_lmoments.q_by_T }}"
+            return_period: "{{ intake.return_period }}"
   - id: short_record
     when:
       - path: context.years_by_variable.discharge
@@ -113,7 +259,7 @@ branches:
     rationale: >-
       {{ station.years }} years of discharge at {{ station.name }} ({{ station.source }} {{ station.station_id }}):
       too short for an at-site estimate to stand alone. The at-site numbers are marginal and are quoted next
-      to a regional estimate from donor gauges, both with their bands.
+      to a regional estimate from donor gauges, with each result's own uncertainty when available.
     steps:
       - id: s1
         tool: describe_catchment
@@ -229,6 +375,19 @@ branches:
         expects:
           - check: not_empty
             path: glofas
+      - id: s5
+        tool: reach_record
+        optional: true
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: >-
+          The GEOGLOWS v2 river reach the site snaps to, and its simulated daily flow since 1940 (MODELLED, not
+          measured): a continuous record at the point itself to set beside the transferred numbers, or a sentence
+          that no stream runs within 1 km.
+        expects:
+          - check: not_empty
+            path: ffa
 declines:
   - when:
       - path: derived.return_period_beyond_cap
@@ -257,7 +416,8 @@ caveats:
     stationary, and any climate scenario is an overlay on it, not a nonstationary fit.
   - >-
     Rare quantiles move with the distribution and the estimator. Two fits (GEV by L-moments and Log-Pearson
-    III) are quoted with their intervals and the spread between them; a spread above 25 percent is reported
+    III) are compared by their point estimates; intervals are attached only to the estimator that produced
+    them. GEV L-moments has no interval here; GEV MLE has a separate bootstrap interval. A spread above 25 percent is reported
     as disagreement, not averaged away.
   - say: >-
       The catchment has upstream dams (degree of regulation above zero in BasinATLAS): the annual maxima are
@@ -281,6 +441,14 @@ caveats:
       - path: context.years_by_variable.discharge
         op: exists
         value: false
+  - say: >-
+      Historical flood events near the site (flood reports in the news from Google Groundsource) are listed
+      with the site's data. They say that and when the place flooded, not how big the flood was: a check on the
+      estimate, never an input to it.
+    when:
+      - path: context.flood_history.events
+        op: ">"
+        value: 0
 citations:
   - "England, J. F. et al. (2019). Guidelines for determining flood flow frequency, Bulletin 17C. USGS Techniques and Methods 4-B5."
   - "Hosking, J. R. M. (1990). L-moments: analysis and estimation of distributions using linear combinations of order statistics. J. R. Stat. Soc. B 52, 105-124."

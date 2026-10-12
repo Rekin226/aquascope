@@ -5,6 +5,7 @@ Standard plots every hydrologist expects:
 - Hydrograph with baseflow separation
 - SPI drought timeline
 - Return period plots
+- Budyko framework diagram
 """
 
 from __future__ import annotations
@@ -25,6 +26,8 @@ from aquascope.viz.styles import (
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
+
+    from aquascope.hydrology.budyko import BudykoResult
 
 logger = logging.getLogger(__name__)
 
@@ -406,6 +409,104 @@ def plot_return_periods(
     # Annotate each point
     for y, v in zip(years, values):
         ax.annotate(f"{v:.1f}", (y, v), textcoords="offset points", xytext=(0, 10), fontsize=9, ha="center")
+
+    _save_or_show(fig, save_path)
+    return fig
+
+
+# ── Budyko Framework ───────────────────────────────────────────────────
+
+
+def plot_budyko(
+    result: BudykoResult,
+    *,
+    labels: list[str] | None = None,
+    title: str = "Budyko Framework",
+    figsize: tuple[float, float] = DEFAULT_FIGSIZE,
+    save_path: str | None = None,
+) -> Figure:
+    """Plot a Budyko framework diagram from a precomputed result.
+
+    The evaporative ratio (ET/P) is drawn against the aridity index
+    (PET/P): the water limit (ET/P = 1) and the energy limit (ET/P = PET/P)
+    frame each requested curve from ``result.curves``, and the observed
+    catchment position(s) from the result are overlaid when available.  The
+    plot only renders what :func:`aquascope.hydrology.budyko` already
+    computed — no curve mathematics happen here.
+
+    Parameters
+    ----------
+    result:
+        A :class:`~aquascope.hydrology.budyko.BudykoResult` from
+        ``budyko(...)``.  Its ``curves`` and ``aridity_grid`` carry the
+        family to draw; ``aridity_index`` and ``observed_evaporative_ratio``
+        place the catchment point(s).
+    labels:
+        Optional one-per-point labels for the observed catchment points;
+        the count must match the number of observed points.  Points are
+        labelled in the flattened (row-major) order of ``aridity_index``.
+        Passing labels for a result without observed points raises
+        ``ValueError``.
+    title:
+        Plot title.
+    figsize:
+        Figure size.
+    save_path:
+        Optional save path.
+
+    Returns
+    -------
+    The matplotlib Figure.
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    apply_aqua_style()
+    fig, ax = plt.subplots(figsize=figsize)
+
+    if labels is not None and result.observed_evaporative_ratio is None:
+        raise ValueError("'labels' given but the result has no observed points.")
+
+    curve_colours = [AQUA_PALETTE["primary"], AQUA_PALETTE["dark"],
+                     AQUA_PALETTE["success"], AQUA_PALETTE["warning"]]
+    curve_labels = {
+        "schreiber": "Schreiber (1904)",
+        "oldekop": "Ol'dekop (1911)",
+        "turc_pike": "Turc-Pike (1954/64)",
+        "fu_zhang": "Fu (1981) / Zhang (2004)",
+    }
+
+    grid = np.asarray(result.aridity_grid, dtype=float)
+
+    # The two limits
+    ax.axhline(1.0, color=AQUA_PALETTE["secondary"], linestyle="--", linewidth=0.8,
+               label="Water limit (ET/P = 1)")
+    ax.plot(grid, grid, color=AQUA_PALETTE["neutral"], linestyle="--", linewidth=0.8,
+            label="Energy limit (ET/P = PET/P)")
+
+    # The curves
+    for i, (curve_name, values) in enumerate(result.curves.items()):
+        ax.plot(grid, np.asarray(values, dtype=float),
+                color=curve_colours[i % len(curve_colours)], linewidth=1.5,
+                label=curve_labels.get(curve_name, curve_name))
+
+    # The observed catchment position(s), if any
+    if result.observed_evaporative_ratio is not None:
+        x = np.asarray(result.aridity_index, dtype=float).reshape(-1)
+        y = np.asarray(result.observed_evaporative_ratio, dtype=float).reshape(-1)
+        ax.scatter(x, y, color=AQUA_PALETTE["danger"], zorder=5, label="Observed catchment")
+        if labels is not None:
+            if len(labels) != len(x):
+                raise ValueError("'labels' must have one entry per observed point.")
+            for (xi, yi, lab) in zip(x, y, labels):
+                ax.annotate(lab, (xi, yi), textcoords="offset points", xytext=(6, 6), fontsize=8)
+
+    ax.set_xlabel("Aridity index (PET / P)")
+    ax.set_ylabel("Evaporative ratio (ET / P)")
+    ax.set_title(title)
+    ax.set_xlim(float(grid.min()), float(grid.max()))
+    ax.set_ylim(0, 1.05)
+    ax.legend(loc="lower right")
 
     _save_or_show(fig, save_path)
     return fig

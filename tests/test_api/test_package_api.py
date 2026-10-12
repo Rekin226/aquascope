@@ -44,7 +44,7 @@ class TestPackageRecommend:
             },
         ]
         data_path = tmp_path / "water.json"
-        data_path.write_text(json.dumps(sample, indent=2))
+        data_path.write_text(json.dumps(sample, indent=2), encoding="utf-8")
 
         result = aquascope.recommend(
             file=str(data_path),

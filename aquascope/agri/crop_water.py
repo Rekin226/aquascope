@@ -31,16 +31,16 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# FAO-56 Table 12 – single crop coefficients (Kc)
+# FAO-56 Rev.1 Table 6.1, 6.2, 6.3 – single crop coefficients (Kc)
 # Keys: initial, mid, late
 # ---------------------------------------------------------------------------
 
 KC_TABLE: dict[str, dict[str, float]] = {
-    # Woody crops & winter wheat retained pending #372 multi-row ground-cover models
-    "wheat_winter": {"initial": 0.40, "mid": 1.15, "late": 0.25},
-    "grape": {"initial": 0.30, "mid": 0.85, "late": 0.45},
-    "citrus": {"initial": 0.65, "mid": 0.60, "late": 0.65},
-    "olive": {"initial": 0.65, "mid": 0.70, "late": 0.65},
+    # FAO-56 Rev.1 (2025) Table 6.3 (woody crops) & Table 6.2 (winter wheat) default standard classes
+    "wheat_winter": {"initial": 0.70, "mid": 1.15, "late": 0.25},
+    "grape": {"initial": 0.40, "mid": 0.80, "late": 0.55},
+    "citrus": {"initial": 0.70, "mid": 0.70, "late": 0.70},
+    "olive": {"initial": 0.50, "mid": 0.50, "late": 0.50},
     # FAO-56 Rev.1 (2025) Table 6.1 (vegetables) & Table 6.2 (field crops)
     "alfalfa": {"initial": 0.50, "mid": 1.20, "late": 1.15},
     "banana": {"initial": 0.50, "mid": 1.05, "late": 1.00},
@@ -67,16 +67,179 @@ KC_TABLE: dict[str, dict[str, float]] = {
 }
 
 # ---------------------------------------------------------------------------
+# FAO-56 Rev.1 Table 6.3 & Table 6.2 – Multi-class woody crop and wheat Kc tables
+# ---------------------------------------------------------------------------
+
+WOODY_CROP_KC_CLASSES: dict[str, dict[str, dict[str, float]]] = {
+    "olive": {
+        # FAO-56 Rev.1 (2025) Table 6.3, a.1. Olive (Olea europaea)
+        "young": {"initial": 0.40, "mid": 0.35, "late": 0.40},  # Young (< 7 yrs trad / < 4 yrs int), fc 0.15–0.30
+        "traditional_low_density": {
+            "initial": 0.45,
+            "mid": 0.45,
+            "late": 0.45,
+        },  # Non-irrigated; low density; 100–200 pl/ha, fc 0.15–0.30
+        "traditional_medium_density": {
+            "initial": 0.50,
+            "mid": 0.50,
+            "late": 0.50,
+        },  # Non-irrigated; medium density; 200–300 pl/ha, fc 0.20–0.40 (standard default)
+        "intensive": {
+            "initial": 0.50,
+            "mid": 0.60,
+            "late": 0.60,
+        },  # Intensive, hedge-prune; low to medium density; 300–800 pl/ha, fc 0.30–0.40
+        "super_intensive_medium_density": {
+            "initial": 0.55,
+            "mid": 0.65,
+            "late": 0.65,
+        },  # Super-intensive; medium density, hedgerow; 800–1500 pl/ha, fc 0.35–0.45
+        "super_intensive_high_density": {
+            "initial": 0.60,
+            "mid": 0.70,
+            "late": 0.70,
+        },  # Super-intensive; high density, hedgerow; 1500–2000 pl/ha, fc 0.45–0.55
+    },
+    "grape": {
+        # FAO-56 Rev.1 (2025) Table 6.3, a.2. Table grapes (Vitis vinifera)
+        "table_low_cover": {"initial": 0.35, "mid": 0.65, "late": 0.55},  # Low (Young); diverse trellis, fc < 0.40
+        "table_medium_cover": {
+            "initial": 0.35,
+            "mid": 0.95,
+            "late": 0.70,
+        },  # Medium; T/Y-trellis, VSP; 1200–1700 pl/ha, fc 0.40–0.60
+        "table_high_cover": {
+            "initial": 0.45,
+            "mid": 1.10,
+            "late": 0.80,
+        },  # High; Y-trellis, overhead; 1200–1700 pl/ha, fc 0.60–0.95
+        # FAO-56 Rev.1 (2025) Table 6.3, a.3. Wine grapes (Vitis vinifera)
+        "wine_very_low_cover": {
+            "initial": 0.30,
+            "mid": 0.35,
+            "late": 0.30,
+        },  # Very low (Young < 5 yrs); 2000–3300 pl/ha, fc < 0.15
+        "wine_low_cover": {
+            "initial": 0.35,
+            "mid": 0.60,
+            "late": 0.40,
+        },  # Low; diverse trellis; 2000–3300 pl/ha, fc 0.15–0.35
+        "wine_medium_cover": {
+            "initial": 0.40,
+            "mid": 0.80,
+            "late": 0.55,
+        },  # Medium; VSP, Guyot, cordon, Lyre, Y-trellis; 2000–3300 pl/ha, fc 0.35–0.50 (standard default)
+        "wine_high_cover": {
+            "initial": 0.40,
+            "mid": 0.95,
+            "late": 0.65,
+        },  # High; VSP, GDC, Lyre, Pergola; 2000–4300 pl/ha, fc 0.50–0.60
+        "wine_very_high_cover": {
+            "initial": 0.45,
+            "mid": 1.05,
+            "late": 0.70,
+        },  # Very high; Y-trellis, overhead; 2000–4300 pl/ha, fc > 0.60
+    },
+    "citrus": {
+        # FAO-56 Rev.1 (2025) Table 6.3, a.4. Citrus trees
+        # a.4.1. Clementine (C. clementina), Mandarin (C. reticulata), Lime (C. aurantifolia)
+        "mandarin_young": {"initial": 0.50, "mid": 0.50, "late": 0.55},  # Young (< 5 yrs); vase, fc 0.10–0.20
+        "mandarin_low_density": {
+            "initial": 0.55,
+            "mid": 0.60,
+            "late": 0.60,
+        },  # Low; vase; < 400 pl/ha, fc 0.20–0.35
+        "mandarin_medium_density": {
+            "initial": 0.70,
+            "mid": 0.75,
+            "late": 0.75,
+        },  # Medium; vase; 400–550 pl/ha, fc 0.35–0.60
+        "mandarin_high_density": {
+            "initial": 0.80,
+            "mid": 0.85,
+            "late": 0.85,
+        },  # High; vase; > 550 pl/ha, fc > 0.60
+        # a.4.2. Lemon (C. limon)
+        "lemon_young": {"initial": 0.50, "mid": 0.40, "late": 0.55},  # Young (< 5 yrs); vase, fc 0.10–0.20
+        "lemon_low_density": {
+            "initial": 0.55,
+            "mid": 0.60,
+            "late": 0.65,
+        },  # Low density; vase; < 200 pl/ha, fc 0.20–0.50
+        "lemon_medium_density": {
+            "initial": 0.75,
+            "mid": 0.75,
+            "late": 0.80,
+        },  # Medium density; vase; 200–400 pl/ha, fc 0.50–0.70
+        "lemon_high_density": {
+            "initial": 0.75,
+            "mid": 0.80,
+            "late": 0.80,
+        },  # High density; vase; > 400 pl/ha, fc > 0.70
+        "lemon_hedgerow": {
+            "initial": 0.80,
+            "mid": 0.85,
+            "late": 0.85,
+        },  # Hedgerow (Industry); > 1000 pl/ha, fc > 0.60
+        # a.4.3. Orange (C. sinensis), Grapefruit (C. paradisi), Tangelo (C. tangelo)
+        "orange_young": {"initial": 0.50, "mid": 0.45, "late": 0.50},  # Young (< 5 yrs); vase, fc 0.10–0.20
+        "orange_low_density": {
+            "initial": 0.55,
+            "mid": 0.60,
+            "late": 0.60,
+        },  # Low; vase; < 400 pl/ha, fc 0.20–0.40
+        "orange_medium_density": {
+            "initial": 0.70,
+            "mid": 0.70,
+            "late": 0.70,
+        },  # Medium; vase; 400–600 pl/ha, fc 0.40–0.70 (standard default)
+        "orange_high_density": {
+            "initial": 0.70,
+            "mid": 0.80,
+            "late": 0.75,
+        },  # High; vase; 600–950 pl/ha, fc > 0.70
+        "orange_hedgerow": {
+            "initial": 0.70,
+            "mid": 0.75,
+            "late": 0.75,
+        },  # Hedgerow (Industry); > 1250 pl/ha, fc > 0.60
+    },
+    "wheat_winter": {
+        # FAO-56 Rev.1 (2025) Table 6.2, f. Cereals and pseudocereals
+        "common_winter_low_moisture": {
+            "initial": 0.70,
+            "mid": 1.15,
+            "late": 0.25,
+        },  # Common winter wheat (Triticum aestivum), low grain moisture at harvest (standard default)
+        "common_winter_high_moisture": {
+            "initial": 0.70,
+            "mid": 1.15,
+            "late": 0.55,
+        },  # Common winter wheat, high grain moisture at harvest
+        "durum_winter_low_moisture": {
+            "initial": 0.50,
+            "mid": 1.05,
+            "late": 0.25,
+        },  # Durum winter wheat (Triticum durum), low grain moisture at harvest
+        "durum_winter_high_moisture": {
+            "initial": 0.50,
+            "mid": 1.05,
+            "late": 0.55,
+        },  # Durum winter wheat, high grain moisture at harvest
+    },
+}
+
+# ---------------------------------------------------------------------------
 # FAO-56 Table 17 / Tables 7.x – basal crop coefficients (Kcb) for dual approach
 # Keys: initial, mid, late
 # ---------------------------------------------------------------------------
 
 KCB_TABLE: dict[str, dict[str, float]] = {
-    # Woody crops & winter wheat retained pending #372 multi-row ground-cover models
-    "wheat_winter": {"initial": 0.15, "mid": 1.10, "late": 0.25},
-    "grape": {"initial": 0.15, "mid": 0.80, "late": 0.40},
-    "citrus": {"initial": 0.60, "mid": 0.55, "late": 0.60},
-    "olive": {"initial": 0.55, "mid": 0.65, "late": 0.55},
+    # FAO-56 Rev.1 (2025) Table 7.3 (woody crops) & Table 7.2 (winter wheat) default standard classes
+    "wheat_winter": {"initial": 0.15, "mid": 1.10, "late": 0.20},
+    "grape": {"initial": 0.25, "mid": 0.70, "late": 0.45},
+    "citrus": {"initial": 0.60, "mid": 0.65, "late": 0.60},
+    "olive": {"initial": 0.30, "mid": 0.35, "late": 0.35},
     # FAO-56 Rev.1 (2025) Tables 7.1 (vegetables), 7.2 (field crops), and 7.3 (woody/mature)
     "alfalfa": {"initial": 0.30, "mid": 0.90, "late": 0.85},
     "banana": {"initial": 0.15, "mid": 1.00, "late": 0.90},
@@ -100,6 +263,61 @@ KCB_TABLE: dict[str, dict[str, float]] = {
     "sunflower": {"initial": 0.15, "mid": 1.10, "late": 0.20},
     "tea": {"initial": 0.95, "mid": 0.95, "late": 0.95},
     "tomato": {"initial": 0.15, "mid": 1.05, "late": 0.75},
+}
+
+# ---------------------------------------------------------------------------
+# FAO-56 Rev.1 Table 7.3 & Table 7.2 – Multi-class woody crop and wheat Kcb tables
+# ---------------------------------------------------------------------------
+
+WOODY_CROP_KCB_CLASSES: dict[str, dict[str, dict[str, float]]] = {
+    "olive": {
+        # FAO-56 Rev.1 (2025) Table 7.3, a.1. Olive (Olea europaea)
+        "young": {"initial": 0.20, "mid": 0.30, "late": 0.20},
+        "traditional_low_density": {"initial": 0.25, "mid": 0.30, "late": 0.30},
+        "traditional_medium_density": {"initial": 0.30, "mid": 0.35, "late": 0.35},
+        "intensive": {"initial": 0.40, "mid": 0.50, "late": 0.45},
+        "super_intensive_medium_density": {"initial": 0.45, "mid": 0.60, "late": 0.55},
+        "super_intensive_high_density": {"initial": 0.50, "mid": 0.65, "late": 0.60},
+    },
+    "grape": {
+        # FAO-56 Rev.1 (2025) Table 7.3, a.2. Table grapes (Vitis vinifera)
+        "table_low_cover": {"initial": 0.20, "mid": 0.55, "late": 0.45},
+        "table_medium_cover": {"initial": 0.25, "mid": 0.85, "late": 0.60},
+        "table_high_cover": {"initial": 0.35, "mid": 1.05, "late": 0.75},
+        # FAO-56 Rev.1 (2025) Table 7.3, a.3. Wine grapes (Vitis vinifera)
+        "wine_very_low_cover": {"initial": 0.10, "mid": 0.20, "late": 0.15},
+        "wine_low_cover": {"initial": 0.20, "mid": 0.45, "late": 0.25},
+        "wine_medium_cover": {"initial": 0.25, "mid": 0.70, "late": 0.45},
+        "wine_high_cover": {"initial": 0.30, "mid": 0.85, "late": 0.55},
+        "wine_very_high_cover": {"initial": 0.35, "mid": 0.95, "late": 0.60},
+    },
+    "citrus": {
+        # FAO-56 Rev.1 (2025) Table 7.3, a.4. Citrus trees
+        # a.4.1. Clementine, Mandarin, Lime
+        "mandarin_young": {"initial": 0.35, "mid": 0.35, "late": 0.35},
+        "mandarin_low_density": {"initial": 0.40, "mid": 0.50, "late": 0.50},
+        "mandarin_medium_density": {"initial": 0.60, "mid": 0.65, "late": 0.65},
+        "mandarin_high_density": {"initial": 0.70, "mid": 0.75, "late": 0.75},
+        # a.4.2. Lemon
+        "lemon_young": {"initial": 0.35, "mid": 0.35, "late": 0.35},
+        "lemon_low_density": {"initial": 0.40, "mid": 0.55, "late": 0.55},
+        "lemon_medium_density": {"initial": 0.65, "mid": 0.70, "late": 0.70},
+        "lemon_high_density": {"initial": 0.70, "mid": 0.75, "late": 0.75},
+        "lemon_hedgerow": {"initial": 0.70, "mid": 0.75, "late": 0.75},
+        # a.4.3. Orange, Grapefruit, Tangelo
+        "orange_young": {"initial": 0.35, "mid": 0.35, "late": 0.35},
+        "orange_low_density": {"initial": 0.40, "mid": 0.50, "late": 0.45},
+        "orange_medium_density": {"initial": 0.60, "mid": 0.65, "late": 0.60},
+        "orange_high_density": {"initial": 0.65, "mid": 0.75, "late": 0.70},
+        "orange_hedgerow": {"initial": 0.65, "mid": 0.70, "late": 0.70},
+    },
+    "wheat_winter": {
+        # FAO-56 Rev.1 (2025) Table 7.2, e. Cereals and pseudocereals
+        "common_winter_low_moisture": {"initial": 0.15, "mid": 1.10, "late": 0.20},
+        "common_winter_high_moisture": {"initial": 0.15, "mid": 1.10, "late": 0.45},
+        "durum_winter_low_moisture": {"initial": 0.15, "mid": 1.00, "late": 0.20},
+        "durum_winter_high_moisture": {"initial": 0.15, "mid": 1.00, "late": 0.45},
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -130,13 +348,10 @@ DEFAULT_STAGE_LENGTHS: dict[str, dict[str, int]] = {
     "sorghum": {"initial": 20, "development": 35, "mid": 40, "late": 30},
     "groundnut": {"initial": 25, "development": 35, "mid": 45, "late": 25},
     "sugar_beet": {"initial": 30, "development": 45, "mid": 90, "late": 15},
-
     # FAO-56 Table 11
     "millet": {"initial": 15, "development": 25, "mid": 40, "late": 25},
-
     # FAO-56 Table 11, cassava year 1. Year 2 is listed separately at 360 days.
     "cassava": {"initial": 20, "development": 40, "mid": 90, "late": 60},
-
     # FAO-56 Table 11 has no chickpea row. Lentil is the closest listed crop
     # (cool-season food legume, same duration class), used here as a proxy.
     "chickpea": {"initial": 20, "development": 30, "mid": 60, "late": 40},  # 150 d
@@ -144,12 +359,341 @@ DEFAULT_STAGE_LENGTHS: dict[str, dict[str, int]] = {
 
 
 # ---------------------------------------------------------------------------
+# Internal Helpers
+# ---------------------------------------------------------------------------
+
+
+def _resolve_crop_coefficients(
+    crop: str,
+    *,
+    is_kcb: bool = False,
+    ground_cover: float | None = None,
+    density: str | None = None,
+    variety: str | None = None,
+    class_name: str | None = None,
+) -> dict[str, float]:
+    """Resolve crop coefficients (Kc or Kcb) for a given crop and optional planting parameters."""
+    classes_table = WOODY_CROP_KCB_CLASSES if is_kcb else WOODY_CROP_KC_CLASSES
+    base_table = KCB_TABLE if is_kcb else KC_TABLE
+
+    if crop not in base_table:
+        raise ValueError(f"Unknown crop '{crop}'. Available: {sorted(base_table)}")
+
+    if crop not in classes_table:
+        if class_name is not None:
+            raise ValueError(f"Crop '{crop}' does not support class_name parameter.")
+        if variety is not None or density is not None:
+            raise ValueError(f"Crop '{crop}' does not support variety or density parameters.")
+        return dict(base_table[crop])
+
+    crop_classes = classes_table[crop]
+
+    if class_name is not None:
+        if class_name not in crop_classes:
+            raise ValueError(f"Unknown class_name '{class_name}' for crop '{crop}'. Available: {sorted(crop_classes)}")
+        return dict(crop_classes[class_name])
+
+    # Parameter resolution based on FAO-56 Rev.1 Tables 6.2, 6.3, 7.2, 7.3
+    if crop == "olive":
+        if variety is not None:
+            raise ValueError(f"Crop 'olive' does not differentiate varieties. Received variety='{variety}'.")
+        if density is not None:
+            density_map = {
+                "young": "young",
+                "traditional_low": "traditional_low_density",
+                "traditional_low_density": "traditional_low_density",
+                "low": "traditional_low_density",
+                "low_density": "traditional_low_density",
+                "traditional_medium": "traditional_medium_density",
+                "traditional_medium_density": "traditional_medium_density",
+                "traditional": "traditional_medium_density",
+                "medium": "traditional_medium_density",
+                "medium_density": "traditional_medium_density",
+                "intensive": "intensive",
+                "hedge_prune": "intensive",
+                "super_intensive_medium": "super_intensive_medium_density",
+                "super_intensive_medium_density": "super_intensive_medium_density",
+                "super_intensive_high": "super_intensive_high_density",
+                "super_intensive_high_density": "super_intensive_high_density",
+                "super_intensive": "super_intensive_high_density",
+                "high": "super_intensive_high_density",
+                "high_density": "super_intensive_high_density",
+            }
+            d_norm = density.lower()
+            if d_norm not in density_map:
+                raise ValueError(
+                    f"Unknown density '{density}' for crop 'olive'. Allowed: {sorted(set(density_map.values()))}"
+                )
+            return dict(crop_classes[density_map[d_norm]])
+
+        if ground_cover is not None:
+            if ground_cover < 0.20:
+                return dict(crop_classes["traditional_low_density"])
+            if ground_cover < 0.30:
+                return dict(crop_classes["traditional_medium_density"])
+            if ground_cover < 0.40:
+                return dict(crop_classes["intensive"])
+            if ground_cover < 0.50:
+                return dict(crop_classes["super_intensive_medium_density"])
+            return dict(crop_classes["super_intensive_high_density"])
+
+        return dict(crop_classes["traditional_medium_density"])
+
+    if crop == "grape":
+        resolved_variety: str | None = None
+        if variety is not None:
+            var_norm = variety.lower()
+            if var_norm in ("table", "table_grape"):
+                resolved_variety = "table"
+            elif var_norm in ("wine", "wine_grape"):
+                resolved_variety = "wine"
+            else:
+                raise ValueError(f"Unknown variety '{variety}' for crop 'grape'. Allowed: ['table', 'wine']")
+
+        if density is not None:
+            d_norm = density.lower()
+            if resolved_variety is None and (
+                d_norm.startswith("table") or d_norm in ("overhead", "t_trellis", "y_trellis")
+            ):
+                resolved_variety = "table"
+            elif resolved_variety is None:
+                resolved_variety = "wine"
+
+            if resolved_variety == "table":
+                table_map = {
+                    "young": "table_low_cover",
+                    "low": "table_low_cover",
+                    "low_cover": "table_low_cover",
+                    "table_low_cover": "table_low_cover",
+                    "medium": "table_medium_cover",
+                    "medium_cover": "table_medium_cover",
+                    "vsp": "table_medium_cover",
+                    "t_trellis": "table_medium_cover",
+                    "y_trellis": "table_medium_cover",
+                    "table_medium_cover": "table_medium_cover",
+                    "high": "table_high_cover",
+                    "high_cover": "table_high_cover",
+                    "overhead": "table_high_cover",
+                    "table_high_cover": "table_high_cover",
+                }
+                if d_norm not in table_map:
+                    raise ValueError(
+                        f"Unknown density '{density}' for table grape. Allowed: ['table_low_cover', 'table_medium_cover', 'table_high_cover'] (or 'low', 'medium', 'high')"
+                    )
+                return dict(crop_classes[table_map[d_norm]])
+
+            wine_map = {
+                "young": "wine_very_low_cover",
+                "very_low": "wine_very_low_cover",
+                "very_low_cover": "wine_very_low_cover",
+                "wine_very_low_cover": "wine_very_low_cover",
+                "low": "wine_low_cover",
+                "low_cover": "wine_low_cover",
+                "wine_low_cover": "wine_low_cover",
+                "medium": "wine_medium_cover",
+                "medium_cover": "wine_medium_cover",
+                "vsp": "wine_medium_cover",
+                "guyot": "wine_medium_cover",
+                "cordon": "wine_medium_cover",
+                "lyre": "wine_medium_cover",
+                "wine_medium_cover": "wine_medium_cover",
+                "high": "wine_high_cover",
+                "high_cover": "wine_high_cover",
+                "pergola": "wine_high_cover",
+                "wine_high_cover": "wine_high_cover",
+                "very_high": "wine_very_high_cover",
+                "very_high_cover": "wine_very_high_cover",
+                "overhead": "wine_very_high_cover",
+                "wine_very_high_cover": "wine_very_high_cover",
+            }
+            if d_norm not in wine_map:
+                raise ValueError(
+                    f"Unknown density '{density}' for wine grape. Allowed: ['wine_very_low_cover', 'wine_low_cover', 'wine_medium_cover', 'wine_high_cover', 'wine_very_high_cover'] (or 'very_low', 'low', 'medium', 'high', 'very_high')"
+                )
+            return dict(crop_classes[wine_map[d_norm]])
+
+        if resolved_variety == "table":
+            if ground_cover is not None:
+                if ground_cover < 0.40:
+                    return dict(crop_classes["table_low_cover"])
+                if ground_cover <= 0.60:
+                    return dict(crop_classes["table_medium_cover"])
+                return dict(crop_classes["table_high_cover"])
+            return dict(crop_classes["table_medium_cover"])
+
+        if ground_cover is not None:
+            if ground_cover < 0.15:
+                return dict(crop_classes["wine_very_low_cover"])
+            if ground_cover < 0.35:
+                return dict(crop_classes["wine_low_cover"])
+            if ground_cover <= 0.50:
+                return dict(crop_classes["wine_medium_cover"])
+            if ground_cover <= 0.60:
+                return dict(crop_classes["wine_high_cover"])
+            return dict(crop_classes["wine_very_high_cover"])
+
+        return dict(crop_classes["wine_medium_cover"])
+
+    if crop == "citrus":
+        group: str = "orange"
+        if variety is not None:
+            var_norm = variety.lower()
+            if var_norm in ("mandarin", "clementine", "lime"):
+                group = "mandarin"
+            elif var_norm == "lemon":
+                group = "lemon"
+            elif var_norm in ("orange", "grapefruit", "tangelo"):
+                group = "orange"
+            else:
+                raise ValueError(
+                    f"Unknown variety '{variety}' for crop 'citrus'. Allowed: ['orange', 'grapefruit', 'tangelo', 'lemon', 'mandarin', 'clementine', 'lime']"
+                )
+
+        if density is not None:
+            d_norm = density.lower()
+            if group == "mandarin":
+                mandarin_map = {
+                    "young": "mandarin_young",
+                    "mandarin_young": "mandarin_young",
+                    "low": "mandarin_low_density",
+                    "low_density": "mandarin_low_density",
+                    "mandarin_low_density": "mandarin_low_density",
+                    "medium": "mandarin_medium_density",
+                    "medium_density": "mandarin_medium_density",
+                    "mandarin_medium_density": "mandarin_medium_density",
+                    "high": "mandarin_high_density",
+                    "high_density": "mandarin_high_density",
+                    "mandarin_high_density": "mandarin_high_density",
+                }
+                if d_norm not in mandarin_map:
+                    raise ValueError(
+                        f"Unknown density '{density}' for mandarin/clementine/lime. Allowed: ['young', 'low_density', 'medium_density', 'high_density'] (or 'low', 'medium', 'high')"
+                    )
+                return dict(crop_classes[mandarin_map[d_norm]])
+
+            if group == "lemon":
+                lemon_map = {
+                    "young": "lemon_young",
+                    "lemon_young": "lemon_young",
+                    "low": "lemon_low_density",
+                    "low_density": "lemon_low_density",
+                    "lemon_low_density": "lemon_low_density",
+                    "medium": "lemon_medium_density",
+                    "medium_density": "lemon_medium_density",
+                    "lemon_medium_density": "lemon_medium_density",
+                    "high": "lemon_high_density",
+                    "high_density": "lemon_high_density",
+                    "lemon_high_density": "lemon_high_density",
+                    "hedgerow": "lemon_hedgerow",
+                    "industry": "lemon_hedgerow",
+                    "lemon_hedgerow": "lemon_hedgerow",
+                }
+                if d_norm not in lemon_map:
+                    raise ValueError(
+                        f"Unknown density '{density}' for lemon. Allowed: ['young', 'low_density', 'medium_density', 'high_density', 'hedgerow'] (or 'low', 'medium', 'high', 'hedgerow')"
+                    )
+                return dict(crop_classes[lemon_map[d_norm]])
+
+            orange_map = {
+                "young": "orange_young",
+                "orange_young": "orange_young",
+                "low": "orange_low_density",
+                "low_density": "orange_low_density",
+                "orange_low_density": "orange_low_density",
+                "medium": "orange_medium_density",
+                "medium_density": "orange_medium_density",
+                "orange_medium_density": "orange_medium_density",
+                "high": "orange_high_density",
+                "high_density": "orange_high_density",
+                "orange_high_density": "orange_high_density",
+                "hedgerow": "orange_hedgerow",
+                "industry": "orange_hedgerow",
+                "orange_hedgerow": "orange_hedgerow",
+            }
+            if d_norm not in orange_map:
+                raise ValueError(
+                    f"Unknown density '{density}' for orange/grapefruit/tangelo. Allowed: ['young', 'low_density', 'medium_density', 'high_density', 'hedgerow'] (or 'low', 'medium', 'high', 'hedgerow')"
+                )
+            return dict(crop_classes[orange_map[d_norm]])
+
+        if ground_cover is not None:
+            if group == "mandarin":
+                if ground_cover < 0.20:
+                    return dict(crop_classes["mandarin_young"])
+                if ground_cover <= 0.35:
+                    return dict(crop_classes["mandarin_low_density"])
+                if ground_cover <= 0.60:
+                    return dict(crop_classes["mandarin_medium_density"])
+                return dict(crop_classes["mandarin_high_density"])
+
+            if group == "lemon":
+                if ground_cover < 0.20:
+                    return dict(crop_classes["lemon_young"])
+                if ground_cover <= 0.50:
+                    return dict(crop_classes["lemon_low_density"])
+                if ground_cover <= 0.70:
+                    return dict(crop_classes["lemon_medium_density"])
+                return dict(crop_classes["lemon_high_density"])
+
+            if ground_cover < 0.20:
+                return dict(crop_classes["orange_young"])
+            if ground_cover <= 0.40:
+                return dict(crop_classes["orange_low_density"])
+            if ground_cover <= 0.70:
+                return dict(crop_classes["orange_medium_density"])
+            return dict(crop_classes["orange_high_density"])
+
+        if group == "mandarin":
+            return dict(crop_classes["mandarin_medium_density"])
+        if group == "lemon":
+            return dict(crop_classes["lemon_medium_density"])
+        return dict(crop_classes["orange_medium_density"])
+
+    if crop == "wheat_winter":
+        wheat_variety: str = "common"
+        if variety is not None:
+            var_norm = variety.lower()
+            if var_norm in ("common", "standard", "aestivum", "bread"):
+                wheat_variety = "common"
+            elif var_norm in ("durum", "pasta", "macaroni"):
+                wheat_variety = "durum"
+            else:
+                raise ValueError(f"Unknown variety '{variety}' for crop 'wheat_winter'. Allowed: ['common', 'durum']")
+
+        moisture: str = "low_moisture"
+        if density is not None:
+            d_norm = density.lower()
+            if d_norm in ("low", "low_moisture", "dry", "dry_harvest"):
+                moisture = "low_moisture"
+            elif d_norm in ("high", "high_moisture"):
+                moisture = "high_moisture"
+            else:
+                raise ValueError(
+                    f"Unknown density/moisture '{density}' for crop 'wheat_winter'. Allowed: ['low_moisture', 'high_moisture'] (or 'low', 'high', 'dry')"
+                )
+
+        target_class = f"{wheat_variety}_winter_{moisture}"
+        return dict(crop_classes[target_class])
+
+    # Fallback to standard documented default class
+    return dict(base_table[crop])
+
+
+# ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
 
 
-def get_kc(crop: str, stage: str | None = None) -> float | dict[str, float]:
-    """Get single crop coefficient(s) for a crop from FAO-56 Table 12.
+def get_kc(
+    crop: str,
+    stage: str | None = None,
+    *,
+    ground_cover: float | None = None,
+    density: str | None = None,
+    variety: str | None = None,
+    class_name: str | None = None,
+) -> float | dict[str, float]:
+    """Get single crop coefficient(s) for a crop from FAO-56 Table 12 / Rev.1 Tables 6.1–6.3.
 
     Parameters
     ----------
@@ -158,6 +702,17 @@ def get_kc(crop: str, stage: str | None = None) -> float | dict[str, float]:
     stage : str | None
         Growth stage: ``"initial"``, ``"mid"``, or ``"late"``.
         If *None*, returns all coefficients as a dict.
+    ground_cover : float | None, optional
+        Effective ground cover fraction (0–1), used to resolve woody-crop
+        classes (e.g. olive, grape, citrus) per FAO-56 Rev.1 Table 6.3.
+    density : str | None, optional
+        Planting density or training class (e.g. ``"low"``, ``"medium"``,
+        ``"high"``, ``"super_intensive"``).
+    variety : str | None, optional
+        Crop variety or sub-species (e.g. ``"table"`` / ``"wine"`` for grape;
+        ``"lemon"`` / ``"mandarin"`` for citrus; ``"durum"`` for wheat_winter).
+    class_name : str | None, optional
+        Explicit FAO-56 Rev.1 class identifier from ``WOODY_CROP_KC_CLASSES``.
 
     Returns
     -------
@@ -167,23 +722,37 @@ def get_kc(crop: str, stage: str | None = None) -> float | dict[str, float]:
     Raises
     ------
     ValueError
-        If *crop* or *stage* is unknown.
+        If *crop*, *stage*, *class_name*, *variety*, or *density* is unknown.
 
     References
     ----------
-    Allen et al. (1998), Table 12; Pereira et al. (2025), FAO-56 Rev.1.
+    Allen et al. (1998), Table 12; Pereira et al. (2025), FAO-56 Rev.1 Tables 6.1–6.3.
     """
-    if crop not in KC_TABLE:
-        raise ValueError(f"Unknown crop '{crop}'. Available: {sorted(KC_TABLE)}")
+    coeffs = _resolve_crop_coefficients(
+        crop,
+        is_kcb=False,
+        ground_cover=ground_cover,
+        density=density,
+        variety=variety,
+        class_name=class_name,
+    )
     if stage is None:
-        return dict(KC_TABLE[crop])
-    if stage not in KC_TABLE[crop]:
-        raise ValueError(f"Unknown stage '{stage}' for crop '{crop}'. Available: {sorted(KC_TABLE[crop])}")
-    return KC_TABLE[crop][stage]
+        return coeffs
+    if stage not in coeffs:
+        raise ValueError(f"Unknown stage '{stage}' for crop '{crop}'. Available: {sorted(coeffs)}")
+    return coeffs[stage]
 
 
-def get_kcb(crop: str, stage: str | None = None) -> float | dict[str, float]:
-    """Get basal crop coefficient(s) for a crop from FAO-56 Table 17.
+def get_kcb(
+    crop: str,
+    stage: str | None = None,
+    *,
+    ground_cover: float | None = None,
+    density: str | None = None,
+    variety: str | None = None,
+    class_name: str | None = None,
+) -> float | dict[str, float]:
+    """Get basal crop coefficient(s) for a crop from FAO-56 Table 17 / Rev.1 Tables 7.1–7.3.
 
     Parameters
     ----------
@@ -192,6 +761,16 @@ def get_kcb(crop: str, stage: str | None = None) -> float | dict[str, float]:
     stage : str | None
         Growth stage: ``"initial"``, ``"mid"``, or ``"late"``.
         If *None*, returns all coefficients as a dict.
+    ground_cover : float | None, optional
+        Effective ground cover fraction (0–1), used to resolve woody-crop
+        classes per FAO-56 Rev.1 Table 7.3.
+    density : str | None, optional
+        Planting density class (e.g. ``"low"``, ``"medium"``, ``"high"``).
+    variety : str | None, optional
+        Crop variety or species (e.g. ``"table"`` / ``"wine"`` for grape;
+        ``"lemon"`` / ``"mandarin"`` for citrus; ``"durum"`` for wheat_winter).
+    class_name : str | None, optional
+        Explicit FAO-56 Rev.1 class identifier from ``WOODY_CROP_KCB_CLASSES``.
 
     Returns
     -------
@@ -201,19 +780,25 @@ def get_kcb(crop: str, stage: str | None = None) -> float | dict[str, float]:
     Raises
     ------
     ValueError
-        If *crop* or *stage* is unknown.
+        If *crop*, *stage*, *class_name*, *variety*, or *density* is unknown.
 
     References
     ----------
-    Allen et al. (1998), Table 17; Pereira et al. (2025), FAO-56 Rev.1.
+    Allen et al. (1998), Table 17; Pereira et al. (2025), FAO-56 Rev.1 Tables 7.1–7.3.
     """
-    if crop not in KCB_TABLE:
-        raise ValueError(f"Unknown crop '{crop}'. Available: {sorted(KCB_TABLE)}")
+    coeffs = _resolve_crop_coefficients(
+        crop,
+        is_kcb=True,
+        ground_cover=ground_cover,
+        density=density,
+        variety=variety,
+        class_name=class_name,
+    )
     if stage is None:
-        return dict(KCB_TABLE[crop])
-    if stage not in KCB_TABLE[crop]:
-        raise ValueError(f"Unknown stage '{stage}' for crop '{crop}'. Available: {sorted(KCB_TABLE[crop])}")
-    return KCB_TABLE[crop][stage]
+        return coeffs
+    if stage not in coeffs:
+        raise ValueError(f"Unknown stage '{stage}' for crop '{crop}'. Available: {sorted(coeffs)}")
+    return coeffs[stage]
 
 
 def compute_ke(
@@ -371,11 +956,17 @@ def crop_water_requirement(
     kc_max: float = 1.20,
     few: float = 1.0,
     kr: float = 1.0,
+    *,
+    ground_cover: float | None = None,
+    density: str | None = None,
+    variety: str | None = None,
+    class_name: str | None = None,
 ) -> pd.DataFrame:
     """Compute daily crop water requirement over the growing season.
 
     Supports both the FAO-56 single crop coefficient (Kc) and dual crop
-    coefficient (Kcb + Ke) approaches.
+    coefficient (Kcb + Ke) approaches, with optional woody-crop parameterization
+    per FAO-56 Rev.1 (2025).
 
     Parameters
     ----------
@@ -401,6 +992,14 @@ def crop_water_requirement(
     kr : float
         Soil evaporation reduction coefficient (dual method only, default 1.0).
         See ``compute_ke`` for details.
+    ground_cover : float | None, optional
+        Effective ground cover fraction (0–1), passed to ``get_kc`` / ``get_kcb``.
+    density : str | None, optional
+        Planting density or training class, passed to ``get_kc`` / ``get_kcb``.
+    variety : str | None, optional
+        Crop variety or sub-species, passed to ``get_kc`` / ``get_kcb``.
+    class_name : str | None, optional
+        Explicit class name, passed to ``get_kc`` / ``get_kcb``.
 
     Returns
     -------
@@ -422,18 +1021,28 @@ def crop_water_requirement(
     if method not in ("single", "dual"):
         raise ValueError(f"Unknown method '{method}'. Use 'single' or 'dual'.")
 
-    kc_values = get_kc(crop)
+    kc_values = get_kc(
+        crop,
+        ground_cover=ground_cover,
+        density=density,
+        variety=variety,
+        class_name=class_name,
+    )
     if not isinstance(kc_values, dict):  # pragma: no cover
         raise TypeError("Expected dict from get_kc when stage is None")
 
     lengths = stage_lengths or DEFAULT_STAGE_LENGTHS.get(crop)
     if lengths is None:
-        raise ValueError(
-            f"No default stage lengths for '{crop}'. Provide stage_lengths explicitly."
-        )
+        raise ValueError(f"No default stage lengths for '{crop}'. Provide stage_lengths explicitly.")
 
     if method == "dual":
-        kcb_values = get_kcb(crop)
+        kcb_values = get_kcb(
+            crop,
+            ground_cover=ground_cover,
+            density=density,
+            variety=variety,
+            class_name=class_name,
+        )
         if not isinstance(kcb_values, dict):  # pragma: no cover
             raise TypeError("Expected dict from get_kcb when stage is None")
 
@@ -452,33 +1061,41 @@ def crop_water_requirement(
 
         if method == "single":
             etc_val = crop_et(eto_val, kc)
-            rows.append({
-                "date": current_date,
-                "stage": stage,
-                "kc": round(kc, 3),
-                "eto": round(eto_val, 2),
-                "etc": round(etc_val, 2),
-            })
+            rows.append(
+                {
+                    "date": current_date,
+                    "stage": stage,
+                    "kc": round(kc, 3),
+                    "eto": round(eto_val, 2),
+                    "etc": round(etc_val, 2),
+                }
+            )
         else:
             # Dual method: ETc = (Kcb + Ke) × ET₀
             _, kcb = _interpolate_kc(day_offset, lengths, kcb_values)
             ke = compute_ke(kcb, kc_max=kc_max, few=few, kr=kr)
             kc_dual = kcb + ke
             etc_val = crop_et(eto_val, kc_dual)
-            rows.append({
-                "date": current_date,
-                "stage": stage,
-                "kc": round(kc, 3),
-                "kcb": round(kcb, 3),
-                "ke": round(ke, 3),
-                "kc_dual": round(kc_dual, 3),
-                "eto": round(eto_val, 2),
-                "etc": round(etc_val, 2),
-            })
+            rows.append(
+                {
+                    "date": current_date,
+                    "stage": stage,
+                    "kc": round(kc, 3),
+                    "kcb": round(kcb, 3),
+                    "ke": round(ke, 3),
+                    "kc_dual": round(kc_dual, 3),
+                    "eto": round(eto_val, 2),
+                    "etc": round(etc_val, 2),
+                }
+            )
 
         logger.debug(
             "crop_water_requirement: day=%d crop=%s stage=%s method=%s etc=%.2f",
-            day_offset, crop, stage, method, etc_val,
+            day_offset,
+            crop,
+            stage,
+            method,
+            etc_val,
         )
 
     return pd.DataFrame(rows)
@@ -495,6 +1112,11 @@ def irrigation_schedule(
     kc_max: float = 1.20,
     few: float = 1.0,
     kr: float = 1.0,
+    *,
+    ground_cover: float | None = None,
+    density: str | None = None,
+    variety: str | None = None,
+    class_name: str | None = None,
 ) -> pd.DataFrame:
     """Full irrigation scheduling over the growing season.
 
@@ -521,6 +1143,14 @@ def irrigation_schedule(
         Exposed-and-wetted soil fraction (dual method only, default 1.0).
     kr : float
         Soil evaporation reduction coefficient (dual method only, default 1.0).
+    ground_cover : float | None, optional
+        Passed to ``crop_water_requirement``.
+    density : str | None, optional
+        Passed to ``crop_water_requirement``.
+    variety : str | None, optional
+        Passed to ``crop_water_requirement``.
+    class_name : str | None, optional
+        Passed to ``crop_water_requirement``.
 
     Returns
     -------
@@ -543,6 +1173,10 @@ def irrigation_schedule(
         kc_max=kc_max,
         few=few,
         kr=kr,
+        ground_cover=ground_cover,
+        density=density,
+        variety=variety,
+        class_name=class_name,
     )
 
     eff_rain_list: list[float] = []

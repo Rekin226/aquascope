@@ -30,6 +30,10 @@ on:
         description: "Skip the observation harvest (catalog, station catchments and bundles only)"
         type: boolean
         default: false
+      health_issues:
+        description: "Open / update / close collector-health issues, as the Monday run does"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -42,14 +46,17 @@ concurrency:
 jobs:
   harvest:
     runs-on: ubuntu-latest
-    timeout-minutes: 170
+    timeout-minutes: 240
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_DATASET: Rekin226/aquascope-gauges
-      # Optional: a free USGS API key lifts the shared demo-key throttling on
-      # the national catalog walk (https://api.waterdata.usgs.gov/signup/).
+      # Optional: a free USGS API key raises the keyless rate limit of the
+      # Water Data API on the national catalog walk (https://api.waterdata.usgs.gov/signup/).
       USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
     steps:
+      - name: Note when the job started (its health record's duration)
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -97,34 +104,38 @@ jobs:
           print(f"{len(table):,} of {len(catalog):,} stations assigned")
           EOF
 
-      - name: Harvest daily observations (budgeted; the archive fills up over weeks)
+      # Poland IMGW's daily archive is ~870 zips (~180 MB), one request each; finished hydrological years never
+      # change. Keeping them between runs turns a 15-minute download into a restore. The key changes every
+      # run so the newest copy is saved; restore-keys picks up the last one.
+      - name: Restore the IMGW archive zips
+        if: ${{ !inputs.skip_obs }}
+        uses: actions/cache@v4
+        with:
+          path: data/cache/poland_imgw
+          key: imgw-archive-${{ github.run_id }}
+          restore-keys: imgw-archive-
+
+      # The observation harvest is allowed to stop early (#449). The Archive fills up over weeks, so a partial
+      # harvest is the normal case: each source has its own deadline inside the step's budget, the step may time
+      # out, and either way the steps after it (bundles, signatures, publish) still run on what was mirrored.
+      # A step timeout that used to skip them threw two hours of harvesting away on 2026-09-21.
+      - name: Harvest daily observations with isolated source deadlines
         id: obs
         if: ${{ !inputs.skip_obs }}
-        timeout-minutes: 120
-        run: |
-          set +e
-          B=${{ inputs.obs_budget || 150 }}
-          # Phase 1: discharge for the three long-record sources.
-          aquascope harvest obs --out archive --variable discharge \
-            --source usgs --source uk_ea --source hubeau_hydrometrie --max-stations $B
-          # Phase 2: the other variables, smaller budgets (UK EA: 3.6k boreholes, 1k rain gauges, 2.6k level sites).
-          aquascope harvest obs --out archive --variable groundwater_level --source uk_ea --max-stations $((B / 2))
-          aquascope harvest obs --out archive --variable precipitation --source uk_ea --max-stations $((B / 3))
-          aquascope harvest obs --out archive --variable water_level --source uk_ea --max-stations $((B / 3))
-          aquascope harvest obs --out archive --variable water_level --source usgs --max-stations $((B / 5))
-          aquascope harvest obs --out archive --variable precipitation --source taiwan_cwa --max-stations 15
-          # Greece OpenHi: 65 telemetry stations the browser cannot call (#408); small enough to mirror whole.
-          aquascope harvest obs --out archive --variable discharge --source greece_openhi --max-stations 65
-          aquascope harvest obs --out archive --variable water_level --source greece_openhi --max-stations 65
-          aquascope harvest obs --out archive --variable precipitation --source greece_openhi --max-stations 65
-          # Poland IMGW-PIB: ~900 gauges, daily from 1951; one download of the archive serves every station (#391).
-          aquascope harvest obs --out archive --variable discharge --source poland_imgw --max-stations $B
-          aquascope harvest obs --out archive --variable water_level --source poland_imgw --max-stations $((B / 2))
-          echo "exit=$?" >> "$GITHUB_OUTPUT"
-          set -e
+        timeout-minutes: 180
+        continue-on-error: true
+        env:
+          OBS_BUDGET: ${{ inputs.obs_budget || '150' }}
+        run: python -m aquascope.archive.refresh --out archive --budget "$OBS_BUDGET" --scheduled-budgets
 
       - name: Roll the per-station files into Parquet bundles (one per variable and source)
+        id: bundles
         run: aquascope harvest bundles --out archive
+
+      - name: Per-station flow signatures (signatures.parquet, the Explorer's map filter)
+        # The stations step already built it from last week's files; this refresh adds what obs just mirrored.
+        continue-on-error: true
+        run: aquascope harvest signatures --out archive
 
       - name: Donor signatures and leave-one-out skill (basins/station_signatures.parquet, regionalization_skill.json)
         # Flow signatures of every gauged station with 10+ years of archived discharge and a catchment row, then
@@ -143,6 +154,7 @@ jobs:
             --out archive/basins/regionalization_skill.json --max-stations 3000
 
       - name: Publish to the Hugging Face dataset
+        id: publish
         # inputs.publish is a boolean input: compare it as one (a string compare
         # against 'true' is always false and silently skipped the first CI runs).
         if: env.HF_TOKEN != '' && (github.event_name == 'schedule' || inputs.publish == true)
@@ -152,6 +164,24 @@ jobs:
           from aquascope.archive import publish_folder
           print(publish_folder("archive", os.environ["HF_DATASET"], commit_message=f"harvest {os.environ.get('GITHUB_RUN_ID','')}"))
           EOF
+
+      # A weekly archive that quietly stops publishing looks healthy for months. If the secret is gone on a
+      # scheduled run, say so loudly rather than skipping the publish in silence.
+      - name: Warn when HF_TOKEN is missing
+        if: always() && env.HF_TOKEN == '' && github.event_name == 'schedule'
+        run: |
+          echo "::error::HF_TOKEN is not set, so the harvest ran but published nothing. Set the repository \
+          secret HF_TOKEN to a Hugging Face token with write access to $HF_DATASET."
+          exit 1
+
+      # The other silent week (#449): a scheduled run that ran but did not publish (a failed bundle step, a refused
+      # token) is red, and its job-health issue says why.
+      - name: Fail when a scheduled run published nothing
+        if: always() && github.event_name == 'schedule' && env.HF_TOKEN != '' && steps.publish.outcome != 'success'
+        run: |
+          echo "::error::The scheduled harvest did not publish (publish step: ${{ steps.publish.outcome }}), so the \
+          Archive keeps last week's files. See the steps above for the cause."
+          exit 1
 
       - name: Job summary
         if: always()
@@ -169,10 +199,26 @@ jobs:
           for s in h["sources"]:
               status = "ok" if s["ok"] else f"FAILED: `{s['error']}`"
               print(f"| `{s['source']}` | {status} | {s['n_stations']:,} | {s['seconds']} |")
+          obs = pathlib.Path("archive/obs/refresh_status.json")
+          if obs.exists():
+              r = json.loads(obs.read_text())
+              print(f"\n## Observation refresh: {r['status']}\n")
+              print("| source | variable | status |\n| --- | --- | --- |")
+              for s in r['sources']:
+                  print(f"| {s['source']} | {s['variable']} | {s['status']} |")
+          else:
+              print("\nObservation refresh did not run; catalog health does not imply fresh observations.")
+          manifest = pathlib.Path("archive/obs/manifest.json")
+          if manifest.exists():
+              bundles = json.loads(manifest.read_text()).get('bundle_status', {})
+              print("\n## Observation bundles\n")
+              print("| source/variable | status | previous bundle retained |\n| --- | --- | --- |")
+              for key, status in sorted(bundles.items()):
+                  print(f"| {key} | {status['status']} | {status.get('retained_previous', False)} |")
           EOF
 
       - name: Open / update / close collector-health issues from health.json
-        if: always() && github.event_name == 'schedule'
+        if: always() && (github.event_name == 'schedule' || inputs.health_issues == true)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -192,3 +238,21 @@ jobs:
           if [ "${{ steps.harvest.outputs.exit }}" != "0" ]; then
             echo "harvest exited ${{ steps.harvest.outputs.exit }} (all sources failed or publish failed)"; exit 1
           fi
+
+      # Job health (#593): health/jobs/harvest.json and health/jobs/index.json, written only under health/jobs/, and
+      # one job-health issue, opened or updated when a scheduled run fails and closed by the next good one. It runs
+      # whether the job passed or not, needs only the standard library to record and to file the issue, and never
+      # turns the job red itself. A capped run (max_items) never publishes its record, as it never should publish
+      # its catalogue.
+      - name: Job health
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PUBLISH: ${{ env.HF_TOKEN != '' && inputs.max_items == '' && (github.event_name == 'schedule' || inputs.publish == true) }}
+          ISSUE: ${{ github.event_name == 'schedule' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 .github/scripts/job_health.py report harvest --root archive --status "${{ job.status }}" --require "publish=${{ steps.publish.outcome }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"

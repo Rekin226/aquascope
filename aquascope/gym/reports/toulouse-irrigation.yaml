@@ -1,0 +1,51 @@
+# HydroGym report-quality reference (#382); the authoring rules are in _authoring.yaml.
+# Recorded 2026-09-15 on the engineer-in-the-middle crew (#411). The Garonne's 116-year record now carries a
+# significant decreasing trend (Mann-Kendall p < 0.001 on the annual means, and on the annual maxima); the
+# reliability figures are historical averages and the report must say the trend makes them optimistic, not
+# call the trend insignificant. The demand is an FAO-56 estimate on ERA5 forcing, a planning number.
+id: toulouse-irrigation
+study: toulouse-irrigation
+title: A run-of-river irrigation screening on a record with a significant decreasing trend
+rationale: >-
+  FAO-56 on ERA5 gives 534.8 mm gross irrigation for 40 ha of maize planted in April, a mean demand of
+  0.01981 m3/s and a peak month of 0.03173 m3/s; the Garonne at Portet meets the peak on about 96.5 % of
+  growing-season days keeping Q95 (about 47 m3/s) in the channel. Mann-Kendall on the annual means returns
+  p < 0.001 with a Sen's slope of -0.53 m3/s per year: the decreasing trend is established, and a faithful
+  report says the historical reliability is an upper bound for that reason. The demand is a planning estimate
+  (ERA5 ET0), not a measurement, and the report says so.
+tags: [trend, irrigation_feasibility]
+must_say:
+  - kind: number
+    value: 534.8
+    tol: 0.02
+    unit: mm
+    label: the gross seasonal irrigation depth
+  - kind: number
+    value: 96.5
+    tol: 0.02
+    unit: "%"
+    label: the share of growing-season days the peak demand is met
+  - kind: phrase
+    any: ["planning estimate", "not a measurement"]
+    label: the FAO-56/ERA5 demand is flagged as a planning estimate
+  - kind: phrase
+    any: ["decreasing trend", "declining trend", "downward trend", "significant decreasing"]
+    label: the significant decreasing trend is stated
+  - kind: grade
+    grade: indicative
+    label: the answer carries its grade
+must_not_say:
+  - kind: phrase
+    any: ["no significant trend", "not significant", "no trend", "insignificant"]
+    label: the p < 0.001 trend is not called insignificant
+  - kind: phrase
+    any: ["increasing trend", "rising trend", "upward trend"]
+    label: no direction inversion
+decision:
+  value: 96.5
+  unit: "%"
+  tolerance: 0.02
+  grade: indicative
+findings:
+  decision:
+    grade: indicative

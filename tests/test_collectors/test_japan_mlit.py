@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
+from aquascope.collectors.base import CollectorError
 from aquascope.collectors.japan_mlit import (
     JAPAN_RIVER_SYSTEMS,
     PARAMETER_MAP_JA,
@@ -156,8 +159,10 @@ class TestJapanMLITFetchRaw:
         mock_client = MagicMock()
         mock_client.get_json.side_effect = ConnectionError("test error")
         collector = JapanMLITCollector(client=mock_client)
-        result = collector.fetch_raw(station_id="12345")
-        assert result == []
+        with pytest.raises(CollectorError) as exc_info:
+            collector.fetch_raw(station_id="12345")
+        assert exc_info.value.source == "japan_mlit"
+        assert isinstance(exc_info.value.cause, ConnectionError)
 
     def test_fetch_raw_builds_station_param(self):
         mock_client = MagicMock()

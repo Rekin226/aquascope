@@ -34,6 +34,24 @@ logger = logging.getLogger(__name__)
 
 CODIS_BASE = "https://codis.cwa.gov.tw/api"
 
+
+def codis_station_type(station_id: str) -> str:
+    """The CODIS ``stn_type`` a station answers to, from its id.
+
+    Checked against CODIS on 2026-09-24, one open station per id prefix: numeric ids (466920 Taipei) are the
+    staffed network, ``cwb``; ``C0`` and ``C1`` are automatic stations, ``auto_C0`` and ``auto_C1``; every
+    other prefix in the catalogue (A2, B2, C2, CA, E2, G2, K2, U2, V2) is the agricultural network, ``agr``.
+    Asked as ``cwb`` (the old fixed default), all of those answered empty: the 2026-09-23 harvest got 0 of 15.
+    """
+    sid = str(station_id).strip().upper()
+    if sid[:1].isdigit():
+        return "cwb"
+    if sid.startswith("C0"):
+        return "auto_C0"
+    if sid.startswith("C1"):
+        return "auto_C1"
+    return "agr"
+
 # parameter key → (CODIS variable block, sub-field, unit)
 PARAMETER_MAP: dict[str, tuple[str, str, str]] = {
     "rainfall_mm": ("Precipitation", "Accumulation", "mm"),
@@ -156,7 +174,7 @@ class TaiwanCWACollector(BaseCollector):
         station_ids: list[str] | str | None = None,
         start: str | None = None,
         end: str | None = None,
-        stn_type: str = "cwb",
+        stn_type: str | None = None,
         **kwargs,
     ) -> list[dict]:
         """Fetch daily climate records for one or more stations.
@@ -170,9 +188,13 @@ class TaiwanCWACollector(BaseCollector):
             Inclusive ISO dates (``"YYYY-MM-DD"``). Defaults to the last
             30 days. Requests are paged in calendar-year windows to stay
             polite with the unauthenticated API.
-        stn_type : str
-            CODIS station attribute: ``"cwb"`` for the manned synoptic
-            network (long archives), ``"auto"`` for automatic stations.
+        stn_type : str, optional
+            CODIS station attribute. By default it follows from the station id
+            (:func:`codis_station_type`): ``"cwb"`` for the staffed synoptic
+            network (numeric ids, long archives), ``"auto_C0"`` / ``"auto_C1"``
+            for automatic stations, ``"agr"`` for the agricultural network.
+            Asked with the wrong one, CODIS returns an empty answer, not an
+            error.
         """
         if station_ids is None:
             station_ids = ["466920"]
@@ -199,7 +221,7 @@ class TaiwanCWACollector(BaseCollector):
                     "start": f"{win_start.isoformat()}T00:00:00",
                     "end": f"{win_end.isoformat()}T00:00:00",
                     "stn_ID": sid,
-                    "stn_type": stn_type,
+                    "stn_type": stn_type or codis_station_type(sid),
                 }
                 payload = self.client.post_json("station", form=form)
                 if payload and payload.get("data"):

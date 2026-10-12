@@ -19,37 +19,53 @@
  "error": null,
  "model": "claude-sonnet-5",
  "provider": "anthropic",
- "recorded": "2026-09-07T14:25:38+00:00",
- "seconds": 228.2,
+ "recorded": "2026-09-14T22:31:40+00:00",
+ "seconds": 445.3,
  "tokens": {
-  "prompt": 34173,
-  "completion": 17960,
-  "calls": 5,
+  "prompt": 68092,
+  "completion": 37536,
+  "calls": 8,
   "by_role": {
    "consultant": {
     "calls": 1,
     "prompt_tokens": 2921,
-    "completion_tokens": 1854
+    "completion_tokens": 2439,
+    "cost_usd": 0.030232
    },
    "methodologist": {
     "calls": 1,
-    "prompt_tokens": 7807,
-    "completion_tokens": 4434
+    "prompt_tokens": 8569,
+    "completion_tokens": 2974,
+    "cost_usd": 0.046878
+   },
+   "analyst": {
+    "calls": 1,
+    "prompt_tokens": 3024,
+    "completion_tokens": 2646,
+    "cost_usd": 0.032508
+   },
+   "interpreter": {
+    "calls": 1,
+    "prompt_tokens": 11526,
+    "completion_tokens": 7500,
+    "cost_usd": 0.098052
    },
    "author": {
     "calls": 2,
-    "prompt_tokens": 16642,
-    "completion_tokens": 8130
+    "prompt_tokens": 31116,
+    "completion_tokens": 8609,
+    "cost_usd": 0.148322
    },
    "critic": {
-    "calls": 1,
-    "prompt_tokens": 6803,
-    "completion_tokens": 3542
+    "calls": 2,
+    "prompt_tokens": 10936,
+    "completion_tokens": 13368,
+    "cost_usd": 0.155552
    }
   },
-  "total": 52133
+  "total": 105628
  },
- "usd": 0.3719,
+ "usd": 0.7673,
  "usd_per_mtoken": [
   3.0,
   15.0
@@ -57,47 +73,50 @@
  "playbook": "flood_risk",
  "branch": null,
  "plan_author": "methodologist",
- "steps": 5,
+ "steps": 4,
  "gates": {
   "passed": 5,
-  "total": 5
+  "total": 7
  },
  "checks": {
-  "passed": 6,
-  "total": 6
+  "passed": 8,
+  "total": 8
  },
- "replans": 0,
+ "replans": 1,
  "stop_reason": null,
- "headline": "Using the client's own daily discharge record (upload:my_flows.csv, station upload:my_flows.csv, 1994-01-01 to 2023-12-31, 30 years, n=10957), the 50-year flood discharge is 166.7 m3/s (95% band 112.9-297.8 m3/s) from a GEV fit and 164.7...",
- "not_established": [],
+ "headline": "Notice: the Critic's fix requests on answer, decision, key_numbers were not all resolved; read the report with the list of what this study does not establish.",
+ "not_established": [
+  "Step s2, gate not_empty: nothing at 'quality'",
+  "Step s2.fallback, gate min_donors: no donor count at 'k'"
+ ],
  "figures": [
   {
    "name": "s1_series.png",
    "id": "fig-s1-series",
    "step": "s1",
    "caption": "Daily discharge at upload upload:my_flows.csv, 1994 to 2023.",
-   "bytes": 91076
+   "bytes": 90129
   },
   {
    "name": "s3_frequency_curve.png",
    "id": "fig-s3-frequency_curve",
    "step": "s3",
    "caption": "Return levels of annual maximum discharge at the site at 40.20 N, 8.00 W: GEV fits with the GEV bootstrap 95 % band, and the observed annual maxima at their Weibull plotting positions.",
-   "bytes": 64379
+   "bytes": 65847
   },
   {
    "name": "s4_frequency_curve.png",
    "id": "fig-s4-frequency_curve",
    "step": "s4",
    "caption": "Return levels of annual maximum discharge at the site at 40.20 N, 8.00 W: Log-Pearson III fits with the LP3 bootstrap 95 % band, and the observed annual maxima at their Weibull plotting positions.",
-   "bytes": 66868
+   "bytes": 67518
   },
   {
-   "name": "s5_fdc.png",
-   "id": "fig-s5-fdc",
-   "step": "s5",
-   "caption": "Flow-duration curve of discharge at the site at 40.20 N, 8.00 W from the ranked daily flows, with Q95, Q50 and Q10 marked (log scale).",
-   "bytes": 57753
+   "name": "s2.fallback_donors_map.png",
+   "id": "fig-s2.fallback-donors_map",
+   "step": "s2.fallback",
+   "caption": "The site and the 10 donor gauges the similarity search selected, in longitude and latitude (no basemap); labels are the station ids.",
+   "bytes": 53811
   }
  ],
  "files": [
@@ -107,8 +126,8 @@
   "figures/s1_series.png",
   "figures/s3_frequency_curve.png",
   "figures/s4_frequency_curve.png",
-  "figures/s5_fdc.png"
+  "figures/s2.fallback_donors_map.png"
  ],
  "trimmed": [],
- "aquascope_version": "0.14.0"
+ "aquascope_version": "0.16.0"
 }

@@ -276,6 +276,7 @@ ALLOWED_TILE_HOSTS = {
     "basemap.nationalmap.gov",        # USGS imagery, public domain, US only
     "elevation-tiles-prod.s3.amazonaws.com",  # AWS Terrain Tiles (Mapzen/Tilezen)
     "wmts.terrascope.be",             # ESA WorldCover, CC BY 4.0
+    "storage.googleapis.com",         # JRC Global Surface Water tiles (water-world bucket), CORS *, no key
 }
 
 # Hosts that must never appear: their terms do not allow this use, or they need
@@ -622,6 +623,43 @@ def test_the_explorer_asks_for_the_full_record_by_default() -> None:
     assert "period_start: r.period_start" in panel
 
 
+@pytestmark_node
+def test_the_period_is_read_from_the_link() -> None:
+    """#270: full record, 40 or 20 years, as &yr=all / &yr=40 / &yr=20; anything else is ignored."""
+    url_js = (EXPLORER / "src" / "url.js").as_uri()
+    script = f"""
+    const m = await import({json.dumps(url_js)});
+    console.log(JSON.stringify({{
+      default: m.defaultPeriod(),
+      all: m.readUrl("#s=usgs/USGS-01013500&yr=all"),
+      forty: m.readUrl("#s=usgs/USGS-01013500&yr=40&tab=floods"),
+      odd: m.readUrl("#s=usgs/USGS-01013500&yr=30"),
+      none: m.readUrl("#s=usgs/USGS-01013500"),
+    }}));
+    """
+    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    data = json.loads(out.stdout)
+    assert data["default"] is None, "the page starts on the full record"
+    assert data["all"]["period"] is None and data["forty"]["period"] == 40 and data["forty"]["tab"] == "floods"
+    assert "period" not in data["odd"] and "period" not in data["none"], "an unknown or missing yr keeps the default"
+
+
+def test_the_station_panel_lets_the_reader_choose_the_period() -> None:
+    """#270: a period control next to the record, sent to the worker and written to the link."""
+    html = (EXPLORER / "index.html").read_text(encoding="utf-8")
+    select = html[html.index('<select id="st-period-select"'):]
+    select = select[:select.index("</select>")]
+    assert [v for v in re.findall(r'value="([^"]+)"', select)] == ["all", "40", "20"]
+    panel = (EXPLORER / "src" / "panel-station.js").read_text(encoding="utf-8")
+    assert "years: state.period" in panel and "years: CONFIG.years" not in panel
+    assert "export function setPeriod" in panel and "export function reanalyze" in panel
+    url = (EXPLORER / "src" / "url.js").read_text(encoding="utf-8")
+    assert 'q.set("yr", state.period === null ? "all" : String(state.period))' in url
+    app = (EXPLORER / "app.js").read_text(encoding="utf-8")
+    assert "setPeriod(url.period)" in app and "if (periodChanged) reanalyze();" in app, (
+        "Back to a different period of the same station fetches it again")
+
+
 # ── Study (the crew in the page) ────────────────────────────────────────────
 
 
@@ -702,7 +740,7 @@ def test_the_node_tests_of_the_pure_modules_pass() -> None:
     files = sorted(str(f) for f in (EXPLORER / "tests").glob("*.test.mjs"))
     assert files, "no node suites under explorer/tests"
     out = subprocess.run(
-        ["node", "--test", *files],
+        ["node", "--test", "--test-reporter=tap", *files],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -710,3 +748,46 @@ def test_the_node_tests_of_the_pure_modules_pass() -> None:
     )
     assert out.returncode == 0, out.stdout + out.stderr
     assert re.search(r"^# fail 0$", out.stdout, re.M), out.stdout
+
+
+@pytestmark_node
+def test_every_named_source_is_a_registry_source() -> None:
+    """The legend names the catalogue's sources ("ANA (BR)", not "brazil_ana"); each key must be a real source."""
+    from aquascope.registry import SOURCES
+
+    core = EXPLORER / "src" / "core.js"
+    script = f"""
+    const m = await import({json.dumps(core.as_uri())});
+    console.log(JSON.stringify({{
+      keys: [...Object.keys(m.SOURCE_STYLE), ...Object.keys(m.SOURCE_LABEL)],
+      ana: m.sourceStyle("brazil_ana").label,
+      unknown: m.sourceStyle("nowhere").label,
+    }}));
+    """
+    out = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    got = json.loads(out.stdout)
+    assert set(got["keys"]) <= set(SOURCES), set(got["keys"]) - set(SOURCES)
+    assert got["ana"] == "ANA (BR)"
+    assert got["unknown"] == "nowhere"
+
+
+def test_the_python_workers_boot_the_way_pyodide_314_needs() -> None:
+    """Pyodide 314 throws "Classic web workers are not supported": module workers and import(), in one place."""
+    config = (EXPLORER / "config.js").read_text(encoding="utf-8")
+    m = re.search(r'pyodideIndexURL:\s*"https://cdn\.jsdelivr\.net/pyodide/v(\d+)\.(\d+)\.(\d+)/full/"', config)
+    assert m, "CONFIG.pyodideIndexURL pins one exact Pyodide version (the smoke workflow reads it from here)"
+    worker = (EXPLORER / "worker.js").read_text(encoding="utf-8")
+    assert "importScripts(" not in worker, "a module worker cannot importScripts; Pyodide comes in through import()"
+    assert "await import(`${pyodideIndexURL}pyodide.mjs`)" in worker
+    client = (EXPLORER / "src" / "worker-client.js").read_text(encoding="utf-8")
+    starts = re.findall(r"new Worker\(`\./worker\.js\?v=\$\{CONFIG\.build\}`(, \{ type: \"module\" \})?\)", client)
+    assert len(starts) == 2 and all(starts), "the main worker and every light worker start as module workers"
+    for path in [EXPLORER / "app.js", *MODULES, EXPLORER / "worker.js"]:
+        text = path.read_text(encoding="utf-8")
+        assert "cdn.jsdelivr.net/pyodide/" not in text, f"{path.name}: the Pyodide version lives in config.js only"

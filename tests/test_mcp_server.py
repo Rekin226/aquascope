@@ -214,20 +214,20 @@ def test_station_view_passes_an_error_straight_through() -> None:
 
 def test_solve_tools_plan_then_run_with_no_model():
     import aquascope.explore
-    from tests.test_ai_engine.test_team import CATCHMENT, FLOW, RECON
+    from tests.test_ai_engine.test_team import CATCHMENT, FLOW, GLOFAS, RECON
 
     listed = m.list_playbooks()
-    assert listed["n"] == 7 and {p["id"] for p in listed["playbooks"]} == {
+    assert listed["n"] == 10 and {p["id"] for p in listed["playbooks"]} == {
         "flood_risk", "ungauged_flow", "groundwater_decline", "drought_status", "supply_reliability",
-        "irrigation_feasibility", "water_quality"}
+        "irrigation_feasibility", "water_quality", "flood_change", "climate_change", "catchment_response"}
     assert "error" in m.describe_playbook("nope") and m.describe_playbook("flood_risk")["id"] == "flood_risk"
     tools = {"describe_catchment": lambda **kw: CATCHMENT, "analyze_station": lambda **kw: FLOW,
-             "flood_frequency": lambda **kw: FLOW}
+             "flood_frequency": lambda **kw: FLOW, "anywhere": lambda **kw: {"glofas": GLOFAS}}
     with patch.object(aquascope.explore, "assess_site", create=True, return_value=RECON), \
          patch("aquascope.study._tools", return_value=tools):
         plan = m.solve_plan("Design flow for a road crossing, 100-year return period", 51.415, -0.308)
         assert not plan["declined"] and plan["playbook"] == "flood_risk" and plan["branch"] == "at_site"
-        assert plan["n_steps"] == 3 and plan["study"]["version"] == 2 and plan["recon"]["donors"] == 8
+        assert plan["n_steps"] == 4 and plan["study"]["version"] == 2 and plan["recon"]["donors"] == 8
         edited = dict(plan["study"])
         edited["steps"] = [s for s in edited["steps"] if s["id"] != "s1"]
         run = m.solve_run(edited)
@@ -289,3 +289,39 @@ def test_analyze_station_asks_for_the_full_record_by_default_and_keeps_the_note(
         ff = m.flood_frequency("usgs", "USGS-1", years=12)
     assert seen["years"] == 12
     assert "fetch_note" in ff and ff["requested"]["catalog_start"] == "1930-01-01"
+
+
+def test_place_and_area_context_tools_wrap_the_engine(monkeypatch):
+    seen = {}
+
+    def fake_place(lat, lon, layers=None):
+        seen["place"] = (lat, lon, layers)
+        return {"layers": {}, "summary": []}
+
+    monkeypatch.setattr("aquascope.context.place_context", fake_place)
+    assert m.place_context("45.1", "5.1", layers=["dams"]) == {"layers": {}, "summary": []}
+    assert seen["place"] == (45.1, 5.1, ["dams"])
+    assert "west, south, east, north" in m.area_context(6, 44, 4, 46)["error"]
+    names = {t.name for t in asyncio.run(m.build_server().list_tools())}
+    assert {"place_context", "area_context"} <= names
+
+
+def test_flood_events_month_tool_wraps_the_engine(monkeypatch):
+    seen = {}
+
+    def fake(month=None, *, start=None, end=None, bbox=None, limit=20):
+        seen.update(month=month, start=start, end=end, bbox=bbox, limit=limit)
+        return {"summary": "ok"}
+
+    monkeypatch.setattr("aquascope.context.floods_past.flood_events_month", fake)
+    assert m.flood_events_month("2021-07", west=5.5, south=50.5, east=6, north=51) == {"summary": "ok"}
+    assert seen == {"month": "2021-07", "start": None, "end": None, "bbox": (5.5, 50.5, 6.0, 51.0), "limit": 20}
+    assert "west, south, east and north" in m.flood_events_month("2021-07", west=5.5)["error"]
+
+    def bad(*a, **kw):
+        raise ValueError("120 months is too long a window (at most 60)")
+
+    monkeypatch.setattr("aquascope.context.floods_past.flood_events_month", bad)
+    assert "at most 60" in m.flood_events_month(start="2000-01", end="2010-01")["error"]
+    names = {t.name for t in asyncio.run(m.build_server().list_tools())}
+    assert "flood_events_month" in names

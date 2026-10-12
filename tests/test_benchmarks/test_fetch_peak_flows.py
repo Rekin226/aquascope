@@ -357,9 +357,9 @@ def test_write_artifacts_commits_all_outputs(tmp_path, monkeypatch) -> None:
 
     fpf._write_artifacts(_tiny_frames(), {"meta": "fresh"})
 
-    assert (tmp_path / "11111111_peaks.csv").read_text().startswith("date,peak_va")
-    assert (tmp_path / "22222222_peaks.csv").read_text().startswith("date,peak_va")
-    assert json.loads((tmp_path / "ffa_reference.json").read_text())["meta"] == "fresh"
+    assert (tmp_path / "11111111_peaks.csv").read_text(encoding="utf-8").startswith("date,peak_va")
+    assert (tmp_path / "22222222_peaks.csv").read_text(encoding="utf-8").startswith("date,peak_va")
+    assert json.loads((tmp_path / "ffa_reference.json").read_text(encoding="utf-8"))["meta"] == "fresh"
     assert list(tmp_path.glob("*.tmp")) == []
 
 
@@ -368,9 +368,9 @@ def test_write_artifacts_aborted_commit_leaves_prior_outputs(tmp_path, monkeypat
     monkeypatch.setattr(fpf, "PEAKS_DIR", tmp_path)
     monkeypatch.setattr(fpf, "FFA_REFERENCE_FILE", tmp_path / "ffa_reference.json")
 
-    (tmp_path / "11111111_peaks.csv").write_text("OLD_1\n")
-    (tmp_path / "22222222_peaks.csv").write_text("OLD_2\n")
-    (tmp_path / "ffa_reference.json").write_text("OLD_JSON\n")
+    (tmp_path / "11111111_peaks.csv").write_text("OLD_1\n", encoding="utf-8")
+    (tmp_path / "22222222_peaks.csv").write_text("OLD_2\n", encoding="utf-8")
+    (tmp_path / "ffa_reference.json").write_text("OLD_JSON\n", encoding="utf-8")
 
     def boom_dump(obj, fp, **kwargs):
         raise RuntimeError("mid-commit failure")
@@ -379,9 +379,9 @@ def test_write_artifacts_aborted_commit_leaves_prior_outputs(tmp_path, monkeypat
     with pytest.raises(RuntimeError, match="mid-commit"):
         fpf._write_artifacts(_tiny_frames(), {"meta": "fresh"})
 
-    assert (tmp_path / "11111111_peaks.csv").read_text() == "OLD_1\n"
-    assert (tmp_path / "22222222_peaks.csv").read_text() == "OLD_2\n"
-    assert (tmp_path / "ffa_reference.json").read_text() == "OLD_JSON\n"
+    assert (tmp_path / "11111111_peaks.csv").read_text(encoding="utf-8") == "OLD_1\n"
+    assert (tmp_path / "22222222_peaks.csv").read_text(encoding="utf-8") == "OLD_2\n"
+    assert (tmp_path / "ffa_reference.json").read_text(encoding="utf-8") == "OLD_JSON\n"
     assert list(tmp_path.glob("*.tmp")) == []
 
 

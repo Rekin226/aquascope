@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Changed
+- The docs build runs on every pull request, and its job is now `docs-build` (was `build`), so it can be a required check on `main` alongside `explorer-contracts`.
+
 ### Fixed
 - Record the verified v0.27.0 Zenodo DOI (`10.5281/zenodo.23301359`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
 

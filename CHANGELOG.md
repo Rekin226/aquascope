@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **Repair bot oversized model requests** (#514): explain HTTP 413 token-limit failures on collector-health issues and suggest a higher-allowance provider or smaller evidence, with an offline regression test.
+
 ### Added
 - **What 1.0 promises** (#588, part of the 1.0 milestone). The public surface is now written down and tested.
   - [`docs/stability.md`](docs/stability.md): the four public surfaces (Python names, CLI commands and flags, MCP tools and arguments, the Archive's paths and columns), what counts as breaking and what does not (a corrected number is not), how a deprecated name keeps working and warns (`AquaScopeDeprecationWarning`, a `FutureWarning`; a stderr line on the CLI; a `"deprecated"` key in an MCP result) until the next major release and for at least six months, and what experimental means.

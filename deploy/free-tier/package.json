@@ -1,0 +1,14 @@
+{
+  "name": "aquascope-free-tier",
+  "private": true,
+  "type": "module",
+  "description": "AquaScope's free tier: a Cloudflare Worker that serves Claude to Explorer visitors within fixed budgets.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.149.0"
+  }
+}

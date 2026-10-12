@@ -898,9 +898,14 @@
         <div id="ask-tier" class="ask-tier" role="radiogroup" aria-label="How to answer">
           <label class="seg"><input type="radio" name="ask-tier" value="showcase" checked><span>Examples</span></label>
           <label class="seg"><input type="radio" name="ask-tier" value="local"><span>On device</span></label>
+          <label class="seg" id="ask-tier-free" hidden><input type="radio" name="ask-tier" value="free"><span>Free</span></label>
           <label class="seg"><input type="radio" name="ask-tier" value="key"><span>Your key</span></label>
         </div>
         <p id="ask-tier-note" class="tier-note muted"></p>
+        <div id="ask-free" class="ask-free" hidden>
+          <div id="ask-free-check" class="ask-free-check" hidden></div>
+          <p id="ask-free-left" class="muted"></p>
+        </div>
         <span id="ask-local-note" hidden></span>
 
         <div id="ask-showcase" class="ask-showcase" hidden></div>

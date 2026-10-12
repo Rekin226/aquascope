@@ -1,0 +1,36 @@
+# AquaScope's free tier: a Cloudflare Worker on the free plan. See README.md for the deploy steps.
+name = "aquascope-free-tier"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+FREE_TIER_ENABLED = "true"
+# Inclusive, YYYY-MM-DD. After this day every endpoint but /status and /stats answers "the free tier has ended".
+END_DATE = "2027-02-28"
+# The Explorer's origins, comma-separated; "*.example.org" matches any subdomain.
+ALLOWED_ORIGINS = "https://rekin226-aquascope-explorer.static.hf.space,http://localhost:8000,http://127.0.0.1:8000"
+SPONSOR_LINE = "Sponsored by Anthropic's AI for Science program"
+# The public half of the Turnstile widget (Cloudflare dashboard > Turnstile). Its secret is TURNSTILE_SECRET.
+TURNSTILE_SITE_KEY = ""
+# Budgets in USD and runs, per UTC day unless named otherwise (defaults in src/core.js).
+DAILY_USD = "30"
+MONTHLY_USD = "1000"
+VISITOR_USD = "2.5"
+NETWORK_USD = "8"
+VISITOR_ASKS = "20"
+VISITOR_STUDIES = "2"
+
+# Secrets, set with `npx wrangler secret put <NAME>`, never in this file:
+#   ANTHROPIC_API_KEY       a key from a workspace that holds only this tier, with a spend limit set on it
+#   ANTHROPIC_WORKSPACE_ID  only for a key that spans several workspaces
+#   TURNSTILE_SECRET        the Turnstile widget's secret
+#   SESSION_SECRET          any long random string (signs session tokens and hashes IP addresses)
+#   ADMIN_TOKEN             any long random string, for GET /stats
+
+[[durable_objects.bindings]]
+name = "METER"
+class_name = "Meter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Meter"]

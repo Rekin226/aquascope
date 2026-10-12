@@ -19,6 +19,9 @@ import { map } from "./map.js?v=__BUILD__";
 import { visibleLayerSummary } from "./layer-ui.js?v=__BUILD__";
 import { initShowcase } from "./showcase.js?v=__BUILD__";
 import { askLocally, describeLocal, localAnswerHtml, localModelPossible } from "./local-model.js?v=__BUILD__";
+import {
+  allowanceText, ensureSession, freeConfig, freeTierLine, freeTierOpen, startRun,
+} from "./free-tier.js?v=__BUILD__";
 
 // Providers come from the package's registry (aquascope/ai_engine/providers.py),
 // written to explorer/providers.json by `python -m aquascope.ai_engine.providers`.
@@ -98,7 +101,16 @@ function updateForgetButton() {
 // The model Ask is set up with, for Study to borrow: one key, one settings
 // block, stored once. Null when there is none; Study then runs keyless, which
 // is a complete study on its own.
-export function askModelConfig() {
+//
+// ``purpose`` (ask, map or study) only matters on the free tier, which picks a
+// model for it. A key of the visitor's own always comes first; the free
+// session is used when there is no key and one has been started. A config
+// with ``free: true`` must be counted with ``startRun`` before it is used.
+export function askModelConfig(purpose = "ask") {
+  return ownKeyConfig() || freeConfig(purpose);
+}
+
+function ownKeyConfig() {
   const provider = $("ask-provider").value;
   const chosen = ASK_PROVIDERS[provider];
   if (!chosen) return null;
@@ -108,6 +120,14 @@ export function askModelConfig() {
   if (provider === "custom" && !base_url) return null;
   const model = $("ask-model").value.trim() || chosen.model;
   return { provider, model, api_key: key || "none", base_url, label: `${model} via ${provider}` };
+}
+
+/** Count a run on the free tier before it starts; a config of the visitor's own key passes straight through. */
+export async function countFreeRun(cfg, kind) {
+  if (!cfg || !cfg.free) return;
+  await startRun(kind);
+  const left = $("ask-free-left");
+  if (left) left.textContent = allowanceText();
 }
 
 // What the user is looking at, in one line the model can act on. Shown in the
@@ -220,12 +240,14 @@ const TIER_NOTE = {
   showcase: "Real runs, recorded once a week. No key needed.",
   local: "Runs on your device. Nothing leaves this tab.",
   key: "The full tool loop, with your own provider key.",
+  free: "Claude, free for a limited time.",
 };
 
 function applyTier() {
   const tier = currentTier();
   const showcase = tier === "showcase";
   $("ask-settings").hidden = tier !== "key";
+  $("ask-free").hidden = tier !== "free";
   $("ask-showcase").hidden = showcase ? !hasRecordedExamples() : true;
   $("ask-compose").hidden = showcase;
   $("ask-compose-note").hidden = !showcase;
@@ -239,6 +261,7 @@ function applyTier() {
     note.textContent = tier === "local" && local && local.textContent
       ? `${TIER_NOTE.local} ${local.textContent}`
       : (TIER_NOTE[tier] || "");
+    if (tier === "free") freeTierLine().then((line) => { if (line && currentTier() === "free") note.textContent = line; });
   }
   askStatus("");
 }
@@ -306,6 +329,21 @@ async function runAsk() {
     await runLocally(question);
     return;
   }
+  if (currentTier() === "free") {
+    if (!question) { askStatus("Type a question first.", "warn"); return; }
+    let cfg;
+    try {
+      askStatus("Checking this browser for the free tier…");
+      await ensureSession($("ask-free-check"));
+      cfg = freeConfig("ask");
+      await countFreeRun(cfg, "ask");
+    } catch (err) {
+      askStatus(err.message, "warn");
+      return;
+    }
+    await runAskWith(question, cfg);
+    return;
+  }
   const provider = $("ask-provider").value;
   const chosen = ASK_PROVIDERS[provider];
   if (!chosen) {
@@ -325,7 +363,12 @@ async function runAsk() {
   }
   if (provider === "custom" && !base_url) { askStatus("A custom endpoint needs its base URL (ending in /v1).", "warn"); return; }
   saveAskSettings();
+  await runAskWith(question, { provider, model, api_key: key || (provider === "custom" ? "none" : null), base_url });
+}
 
+// The full tool loop in the worker, with a model config from either your key or the free tier.
+async function runAskWith(question, cfg) {
+  const { provider, model, api_key, base_url } = cfg;
   const ctx = $("ask-use-context").checked ? contextLine() : "";
   const prompt = ctx ? `${question}\n\nContext: ${ctx}` : question;
 
@@ -343,12 +386,12 @@ async function runAsk() {
   askStatus(state.workerReady ? "Preparing…" : "Loading Python in your browser (about 30 MB, once)…");
   try {
     await ensureCatalogInWorker();
-    askStatus(`Asking ${model} via ${provider}…`);
+    askStatus(cfg.free ? `Asking ${cfg.label}…` : `Asking ${model} via ${provider}…`);
     const job = callCancelable("ask", {
       question: prompt,
       provider: provider === "custom" ? "custom" : provider,
       model,
-      api_key: key || (provider === "custom" ? "none" : null),
+      api_key,
       base_url,
       max_steps: 8,
     });
@@ -519,6 +562,8 @@ export async function initAsk() {
   }
   applyTier();
   actions.openAsk = openAsk;
+  // The free tier shows itself only when the proxy is configured, open and has a browser check.
+  freeTierOpen().then((open) => { $("ask-tier-free").hidden = !open; });
 
   // Last, because it is the only part that waits on the network: the provider
   // list. Everything above works without it.

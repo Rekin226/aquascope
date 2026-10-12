@@ -1276,6 +1276,26 @@ set" rather than presented as the full Analyst.
 
 **Your own key**, as described above, for the full tool loop.
 
+**Free, for a limited time.** While AquaScope's free tier is open, a visitor
+with no key can choose **Free**. They pass a quick browser check (Cloudflare
+Turnstile), and Ask runs the full tool loop on Claude Haiku 5.5. Studies
+started in the same tab use Claude Sonnet 5.5 for the crew's prose, and Ask the
+map can use the free session too. The allowance is 20 questions and 2 studies
+a day per visitor. The tier line says how much is left, until when the tier
+runs, and that Anthropic's AI for Science program pays for it.
+
+The key never reaches the page. It sits in a small proxy on Cloudflare's free
+Workers plan ([`deploy/free-tier/`](https://github.com/Rekin226/aquascope/tree/main/deploy/free-tier)).
+The proxy:
+
+- passes on only the Explorer's own requests;
+- charges each call against the visitor's, the network's, the day's and the
+  month's budgets;
+- keeps token counts and dollars, never prompts or replies.
+
+A key of your own always comes first. When the tier ends or a budget is spent,
+the other three ways keep working as before.
+
 ## Study: a complete study at a place
 
 The drawer's second mode. **Study this place** on a gauge or on a point (or

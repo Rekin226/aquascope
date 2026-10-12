@@ -24,6 +24,10 @@ export const CONFIG = {
   // Cap on how far back to ask each agency, in years. null asks for the full
   // record, from the catalog's first date for the station (#270).
   years: null,
+  // The free tier (deploy/free-tier/): Claude for visitors without a key, for a limited time, through
+  // AquaScope's proxy. Empty hides the tier; the URL is the Worker's root, e.g.
+  // "https://aquascope-free-tier.<account>.workers.dev".
+  freeTierUrl: "",
   // Cache-busting token, replaced at deploy time (git sha).
   build: "__BUILD__",
 };

@@ -1251,7 +1251,7 @@ def model_prompt(context: str = "", today: str | date | None = None) -> dict[str
                 for a in parse_command(ex, t)["actions"]]
         shots.append(f"Request: {ex}\nReply: {json.dumps({'actions': acts})}")
     lines = [
-        "You control a world map of rivers. Turn the reader's request into map actions.",
+        "You control AquaScope's world map of rivers. Turn the reader's request into map actions.",
         'Reply with ONE JSON object and nothing else: {"actions": [ ... ]}, '
         "at most 8 actions, in the order to run them.",
         f"Today is {_iso(t)}. Dates are YYYY-MM-DD and never after today. "

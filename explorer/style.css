@@ -812,6 +812,9 @@ body.drawer-open .panel { visibility: hidden; }
 .ask-tier .seg:has(input:disabled) span { opacity: .4; cursor: not-allowed; }
 .ask-tier .seg:has(input:focus-visible) span { outline: 2px solid var(--blue); outline-offset: 1px; }
 .tier-note { font-size: .75rem; line-height: 1.5; margin: 0 0 .5rem; min-height: 1.1em; }
+.ask-free { margin: 0 0 .5rem; }
+.ask-free p { font-size: .75rem; margin: .25rem 0 0; }
+.ask-free-check { margin: .25rem 0; }
 .ask-compose-note { font-size: .78rem; line-height: 1.55; margin: .6rem 0 0; padding-left: .55rem; border-left: 2px solid var(--line); }
 .ask-compose-note strong { color: var(--ink-2); font-weight: 600; }
 #ask-result:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }

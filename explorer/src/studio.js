@@ -24,7 +24,7 @@ import { $, actions, escapeHtml, fmt, sourceStyle, state, stationKey } from "./c
 import { shapeSvg } from "./shapes.js?v=__BUILD__";
 import { announce } from "./a11y.js?v=__BUILD__";
 import { catchmentAreaAt, catchmentForWorker, donorPoolSize, donorTablesForWorker, stationArea } from "./basins.js?v=__BUILD__";
-import { askModelConfig, mdToHtml } from "./ask.js?v=__BUILD__";
+import { askModelConfig, countFreeRun, mdToHtml } from "./ask.js?v=__BUILD__";
 import { closeDrawer, drawerMode, drawerOpen, openDrawer, setStatusEl } from "./shell.js?v=__BUILD__";
 import {
   Cancelled, call, callCancelable, ensureCatalogInWorker, onStudioArtifact, onStudioProgress, restartWorker,
@@ -125,6 +125,7 @@ const S = {
   declined: null,       // the reader's own decline of the plan (the crew's is ws.status)
   editing: false,
   useKey: true,         // the key Ask holds, when there is one
+  freeRefused: false,   // the free tier said no to this study (its allowance is spent): it runs keyless
   files: [],            // [{ id, csv }] attached before the study starts
   useMyData: false,
   figures: new Map(),   // artifact id -> { id, src, caption, step, job }
@@ -176,7 +177,7 @@ function siteFrom(rec) {
 }
 
 function modelForRun() {
-  const cfg = S.useKey ? askModelConfig() : null;
+  const cfg = S.useKey && !S.freeRefused ? askModelConfig("study") : null;
   return cfg ? { provider: cfg.provider, model: cfg.model, api_key: cfg.api_key, base_url: cfg.base_url } : {};
 }
 
@@ -233,7 +234,7 @@ function fileDropHtml(status) {
 
 function intakeHtml() {
   const w = S.ws ? S.site : where();
-  const cfg = askModelConfig();
+  const cfg = askModelConfig("study");
   const started = Boolean(S.ws);
   let model;
   if (!cfg) model = `<p class="study-line muted">No API key needed. A predefined workflow runs the analysis and writes the report.</p>`;
@@ -913,9 +914,20 @@ async function start(text, { intake: given = null } = {}) {
   S.proposal = null;
   S.planLine = null;
   S.proseLine = null;
+  S.freeRefused = false;
   setBusy(true);
   note(state.workerReady ? "" : "Loading Python in your browser (about 30 MB, once)…");
   try {
+    // A study on the free tier is counted before it starts; past the day's allowance it runs keyless.
+    const cfg = S.useKey ? askModelConfig("study") : null;
+    if (cfg && cfg.free) {
+      try {
+        await countFreeRun(cfg, "study");
+      } catch (err) {
+        S.freeRefused = true;
+        note(`${err.message} This study runs without a model.`, "warn");
+      }
+    }
     let intake = given, brief = null;
     if (!given && await deviceOnCrew()) {
       const read = await readOnDevice(text);
@@ -927,7 +939,7 @@ async function start(text, { intake: given = null } = {}) {
     if (my !== S.run) return;
     const tables = {};
     for (const f of S.files) tables[f.id] = f.csv;
-    note("");
+    if (!S.freeRefused) note("");
     const res = await job("start", {
       lat: w.lat, lon: w.lon, text, tables, use_frame: Boolean(S.useMyData && hasTable()), frame_label: tableLabel(),
       intake, proposed: brief ? { brief, source: "device" } : null,

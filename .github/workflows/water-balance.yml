@@ -46,6 +46,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: water-balance-${{ github.event_name == 'pull_request' && github.ref || 'archive' }}
@@ -61,6 +62,9 @@ jobs:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_DATASET: Rekin226/aquascope-gauges
     steps:
+      - name: Note when the job started (its health record's duration)
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -113,6 +117,7 @@ jobs:
 
       # A smoke run never publishes: its few hours are not a month. A pull request has no token anyway.
       - name: Publish waterbalance/ to Hugging Face
+        id: publish
         if: >-
           env.HF_TOKEN != '' && github.event_name != 'pull_request' && inputs.smoke_hours == '' &&
           (github.event_name == 'schedule' || inputs.publish == true)
@@ -136,3 +141,21 @@ jobs:
           name: water-balance-${{ github.run_id }}
           path: build/waterbalance/
           retention-days: 7
+
+      # Job health (#593): health/jobs/water-balance.json and health/jobs/index.json, written only under
+      # health/jobs/, and one job-health issue, opened or updated when a scheduled run fails and closed by the next
+      # good one. It runs whether the job passed or not, needs only the standard library to record and to file the
+      # issue, and never turns the job red itself. A pull request's smoke records but never publishes or files
+      # anything.
+      - name: Job health
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PUBLISH: ${{ env.HF_TOKEN != '' && github.event_name != 'pull_request' && inputs.smoke_hours == '' && (github.event_name == 'schedule' || inputs.publish == true) }}
+          ISSUE: ${{ github.event_name == 'schedule' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 .github/scripts/job_health.py report water-balance --root build --status "${{ job.status }}" --require "publish=${{ steps.publish.outcome }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"

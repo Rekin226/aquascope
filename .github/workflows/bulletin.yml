@@ -29,6 +29,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: bulletin
@@ -47,6 +48,9 @@ jobs:
       # Optional, as in the harvest: raises the keyless USGS rate limit for the top-up.
       USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
     steps:
+      - name: Note when the job started (its health record's duration)
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -121,6 +125,7 @@ jobs:
 
       # A smoke run never publishes: its few gauges would stand for the month.
       - name: Publish to Hugging Face (bulletins/ only)
+        id: publish
         if: env.HF_TOKEN != '' && !inputs.smoke && (github.event_name == 'schedule' || inputs.publish)
         run: python -m aquascope.bulletin publish --out out --repo "$HF_DATASET"
 
@@ -134,3 +139,20 @@ jobs:
           echo "::error::HF_TOKEN is not set, so the bulletin was built but not published. Set the repository \
           secret HF_TOKEN to a Hugging Face token with write access to $HF_DATASET."
           exit 1
+
+      # Job health (#593): health/jobs/bulletin.json and health/jobs/index.json, written only under health/jobs/,
+      # and one job-health issue, opened or updated when a scheduled run fails and closed by the next good one. It
+      # runs whether the job passed or not, needs only the standard library to record and to file the issue, and
+      # never turns the job red itself.
+      - name: Job health
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PUBLISH: ${{ env.HF_TOKEN != '' && !inputs.smoke && (github.event_name == 'schedule' || inputs.publish) }}
+          ISSUE: ${{ github.event_name == 'schedule' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 .github/scripts/job_health.py report bulletin --root out --status "${{ job.status }}" --require "publish=${{ steps.publish.outcome }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"

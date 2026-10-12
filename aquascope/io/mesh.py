@@ -58,6 +58,8 @@ SPEED_BUDGET = 60_000_000
 RAS_TS = "Results/Unsteady/Output/Output Blocks/Base Output/Unsteady Time Series"
 RAS_SUMMARY = "Results/Unsteady/Output/Output Blocks/Base Output/Summary Output"
 RAS_GEOM = "Geometry/2D Flow Areas"
+# RAS's own cell velocity, in the projection's grid x and y, when the plan's output options wrote it (6.x).
+RAS_CELL_VX, RAS_CELL_VY = "Cell Velocity - Velocity X", "Cell Velocity - Velocity Y"
 
 _HDF5_MAGIC = b"\x89HDF\r\n\x1a\n"
 
@@ -344,6 +346,14 @@ class _RasSource:
         except Exception:  # already closed
             pass
 
+    def _cell_uv(self, area: dict, sel) -> tuple[np.ndarray, np.ndarray] | None:
+        """RAS's own cell velocity (grid x, y) where the plan wrote it, else None."""
+        if not area.get("cv"):
+            return None
+        base = f"{RAS_TS}/2D Flow Areas/{area['name']}"
+        return (np.asarray(self.fh[f"{base}/{RAS_CELL_VX}"][sel], dtype="f8"),
+                np.asarray(self.fh[f"{base}/{RAS_CELL_VY}"][sel], dtype="f8"))
+
     def _ws(self, area: dict, sel) -> np.ndarray | None:
         ds = self.fh.get(f"{RAS_TS}/2D Flow Areas/{area['name']}/Water Surface")
         if ds is None:
@@ -365,8 +375,12 @@ class _RasSource:
             ws = np.full(n, np.nan) if ws is None else ws
             bed = None if self.bed is None else self.bed[a["start"]:a["start"] + n]
             values.append(self._value(ws, bed))
+            cuv = self._cell_uv(a, (step, slice(0, n)))
             fv = self.fh.get(f"{RAS_TS}/2D Flow Areas/{a['name']}/Face Velocity")
-            if fv is not None and a.get("lsq") is not None:
+            if cuv is not None:
+                us.append(cuv[0])
+                vs.append(cuv[1])
+            elif fv is not None and a.get("lsq") is not None:
                 u, v = a["lsq"].solve(np.asarray(fv[step, :], dtype="f8")[None, :])
                 us.append(u[0])
                 vs.append(v[0])
@@ -374,7 +388,7 @@ class _RasSource:
                 us.append(np.full(n, np.nan))
                 vs.append(np.full(n, np.nan))
         value = np.concatenate(values)
-        if not any(a.get("lsq") is not None for a in self.areas):
+        if not any(a.get("lsq") is not None or a.get("cv") for a in self.areas):
             return {"value": value, "u": None, "v": None}
         u, v = _rotate(np.concatenate(us), np.concatenate(vs), self.angle)
         dry = ~np.isfinite(value) if self.bed is not None else np.zeros(value.size, bool)
@@ -405,7 +419,12 @@ class _RasSource:
         value = self._value(ws.copy(), bed)
         speed = None
         fv = self.fh.get(f"{RAS_TS}/2D Flow Areas/{a['name']}/Face Velocity")
-        if fv is not None and a.get("lsq") is not None:
+        cuv = self._cell_uv(a, (slice(None), i))
+        if cuv is not None:
+            speed = np.hypot(*cuv)
+            if self.bed is not None:
+                speed[~np.isfinite(value)] = np.nan
+        elif fv is not None and a.get("lsq") is not None:
             faces = a["lsq"].faces_of(i)
             if faces.size:
                 vals = np.asarray(fv[:, faces.tolist()], dtype="f8")
@@ -732,10 +751,12 @@ def _read_ras(fh, name: str, size: int, crs: str | int | None, max_cells: int) -
     if not has_ts:
         times = []
         notes.append("This file has no time series output, only the maxima.")
-    has_v = any(f"{RAS_TS}/2D Flow Areas/{a['name']}/Face Velocity" in fh for a in areas)
-    if not has_v:
-        for a in areas:
+    for a in areas:   # the model's own cell velocity, where written, before one rebuilt from the faces
+        base = f"{RAS_TS}/2D Flow Areas/{a['name']}"
+        a["cv"] = bool(times) and f"{base}/{RAS_CELL_VX}" in fh and f"{base}/{RAS_CELL_VY}" in fh
+        if f"{base}/Face Velocity" not in fh:
             a["lsq"] = None
+    has_v = any(a["cv"] or a["lsq"] is not None for a in areas)
 
     if times and not any(f"{RAS_SUMMARY}/2D Flow Areas/{a['name']}/Maximum Water Surface" in fh for a in areas):
         notes.append("No summary output: the largest is over the saved time steps.")
@@ -789,11 +810,22 @@ def _ras_max_speed(fh, areas, src: _RasSource, times: list[str], notes: list[str
         n = a["cells"]
         fv = fh.get(f"{RAS_TS}/2D Flow Areas/{a['name']}/Face Velocity")
         lsq = a.get("lsq")
-        if fv is None or lsq is None:
+        if a.get("cv"):
+            best = np.zeros(n)
+            seg = None if src.bed is None else src.bed[a["start"]:a["start"] + n]
+            for i in range(0, len(times), 64):
+                sel = (slice(i, i + 64), slice(0, n))
+                u, v = src._cell_uv(a, sel)
+                speed = np.hypot(u, v)
+                ws = None if seg is None else src._ws(a, sel)
+                if ws is not None:   # RAS writes a small velocity in dry cells too; the frame and series leave it out
+                    speed[~(ws - seg > DRY_DEPTH)] = np.nan
+                best = np.fmax(best, _nanmax(speed, axis=0))
+        elif fv is None or lsq is None:
             parts.append(np.full(n, np.nan))
             continue
-        steps = fv.shape[0]
-        if steps * fv.shape[1] <= SPEED_BUDGET:
+        elif fv.shape[0] * fv.shape[1] <= SPEED_BUDGET:
+            steps = fv.shape[0]
             best = np.zeros(n)
             for i in range(0, steps, 64):
                 u, v = lsq.solve(np.asarray(fv[i:i + 64, :], dtype="f8"))

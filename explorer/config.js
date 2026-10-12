@@ -13,6 +13,8 @@ export const CONFIG = {
   bulletinsBase: "https://huggingface.co/datasets/Rekin226/aquascope-gauges/resolve/main/bulletins/",
   // Watch (#521): the per-gauge Atom feeds and their index, written by the same daily workflow.
   feedsBase: "https://huggingface.co/datasets/Rekin226/aquascope-gauges/resolve/main/feeds/",
+  // Job health (#593): every scheduled job's last run and expected cadence, written by each workflow's last step.
+  healthIndex: "https://huggingface.co/datasets/Rekin226/aquascope-gauges/resolve/main/health/jobs/index.json",
   // DuckDB-WASM reads the parquet in place (HF serves range requests with CORS).
   duckdbModule: "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm",
   // Pyodide runtime for the analysis worker.

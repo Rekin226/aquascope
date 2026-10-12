@@ -12,6 +12,7 @@ on:
     paths:
       - paper.md
       - paper.bib
+      - .github/workflows/draft-pdf.yml
 
 jobs:
   paper:

@@ -44,7 +44,7 @@ def clean_depths() -> np.ndarray:
     return d
 
 
-def make_run(path, depth=None, *, bed=True, volume_pct=0.2, ws_override=None):
+def make_run(path, depth=None, *, bed=True, volume_pct=0.2, ws_override=None, area_volume_pct=None):
     """A HEC-RAS plan file of the grid: water surface = bed + depth (a dry cell holds the bed, as RAS writes it)."""
     depth = clean_depths() if depth is None else depth
     pid = lambda i, j: j * (NX + 1) + i  # noqa: E731
@@ -100,6 +100,15 @@ def make_run(path, depth=None, *, bed=True, volume_pct=0.2, ws_override=None):
             va.attrs["Vol Accounting in"] = b"1000 m3"
             va.attrs["Volume Starting"] = np.float32(0.0)
             va.attrs["Volume Ending"] = np.float32(1000.0)
+            if area_volume_pct is not None:   # each 2D area's own, with the names HEC-RAS 6.5 gives them
+                per = va.create_group("Volume Accounting 2D/Valley")
+                per.attrs["Error Percent"] = np.float32(area_volume_pct)
+                per.attrs["Error"] = np.float32(-0.4319)
+                per.attrs["Vol Accounting in"] = b"1000 m^3"
+                per.attrs["Vol Starting"] = np.float32(2787.7)
+                per.attrs["Vol Ending"] = np.float32(3956.2)
+                per.attrs["Cum Inflow"] = np.float32(69082.1)
+                per.attrs["Cum Outflow"] = np.float32(67913.2)
     return path
 
 
@@ -250,6 +259,33 @@ def test_volume_error_is_found_and_nothing_else(mesh_of):
     assert f["severity"] == "warning" and f["value"] == pytest.approx(3.2, abs=1e-4) and f["unit"] == "%"
     assert R.review(mesh_of(volume_pct=-7.5), context=clean_context(m))["findings"][0]["severity"] == "problem"
     assert R.check_volume(m)["worst"]["unit"] == "1000 m3"
+
+
+def test_each_2d_areas_volume_accounting_is_read_with_its_own_names(mesh_of):
+    # HEC-RAS 6.5 (a real plan, docs/assessments/hec-ras.md) names the per-area volumes apart from the plan's
+    m = mesh_of(volume_pct=0.0006, area_volume_pct=1.8)
+    va = R.check_volume(m)
+    w = va["worst"]
+    assert w["where"].endswith("Valley") and w["error_percent"] == pytest.approx(1.8)
+    assert (w["start"], w["end"], w["in"], w["out"]) == pytest.approx((2787.7, 3956.2, 69082.1, 67913.2), rel=1e-6)
+    assert w["unit"] == "1000 m^3"
+    plan = next(p for p in va["parts"] if p["where"] == "plan")
+    assert (plan["start"], plan["end"]) == pytest.approx((0.0, 1000.0))
+    res = R.review(m, context=clean_context(m))
+    f = found(res, "mass_balance")[0]
+    assert f["severity"] == "warning" and "(Valley)" in f["reason"]
+
+
+def test_a_film_share_under_one_percent_is_not_shown_as_nought():
+    from types import SimpleNamespace
+
+    n = 2000
+    hi = np.full(n, 1.5)
+    hi[:3] = 0.02                      # 3 films among 2,000 wet cells: 0.15%
+    m = SimpleNamespace(variable="depth", lat=np.linspace(45, 45.1, n), lon=np.linspace(15, 15.1, n))
+    out, status, _ = R._tiny(m, {"hi": hi}, R._Ids(), "m", 1.0)
+    share = next(x for x in out[0]["facts"] if x["label"] == "Share of the cells that get wet")
+    assert status == "flagged" and share["shown"] == "0.15%"
 
 
 def test_radar_flooding_where_the_model_is_dry_is_found_and_nothing_else(mesh_of):

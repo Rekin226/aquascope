@@ -41,8 +41,8 @@ m.close()
 | Cells | the 2D flow areas' cells, ghost cells left out; outlines from `Cells FacePoint Indexes`, or the cell's face points in order around its centre | the faces of the mesh topology (`cf_role = mesh_topology`), from `face_node_connectivity` |
 | Coordinate system | RAS Mapper's projection, stored with the results | the coordinates in degrees, or the grid mapping's WKT or EPSG code |
 | Times | `Time Date Stamp`, as RAS writes it | the `time` variable's CF units (`hours since 2021-02-03`) |
-| Depth | water surface less `Cells Minimum Elevation` | a depth variable, or the water level less the bed level |
-| Velocity | rebuilt per cell from the face normal velocities by least squares, weighted by face length, then turned to east and north | `ucx`/`ucy` (or the CF standard names), turned to east and north on a projected grid |
+| Depth | water surface less `Cells Minimum Elevation`: the cell's deepest point, as HEC-RAS's `Cell Invert Depth` | a depth variable, or the water level less the bed level |
+| Velocity | HEC-RAS's own cell velocity (`Cell Velocity - Velocity X / Y`) where the plan wrote it, else rebuilt per cell from the face normal velocities by least squares, weighted by face length; then turned to east and north | `ucx`/`ucy` (or the CF standard names), turned to east and north on a projected grid |
 | Largest | RAS's summary output where present, else every time step | every time step |
 
 Values on mesh nodes are averaged onto the faces. Layered (3D) variables are left out.
@@ -84,7 +84,7 @@ per check saying what it found or why it could not run.
 | Very shallow water | cells never deeper than 3 cm (about 0.1 ft): a film, from rain on the grid, the terrain or a tolerance | worth a look |
 | Isolated wet cells | a cell wet while every neighbour stays dry | worth a look |
 | Wet and dry flicker | a cell that changes between wet and dry 4 times or more (needs 5 steps or more) | worth a look |
-| Volume balance | the volume error HEC-RAS wrote itself (`Results/Unsteady/Summary/Volume Accounting`): over 1% worth a look, over 5% a problem | as said |
+| Volume balance | the volume error HEC-RAS wrote itself (`Results/Unsteady/Summary/Volume Accounting`, the plan's and each 2D area's under `Volume Accounting 2D`): over 1% worth a look, over 5% a problem | as said |
 | Floods seen by radar | 0.05° squares where Sentinel-1 saw flooding (Microsoft AI for Good, Oct 2014 to Sep 2024) and the model keeps every cell dry | worth a look in the run's months, information otherwise |
 | Floods in the news | Groundsource flood reports (2000 on) whose footprint covers cells the model keeps dry | worth a look in the run's days, information otherwise |
 | Gauges in the mesh | the observed peak at each Archive gauge standing in a cell (the first five; the line counts them all) against the model's peak at that cell, timing only (a gauge measures flow or stage, the model depth); more than a day apart is worth a look. When no gauge stands inside the mesh, the line says so | as said |
@@ -159,5 +159,11 @@ In Pyodide 314.0.7, the Explorer's Python, in Chrome:
 - **A large file**: the Bald Eagle results repeated to 1,110 steps (66 MB; real geometry,
   synthetic length). Mounting it costs no memory; one time step reads in 7 ms, a cell's
   1,110 values in 0.2 s, and the largest over all steps in 0.2 s.
+
+- **A run with terrain and volume accounting** (#592): a HEC-RAS 6.5 plan of compound
+  flooding in Portsmouth, Virginia, from HydroShare (CC BY 4.0). The depth equals the
+  `Cell Invert Depth` HEC-RAS wrote, at every cell and step; the per-area volume names and
+  HEC-RAS's own cell velocity are now read. Sources, licences and numbers:
+  [assessments/hec-ras.md](assessments/hec-ras.md).
 
 None of these files is in the repository; the tests make small synthetic ones.

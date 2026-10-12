@@ -129,3 +129,13 @@ def _no_model_skill_reads(monkeypatch):
 
     monkeypatch.setattr(scout, "_read_model_skill", lambda lat, lon: {})
     yield
+
+
+@pytest.fixture(autouse=True)
+def _no_archive_listing(monkeypatch):
+    """The daily jobs' publish lists its folder in the Archive to prune old dated files (#597); tests never reach
+    the network for it. A test that wants a published folder patches ``retention.list_published`` itself."""
+    from aquascope.archive import retention
+
+    monkeypatch.setattr(retention, "list_published", lambda folder, repo_id, token=None: [])
+    yield

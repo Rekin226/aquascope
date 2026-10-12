@@ -59,6 +59,8 @@ body.workbench-mode .map-legends { display: none; }
 .ml-title { font-weight: 600; white-space: nowrap; }
 .ml-sum { color: var(--muted); font-size: .7rem; font-variant-numeric: tabular-nums; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
+/* the job behind the layer is late (#593): a few words after the summary */
+.ml-late { color: var(--warn-ink); font-size: .68rem; white-space: nowrap; flex: none; font-variant-numeric: tabular-nums; }
 .ml-name .ml-chev { align-self: center; margin-left: auto; }
 .ml-name[aria-expanded="true"] .ml-chev { transform: rotate(90deg); }
 .ml-name:hover .ml-title { color: var(--blue); }

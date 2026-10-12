@@ -31,6 +31,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: forecast-archive
@@ -46,6 +47,9 @@ jobs:
       # Optional, as in the harvest: raises the keyless USGS rate limit for the daily top-up.
       USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
     steps:
+      - name: Note when the job started (its health record's duration)
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -91,6 +95,7 @@ jobs:
 
       # A smoke run (max_items set) never publishes: its few gauges would replace the day's snapshot.
       - name: Publish forecasts/ to Hugging Face
+        id: publish
         if: env.HF_TOKEN != '' && inputs.max_items == '' && (github.event_name == 'schedule' || inputs.publish == true)
         run: python -m aquascope.archive.forecasts publish --out build
 
@@ -102,6 +107,7 @@ jobs:
         run: python -m aquascope.archive.feeds run --out build
 
       - name: Publish feeds/ to Hugging Face
+        id: publish_feeds
         if: env.HF_TOKEN != '' && inputs.max_items == '' && (github.event_name == 'schedule' || inputs.publish == true) && hashFiles('build/feeds/index.json') != ''
         run: python -m aquascope.archive.feeds publish --out build
 
@@ -123,3 +129,21 @@ jobs:
           name: forecasts-${{ github.run_id }}
           path: build/
           retention-days: 7
+
+      # Job health (#593): health/jobs/forecast-archive.json and health/jobs/index.json, written only under
+      # health/jobs/, and one job-health issue, opened or updated when a scheduled run fails and closed by the next
+      # good one. It runs whether the job passed or not, needs only the standard library to record and to file the
+      # issue, and never turns the job red itself. A smoke run's record stays in the job summary.
+      - name: Job health
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PUBLISH: ${{ env.HF_TOKEN != '' && inputs.max_items == '' && (github.event_name == 'schedule' || inputs.publish == true) }}
+          ISSUE: ${{ github.event_name == 'schedule' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 .github/scripts/job_health.py report forecast-archive --root build --status "${{ job.status }}" \
+            --require "publish=${{ steps.publish.outcome }}" --require "feeds=${{ steps.publish_feeds.outcome }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"

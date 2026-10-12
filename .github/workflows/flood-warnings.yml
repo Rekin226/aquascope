@@ -35,6 +35,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: flood-warnings
@@ -50,6 +51,9 @@ jobs:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_DATASET: Rekin226/aquascope-gauges
     steps:
+      - name: Note when the job started (its health record's duration)
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -95,6 +99,7 @@ jobs:
 
       # A smoke run never publishes: its few chunks would replace the day's issue (publish refuses it too).
       - name: Publish forecasts/warnings/ to Hugging Face
+        id: publish
         if: env.HF_TOKEN != '' && inputs.smoke == '' && (github.event_name == 'schedule' || inputs.publish == true)
         run: python -m aquascope.archive.warnings publish --out build
 
@@ -103,11 +108,13 @@ jobs:
       # on the published one; never on a smoke run. Writes and publishes scout/ only. A scout that fails does not
       # turn the day's Floods ahead issue red: yesterday's scout/latest.json stays and the Explorer scans live.
       - name: Today's scout
+        id: scout
         if: always() && inputs.smoke == ''
         continue-on-error: true
         run: python -m aquascope.map_scout daily --out build --warnings build
 
       - name: Publish scout/ to Hugging Face
+        id: publish_scout
         if: >-
           always() && env.HF_TOKEN != '' && inputs.smoke == '' && hashFiles('build/scout/latest.json') != '' &&
           (github.event_name == 'schedule' || inputs.publish == true)
@@ -118,11 +125,13 @@ jobs:
       # Writes flowstatus/ only. It fails (and says so) until flow-climatology.yml has published the climatology,
       # without turning the day's Floods ahead issue red. A smoke run builds it but never publishes.
       - name: Today's flow against normal
+        id: flowstatus
         if: always() && hashFiles('build/scratch/day0.parquet') != ''
         continue-on-error: true
         run: python -m aquascope.flowstatus daily --out build --day0 build/scratch/day0.parquet
 
       - name: Publish flowstatus/ to Hugging Face
+        id: publish_flowstatus
         if: >-
           always() && env.HF_TOKEN != '' && inputs.smoke == '' && hashFiles('build/flowstatus/manifest.json') != '' &&
           (github.event_name == 'schedule' || inputs.publish == true)
@@ -150,3 +159,26 @@ jobs:
             build/scout/
             build/flowstatus/
           retention-days: 7
+
+      # Job health (#593): health/jobs/flood-warnings.json and health/jobs/index.json, written only under
+      # health/jobs/, and one job-health issue, opened or updated when a scheduled run fails and closed by the next
+      # good one. It runs whether the job passed or not, needs only the standard library to record and to file the
+      # issue, and never turns the job red itself. This workflow reports three jobs: the Floods ahead issue, the
+      # scout and flow against normal (each by its own steps).
+      - name: Job health
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PUBLISH: ${{ env.HF_TOKEN != '' && inputs.smoke == '' && (github.event_name == 'schedule' || inputs.publish == true) }}
+          ISSUE: ${{ github.event_name == 'schedule' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 .github/scripts/job_health.py report flood-warnings --root build --status "${{ job.status }}" --require "publish=${{ steps.publish.outcome }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"
+          python3 .github/scripts/job_health.py report scout --root build --status "${{ steps.scout.outcome }}" --require "publish=${{ steps.publish_scout.outcome }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"
+          python3 .github/scripts/job_health.py report flow-status --root build --status "${{ steps.flowstatus.outcome == 'skipped' && 'failure' || steps.flowstatus.outcome }}" \
+            --require "publish=${{ steps.publish_flowstatus.outcome }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"

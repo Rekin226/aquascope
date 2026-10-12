@@ -124,8 +124,9 @@ rows of the package's one price table, `aquascope.ai_engine.providers.PRICES`
 and 20, Sonnet 5.5 at 2 and 10, Haiku 5.5 at 0.10 and 0.50. The older ids the
 results below were run on keep their rates: Sonnet 5 at 2 and 10, Opus 5 at 5
 and 25, Haiku 4.5 at 1 and 5.
-Prices change, cache and batch discounts are not modelled, and a model that
-is not in the table gets no estimate rather than a guess.
+Prices change. Prompt-cache reads and writes are priced at their own rates;
+batch discounts are not modelled, and a model that is not in the table gets
+no estimate rather than a guess.
 
 ## Running it
 

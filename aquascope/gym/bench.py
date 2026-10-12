@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from aquascope.ai_engine.providers import PRICES as _PRICES
+from aquascope.ai_engine.providers import usd_for as _usd_for
 from aquascope.gym.tasks import Task, read_tasks
 
 logger = logging.getLogger(__name__)
@@ -68,11 +69,13 @@ ASK_MAX_STEPS = 8
 
 #: USD per million tokens (input, output) for the Claude models, taken from the package's one price table
 #: (:data:`aquascope.ai_engine.providers.PRICES`). Other providers are not listed; a model absent here gets no
-#: cost estimate rather than a guess. Cache reads and batch discounts are not modelled.
+#: cost estimate rather than a guess. Cache reads and writes are priced at their own rates; batch discounts are
+#: not modelled.
 PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {k: v for k, v in _PRICES.items() if k.startswith("claude-")}
 PRICES_NOTE = ("Cost is estimated from the tokens the provider reported and a small table of list prices "
-               "(aquascope.gym.bench.PRICES_USD_PER_MTOK, October 2026); prices change, cache and batch discounts are "
-               "not modelled, and a model not in the table gets no estimate.")
+               "(aquascope.gym.bench.PRICES_USD_PER_MTOK, October 2026); prices change, prompt-cache reads and "
+               "writes are priced at their own rates, batch discounts are not modelled, and a model not in the "
+               "table gets no estimate.")
 
 #: How the ``ask`` agent's refusal is read off its answer. A heuristic: the loop has no decline verdict of its
 #: own. Two lists. An *explicit* refusal ("out of scope", "cannot answer", "I decline") in the opening of an answer
@@ -145,6 +148,8 @@ class Result:
     calls: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
     cost_usd: float | None = None
     seconds: float = 0.0
     error: str | None = None
@@ -162,7 +167,7 @@ class Result:
 
     @property
     def tokens(self) -> int:
-        return self.prompt_tokens + self.completion_tokens
+        return self.prompt_tokens + self.completion_tokens + self.cache_read_tokens + self.cache_write_tokens
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -174,12 +179,13 @@ class Result:
         return cls(**{k: d[k] for k in cls.__dataclass_fields__ if k in d})
 
 
-def estimate_cost(model: str | None, prompt_tokens: int, completion_tokens: int) -> float | None:
-    """USD from the price table, or None when the model is not listed or nothing was spent."""
+def estimate_cost(model: str | None, prompt_tokens: int, completion_tokens: int, *, cache_read: int = 0,
+                  cache_write: int = 0) -> float | None:
+    """USD from the price table (cache reads and writes at their own rates), or None when the model is not
+    listed or nothing was spent."""
     if not model or model not in PRICES_USD_PER_MTOK:
-        return None if (prompt_tokens or completion_tokens) else 0.0
-    p_in, p_out = PRICES_USD_PER_MTOK[model]
-    return round((prompt_tokens * p_in + completion_tokens * p_out) / 1_000_000, 6)
+        return None if (prompt_tokens or completion_tokens or cache_read or cache_write) else 0.0
+    return _usd_for(prompt_tokens, completion_tokens, model, cache_read=cache_read, cache_write=cache_write)
 
 
 # ── agents ───────────────────────────────────────────────────────────────────
@@ -233,7 +239,7 @@ def _run_team(task: Task, cfg: _Config) -> dict[str, Any]:
             fb = r.get("fallback")
             if r.get("fallback_used") and isinstance(fb, dict) and fb.get("tool"):
                 tools.append(str(fb["tool"]))
-    usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0}
+    usage = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cache_read_tokens": 0, "cache_write_tokens": 0}
     for entry in res.cost.values():
         for k in usage:
             usage[k] += int(entry.get(k, 0) or 0)
@@ -383,9 +389,12 @@ def _score(task: Task, agent: str, cfg: _Config, outcome: dict[str, Any], second
         answer_present=bool(answer.strip()) and not declined, answer=answer[:ANSWER_CHARS],
         calls=int(usage.get("calls", 0) or 0), prompt_tokens=int(usage.get("prompt_tokens", 0) or 0),
         completion_tokens=int(usage.get("completion_tokens", 0) or 0),
+        cache_read_tokens=int(usage.get("cache_read_tokens", 0) or 0),
+        cache_write_tokens=int(usage.get("cache_write_tokens", 0) or 0),
         seconds=round(seconds, 2), finished=_now(), detail=dict(outcome.get("detail") or {}),
     )
-    res.cost_usd = estimate_cost(res.model, res.prompt_tokens, res.completion_tokens)
+    res.cost_usd = estimate_cost(res.model, res.prompt_tokens, res.completion_tokens,
+                                 cache_read=res.cache_read_tokens, cache_write=res.cache_write_tokens)
     return res
 
 

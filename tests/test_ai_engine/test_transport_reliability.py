@@ -83,10 +83,10 @@ def test_the_anthropic_sdks_timeout_is_a_connection_error():
     anthropic = pytest.importorskip("anthropic")
     import httpx2
 
-    def create(**kw):
+    def stream(**kw):
         raise anthropic.APITimeoutError(request=httpx2.Request("POST", "https://api.anthropic.com/v1/messages"))
 
-    client = AnthropicChatClient("k", sdk_client=SimpleNamespace(messages=SimpleNamespace(create=create)),
+    client = AnthropicChatClient("k", sdk_client=SimpleNamespace(messages=SimpleNamespace(stream=stream)),
                                  sleep=lambda _s: None)
     with pytest.raises(LLMConnectionError):
         client.chat.completions.create(model="m", messages=[{"role": "user", "content": "q"}])

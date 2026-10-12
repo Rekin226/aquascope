@@ -421,7 +421,8 @@ class Workspace:
 
     @property
     def tokens(self) -> int:
-        return sum(v.get("prompt_tokens", 0) + v.get("completion_tokens", 0) for v in self.ledger.values())
+        keys = ("prompt_tokens", "completion_tokens", "cache_read_tokens", "cache_write_tokens")
+        return sum(int(v.get(k, 0) or 0) for v in self.ledger.values() for k in keys)
 
     @property
     def total_usd(self) -> float | None:

@@ -101,7 +101,13 @@ def test_request_is_translated_to_the_messages_api():
     assert h["x-api-key"] == "sk-ant-test" and h["anthropic-version"] == transport.ANTHROPIC_VERSION
     assert "authorization" not in h and "anthropic-dangerous-direct-browser-access" not in h
     body = seen["body"]
-    assert body["model"] == "claude-opus-5" and body["system"] == "Be careful."
+    assert body["model"] == "claude-opus-5"
+    # The system prompt is the shared prefix, cached; a tool loop caches its growing tail too.
+    assert body["system"] == [{"type": "text", "text": "Be careful.", "cache_control": {"type": "ephemeral"}}]
+    assert body["cache_control"] == {"type": "ephemeral"}
+    # A refusal on a model that can fall back is run again on another model inside the same call.
+    assert body["fallbacks"] == "default" and h["anthropic-beta"] == transport.FALLBACK_BETA
+    assert "_betas" not in body
     assert body["messages"] == [{"role": "user", "content": "Seine?"}]
     assert body["tools"] == [
         {
@@ -219,7 +225,8 @@ def test_tool_choice_effort_and_refusal():
 
     client = AnthropicChatClient("k", effort="medium", max_tokens=2048)
     with patch("urllib.request.urlopen", urlopen):
-        resp = client.chat.completions.create(model="m", messages=[{"role": "user", "content": "q"}], tools=TOOLS)
+        resp = client.chat.completions.create(model="claude-opus-5", messages=[{"role": "user", "content": "q"}],
+                                              tools=TOOLS)
     assert seen["body"]["output_config"] == {"effort": "medium"} and seen["body"]["max_tokens"] == 2048
     msg = resp.choices[0].message
     assert msg.tool_calls is None and "declined" in msg.content and "nope" in msg.content
@@ -278,16 +285,37 @@ def test_make_client_uses_the_sdk_when_installed(monkeypatch):
     assert c._sdk.max_retries == 0  # the loop already waits out 429s
 
 
-def test_sdk_path_calls_messages_create_and_maps_errors():
+class _Stream:
+    """What ``messages.stream(...)`` returns: a context manager whose ``get_final_message`` is the reply."""
+
+    def __init__(self, dump):
+        self._dump = dump
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def get_final_message(self):
+        return SimpleNamespace(model_dump=lambda **_: self._dump)
+
+
+def _fake_sdk(stream):
+    """An ``anthropic.Anthropic`` stand-in: ``messages.stream`` and ``beta.messages.stream`` both call ``stream``."""
+    return SimpleNamespace(messages=SimpleNamespace(stream=lambda **kw: stream(beta=False, **kw)),
+                           beta=SimpleNamespace(messages=SimpleNamespace(stream=lambda **kw: stream(beta=True, **kw))))
+
+
+def test_sdk_path_streams_and_maps_errors():
     anthropic = pytest.importorskip("anthropic")
     calls = []
 
-    def create(**kw):
+    def stream(**kw):
         calls.append(kw)
-        return SimpleNamespace(model_dump=lambda **_: _final("from sdk"))
+        return _Stream(_final("from sdk"))
 
-    sdk = SimpleNamespace(messages=SimpleNamespace(create=create))
-    client = AnthropicChatClient("k", sdk_client=sdk)
+    client = AnthropicChatClient("k", sdk_client=_fake_sdk(stream))
     resp = client.chat.completions.create(
         model="claude-opus-5",
         messages=[{"role": "system", "content": "s"}, {"role": "user", "content": "q"}],
@@ -295,7 +323,11 @@ def test_sdk_path_calls_messages_create_and_maps_errors():
         tool_choice="auto",
     )
     assert resp.choices[0].message.content == "from sdk"
-    assert calls[0]["system"] == "s" and calls[0]["tools"][0]["input_schema"]["type"] == "object"
+    assert calls[0]["system"][0]["text"] == "s" and calls[0]["tools"][0]["input_schema"]["type"] == "object"
+    # A model that can fall back goes through the beta namespace with the header; one that cannot, the plain one.
+    assert calls[0]["beta"] and calls[0]["betas"] == [transport.FALLBACK_BETA] and calls[0]["fallbacks"] == "default"
+    client.chat.completions.create(model="claude-haiku-5-5", messages=[{"role": "user", "content": "q"}])
+    assert calls[1]["beta"] is False and "fallbacks" not in calls[1] and "betas" not in calls[1]
 
     import httpx2
 
@@ -304,9 +336,7 @@ def test_sdk_path_calls_messages_create_and_maps_errors():
         raise anthropic.APIStatusError("rate limited", response=response, body={"error": {"type": "rate_limit_error"}})
 
     sleeps = []
-    client = AnthropicChatClient(
-        "k", sdk_client=SimpleNamespace(messages=SimpleNamespace(create=failing)), max_retries=1, sleep=sleeps.append
-    )
+    client = AnthropicChatClient("k", sdk_client=_fake_sdk(failing), max_retries=1, sleep=sleeps.append)
     with pytest.raises(LLMHTTPError) as ei:
         client.chat.completions.create(model="m", messages=[{"role": "user", "content": "q"}])
     assert ei.value.status == 429 and "rate_limit_error" in ei.value.body
@@ -342,7 +372,7 @@ def test_analyst_runs_end_to_end_over_a_scripted_messages_api(monkeypatch):
 
     url, headers, first = bodies[0]
     assert url == "https://api.anthropic.com/v1/messages" and headers["x-api-key"] == "sk-ant-test"
-    assert first["system"] == analyst.SYSTEM_PROMPT
+    assert first["system"][0]["text"] == analyst.SYSTEM_PROMPT
     assert {t["name"] for t in first["tools"]} >= {"find_stations", "describe_methods", "run_python"}
     second = bodies[1][2]["messages"]
     assert second[1]["content"][0]["type"] == "thinking" and second[1]["content"][-1]["id"] == "toolu_dm"

@@ -131,9 +131,10 @@ class Model:
         spent = self.ws.total_usd
         return spent is not None and spent >= self.max_usd
 
-    def _tokens(self, role: str) -> tuple[int, int]:
+    def _tokens(self, role: str) -> tuple[int, int, int, int]:
         entry = self.ws.ledger.get(role) or {}
-        return int(entry.get("prompt_tokens") or 0), int(entry.get("completion_tokens") or 0)
+        return tuple(int(entry.get(k) or 0)  # type: ignore[return-value]
+                     for k in ("prompt_tokens", "completion_tokens", "cache_read_tokens", "cache_write_tokens"))
 
     def _check_budget(self, role: str, step: str | None) -> bool:
         """True when the ceiling is reached; the first time, the event and ``ws.budget`` record it."""
@@ -159,14 +160,16 @@ class Model:
         before = self._tokens(role)
         text = self._inner.call(role, system, context, step=step)
         after = self._tokens(role)
-        self._charge(role, after[0] - before[0], after[1] - before[1])
+        self._charge(role, *(a - b for a, b in zip(after, before, strict=True)))
         self._check_budget(role, step)
         return text
 
-    def _charge(self, role: str, prompt_tokens: int, completion_tokens: int) -> None:
+    def _charge(self, role: str, prompt_tokens: int, completion_tokens: int, cache_read: int = 0,
+                cache_write: int = 0) -> None:
         from aquascope.ai_engine.providers import usd_for
 
-        usd = usd_for(prompt_tokens, completion_tokens, self.ws.model)
+        usd = usd_for(prompt_tokens, completion_tokens, self.ws.model, cache_read=cache_read,
+                      cache_write=cache_write)
         if usd is not None:
             self.ws.charge_usd(role, usd)
 

@@ -197,9 +197,12 @@ def llm_mapping(df: pd.DataFrame, *, client: Any, model: str, description: str =
     """Ask an OpenAI-compatible model for the mapping; validated by the heuristics before use."""
     head = df.head(8).to_csv(index=False)
     prompt = LLM_MAPPING_PROMPT % list(VARIABLES) + f"\nUser note: {description or '(none)'}\n\n{head}"
+    from aquascope.ai_engine.llm_transport import with_options
+
     try:
         resp = client.chat.completions.create(
             model=model, messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"},
+            **with_options(client, role="ingest", effort="low"),
         )
         text = resp.choices[0].message.content or "{}"
         data = json.loads(text[text.find("{"): text.rfind("}") + 1])

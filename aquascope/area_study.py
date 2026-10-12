@@ -67,7 +67,8 @@ METHODS: dict[str, dict[str, str]] = {
         "text": "Non-parametric Mann-Kendall test with Sen's slope on each site's annual maximum daily flow "
         "(calendar years with at least 80 % daily coverage).",
         "citation": "Mann, H. B. (1945). Nonparametric tests against trend. Econometrica, 13, 245-259; "
-        "Sen, P. K. (1968). J. Am. Stat. Assoc., 63, 1379-1389.",
+        "Sen, P. K. (1968). Estimates of the regression coefficient based on Kendall's tau. "
+        "J. Am. Stat. Assoc., 63(324), 1379-1389.",
     },
     "field_significance": {
         "name": "Field significance (Benjamini-Hochberg FDR and Walker test)",

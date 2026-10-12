@@ -15,6 +15,7 @@ from aquascope.collectors.usgs import USGSCollector
 from aquascope.schemas.water_data import (
     DataSource,
     GeoLocation,
+    Quality,
     StreamflowReading,
     WaterLevelReading,
     WaterQualitySample,
@@ -88,12 +89,21 @@ class TestWRANormaliseUsesLocation:
         assert readings[0].location is None
 
 
+def _ogc_feature(code, value, time, *, unit="ft^3/s", approval="Approved", qualifier=None, site="USGS-01646500"):
+    """One feature as the USGS Water Data OGC API (v1) returns it from ``collections/daily/items``."""
+    return {
+        "type": "Feature",
+        "id": f"{site}-{code}-{time}",
+        "geometry": {"type": "Point", "coordinates": [-77.1, 38.9]},
+        "properties": {
+            "monitoring_location_id": site, "parameter_code": code, "statistic_id": "00003", "time": time,
+            "value": value, "unit_of_measure": unit, "approval_status": approval, "qualifier": qualifier,
+        },
+    }
+
+
 class TestUSGSCollectorKeyless:
-    def test_keyless_raises_error_for_unsupported_collection(self, monkeypatch):
-        monkeypatch.delenv("USGS_API_KEY", raising=False)
-        collector = USGSCollector()
-        with pytest.raises(ValueError, match="Collection 'discrete' is not supported"):
-            collector.fetch_raw(collection="discrete", station_id="01646500")
+    """Keyless calls go to the same OGC API as keyed ones, just without an ``api_key`` (#515)."""
 
     def test_keyless_raises_error_without_filter(self, monkeypatch):
         monkeypatch.delenv("USGS_API_KEY", raising=False)
@@ -101,54 +111,25 @@ class TestUSGSCollectorKeyless:
         with pytest.raises(ValueError, match="USGS keyless path requires a filter parameter"):
             collector.fetch_raw(collection="daily")
 
+    def test_keyless_field_measurements_are_allowed(self, monkeypatch):
+        monkeypatch.delenv("USGS_API_KEY", raising=False)
+        collector = USGSCollector()
+        collector.client.get_json = Mock(return_value={"features": [], "links": []})
+        assert collector.fetch_raw(collection="discrete", station_id="01646500") == []
+        args, kwargs = collector.client.get_json.call_args
+        assert args[0] == "collections/field-measurements/items"
+        assert "api_key" not in kwargs["params"]
+
     def test_keyless_daily_fetch_and_normalise_water_quality_sample(self, monkeypatch):
         monkeypatch.delenv("USGS_API_KEY", raising=False)
         collector = USGSCollector()
-
-        mock_response = {
-            "value": {
-                "timeSeries": [
-                    {
-                        "sourceInfo": {
-                            "siteName": "Test Site",
-                            "siteCode": [{"value": "01646500"}],
-                            "geoLocation": {
-                                "geogLocation": {
-                                    "latitude": 38.9,
-                                    "longitude": -77.1
-                                }
-                            }
-                        },
-                        "variable": {
-                            "variableCode": [{"value": "00095"}],
-                            "unit": {"unitCode": "uS/cm"},
-                            "noDataValue": -999999.0
-                        },
-                        "values": [
-                            {
-                                "value": [
-                                    {"value": "2960", "dateTime": "2026-07-20T00:00:00.000"},
-                                    {"value": "-999999", "dateTime": "2026-07-21T00:00:00.000"},
-                                    {"value": "2430", "dateTime": "2026-07-22T00:00:00.000"}
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        }
-
-        mock_get_json = Mock(return_value=mock_response)
-        collector.client.get_json = mock_get_json
+        page = {"features": [_ogc_feature("00095", "2960", "2026-07-20", unit="uS/cm"),
+                             _ogc_feature("00095", "2430", "2026-07-22", unit="uS/cm")], "links": []}
+        collector.client.get_json = Mock(return_value=page)
 
         raw = collector.fetch_raw(collection="daily", station_id="01646500", days=5)
 
-        assert len(raw) == 2
-        assert raw[0]["properties"]["parameter_code"] == "00095"
-        assert raw[0]["properties"]["value"] == "2960"
-        assert raw[0]["properties"]["monitoring_location_id"] == "01646500"
-        assert raw[1]["properties"]["value"] == "2430"
-
+        assert [f["properties"]["value"] for f in raw] == ["2960", "2430"]
         samples = collector.normalise(raw)
         assert len(samples) == 2
         assert samples[0].parameter == "Conductivity"
@@ -160,119 +141,72 @@ class TestUSGSCollectorKeyless:
 
     def test_keyless_daily_fetch_and_normalise_streamflow_reading(self, monkeypatch):
         monkeypatch.delenv("USGS_API_KEY", raising=False)
-        collector = USGSCollector()
-
-        mock_response = {
-            "value": {
-                "timeSeries": [
-                    {
-                        "sourceInfo": {
-                            "siteName": "Test Site",
-                            "siteCode": [{"value": "01646500"}],
-                            "geoLocation": {
-                                "geogLocation": {
-                                    "latitude": 38.9,
-                                    "longitude": -77.1
-                                }
-                            }
-                        },
-                        "variable": {
-                            "variableCode": [{"value": "00060"}],
-                            "unit": {"unitCode": "ft3/s"},
-                            "noDataValue": -999999.0
-                        },
-                        "values": [
-                            {
-                                "value": [
-                                    {"value": "2960", "dateTime": "2026-07-20T00:00:00.000"},
-                                    {"value": "-999999", "dateTime": "2026-07-21T00:00:00.000"},
-                                    {"value": "2430", "dateTime": "2026-07-22T00:00:00.000"}
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        }
-
-        mock_get_json = Mock(return_value=mock_response)
+        collector = USGSCollector(lookup_catchment_area=False)
+        page = {"features": [_ogc_feature("00060", "2960", "2026-07-20"),
+                             _ogc_feature("00060", "2430", "2026-07-22")], "links": []}
+        mock_get_json = Mock(return_value=page)
         collector.client.get_json = mock_get_json
 
-        raw = collector.fetch_raw(collection="daily", station_id="01646500", days=5)
-
-        assert len(raw) == 2
-        assert raw[0]["properties"]["value"] == "2960"
-        assert raw[0]["properties"]["monitoring_location_id"] == "01646500"
-        assert raw[1]["properties"]["value"] == "2430"
+        raw = collector.fetch_raw(collection="daily", station_id="01646500", days=5, statCd="00003")
 
         mock_get_json.assert_called_once()
         args, kwargs = mock_get_json.call_args
-        assert args[0].startswith("https://waterservices.usgs.gov/nwis/dv/")
-        assert kwargs["params"]["sites"] == "01646500"
+        assert args[0] == "collections/daily/items"
+        params = kwargs["params"]
+        assert params["monitoring_location_id"] == "USGS-01646500"
+        assert params["statistic_id"] == "00003"
+        assert "api_key" not in params  # keyless means no key at all, not the shared DEMO_KEY
 
         samples = collector.normalise(raw)
         assert len(samples) == 2
+        assert samples[0].station_id == "USGS-01646500"
         assert samples[0].discharge_cms == 83.8
         assert samples[0].location.latitude == 38.9
         assert samples[0].location.longitude == -77.1
         assert samples[1].discharge_cms == 68.8
 
-    def test_keyless_sta_fetch_and_normalise(self, monkeypatch):
+    def test_keyless_daily_quality_flags_are_preserved(self, monkeypatch):
+        """The #481 mapping, on the fields the v1 API returns (approval_status plus a qualifier list)."""
+        monkeypatch.delenv("USGS_API_KEY", raising=False)
+        collector = USGSCollector(lookup_catchment_area=False)
+        page = {"features": [
+            _ogc_feature("00060", "10.0", "2026-07-20", approval="Approved"),
+            _ogc_feature("00060", "20.0", "2026-07-21", approval="Provisional"),
+            _ogc_feature("00060", "30.0", "2026-07-22", approval="Approved", qualifier=["ESTIMATED"]),
+            _ogc_feature("00060", "40.0", "2026-07-23", approval="Approved", qualifier=["ICE"]),
+        ], "links": []}
+        collector.client.get_json = Mock(return_value=page)
+
+        samples = collector.normalise(collector.fetch_raw(collection="daily", station_id="01646500", days=5))
+
+        assert [s.quality for s in samples] == [Quality.APPROVED, Quality.PROVISIONAL, Quality.ESTIMATED,
+                                                Quality.SUSPECT]
+        assert samples[2].quality_raw == "Approved | ESTIMATED"
+
+    def test_keyless_continuous_fetch_and_normalise(self, monkeypatch):
         monkeypatch.delenv("USGS_API_KEY", raising=False)
         collector = USGSCollector()
-
-        mock_response = {
-            "value": {
-                "timeSeries": [
-                    {
-                        "sourceInfo": {
-                            "siteName": "Test Site",
-                            "siteCode": [{"value": "01646500"}],
-                            "geoLocation": {
-                                "geogLocation": {
-                                    "latitude": 38.9,
-                                    "longitude": -77.1
-                                }
-                            }
-                        },
-                        "variable": {
-                            "variableCode": [{"value": "00065"}],
-                            "unit": {"unitCode": "ft"},
-                            "noDataValue": -999999.0
-                        },
-                        "values": [
-                            {
-                                "value": [
-                                    {"value": "12.3", "dateTime": "2026-07-24T20:10:00.000-04:00"}
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        }
-
-        mock_get_json = Mock(return_value=mock_response)
+        feature = _ogc_feature("00065", "12.3", "2026-07-24T20:10:00+00:00", unit="ft", approval="Provisional")
+        mock_get_json = Mock(return_value={"features": [feature], "links": []})
         collector.client.get_json = mock_get_json
 
+        # "sta" is the v0 name of the continuous collection; it still works.
         raw = collector.fetch_raw(collection="sta", bbox="-77.2,38.8,-77.0,39.0", days=1)
         assert len(raw) == 1
-        assert raw[0]["properties"]["value"] == "12.3"
-
-        mock_get_json.assert_called_once()
         args, kwargs = mock_get_json.call_args
-        assert args[0].startswith("https://waterservices.usgs.gov/nwis/iv/")
-        assert kwargs["params"]["bBox"] == "-77.2,38.8,-77.0,39.0"
+        assert args[0] == "collections/continuous/items"
+        assert kwargs["params"]["bbox"] == "-77.2,38.8,-77.0,39.0"
 
         samples = collector.normalise(raw)
         assert len(samples) == 1
         reading = samples[0]
         assert isinstance(reading, WaterLevelReading)
         assert reading.source == DataSource.USGS
-        assert reading.station_id == "01646500"
+        assert reading.station_id == "USGS-01646500"
         assert reading.unit == "m"
         # 12.3 has 3 sig figs: 12.3 * 0.3048 = 3.74904 -> 3.75
         assert reading.water_level == pytest.approx(3.75)
+        assert reading.quality == Quality.PROVISIONAL
         assert reading.location is not None
         assert reading.location.latitude == 38.9
         assert reading.location.longitude == -77.1
@@ -295,7 +229,7 @@ class TestUSGSMonitoringLocationCatchmentArea:
         assert area == pytest.approx(32.4)
         collector.client.get_json.assert_called_once_with(
             "collections/monitoring-locations/items/USGS-01646500",
-            params={"f": "json"},
+            params={"f": "json", "api_key": "valid-key"},
         )
 
     def test_returns_none_when_feature_has_no_drainage_area(self):
@@ -500,8 +434,90 @@ class TestUSGSOGCPagination:
         out = c.fetch_raw(station_id="01646500", days=3, collection="daily", parameter="00060", max_items=None)
         assert len(out) == 2  # page1 + page2; the repeated cursor stops the loop
         second_call = c.client.get_json.call_args_list[1]
-        assert second_call.args[0] == "https://x/items?cursor=abc&f=json"
+        # USGS builds next links without the key, so a keyed walk puts it back on (#515).
+        assert second_call.args[0] == "https://x/items?cursor=abc&f=json&api_key=a-real-key"
         assert second_call.kwargs["params"] is None
+
+    def test_keyless_walk_follows_every_page_until_the_last(self):
+        from unittest.mock import MagicMock
+
+        c = USGSCollector(api_key="DEMO_KEY")
+        c.client = MagicMock()
+        base = "https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items"
+        pages = [
+            {"features": [{"n": 1}, {"n": 2}], "links": [{"rel": "next", "href": f"{base}?cursor=p2&f=json"}]},
+            {"features": [{"n": 3}, {"n": 4}], "links": [{"rel": "self", "href": "x"},
+                                                        {"rel": "next", "href": f"{base}?cursor=p3&f=json"}]},
+            {"features": [{"n": 5}], "links": [{"rel": "self", "href": "x"}]},
+        ]
+        c.client.get_json.side_effect = pages
+        out = c.fetch_raw(station_id="01646500", days=3, collection="daily", max_items=None, limit=2)
+        assert [f["n"] for f in out] == [1, 2, 3, 4, 5]
+        urls = [call.args[0] for call in c.client.get_json.call_args_list]
+        assert urls == ["collections/daily/items", f"{base}?cursor=p2&f=json", f"{base}?cursor=p3&f=json"]
+        assert all("api_key" not in u for u in urls)  # keyless pages stay keyless
+
+    def test_max_items_stops_the_walk_mid_page(self):
+        from unittest.mock import MagicMock
+
+        c = USGSCollector(api_key="DEMO_KEY")
+        c.client = MagicMock()
+        c.client.get_json.side_effect = [
+            {"features": [{"n": i} for i in range(3)], "links": [{"rel": "next", "href": "https://x/p2"}]},
+            {"features": [{"n": i} for i in range(3, 6)], "links": [{"rel": "next", "href": "https://x/p3"}]},
+        ]
+        out = c.fetch_raw(station_id="01646500", days=3, collection="daily", max_items=4)
+        assert [f["n"] for f in out] == [0, 1, 2, 3]
+        assert c.client.get_json.call_count == 2
+
+    def test_slim_series_options_reach_the_query(self):
+        from unittest.mock import MagicMock
+
+        c = USGSCollector(api_key="DEMO_KEY")
+        c.client = MagicMock()
+        c.client.get_json.return_value = {"features": [], "links": []}
+        c.fetch_raw(station_id="01646500", days=3, collection="daily", parameter="00060", statCd="00003",
+                    limit=50_000, skip_geometry=True, properties=("time", "value", "approval_status"))
+        params = c.client.get_json.call_args.kwargs["params"]
+        assert params["limit"] == 50_000 and params["statistic_id"] == "00003"
+        assert params["skipGeometry"] == "true" and params["properties"] == "time,value,approval_status"
+
+    def test_statistic_filter_is_not_sent_to_field_measurements(self):
+        from unittest.mock import MagicMock
+
+        c = USGSCollector(api_key="DEMO_KEY")
+        c.client = MagicMock()
+        c.client.get_json.return_value = {"features": [], "links": []}
+        c.fetch_raw(station_id="01646500", days=3, collection="field-measurements", statCd="00003")
+        assert "statistic_id" not in c.client.get_json.call_args.kwargs["params"]  # the API 400s on it
+
+
+class TestUSGSv1Endpoints:
+    def test_base_url_is_ogc_v1(self):
+        from aquascope.collectors.usgs import USGS_BASE
+
+        assert USGS_BASE == "https://api.waterdata.usgs.gov/ogcapi/v1"
+        assert USGSCollector().client.base_url == USGS_BASE
+
+    @pytest.mark.parametrize("old,new", [("sta", "continuous"), ("iv", "continuous"), ("dv", "daily"),
+                                         ("discrete", "field-measurements"), ("daily", "daily")])
+    def test_old_collection_names_map_to_v1(self, old, new):
+        from unittest.mock import MagicMock
+
+        c = USGSCollector(api_key="DEMO_KEY")
+        c.client = MagicMock()
+        c.client.get_json.return_value = {"features": [], "links": []}
+        c.fetch_raw(station_id="01646500", days=3, collection=old)
+        assert c.client.get_json.call_args.args[0] == f"collections/{new}/items"
+
+    def test_keyed_area_lookup_carries_the_key(self):
+        c = USGSCollector(api_key="a-real-key")
+        USGSCollector._shared_area_cache.pop("USGS-09999999", None)
+        c.client.get_json = Mock(return_value={"properties": {"drainage_area": "10"}})
+        c._get_monitoring_location_catchment_area("09999999")
+        c.client.get_json.assert_called_once_with(
+            "collections/monitoring-locations/items/USGS-09999999", params={"f": "json", "api_key": "a-real-key"})
+        USGSCollector._shared_area_cache.pop("USGS-09999999", None)
 
 
 class TestUSGSAgencyPrefixedIds:
@@ -518,20 +534,19 @@ class TestUSGSAgencyPrefixedIds:
         c.fetch_raw(station_id="01646500", days=3, collection="daily", max_items=None)
         assert c.client.get_json.call_args.kwargs["params"]["monitoring_location_id"] == "USGS-01646500"
 
-    def test_keyless_path_splits_agency_and_number(self):
+    def test_keyless_path_keeps_the_agency_prefix(self):
         from unittest.mock import MagicMock
 
         from aquascope.collectors.usgs import USGSCollector
 
         c = USGSCollector(api_key="DEMO_KEY")
         c.client = MagicMock()
-        c.client.get_json.return_value = {"value": {"timeSeries": []}}
+        c.client.get_json.return_value = {"features": [], "links": []}
         c.fetch_raw(station_id="CA574-09527500", days=3, collection="daily", parameter="00060", max_items=None)
         params = c.client.get_json.call_args.kwargs["params"]
-        assert params["sites"] == "09527500" and params["agencyCd"] == "CA574"
+        assert params["monitoring_location_id"] == "CA574-09527500" and "api_key" not in params
         c.fetch_raw(station_id="USGS-01646500", days=3, collection="daily", max_items=None)
-        params = c.client.get_json.call_args.kwargs["params"]
-        assert params["sites"] == "01646500" and "agencyCd" not in params
+        assert c.client.get_json.call_args.kwargs["params"]["monitoring_location_id"] == "USGS-01646500"
 
 
 class TestUSGSSharedPacingAndAreaLookup:

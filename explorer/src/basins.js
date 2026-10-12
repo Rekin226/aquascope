@@ -343,18 +343,33 @@ async function basinAttributes(hybasId) {
   return out;
 }
 
-export async function requestBasin(lat, lon, target) {
+// `snap` (a promise of aquascope.rivers.snap_to_river for the point) lets the card refuse a hillside: a
+// level-12 sub-basin holds both the river and the slopes that drain to it, so its upstream area is the
+// river's, and a click on the slope used to be told it drained thousands of km² (#516).
+export async function requestBasin(lat, lon, target, { snap = null } = {}) {
   const my = ++basinReq;
   const el = $(`${target}-basin`);
   const r = root(target);
   if (!el) return;
-  setCard(el, "loading", { message: "Finding the sub-basin (BasinATLAS)…" });
+  setCard(el, "loading", { message: snap ? "Finding the nearest stream and the sub-basin…" : "Finding the sub-basin (BasinATLAS)…" });
   setTab(r, "catchment", { enabled: true });
   try {
-    const sb = await subBasinAtCached(lat, lon);
+    const [sb, river] = await Promise.all([subBasinAtCached(lat, lon), snap ? snap.catch(() => null) : null]);
     if (my !== basinReq) return;
     if (!sb || sb.hybas_id === null) {
       setCard(el, "empty", { message: "No BasinATLAS sub-basin here (open sea, or outside the level-12 layer)." });
+      return;
+    }
+    if (river && river.snapped === false) {
+      el.querySelector(".card-body").innerHTML =
+        `<strong>No stream within ${river.max_distance_m >= 1000 ? `${fmt(river.max_distance_m / 1000, 1)} km` : `${fmt(river.max_distance_m, 0)} m`} ` +
+        `of this point</strong>, so it has no river catchment ` +
+        `of its own to describe. It lies in BasinATLAS sub-basin ${sb.hybas_id}, whose river drains ` +
+        `${fmt(sb.up_area, 0)} km² further down: that is the river's catchment, not this point's. ` +
+        `<span class="muted">The River tab can use the nearest mapped reach instead.</span>`;
+      setCard(el, "ready");
+      highlightBasins([]);
+      setCard($(`${target}-similar`), "empty", { message: "Similar basins need a catchment, and this point is not on a stream." });
       return;
     }
     const body = el.querySelector(".card-body");

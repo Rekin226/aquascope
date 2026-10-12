@@ -8,14 +8,17 @@ DuckDB-WASM in a browser all read without help.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import struct
+from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
 from aquascope import __version__
+from aquascope.archive.catalog import fold_text
 from aquascope.registry import SOURCES, StationCatalog, station_catalogs, station_sources
 from aquascope.schemas.station import Station
 from aquascope.utils.imports import require
@@ -53,6 +56,7 @@ class SourceHealth:
     license: str
     redistributable: bool
     agency: str
+    retained_stations: int = 0
 
 
 @dataclass
@@ -91,6 +95,54 @@ def _bbox(stations: list[Station]) -> list[float] | None:
     lons = [s.longitude for s in stations]
     lats = [s.latitude for s in stations]
     return [min(lons), min(lats), max(lons), max(lats)]
+
+
+def infer_site_ids(stations: list[Station], precision: int = 3) -> list[Station]:
+    """Infer shared site_id for co-located stations with matching source, folded name, and rounded coordinates.
+
+    Only updates records where ``site_id == station_id`` (or empty) so that
+    collector-supplied agency site IDs (such as Hub'Eau code_site or UK EA
+    stationGuid) are never overwritten. Stations without a name (or with an
+    empty folded name) are skipped so coordinates alone do not fuse distinct
+    nameless sensors.
+
+    Note: rounding coordinates can split pairs that straddle a cell boundary,
+    so nearby pairs group in practice rather than by guarantee.
+    """
+    groups: dict[tuple[str, str, float, float], list[Station]] = defaultdict(list)
+    for st in stations:
+        if st.latitude is None or st.longitude is None:
+            continue
+        fname = fold_text(st.name)
+        if not fname:
+            continue
+        key = (
+            st.source,
+            fname,
+            round(st.latitude, precision),
+            round(st.longitude, precision),
+        )
+        groups[key].append(st)
+
+    for (source, fname, rlat, rlon), members in groups.items():
+        if len(members) < 2:
+            continue
+        agency_site = next(
+            (s.site_id for s in members if s.site_id and s.site_id != s.station_id),
+            None,
+        )
+        if agency_site:
+            target_site_id = agency_site
+        else:
+            raw_key = f"{source}|{fname}|{rlat:.{precision}f}|{rlon:.{precision}f}"
+            digest = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()[:10]
+            target_site_id = f"syn:{source}:{digest}"
+
+        for st in members:
+            if not st.site_id or st.site_id == st.station_id:
+                st.site_id = target_site_id
+
+    return stations
 
 
 def stations_to_table(stations: list[Station]):
@@ -244,13 +296,27 @@ def harvest_stations(
     stations: list[Station] = []
     for key in sorted(catalogs):
         stations.extend(catalogs[key].stations)
+    health = _health(catalogs)
+    previous_path = out / "stations.parquet"
+    if previous_path.exists():
+        from aquascope.archive.catalog import load_stations
+
+        previous = load_stations(path=previous_path)
+        failed = {key for key, cat in catalogs.items() if not cat.ok}
+        retained = [Station.model_validate(row) for row in previous
+                    if row["source"] in failed or row["source"] not in catalogs]
+        current_ids = {(s.source, s.station_id) for s in stations}
+        stations.extend(s for s in retained if (s.source, s.station_id) not in current_ids)
+        for row in health:
+            row.retained_stations = sum(s.source == row.source for s in retained)
+    infer_site_ids(stations)
     stations.sort(key=lambda s: (s.source, s.station_id))
 
     report = HarvestReport(
         run_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         aquascope_version=__version__,
         n_stations=len(stations),
-        sources=_health(catalogs),
+        sources=health,
     )
 
     parquet_path = write_stations_parquet(stations, out / "stations.parquet")

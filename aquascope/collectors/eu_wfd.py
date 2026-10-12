@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlencode
 
-from aquascope.collectors.base import BaseCollector
+from aquascope.collectors.base import BaseCollector, CollectorError
 from aquascope.schemas.water_data import (
     DataSource,
     GeoLocation,
@@ -175,10 +175,7 @@ def check_wfd_compliance(samples: list[WaterQualitySample], parameter: str) -> W
         ValueError: If *parameter* is not in the EQS threshold table.
     """
     if parameter not in _EQS_THRESHOLDS:
-        raise ValueError(
-            f"Unknown EQS parameter '{parameter}'. "
-            f"Supported: {list(_EQS_THRESHOLDS.keys())}"
-        )
+        raise ValueError(f"Unknown EQS parameter '{parameter}'. Supported: {list(_EQS_THRESHOLDS.keys())}")
 
     spec = _EQS_THRESHOLDS[parameter]
 
@@ -284,7 +281,12 @@ class EUWFDCollector(BaseCollector):
             data = self.client.get_json(url, use_cache=True)
         except Exception as exc:
             logger.warning("EEA DiscoData fetch failed: %s", exc)
-            return []
+            raise CollectorError(
+                f"EEA DiscoData fetch failed: {exc}",
+                source=self.name,
+                url=url,
+                cause=exc,
+            ) from exc
 
         if isinstance(data, dict) and "results" in data:
             return data["results"]

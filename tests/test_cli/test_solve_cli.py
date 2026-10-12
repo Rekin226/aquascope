@@ -23,7 +23,7 @@ def test_playbooks_list_and_show(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["aquascope", "playbooks"])
     cli.main()
     out = capsys.readouterr().out
-    assert "flood_risk" in out and "ungauged_flow" in out and "groundwater_decline" in out and "7 playbook(s)" in out
+    assert "flood_risk" in out and "ungauged_flow" in out and "groundwater_decline" in out and "10 playbook(s)" in out
     assert "drought_status" in out and "supply_reliability" in out and "irrigation_feasibility" in out
     assert "water_quality" in out
     monkeypatch.setattr(sys, "argv", ["aquascope", "playbooks", "show", "flood_risk"])
@@ -49,7 +49,7 @@ def test_solve_prints_the_plan_runs_with_yes_and_writes_the_study(monkeypatch, c
         cli.main()
     printed = capsys.readouterr().out
     assert "Plan: playbook flood_risk, branch at_site, 4 step(s)" in printed
-    assert "gate max_return_period_factor 3 on years" in printed and "Report saved to" in printed
+    assert "gate max_return_period_factor 3 on ffa.n_years" in printed and "Report saved to" in printed
     assert "## Steps and gates" in out.read_text(encoding="utf-8") and "T = 50 years" in out.read_text(encoding="utf-8")
     text = study.read_text(encoding="utf-8")
     assert text.startswith("# An AquaScope study (version 2)") and '"return_period": 50' in text

@@ -107,7 +107,8 @@ def test_unknown_or_malformed_gates_fail_loudly():
     assert "unknown check" in rows[0]["detail"] and "min_years" in rows[0]["detail"]
     assert set(CHECKS) == {"min_years", "max_return_period_factor", "ci_finite", "spread_within", "nse_min", "kge_min",
                            "not_empty", "unit_present", "max_area_km2", "min_donors", "status_is", "min_samples",
-                           "fit_envelopes_max", "sampling_density", "trend_on_series", "cross_check_ratio"}
+                           "fit_envelopes_max", "sampling_density", "trend_on_series", "cross_check_ratio",
+                           "stationary", "min_models", "min_sites"}
 
 
 def test_empty_expects_is_no_gate():
@@ -171,8 +172,26 @@ def test_cross_check_ratio_compares_a_cross_check_with_a_reference_number():
     assert ok["passed"] and "ratio 0.83" in ok["detail"] and "T = 100" in ok["detail"]
     far = evaluate([dict(gate, reference={"100": 2000.0})], payload)[0]
     assert not far["passed"] and "disagrees" in far["detail"]
+    assert "within the allowed factor of 1.50" in ok["detail"]
+    assert "outside the allowed factor of 1.50" in far["detail"] and "within" not in far["detail"]
     scalar = evaluate([{"check": "cross_check_ratio", "path": "glofas.ffa.fits.gev_lmoments.q",
                         "reference": 600.0, "return_period": 100, "value": 0.5}], payload)[0]
     assert scalar["passed"] and "540" in scalar["detail"]
     missing = evaluate([dict(gate, reference=None)], payload)[0]
     assert not missing["passed"] and "did not resolve" in missing["detail"]
+
+
+def test_stationary_gate_reads_the_change_point_verdict():
+    ok = evaluate([{"check": "stationary"}], {"stationary": True, "verdict": "No significant step change."})
+    assert ok[0]["passed"] and "No significant" in ok[0]["detail"]
+    bad = evaluate([{"check": "stationary"}], {"stationary": False, "verdict": "A step change around 1970."})
+    assert not bad[0]["passed"] and "not one sample" in bad[0]["detail"]
+    missing = evaluate([{"check": "stationary"}], {"n": 40})
+    assert not missing[0]["passed"] and "no change-point verdict" in missing[0]["detail"]
+
+
+def test_model_and_site_count_gates():
+    assert evaluate([{"check": "min_models", "value": 3}], {"n_models": 7})[0]["passed"]
+    assert not evaluate([{"check": "min_models", "value": 3}], {"n_models": 2})[0]["passed"]
+    assert evaluate([{"check": "min_sites", "value": 5}], {"n_pooled": 9})[0]["passed"]
+    assert not evaluate([{"check": "min_sites", "value": 5}], {"n_pooled": 2})[0]["passed"]

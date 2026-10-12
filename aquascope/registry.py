@@ -88,7 +88,7 @@ def _s(**kwargs) -> SourceMeta:
 SOURCES: dict[str, SourceMeta] = {
     # ── Americas ────────────────────────────────────────────────────────
     "usgs": _s(
-        key="usgs", label="USGS Water Services", region="United States",
+        key="usgs", label="USGS Water Data", region="United States",
         description="Daily and instantaneous discharge, gauge height, temperature and water quality from US gauges",
         agency="U.S. Geological Survey", country="USA",
         homepage="https://waterdata.usgs.gov/",
@@ -422,6 +422,7 @@ SOURCES: dict[str, SourceMeta] = {
         license="CC-BY-3.0-AU", redistributable=True,
         attribution="Bureau of Meteorology, © Commonwealth of Australia",
         supports_station_lookup=True,
+        browser_reachable=False,  # KiWIS answers any cross-origin request (an Origin header) with 403
     ),
     # ── Global ──────────────────────────────────────────────────────────
     "grdc": _s(
@@ -496,6 +497,146 @@ SOURCES: dict[str, SourceMeta] = {
         output_model="WaPORObservation",
         license="CC-BY-4.0", redistributable=True,
         attribution="FAO WaPOR (CC BY 4.0)",
+    ),
+}
+
+
+@dataclass(frozen=True)
+class ContextLayerMeta:
+    """A place-context dataset (#520): read at a point or over an area, never a gauge record.
+
+    Kept apart from ``SOURCES`` because these are not collectors: there is no station, no schema record and
+    no harvest. ``mirrored`` says whether the Archive keeps a copy (only for licences that allow it, see
+    ``redistributable``); the rest are read in place over HTTP range requests.
+    """
+
+    key: str
+    label: str
+    provider: str
+    description: str
+    license: str
+    attribution: str
+    homepage: str
+    citation: str = ""
+    redistributable: bool = False
+    mirrored: bool = False
+    #: Whether the page can read it directly (CORS open to the Explorer's origin, checked 2026-10-08).
+    browser_reachable: bool = True
+    #: A name short enough for a credits line ("Groundsource", "SoilGrids").
+    short: str = ""
+
+
+CONTEXT_LAYERS: dict[str, ContextLayerMeta] = {
+    "groundsource": ContextLayerMeta(
+        key="groundsource", short="Groundsource",
+        label="Flood events from news (Groundsource)", provider="Google Research",
+        description="About 2.6 million flood events extracted from news articles in more than 150 countries, "
+                    "with dates and an affected area",
+        license="CC-BY-4.0", redistributable=True, mirrored=True,
+        attribution="Groundsource: A Dataset of Flood Events from News (Mayo et al. 2026, Google), CC BY 4.0",
+        homepage="https://doi.org/10.5281/zenodo.18647054",
+        citation="Mayo, R. et al. (2026). Groundsource: A Dataset of Flood Events from News. Zenodo. "
+                 "doi:10.5281/zenodo.18647054",
+    ),
+    "microsoft_floods": ContextLayerMeta(
+        key="microsoft_floods", short="Microsoft Sentinel-1 floods",
+        label="Floods seen by Sentinel-1 radar, 2014 to 2024",
+        provider="Microsoft AI for Good Lab",
+        description="Flood detections from ten years of Sentinel-1 radar at 20 m (October 2014 to September 2024), "
+                    "with a per-pixel count of the months in which flooding was seen",
+        license="MIT", redistributable=True, mirrored=True,
+        attribution="Microsoft AI for Good Lab global flood dataset (Sentinel-1, 2014-2024), MIT licence",
+        homepage="https://huggingface.co/datasets/ai-for-good-lab/ai4g-flood-dataset",
+        citation="Misra, A. et al. (2025). Mapping global floods with 10 years of satellite radar data. "
+                 "Nature Communications 16, 5762. doi:10.1038/s41467-025-60973-1",
+    ),
+    "surface_water": ContextLayerMeta(
+        key="surface_water", short="JRC Global Surface Water",
+        label="Surface water since 1984 (JRC Global Surface Water)",
+        provider="European Commission JRC / Google",
+        description="How often each 30 m pixel was water between March 1984 and December 2024, and the "
+                    "occurrence change intensity between 1984-1999 and 2000-2024 (a normalised difference, "
+                    "Landsat, release v1.5)",
+        license="free and open, no restrictions (Copernicus)",
+        attribution="Source: EC JRC/Google, Global Surface Water v1.5 (Pekel et al. 2016)",
+        homepage="https://global-surface-water.appspot.com/",
+        citation="Pekel, J.-F., Cottam, A., Gorelick, N. and Belward, A. S. (2016). High-resolution mapping of "
+                 "global surface water and its long-term changes. Nature 540, 418-422. doi:10.1038/nature20584",
+    ),
+    "flood_hazard": ContextLayerMeta(
+        key="flood_hazard", short="JRC GloFAS flood hazard maps",
+        label="Modelled flood depth by return period (JRC GloFAS)",
+        provider="European Commission JRC (CEMS-GloFAS)",
+        description="River flood depth at about 90 m for the 10 to 500-year floods, from the CEMS-GloFAS "
+                    "global flood hazard maps v2.1.2, read from a community Cloud-Optimized GeoTIFF mirror. JRC's "
+                    "copyright notice licenses the dataset under CC BY 4.0 (credit given, changes indicated); its "
+                    "README says no restrictions, a free and open Copernicus product (both read 2026-10-10)",
+        license="CC-BY-4.0",
+        attribution="European Union, 2016-2021, GloFAS: global river flood hazard maps v2.1.2 (CEMS); COG mirror "
+                    "by N. Lebovits on Source Cooperative",
+        homepage="https://data.jrc.ec.europa.eu/collection/id-0054",
+        citation="JRC CEMS-GloFAS global river flood hazard maps v2.1.2, https://data.jrc.ec.europa.eu/collection/id-0054",
+    ),
+    "dams": ContextLayerMeta(
+        key="dams", short="Global Dam Watch",
+        label="Dams and reservoirs (Global Dam Watch)", provider="Global Dam Watch consortium",
+        description="41,145 dams and barriers with name, river, year, height, storage capacity and main use",
+        license="CC-BY-4.0", redistributable=True, mirrored=True,
+        attribution="Global Dam Watch database v1.0 (Lehner et al. 2024), CC BY 4.0",
+        homepage="https://doi.org/10.6084/m9.figshare.25988293.v1",
+        citation="Lehner, B. et al. (2024). Global Dam Watch database version 1.0. figshare. "
+                 "doi:10.6084/m9.figshare.25988293.v1",
+    ),
+    "soil": ContextLayerMeta(
+        key="soil", short="SoilGrids",
+        label="Soil texture and water holding (SoilGrids 2.0)", provider="ISRIC - World Soil Information",
+        description="Sand, silt and clay of the top 30 cm and the water held between field capacity (33 kPa) and "
+                    "wilting point (1500 kPa) in the top metre, from the 1 km SoilGrids aggregates",
+        license="CC-BY-4.0",
+        attribution="SoilGrids 2.0, ISRIC - World Soil Information (CC BY 4.0)",
+        homepage="https://files.isric.org/soilgrids/latest/data_aggregated/",
+        citation="Poggio, L. et al. (2021). SoilGrids 2.0: producing soil information for the globe with "
+                 "quantified spatial uncertainty. SOIL 7, 217-240. doi:10.5194/soil-7-217-2021",
+    ),
+    "actual_et": ContextLayerMeta(
+        key="actual_et", short="FAO WaPOR",
+        label="Actual evapotranspiration (FAO WaPOR v3)", provider="FAO",
+        description="Annual actual evapotranspiration and interception (AETI) at 300 m, 2018 onward. The licence "
+                    "is the one recorded for the wapor source; FAO's terms for commercial use are not confirmed",
+        license="CC-BY-4.0",
+        attribution="FAO WaPOR v3, L1 AETI annual",
+        homepage="https://data.apps.fao.org/wapor/",
+        citation="FAO (2024). WaPOR v3. https://www.fao.org/in-action/remote-sensing-for-water-productivity/",
+    ),
+    "rain_gauge": ContextLayerMeta(
+        key="rain_gauge", short="NOAA GHCN-Daily",
+        label="Nearest rain gauge (NOAA GHCN-Daily)", provider="NOAA NCEI",
+        description="The nearest GHCN-Daily station that records precipitation, and a summary of its record",
+        license="CC0-1.0", redistributable=True, mirrored=True,
+        attribution="NOAA NCEI, Global Historical Climatology Network - Daily (via NOAA Open Data Dissemination, CC0)",
+        homepage="https://registry.opendata.aws/noaa-ghcn/",
+        citation="Menne, M. J. et al. (2012). An overview of the Global Historical Climatology Network-Daily "
+                 "database. J. Atmos. Oceanic Technol. 29, 897-910. doi:10.1175/JTECH-D-11-00103.1",
+    ),
+    "natural_earth": ContextLayerMeta(
+        key="natural_earth", short="Natural Earth",
+        label="Country boundaries (Natural Earth 1:50m)", provider="Natural Earth",
+        description="Admin-0 country polygons, used to name the countries a traced river crosses. Read from the "
+                    "world-atlas 2.0.2 TopoJSON on jsDelivr; borders as Natural Earth draws them, not a position on "
+                    "any dispute",
+        license="public domain", redistributable=True,
+        attribution="Natural Earth 1:50m admin-0 boundaries (public domain), via world-atlas 2.0.2",
+        homepage="https://www.naturalearthdata.com/about/terms-of-use/",
+    ),
+    "global_water_watch": ContextLayerMeta(
+        key="global_water_watch", short="Global Water Watch",
+        label="Reservoir surface area (Global Water Watch)",
+        provider="Deltares, WRI, WWF and partners",
+        description="Satellite reservoir surface-area series. Linked only: the data licence is not confirmed, "
+                    "so nothing is read or mirrored",
+        license="unknown (not confirmed)",
+        attribution="Global Water Watch",
+        homepage="https://www.globalwaterwatch.earth/",
     ),
 }
 
@@ -593,6 +734,20 @@ class StationCatalog:
         return self.error is None
 
 
+def _error_text(exc: BaseException) -> str:
+    """``Type: message``, followed by the exceptions it was raised from.
+
+    A collector that wraps its failures (BOM raises one ``RuntimeError`` after every parameter type failed) would
+    otherwise hide the cause, so the health report could not tell an agency outage (503, timeouts) from a code fault.
+    """
+    text = f"{type(exc).__name__}: {exc}"
+    cause, seen = exc.__cause__, 0
+    while cause is not None and seen < 3:
+        text += f" (from {type(cause).__name__}: {cause})"
+        cause, seen = cause.__cause__, seen + 1
+    return text
+
+
 def station_catalogs(
     *,
     bbox: tuple[float, float, float, float] | None = None,
@@ -624,7 +779,7 @@ def station_catalogs(
             return StationCatalog(source=key, stations=list(found), seconds=time.perf_counter() - t0)
         except Exception as exc:  # noqa: BLE001 - one bad source must not sink the others
             logger.warning("[%s] station lookup failed: %s", key, exc)
-            return StationCatalog(source=key, error=f"{type(exc).__name__}: {exc}", seconds=time.perf_counter() - t0)
+            return StationCatalog(source=key, error=_error_text(exc), seconds=time.perf_counter() - t0)
 
     if not keys:
         return {}

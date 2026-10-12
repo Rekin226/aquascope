@@ -63,6 +63,14 @@ class GeoLocation(BaseModel):
     datum: str = Field(default="WGS84")
 
 
+class Quality(str, Enum):
+    APPROVED = "approved"
+    PROVISIONAL = "provisional"
+    ESTIMATED = "estimated"
+    SUSPECT = "suspect"
+    UNKNOWN = "unknown"
+
+
 class WaterQualitySample(BaseModel):
     """A single water-quality measurement."""
 
@@ -78,6 +86,8 @@ class WaterQualitySample(BaseModel):
     river: str | None = None
     county: str | None = None
     remark: str | None = None
+    quality: Quality = Quality.UNKNOWN
+    quality_raw: str | None = None
 
     model_config = {
         "json_schema_extra": {
@@ -119,6 +129,8 @@ class ClimateReading(BaseModel):
     value: float
     unit: str
     remark: str | None = None
+    quality: Quality = Quality.UNKNOWN
+    quality_raw: str | None = None
 
 
 class WaterLevelReading(BaseModel):
@@ -132,6 +144,8 @@ class WaterLevelReading(BaseModel):
     water_level: float
     unit: str = "m"
     remark: str | None = None
+    quality: Quality = Quality.UNKNOWN
+    quality_raw: str | None = None
 
 
 class ReservoirStatus(BaseModel):
@@ -178,6 +192,8 @@ class StreamflowReading(BaseModel):
     )
     unit: str = "m3/s"
     remark: str | None = None
+    quality: Quality = Quality.UNKNOWN
+    quality_raw: str | None = None
 
     @property
     def runoff_mm_day(self) -> float | None:

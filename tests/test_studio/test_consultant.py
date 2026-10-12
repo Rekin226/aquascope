@@ -96,14 +96,15 @@ def test_the_model_writes_the_brief_within_the_playbooks(monkeypatch):
     model = Model.resolve(ws, client=client, model="fake", provider="custom")
     msg = consultant.consult(ws, model, "A culvert on the Hogsmill, 200-year", tables={"upload:flows.csv": None})
     b = ws.brief
-    assert msg.kind == "questions" and b.source == "model" and not b.ready
-    assert b.decision == "size a culvert" and b.intake == {"return_period": 200, "decision": "design flow"}
-    assert [q.id for q in b.questions] == ["horizon", "q2", "q3"], "at most three questions"
+    assert msg.kind == "brief" and b.source == "model" and b.ready
+    assert b.decision == "size a culvert"
+    assert b.intake == {"return_period": 200, "decision": "design flow"}
+    assert b.questions == [], "a checklist playbook asks only its checklist: the model's own questions are dropped"
     ctx = client.requests[0]["context"]
     assert ctx["uploads"] == {"upload:flows.csv": ["date", "flow"]} and ctx["playbooks"][0]["intake"]
-    consultant.consult(ws, model, "100 years, yes")
-    assert b.ready and b.questions[0].answer == 100 and b.questions[2].answer == ""
-    assert ws.ledger["consultant"]["calls"] == 2
+    flood = next(p for p in ctx["playbooks"] if p["id"] == "flood_risk")
+    assert [i["field"] for i in flood["checklist"]] == ["decision", "return_period", "years"]
+    assert ws.ledger["consultant"]["calls"] == 1
 
 
 def test_follow_ups_are_classified_keyless():

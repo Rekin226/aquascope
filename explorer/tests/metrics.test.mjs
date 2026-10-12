@@ -1,0 +1,30 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createMetrics } from "../src/metrics.js";
+
+test("logging is opt-in, bounded, deletable and excludes unapproved data", () => {
+  const memory = new Map();
+  const storage = { getItem: k => memory.get(k), setItem: (k,v) => memory.set(k,v), removeItem: k => memory.delete(k) };
+  let today = new Date("2026-09-01T12:00:00Z");
+  const m = createMetrics(storage, () => today);
+  m.record("usable_record");
+  assert.equal(memory.size, 0);
+  m.enable();
+  m.record("usable_record", { kind: "station", question: "private", coordinates: [1,2] });
+  m.record("operation_ok", { kind: "PRIVATE-FILENAME", durationMs: 1234, runtime: "cold" });
+  m.record("PRIVATE-QUESTION");
+  const serialized = JSON.stringify(m.snapshot());
+  assert.doesNotMatch(serialized, /private|PRIVATE|coordinates/);
+  assert.equal(m.snapshot().useful_days, 1);
+  assert.equal(m.snapshot().days[0].durations["operation_ok:other:cold"][0], 1234);
+  const reopened = createMetrics(storage, () => today);
+  assert.equal(reopened.enabled(), true);
+  today = new Date("2026-10-01T12:00:00Z");
+  assert.equal(reopened.snapshot().days.length, 0, "old counters expire on inspection without another event");
+  reopened.record("visit");
+  assert.equal(reopened.snapshot().days.length, 1);
+  assert.equal(reopened.snapshot().useful_days, 0);
+  reopened.clear();
+  assert.equal(memory.size, 0);
+  assert.equal(reopened.enabled(), false);
+});

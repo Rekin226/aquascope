@@ -143,7 +143,8 @@ test("the done board shows the grade badge, the decision bullets and the finding
       grade: "indicative",
       decision: {
         answer: "Design flow: 12.3 m3/s (indicative).",
-        conditions: ["step s2 did not pass a gate"],
+        conditions: ["the annual maxima are independent"],
+        limitations: ["step s2 did not pass a gate"],
         what_would_change_it: ["a longer record for gev_lmoments"],
       },
       data_requests: [{ what: "abstraction records", why: "attribute the cause", effect_on_grade: "moves to established" }],
@@ -157,10 +158,12 @@ test("the done board shows the grade badge, the decision bullets and the finding
   assert.match(html, />indicative</);
   assert.match(html, /Design flow: 12\.3 m3\/s \(indicative\)\./);
   assert.match(html, /Holds if:/);
+  assert.match(html, /Holds if:<\/p><ul><li>the annual maxima are independent<\/li><\/ul>/);
+  assert.match(html, /Limitations and unresolved checks:<\/p><ul><li>step s2 did not pass a gate/);
   assert.match(html, /step s2 did not pass a gate/);
   assert.match(html, /Would change it:/);
   assert.match(html, /a longer record for gev_lmoments/);
-  assert.match(html, /The crew would ask for:/);
+  assert.match(html, /Additional evidence needed:/);
   assert.match(html, /abstraction records: moves to established/);
   assert.match(html, /<details class="study-findings"><summary>Findings<\/summary>/);
   assert.match(html, /\[indicative\] Q5: 12\.3 m3\/s/);

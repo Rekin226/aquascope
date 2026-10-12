@@ -70,7 +70,8 @@ def test_the_tree_plans_keyless_as_version_3():
     assert "[s3] flood_frequency" in ws.messages[-1].text
     back = loads(study.to_yaml())
     assert back.version == 3 and back.plan["methodology"] == plan["methodology"] and back.steps[2].outputs
-    assert ws.brief.intake == {"return_period": 100, "decision": "design flow"}, "the filled intake is written back"
+    assert ws.brief.intake == {"return_period": 100, "decision": "design flow", "years": None}, (
+        "the filled intake is written back")
 
 
 def test_keyless_declines_are_the_playbooks_words_or_the_missing_playbook():
@@ -106,7 +107,8 @@ def test_a_valid_model_plan_is_accepted_with_the_playbooks_caveats_attached():
     listed = {e["tool"] for e in ctx["catalogue"]}
     assert "eda" not in listed, "a table's descriptive tools are listed only with an upload"
     assert {"wqi", "who_screen", "return_periods"} <= listed, "the analytic table tools are listed: a step feeds them"
-    assert len(__import__("json").dumps(ctx)) < 20_000
+    # the advanced steps (change points, regional pooling) serve flood studies too: 21k characters is the budget
+    assert len(__import__("json").dumps(ctx)) < 21_000
 
 
 def test_an_invalid_plan_gets_one_repair_call():
@@ -215,7 +217,7 @@ def test_plan_text_is_a_numbered_checklist():
     text = methodologist.plan_text(ws.study)
     assert text.startswith("Plan (playbook, playbook flood_risk, branch at_site, 4 step(s))")
     assert "2. [s2] analyze_station(source='uk_ea', station_id='3400TH')  method trend_mann_kendall" in text
-    assert "gate max_return_period_factor 3 on years" in text and "fallback: similar_basins" in text
+    assert "gate max_return_period_factor 3 on ffa.n_years" in text and "fallback: similar_basins" in text
     assert "caveat(s) will be printed verbatim" in text
 
 

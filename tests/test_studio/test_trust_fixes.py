@@ -43,7 +43,7 @@ def test_a_failed_cross_check_on_the_headline_is_not_established_anywhere():
     assert primary == "s3" and grade == "indicative"
     assert out["decision"]["grade"] == "indicative" and "(indicative)" in out["decision"]["answer"]
     assert [g["step"] for g in interpreter.headline_gates(ws, primary)] == ["s4"]
-    assert any("cross_check_ratio" in c for c in out["decision"]["conditions"])
+    assert any("cross_check_ratio" in c for c in out["decision"]["limitations"])
     missing = critic.not_established(ws)
     assert any("cross_check_ratio" in m for m in missing), "the box lists it"
     report = author.author_report(ws, None)
@@ -109,7 +109,8 @@ def test_the_cell_is_snapped_to_the_one_whose_mean_flow_matches_the_gauge():
     with patch.object(explore, "build_collector", return_value=fake):
         cell = explore.snap_glofas_cell(46.7, -68.6, 50.0)
     assert len(str(fake.calls[0]["latitude"]).split(",")) == 25, "one request for a 5 x 5 window"
-    assert cell["comparable"] and cell["lat"] == 46.7 and cell["lon"] == pytest.approx(-68.5)
+    assert not cell["comparable"] and cell["flow_magnitude_matches"]
+    assert cell["lat"] == 46.7 and cell["lon"] == pytest.approx(-68.5)
     assert cell["ratio"] == pytest.approx(0.96) and cell["offset_km"] > 5
     assert "closest to the gauge's" in cell["why"] and cell["n_probed"] == 25
 
@@ -120,14 +121,14 @@ def test_no_cell_within_tolerance_says_so():
     assert cell["comparable"] is False and cell["why"].startswith("no comparable model cell")
 
 
-def test_anywhere_reads_the_snapped_cell_and_records_it():
+def test_similar_mean_flow_is_not_evidence_of_catchment_comparability():
     fake = _FakeFlood(main_mean=48.0)
     with patch.object(explore, "build_collector", return_value=fake):
         out = explore.anywhere(46.7, -68.6, years=20, match_mean_flow=50.0, area_km2=2320)
     g = out["glofas"]
-    assert g["comparable"] is True and g["cell"]["lon"] == pytest.approx(-68.5) and g["cell"]["area_km2"] == 2320
-    assert fake.calls[-1]["latitude"] == 46.7 and fake.calls[-1]["longitude"] == pytest.approx(-68.5)
-    assert "ffa" in g and any("Cell snapped to the gauge" in n for n in out["notes"])
+    assert g["comparable"] is False and g["cell"]["lon"] == pytest.approx(-68.5)
+    assert g["cell"]["area_km2"] == 2320 and g["cell"]["flow_magnitude_matches"]
+    assert g["cell"]["catchment_match"] == "unverified" and "ffa" not in g
     json.dumps(out)
 
 
@@ -264,7 +265,7 @@ def test_a_short_archive_copy_is_replaced_by_the_agencys_full_record():
         out = explore.fetch_series("usgs", "USGS-01013500", period_start="1903-07-29")
     assert out["series"].index.min().date() == date(1903, 10, 1)
     assert agency.calls[0]["days"] == (_today() - date(1903, 7, 29)).days
-    assert "USGS daily values (NWIS); full record requested (from 1903-07-29" in out["note"]
+    assert "USGS daily values (Water Data API, daily mean); full record requested (from 1903-07-29" in out["note"]
     assert "archive holds only" in out["note"] and "full record came from the agency" in out["note"]
 
 
@@ -289,6 +290,15 @@ def test_a_capped_request_or_a_full_archive_copy_never_calls_the_agency():
         start = (_today() - timedelta(days=int(40 * 365.25) - 30)).isoformat()
         whole = explore.fetch_series("usgs", "USGS-01013500", period_start=start)
     assert "last 20 years requested" in capped["note"] and "From the AquaScope archive" in whole["note"]
+
+
+def test_a_window_longer_than_the_archive_copy_comes_from_the_agency():
+    agency = _USGS("1903-10-01")
+    with patch("aquascope.archive.observations.fetch_archived_series", return_value=_archive_copy()), \
+            patch.object(explore, "build_collector", return_value=agency):
+        out = explore.fetch_series("usgs", "USGS-01013500", years=50, period_start="1903-07-29")
+    assert (date.today() - out["series"].index.min().date()).days > int(45 * 365.25), "50 years, not the 40 held"
+    assert "requested window came from the agency" in out["note"]
 
 
 def test_the_browser_does_not_call_an_agency_it_cannot_reach(monkeypatch):

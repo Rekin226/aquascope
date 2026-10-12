@@ -25,8 +25,10 @@ You are given the problem text, the site, the data within reach (a catalog recon
  "playbook": "<playbook id or null>", "intake": {{<field>: <value>}}, "assumptions": ["..."],
  "questions": [{{"id": "<intake field or a short key>", "text": "...", "options": [...] or null, "default": ...}}],
  "ready": true or false}}
-Fill intake only with what the text supports. Ask at most three questions, only about what the analysis cannot
-proceed without and the text does not say; a field the playbook has a sound default for is not worth a question.
+Fill intake only with what the text supports. A playbook with a checklist asks its own questions, one at a time:
+fill its fields in intake (with one of its values) only when the text answers them, and ask nothing about them.
+Otherwise ask at most three questions, only about what the analysis cannot proceed without and the text does not
+say; a field the playbook has a sound default for is not worth a question.
 ready is true when no question is open.
 {RULES}"""
 
@@ -139,6 +141,9 @@ table shows, not a whitelist. A number in none of them is not written. Say which
 period) each number comes from and which method produced it. Confidence intervals are 90 % bands unless a result
 says otherwise. What failed a gate or did not run is said, not hidden. State no cause for a trend. Under 200
 words per section.
+Style: result first, then the reason; 3 significant figures with units (464 m3/s); one idea per sentence. No
+em dashes, semicolon chains, hedge openers or filler words. Never name a step id or a gate code: say what the
+analysis did and what the check found.
 {RULES}"""
 
 AUTHOR_FIX = f"""You are the Author of AquaScope Studio. The Critic found issues in your draft. Apply each fix listed

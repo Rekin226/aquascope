@@ -54,7 +54,7 @@ class Control:
 
     param: str
     label: str
-    #: choice | number | integer | boolean
+    #: choice | number | integer | boolean | years (a list of calendar years)
     type: str
     choices: tuple[Any, ...] = ()
     min: float | None = None
@@ -91,6 +91,13 @@ def _years(label: str = "Use only the last N years", *, default: int | None = No
                    help="leave empty for the full record" if optional else "")
 
 
+def _exclude_years() -> Control:
+    return Control("exclude_years", "Leave out these years' floods", "years", optional=True,
+                   argument="exclude_years",
+                   help="years whose annual maximum is not to be trusted (a dam break, a revised rating); "
+                        "leave empty to use every complete year")
+
+
 def _declarations() -> dict[str, tuple[Control, ...]]:
     """The steerable parameters per catalogue tool. The closed sets come from the constants the tools check
     against, so a control never offers a value the tool would refuse."""
@@ -101,9 +108,10 @@ def _declarations() -> dict[str, tuple[Control, ...]]:
         "flood_frequency": (
             _return_period(),
             _years(),
+            _exclude_years(),
             Control("bootstrap_ci", "Bootstrap confidence band", "boolean", default=False, argument="bootstrap_ci"),
         ),
-        "analyze_station": (_return_period(flood), _years()),
+        "analyze_station": (_return_period(flood), _years(), _exclude_years()),
         "return_periods": (
             Control("distribution", "Distribution", "choice", choices=tuple(workbench.DISTRIBUTIONS), default="gev",
                     argument="distribution", help="GEV, Log-Pearson III or Gumbel fitted to the annual maxima"),
@@ -146,6 +154,39 @@ def _declarations() -> dict[str, tuple[Control, ...]]:
         "crop_water_demand": (
             Control("efficiency", "Irrigation efficiency", "number", min=0.3, max=1.0, default=0.7,
                     argument="efficiency"),
+        ),
+        # the advanced steps (aquascope.advanced)
+        "change_points": (
+            Control("series", "Series tested", "choice", choices=("annual_max", "annual_mean"), default="annual_max",
+                    argument="series", help="the annual maxima (floods) or the annual means (the water balance)"),
+            Control("alpha", "Significance level", "choice", choices=(0.01, 0.05, 0.1), default=0.05,
+                    argument="alpha"),
+        ),
+        "nonstationary_flood": (
+            _return_period(),
+            Control("horizon_year", "Horizon year for the trend", "integer", min=2026, max=2075, default=2050,
+                    argument="horizon_year", help="beyond the record the fitted trend is extended, not forecast"),
+        ),
+        "pot_flood": (
+            _return_period(),
+            Control("events_per_year", "Peaks a year the threshold aims for", "number", min=0.5, max=6.0, default=2.0,
+                    argument="events_per_year"),
+            Control("min_separation_days", "Days between independent peaks", "integer", min=1, max=60, default=7,
+                    argument="min_separation_days", help="a slow, large river needs a longer separation"),
+        ),
+        "catchment_model": (
+            Control("years", "Years of record to calibrate and validate on", "integer", min=10, max=40, default=20,
+                    argument="years", help="split in two: the first half calibrates, the second validates"),
+            Control("snow", "Snow store", "choice", choices=("auto", "true", "false"), default="auto",
+                    argument="snow", help="auto adds it when a tenth of the precipitation falls below freezing"),
+        ),
+        "climate_projection": (
+            Control("return_period", "Flood and wettest-day return period (years)", "choice",
+                    choices=(5, 10, 20, 50, 100), default=20, argument="return_period"),
+        ),
+        "regional_flood": (
+            Control("radius_km", "Radius of the region (km)", "number", min=20, max=250, default=75,
+                    argument="radius_km"),
         ),
     }
 
@@ -208,6 +249,25 @@ def _coerce(control: Control, value: Any) -> Any:
         if isinstance(value, str) and value.strip().lower() in ("true", "false", "yes", "no", "on", "off"):
             return value.strip().lower() in ("true", "yes", "on")
         raise ValueError(f"{label} is yes or no, not {value!r}")
+    if control.type == "years":
+        items = value if isinstance(value, (list, tuple)) else str(value).replace(";", ",").split(",")
+        years: list[int] = []
+        for item in items:
+            text = str(item).strip()
+            if not text:
+                continue
+            try:
+                year = int(float(text))
+            except ValueError:
+                raise ValueError(f"{label}: {text!r} is not a year") from None
+            if not 1800 <= year <= 2100:
+                raise ValueError(f"{label}: {year} is not a plausible year")
+            years.append(year)
+        if not years:
+            if control.optional:
+                return None
+            raise ValueError(f"{label} needs at least one year")
+        return sorted(set(years))
     if control.type == "choice":
         for choice in control.choices:
             if isinstance(choice, str) and isinstance(value, str) and value.strip().lower() == choice.lower():

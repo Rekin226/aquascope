@@ -801,6 +801,28 @@ def _record(step: Step, step_id: str, payload: Any, ok: bool, error: str | None,
     }
 
 
+def _run_fallback(fstep: Step, fid: str, tools: dict[str, Callable[..., Any]], say: Callable[[dict[str, Any]], None],
+                  why: str) -> dict[str, Any]:
+    """Run a step's ``fallback: {step: ...}`` once and record it (with its own gates)."""
+    from aquascope.gates import evaluate
+
+    fargs = ", ".join(f"{k}={v!r}" for k, v in fstep.arguments.items())
+    say({"role": "runner", "step": fid, "event": "fallback", "detail": f"{why}; running {fstep.tool}({fargs})"})
+    ffunc = tools.get(fstep.tool)
+    if ffunc is None:
+        fpayload, fok, ferror = None, False, f"unknown tool {fstep.tool!r}"
+    else:
+        fpayload, fok, ferror = _run_tool(ffunc, dict(fstep.arguments))
+    fgates = evaluate(fstep.expects, fpayload)
+    frec = _record(fstep, fid, fpayload, fok, ferror, fgates)
+    say({"role": "runner", "step": fid, "event": "done" if fok else "error",
+         "detail": ferror or _summarise(fpayload)})
+    for g in fgates:
+        say({"role": "reviewer", "step": fid, "event": "gate",
+             "detail": f"{g['check']}: {'passed' if g['passed'] else 'FAILED'}, {g['detail']}"})
+    return frec
+
+
 def run_study(
     study: Study | str | Path,
     *,
@@ -868,9 +890,25 @@ def run_study(
             say({"role": "runner", "step": step_id, "event": "skipped", "detail": detail})
             rec = _record(step, step_id, None, False, detail, [])
             rec["skipped"] = True
+            fb = step.fallback
+            # A fallback step that needs nothing that failed still runs: it is the plan's answer for a step
+            # that cannot deliver, whether its gate failed or its input did (climate factors when the
+            # catchment model did not validate).
+            if isinstance(fb, dict) and isinstance(fb.get("step"), dict):
+                fstep = Step.from_dict(fb["step"])
+                if all(_established(done.get(d)) for d in _referenced_steps(fstep)):
+                    frec = _run_fallback(fstep, f"{step_id}.fallback", tools, say, detail)
+                    rec["fallback_used"] = True
+                    rec["fallback"] = frec
+                    if frec["ok"] and frec["gates_passed"]:
+                        rec.update({"skipped": False, "ok": True, "gates_passed": False,
+                                    "failed_reason": f"{detail}; its fallback {fstep.tool} ran instead"})
             run.results.append(rec)
-            run.ok = False
+            if not _established(rec):
+                run.ok = False
             done[step_id] = rec
+            if write_back and rec.get("fallback_used"):
+                study.results[step_id] = _result_entry(rec)
             continue
 
         old = reusable.get(step_id)
@@ -935,22 +973,8 @@ def run_study(
             fb = step.fallback
             if isinstance(fb, dict) and isinstance(fb.get("step"), dict):
                 fstep = Step.from_dict(fb["step"])
-                fid = f"{step_id}.fallback"
-                fargs = ", ".join(f"{k}={v!r}" for k, v in fstep.arguments.items())
-                say({"role": "runner", "step": fid, "event": "fallback",
-                     "detail": f"gate failed ({reason}); running {fstep.tool}({fargs})"})
-                ffunc = tools.get(fstep.tool)
-                if ffunc is None:
-                    fpayload, fok, ferror = None, False, f"unknown tool {fstep.tool!r}"
-                else:
-                    fpayload, fok, ferror = _run_tool(ffunc, dict(fstep.arguments))
-                fgates = evaluate(fstep.expects, fpayload)
-                frec = _record(fstep, fid, fpayload, fok, ferror, fgates)
-                say({"role": "runner", "step": fid, "event": "done" if fok else "error",
-                     "detail": ferror or _summarise(fpayload)})
-                for g in fgates:
-                    say({"role": "reviewer", "step": fid, "event": "gate",
-                         "detail": f"{g['check']}: {'passed' if g['passed'] else 'FAILED'}, {g['detail']}"})
+                frec = _run_fallback(fstep, f"{step_id}.fallback", tools, say, f"gate failed ({reason})")
+                fok, ferror = frec["ok"], frec["error"]
                 rec["fallback_used"] = True
                 rec["fallback"] = frec
                 if not fok or not frec["gates_passed"]:

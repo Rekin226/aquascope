@@ -202,14 +202,14 @@ def test_the_usgs_collector_passes_the_statistic_code_on_the_keyless_path():
 
         def get_json(self, url, params=None, **kw):
             self.calls.append((url, params))
-            return {"value": {"timeSeries": []}}
+            return {"features": [], "links": []}
 
     client = FakeClient()
     USGSCollector(api_key="DEMO_KEY", client=client).fetch_raw(station_id="USGS-01646500", days=10, collection="daily",
                                                               parameter="00010,00400", statCd="00003")
     url, params = client.calls[0]
-    assert url.endswith("/nwis/dv/") and params["statCd"] == "00003" and params["parameterCd"] == "00010,00400"
-    assert params["sites"] == "01646500"
+    assert url == "collections/daily/items" and params["statistic_id"] == "00003"
+    assert params["parameter_code"] == "00010,00400" and params["monitoring_location_id"] == "USGS-01646500"
 
 
 # ── studies, gates, the Analyst ─────────────────────────────────────────────

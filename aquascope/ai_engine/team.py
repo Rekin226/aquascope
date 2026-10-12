@@ -78,6 +78,33 @@ KEYWORDS: dict[str, list[str]] = {
         r"barley|alfalfa|onion|cabbage|pepper|banana|coffee|tea|sorghum|groundnut|sugar ?beet)\b",
         r"crop water|water requirement|planting|growing season",
     ],
+    # The advanced studies (aquascope.advanced): each wins only on the words that name it, so a plain design-flow
+    # question stays with flood_risk.
+    "flood_change": [
+        r"\bflood",
+        r"(flood|peak|annual max)[^.?!]{0,40}(worse|increas|decreas|chang|trend|more (frequent|often|severe)|bigger|"
+        r"larger|higher)|(worse|increas|decreas|trend|more frequent|bigger|larger)[^.?!]{0,40}(flood|peak)",
+        r"annual max(ima|imum|imums)?\b",
+        r"getting (worse|bigger|larger|higher)|worsen|(?<!climate )chang(e|es|ed|ing)\b|increas|decreas|"
+        r"more (frequent|often|severe)|\btrend",
+        r"non-?stationar|step change|change ?points?|regime shift|shift(ed)? in",
+        r"over (the )?(years|time|decades|record)|since (the )?\d{4}|through time",
+    ],
+    "climate_change": [
+        r"climate change|global warming|changing climate",
+        r"\bfuture\b|by (the )?20[3-9]\d|in 20[3-9]\d|\b2050\b|mid-century|coming decades",
+        r"\bcmip|projection|projected|\bssp\d|\brcp\s*\d|climate model|emission",
+        r"\baffect|\bimpact|consequence",
+        r"(climate change|warming)[^.?!]{0,60}(flood|flow|river|rain|drought|water)|"
+        r"(flood|flow|river|drought|water)[^.?!]{0,60}(climate change|warming)",
+    ],
+    "catchment_response": [
+        r"what if|what would happen|what happens (to|if)|sensitiv",
+        r"(less|more|reduced|increased|lower|higher) (rain|rainfall|precipitation)|drier|wetter|"
+        r"(rain|rainfall|precipitation) (drops|falls|decreases|increases|changes)",
+        r"\bgr4j\b|rainfall-?runoff|catchment model|model (the|this) (catchment|river|basin)|simulat|calibrat",
+        r"\d+\s*(°|deg(rees)?)\s*c?\b.{0,12}warm|warmer by|\bwarm(er|ing)\b",
+    ],
 }
 
 _RETURN_PERIOD = re.compile(r"(\d{1,4})\s*-?\s*(?:year|yr)\b", re.I)
@@ -425,6 +452,24 @@ def intake_hints(text: str, playbook: str | None = None) -> dict[str, Any]:
         playbook == "groundwater_decline" or re.search(r"ground ?water|aquifer|well", text, re.I)
     ):
         out["attribute_cause"] = True
+    # the "what if" of a catchment question: a rainfall change in percent and a warming in degrees
+    wet = r"(?:rain|rainfall|precipitation)"
+    m = (re.search(rf"{wet}\s+(drops?|falls?|decreases?|declines?|reduces?|is reduced|goes down|increases?|rises?|"
+                   rf"goes up)\s+(?:by\s+)?(\d+(?:\.\d+)?)\s*(?:%|percent)", text, re.I)
+         or re.search(rf"(\d+(?:\.\d+)?)\s*(?:%|percent)\s+(less|more|lower|higher|fewer)\s+{wet}", text, re.I))
+    if m:
+        a, b = m.group(1), m.group(2)
+        num, word = (float(b), a) if a[0].isalpha() else (float(a), b)
+        down = re.match(r"drop|fall|decreas|declin|reduc|down|less|lower|fewer", word, re.I)
+        out["dp_pct"] = -num if down else num
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:°\s*c?|deg(?:rees?)?(?:\s*c(?:elsius)?)?|c\b)\s*(?:of\s+)?(?:warmer|"
+                  r"warming|hotter|higher)", text, re.I) or re.search(
+        r"warm(?:er|s|ing)?\s+(?:by\s+)?(\d+(?:\.\d+)?)\s*(?:°|deg)", text, re.I)
+    if m:
+        out["dt_c"] = float(m.group(1))
+    m = re.search(r"\bby\s+(20[3-9]\d|2100)\b|\bin\s+(20[3-9]\d)\b", text)
+    if m and playbook in ("flood_change", "climate_change"):
+        out["horizon_year"] = int(m.group(1) or m.group(2))
     if re.search(r"\bq95\b|low[- ]flow|dry season|minimum flow", text, re.I):
         out["statistic"] = "Q95"
     elif re.search(r"\bq05\b|high[- ]flow|peak", text, re.I) and playbook == "ungauged_flow":
@@ -688,12 +733,35 @@ def _sentences_for(tool: str, payload: dict[str, Any], study: Study) -> list[str
                        f"reference evapotranspiration {_fmt(cl.get('et0_mm_per_year'))} mm per year, aridity index "
                        f"{_fmt(cl.get('aridity_index'), 2)} ({cl.get('aridity_class')}).")
         g = payload.get("glofas") or {}
-        if g:
+        if g and (g.get("comparable") is False or (g.get("stats") or {}).get("mean") is None):
+            out.append("GloFAS comparison not established: "
+                       + str(g.get("note") or "model discharge statistics unavailable").rstrip(".") + ".")
+        elif g:
             mean = _fmt((g.get("stats") or {}).get("mean"))
             s = f"GloFAS modelled discharge (grid cell, indicative): mean {mean} m3/s"
             fits = (g.get("ffa") or {}).get("fits") or {}
             gev = fits.get("gev_lmoments") or {}
             idx = _rp_index(g, params.get("return_period") or 100)
+            if gev.get("q") and idx is not None:
+                s += f", {params.get('return_period') or 100}-year GEV {_fmt(gev['q'][idx])} m3/s"
+            out.append(s + ".")
+    elif tool == "reach_record":
+        if payload.get("error"):
+            out.append("GEOGLOWS reach record not used: " + str(payload["error"]).rstrip(".") + ".")
+        else:
+            snap = payload.get("snap") or {}
+            where = (f", {_fmt(snap.get('distance_m'))} m from the site" if snap.get("distance_m") is not None
+                     else "")
+            st = payload.get("stats") or {}
+            s = (f"GEOGLOWS v2 simulated discharge for river reach {payload.get('river_id')}{where} (MODELLED, "
+                 f"not measured; {payload.get('start')} to {payload.get('end')}, {_fmt(payload.get('years'))} "
+                 f"years): mean {_fmt(st.get('mean'))} m3/s")
+            fdc = payload.get("fdc") or {}
+            if fdc.get("q95") is not None:
+                s += f", Q95 {_fmt(fdc['q95'])} m3/s, Q10 {_fmt(fdc.get('q10'))} m3/s"
+            fits = (payload.get("ffa") or {}).get("fits") or {}
+            gev = fits.get("gev_lmoments") or {}
+            idx = _rp_index(payload, params.get("return_period") or 100)
             if gev.get("q") and idx is not None:
                 s += f", {params.get('return_period') or 100}-year GEV {_fmt(gev['q'][idx])} m3/s"
             out.append(s + ".")
@@ -1498,6 +1566,10 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
+#: How far from the site the reconnaissance fetches the record of a gauge whose span the catalog does not know.
+PROBE_KM = 10.0
+
+
 def _scout(site: dict[str, float], kind: str | None, intake: dict[str, Any],
            say: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
     rp = intake.get("return_period")
@@ -1512,10 +1584,17 @@ def _scout(site: dict[str, float], kind: str | None, intake: dict[str, Any],
         except pbk.PlaybookError:
             problem = kind
     try:
+        import inspect
+
         from aquascope.explore import assess_site
 
-        recon = assess_site(site["lat"], site["lon"], problem=problem,
-                            return_period=float(rp) if isinstance(rp, (int, float)) else None)
+        kw: dict[str, Any] = {"problem": problem, "return_period": float(rp) if isinstance(rp, (int, float)) else None}
+        try:
+            if "probe_km" in inspect.signature(assess_site).parameters:
+                kw["probe_km"] = PROBE_KM      # fetch the record of an unspanned gauge near the site
+        except (TypeError, ValueError):
+            pass
+        recon = assess_site(site["lat"], site["lon"], **kw)
     except Exception as exc:  # noqa: BLE001 - no reconnaissance is a fact the plan has to live with
         recon = {"point": dict(site), "stations": [], "catchment": {},
                  "context": {"years_by_variable": {}, "resolution_by_variable": {}, "ungauged": True},

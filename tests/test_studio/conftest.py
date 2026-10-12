@@ -77,10 +77,21 @@ SUPPLY = {"mode": "gauged", "source": "uk_ea", "station_id": "3400TH", "years": 
 
 FLOW_FDC = {**FLOW, "fdc": {"q95": 12.3, "q50": 38.7, "q10": 141.0}}
 
+# aquascope.rivers.reach_summary at the site: the GEOGLOWS v2 reach and its simulated record (#516).
+REACH = {"river_id": 230399750, "modelled": True, "label": "modelled", "unit": "m3/s", "variable": "discharge",
+         "start": "1940-01-01", "end": "2026-09-30", "years": 86.7,
+         "snap": {"snapped": True, "river_id": 230399750, "distance_m": 18.0},
+         "stats": {"mean": 70.1, "max": 690.0}, "fdc": {"q95": 14.0, "q50": 48.0, "q10": 160.0},
+         "ffa": {"n_years": 86, "return_periods": [2, 5, 10, 25, 50, 100],
+                 "fits": {"gev_lmoments": {"q": [300, 390, 450, 520, 570, 620],
+                                           "q_by_T": {"2": 300, "5": 390, "10": 450, "25": 520, "50": 570,
+                                                      "100": 620}}}},
+         "attribution": "GEOGLOWS v2, CC BY 4.0", "licence": "CC BY 4.0"}
+
 PAYLOADS: dict[str, Any] = {
     "describe_catchment": CATCHMENT, "analyze_station": FLOW_FDC, "flood_frequency": FLOW, "similar_basins": DONORS,
     "regionalize_signatures": SIGNATURES, "anywhere": ANYWHERE, "drought_indices": DROUGHT,
-    "low_flow_context": LOW_FLOW, "supply_reliability": SUPPLY,
+    "low_flow_context": LOW_FLOW, "supply_reliability": SUPPLY, "reach_record": REACH,
     "get_timeseries": {"source": "uk_ea", "station_id": "3400TH", "unit": "m3/s", "n_points": 120,
                        "resample": "M", "years": 10.0, "series": {"t": ["2016-01-31", "2016-02-29"],
                                                                    "v": [40.0, 55.0]}},

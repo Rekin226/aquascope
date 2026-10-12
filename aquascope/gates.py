@@ -48,6 +48,10 @@ CHECKS: dict[str, str] = {
                        "in the series the test was run on",
     "cross_check_ratio": "the number at path against reference (a number, or a dict by return period), as a ratio "
                          "within 1 +/- value; skipped when the compared block says comparable: false",
+    "stationary": "the change-point verdict at path (default: stationary) is true: no significant step change or "
+                  "trend in the series the test was run on",
+    "min_models": "at least value climate models answered (the count at path, default: n_models)",
+    "min_sites": "at least value gauges were studied together (the count at path, default: n_pooled)",
 }
 
 _DEFAULT_PATH = {
@@ -59,6 +63,9 @@ _DEFAULT_PATH = {
     "fit_envelopes_max": "ffa",
     "sampling_density": "sampling",
     "trend_on_series": "ffa.amax_trend",
+    "stationary": "stationary",
+    "min_models": "n_models",
+    "min_sites": "n_pooled",
 }
 
 _MISSING = object()
@@ -339,6 +346,25 @@ def _run_check(name: str, gate: dict[str, Any], payload: Any) -> tuple[bool | No
         ok = count >= need
         return ok, f"{count:g} donors, {need:g} needed" + ("" if ok else ": too few for a transfer")
 
+    if name == "stationary":
+        got = resolve_path(payload, path)
+        if not isinstance(got, bool):
+            return False, f"no change-point verdict at {path!r}"
+        verdict = payload.get("verdict") if isinstance(payload, dict) else None
+        if got:
+            return True, str(verdict or "no significant step change or trend")
+        return False, str(verdict or "a significant step change or trend") + ": the record is not one sample"
+
+    if name in ("min_models", "min_sites"):
+        got = resolve_path(payload, path)
+        need = _number(value)
+        count = float(len(got)) if isinstance(got, (list, tuple, dict)) else _number(got)
+        what = "climate models" if name == "min_models" else "gauges"
+        if count is None or need is None:
+            return False, f"no count of {what} at {path!r}"
+        ok = count >= need
+        return ok, f"{count:g} {what}, {need:g} needed" + ("" if ok else ": too few")
+
     if name == "status_is":
         got = resolve_path(payload, path)
         allowed = [str(v) for v in value] if isinstance(value, (list, tuple)) else [str(value)]
@@ -457,8 +483,9 @@ def _run_check(name: str, gate: dict[str, Any], payload: Any) -> tuple[bool | No
         ratio = a / b
         ok = (1.0 / (1.0 + tol)) <= ratio <= (1.0 + tol)
         return ok, (
-            f"{_fmt(a)} against the reference {_fmt(b)}" + (f" {note}" if note else "") + f": ratio {ratio:.2f} "
-            f"(within a factor {1 + tol:.2f} allowed)" + ("" if ok else ": the cross-check disagrees")
+            f"{_fmt(a)} against the reference {_fmt(b)}" + (f" {note}" if note else "") + f": ratio {ratio:.2f}, "
+            + ("within" if ok else "outside") + f" the allowed factor of {1 + tol:.2f}"
+            + ("" if ok else ": the cross-check disagrees")
         )
 
     return False, f"unknown check {name!r}; known: {', '.join(CHECKS)}"
@@ -475,6 +502,8 @@ _PATH_WORDS = {
     "climate": "climate data", "glofas": "GloFAS discharge", "sgi": "a groundwater index", "score": "a score",
     "gross_irrigation_mm": "an irrigation depth", "peak_month_m3s": "a peak-month flow", "months": "a season",
     "n_records": "some rows", "k": "donor gauges",
+    "pettitt": "a step-change test", "nonstationary": "a nonstationary fit", "gpd": "a peaks-over-threshold fit",
+    "ensemble": "a model ensemble", "regional_frequency": "a regional pooled curve",
 }
 
 #: The tolerance a check uses when the gate names none (as in :func:`_run_check`).
@@ -555,6 +584,12 @@ def plain(gate: dict[str, Any] | Any) -> str:
         series = "flood peaks" if "amax" in str(gate.get("path") or "ffa.amax_trend") else "series"
         return (f"the {series} must show no significant trend (at the {_pct(v)} level)" if v is not None
                 else f"the {series} must show no significant trend")
+    if name == "stationary":
+        return "the record must show no significant step change or trend"
+    if name == "min_models":
+        return f"needs at least {_num(value)} climate models"
+    if name == "min_sites":
+        return f"needs at least {_num(value)} gauges pooled together"
     if name == "cross_check_ratio":
         return (f"must agree with the earlier estimate within a factor of {1 + v:g}" if v is not None
                 else "must agree with the earlier estimate") + at_t

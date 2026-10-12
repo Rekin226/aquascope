@@ -13,11 +13,12 @@ No API key required (open data, unauthenticated).
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from aquascope.collectors.base import BaseCollector
+from aquascope.collectors.base import BaseCollector, CollectorError
 from aquascope.schemas.station import Station, in_bbox
 from aquascope.schemas.water_data import (
     DataSource,
@@ -50,6 +51,8 @@ MAPPED_OBSERVED_PROPERTY_MEASURE_CODE = {
     "rainfall": "rainfall",
     "gw": "groundwaterLevel"
 }
+#: The observed-property token of a measure id, between hyphens after the station part.
+_MEASURE_PROPERTY = re.compile(r"-(" + "|".join(MAPPED_OBSERVED_PROPERTY_MEASURE_CODE) + r")-")
 COLLECTION_PERIOD_VALUES = {
     "15min": 900,
     "daily": 86400
@@ -346,7 +349,7 @@ class UKEACollector(BaseCollector):
                 limit=limit,
                 max_items=max_items,
             )
-            if station_meta is None:
+            if not station_meta:
                 return []
 
             if collection:
@@ -370,9 +373,6 @@ class UKEACollector(BaseCollector):
                     limit=limit,
                     max_items=max_items,
                 )
-                if paginated_items is None:
-                    return []
-
                 all_items.extend(paginated_items)
 
             return all_items
@@ -402,9 +402,6 @@ class UKEACollector(BaseCollector):
             limit=limit,
             max_items=max_items,
         )
-        if paginated_items is None:
-            return []
-
         all_items.extend(paginated_items)
         if measure:
             all_items[0]["observedProperty"] = observed_property_metadata
@@ -419,7 +416,7 @@ class UKEACollector(BaseCollector):
         station_meta: dict | None,
         limit: int,
         max_items: int | None = None,
-    ) -> list[dict] | None:
+    ) -> list[dict]:
         """Fetch and normalise paginated reading items for the requested query."""
         all_items: list[dict] = []
         offset = 0
@@ -428,9 +425,21 @@ class UKEACollector(BaseCollector):
             params["_offset"] = offset
             try:
                 data = client.get_json(path, params=params)
+            except CollectorError:
+                raise
             except Exception as exc:
-                logger.error("UKEA fetch failed: %s", exc)
-                return None
+                logger.warning("UKEA fetch failed: %s", exc)
+                target_url = (
+                    path
+                    if path.startswith(("http://", "https://"))
+                    else f"{getattr(client, 'base_url', UKEA_BASE).rstrip('/')}/{path.lstrip('/')}"
+                )
+                raise CollectorError(
+                    f"UKEA fetch failed for {target_url}: {exc}",
+                    source="uk_ea",
+                    url=target_url,
+                    cause=exc,
+                ) from exc
 
             page_items = data.get("items", [])
             if not page_items:
@@ -665,7 +674,10 @@ class UKEACollector(BaseCollector):
 
         try:
             data = self.client.get_json("id/stations.json", params=params)
-        except Exception as exc:
+        except (RuntimeError, ValueError) as exc:
+            # Station metadata enriches reading records with station name, river,
+            # and coordinates, but is optional for reading queries: if the metadata
+            # endpoint fails, warn and continue so readings can still be returned.
             logger.warning("Failed to fetch UKEA station metadata: %s", exc)
             return None
 
@@ -697,7 +709,11 @@ class UKEACollector(BaseCollector):
         if not measure:
             return None
 
-        # Since the SUID is based on GUID style identifiers, the SUID is always the first 36 characters of the measure ID.
+        # The SUID is a GUID, the first 36 characters of the measure ID. A sub-site keeps its suffix
+        # ("<suid>_w1"): the station part runs up to the observed-property token.
+        match = _MEASURE_PROPERTY.search(measure, 36)
+        if match:
+            return measure[:match.start()]
         return measure[:36]
 
     @staticmethod
@@ -719,9 +735,14 @@ class UKEACollector(BaseCollector):
         if not measure:
             return None
 
-        # The observedProperty can be extracted from the measure's id. It appears after the station SUID.
-        measure_without_suid = measure[37:]
-        observed_property = measure_without_suid.split("-", 1)[0]
+        # The observedProperty sits after the station part of the id: "<suid>-flow-m-86400-m3s-qualified".
+        # The station part is a 36-character SUID, sometimes with a sub-site suffix ("<suid>_w1",
+        # "<suid>_2879_w2TH", "<suid>_TL31_181"), so find the first known property token after the SUID
+        # rather than cutting at a fixed offset, which read "w1" and rejected those sites' measures.
+        match = _MEASURE_PROPERTY.search(measure, 36)
+        if match:
+            return match.group(1)
+        observed_property = measure[37:].split("-", 1)[0]
         return observed_property or None
 
     @staticmethod

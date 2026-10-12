@@ -155,20 +155,21 @@ def test_narrate_replaces_sections_after_the_number_check(studio_factory):
         "answer": "About 520 m3/s at Kingston (uk_ea 3400TH), 90 % band 420 to 650 m3/s.",
         "references": "not allowed", "nope": "unknown section", "limitations": "   ",
     }, source="device")
-    assert r.kind == "report" and r.payload["dropped"] == 2 and r.payload["ignored"] == ["references", "nope"]
+    assert r.kind == "report" and r.payload["dropped"] == 4
+    assert r.payload["ignored"] == ["answer", "references", "nope"]
     after = {x["id"]: x["text"] for x in ws.report["sections"]}
     assert after["summary"] == ("The 100-year flow at Kingston (uk_ea 3400TH) is 520 m3/s by GEV, 548 m3/s by LP3. "
                                 "The record runs 39.9 years.")
-    assert after["results-s3"] == "- GEV gives 520 m3/s (90 % band 420 to 650 m3/s).\n- LP3 gives 548 m3/s."
+    assert after["results-s3"] == "- LP3 gives 548 m3/s."
     assert after["problem"] == before["problem"] and after["limitations"] == before["limitations"]
-    assert "About 520" in ws.report["answer"] and "About 520" in r.text and "(established)" in r.text
+    assert "About 520" not in ws.report["answer"] and "(established)" in r.text
     written_by = ws.report["written_by"]
     assert written_by["summary"] == "device" and written_by["results-s3"] == "device"
-    assert written_by["answer"] == "device"
+    assert written_by["answer"] == "template"
     assert written_by["problem"] == "template" and ws.report["footer"]["written_by"] == written_by
     assert r.payload["written_by"] == written_by
     md = to_markdown(ws)
-    assert "device wrote answer, summary, results-s3" in md
+    assert "device wrote summary, results-s3" in md
     assert ws.report["critique"]["checks"] and ws.report["not_established"] == []
     assert any(e["event"] == "dropped" for e in ws.events if e["role"] == "critic")
     assert len([e for e in ws.events if e["event"] == "deliverables_unavailable"]) == events + 1, "rebuilt"
@@ -184,8 +185,8 @@ def test_narrate_rebuilds_the_deliverables_and_keeps_recommendations_as_a_list(s
     pkg.build = lambda ws: built.append(ws.id) or []
     monkeypatch.setitem(sys.modules, "aquascope.studio.deliverables", pkg)
     r = s.narrate([{"id": "recommendations", "text": "- Adopt 520 m3/s.\n- Quote the 420 to 650 m3/s band."}])
-    assert r.kind == "report" and r.payload["dropped"] == 0 and built == [s.workspace.id]
-    assert s.workspace.report["recommendations"] == ["Adopt 520 m3/s.", "Quote the 420 to 650 m3/s band."]
+    assert r.kind == "report" and r.payload["dropped"] == 1 and built == [s.workspace.id]
+    assert s.workspace.report["recommendations"] == ["Adopt 520 m3/s."]
     assert any(e["event"] == "deliverables" for e in s.workspace.events)
 
 

@@ -117,3 +117,33 @@ class TestNormalise:
             "temperature_min_c", "relative_humidity_pct",
             "solar_radiation_mj_m2", "wind_speed_ms", "pan_evaporation_mm",
         }
+
+
+class TestStationType:
+    """CODIS answers empty (not an error) when asked with the wrong stn_type; the 2026-09-23 harvest got 0 of 15."""
+
+    @pytest.mark.parametrize(("sid", "expected"), [
+        ("466920", "cwb"), ("C0A520", "auto_C0"), ("C1A630", "auto_C1"),
+        ("B2N890", "agr"), ("A2C560", "agr"), ("C2A540", "agr"), ("CAG100", "agr"), ("V2K620", "agr"),
+        (" c0a520 ", "auto_C0"),
+    ])
+    def test_type_follows_from_the_id(self, sid, expected):
+        from aquascope.collectors.taiwan_cwa import codis_station_type
+
+        assert codis_station_type(sid) == expected
+
+    def test_each_station_is_asked_with_its_own_type(self):
+        col = _collector()
+        col.client.post_json.side_effect = _post_json
+        col.fetch_raw(station_ids=["466920", "C0A520", "B2N890"], start="2024-03-01", end="2024-03-03")
+        forms = [c.kwargs.get("form") or c.args[1] for c in col.client.post_json.call_args_list]
+        assert [(f["stn_ID"], f["stn_type"]) for f in forms] == [
+            ("466920", "cwb"), ("C0A520", "auto_C0"), ("B2N890", "agr"),
+        ]
+
+    def test_an_explicit_type_still_wins(self):
+        col = _collector()
+        col.client.post_json.side_effect = _post_json
+        col.fetch_raw(station_ids=["C0A520"], start="2024-03-01", end="2024-03-03", stn_type="cwb")
+        form = col.client.post_json.call_args.kwargs.get("form") or col.client.post_json.call_args.args[1]
+        assert form["stn_type"] == "cwb"

@@ -1,0 +1,74 @@
+{
+  "source_revision": "f7ea193",
+  "status": "done",
+  "original_files_unchanged": true,
+  "steps": [
+    {
+      "id": "s1",
+      "ok": true,
+      "tool": "describe_catchment",
+      "error": null
+    },
+    {
+      "id": "s2",
+      "ok": true,
+      "tool": "analyze_station",
+      "error": null
+    },
+    {
+      "id": "s3",
+      "ok": true,
+      "tool": "flood_frequency",
+      "error": null
+    },
+    {
+      "id": "s4",
+      "ok": true,
+      "tool": "anywhere",
+      "error": null
+    }
+  ],
+  "inputs": [
+    {
+      "step": "s2",
+      "rows": 14607,
+      "snapshot": "sha256:b295b4d5bedc5c63620ad46201a056af83e222ec222c07f6d4fd6c988c2887ec"
+    },
+    {
+      "step": "s3",
+      "rows": 14607,
+      "snapshot": "sha256:b295b4d5bedc5c63620ad46201a056af83e222ec222c07f6d4fd6c988c2887ec"
+    }
+  ],
+  "report_grade": "established",
+  "artifact_count": 32,
+  "date": "2026-09-27",
+  "all_exported_input_hashes_verified": true,
+  "new_result": {
+    "value": 583.2,
+    "unit": "m3/s",
+    "band": null,
+    "grade": "established"
+  },
+  "new_input": {
+    "source": "usgs",
+    "station_id": "USGS-01013500",
+    "snapshot": "sha256:b295b4d5bedc5c63620ad46201a056af83e222ec222c07f6d4fd6c988c2887ec",
+    "variable": "discharge",
+    "unit": "m3/s",
+    "start": "1986-08-24",
+    "end": "2026-08-22",
+    "observations": 14607,
+    "software_version": "0.19.0",
+    "software_revision": "f7ea193",
+    "archive_revision": null
+  },
+  "original_browser_result": {
+    "value": 463.9,
+    "observations": 37538
+  },
+  "limitations": [
+    "Native data retrieval fell back to the 1986\u20132026 mirror (14,607 observations). This is not proof of full-history native retrieval.",
+    "Maintainer execution, not independent hydrologist review."
+  ]
+}

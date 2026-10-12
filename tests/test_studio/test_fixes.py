@@ -149,7 +149,8 @@ def test_analyze_station_full_keeps_the_series_and_adds_the_band(monkeypatch):
     import aquascope.explore
 
     def fake(source, station_id, *, years=None, store=None, variable=None, period_start=None):
-        store["series"] = "S"
+        import pandas as pd
+        store["series"] = pd.Series([1.0], index=pd.to_datetime(["2000-01-01"]))
         return {"source": source, "station_id": station_id, "series": {"t": ["2000-01-01"], "v": [1.0]},
                 "fdc": {"exceedance": [1], "q": [1], "q95": 1, "q50": 1, "q10": 1},
                 "ffa": {"fits": {"gev_lmoments": {"q": [1]}}}}

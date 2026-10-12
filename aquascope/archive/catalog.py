@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 import unicodedata
 from datetime import date
@@ -20,6 +19,7 @@ from typing import Any
 import httpx
 
 from aquascope.schemas.station import in_bbox
+from aquascope.utils.cache import cache_dir  # noqa: F401 - re-exported, the name callers import from here
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +44,6 @@ def set_catalog(rows: list[dict[str, Any]] | None) -> None:
 
 def catalog_url(repo_id: str = DEFAULT_REPO_ID, filename: str = "stations.parquet") -> str:
     return f"https://huggingface.co/datasets/{repo_id}/resolve/main/{filename}"
-
-
-def cache_dir() -> Path:
-    root = os.environ.get("AQUASCOPE_CACHE_DIR") or os.path.join(os.path.expanduser("~"), ".cache", "aquascope")
-    path = Path(root)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 def _download(url: str, dest: Path, refresh: bool) -> Path:

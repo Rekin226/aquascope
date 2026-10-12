@@ -52,3 +52,7 @@ site/
 
 # Explorer build output
 dist-explorer/
+
+# macOS / cloud-sync duplicates ("poland_imgw 2.py"). They break ruff with
+# N999 Invalid module name long before anyone thinks to look for them.
+* [2-9].*

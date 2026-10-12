@@ -26,7 +26,7 @@ export async function requestAssess({ lat, lon, target, key = null, problem = nu
   const el = $(`${target}-assess-card`);
   if (!el) return null;
   setCard(el, "loading", {
-    message: state.workerReady ? "Checking what the record here supports…" : "Loading Python in your browser (about 15 MB, once)…",
+    message: state.workerReady ? "Checking what the record here supports…" : "Loading Python in your browser (about 30 MB, once)…",
   });
   try {
     const [area, pool] = await Promise.all([

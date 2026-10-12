@@ -1,0 +1,146 @@
+name: Model skill at the Archive gauges
+
+# The evidence ladder (#518). Once a month, every global model is scored against the Archive gauges whose
+# daily discharge is mirrored: GEOGLOWS v2 (its daily Zarr on AWS), NWM v3.0 retrospective (US gauges, AWS
+# Zarr) and Google GRRR (Flood Hub reanalysis, a Google Cloud bucket with no CORS, so only CI reads it).
+# GloFAS is scored live in the Explorer instead: Open-Meteo's free tier counts a long request as many calls.
+#
+# Publishes skill/model_skill.parquet and skill/manifest.json to the Archive dataset and writes nothing
+# outside skill/. A run takes the gauges never scored first, then the longest unscored; max_gauges caps it
+# and the manifest logs what was left for next month. A smoke run takes six gauges and never publishes.
+# Uses the same HF_TOKEN secret as the harvest. Locally: aquascope evidence build --archive DIR --out DIR.
+
+on:
+  schedule:
+    - cron: "41 5 3 * *"  # the 3rd of every month, 05:41 UTC (after the Monday harvest has settled)
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to the Hugging Face dataset (skill/ only)"
+        type: boolean
+        default: true
+      smoke:
+        description: "Smoke run: six gauges, never published"
+        type: boolean
+        default: false
+      max_gauges:
+        description: "Gauges scored this run (default 4000; the rest keep last month's rows)"
+        type: string
+        default: ""
+      nwm_max_columns:
+        description: "NWM reach chunks read this run (each is about 1 GB over ten years; default 24)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: model-skill
+  cancel-in-progress: false
+
+env:
+  HF_DATASET: Rekin226/aquascope-gauges
+
+jobs:
+  skill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_PROGRESS_BARS: "1"
+    steps:
+      - name: Note when the job started (its health record's duration)
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install aquascope with the archive extra and the Zarr codecs
+        run: python -m pip install -q ".[archive]" numcodecs zstandard
+
+      - name: Fetch the catalog, the discharge bundles, the station catchments and last month's table
+        run: |
+          python - <<'EOF'
+          import os
+          from huggingface_hub import snapshot_download
+          snapshot_download(os.environ["HF_DATASET"], repo_type="dataset", local_dir="archive",
+                            allow_patterns=["stations.parquet", "obs/discharge/*.parquet",
+                                            "basins/station_catchments.parquet", "skill/*"])
+          EOF
+          ls -la archive archive/obs/discharge || true
+
+      # The dispatch inputs reach the shell as environment variables, never pasted into the script.
+      - name: Score the models
+        env:
+          SMOKE: ${{ inputs.smoke }}
+          MAX_GAUGES: ${{ inputs.max_gauges }}
+          NWM_MAX_COLUMNS: ${{ inputs.nwm_max_columns }}
+        run: |
+          set -euo pipefail
+          ARGS=(--archive archive --out out/skill)
+          if [ "${SMOKE:-}" = "true" ]; then ARGS+=(--smoke); fi
+          if [ -n "${MAX_GAUGES:-}" ]; then
+            [[ "$MAX_GAUGES" =~ ^[0-9]+$ ]] || { echo "::error::max_gauges must be a whole number"; exit 1; }
+            ARGS+=(--max-gauges "$MAX_GAUGES")
+          fi
+          if [ -n "${NWM_MAX_COLUMNS:-}" ]; then
+            [[ "$NWM_MAX_COLUMNS" =~ ^[0-9]+$ ]] || { echo "::error::nwm_max_columns must be a whole number"; exit 1; }
+            ARGS+=(--nwm-max-columns "$NWM_MAX_COLUMNS")
+          fi
+          python -m aquascope.archive.skill build "${ARGS[@]}"
+
+      - name: Summary
+        if: always()
+        run: |
+          [ -f out/skill/manifest.json ] || exit 0
+          {
+            echo "### Model skill"
+            echo
+            python -c "import json; m = json.load(open('out/skill/manifest.json')); print(f\"- {m['n_rows']} rows, {m['n_graded']} graded, {m['n_gauges']} gauges ({m['scored_this_run']} scored this run)\"); print(f\"- rows by model: {m['rows_by_model']}\"); print(f\"- left out: {m['dropped']}\"); print(f\"- failures: {m['failures']}\"); print(f\"- smoke: {m['smoke']}\")"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: model-skill
+          path: out/skill
+          retention-days: 7
+
+      # A smoke run never publishes: its six gauges would replace the full table.
+      - name: Publish to Hugging Face (skill/ only)
+        id: publish
+        if: env.HF_TOKEN != '' && !inputs.smoke && (github.event_name == 'schedule' || inputs.publish)
+        run: python -m aquascope.archive.skill publish --out out/skill --repo "$HF_DATASET"
+
+      - name: Say why a smoke run was not published
+        if: inputs.smoke
+        run: echo "::notice::A smoke run scores six gauges and never publishes."
+
+      - name: Warn when HF_TOKEN is missing
+        if: env.HF_TOKEN == '' && !inputs.smoke && (github.event_name == 'schedule' || inputs.publish)
+        run: |
+          echo "::error::HF_TOKEN is not set, so nothing was published. Set the repository secret HF_TOKEN to a \
+          Hugging Face token with write access to $HF_DATASET."
+          exit 1
+
+      # Job health (#593): health/jobs/model-skill.json and health/jobs/index.json, written only under health/jobs/,
+      # and one job-health issue, opened or updated when a scheduled run fails and closed by the next good one. It
+      # runs whether the job passed or not, needs only the standard library to record and to file the issue, and
+      # never turns the job red itself.
+      - name: Job health
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PUBLISH: ${{ env.HF_TOKEN != '' && !inputs.smoke && (github.event_name == 'schedule' || inputs.publish) }}
+          ISSUE: ${{ github.event_name == 'schedule' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 .github/scripts/job_health.py report model-skill --root out/skill --status "${{ job.status }}" --require "publish=${{ steps.publish.outcome }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"

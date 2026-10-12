@@ -340,7 +340,7 @@ async function runAsk() {
   $("ask-stations").hidden = true;
   $("ask-log").innerHTML = "";
   $("ask-log").hidden = true;
-  askStatus(state.workerReady ? "Preparing…" : "Loading Python in your browser (about 15 MB, once)…");
+  askStatus(state.workerReady ? "Preparing…" : "Loading Python in your browser (about 30 MB, once)…");
   try {
     await ensureCatalogInWorker();
     askStatus(`Asking ${model} via ${provider}…`);

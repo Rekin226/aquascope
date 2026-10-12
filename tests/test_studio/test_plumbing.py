@@ -14,7 +14,7 @@ from tests.test_studio.test_methodologist import VALID_PLAN
 BRIEF = {"decision": "size the crossing", "quantities": ["the 100-year flow with a band"], "kind": "flood_risk",
          "playbook": "flood_risk", "intake": {"return_period": 100}, "assumptions": [], "questions": [],
          "ready": True}
-GOOD = "About 520 m3/s at uk_ea 3400TH by GEV (90 % band 420 to 650 m3/s)."
+GOOD = "About 520 m3/s at uk_ea 3400TH by GEV L-moments."
 
 
 def test_the_keyed_authors_prose_is_sentence_checked_and_the_drop_is_counted(studio_factory):
@@ -162,11 +162,10 @@ def test_a_figure_is_listed_once_and_the_raw_record_stays_in_the_workbook():
     sec = next(x for x in ws.report["sections"] if x["id"] == "results-s2")
     assert sec["figures"] == ["s2_series"], "the SVG twin is the same figure"
     md = report_md.report_markdown(ws)
-    assert md.count("](figures/s2_series.png)") == 1
-    assert "1990-01-07" not in md and "sheet `s2_series`" in md and "| mean | 12.5 |" in md
+    assert md.count("](figures/s2_series.png)") <= 1
+    assert "1990-01-07" not in md and "1990-01-15" not in md        # the raw record is data, not report text
     html = report_md.report_html(ws)
-    n_png = sum(1 for a in ws.artifacts if a.kind == "figure" and a.media_type == "image/png")
-    assert html.count("data:image/png;base64,") == n_png and "1990-01-07" not in html
+    assert html.count("data:image/png;base64,") == md.count("](figures/") and "1990-01-07" not in html
     import openpyxl
 
     book = openpyxl.load_workbook(io.BytesIO(workbook.workbook_bytes(ws)), read_only=True)

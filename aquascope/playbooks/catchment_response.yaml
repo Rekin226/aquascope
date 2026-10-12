@@ -1,0 +1,126 @@
+# What if the rain changes or it warms: how does the river respond? A calibrated catchment model as a laboratory.
+#
+# Evidence rules:
+# - calibrate and validate on different years (split-sample, Klemeš 1986); quote the validation skill with every
+#   scenario number, and do not quote scenarios from a model that fails its validation gate
+# - a scenario scales the observed weather (the same days, more or less rain, a warmer snow store); it is a
+#   sensitivity of this catchment, not a projection of its future
+id: catchment_response
+title: What if the rain or the temperature changes?
+problem: catchment_response
+variable: discharge
+description: Calibrate GR4J at a gauge, test it on years it never saw, and run "what if" changes in rainfall and temperature.
+intake:
+  - name: dp_pct
+    label: Change in rainfall (%)
+    type: float
+    default: -10
+    min: -50
+    max: 50
+  - name: dt_c
+    label: Warming (degrees C)
+    type: float
+    default: 2
+    min: 0
+    max: 6
+# What the study must know before it plans, asked one at a time as a pick list when the question leaves it open.
+checklist:
+  - field: dp_pct
+    ask: How should the rainfall change?
+    why: The model runs the same days with the rainfall scaled by this much.
+    options:
+      - value: -10
+        label: 10% less rain
+        match: \b(less|drier|drops?|falls?|reduc\w*|decreas\w*)\b
+      - value: -20
+        label: 20% less rain
+      - value: 10
+        label: 10% more rain
+        match: \b(more|wetter|increas\w*|rises?)\b
+      - value: 0
+        label: No change in rainfall
+  - field: dt_c
+    ask: How much warmer?
+    why: Warming raises evaporation and melts snow earlier; the model runs the same days this much warmer.
+    options:
+      - value: 2
+        label: 2 degrees warmer
+      - value: 1
+        label: 1 degree warmer
+      - value: 3
+        label: 3 degrees warmer
+      - value: 0
+        label: No warming
+branches:
+  - id: gauged
+    when:
+      - path: context.years_by_variable.discharge
+        op: ">="
+        value: 5
+    station_variable: discharge
+    rationale: >-
+      {{ station.years }} years of daily discharge at {{ station.name }} ({{ station.source }}
+      {{ station.station_id }}): enough to calibrate GR4J on ERA5 rainfall and evaporation, validate it on the
+      other half of the record, and run the rainfall and temperature changes asked for.
+    steps:
+      - id: s1
+        tool: describe_catchment
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: The catchment area turns the gauge's flow into a depth the model can balance against rainfall.
+        expects:
+          - check: not_empty
+            path: sub_basin
+          - check: max_area_km2
+            value: 10000
+            path: sub_basin.up_area
+      - id: s2
+        tool: catchment_model
+        method: gr4j_calibration
+        depends_on: [s1]
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          lat: "{{ station.latitude }}"
+          lon: "{{ station.longitude }}"
+          area_km2: "{{ result.s1.sub_basin.up_area }}"
+          scenarios:
+            - label: "rainfall {{ intake.dp_pct }}%"
+              dp_pct: "{{ intake.dp_pct }}"
+            - label: "{{ intake.dt_c }} degrees warmer"
+              dt_c: "{{ intake.dt_c }}"
+            - label: "rainfall {{ intake.dp_pct }}% and {{ intake.dt_c }} degrees warmer"
+              dp_pct: "{{ intake.dp_pct }}"
+              dt_c: "{{ intake.dt_c }}"
+        rationale: >-
+          GR4J (with a degree-day snow store where it snows) calibrated on one half of the last 20 years and
+          validated on the other, then run with the rainfall {{ intake.dp_pct }}% and {{ intake.dt_c }} degrees
+          warmer, alone and together: the change in mean flow, low flow (Q95), high flow and the annual maximum.
+        expects:
+          - check: kge_min
+            value: 0.5
+            path: validation.kge
+          - check: max_area_km2
+            value: 10000
+            path: area_km2
+declines:
+  - when:
+      - path: derived.discharge_years
+        op: "<"
+        value: 5
+    say: >-
+      A catchment model has to be calibrated and tested against observed flow, and there is no gauge with five years
+      of daily discharge within reach. Without one a "what if" would be a model nobody has checked. A regional
+      estimate of the flow regime (the ungauged flow study) is the honest alternative here.
+caveats:
+  - >-
+    A scenario scales the observed weather: the same days with more or less rain and a warmer snow store. It shows
+    how sensitive this catchment is, not what its future will be; the climate change study gives model futures.
+  - >-
+    A warming scenario raises reference evaporation by an assumed 3% per degree (a rough mid value of the FAO-56
+    sensitivity) and warms the snow store by the same degrees.
+citations:
+  - "Perrin, C., Michel, C., & Andréassian, V. (2003). Improvement of a parsimonious model for streamflow simulation. J. Hydrol., 279, 275-289."
+  - "Klemeš, V. (1986). Operational testing of hydrological simulation models. Hydrol. Sci. J., 31(1), 13-24."
+  - "Hock, R. (2003). Temperature index melt modelling in mountain areas. J. Hydrol., 282, 104-115."

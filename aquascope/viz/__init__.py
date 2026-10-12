@@ -17,77 +17,56 @@ Quick start::
 
 from __future__ import annotations
 
-# Diagnostics
-from aquascope.viz.diagnostics import (
-    diagnostic_panel,
-    double_mass_plot,
-    pp_plot,
-    qq_plot,
-    return_level_plot,
-)
+import importlib
+from typing import Any
 
-# Hydrology
-from aquascope.viz.hydro import (
-    plot_budyko,
-    plot_fdc,
-    plot_hydrograph,
-    plot_return_periods,
-    plot_spi_timeline,
-)
-
-# Water-quality
-from aquascope.viz.quality import (
-    plot_boxplot,
-    plot_eda_summary,
-    plot_heatmap,
-    plot_param_comparison,
-    plot_who_exceedances,
-)
-
-# Spatial
-from aquascope.viz.spatial import plot_station_map, plot_station_scatter
-
-# Styling
-from aquascope.viz.styles import AQUA_PALETTE, apply_aqua_style
-
-# Time-series & forecasting
-from aquascope.viz.timeseries import (
-    plot_forecast,
-    plot_multi_param,
-    plot_observed_vs_predicted,
-    plot_residuals,
-    plot_timeseries,
-)
-
-__all__ = [
+#: Each public name and the submodule that defines it. The submodules import matplotlib at their top, so they
+#: load on first use (PEP 562) and ``import aquascope.viz.publication`` stays free of matplotlib until a figure
+#: is drawn (the Studio imports it in the browser before the plotting package is there).
+_EXPORTS: dict[str, str] = {
     # diagnostics
-    "qq_plot",
-    "pp_plot",
-    "double_mass_plot",
-    "return_level_plot",
-    "diagnostic_panel",
+    "qq_plot": "diagnostics",
+    "pp_plot": "diagnostics",
+    "double_mass_plot": "diagnostics",
+    "return_level_plot": "diagnostics",
+    "diagnostic_panel": "diagnostics",
     # timeseries
-    "plot_timeseries",
-    "plot_multi_param",
-    "plot_forecast",
-    "plot_observed_vs_predicted",
-    "plot_residuals",
+    "plot_timeseries": "timeseries",
+    "plot_multi_param": "timeseries",
+    "plot_forecast": "timeseries",
+    "plot_observed_vs_predicted": "timeseries",
+    "plot_residuals": "timeseries",
     # quality
-    "plot_boxplot",
-    "plot_heatmap",
-    "plot_who_exceedances",
-    "plot_eda_summary",
-    "plot_param_comparison",
+    "plot_boxplot": "quality",
+    "plot_heatmap": "quality",
+    "plot_who_exceedances": "quality",
+    "plot_eda_summary": "quality",
+    "plot_param_comparison": "quality",
     # spatial
-    "plot_station_map",
-    "plot_station_scatter",
+    "plot_station_map": "spatial",
+    "plot_station_scatter": "spatial",
     # hydrology
-    "plot_budyko",
-    "plot_fdc",
-    "plot_hydrograph",
-    "plot_spi_timeline",
-    "plot_return_periods",
+    "plot_budyko": "hydro",
+    "plot_fdc": "hydro",
+    "plot_hydrograph": "hydro",
+    "plot_spi_timeline": "hydro",
+    "plot_return_periods": "hydro",
     # styling
-    "AQUA_PALETTE",
-    "apply_aqua_style",
-]
+    "AQUA_PALETTE": "styles",
+    "apply_aqua_style": "styles",
+}
+
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str) -> Any:
+    module = _EXPORTS.get(name)
+    if module is None:
+        raise AttributeError(f"module 'aquascope.viz' has no attribute {name!r}")
+    value = getattr(importlib.import_module(f"aquascope.viz.{module}"), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_EXPORTS))

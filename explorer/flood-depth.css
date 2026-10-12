@@ -1,0 +1,19 @@
+/* Flood depth where floods are forecast (#554): its row in the shared "On the map" legend (map-legend.js),
+   its mark and its key. */
+.fd-mark { display: inline-block; width: 18px; height: 8px; border-radius: 3px; }
+.ml-body .fd-tag { margin: 0 0 .35rem; color: var(--ink-2); }
+.fd-ramp { height: 9px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(23, 63, 153, .12); }
+.fd-ticks {
+  position: relative; height: .95rem; margin-right: 1.3rem;
+  font-size: .64rem; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.fd-ticks span { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; }
+.fd-ticks span:first-child { transform: none; }
+.fd-ticks span:last-child { transform: translateX(-30%); }
+.ml-body .fd-line, .ml-body .fd-src, .ml-body .fd-err { margin: .25rem 0 0; line-height: 1.35; }
+.ml-body .fd-src { color: var(--muted); font-size: .66rem; }
+.ml-body .fd-err { color: var(--err-ink); }
+.fd-go {
+  font: inherit; border: 0; background: none; padding: 0; color: var(--blue); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}

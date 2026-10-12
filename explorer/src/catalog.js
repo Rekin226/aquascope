@@ -6,6 +6,8 @@ import { CONFIG } from "../config.js?v=__BUILD__";
 import { sourceStyle, state, stationKey, trace } from "./core.js?v=__BUILD__";
 import { RECENT_BREAKS, RECORD_BREAKS, breakColor, recordYears, yearsSinceLast } from "./layers.js?v=__BUILD__";
 import { colocatedOffsets } from "./sites.js?v=__BUILD__";
+import { gradeColor } from "./evidence-core.js?v=__BUILD__";
+import { nowColor } from "./now-core.js?v=__BUILD__";
 
 let duckPromise = null;
 
@@ -104,6 +106,13 @@ export function toFeatureCollection(rows) {
           shape: sourceStyle(r.source).shape,
           colorRecord: breakColor(RECORD_BREAKS, years),
           colorRecent: breakColor(RECENT_BREAKS, stale),
+          // "Best model skill" (#518): evidence.js fills state.skillGrades from skill/model_skill.parquet
+          colorSkill: gradeColor(((state.skillGrades && state.skillGrades.get(stationKey(r))) || {}).grade),
+          // Today vs normal (#517); a gauge the snapshot does not cover keeps its agency colour (#544)
+          colorNow: nowColor(state.nowStatus, stationKey(r), sourceStyle(r.source).color, sourceStyle(r.source).color),
+          hasNow: !state.nowStatus || state.nowStatus.has(stationKey(r)),
+          // "Last month's status" (#523): bulletin.js fills state.bulletinStatus from the monthly bulletin
+          colorBulletin: nowColor(state.bulletinStatus, stationKey(r), sourceStyle(r.source).color),
           years: years === null ? -1 : Math.round(years * 10) / 10,
         },
       };

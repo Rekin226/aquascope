@@ -78,6 +78,15 @@ CAPTIONS: dict[str, str] = {
     "recharge_events": "Water-table fluctuation recharge estimate and its inputs.",
     "recession_segments": "Recession segments of the hydrograph.",
     "drawdown": "Theis drawdown and its inputs.",
+    "change_tests": "Step-change (Pettitt), trend (Mann-Kendall, Sen) and segments (PELT) at {record}.",
+    "nonstationary_table": "Stationary and nonstationary GEV return levels at {record} (first, last and horizon year).",
+    "pot_table": "Peaks-over-threshold (GPD) and annual-maximum (GEV) return levels at {record}.",
+    "model_skill": "GR4J parameters and skill on the calibration and validation years at {record}.",
+    "scenarios": "What-if runs of the calibrated GR4J at {record}: change in mean, low and high flow.",
+    "projection_models": "CMIP6 HighResMIP change factors per model at {record}.",
+    "projection_ensemble": "CMIP6 ensemble: median, range and agreement on the sign, per quantity.",
+    "regional_sites": "Gauges pooled in the regional study: record, index flood, at-site and pooled 100-year flow.",
+    "compare": "The compared gauges side by side.",
 }
 
 
@@ -110,7 +119,15 @@ def _scalars(payload: dict[str, Any], *, include: tuple[str, ...] = (), depth: i
 
 
 def _series(payload: dict[str, Any]) -> Table | None:
-    got = series_of(payload)
+    observed = payload.get("observations")
+    if isinstance(observed, dict):
+        dates, values = observed.get("t"), observed.get("v")
+        if isinstance(dates, list) and isinstance(values, list) and len(dates) == len(values):
+            return ["datetime", "value"], [[t, v] for t, v in zip(dates, values)]
+        raise ValueError("The retained observation timestamps and values do not match.")
+    if payload.get("series_downsampled"):
+        raise ValueError("The plotting series is downsampled; full observations are required for a record table.")
+    got = series_of(payload, preserve_time=True)
     if got:
         return ["datetime", "value"], [[t, v] for t, v in zip(*got)]
     if isinstance(payload.get("preview"), dict):
@@ -140,6 +157,22 @@ def _annual_maxima(payload: dict[str, Any]) -> Table | None:
 
 
 def _return_levels(payload: dict[str, Any]) -> Table | None:
+    from aquascope.claims import flood_result
+
+    columns = ["T", "estimator", "unit", "estimate", "lower", "upper", "interval_method", "confidence_level"]
+    ffa = payload.get("ffa")
+    if isinstance(ffa, dict) and isinstance(ffa.get("fits"), dict):
+        rows = []
+        for name, fit in ffa["fits"].items():
+            if not isinstance(fit, dict) or not isinstance(fit.get("q"), list):
+                continue
+            for i, (period, value) in enumerate(zip(ffa.get("return_periods", []), fit["q"])):
+                identity = flood_result(payload, "result", name, i)
+                interval = identity["interval"] or {}
+                lo, hi = interval.get("bounds", [None, None])
+                rows.append([period, identity["estimator"], payload.get("unit"), value, lo, hi,
+                             interval.get("method"), interval.get("level")])
+        return (columns, rows) if rows else None
     rl = return_levels_of(payload)
     if not rl:
         return None
@@ -149,9 +182,11 @@ def _return_levels(payload: dict[str, Any]) -> Table | None:
         vals = rl.get(name)
         return list(vals) + [None] * (n - len(vals)) if isinstance(vals, list) else [None] * n
 
-    gev = col("gev") if rl["gev"] is not None else col("boot")
-    rows = [[t, g, lp, lo, hi] for t, g, lp, lo, hi in zip(rl["T"], gev, col("lp3"), col("lower"), col("upper"))]
-    return ["T", "GEV", "LP3", "lower", "upper"], rows
+    levels = col("lp3") if rl["lp3"] is not None else col("gev")
+    estimator = payload.get("estimator") or rl["distribution"] or "reported fit"
+    rows = [[t, estimator, payload.get("unit"), q, lo, hi, payload.get("interval_method"),
+             payload.get("confidence_level")] for t, q, lo, hi in zip(rl["T"], levels, col("lower"), col("upper"))]
+    return columns, rows
 
 
 def _fit_spread(payload: dict[str, Any]) -> Table | None:
@@ -510,6 +545,104 @@ def _drawdown(payload: dict[str, Any]) -> Table | None:
     return _scalars(payload, include=("inputs",), anchors=("drawdown_m",))
 
 
+# ── advanced study steps (aquascope.advanced) ─────────────────────────────
+
+
+def _change_tests(payload: dict[str, Any]) -> Table | None:
+    pet, mk = payload.get("pettitt") or {}, payload.get("mann_kendall") or {}
+    if not pet and not mk:
+        return None
+    rows = [["Pettitt step change", pet.get("change_year"), pet.get("p_value"), pet.get("significant"),
+             f"mean {pet.get('mean_before')} before, {pet.get('mean_after')} after ({pet.get('change_pct')}%)"],
+            ["Mann-Kendall trend", mk.get("trend"), mk.get("p_value"), mk.get("significant"),
+             f"Sen's slope {mk.get('sen_slope_per_year')} per year ({mk.get('sen_slope_pct_per_decade')}% a decade)"]]
+    for seg in (payload.get("pelt") or {}).get("segments") or []:
+        rows.append(["PELT segment", f"{seg.get('start_year')}-{seg.get('end_year')}", None, None,
+                     f"mean {seg.get('mean')} over {seg.get('n')} years"])
+    return ["test", "result", "p_value", "significant", "detail"], rows
+
+
+def _nonstationary_table(payload: dict[str, Any]) -> Table | None:
+    rows = payload.get("table") or []
+    if not rows:
+        return None
+    cols = ["T", "stationary", f"first_year_{payload.get('first_year')}", f"last_year_{payload.get('last_year')}",
+            f"horizon_{payload.get('horizon_year')}", "change_first_to_last_pct"]
+    return cols, [[r.get("T"), r.get("stationary"), r.get("first_year"), r.get("last_year"), r.get("horizon"),
+                   r.get("change_first_to_last_pct")] for r in rows]
+
+
+def _pot_table(payload: dict[str, Any]) -> Table | None:
+    rows = payload.get("table") or []
+    if not rows:
+        return None
+    return ["T", "pot_gpd", "annual_max_gev", "difference_pct"], [
+        [r.get("T"), r.get("pot_gpd"), r.get("annual_max_gev"), r.get("difference_pct")] for r in rows]
+
+
+def _model_skill(payload: dict[str, Any]) -> Table | None:
+    if not payload.get("params"):
+        return None
+    rows: list[list[Any]] = [[f"parameter {k}", v, None] for k, v in payload["params"].items()]
+    for part in ("calibration", "validation"):
+        blk = payload.get(part) or {}
+        for key in ("kge", "nse", "log_nse", "pbias_pct"):
+            rows.append([f"{part} {key}", blk.get(key), f"{blk.get('start')} to {blk.get('end')}"])
+    band = payload.get("band") or {}
+    rows.append(["90% band coverage (validation)", band.get("coverage"), band.get("note")])
+    snow = payload.get("snow") or {}
+    rows.append(["snow store", snow.get("used"), f"{snow.get('share_below_freezing')} of precipitation below 0 C"])
+    return ["item", "value", "note"], rows
+
+
+def _scenario_table(payload: dict[str, Any]) -> Table | None:
+    runs = payload.get("scenarios") or []
+    if not runs:
+        return None
+    cols = ["label", "dp_pct", "dpet_pct", "dt_c", "mean_flow_change_pct", "q95_change_pct", "q05_change_pct",
+            "amax_median_change_pct"]
+    return cols, [[r.get(c) for c in cols] for r in runs]
+
+
+def _projection_models(payload: dict[str, Any]) -> Table | None:
+    rows = payload.get("models") or []
+    if not rows:
+        return None
+    cols = [c for c in ("model", "precip_change_pct", "pet_change_pct", "temp_change_c", "wettest_day_change_pct",
+                        "mean_flow_change_pct", "q95_change_pct", "flood_change_pct") if any(c in r for r in rows)]
+    return cols, [[r.get(c) for c in cols] for r in rows]
+
+
+def _projection_ensemble(payload: dict[str, Any]) -> Table | None:
+    ens = payload.get("ensemble") or {}
+    if not ens:
+        return None
+    return ["quantity", "median", "min", "max", "n_models", "n_up", "n_down"], [
+        [k, v.get("median"), v.get("min"), v.get("max"), v.get("n"), v.get("n_up"), v.get("n_down")]
+        for k, v in ens.items() if isinstance(v, dict)]
+
+
+def _regional_sites(payload: dict[str, Any]) -> Table | None:
+    sites = payload.get("sites") or []
+    if not sites:
+        return None
+    cols = ["key", "name", "status", "record_years", "n_amax", "area_km2", "index_flood", "q100", "regional_q100",
+            "trend", "trend_p", "discordancy", "note"]
+    return cols, [[r.get(c) for c in cols] for r in sites]
+
+
+def _compare(payload: dict[str, Any]) -> Table | None:
+    places = payload.get("places") or []
+    if not places:
+        return None
+    keys: list[str] = []
+    for p in places:
+        for k, v in p.items():
+            if is_scalar(v) and k not in keys:
+                keys.append(k)
+    return keys, [[p.get(k) for k in keys] for p in places]
+
+
 MAKERS: dict[str, Callable[[dict[str, Any]], Table | None]] = {
     "series": _series,
     "summary": _summary,
@@ -550,6 +683,15 @@ MAKERS: dict[str, Callable[[dict[str, Any]], Table | None]] = {
     "recharge_events": _recharge_events,
     "recession_segments": _recession_segments,
     "drawdown": _drawdown,
+    "change_tests": _change_tests,
+    "nonstationary_table": _nonstationary_table,
+    "pot_table": _pot_table,
+    "model_skill": _model_skill,
+    "scenarios": _scenario_table,
+    "projection_models": _projection_models,
+    "projection_ensemble": _projection_ensemble,
+    "regional_sites": _regional_sites,
+    "compare": _compare,
 }
 
 
@@ -593,6 +735,8 @@ def tables_for(step_id: str, tool: str, payload: dict[str, Any], *, names: list[
     unexpected shape is logged and skipped.
     """
     wanted = list(names) if names is not None else names_of(tool)
+    if names is None and isinstance(payload, dict) and "observations" in payload and "series" not in wanted:
+        wanted.append("series")
     out: list[Artifact] = []
     if not isinstance(payload, dict) or payload.get("error"):
         return out
@@ -618,4 +762,4 @@ def frame_of(artifact: Artifact) -> Any:
     """A table artifact's CSV as a pandas DataFrame."""
     import pandas as pd
 
-    return pd.read_csv(io.BytesIO(artifact.data))
+    return pd.read_csv(io.BytesIO(artifact.data), float_precision="round_trip")

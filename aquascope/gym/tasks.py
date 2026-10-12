@@ -75,6 +75,11 @@ _CONTINENT_BY_COUNTRY = {
     "africa": {"ZAF", "KEN", "NGA", "EGY", "MAR", "ETH", "TZA", "GHA", "BFA"},
 }
 
+#: The playbooks the benchmark's tasks are generated from by default: the seven it was built and scored on, so a
+#: new playbook does not change the task set (and the leaderboard) until it has expert plans of its own.
+BENCHMARK_PLAYBOOKS = ("drought_status", "flood_risk", "groundwater_decline", "irrigation_feasibility",
+                       "supply_reliability", "ungauged_flow", "water_quality")
+
 
 @dataclass
 class Task:
@@ -499,7 +504,7 @@ def tasks_from_playbooks(
     say = on_event or (lambda _m: None)
     if recon is None:
         from aquascope.explore import assess_site as recon  # type: ignore[assignment]
-    ids = [p["id"] for p in pbk.list_playbooks() if "error" not in p] if playbooks is None else list(playbooks)
+    ids = list(BENCHMARK_PLAYBOOKS) if playbooks is None else list(playbooks)
     loaded = [pbk.load(p) for p in ids]
     all_probes = [(pb, probe) for pb in loaded for probe in decline_probes(pb)]
     tasks: list[Task] = []

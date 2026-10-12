@@ -44,10 +44,12 @@ __all__ = [
     "COMPANIONS",
     "companions",
     "Branch",
+    "ChecklistItem",
     "Declined",
     "Playbook",
     "PlaybookError",
     "as_json",
+    "checklist_open",
     "coerce_intake",
     "describe",
     "evaluation_context",
@@ -109,6 +111,46 @@ class IntakeField(BaseModel):
     max: float | None = None
 
 
+class ChecklistOption(BaseModel):
+    """One answer a checklist question offers: the intake value, the words shown, and the words in the
+    client's own text that pick it without asking."""
+
+    value: Any
+    label: str | None = None
+    match: str | None = None
+
+
+class ChecklistItem(BaseModel):
+    """One thing the study must know before it plans, asked only when the text, the site and the earlier
+    answers leave it open. ``field`` is the intake field it fills; ``why`` is the one line that says what the
+    answer changes; ``when`` (conditions over ``intake.*``) says when the item applies at all."""
+
+    field: str
+    ask: str
+    why: str | None = None
+    options: list[ChecklistOption] = Field(default_factory=list)
+    when: list[Condition] = Field(default_factory=list)
+
+    def label_of(self, value: Any) -> str | None:
+        for o in self.options:
+            if o.value == value or str(o.value).lower() == str(value).lower():
+                return o.label or str(o.value)
+        return None
+
+    def pick(self, text: Any) -> ChecklistOption | None:
+        """The option a reply names (its label, its value, or its ``match`` words), else None."""
+        low = str(text if text is not None else "").strip().lower()
+        if not low:
+            return None
+        for o in self.options:
+            if low in (str(o.value).lower(), str(o.label or "").lower()):
+                return o
+        for o in self.options:
+            if o.match and re.search(o.match, str(text), re.I):
+                return o
+        return None
+
+
 class StepTemplate(BaseModel):
     id: str
     tool: str
@@ -152,6 +194,8 @@ class Playbook(BaseModel):
     variable: str | None = None
     version: int = 1
     intake: list[IntakeField] = Field(default_factory=list)
+    #: What the study must know before it plans, in the order it is asked (aquascope.studio's Consultant).
+    checklist: list[ChecklistItem] = Field(default_factory=list)
     branches: list[Branch]
     declines: list[Decline] = Field(default_factory=list)
     caveats: list[str | Caveat] = Field(default_factory=list)
@@ -264,6 +308,23 @@ def validate(playbook: str | Playbook | dict[str, Any]) -> list[str]:
             errors.append(f"intake {f.name}: min/max apply to int and float fields only")
         if f.min is not None and f.max is not None and f.min > f.max:
             errors.append(f"intake {f.name}: min {f.min!r} is above max {f.max!r}")
+    for item in pb.checklist:
+        field = next((f for f in pb.intake if f.name == item.field), None)
+        if field is None:
+            errors.append(f"checklist {item.field}: not an intake field")
+            continue
+        errors += [f"checklist {item.field}: {e}" for e in _check_conditions(item.when)]
+        for o in item.options:
+            try:
+                if o.value is not None:  # None: the field's own "no value" (the whole record)
+                    _coerce(o.value, field)
+            except (TypeError, ValueError, OverflowError):
+                errors.append(f"checklist {item.field}: option {o.value!r} is not a value the field takes")
+            if o.match:
+                try:
+                    re.compile(o.match)
+                except re.error as exc:
+                    errors.append(f"checklist {item.field}: match {o.match!r} is not a pattern ({exc})")
     if not pb.branches:
         errors.append("a playbook needs at least one branch")
     seen_branches: set[str] = set()
@@ -539,6 +600,17 @@ def _holds(cond: Condition, ctx: dict[str, Any]) -> bool:
 
 def _all_hold(conds: list[Condition], ctx: dict[str, Any]) -> bool:
     return all(_holds(c, ctx) for c in conds)
+
+
+def checklist_open(pb: str | Playbook | dict[str, Any], intake: dict[str, Any] | None,
+                   stated: list[str] | set[str] | None = None) -> list[ChecklistItem]:
+    """The checklist items still open, in order: those whose ``when`` holds over ``intake`` and whose field the
+    client has not stated (``stated``: the fields read off the text or answered). A default in ``intake`` does
+    not close an item; only the client's words do."""
+    pb = load(pb)
+    done = set(stated or ())
+    ctx = {"intake": dict(intake or {})}
+    return [item for item in pb.checklist if item.field not in done and _all_hold(item.when, ctx)]
 
 
 def _fill(obj: Any, ctx: dict[str, Any]) -> Any:

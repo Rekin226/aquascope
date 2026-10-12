@@ -57,6 +57,9 @@ jobs:
       AQUASCOPE_LLM_MODEL: ${{ vars.AQUASCOPE_LLM_MODEL }}
       USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
     steps:
+      - name: Note when the job started (its health record's duration)
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - name: Is a model configured?
         id: gate
         run: |
@@ -105,3 +108,21 @@ jobs:
           if [ "${{ inputs.dry_run }}" = "true" ]; then DRY="--dry-run"; fi
           python .github/scripts/harvest_repair.py archive/health.json --repo "$GITHUB_REPOSITORY" $DRY \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      # Job health (#593): health/jobs/repair.json and health/jobs/index.json, written only under health/jobs/, and
+      # one job-health issue, opened or updated when a scheduled run fails and closed by the next good one. It runs
+      # whether the job passed or not, needs only the standard library to record and to file the issue, and never
+      # turns the job red itself. It runs only when a model is configured (the steps above need one), after the
+      # scheduled harvest.
+      - name: Job health
+        if: always() && steps.gate.outputs.go == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PUBLISH: ${{ secrets.HF_TOKEN != '' && (github.event_name == 'workflow_run' || !inputs.dry_run) }}
+          ISSUE: ${{ github.event_name == 'workflow_run' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 .github/scripts/job_health.py report repair --status "${{ job.status }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"

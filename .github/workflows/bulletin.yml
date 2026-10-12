@@ -1,0 +1,158 @@
+name: Monthly bulletin
+
+# The state of the rivers (#523). On the 3rd of every month, last month's status at every Archive gauge with a
+# mirrored discharge record covering it (topped up with the agencies' newest days), in the WMO HydroSOS classes,
+# rolled up per country and per river basin, written as print-ready HTML and Markdown with a map:
+#   bulletins/<YYYY-MM>/bulletin.html, bulletin.md, bulletin.json, map.png, status.parquet
+#   bulletins/index.json   every month published, newest first (the Explorer opens the latest)
+# It writes ONLY those paths in the Archive dataset; the catalogue and the observations are never touched.
+# Same HF_TOKEN secret as the harvest. A smoke run takes a few gauges per source and never publishes.
+# Locally: python -m aquascope.bulletin build --archive DIR --out DIR [--month YYYY-MM]
+
+on:
+  schedule:
+    - cron: "17 8 3 * *"  # the 3rd of every month, 08:17 UTC (after the model-skill run starts at 05:41)
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "Month to write, YYYY-MM (empty = last month)"
+        type: string
+        default: ""
+      publish:
+        description: "Publish to the Hugging Face dataset (bulletins/ only)"
+        type: boolean
+        default: true
+      smoke:
+        description: "Smoke run: a few gauges per source, no agency top-up, never published"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: bulletin
+  cancel-in-progress: false
+
+env:
+  HF_DATASET: Rekin226/aquascope-gauges
+
+jobs:
+  bulletin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_PROGRESS_BARS: "1"
+      # Optional, as in the harvest: raises the keyless USGS rate limit for the top-up.
+      USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
+    steps:
+      - name: Note when the job started (its health record's duration)
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install aquascope with the archive extra and matplotlib (the map)
+        run: python -m pip install -q ".[archive]" "matplotlib>=3.7"
+
+      - name: Fetch the catalogue, the discharge bundles, the basins and the bulletin index
+        run: |
+          python - <<'EOF'
+          import os
+          from huggingface_hub import snapshot_download
+          snapshot_download(os.environ["HF_DATASET"], repo_type="dataset", local_dir="archive",
+                            allow_patterns=["stations.parquet", "obs/discharge/*.parquet",
+                                            "basins/station_catchments.parquet", "basins/lev12_topology.parquet",
+                                            "bulletins/index.json"])
+          EOF
+          ls -la archive archive/obs/discharge || true
+
+      # The dispatch inputs reach the shell as environment variables, never pasted into the script.
+      # The top-up asks the agencies for the month's days the weekly mirror does not have yet; the cap and the
+      # time budget keep the job inside free runner time, and what they skipped is counted in the bulletin.
+      - name: Build the bulletin
+        env:
+          MONTH: ${{ inputs.month }}
+          SMOKE: ${{ inputs.smoke }}
+        run: |
+          set -euo pipefail
+          ARGS=(--archive archive --out out --workers 4)
+          if [ -n "${MONTH:-}" ]; then
+            [[ "$MONTH" =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]] || { echo "::error::month must be YYYY-MM"; exit 1; }
+            ARGS+=(--month "$MONTH")
+          fi
+          if [ "${SMOKE:-}" = "true" ]; then
+            ARGS+=(--smoke)
+          else
+            ARGS+=(--top-up 2500 --time-budget-min 90)
+          fi
+          python -m aquascope.bulletin build "${ARGS[@]}"
+
+      - name: Summary
+        if: always()
+        run: |
+          python - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          root = pathlib.Path("out/bulletins")
+          build = root / "build.json"
+          if not build.exists():
+              print("## Monthly bulletin\n\nnothing written (the run stopped early)")
+              raise SystemExit
+          month = json.loads(build.read_text())["month"]
+          b = json.loads((root / month / "bulletin.json").read_text())
+          c = b["coverage"]
+          print(f"## State of the rivers, {b['label']}\n")
+          print(b["summary"] + "\n")
+          print(f"**Classed:** {c['classed']} of {c['considered']} gauges; smoke: {b.get('smoke', False)}\n")
+          print("| left out because | gauges |\n| --- | ---: |")
+          for k, n in c["excluded"].items():
+              print(f"| {c['excluded_text'][k]} | {n} |")
+          print(f"\n**Top-up:** {c.get('top_up')}")
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bulletin-${{ github.run_id }}
+          path: out/
+          retention-days: 14
+
+      # A smoke run never publishes: its few gauges would stand for the month.
+      - name: Publish to Hugging Face (bulletins/ only)
+        id: publish
+        if: env.HF_TOKEN != '' && !inputs.smoke && (github.event_name == 'schedule' || inputs.publish)
+        run: python -m aquascope.bulletin publish --out out --repo "$HF_DATASET"
+
+      - name: Say why a smoke run was not published
+        if: inputs.smoke
+        run: echo "::notice::A smoke run takes a few gauges per source and never publishes."
+
+      - name: Warn when HF_TOKEN is missing
+        if: always() && env.HF_TOKEN == '' && github.event_name == 'schedule'
+        run: |
+          echo "::error::HF_TOKEN is not set, so the bulletin was built but not published. Set the repository \
+          secret HF_TOKEN to a Hugging Face token with write access to $HF_DATASET."
+          exit 1
+
+      # Job health (#593): health/jobs/bulletin.json and health/jobs/index.json, written only under health/jobs/,
+      # and one job-health issue, opened or updated when a scheduled run fails and closed by the next good one. It
+      # runs whether the job passed or not, needs only the standard library to record and to file the issue, and
+      # never turns the job red itself.
+      - name: Job health
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PUBLISH: ${{ env.HF_TOKEN != '' && !inputs.smoke && (github.event_name == 'schedule' || inputs.publish) }}
+          ISSUE: ${{ github.event_name == 'schedule' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 .github/scripts/job_health.py report bulletin --root out --status "${{ job.status }}" --require "publish=${{ steps.publish.outcome }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"

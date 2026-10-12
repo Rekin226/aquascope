@@ -144,17 +144,75 @@ class TestUSGSStations:
         assert ("https://example/next", None) in calls
         assert len(collector.stations(max_items=2)) == 2
 
-    def test_nwis_state_sweep_uses_aq_not_as(self):
+    def test_names_pass_asks_for_a_slim_page(self):
+        collector, client = self._collector()
+        collector.stations(bbox=(-77.3, 38.8, -77.0, 39.0))
+        loc_call = next(c for c in client.get_json.call_args_list if "monitoring-locations" in c.args[0])
+        params = loc_call.kwargs["params"]
+        assert params["skipGeometry"] == "true"
+        assert params["properties"] == "id,monitoring_location_name,drainage_area"
+        assert "api_key" not in params  # keyless: no key, not the shared DEMO_KEY
+
+    def test_failed_names_pass_returns_stations_without_names(self):
         client = MagicMock()
-        client.get_text.return_value = ""
-        collector = USGSCollector(api_key="DEMO_KEY", client=client)
-        collector._nwis_site_names(None)
-        state_codes = {
-            call.kwargs["params"]["stateCd"]
-            for call in client.get_text.call_args_list
+
+        def get_json(path, params=None, **kw):
+            if "time-series-metadata" in path:
+                return USGS_TS_PAGE
+            raise RuntimeError("429")
+
+        client.get_json.side_effect = get_json
+        stations = USGSCollector(api_key="DEMO_KEY", client=client).stations()
+        assert [s.station_id for s in stations] == ["USGS-01646000"] and stations[0].name is None
+        assert all("waterservices" not in str(c) for c in client.get_json.call_args_list)
+        client.get_text.assert_not_called()
+
+    def test_capped_national_call_asks_for_the_sites_by_id(self):
+        collector, client = self._collector()
+        stations = collector.stations(max_items=300)  # no bbox: a capped walk would miss the sites found
+        assert stations[0].name == "DIFFICULT RUN NEAR GREAT FALLS, VA"
+        loc_calls = [c for c in client.get_json.call_args_list if "monitoring-locations" in c.args[0]]
+        assert len(loc_calls) == 1
+        params = loc_calls[0].kwargs["params"]
+        assert params["id"] == "USGS-01646000" and params["limit"] == 1
+        assert "site_type_code" not in params and "bbox" not in params
+        assert params["properties"] == "id,monitoring_location_name,drainage_area"
+
+    def test_failed_walk_falls_back_to_lookups_by_id(self):
+        client = MagicMock()
+
+        def get_json(path, params=None, **kw):
+            if "time-series-metadata" in path:
+                return USGS_TS_PAGE
+            if "id" not in (params or {}):
+                raise RuntimeError("503")  # the walk fails
+            return USGS_LOC_PAGE
+
+        client.get_json.side_effect = get_json
+        stations = USGSCollector(api_key="DEMO_KEY", client=client).stations(bbox=(-77.3, 38.8, -77.0, 39.0))
+        assert stations[0].name == "DIFFICULT RUN NEAR GREAT FALLS, VA"
+
+    def test_lookups_by_id_go_in_batches_of_100(self):
+        ts_page = {
+            "features": [
+                {
+                    "geometry": {"type": "Point", "coordinates": [-77.0, 38.9]},
+                    "properties": {"monitoring_location_id": f"USGS-{i:08d}", "parameter_code": "00060"},
+                }
+                for i in range(250)
+            ],
+            "links": [],
         }
-        assert "AQ" in state_codes
-        assert "AS" not in state_codes
+        client = MagicMock()
+
+        def get_json(path, params=None, **kw):
+            return ts_page if "time-series-metadata" in path else {"features": [], "links": []}
+
+        client.get_json.side_effect = get_json
+        USGSCollector(api_key="DEMO_KEY", client=client).stations(max_items=1_000)
+        sizes = [len(c.kwargs["params"]["id"].split(",")) for c in client.get_json.call_args_list
+                 if "monitoring-locations" in c.args[0]]
+        assert sizes == [100, 100, 50]
 
 
 # ─── UK EA ───────────────────────────────────────────────────────────────────

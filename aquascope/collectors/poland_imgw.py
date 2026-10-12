@@ -255,6 +255,12 @@ class PolandIMGWCollector(BaseCollector):
 
     name = "poland_imgw"
 
+    #: Parsed archive frames for the whole process, keyed by (cache dir, file). The harvest builds one
+    #: collector per station, and with a per-instance memo every station re-read and re-parsed all ~870
+    #: zips from disk (about 3 minutes each; 3 stations in a 16-minute run on 2026-09-23). Recent
+    #: hydrological years expire like their cached zips, so a long-lived process never serves a stale year.
+    _shared_frames: dict[tuple[str, str], tuple[float, pd.DataFrame | None]] = {}
+
     def __init__(
         self,
         client: CachedHTTPClient | None = None,
@@ -270,7 +276,6 @@ class PolandIMGWCollector(BaseCollector):
         )
         self._cache_dir = Path(cache_dir) if cache_dir is not None else DEFAULT_CACHE_DIR / "poland_imgw"
         self._timeout = timeout
-        self._frames: dict[str, pd.DataFrame | None] = {}
         self._live: list[dict[str, Any]] | None = None
 
     # ── live API ─────────────────────────────────────────────────────────
@@ -380,9 +385,13 @@ class PolandIMGWCollector(BaseCollector):
         return data
 
     def _load_archive(self, hy: int, filename: str) -> pd.DataFrame | None:
-        """The parsed frame for one archive file, memoised for the run (misses too)."""
-        if filename in self._frames:
-            return self._frames[filename]
+        """The parsed frame for one archive file, memoised for the process (misses too)."""
+        key = (str(self._cache_dir), filename)
+        hit = PolandIMGWCollector._shared_frames.get(key)
+        if hit is not None:
+            loaded_at, cached = hit
+            if hy < hydro_year(date.today()) - 1 or time.time() - loaded_at < RECENT_TTL_SECONDS:
+                return cached
         raw = self._archive_bytes(hy, filename)
         frame: pd.DataFrame | None = None
         if raw is not None:
@@ -392,7 +401,7 @@ class PolandIMGWCollector(BaseCollector):
                     raise ValueError(f"IMGW archive {filename} is an empty zip")
                 frame = parse_archive(decode_archive(z.read(inner)))
             logger.debug("IMGW archive: %s parsed, %d rows", filename, len(frame))
-        self._frames[filename] = frame
+        PolandIMGWCollector._shared_frames[key] = (time.time(), frame)
         return frame
 
     # ── observations ─────────────────────────────────────────────────────

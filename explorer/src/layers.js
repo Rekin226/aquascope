@@ -86,6 +86,7 @@ export const BASEMAPS = [
     tiles: [`${GIBS}/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`],
     maxzoom: 9,
     time: true,
+    since: "2015-11-24",
     attribution: "Imagery from NASA Worldview / GIBS (ESDIS)",
     licence: "Open (NASA), acknowledgement requested",
     note: "VIIRS true colour for the chosen date, coarse (about 250 m). Move the date to see a flood or a storm.",
@@ -113,8 +114,40 @@ export const TERRAIN_DEM = {
   licence: "Open data, per-source attribution (tilezen/joerd)",
 };
 
-// Raster overlays. `time: true` means the URL carries {date} and the shared
+// The GRACE images GIBS holds, as start/end/period from its WMTS capabilities
+// (2026-10-08). The months are irregular: some images start mid-month, some
+// months have two and some none, so the first of the month is not always a day
+// GIBS has an image for. Kept equal to GRACE_PERIODS in aquascope/map_time.py.
+export const GRACE_PERIODS = [
+  "2002-04-04/2002-04-04/P28D", "2002-05-02/2002-05-02/P17D", "2002-08-01/2003-04-01/P1M",
+  "2003-05-01/2003-05-01/P21D", "2003-07-01/2003-12-01/P1M", "2004-01-01/2004-01-01/P13D",
+  "2004-02-04/2004-02-04/P26D", "2004-03-01/2010-11-01/P1M", "2010-12-01/2010-12-01/P27D",
+  "2011-02-08/2011-02-08/P21D", "2011-03-01/2011-04-01/P1M", "2011-05-01/2011-05-01/P31D",
+  "2011-07-05/2011-07-05/P27D", "2011-08-01/2011-09-01/P1M", "2011-10-01/2011-10-01/P16D",
+  "2011-10-17/2011-10-17/P31D", "2011-12-17/2011-12-17/P15D", "2012-01-01/2012-02-01/P1M",
+  "2012-03-01/2012-03-01/P19D", "2012-03-20/2012-03-20/P31D", "2012-06-01/2012-08-01/P1M",
+  "2012-09-01/2012-09-01/P24D", "2012-11-06/2012-11-06/P25D", "2012-12-01/2013-01-01/P1M",
+  "2013-02-01/2013-02-01/P26D", "2013-04-11/2013-04-11/P20D", "2013-05-01/2013-06-01/P1M",
+  "2013-07-01/2013-07-01/P31D", "2013-10-01/2013-12-01/P1M", "2014-01-01/2014-01-01/P17D",
+  "2014-03-01/2014-05-01/P1M", "2014-06-01/2014-06-01/P24D", "2014-08-01/2014-10-01/P1M",
+  "2014-11-01/2014-11-01/P32D", "2015-01-13/2015-01-13/P19D", "2015-02-01/2015-03-01/P1M",
+  "2015-04-01/2015-04-01/P11D", "2015-04-12/2015-04-12/P30D", "2015-06-29/2015-06-29/P33D",
+  "2015-08-01/2015-08-01/P1M", "2015-09-01/2015-09-01/P27D", "2015-12-12/2015-12-12/P23D",
+  "2016-01-04/2016-01-04/P25D", "2016-01-29/2016-01-29/P32D", "2016-03-01/2016-03-01/P31D",
+  "2016-05-08/2016-05-08/P24D", "2016-06-01/2016-06-01/P1M", "2016-07-01/2016-07-01/P29D",
+  "2016-08-08/2016-08-08/P27D", "2016-11-14/2016-12-11/P27D", "2017-01-07/2017-01-07/P28D",
+  "2017-03-17/2017-03-17/P24D", "2017-04-10/2017-04-10/P22D", "2017-05-02/2017-05-02/P21D",
+  "2017-05-23/2017-05-23/P38D", "2018-06-01/2018-06-01/P1M", "2018-07-01/2018-07-01/P18D",
+  "2018-10-22/2018-10-22/P10D", "2018-11-01/2018-12-01/P1M", "2019-01-01/2019-01-01/P25D",
+  "2019-01-26/2019-01-26/P34D", "2019-03-01/2022-12-01/P1M", "2020-02-01/2022-07-01/P1M",
+];
+
+// Raster overlays (Global Surface Water added for #520, checked 2026-10-08:
+// tiles2024 is the v1.5 release, XYZ to zoom 13, CORS *). `time: true` means the URL carries {date} and the shared
 // date control drives it. Legends are the GIBS colour maps, which are SVG.
+// `since` and `until` are the first and last day GIBS has (an open `until` runs
+// to about today), read from the WMTS capabilities on 2026-10-08 and kept in step
+// with aquascope/map_time.py by a test. A date outside them draws nothing.
 export const OVERLAYS = [
   {
     id: "precip",
@@ -123,6 +156,7 @@ export const OVERLAYS = [
     tiles: [`${GIBS}/IMERG_Precipitation_Rate/default/{date}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png`],
     maxzoom: 6,
     time: true,
+    since: "2000-06-01",
     opacity: 0.75,
     legend: `${GIBS_LEGENDS}/GPM_Precipitation_Rate_H.svg`,
     attribution: "GPM IMERG precipitation rate, NASA GIBS (ESDIS)",
@@ -136,6 +170,7 @@ export const OVERLAYS = [
     tiles: [`${GIBS}/SMAP_L4_Analyzed_Root_Zone_Soil_Moisture/default/{date}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png`],
     maxzoom: 6,
     time: true,
+    since: "2015-03-31",
     opacity: 0.75,
     legend: `${GIBS_LEGENDS}/SMAP_Analyzed_Soil_Moisture_H.svg`,
     attribution: "SMAP L4 analysed root-zone soil moisture, NASA GIBS (ESDIS)",
@@ -149,6 +184,7 @@ export const OVERLAYS = [
     tiles: [`${GIBS}/MODIS_Terra_NDSI_Snow_Cover/default/{date}/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png`],
     maxzoom: 8,
     time: true,
+    since: "2000-02-24",
     opacity: 0.8,
     legend: `${GIBS_LEGENDS}/MODIS_NDSI_Snow_Cover_H.svg`,
     attribution: "MODIS/Terra NDSI snow cover, NASA GIBS (ESDIS)",
@@ -162,6 +198,7 @@ export const OVERLAYS = [
     tiles: [`${GIBS}/MODIS_Terra_Land_Surface_Temp_Day/default/{date}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png`],
     maxzoom: 7,
     time: true,
+    since: "2000-02-24",
     opacity: 0.7,
     legend: `${GIBS_LEGENDS}/MODIS_Land_Surface_Temp_H.svg`,
     attribution: "MODIS/Terra daytime land surface temperature, NASA GIBS (ESDIS)",
@@ -175,11 +212,25 @@ export const OVERLAYS = [
     maxzoom: 6,
     time: true,
     monthly: true,
+    since: "2002-04-04",
+    until: "2022-07-01",
+    periods: GRACE_PERIODS,
     opacity: 0.75,
     legend: `${GIBS_LEGENDS}/GRACE_Tellus_Liquid_Water_Equivalent_Thickness_Mascon_CRI_H.svg`,
     attribution: "GRACE/GRACE-FO Tellus mascon liquid water equivalent thickness, NASA GIBS (ESDIS)",
     licence: "Open (NASA), acknowledgement requested",
-    note: "Total water storage anomaly in cm of equivalent water, monthly. The signal groundwater depletion shows up in.",
+    note: "Total water storage anomaly in cm of equivalent water, monthly, April 2002 to July 2022 with gaps. The signal groundwater depletion shows up in.",
+  },
+  {
+    id: "surface-water",
+    label: "Surface water since 1984",
+    group: "Water and climate",
+    tiles: ["https://storage.googleapis.com/water-world/tiles2024/occurrence/{z}/{x}/{y}.png"],
+    maxzoom: 13,
+    opacity: 0.85,
+    attribution: 'Source: EC JRC/Google, <a href="https://global-surface-water.appspot.com/">Global Surface Water</a> v1.5 (Pekel et al. 2016)',
+    licence: "Copernicus: free of charge, without restriction of use",
+    note: "How often each 30 m pixel was water from 1984 to 2024: pale for rarely, deep blue for always. Click a point and open Context for the number.",
   },
   {
     id: "landcover",
@@ -202,16 +253,114 @@ export const OVERLAY_GROUPS = ["Water and climate", "Land"];
 export const basemapById = (id) => BASEMAPS.find((b) => b.id === id) || BASEMAPS.find((b) => b.default);
 export const overlayById = (id) => OVERLAYS.find((o) => o.id === id);
 
-// GIBS wants a plain YYYY-MM-DD, and monthly products want the first of the
-// month. Data lands a few days late, so the default date is a week back.
+// GIBS wants a plain YYYY-MM-DD, and monthly products want a day inside one of
+// their images. Data lands a few days late, so the default date is a week back.
 export function defaultDate(today = new Date()) {
   const d = new Date(today.getTime() - 7 * 86400000);
   return d.toISOString().slice(0, 10);
 }
 
+const isoDay = (d) => d.toISOString().slice(0, 10);
+const utcDay = (s) => new Date(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)));
+function addMonths(s, n) {
+  const d = utcDay(s);
+  const total = d.getUTCFullYear() * 12 + d.getUTCMonth() + n;
+  const y = Math.floor(total / 12), m0 = total - y * 12;
+  const last = new Date(Date.UTC(y, m0 + 1, 0)).getUTCDate();
+  return isoDay(new Date(Date.UTC(y, m0, Math.min(d.getUTCDate(), last))));
+}
+
+// The images a `periods` list stands for: [{ start, end }] with `end` the day
+// after the image stops covering, sorted, none after the layer's `until`.
+const imageCache = new WeakMap();
+export function layerImages(layer) {
+  if (!layer || !layer.periods) return [];
+  if (imageCache.has(layer)) return imageCache.get(layer);
+  const spans = new Map();
+  for (const value of layer.periods) {
+    const [a, b, period] = value.split("/");
+    const m = /^P(\d+)([DM])$/.exec(period || "");
+    if (!m || b < a) continue;
+    const n = +m[1];
+    for (let i = 0; ; i++) {
+      let start, end;
+      if (m[2] === "D") {
+        const d = utcDay(a);
+        d.setUTCDate(d.getUTCDate() + n * i);
+        start = isoDay(d);
+        d.setUTCDate(d.getUTCDate() + n);
+        end = isoDay(d);
+      } else {
+        start = addMonths(a, n * i);
+        end = addMonths(start, n);
+      }
+      if (start > b || (layer.until && start > layer.until)) break;
+      const prev = spans.get(start);
+      spans.set(start, prev && prev > end ? prev : end);
+    }
+  }
+  const out = [...spans.entries()].sort((x, y) => (x[0] < y[0] ? -1 : 1)).map(([start, end]) => ({ start, end }));
+  imageCache.set(layer, out);
+  return out;
+}
+
+// The image a layer with `periods` shows for a date: the latest one covering
+// it, else one starting in the same calendar month, else null (a gap). The same
+// rule as image_for in aquascope/map_time.py.
+export function imageFor(layer, date) {
+  const images = layerImages(layer);
+  let hit = null;
+  let same = null;
+  for (const img of images) {
+    if (img.start > date) {
+      if (!same && img.start.slice(0, 7) === date.slice(0, 7)) same = img.start;
+      if (img.start.slice(0, 7) > date.slice(0, 7)) break;
+      continue;
+    }
+    if (date < img.end) hit = img.start;
+    if (img.start.slice(0, 7) === date.slice(0, 7)) same = img.start;
+  }
+  return hit || same;
+}
+
 export function layerDate(layer, date) {
   if (!date) return date;
-  return layer && layer.monthly ? `${date.slice(0, 7)}-01` : date;
+  if (!layer || !layer.monthly) return date;
+  if (layer.periods) {
+    const img = imageFor(layer, date);
+    if (img) return img;
+  }
+  // The first of the month, or the layer's first day when that is later
+  // (GIBS answers a date inside a period with that period's image).
+  const first = `${date.slice(0, 7)}-01`;
+  return layer.since && first < layer.since && date >= layer.since ? layer.since : first;
+}
+
+// Dated layers a module draws itself rather than as tiles (the world river
+// status, #544). Each registers a function that returns its layer, shaped like
+// an overlay ({ id, label, time, monthly, since, until, periods }), while it is
+// on, and null while it is off; the time bar and the link then treat it like
+// any other dated layer.
+const datedExtras = new Set();
+export function registerDatedLayer(fn) {
+  datedExtras.add(fn);
+  return () => datedExtras.delete(fn);
+}
+
+// Every dated layer on screen: the dated basemap, the dated overlays and the registered ones.
+export function datedLayersOn(basemapId, overlayIds) {
+  const out = [];
+  const base = basemapById(basemapId);
+  if (base && base.time) out.push(base);
+  for (const id of overlayIds || []) {
+    const o = overlayById(id);
+    if (o && o.time) out.push(o);
+  }
+  for (const fn of datedExtras) {
+    const l = fn();
+    if (l && l.time) out.push(l);
+  }
+  return out;
 }
 
 export function tileUrls(layer, date) {
@@ -238,6 +387,11 @@ export const GAUGE_STYLES = [
   { id: "source", label: "Agency" },
   { id: "record", label: "Record length" },
   { id: "recent", label: "Last observation" },
+  { id: "skill", label: "Best model skill" },
+  // #517: from the daily status snapshot (now-map.js), not from the catalog.
+  { id: "now", label: "Today vs normal" },
+  // #523: from the monthly bulletin (bulletin.js).
+  { id: "bulletin", label: "Last month's status" },
 ];
 
 // Years of record from the catalog's own period columns (no extra data needed).

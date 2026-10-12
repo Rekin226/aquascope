@@ -134,7 +134,7 @@ def test_record_writes_the_files_the_meta_and_the_index(tmp_path):
     assert meta["recorded"].endswith("+00:00") and meta["seconds"] >= 0
     ws = json.loads((case_dir / "workspace.json").read_text(encoding="utf-8"))
     assert ws["status"] == "done" and ws["artifacts"][0].get("data") is None and ws["study"]["version"] == 3
-    assert "520 m3/s" in (case_dir / "report.md").read_text(encoding="utf-8")
+    assert "520 m³/s" in (case_dir / "report.md").read_text(encoding="utf-8")
     assert "flood_frequency" in (case_dir / "study.yaml").read_text(encoding="utf-8")
     # the upload travels in the workspace as CSV text
     ws2 = json.loads((tmp_path / "own-table-flood" / "workspace.json").read_text(encoding="utf-8"))

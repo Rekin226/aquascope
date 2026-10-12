@@ -1,0 +1,46 @@
+/* Groundwater (#558): the rows "Groundwater" and "Your MODFLOW heads" in the shared "On the map" legend,
+   and the "Where is this model?" form. */
+.gw-mark { display: inline-block; width: 18px; height: 8px; border-radius: 3px; }
+.gw-mark-grid {
+  background-size: 100% 100%;
+  box-shadow: inset 0 0 0 1px rgba(11, 36, 64, .35);
+  border-radius: 1px;
+}
+.gw-segs { display: flex; gap: 0; margin: 0 0 .45rem; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; width: max-content; }
+.gw-seg {
+  font: inherit; font-size: .7rem; border: 0; background: none; padding: .18rem .55rem; color: var(--ink-2); cursor: pointer;
+}
+.gw-seg + .gw-seg { border-left: 1px solid var(--line); }
+.gw-seg.on { background: var(--bg-sunken); color: var(--ink); font-weight: 600; }
+.gw-ramp { height: 9px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(11, 36, 64, .12); }
+.gw-ends {
+  display: flex; justify-content: space-between; margin: 2px 0 0;
+  font-size: .64rem; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.ml-body .gw-head, .ml-body .gw-line, .ml-body .gw-src, .ml-body .gw-err, .ml-body .gw-mask { margin: .3rem 0 0; line-height: 1.35; }
+.ml-body .gw-head { margin-top: 0; color: var(--ink-2); }
+.ml-body .gw-src { color: var(--muted); font-size: .66rem; }
+.ml-body .gw-err { color: var(--err-ink); }
+.ml-body .gw-mask { display: flex; gap: .45rem; align-items: flex-start; color: var(--muted); font-size: .68rem; }
+.gw-hatch {
+  flex: 0 0 auto; width: 18px; height: 10px; margin-top: 2px; border-radius: 2px;
+  background: repeating-linear-gradient(135deg, rgba(120, 128, 136, .65) 0 1px, rgba(120, 128, 136, .09) 1px 5px);
+  box-shadow: inset 0 0 0 1px rgba(120, 128, 136, .3);
+}
+.gw-link {
+  font: inherit; border: 0; background: none; padding: 0; color: var(--blue); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.gw-model-ctl { display: flex; align-items: center; gap: .5rem; margin: .45rem 0 0; font-size: .7rem; }
+.gw-model-ctl select { font: inherit; font-size: .7rem; padding: .1rem .25rem; }
+.gw-model-ctl input[type=range] { flex: 1 1 0; min-width: 0; width: 0; }
+.gw-step-n { flex: 0 0 auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.gw-form p { margin: 0 0 .6rem; }
+.gw-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem .8rem; margin: .4rem 0 .6rem; }
+.gw-field { display: flex; flex-direction: column; gap: .15rem; font-size: .8rem; }
+.gw-field input { font: inherit; padding: .3rem .45rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.gw-field small { font-size: .68rem; }
+.gw-form-err { color: var(--err-ink); }
+.gw-form-row { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
+@media (max-width: 520px) { .gw-grid { grid-template-columns: 1fr; } }

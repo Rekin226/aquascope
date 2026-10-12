@@ -175,7 +175,7 @@ def test_a_branch_fallback_replans_through_the_playbook(no_deliverables):
     assert ws.study["plan"]["branch"] == "regional" and ws.study["plan"]["replanned_from"]["step"] == "s3"
     assert ws.study["version"] == 3 and ws.study["plan"]["objective"], "the plan block carries over"
     assert [s["tool"] for s in ws.study["steps"]] == ["describe_catchment", "similar_basins",
-                                                      "regionalize_signatures", "anywhere"]
+                                                      "regionalize_signatures", "anywhere", "reach_record"]
     assert run.ok and ws.run["replans"] == 1
     assert calls[0][0] == "describe_catchment" and "describe_catchment" not in [c[0] for c in calls[1:]], "reused"
 

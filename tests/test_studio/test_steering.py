@@ -73,7 +73,7 @@ def test_every_declared_control_names_a_real_argument_of_its_tool():
         assert entry is not None, f"{tool} is not in the catalogue"
         assert entry.steer == declared(tool) and entry.to_dict()["steer"] == entry.steer
         for c in controls:
-            assert c.type in ("choice", "number", "integer", "boolean")
+            assert c.type in ("choice", "number", "integer", "boolean", "years")
             if c.argument:
                 assert c.argument in entry.arguments, f"{tool}.{c.argument} is not an argument of the tool"
             else:

@@ -75,7 +75,7 @@ def test_gauged_site_with_a_long_record_supports_at_site_flood_frequency(small_c
     assert not ctx["ungauged"] and ctx["years_by_variable"]["discharge"] > 140
     assert ctx["resolution_by_variable"] == {"discharge": "daily", "water_level": "daily", "precipitation": "daily"}
     assert ctx["area_km2"] == 9948.0 and ctx["donors"] == 10 and ctx["return_period"] == 100.0
-    assert set(ctx["available"]) == {"forcing", "glofas", "temperature"}
+    assert set(ctx["available"]) == {"forcing", "gcms>=3", "glofas", "temperature"}
     assert res["catchment"]["upstream_area_km2"] == 9948.0 and res["catchment"]["dams"] == 3.0
     ffa = _row_for(res, "at_site_flood_frequency")
     assert ffa["status"] == DEFENSIBLE and ffa["station"] == {"source": "uk_ea", "station_id": "8496ce69"}
@@ -188,3 +188,54 @@ def test_caller_hints_skip_the_archive_lookups(small_catalog, archive):
     assert res["catchment"] == {"area_km2": 250.0, "upstream_area_km2": 250.0, "source": "caller"}
     assert res["context"]["area_km2"] == 250.0 and res["context"]["donors"] == 4
     assert any("supplied by the caller" in n for n in res["notes"])
+
+
+# ── a gauge the catalog has no span for (the probe) ─────────────────────────
+
+NO_SPAN = _row("usgs", "USGS-7", "Unspanned Creek", 45.0, -100.0, ["discharge"], None)
+NO_SPAN_DWS = _row("south_africa_dws", "A2H012", "Crocodile River at Kalkheuwel", -25.82, 27.92, ["discharge"],
+                   None)
+
+
+def test_without_the_probe_a_gauge_with_no_catalog_span_is_not_counted(archive):
+    catalog.set_catalog([NO_SPAN])
+    try:
+        with patch.object(explore, "fetch_series") as fetch:
+            res = explore.assess_site(45.0, -100.0, problem="flood_risk")
+        fetch.assert_not_called()
+    finally:
+        catalog.set_catalog(None)
+    assert res["context"]["ungauged"]
+    assert any("no record span" in n for n in res["notes"])
+
+
+def test_the_probe_fetches_the_record_and_counts_the_gauge(archive):
+    import pandas as pd
+
+    idx = pd.date_range("1990-01-01", "2019-12-31", freq="D")
+    got = {"series": pd.Series(1.0, index=idx), "variable": "discharge", "unit": "m3/s", "note": ""}
+    catalog.set_catalog([NO_SPAN])
+    try:
+        with patch.object(explore, "fetch_series", return_value=got) as fetch:
+            res = explore.assess_site(45.0, -100.0, problem="flood_risk", probe_km=10.0)
+        fetch.assert_called_once()
+    finally:
+        catalog.set_catalog(None)
+    st = res["stations"][0]
+    assert st["years"] == 30.0 and st["span_source"] == "probed" and st["period_start"] == "1990-01-01"
+    assert not res["context"]["ungauged"] and res["context"]["years_by_variable"]["discharge"] == 30.0
+    assert any("its record was fetched" in n for n in res["notes"])
+    assert not any("not counted" in n for n in res["notes"])
+
+
+def test_a_source_aquascope_cannot_fetch_is_said_plainly(archive):
+    catalog.set_catalog([NO_SPAN_DWS])
+    try:
+        with patch.object(explore, "fetch_series") as fetch:
+            res = explore.assess_site(-25.82, 27.92, problem="flood_risk", probe_km=10.0)
+        fetch.assert_not_called()
+    finally:
+        catalog.set_catalog(None)
+    note = next(n for n in res["notes"] if "Kalkheuwel" in n)
+    assert "cannot fetch south_africa_dws records yet" in note and "attached as a table" in note
+    assert sum("Kalkheuwel" in n for n in res["notes"]) == 1

@@ -1,0 +1,1540 @@
+{
+ "about": "The stable public surface of aquascope (#588, docs/stability.md). Written by `python tests/test_public_api.py --update`, which only adds. Removing an entry is a major-release change. cli_internal lists commands that exist for CI and maintainers and carry no promise.",
+ "python": {
+  "aquascope": [
+   "CMIP6Processor",
+   "ChallengePlanner",
+   "GRACEProcessor",
+   "HydroAgent",
+   "ModelRecommender",
+   "Station",
+   "__version__",
+   "baseflow_analysis",
+   "bayesian_regression",
+   "benchmark_aquastat",
+   "climate_downscale",
+   "climate_indices",
+   "collect",
+   "compute_all_signatures",
+   "detect_changepoints",
+   "ensemble_forecast",
+   "estimate_wapor_productivity",
+   "find_stations",
+   "fit_copula",
+   "flood_analysis",
+   "flow_duration",
+   "generate_report",
+   "groundwater_analysis",
+   "plan_irrigation",
+   "recommend",
+   "station_catalogs"
+  ],
+  "aquascope.advanced": [
+   "CMIP6_MODELS",
+   "catchment_model",
+   "change_points",
+   "climate_projection",
+   "compare_gauges",
+   "nonstationary_flood",
+   "pot_flood",
+   "regional_flood"
+  ],
+  "aquascope.agri": [
+   "AgricultureBenchmarkResult",
+   "IrrigationPlan",
+   "SoilWaterBalance",
+   "WaPORProductivityResult",
+   "benchmark_aquastat",
+   "crop_water_requirement",
+   "default_season_end_date",
+   "estimate_wapor_productivity",
+   "fetch_openmeteo_plan_inputs",
+   "get_kc",
+   "hargreaves",
+   "irrigation_schedule",
+   "list_benchmark_metrics",
+   "list_productivity_metrics",
+   "penman_monteith_daily",
+   "penman_monteith_series",
+   "plan_irrigation"
+  ],
+  "aquascope.agri.water_balance": [
+   "SoilProperties",
+   "SoilWaterBalance"
+  ],
+  "aquascope.ai_engine": [
+   "AgentResult",
+   "ChallengePlanner",
+   "ChallengeSpec",
+   "DatasetProfile",
+   "HydroAgent",
+   "METHODOLOGIES",
+   "ModelRecommendation",
+   "ModelRecommender",
+   "Recommendation",
+   "RecommendationResult",
+   "ResearchMethodology",
+   "get_methodology",
+   "recommend",
+   "recommend_with_llm",
+   "recommend_with_llm_detailed",
+   "search_methodologies"
+  ],
+  "aquascope.ai_engine.agent": [
+   "HydroAgent"
+  ],
+  "aquascope.ai_engine.analyst": [
+   "AskResult",
+   "ask"
+  ],
+  "aquascope.ai_engine.llm_transport": [
+   "AnthropicChatClient",
+   "LLMHTTPError",
+   "UrllibChatClient",
+   "in_pyodide",
+   "make_client"
+  ],
+  "aquascope.ai_engine.providers": [
+   "PRICES",
+   "PROVIDERS",
+   "Provider",
+   "as_json",
+   "default_model",
+   "env_var",
+   "price_for",
+   "provider_ids",
+   "usd_for",
+   "write_json"
+  ],
+  "aquascope.ai_engine.recommender": [
+   "DatasetProfile",
+   "Recommendation",
+   "recommend"
+  ],
+  "aquascope.ai_engine.team": [
+   "SolveResult",
+   "choose_playbook",
+   "intake_hints",
+   "run_reviewed",
+   "solve"
+  ],
+  "aquascope.ai_engine.verify": [
+   "Check",
+   "normalise",
+   "verify"
+  ],
+  "aquascope.analysis.eda": [
+   "generate_eda_report",
+   "print_eda_report",
+   "profile_dataset"
+  ],
+  "aquascope.analysis.quality": [
+   "assess_quality",
+   "preprocess",
+   "print_quality_report"
+  ],
+  "aquascope.api": [
+   "baseflow_analysis",
+   "bayesian_regression",
+   "budyko_analysis",
+   "climate_downscale",
+   "climate_indices",
+   "compute_all_signatures",
+   "detect_changepoints",
+   "ensemble_forecast",
+   "fit_copula",
+   "flood_analysis",
+   "flow_duration",
+   "generate_report",
+   "groundwater_analysis",
+   "mann_kendall",
+   "sens_slope",
+   "trend_analysis"
+  ],
+  "aquascope.archive": [
+   "HarvestReport",
+   "build_bundles",
+   "fetch_archived_series",
+   "harvest_observations",
+   "harvest_stations",
+   "infer_site_ids",
+   "load_observations",
+   "publish_folder",
+   "write_dataset_card"
+  ],
+  "aquascope.archive.basins": [
+   "ATTRIBUTE_GUIDE",
+   "ATTRIBUTION",
+   "LICENSE",
+   "Topology",
+   "basins_url",
+   "build_basins",
+   "catchment_attributes",
+   "describe_catchment",
+   "describe_catchment_from_row",
+   "load_attributes",
+   "load_topology",
+   "sub_basin_at"
+  ],
+  "aquascope.archive.caravan": [
+   "CARAVAN_END",
+   "CARAVAN_START",
+   "CaravanReport",
+   "FORCING",
+   "GaugeExport",
+   "climate_indices",
+   "export_caravan",
+   "fetch_forcing",
+   "gauge_id_for",
+   "station_area_km2",
+   "validate_caravan"
+  ],
+  "aquascope.archive.catalog": [
+   "catalog_url",
+   "load_stations",
+   "search_stations",
+   "set_catalog"
+  ],
+  "aquascope.archive.regionalize": [
+   "BOUNDS",
+   "SIGNATURES",
+   "compute_station_signatures",
+   "load_skill",
+   "load_station_signatures",
+   "loo_skill",
+   "regionalize",
+   "regionalize_point",
+   "signatures_url",
+   "skill_url",
+   "station_signature"
+  ],
+  "aquascope.archive.signatures": [
+   "COLUMNS",
+   "FILTER_FIELDS",
+   "SIGNATURES_FILE",
+   "build_signatures",
+   "build_signatures_file",
+   "describe_filter",
+   "filter_gauges",
+   "filter_signatures",
+   "load_signatures",
+   "normalize_filter",
+   "parse_filter_question",
+   "signatures_url",
+   "station_signatures",
+   "write_signatures_parquet"
+  ],
+  "aquascope.archive.similar": [
+   "FEATURES",
+   "TABLE_NAME",
+   "assign_station_catchments",
+   "load_station_catchments",
+   "similar_basins",
+   "similar_for_point",
+   "similar_for_station",
+   "table_url"
+  ],
+  "aquascope.area_study": [
+   "MAX_LIVE_FETCHES",
+   "MAX_SITES",
+   "METHODS",
+   "TABLE_COLUMNS",
+   "analyse_sites",
+   "apply_areas",
+   "benjamini_hochberg",
+   "field_significance",
+   "gather_series",
+   "index_flood_rfa",
+   "inventory",
+   "site_summary",
+   "study_area",
+   "to_csv",
+   "to_xlsx"
+  ],
+  "aquascope.collectors": [
+   "AquastatCollector",
+   "BOMCollector",
+   "BaseCollector",
+   "BrazilANACollector",
+   "CAMELSBRCollector",
+   "CAMELSCLCollector",
+   "CollectorError",
+   "ColoradoCDSSCollector",
+   "CopernicusCollector",
+   "EUWFDCollector",
+   "GEMStatCollector",
+   "GRDCCollector",
+   "GreeceHydroscopeCollector",
+   "GreeceOpenhiCollector",
+   "HubeauHydrometrieCollector",
+   "IndiaWRISCollector",
+   "IrelandOPWCollector",
+   "JapanMLITCollector",
+   "KoreaWAMISCollector",
+   "NOAANWPSCollector",
+   "OpenMeteoCollector",
+   "PegelonlineCollector",
+   "PolandIMGWCollector",
+   "SDG6Collector",
+   "SouthAfricaDWSCollector",
+   "TaiwanCWACollector",
+   "TaiwanCivilIoTCollector",
+   "TaiwanDataGovCollector",
+   "TaiwanMOENVCollector",
+   "TaiwanWRAFhyCollector",
+   "TaiwanWRAGroundwaterCollector",
+   "TaiwanWRAGroundwaterDailyCollector",
+   "TaiwanWRAIoTCollector",
+   "TaiwanWRAReservoirCollector",
+   "TaiwanWRAWaterLevelCollector",
+   "UKEACollector",
+   "USGSCollector",
+   "WQPCollector",
+   "WaPORCollector"
+  ],
+  "aquascope.collectors.base": [
+   "BaseCollector"
+  ],
+  "aquascope.compare": [
+   "compare_series",
+   "compare_stations"
+  ],
+  "aquascope.evaluation": [
+   "find_studies",
+   "score_path",
+   "stats"
+  ],
+  "aquascope.experimental": [
+   "CLI",
+   "CLI_FLAGS",
+   "MCP_TOOLS",
+   "MODULES",
+   "NAMES",
+   "is_experimental",
+   "is_experimental_command"
+  ],
+  "aquascope.explore": [
+   "analyze_series",
+   "analyze_station",
+   "anywhere",
+   "assess_site",
+   "fetch_series",
+   "flood_ci",
+   "to_csv",
+   "water_quality_samples"
+  ],
+  "aquascope.hydrology": [
+   "BUDYKO_CURVES",
+   "BaseflowResult",
+   "BudykoResult",
+   "EMAResult",
+   "FDCResult",
+   "FloodFreqResult",
+   "GoodnessOfFitResult",
+   "NonStationaryGEVResult",
+   "RatingCurveResult",
+   "RatingSegment",
+   "RecessionResult",
+   "RecessionSegment",
+   "RegionalResult",
+   "SignatureReport",
+   "anderson_darling_test",
+   "baseflow_index_simple",
+   "budyko",
+   "compare_signatures",
+   "compute_signatures",
+   "coverage_probability",
+   "cramer_von_mises_test",
+   "cross_validate_rating",
+   "detect_rating_shift",
+   "eckhardt",
+   "expected_moments_algorithm",
+   "export_hec_ras",
+   "fdc_slope",
+   "fit_gev",
+   "fit_gev_lmoments",
+   "fit_gpd",
+   "fit_gumbel",
+   "fit_lp3",
+   "fit_master_recession",
+   "fit_nonstationary_gev",
+   "fit_rating_curve",
+   "fit_segmented_rating_curve",
+   "fit_weibull_min",
+   "flashiness_index",
+   "flow_duration_curve",
+   "flow_elasticity",
+   "grubbs_beck_test",
+   "identify_recessions",
+   "leave_one_out_cv",
+   "lmoments_from_sample",
+   "low_flow_stat",
+   "lyne_hollick",
+   "predict_discharge",
+   "predict_stage",
+   "probability_plot_correlation",
+   "rating_curve_uncertainty",
+   "recession_analysis",
+   "recession_constant",
+   "regional_frequency_analysis",
+   "runoff_ratio",
+   "seasonality_index",
+   "select_pot_threshold",
+   "similarity_score",
+   "stage_to_runoff",
+   "ukih",
+   "weighted_skew"
+  ],
+  "aquascope.hydrology.flood_frequency": [
+   "expected_moments_algorithm",
+   "fit_nonstationary_gev"
+  ],
+  "aquascope.ingest": [
+   "ingest",
+   "ingest_text"
+  ],
+  "aquascope.io": [
+   "HECDSSRecord",
+   "WaterMLTimeSeries",
+   "dataframe_to_hec_format",
+   "dataframe_to_waterml",
+   "read_waterml",
+   "records_to_geodataframe",
+   "records_to_xarray",
+   "waterml_to_dataframe",
+   "write_hec_dss_csv",
+   "write_hec_ras_flow",
+   "write_swmm_rainfall",
+   "write_swmm_timeseries",
+   "write_waterml"
+  ],
+  "aquascope.io.interop": [
+   "records_to_geodataframe",
+   "records_to_xarray"
+  ],
+  "aquascope.methods": [
+   "METHODS",
+   "MethodPrecondition",
+   "SiteContext",
+   "assess_method",
+   "describe_preconditions",
+   "method_ids",
+   "sufficiency_table"
+  ],
+  "aquascope.models.rainfall_runoff": [
+   "GR4J",
+   "predict_quantiles"
+  ],
+  "aquascope.pipelines.model_builder": [
+   "list_available_pipelines",
+   "run_pipeline"
+  ],
+  "aquascope.playbooks": [
+   "Branch",
+   "COMPANIONS",
+   "ChecklistItem",
+   "Declined",
+   "Playbook",
+   "PlaybookError",
+   "as_json",
+   "checklist_open",
+   "coerce_intake",
+   "companions",
+   "describe",
+   "evaluation_context",
+   "fill_intake",
+   "list_playbooks",
+   "load",
+   "plan",
+   "select_branch",
+   "validate"
+  ],
+  "aquascope.registry": [
+   "SOURCES",
+   "SourceMeta",
+   "StationCatalog",
+   "build_collector",
+   "find_stations",
+   "redistributable_sources",
+   "source_keys",
+   "station_catalogs",
+   "station_sources"
+  ],
+  "aquascope.schemas.station": [
+   "Station",
+   "VARIABLES",
+   "in_bbox"
+  ],
+  "aquascope.schemas.water_data": [
+   "ClimateReading",
+   "DataSource",
+   "GeoLocation",
+   "Quality",
+   "StreamflowReading",
+   "WaterLevelReading",
+   "WaterQualitySample"
+  ],
+  "aquascope.studio": [
+   "Artifact",
+   "Brief",
+   "Dataset",
+   "Inventory",
+   "Message",
+   "Question",
+   "Reply",
+   "Studio",
+   "Workspace"
+  ],
+  "aquascope.studio.desk": [
+   "comment",
+   "resolve",
+   "sensitivity"
+  ],
+  "aquascope.studio.prompts": [
+   "as_json"
+  ],
+  "aquascope.utils.http_client": [
+   "CachedHTTPClient",
+   "RateLimiter"
+  ],
+  "aquascope.utils.storage": [
+   "export_netcdf",
+   "save_records"
+  ],
+  "aquascope.viz": [
+   "AQUA_PALETTE",
+   "apply_aqua_style",
+   "diagnostic_panel",
+   "double_mass_plot",
+   "plot_boxplot",
+   "plot_budyko",
+   "plot_eda_summary",
+   "plot_fdc",
+   "plot_forecast",
+   "plot_heatmap",
+   "plot_hydrograph",
+   "plot_multi_param",
+   "plot_observed_vs_predicted",
+   "plot_param_comparison",
+   "plot_residuals",
+   "plot_return_periods",
+   "plot_spi_timeline",
+   "plot_station_map",
+   "plot_station_scatter",
+   "plot_timeseries",
+   "plot_who_exceedances",
+   "pp_plot",
+   "qq_plot",
+   "return_level_plot"
+  ],
+  "aquascope.workbench": [
+   "DataProfile",
+   "TOOLS",
+   "aquifer_drawdown",
+   "baseflow",
+   "datetime_indexed",
+   "eda",
+   "flood_frequency",
+   "flow_duration",
+   "insights",
+   "irrigation",
+   "iwqi",
+   "jsonable",
+   "pick_column",
+   "profile",
+   "quality",
+   "recession",
+   "recharge",
+   "reference_et",
+   "return_periods",
+   "run",
+   "sgi_drought",
+   "signatures",
+   "spei",
+   "standardized_indices",
+   "who_screen",
+   "wqi"
+  ]
+ },
+ "cli": {
+  "agri": {
+   "flags": [],
+   "positionals": 0
+  },
+  "agri benchmark": {
+   "flags": [
+    "--all-years",
+    "--aquastat-file",
+    "--countries",
+    "--metric",
+    "--output",
+    "--top",
+    "--year"
+   ],
+   "positionals": 0
+  },
+  "agri plan": {
+   "flags": [
+    "--crop",
+    "--depletion-fraction",
+    "--efficiency",
+    "--end-date",
+    "--eto-file",
+    "--eto-parameter",
+    "--format",
+    "--initial-depletion",
+    "--lat",
+    "--lon",
+    "--output",
+    "--planting-date",
+    "--precip-file",
+    "--precip-parameter",
+    "--root-depth",
+    "--soil-fc",
+    "--soil-wp",
+    "--start-date"
+   ],
+   "positionals": 0
+  },
+  "agri productivity": {
+   "flags": [
+    "--aeti-file",
+    "--aquastat-countries",
+    "--aquastat-file",
+    "--aquastat-metrics",
+    "--aquastat-top",
+    "--aquastat-year",
+    "--metric",
+    "--npp-file",
+    "--output",
+    "--ret-file"
+   ],
+   "positionals": 0
+  },
+  "alerts": {
+   "flags": [
+    "--output",
+    "--param-col",
+    "--source",
+    "--standards",
+    "--value-col"
+   ],
+   "positionals": 0
+  },
+  "area-study": {
+   "flags": [
+    "--bbox",
+    "--json",
+    "--max-live",
+    "--max-sites",
+    "--output",
+    "--question",
+    "--station"
+   ],
+   "positionals": 0
+  },
+  "ask": {
+   "flags": [
+    "--api-key",
+    "--base-url",
+    "--max-steps",
+    "--model",
+    "--out",
+    "--provider",
+    "--quiet",
+    "--study"
+   ],
+   "positionals": 1
+  },
+  "assess": {
+   "flags": [
+    "--json",
+    "--problem",
+    "--radius-km",
+    "--return-period"
+   ],
+   "positionals": 2
+  },
+  "basins": {
+   "flags": [],
+   "positionals": 0
+  },
+  "basins at": {
+   "flags": [
+    "--json",
+    "--local"
+   ],
+   "positionals": 2
+  },
+  "basins regionalize": {
+   "flags": [
+    "--json",
+    "--k",
+    "--method"
+   ],
+   "positionals": 2
+  },
+  "basins similar": {
+   "flags": [
+    "--json",
+    "--k",
+    "--method",
+    "--source",
+    "--station"
+   ],
+   "positionals": 2
+  },
+  "basins upstream": {
+   "flags": [
+    "--limit"
+   ],
+   "positionals": 1
+  },
+  "caravan": {
+   "flags": [],
+   "positionals": 0
+  },
+  "caravan export": {
+   "flags": [
+    "--end",
+    "--era5",
+    "--fetch-missing",
+    "--max-stations",
+    "--min-years",
+    "--netcdf",
+    "--no-forcing",
+    "--out",
+    "--pause",
+    "--prefix",
+    "--quiet",
+    "--source",
+    "--start",
+    "--station"
+   ],
+   "positionals": 0
+  },
+  "caravan validate": {
+   "flags": [
+    "--prefix"
+   ],
+   "positionals": 1
+  },
+  "climate": {
+   "flags": [
+    "--analysis",
+    "--file",
+    "--gcm-future-file",
+    "--gcm-hist-file",
+    "--index",
+    "--method",
+    "--obs-file",
+    "--output"
+   ],
+   "positionals": 0
+  },
+  "collect": {
+   "flags": [
+    "--api-key",
+    "--bbox",
+    "--collection",
+    "--countries",
+    "--country",
+    "--county-code",
+    "--days",
+    "--end-date",
+    "--end-year",
+    "--format",
+    "--huc",
+    "--lat",
+    "--lid",
+    "--lon",
+    "--max-stations",
+    "--measure",
+    "--mode",
+    "--observed-property",
+    "--parameter",
+    "--parameter-type",
+    "--source",
+    "--start-date",
+    "--start-year",
+    "--state",
+    "--state-code",
+    "--station",
+    "--station-id",
+    "--station-ids",
+    "--station-wiski-id",
+    "--timeseries",
+    "--variable",
+    "--variables",
+    "--water-body-type",
+    "--year"
+   ],
+   "positionals": 0
+  },
+  "completion": {
+   "flags": [],
+   "positionals": 1
+  },
+  "dashboard": {
+   "flags": [
+    "--host",
+    "--port"
+   ],
+   "positionals": 0
+  },
+  "desk": {
+   "flags": [
+    "--by",
+    "--comment",
+    "--estimator",
+    "--exclude-years",
+    "--note",
+    "--out",
+    "--resolve",
+    "--return-period",
+    "--section",
+    "--set",
+    "--sign",
+    "--verbose",
+    "--years"
+   ],
+   "positionals": 1
+  },
+  "eda": {
+   "flags": [
+    "--file",
+    "--recommend",
+    "--top-k"
+   ],
+   "positionals": 0
+  },
+  "eval": {
+   "flags": [],
+   "positionals": 0
+  },
+  "eval score": {
+   "flags": [
+    "--case",
+    "--json"
+   ],
+   "positionals": 1
+  },
+  "eval stats": {
+   "flags": [
+    "--by",
+    "--cards",
+    "--case",
+    "--csv",
+    "--json",
+    "--top"
+   ],
+   "positionals": 1
+  },
+  "eval trace": {
+   "flags": [
+    "--events",
+    "--json"
+   ],
+   "positionals": 1
+  },
+  "forecast": {
+   "flags": [
+    "--days",
+    "--file",
+    "--model"
+   ],
+   "positionals": 0
+  },
+  "groundwater": {
+   "flags": [
+    "--analysis",
+    "--distance",
+    "--file",
+    "--output",
+    "--pumping-rate",
+    "--specific-yield",
+    "--storativity",
+    "--transmissivity"
+   ],
+   "positionals": 1
+  },
+  "hydro": {
+   "flags": [
+    "--analysis",
+    "--file",
+    "--format",
+    "--method",
+    "--n-day",
+    "--output",
+    "--return-period"
+   ],
+   "positionals": 0
+  },
+  "ingest": {
+   "flags": [
+    "--api-key",
+    "--date-column",
+    "--describe",
+    "--llm",
+    "--model",
+    "--out",
+    "--provider",
+    "--sheet",
+    "--station",
+    "--unit",
+    "--value-column",
+    "--variable"
+   ],
+   "positionals": 1
+  },
+  "list-methods": {
+   "flags": [],
+   "positionals": 0
+  },
+  "list-sources": {
+   "flags": [],
+   "positionals": 0
+  },
+  "mcp": {
+   "flags": [
+    "--transport"
+   ],
+   "positionals": 0
+  },
+  "playbooks": {
+   "flags": [],
+   "positionals": 0
+  },
+  "playbooks list": {
+   "flags": [],
+   "positionals": 0
+  },
+  "playbooks show": {
+   "flags": [],
+   "positionals": 1
+  },
+  "plot": {
+   "flags": [
+    "--file",
+    "--output",
+    "--title",
+    "--type"
+   ],
+   "positionals": 0
+  },
+  "quality": {
+   "flags": [
+    "--file",
+    "--fix"
+   ],
+   "positionals": 0
+  },
+  "recommend": {
+   "flags": [
+    "--format",
+    "--from-file",
+    "--goal",
+    "--keywords",
+    "--llm-api-key",
+    "--llm-base-url",
+    "--model",
+    "--n-records",
+    "--n-stations",
+    "--output",
+    "--parameters",
+    "--scope",
+    "--top-k",
+    "--use-llm",
+    "--years"
+   ],
+   "positionals": 0
+  },
+  "run": {
+   "flags": [
+    "--config",
+    "--dry-run",
+    "--file",
+    "--method",
+    "--out",
+    "--output",
+    "--quiet"
+   ],
+   "positionals": 1
+  },
+  "solve": {
+   "flags": [
+    "--api-key",
+    "--base-url",
+    "--file",
+    "--intake",
+    "--lat",
+    "--lon",
+    "--model",
+    "--out",
+    "--playbook",
+    "--provider",
+    "--quiet",
+    "--study",
+    "--yes"
+   ],
+   "positionals": 1
+  },
+  "stations": {
+   "flags": [
+    "--api-key",
+    "--bbox",
+    "--format",
+    "--max-items",
+    "--output",
+    "--source",
+    "--variable"
+   ],
+   "positionals": 0
+  },
+  "studio": {
+   "flags": [
+    "--api-key",
+    "--at",
+    "--base-url",
+    "--by",
+    "--comment",
+    "--continue-without",
+    "--data",
+    "--estimator",
+    "--exclude-years",
+    "--intake",
+    "--lat",
+    "--lon",
+    "--max-usd",
+    "--model",
+    "--note",
+    "--out",
+    "--provider",
+    "--quiet",
+    "--resolve",
+    "--resume",
+    "--return-period",
+    "--section",
+    "--set",
+    "--sign",
+    "--style",
+    "--verbose",
+    "--years",
+    "--yes"
+   ],
+   "positionals": 1
+  },
+  "update": {
+   "flags": [
+    "--check",
+    "--yes"
+   ],
+   "positionals": 0
+  }
+ },
+ "cli_internal": [
+  "basins assign",
+  "basins build",
+  "basins loo",
+  "basins signatures",
+  "evidence build",
+  "evidence publish",
+  "harvest",
+  "studio-showcase"
+ ],
+ "mcp": {
+  "analyse_table": {
+   "args": [
+    "csv",
+    "analysis",
+    "params"
+   ],
+   "required": [
+    "csv",
+    "analysis"
+   ]
+  },
+  "analyze_station": {
+   "args": [
+    "source",
+    "station_id",
+    "years",
+    "bootstrap_ci",
+    "variable",
+    "return_periods",
+    "exclude_years"
+   ],
+   "required": [
+    "source",
+    "station_id"
+   ]
+  },
+  "archive_health": {
+   "args": [],
+   "required": []
+  },
+  "assess_site": {
+   "args": [
+    "lat",
+    "lon",
+    "radius_km",
+    "problem",
+    "return_period"
+   ],
+   "required": [
+    "lat",
+    "lon"
+   ]
+  },
+  "catchment_model": {
+   "args": [
+    "source",
+    "station_id",
+    "lat",
+    "lon",
+    "area_km2",
+    "years",
+    "scenarios",
+    "objective",
+    "maxiter",
+    "warmup_days",
+    "pet_pct_per_c",
+    "snow",
+    "flood_rp",
+    "members",
+    "params"
+   ],
+   "required": [
+    "source",
+    "station_id",
+    "lat",
+    "lon"
+   ]
+  },
+  "change_points": {
+   "args": [
+    "source",
+    "station_id",
+    "variable",
+    "series",
+    "years",
+    "alpha"
+   ],
+   "required": [
+    "source",
+    "station_id"
+   ]
+  },
+  "climate_projection": {
+   "args": [
+    "lat",
+    "lon",
+    "params",
+    "area_km2",
+    "baseline",
+    "future",
+    "return_period",
+    "models",
+    "pet_climatology"
+   ],
+   "required": [
+    "lat",
+    "lon"
+   ]
+  },
+  "compare_gauges": {
+   "args": [
+    "stations",
+    "lat",
+    "lon",
+    "k",
+    "years"
+   ],
+   "required": []
+  },
+  "crop_water_demand": {
+   "args": [
+    "lat",
+    "lon",
+    "crop",
+    "area_ha",
+    "planting_month",
+    "efficiency",
+    "years"
+   ],
+   "required": [
+    "lat",
+    "lon",
+    "crop",
+    "area_ha",
+    "planting_month"
+   ]
+  },
+  "describe_catchment": {
+   "args": [
+    "lat",
+    "lon",
+    "upstream"
+   ],
+   "required": [
+    "lat",
+    "lon"
+   ]
+  },
+  "describe_methods": {
+   "args": [],
+   "required": []
+  },
+  "describe_playbook": {
+   "args": [
+    "playbook"
+   ],
+   "required": [
+    "playbook"
+   ]
+  },
+  "drought_indices": {
+   "args": [
+    "lat",
+    "lon",
+    "years",
+    "timescales",
+    "source",
+    "station_id",
+    "pet",
+    "threshold"
+   ],
+   "required": [
+    "lat",
+    "lon"
+   ]
+  },
+  "drought_propagation": {
+   "args": [
+    "source",
+    "station_id",
+    "lat",
+    "lon",
+    "years",
+    "max_lag"
+   ],
+   "required": [
+    "source",
+    "station_id",
+    "lat",
+    "lon"
+   ]
+  },
+  "filter_gauges": {
+   "args": [
+    "question",
+    "min_years",
+    "flood_trend",
+    "bfi_min",
+    "bfi_max",
+    "limit",
+    "spec_only"
+   ],
+   "required": []
+  },
+  "find_stations": {
+   "args": [
+    "query",
+    "bbox",
+    "near",
+    "variable",
+    "sources",
+    "limit"
+   ],
+   "required": []
+  },
+  "flood_frequency": {
+   "args": [
+    "source",
+    "station_id",
+    "years",
+    "bootstrap_ci",
+    "return_periods",
+    "exclude_years"
+   ],
+   "required": [
+    "source",
+    "station_id"
+   ]
+  },
+  "get_timeseries": {
+   "args": [
+    "source",
+    "station_id",
+    "years",
+    "resample",
+    "max_points",
+    "variable"
+   ],
+   "required": [
+    "source",
+    "station_id"
+   ]
+  },
+  "list_analyses": {
+   "args": [],
+   "required": []
+  },
+  "list_playbooks": {
+   "args": [],
+   "required": []
+  },
+  "list_sources": {
+   "args": [],
+   "required": []
+  },
+  "low_flow_context": {
+   "args": [
+    "source",
+    "station_id",
+    "years"
+   ],
+   "required": [
+    "source",
+    "station_id"
+   ]
+  },
+  "nonstationary_flood": {
+   "args": [
+    "source",
+    "station_id",
+    "return_periods",
+    "horizon_year",
+    "years",
+    "n_boot",
+    "seed"
+   ],
+   "required": [
+    "source",
+    "station_id"
+   ]
+  },
+  "pot_flood": {
+   "args": [
+    "source",
+    "station_id",
+    "threshold",
+    "events_per_year",
+    "min_separation_days",
+    "return_periods",
+    "years"
+   ],
+   "required": [
+    "source",
+    "station_id"
+   ]
+  },
+  "regional_flood": {
+   "args": [
+    "lat",
+    "lon",
+    "radius_km",
+    "source",
+    "station_id",
+    "max_sites",
+    "return_period"
+   ],
+   "required": [
+    "lat",
+    "lon"
+   ]
+  },
+  "regionalize_signatures": {
+   "args": [
+    "lat",
+    "lon",
+    "k",
+    "method"
+   ],
+   "required": [
+    "lat",
+    "lon"
+   ]
+  },
+  "similar_basins": {
+   "args": [
+    "lat",
+    "lon",
+    "source",
+    "station_id",
+    "k",
+    "method",
+    "sources"
+   ],
+   "required": []
+  },
+  "solve_plan": {
+   "args": [
+    "problem",
+    "lat",
+    "lon",
+    "playbook",
+    "intake"
+   ],
+   "required": [
+    "problem",
+    "lat",
+    "lon"
+   ]
+  },
+  "solve_run": {
+   "args": [
+    "study"
+   ],
+   "required": [
+    "study"
+   ]
+  },
+  "station_view": {
+   "args": [
+    "source",
+    "station_id",
+    "years"
+   ],
+   "required": [
+    "source",
+    "station_id"
+   ]
+  },
+  "studio_approve": {
+   "args": [
+    "workspace",
+    "edits",
+    "plan",
+    "provider",
+    "model",
+    "api_key",
+    "base_url",
+    "max_usd"
+   ],
+   "required": [
+    "workspace"
+   ]
+  },
+  "studio_context": {
+   "args": [
+    "workspace",
+    "role",
+    "text"
+   ],
+   "required": [
+    "workspace",
+    "role"
+   ]
+  },
+  "studio_export": {
+   "args": [
+    "workspace",
+    "out_dir"
+   ],
+   "required": [
+    "workspace",
+    "out_dir"
+   ]
+  },
+  "studio_follow_up": {
+   "args": [
+    "workspace",
+    "text",
+    "provider",
+    "model",
+    "api_key",
+    "base_url",
+    "max_usd"
+   ],
+   "required": [
+    "workspace",
+    "text"
+   ]
+  },
+  "studio_narrate": {
+   "args": [
+    "workspace",
+    "sections",
+    "source"
+   ],
+   "required": [
+    "workspace",
+    "sections"
+   ]
+  },
+  "studio_say": {
+   "args": [
+    "workspace",
+    "text",
+    "proposed",
+    "provider",
+    "model",
+    "api_key",
+    "base_url",
+    "max_usd",
+    "tables"
+   ],
+   "required": [
+    "workspace",
+    "text"
+   ]
+  },
+  "studio_start": {
+   "args": [
+    "problem",
+    "lat",
+    "lon",
+    "intake",
+    "provider",
+    "model",
+    "api_key",
+    "base_url",
+    "max_usd",
+    "tables"
+   ],
+   "required": [
+    "problem",
+    "lat",
+    "lon"
+   ]
+  },
+  "study_area": {
+   "args": [
+    "bbox",
+    "stations",
+    "question",
+    "max_sites",
+    "max_live"
+   ],
+   "required": []
+  },
+  "supply_reliability": {
+   "args": [
+    "demand_m3s",
+    "demand_ml_day",
+    "source",
+    "station_id",
+    "lat",
+    "lon",
+    "share",
+    "reserve",
+    "months"
+   ],
+   "required": []
+  },
+  "water_quality_samples": {
+   "args": [
+    "source",
+    "station_id",
+    "years",
+    "parameters",
+    "use"
+   ],
+   "required": [
+    "source",
+    "station_id"
+   ]
+  }
+ }
+}

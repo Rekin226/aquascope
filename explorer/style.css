@@ -149,6 +149,17 @@ header#top {
   padding: .65rem; background: var(--bg); border: 1px solid var(--line);
   border-radius: var(--radius); box-shadow: var(--shadow-2);
 }
+/* Tools > Data status (#593): one line, open for every scheduled job */
+.data-status { border-top: 1px solid var(--line-soft); padding-top: .4rem; font-size: .74rem; max-width: 300px; }
+.data-status summary { cursor: pointer; color: var(--ink-2); }
+.ds-list { list-style: none; margin: .35rem 0 0; padding: 0; display: grid; gap: .2rem; }
+.ds-list li { display: grid; grid-template-columns: 8px auto 1fr; align-items: center; gap: .4rem; }
+.ds-list i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.ds-list .ds-ok i { background: var(--ok-ink); }
+.ds-list .ds-stale i, .ds-list .ds-failing i { background: var(--err-ink); }
+.ds-name { white-space: nowrap; }
+.ds-age { color: var(--muted); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ds-list .ds-stale .ds-age, .ds-list .ds-failing .ds-age { color: var(--err-ink); }
 .entry-routes { display: flex; flex-direction: column; align-items: stretch; gap: .65rem; margin: 1.2rem 0; }
 .entry-routes .btn { text-align: left; white-space: normal; padding: .8rem; }
 

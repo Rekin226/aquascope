@@ -114,10 +114,12 @@ nav:
     - Theory: theory.md
     - Data sources: data_sources.md
     - The Archive (open gauge catalog): archive.md
+    - Archive layout (the contract): archive-layout.md
     - Caravan export (large-sample datasets): caravan.md
     - Engineering exports (HEC, SWMM, MODFLOW, FEWS, Raven): engineering_exports.md
     - Model results on a mesh (HEC-RAS 2D, UGRID): mesh.md
     - SWMM in the browser (assessment): assessments/swmm.md
+    - A real HEC-RAS 2D run (assessment): assessments/hec-ras.md
     - Use the Archive from R, QGIS, DuckDB: readers.md
     - MODFLOW heads on the map: modflow.md
     - The Explorer (click any gauge): explorer.md
@@ -151,5 +153,6 @@ nav:
     - R: integration_guides/r_integration.md
     - xarray and GeoPandas: integration_guides/xarray_integration.md
   - API Reference: api.md
+  - Stability and deprecation: stability.md
   - FAQ: faq.md
   - Troubleshooting: troubleshooting.md

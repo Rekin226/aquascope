@@ -18,12 +18,16 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Note when the job started (its health record's duration)
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
@@ -81,3 +85,21 @@ jobs:
 
       - name: Assemble Explorer site
         run: python explorer/build.py --out dist-explorer --wheel dist/aquascope-*.whl
+
+      # Job health (#593): health/jobs/pyodide-smoke.json and health/jobs/index.json, written only under
+      # health/jobs/, and one job-health issue, opened or updated when a scheduled run fails and closed by the next
+      # good one. It runs whether the job passed or not, needs only the standard library to record and to file the
+      # issue, and never turns the job red itself.
+      - name: Job health
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PUBLISH: ${{ secrets.HF_TOKEN != '' && github.event_name == 'schedule' }}
+          ISSUE: ${{ github.event_name == 'schedule' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$PUBLISH" = "true" ]; then python3 -m pip install -q "huggingface_hub>=0.20"; fi
+          python3 .github/scripts/job_health.py report pyodide-smoke --status "${{ job.status }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"

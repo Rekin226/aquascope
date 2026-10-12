@@ -11,6 +11,7 @@ import { $, escapeHtml } from "./core.js?v=__BUILD__";
 import { chipLabel, rowState, sortRows, startsFolded, startsOpen } from "./map-legend-core.js?v=__BUILD__";
 
 const rows = new Map();   // id -> { def, open }
+let notes = {};           // id -> { text, title }, when the job behind a row is late (job-health.js, #593)
 let folded = null;        // null until the first render decides from the screen width
 
 const host = () => $("map-legend");
@@ -47,6 +48,15 @@ export function refreshLegend(id) {
   if (!fresh) { render(); return; }
   row.replaceWith(fresh);
   syncChip();
+}
+
+/**
+ * Notes from the scheduled jobs' health (#593): { rowId: { text: "3 d old", title } } for each layer whose data
+ * is older than expected. The row shows the note after its words; a row turned off does not.
+ */
+export function setLegendNotes(next) {
+  notes = next && typeof next === "object" ? { ...next } : {};
+  render();
 }
 
 /** Open a row's key, as when a lit river wants its words seen. */
@@ -88,8 +98,10 @@ function rowNode(r) {
     ? `<input type="checkbox" class="ml-toggle" ${st === "off" ? "" : "checked"} aria-label="Show ${escapeHtml(d.title)}" ` +
       `title="${st === "off" ? "Show" : "Hide"} ${escapeHtml(d.title)}">`
     : '<button type="button" class="ml-clear" data-act="clear" aria-label="Clear" title="Clear">×</button>';
+  const late = st === "off" ? null : notes[d.id];
   const name = `<span class="ml-title">${escapeHtml(d.title)}</span>` +
-    (sum ? `<span class="ml-sum">${escapeHtml(sum)}</span>` : "");
+    (sum ? `<span class="ml-sum">${escapeHtml(sum)}</span>` : "") +
+    (late ? `<span class="ml-late" title="${escapeHtml(late.title)}">${escapeHtml(late.text)}</span>` : "");
   node.innerHTML =
     `<div class="ml-line">${toggle}<span class="ml-mark" aria-hidden="true">${d.mark ? d.mark() : ""}</span>` +
     (canOpen

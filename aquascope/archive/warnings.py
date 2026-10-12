@@ -15,7 +15,8 @@ Layout under ``<out>/forecasts/warnings/`` (the only folder this job writes or p
     manifest.json          the issue date, counts by class, the method, the thresholds, what it is not, licences
     latest.parquet         one row per reach expected to pass its 2-year flow (every column, see COLUMNS)
     latest.geojson         the same reaches as points, slim, for the Explorer (at most GEOJSON_MAX)
-    <YYYY-MM-DD>.parquet   the same table kept by the forecast's start date
+    <YYYY-MM-DD>.parquet   the same table kept by the forecast's start date (the last 60 days, then the first of
+                           each month: publish prunes the rest, #597)
 
 Cost, measured on 2026-10-10 against the 2026-10-09 run: the forecast's Qout array is chunked 686 reaches wide with
 every member and time step in a chunk (about 16 MB compressed each, 9,970 chunks, about 150 GB in all). The reaches
@@ -26,7 +27,7 @@ Chunks are streamed, reduced and dropped, so disk use is nil and memory is a few
 Run by ``.github/workflows/flood-warnings.yml``:
 
     python -m aquascope.archive.warnings run --out build [--min-order 5] [--max-chunks N]
-    python -m aquascope.archive.warnings publish --out build
+    python -m aquascope.archive.warnings publish --out build [--dry-run]
 
 ``--max-chunks`` is a smoke run: it reads N chunks spread over the globe and is marked so, and publish refuses it.
 Needs the ``archive`` extra (pyarrow, huggingface_hub) and a Blosc decoder (``numcodecs`` or ``blosc2``).
@@ -53,6 +54,8 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 FOLDER = "forecasts/warnings"
+#: The dated issues' suffix; :mod:`aquascope.archive.retention` prunes them (#597).
+DATED_SUFFIX = ".parquet"
 DEFAULT_REPO = "Rekin226/aquascope-gauges"
 FORECAST_BUCKET = "https://geoglows-v2-forecasts.s3.us-west-2.amazonaws.com"
 GEOGLOWS_BUCKET = "https://geoglows-v2.s3.us-west-2.amazonaws.com"
@@ -670,11 +673,7 @@ def write_day0(path: str | Path, rivid: Any, flow: Any, info: dict[str, Any]) ->
     return path
 
 
-def publish(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None = None) -> str:
-    """Upload ``<out>/forecasts/warnings`` and nothing else to the Archive dataset (needs HF_TOKEN with write
-    access). A smoke run is refused: its few chunks would replace the day's issue."""
-    from aquascope.archive.publish import publish_folder
-
+def _publish_src(out: str | Path) -> tuple[Path, dict[str, Any]]:
     src = Path(out) / FOLDER
     manifest = src / "manifest.json"
     if not manifest.exists():
@@ -682,11 +681,38 @@ def publish(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None =
     doc = json.loads(manifest.read_text())
     if doc.get("smoke"):
         raise ValueError("this is a smoke run (--max-chunks); it is never published")
+    return src, doc
+
+
+def publish(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None = None) -> str:
+    """Upload ``<out>/forecasts/warnings`` and nothing else to the Archive dataset (needs HF_TOKEN with write
+    access). A smoke run is refused: its few chunks would replace the day's issue.
+
+    The same commit prunes the dated issues the retention rule drops (:mod:`aquascope.archive.retention`: the last
+    60 days, then the first of each month) and their manifest history entries, under ``forecasts/warnings/`` only.
+    """
+    from aquascope.archive import retention
+    from aquascope.archive.publish import publish_folder
+
+    src, doc = _publish_src(out)
+    message = f"forecasts/warnings: issue {doc['issue_date']}"
     with tempfile.TemporaryDirectory() as tmp:
         stage = Path(tmp) / FOLDER
         shutil.copytree(src, stage)
+        delete = retention.plan(stage, FOLDER, DATED_SUFFIX, repo_id=repo_id, token=token)["delete"]
+        if delete:
+            logger.info("pruning %d dated issue(s) under %s/ (#597): %s", len(delete), FOLDER, ", ".join(delete))
+            message += f" (pruned {len(delete)} dated file(s))"
         return str(publish_folder(Path(tmp), repo_id, token=token, allow_patterns=[f"{FOLDER}/*"],
-                                  commit_message=f"forecasts/warnings: issue {doc['issue_date']}"))
+                                  commit_message=message, delete=delete or None))
+
+
+def prune_plan(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None = None) -> dict[str, Any]:
+    """What :func:`publish` would keep and prune under ``forecasts/warnings/`` (``publish --dry-run``)."""
+    from aquascope.archive import retention
+
+    src, _ = _publish_src(out)
+    return retention.dry_run(src, FOLDER, DATED_SUFFIX, repo_id=repo_id, token=token)
 
 
 # ── reading what is published (the MCP tool and the CLI) ───────────────────
@@ -757,6 +783,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("publish")
     p.add_argument("--out", required=True)
     p.add_argument("--repo", default=os.environ.get("HF_DATASET", DEFAULT_REPO))
+    p.add_argument("--dry-run", action="store_true", help="list the dated issues that would be pruned; upload nothing")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     for noisy in ("httpx", "httpcore"):
@@ -765,6 +792,8 @@ def main(argv: list[str] | None = None) -> int:
         info = run(a.out, repo_id=a.repo, min_order=a.min_order, min_q2=a.min_q2, max_chunks=a.max_chunks,
                    workers=a.workers,
                    time_budget_s=a.time_budget_min * 60, run_name=a.run, day0_out=a.day0)
+    elif a.dry_run:
+        info = prune_plan(a.out, repo_id=a.repo)
     else:
         info = {"commit": publish(a.out, repo_id=a.repo)}
     print(json.dumps(info, indent=1, default=str))

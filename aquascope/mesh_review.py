@@ -402,8 +402,9 @@ def _tiny(m: Mesh, sc: dict[str, Any], ids: _Ids, unit: str | None, k: float) ->
         f1 = _fact(ids, "Largest depth", round(float(hi[i]), 4), unit, fmt(hi[i]), lat=m.lat[i], lon=m.lon[i])
         if f2 is None:
             f2 = _fact(ids, "Cells wetted only by a film", int(film.size), "cells", _count(film.size))
+            share = 100 * film.size / max(wet, 1)
             f3 = _fact(ids, "Share of the cells that get wet", round(film.size / max(wet, 1), 4), "",
-                       f"{round(100 * film.size / max(wet, 1))}%")
+                       f"{fmt(share, 2) if share < 1 else round(share)}%")
             facts = [f1, f2, f3]
             reason = (f"This cell never gets deeper than {f1['shown']}{u}, under {limit}{u}. "
                       f"{f2['shown']} {'cell in all is' if film.size == 1 else 'cells in all are'} like it, "
@@ -494,7 +495,12 @@ _VA = "Results/Unsteady/Summary/Volume Accounting"
 def check_volume(m: Mesh) -> dict[str, Any] | None:
     """The volume accounting a HEC-RAS plan file holds (``Results/Unsteady/Summary/Volume Accounting``): the error
     in percent, its volume and unit, the start and end volumes. None for a file without one (a UGRID map file
-    holds none)."""
+    holds none).
+
+    HEC-RAS 6.5 writes the plan's totals on the group itself (``Error Percent``, ``Error``, ``Volume Starting``,
+    ``Volume Ending``, ``Total Boundary Flux of Water In`` / ``Out``, ``Vol Accounting in``) and each 2D area's
+    under ``Volume Accounting 2D/<area>`` with other names (``Vol Starting``, ``Vol Ending``, ``Cum Inflow``,
+    ``Cum Outflow``); both are read (checked on a real 6.5 plan, docs/assessments/hec-ras.md)."""
     fh = getattr(getattr(m, "_source", None), "fh", None)
     if m.format != "hec-ras" or fh is None or _VA not in fh:
         return None
@@ -512,8 +518,8 @@ def check_volume(m: Mesh) -> dict[str, Any] | None:
         if not math.isfinite(pct):
             return
 
-        def num(key: str) -> float | None:
-            v = attrs.get(key)
+        def num(*keys: str) -> float | None:
+            v = next((attrs[k] for k in keys if k in attrs), None)
             try:
                 v = float(np.asarray(v).reshape(-1)[0])
             except (TypeError, ValueError):
@@ -523,9 +529,11 @@ def check_volume(m: Mesh) -> dict[str, Any] | None:
         unit = attrs.get("Vol Accounting in")
         unit = unit.decode("utf-8", "replace").strip("\x00 ") if isinstance(unit, (bytes, np.bytes_)) else unit
         found.append({"where": name or "plan", "error_percent": pct, "error": num("Error"),
-                      "unit": str(unit).strip() if unit else None, "start": num("Volume Starting"),
-                      "end": num("Volume Ending"), "in": num("Total Boundary Flux of Water In"),
-                      "out": num("Total Boundary Flux of Water Out")})
+                      "unit": str(unit).strip() if unit else None,
+                      # the plan's totals and each 2D area's own (Volume Accounting 2D/<area>) name them apart
+                      "start": num("Volume Starting", "Vol Starting"), "end": num("Volume Ending", "Vol Ending"),
+                      "in": num("Total Boundary Flux of Water In", "Cum Inflow"),
+                      "out": num("Total Boundary Flux of Water Out", "Cum Outflow")})
 
     grp = fh[_VA]
     read("", grp)

@@ -53,6 +53,8 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 FOLDER = "scout"
+#: The dated files' suffix; :mod:`aquascope.archive.retention` prunes them (#597).
+DATED_SUFFIX = ".json"
 DEFAULT_REPO = "Rekin226/aquascope-gauges"
 ARCHIVE_BASE = f"https://huggingface.co/datasets/{DEFAULT_REPO}/resolve/main/"
 MAX_PINS = 10
@@ -1439,18 +1441,41 @@ def daily(out: str | Path, *, base: str = ARCHIVE_BASE, warnings_dir: str | Path
     return {k: doc[k] for k in ("made", "inputs", "counts", "notes", "seconds")} | {"picks": len(picks)}
 
 
-def publish(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None = None) -> str:
-    """Upload ``<out>/scout`` and nothing else to the Archive dataset (needs HF_TOKEN with write access)."""
+def _publish_src(out: str | Path) -> Path:
     src = Path(out) / FOLDER
     if not (src / "latest.json").exists():
         raise FileNotFoundError(f"{src / 'latest.json'} is missing; run the scout first")
+    return src
+
+
+def publish(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None = None) -> str:
+    """Upload ``<out>/scout`` and nothing else to the Archive dataset (needs HF_TOKEN with write access).
+
+    The same commit prunes the dated files the retention rule drops (:mod:`aquascope.archive.retention`: the last
+    60 days, then the first of each month), under ``scout/`` only.
+    """
+    from aquascope.archive import retention
     from aquascope.archive.publish import publish_folder
 
+    src = _publish_src(out)
     doc = json.loads((src / "latest.json").read_text())
+    message = f"scout: {doc['date']}"
     with tempfile.TemporaryDirectory() as tmp:
-        shutil.copytree(src, Path(tmp) / FOLDER)
+        stage = Path(tmp) / FOLDER
+        shutil.copytree(src, stage)
+        delete = retention.plan(stage, FOLDER, DATED_SUFFIX, repo_id=repo_id, token=token)["delete"]
+        if delete:
+            logger.info("pruning %d dated file(s) under %s/ (#597): %s", len(delete), FOLDER, ", ".join(delete))
+            message += f" (pruned {len(delete)} dated file(s))"
         return str(publish_folder(Path(tmp), repo_id, token=token, allow_patterns=[f"{FOLDER}/*"],
-                                  commit_message=f"scout: {doc['date']}"))
+                                  commit_message=message, delete=delete or None))
+
+
+def prune_plan(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None = None) -> dict[str, Any]:
+    """What :func:`publish` would keep and prune under ``scout/`` (``publish --dry-run``); uploads nothing."""
+    from aquascope.archive import retention
+
+    return retention.dry_run(_publish_src(out), FOLDER, DATED_SUFFIX, repo_id=repo_id, token=token)
 
 
 def from_published(doc: dict[str, Any], view: dict[str, Any] | None = None, *,
@@ -1532,12 +1557,15 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("publish")
     p.add_argument("--out", required=True)
     p.add_argument("--repo", default=os.environ.get("HF_DATASET", DEFAULT_REPO))
+    p.add_argument("--dry-run", action="store_true", help="list the dated files that would be pruned; upload nothing")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     for noisy in ("httpx", "httpcore"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
     if a.cmd == "daily":
         info = daily(a.out, warnings_dir=a.warnings, history=not a.no_history)
+    elif a.dry_run:
+        info = prune_plan(a.out, repo_id=a.repo)
     else:
         info = {"commit": publish(a.out, repo_id=a.repo)}
     print(json.dumps(info, indent=1, default=str))

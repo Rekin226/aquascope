@@ -32,7 +32,11 @@ Run by ``.github/workflows/flow-climatology.yml`` (once) and ``flood-warnings.ym
     python -m aquascope.flowstatus publish-climatology --out build
     python -m aquascope.archive.warnings run --out build --day0 build/scratch/day0.parquet
     python -m aquascope.flowstatus daily --out build --day0 build/scratch/day0.parquet
-    python -m aquascope.flowstatus publish --out build
+    python -m aquascope.flowstatus publish --out build [--dry-run]
+
+Publish keeps the latest file, the last 60 days of dated files and the first of each month before that, and prunes
+the rest (and their manifest history) in the same commit (#597, :mod:`aquascope.archive.retention`); ``--dry-run``
+lists what it would prune and uploads nothing.
 
 Without ``--day0`` the daily step reads the forecast itself (``--max-chunks`` or ``--bbox`` for a smoke run). A smoke
 run is marked so, and publish refuses it. Needs the ``archive`` extra (pyarrow, huggingface_hub) and a Blosc decoder.
@@ -69,6 +73,8 @@ PERCENTILES = (10, 25, 75, 90)
 #: Measured on 2026-10-11 (see the module docstring): the years the store's percentiles are taken over.
 BASE_PERIOD = "1950 to 2019"
 MAGIC = b"AQFS"
+#: The dated files' suffix; :mod:`aquascope.archive.retention` prunes them (#597).
+DATED_SUFFIX = ".bin.gz"
 VERSION = 1
 
 #: Codes 1 to 5 in the browser file, with the ids, words and bounds of the river status layer (map_layers.py).
@@ -375,7 +381,8 @@ def build_climatology(out: str | Path, *, min_order: int = DEFAULT_MIN_ORDER, ma
     return {k: doc[k] for k in keys}
 
 
-def _publish(src: Path, folder: str, patterns: list[str], message: str, repo_id: str, token: str | None) -> str:
+def _publish(src: Path, folder: str, patterns: list[str], message: str, repo_id: str, token: str | None,
+             prune: bool = False) -> str:
     from aquascope.archive.publish import publish_folder
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -384,7 +391,17 @@ def _publish(src: Path, folder: str, patterns: list[str], message: str, repo_id:
         for p in src.iterdir():
             if p.is_file():
                 shutil.copy2(p, stage / p.name)
-        return str(publish_folder(Path(tmp), repo_id, token=token, allow_patterns=patterns, commit_message=message))
+        delete: list[str] = []
+        if prune:
+            from aquascope.archive import retention
+
+            res = retention.plan(stage, folder, DATED_SUFFIX, repo_id=repo_id, token=token)
+            delete = res["delete"]
+            if delete:
+                logger.info("pruning %d dated file(s) under %s/ (#597): %s", len(delete), folder, ", ".join(delete))
+                message += f" (pruned {len(delete)} dated file(s))"
+        return str(publish_folder(Path(tmp), repo_id, token=token, allow_patterns=patterns, commit_message=message,
+                                  delete=delete or None))
 
 
 def publish_climatology(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None = None) -> str:
@@ -578,8 +595,7 @@ def daily(out: str | Path, *, day0: str | Path | None = None, climatology: str |
     return {k: doc[k] for k in keys}
 
 
-def publish(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None = None) -> str:
-    """Upload today's ``<out>/flowstatus`` files (not the climatology). A smoke run is refused."""
+def _daily_src(out: str | Path) -> tuple[Path, dict[str, Any]]:
     src = Path(out) / FOLDER
     manifest = src / "manifest.json"
     if not manifest.exists():
@@ -587,8 +603,26 @@ def publish(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None =
     doc = json.loads(manifest.read_text())
     if doc.get("smoke"):
         raise ValueError("this is a smoke run; it is never published")
+    return src, doc
+
+
+def publish(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None = None) -> str:
+    """Upload today's ``<out>/flowstatus`` files (not the climatology). A smoke run is refused.
+
+    The same commit prunes the dated files the retention rule drops (:mod:`aquascope.archive.retention`: the last
+    60 days, then the first of each month) and their manifest history entries, under ``flowstatus/`` only.
+    """
+    src, doc = _daily_src(out)
     return _publish(src, FOLDER, [f"{FOLDER}/*.bin.gz", f"{FOLDER}/latest.parquet", f"{FOLDER}/manifest.json"],
-                    f"flowstatus: {doc['issue_date']}", repo_id, token)
+                    f"flowstatus: {doc['issue_date']}", repo_id, token, prune=True)
+
+
+def prune_plan(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None = None) -> dict[str, Any]:
+    """What :func:`publish` would keep and prune under ``flowstatus/`` (``publish --dry-run``); uploads nothing."""
+    from aquascope.archive import retention
+
+    src, _ = _daily_src(out)
+    return retention.dry_run(src, FOLDER, DATED_SUFFIX, repo_id=repo_id, token=token)
 
 
 # ── reading what is published (the MCP tool and the CLI) ───────────────────
@@ -692,6 +726,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("publish")
     p.add_argument("--out", required=True)
     p.add_argument("--repo", default=os.environ.get("HF_DATASET", DEFAULT_REPO))
+    p.add_argument("--dry-run", action="store_true", help="list the dated files that would be pruned; upload nothing")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     for noisy in ("httpx", "httpcore"):
@@ -704,6 +739,8 @@ def main(argv: list[str] | None = None) -> int:
     elif a.cmd == "daily":
         info = daily(a.out, day0=a.day0, climatology=a.climatology, repo_id=a.repo, max_chunks=a.max_chunks,
                      bbox=a.bbox, run_name=a.run, workers=a.workers)
+    elif a.dry_run:
+        info = prune_plan(a.out, repo_id=a.repo)
     else:
         info = {"commit": publish(a.out, repo_id=a.repo)}
     print(json.dumps(info, indent=1, default=str))

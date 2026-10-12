@@ -409,6 +409,12 @@ top says what the blue and the orange mean, and its × clears it. On a wide
 screen the river status's row starts open; on a phone the whole legend starts
 as one small chip, and opened it stays inside a quarter of the screen.
 
+When the scheduled job behind a layer is late (its last success is older than
+its cadence allows, from the Archive's `health/jobs/index.json`), the row says
+how old the data is, *3 d old*, and its tooltip names the job and how often it
+runs. **Tools > Data status** lists every job: on time, late, last run failed,
+or run when dispatched ([Job health](archive.md#job-health)).
+
 Above the globe, one line says what the map shows this month, made from the
 river status file itself: for a few regions a reader knows by name (rough boxes
 such as the Amazon, the Sahel or South Asia, not basins), the share of the mapped

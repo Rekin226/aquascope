@@ -50,7 +50,8 @@ def _normals(pts, faces):
     return np.stack([ab[:, 1] / length, -ab[:, 0] / length, length], 1)
 
 
-def make_ras(path, *, bed=True, normals=True, ordered=True, projection=True, series=True, ghost=1):
+def make_ras(path, *, bed=True, normals=True, ordered=True, projection=True, series=True, ghost=1,
+             cell_velocity=None, face_velocity=True):
     pts, faces, cells, centres, rings = _grid()
     n = len(cells)
     nl = _normals(pts, faces)
@@ -93,7 +94,14 @@ def make_ras(path, *, bed=True, normals=True, ordered=True, projection=True, ser
             area = ts.create_group("2D Flow Areas/Grid")
             area["Water Surface"] = ws
             vn = (nl[:, :2] @ np.array(FLOW)).astype("f4")
-            area["Face Velocity"] = np.vstack([vn, 2 * vn, vn])
+            if face_velocity:
+                area["Face Velocity"] = np.vstack([vn, 2 * vn, vn])
+            if cell_velocity is not None:   # RAS's own cell velocity (grid x, y), as 6.x writes it when asked
+                k = np.array([1.0, 2.0, 1.0])[:, None]
+                area["Cell Velocity - Velocity X"] = np.hstack([k * cell_velocity[0] * np.ones((1, n)),
+                                                               np.zeros((3, ghost))]).astype("f4")
+                area["Cell Velocity - Velocity Y"] = np.hstack([k * cell_velocity[1] * np.ones((1, n)),
+                                                               np.zeros((3, ghost))]).astype("f4")
             summ = f.create_group(f"{M.RAS_SUMMARY}/2D Flow Areas/Grid")
             summ["Maximum Water Surface"] = np.vstack([ws.max(axis=0), np.zeros(ws.shape[1])]).astype("f4")
     return path
@@ -128,6 +136,34 @@ def test_ras_cell_velocity_is_rebuilt_from_face_velocities(tmp_path):
     s = m.series(0)
     np.testing.assert_allclose(s["value"], [2.0, 3.0, 2.5])
     np.testing.assert_allclose(s["speed"], np.array([1, 2, 1]) * np.hypot(*FLOW), atol=1e-3)
+    m.close()
+
+
+@pytest.mark.parametrize("faces", [True, False])
+def test_ras_uses_the_models_own_cell_velocity_where_written(tmp_path, faces):
+    # A real 6.5 plan (docs/assessments/hec-ras.md) writes Cell Velocity X/Y; the reader takes them over the
+    # least-squares rebuild from faces (here they differ on purpose), and a run with no face velocity still has arrows.
+    own = (-0.3, 0.8)
+    m = M.read_ras_plan(make_ras(tmp_path / "run.p01.hdf", cell_velocity=own, face_velocity=faces))
+    assert m.has_velocity
+    fr = m.frame(1)
+    np.testing.assert_allclose(fr["u"][:5], 2 * own[0], atol=1e-3)
+    np.testing.assert_allclose(fr["v"][:5], 2 * own[1], atol=1e-3)
+    assert math.isnan(fr["u"][5])   # dry: no arrow
+    np.testing.assert_allclose(m.max_speed[:5], 2 * math.hypot(*own), atol=1e-3)
+    np.testing.assert_allclose(m.series(0)["speed"], np.array([1, 2, 1]) * math.hypot(*own), atol=1e-3)
+    m.close()
+
+
+def test_ras_largest_own_cell_velocity_leaves_out_dry_steps(tmp_path):
+    # RAS writes a small velocity in dry cells (up to 0.24 m/s on the real 6.5 plan); cell 4 is dry at step 0,
+    # so a speed written there must not become its largest, as the frame and the series leave it out too.
+    own = (-0.3, 0.8)
+    path = make_ras(tmp_path / "run.p01.hdf", cell_velocity=own)
+    with h5py.File(path, "r+") as f:
+        f[f"{M.RAS_TS}/2D Flow Areas/Grid/Cell Velocity - Velocity X"][0, 4] = 10.0
+    m = M.read_ras_plan(path)
+    np.testing.assert_allclose(m.max_speed[4], 2 * math.hypot(*own), atol=1e-3)
     m.close()
 
 

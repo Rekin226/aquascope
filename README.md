@@ -478,6 +478,8 @@ Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/d
 | [Advanced studies](docs/advanced_studies.md) | Is the flood changing, climate change to 2050, "what if" the rain drops: what runs and what the numbers cannot say |
 | [HydroGym](docs/gym.md) | A gym-style calibration environment over real basins, with baselines and a leaderboard |
 | [Evaluating studies](docs/evaluation.md) | `aquascope eval`: a study's scorecard and trace, and stats across many runs, read from the bundles |
+| [Stability](docs/stability.md) | What 1.0 promises: the public API, the CLI and MCP surface, what counts as breaking, deprecations, what "experimental" means |
+| [Archive layout](docs/archive-layout.md) | The Archive as a contract: every prefix, its files, columns, units, cadence, licence and the workflow that writes it |
 | [HydroGym benchmark](docs/hydrogym.md) | Hydrology agents scored on real sites: task outcomes, plan quality against expert plans, and the report the user receives |
 | [Integration guides](docs/integration_guides/) | xarray, QGIS, R interoperability |
 | [Contributing](CONTRIBUTING.md) | How to add a data source, methodology, or test |

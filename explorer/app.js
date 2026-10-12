@@ -24,6 +24,7 @@ import { buildRail, syncRail, updateCount } from "./src/rail.js?v=__BUILD__";
 import { setBasinsVisible } from "./src/basins.js?v=__BUILD__";
 import { registerRiverRows, setRiversVisible } from "./src/river-map.js?v=__BUILD__";
 import { initMapLegend } from "./src/map-legend.js?v=__BUILD__";  // "On the map": one legend for every layer (#543)
+import { initJobHealth } from "./src/job-health.js?v=__BUILD__";  // late data in the legend, Tools > Data status (#593)
 import { clearRiver, initRiver } from "./src/river.js?v=__BUILD__";
 import { initNow } from "./src/now.js?v=__BUILD__";
 import { initBulletin } from "./src/bulletin.js?v=__BUILD__";
@@ -183,6 +184,7 @@ function bringMapOnline(url) {
     setView(url.view);
   }
   initMapLegend();
+  initJobHealth();
   registerRiverRows();
   initLayerUI();
   initTimeBar();

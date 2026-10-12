@@ -54,6 +54,9 @@ jobs:
       # Water Data API on the national catalog walk (https://api.waterdata.usgs.gov/signup/).
       USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
     steps:
+      - name: Note when the job started (its health record's duration)
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -112,6 +115,10 @@ jobs:
           key: imgw-archive-${{ github.run_id }}
           restore-keys: imgw-archive-
 
+      # The observation harvest is allowed to stop early (#449). The Archive fills up over weeks, so a partial
+      # harvest is the normal case: each source has its own deadline inside the step's budget, the step may time
+      # out, and either way the steps after it (bundles, signatures, publish) still run on what was mirrored.
+      # A step timeout that used to skip them threw two hours of harvesting away on 2026-09-21.
       - name: Harvest daily observations with isolated source deadlines
         id: obs
         if: ${{ !inputs.skip_obs }}
@@ -165,6 +172,15 @@ jobs:
         run: |
           echo "::error::HF_TOKEN is not set, so the harvest ran but published nothing. Set the repository \
           secret HF_TOKEN to a Hugging Face token with write access to $HF_DATASET."
+          exit 1
+
+      # The other silent week (#449): a scheduled run that ran but did not publish (a failed bundle step, a refused
+      # token) is red, and its job-health issue says why.
+      - name: Fail when a scheduled run published nothing
+        if: always() && github.event_name == 'schedule' && env.HF_TOKEN != '' && steps.publish.outcome != 'success'
+        run: |
+          echo "::error::The scheduled harvest did not publish (publish step: ${{ steps.publish.outcome }}), so the \
+          Archive keeps last week's files. See the steps above for the cause."
           exit 1
 
       - name: Job summary
@@ -222,3 +238,21 @@ jobs:
           if [ "${{ steps.harvest.outputs.exit }}" != "0" ]; then
             echo "harvest exited ${{ steps.harvest.outputs.exit }} (all sources failed or publish failed)"; exit 1
           fi
+
+      # Job health (#593): health/jobs/harvest.json and health/jobs/index.json, written only under health/jobs/, and
+      # one job-health issue, opened or updated when a scheduled run fails and closed by the next good one. It runs
+      # whether the job passed or not, needs only the standard library to record and to file the issue, and never
+      # turns the job red itself. A capped run (max_items) never publishes its record, as it never should publish
+      # its catalogue.
+      - name: Job health
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PUBLISH: ${{ env.HF_TOKEN != '' && inputs.max_items == '' && (github.event_name == 'schedule' || inputs.publish == true) }}
+          ISSUE: ${{ github.event_name == 'schedule' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 .github/scripts/job_health.py report harvest --root archive --status "${{ job.status }}" --require "publish=${{ steps.publish.outcome }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"

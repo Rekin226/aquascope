@@ -205,6 +205,9 @@ a deployable directory.
   hard-code a URL or widen an `except` until the tests pass.
 - `showcase.yml` re-records the Explorer's worked AI examples.
 - The honest health headline is the archive's `health.json`, not the source count.
+- Every scheduled job writes `health/jobs/<job>.json` and keeps one `job-health` issue from a last step with
+  `if: always()` (`aquascope/archive/health_jobs.py`, run through `.github/scripts/job_health.py`). A new scheduled
+  workflow adds a row to `JOBS` and that step, or `tests/test_archive/test_health_jobs.py` fails.
 
 ## Pull requests
 

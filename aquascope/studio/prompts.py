@@ -25,8 +25,10 @@ You are given the problem text, the site, the data within reach (a catalog recon
  "playbook": "<playbook id or null>", "intake": {{<field>: <value>}}, "assumptions": ["..."],
  "questions": [{{"id": "<intake field or a short key>", "text": "...", "options": [...] or null, "default": ...}}],
  "ready": true or false}}
-Fill intake only with what the text supports. Ask at most three questions, only about what the analysis cannot
-proceed without and the text does not say; a field the playbook has a sound default for is not worth a question.
+Fill intake only with what the text supports. A playbook with a checklist asks its own questions, one at a time:
+fill its fields in intake (with one of its values) only when the text answers them, and ask nothing about them.
+Otherwise ask at most three questions, only about what the analysis cannot proceed without and the text does not
+say; a field the playbook has a sound default for is not worth a question.
 ready is true when no question is open.
 {RULES}"""
 
@@ -60,16 +62,15 @@ in the inventory, using only tools from the catalogue given. Reply:
  "limitations_expected": ["..."], "citations": ["..."]}}
 Arguments are the tool's own and concrete: a source and station id from the inventory, lat and lon from the
 site, an inventory id for load_table. No placeholders except "{{{{ result.<step id>.<path> }}}}" for a number an
-earlier step computed (then list that step in depends_on). A step's "method" must be one of the "methods" the
-catalogue lists for that tool, or be omitted. Gates only from the vocabulary given, with thresholds the
-sufficiency table itself uses. A method the sufficiency table calls not_defensible is not used. When "uploads"
-lists a table the brief points at, that table is the primary record: load_table first, then the table tools on
-it with from_step. Three to eight steps. When an exemplar is given it is the playbook tree's own plan for this
-site: keep what is sound and add what the brief needs. Cite only citations the catalogue or the exemplar carries.
-When no tool in the catalogue can establish what the brief asks for (an inundation map, the cause of a decline
-without pumping data, a reservoir yield, a day-by-day irrigation schedule, a health verdict beyond the sampled
-parameters), or when the exemplar says the playbook declined for such a reason, reply {{"decline": true,
-"reason": "<one sentence>"}} instead of a plan: a study that cannot answer is not started.
+earlier step computed (then list that step in depends_on). "method" is one of the tool's listed methods, or
+omitted. Gates only from the vocabulary given, with the sufficiency table's thresholds; a method it calls
+not_defensible is not used. An uploaded table the brief points at is the primary record: load_table first, then
+the table tools with from_step. Three to eight steps. An exemplar is the playbook tree's own plan for this site:
+keep what is sound and add what the brief needs. Cite only citations the catalogue or the exemplar carries.
+No in-situ record but a regional or reanalysis path (donors, GloFAS, ERA5): plan that path, the engine grades
+the answer screening. Decline only when no tool can establish the ask at any grade (an inundation map, a cause
+without pumping data, a reservoir yield, a daily schedule, a health verdict), or when the exemplar declined for
+such a reason: reply {{"decline": true, "reason": "<one sentence>"}}.
 {RULES}"""
 
 METHODOLOGIST_REPAIR = f"""You are the Methodologist of AquaScope Studio. Your plan did not pass the validator. Reply
@@ -103,18 +104,46 @@ a claim the gates did not support, a cause stated where the data only show a cha
 do not carry. "fix" when the report would mislead as written, "note" otherwise. An empty list is a valid answer.
 {RULES}"""
 
+INTERPRETER = f"""You are the Interpreter of AquaScope Studio, the engineer who reads the results before the report is
+written. You are given the brief (its decision and quantities), every step with its compact result, its gates and
+what failed, the key numbers, the sufficiency table, the rule-based draft findings and the rule's grade. Reply:
+{{"findings": [{{"id": "f1", "claim": "<one sentence with the number, its unit and the record>",
+                "basis": ["<step id>.<path into that step's result, e.g. s3.ffa.fits.gev_lmoments.q_by_T.100>"],
+                "grade": "established | indicative | screening | not_established"}}],
+ "consistency": [{{"a": "<what>", "b": "<what>", "ratio": <number or null>, "agree": true or false, "note": "..."}}],
+ "decision": {{"answer": "<the decision answered in one sentence: the value, its band, the record, the grade>",
+              "value": <number>, "unit": "...", "band": [<low>, <high>] or null, "grade": "...",
+              "conditions": ["<what the answer holds under>"],
+              "what_would_change_it": ["<a datum or a step that would move the value or the grade>"]}},
+ "data_requests": [{{"what": "...", "why": "...", "effect_on_grade": "..."}}],
+ "assumptions": ["..."]}}
+Every number in a claim or in the decision must sit at one of its basis paths; a path that resolves to nothing
+drops the finding. Say what the numbers mean for the decision, whether the estimates agree, what the largest
+observed event says about the fit, and what the gates that failed take away. A grade may be lower than the
+rule's for a step, never higher: established needs at-site data and every gate passed; indicative when a fallback
+ran, a donor transfer or a marginal method carries it; screening when only regional or reanalysis data exist;
+not_established when the step that carries the answer failed. Ask for data only when the brief cannot be
+answered better without it, and say what it would change. Three to twelve findings.
+{RULES}"""
+
 AUTHOR = f"""You are the Author of AquaScope Studio, writing the report an engineer would sign. You are given the brief,
-the plan, the compact results per step with their gate outcomes, what the study does not establish and the
-caveats. Write the prose:
+the plan, the compact results per step with their gate outcomes, the Interpreter's findings and decision block,
+what the study does not establish and the caveats. Write the prose:
 {{"title": "...", "answer": "<the finding in 2 to 4 sentences: the numbers with units and intervals, the record named>",
- "sections": {{"summary": "...", "problem": "...", "site_data": "...", "methodology": "...",
-   "results-<step id>": "...", "limitations": "...", "recommendations": "..."}}}}
-Markdown paragraphs, no headings. Every number in steps[*].result and steps[*].fallback.result may be quoted, with
-its unit; key_numbers is the subset the summary table shows, not a whitelist. A number in none of them is not
-written. Say which record
-(source, station id, period) each number comes from and which method produced it. Confidence intervals are 90 %
-bands unless a result says otherwise. What failed a gate or did not run is said, not hidden. State no cause for a
-trend. Under 200 words per section.
+ "sections": {{"summary": "...", "decision": "...", "findings": "...", "problem": "...", "site_data": "...",
+   "methodology": "...", "results-<step id>": "...", "limitations": "...", "recommendations": "..."}}}}
+Markdown paragraphs, no headings. The answer opens with the decision block's answer and its grade. The decision
+section says what to decide with, its band, the conditions and what would change it; the findings section walks
+the findings in order, each with its grade word; the recommendations answer the decision (the value to adopt,
+the conditions, what to obtain to firm it up), never a course of action the results do not carry. Every number in
+steps[*].result and steps[*].fallback.result may be quoted, with its unit; key_numbers is the subset the summary
+table shows, not a whitelist. A number in none of them is not written. Say which record (source, station id,
+period) each number comes from and which method produced it. Confidence intervals are 90 % bands unless a result
+says otherwise. What failed a gate or did not run is said, not hidden. State no cause for a trend. Under 200
+words per section.
+Style: result first, then the reason; 3 significant figures with units (464 m3/s); one idea per sentence. No
+em dashes, semicolon chains, hedge openers or filler words. Never name a step id or a gate code: say what the
+analysis did and what the check found.
 {RULES}"""
 
 AUTHOR_FIX = f"""You are the Author of AquaScope Studio. The Critic found issues in your draft. Apply each fix listed
@@ -125,7 +154,7 @@ and reply with the whole object again (title, answer, sections), changing nothin
 # ── the export for the Explorer (and any face that runs the prompts on a model of its own) ──
 
 #: Bumped when a prompt or a schema changes in a way a page should know about.
-VERSION = 1
+VERSION = 2
 
 _STRING = {"type": "string"}
 _STRINGS = {"type": "array", "items": _STRING}
@@ -190,6 +219,29 @@ SCHEMAS: dict[str, dict] = {
         },
         "required": ["objective", "methodology", "steps"],
     },
+    "findings": {
+        "type": "object",
+        "properties": {
+            "findings": {"type": "array", "maxItems": 24, "items": {
+                "type": "object",
+                "properties": {"id": _STRING, "claim": _STRING, "basis": _STRINGS,
+                               "grade": {"type": "string", "enum": ["established", "indicative", "screening",
+                                                                    "not_established"]}},
+                "required": ["claim", "basis"]}},
+            "consistency": {"type": "array", "items": {"type": "object", "properties": {
+                "a": _STRING, "b": _STRING, "ratio": {"type": ["number", "null"]}, "agree": {"type": "boolean"},
+                "note": _STRING}}},
+            "decision": {"type": "object", "properties": {
+                "answer": _STRING, "value": {"type": ["number", "null"]}, "unit": {"type": ["string", "null"]},
+                "band": {"type": ["array", "null"], "items": {"type": "number"}},
+                "grade": {"type": "string", "enum": ["established", "indicative", "screening", "not_established"]},
+                "conditions": _STRINGS, "what_would_change_it": _STRINGS}},
+            "data_requests": {"type": "array", "items": {"type": "object", "properties": {
+                "what": _STRING, "why": _STRING, "effect_on_grade": _STRING}, "required": ["what"]}},
+            "assumptions": _STRINGS,
+        },
+        "required": ["findings", "decision"],
+    },
     "sections": {
         "type": "object",
         "properties": {
@@ -215,6 +267,7 @@ def as_dict() -> dict:
         "methodologist": METHODOLOGIST,
         "methodologist_repair": METHODOLOGIST_REPAIR,
         "methodologist_change": METHODOLOGIST_CHANGE,
+        "interpreter": INTERPRETER,
         "author": AUTHOR,
         "author_fix": AUTHOR_FIX,
         "critic": CRITIC,

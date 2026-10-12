@@ -1,7 +1,7 @@
 """Data collectors for Taiwan and global water data sources."""
 
 from aquascope.collectors.aquastat import AquastatCollector
-from aquascope.collectors.base import BaseCollector
+from aquascope.collectors.base import BaseCollector, CollectorError
 from aquascope.collectors.bom import BOMCollector
 from aquascope.collectors.brazil_ana import BrazilANACollector
 from aquascope.collectors.camels_br import CAMELSBRCollector
@@ -21,6 +21,7 @@ from aquascope.collectors.korea_wamis import KoreaWAMISCollector
 from aquascope.collectors.noaa_nwps import NOAANWPSCollector
 from aquascope.collectors.openmeteo import OpenMeteoCollector
 from aquascope.collectors.pegelonline import PegelonlineCollector
+from aquascope.collectors.poland_imgw import PolandIMGWCollector
 from aquascope.collectors.scotland_sepa import ScotlandSepaCollector
 from aquascope.collectors.sdg6 import SDG6Collector
 from aquascope.collectors.south_africa_dws import SouthAfricaDWSCollector
@@ -44,6 +45,7 @@ from aquascope.collectors.wqp import WQPCollector
 __all__ = [
     "AquastatCollector",
     "BaseCollector",
+    "CollectorError",
     "BOMCollector",
     "BrazilANACollector",
     "CAMELSCLCollector",
@@ -60,6 +62,7 @@ __all__ = [
     "KoreaWAMISCollector",
     "NOAANWPSCollector",
     "OpenMeteoCollector",
+    "PolandIMGWCollector",
     "PegelonlineCollector",
     "SDG6Collector",
     "ScotlandSepaCollector",

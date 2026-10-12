@@ -1,8 +1,146 @@
 {
- "generated": "2026-09-07T19:20:01+00:00",
- "aquascope_version": "0.14.0",
+ "generated": "2026-09-27T04:21:38+00:00",
+ "aquascope_version": "0.19.0",
  "note": "Recorded studies: the prose was written once by the model named in each entry, on the date given. The plan re-runs live in the page with no key; the recorded numbers are the run's.",
  "studies": [
+  {
+   "id": "reference-fish-river-us",
+   "title": "Daily-mean flood screening: Fish River, Maine",
+   "kind": "flood_risk",
+   "site": {
+    "lat": 47.2375,
+    "lon": -68.5827777777778,
+    "name": "Fish River, Maine"
+   },
+   "shows": "Observed snapshot with estimator-specific uncertainty. Independent domain review pending.",
+   "status": "done",
+   "model": null,
+   "provider": null,
+   "date": "2026-09-27",
+   "recorded": "2026-09-27T04:21:19+00:00",
+   "usd": 0.0,
+   "seconds": null,
+   "steps": 1,
+   "gates": {
+    "passed": 5,
+    "total": 5
+   },
+   "checks": {
+    "passed": 0,
+    "total": 0
+   },
+   "headline": "Screen the 100-year daily-mean flood at Fish River, Maine; identify estimator uncertainty and limitations: 100-year return level, GEV (L-moments) 463.9 m3/s (established).",
+   "files": [
+    "workspace.json",
+    "report.md",
+    "study.yaml",
+    "figures/s1_frequency_curve.png",
+    "figures/s1_annual_maxima.png",
+    "figures/s1_trend.png",
+    "complete.aqstudy.json",
+    "report.html",
+    "observations.csv",
+    "provenance.json"
+   ],
+   "figures": [
+    "s1_frequency_curve.png",
+    "s1_annual_maxima.png",
+    "s1_trend.png"
+   ],
+   "upload": null
+  },
+  {
+   "id": "reference-kingston-uk",
+   "title": "Daily-mean flood screening: Thames at Kingston, England",
+   "kind": "flood_risk",
+   "site": {
+    "lat": 51.415482,
+    "lon": -0.307629,
+    "name": "Thames at Kingston, England"
+   },
+   "shows": "Observed snapshot with estimator-specific uncertainty. Independent domain review pending.",
+   "status": "done",
+   "model": null,
+   "provider": null,
+   "date": "2026-09-27",
+   "recorded": "2026-09-27T04:21:28+00:00",
+   "usd": 0.0,
+   "seconds": null,
+   "steps": 1,
+   "gates": {
+    "passed": 5,
+    "total": 5
+   },
+   "checks": {
+    "passed": 0,
+    "total": 0
+   },
+   "headline": "Screen the 100-year daily-mean flood at Thames at Kingston, England; identify estimator uncertainty and limitations: 100-year return level, GEV (L-moments) 652.5 m3/s (established).",
+   "files": [
+    "workspace.json",
+    "report.md",
+    "study.yaml",
+    "figures/s1_frequency_curve.png",
+    "figures/s1_annual_maxima.png",
+    "figures/s1_trend.png",
+    "complete.aqstudy.json",
+    "report.html",
+    "observations.csv",
+    "provenance.json"
+   ],
+   "figures": [
+    "s1_frequency_curve.png",
+    "s1_annual_maxima.png",
+    "s1_trend.png"
+   ],
+   "upload": null
+  },
+  {
+   "id": "reference-seine-fr",
+   "title": "Daily-mean flood screening: Seine at Paris-Austerlitz, France",
+   "kind": "flood_risk",
+   "site": {
+    "lat": 48.84468962,
+    "lon": 2.365510635,
+    "name": "Seine at Paris-Austerlitz, France"
+   },
+   "shows": "Observed snapshot with estimator-specific uncertainty. Independent domain review pending.",
+   "status": "done",
+   "model": null,
+   "provider": null,
+   "date": "2026-09-27",
+   "recorded": "2026-09-27T04:21:38+00:00",
+   "usd": 0.0,
+   "seconds": null,
+   "steps": 1,
+   "gates": {
+    "passed": 4,
+    "total": 5
+   },
+   "checks": {
+    "passed": 0,
+    "total": 0
+   },
+   "headline": "Screen the 100-year daily-mean flood at Seine at Paris-Austerlitz, France; identify estimator uncertainty and limitations: 100-year return level, GEV (L-moments) 1951 m3/s (not established).",
+   "files": [
+    "workspace.json",
+    "report.md",
+    "study.yaml",
+    "figures/s1_frequency_curve.png",
+    "figures/s1_annual_maxima.png",
+    "figures/s1_trend.png",
+    "complete.aqstudy.json",
+    "report.html",
+    "observations.csv",
+    "provenance.json"
+   ],
+   "figures": [
+    "s1_frequency_curve.png",
+    "s1_annual_maxima.png",
+    "s1_trend.png"
+   ],
+   "upload": null
+  },
   {
    "id": "bamako-ungauged",
    "title": "Flow to expect in the Niger at Bamako",
@@ -16,20 +154,20 @@
    "status": "done",
    "model": "claude-sonnet-5",
    "provider": "anthropic",
-   "date": "2026-09-07",
-   "recorded": "2026-09-07T13:55:59+00:00",
-   "usd": 0.7882,
-   "seconds": 469.0,
+   "date": "2026-09-14",
+   "recorded": "2026-09-14T21:54:36+00:00",
+   "usd": 0.4936,
+   "seconds": 428.8,
    "steps": 4,
    "gates": {
-    "passed": 8,
-    "total": 9
+    "passed": 7,
+    "total": 7
    },
    "checks": {
-    "passed": 3,
-    "total": 4
+    "passed": 6,
+    "total": 6
    },
-   "headline": "No gauge is reachable at the Bamako offtake, so both numbers are transferred from 10 gauged donor basins (out of a 37,071-station pool) matched by catchment similarity, then converted to m3/s using the BasinATLAS upstream area of 115,012...",
+   "headline": "estimate the mean flow and low-flow (Q95) that a proposed water-supply offtake on the Niger at Bamako should plan around, given no usable gauge record at the site: mean daily flow 0.779 mm/d (screening).",
    "files": [
     "workspace.json",
     "report.md",
@@ -38,16 +176,14 @@
     "figures/s2_donors_map.png",
     "figures/s3_signatures_band.png",
     "figures/s4_monthly_climate.png",
-    "figures/s4_glofas_series.png",
-    "figures/s4.fallback_signatures_band.png"
+    "figures/s4_glofas_series.png"
    ],
    "figures": [
     "s1_site_map.png",
     "s2_donors_map.png",
     "s3_signatures_band.png",
     "s4_monthly_climate.png",
-    "s4_glofas_series.png",
-    "s4.fallback_signatures_band.png"
+    "s4_glofas_series.png"
    ],
    "upload": null
   },
@@ -64,20 +200,20 @@
    "status": "done",
    "model": "claude-sonnet-5",
    "provider": "anthropic",
-   "date": "2026-09-07",
-   "recorded": "2026-09-07T13:48:10+00:00",
-   "usd": 0.4218,
-   "seconds": 279.9,
-   "steps": 4,
+   "date": "2026-09-14",
+   "recorded": "2026-09-14T23:14:30+00:00",
+   "usd": 1.0428,
+   "seconds": 574.5,
+   "steps": 8,
    "gates": {
-    "passed": 5,
-    "total": 8
+    "passed": 11,
+    "total": 14
    },
    "checks": {
-    "passed": 6,
-    "total": 6
+    "passed": 7,
+    "total": 8
    },
-   "headline": "The full 48.7-year record at Haggis Farm (uk_ea, station b3272d5b-f4fd-48eb-8bc7-67c102d65943, 1977-09-29 to 2026-06-08) shows a statistically significant increasing trend by Mann-Kendall test (tau = 0.86, p = 0.0) with a Sen's slope of...",
+   "headline": "Notice: this report did not pass the Critic's checks (trend_matches_the_test); read its numbers with the list of what this study does not establish.",
    "files": [
     "workspace.json",
     "report.md",
@@ -85,6 +221,13 @@
     "figures/s1_series.png",
     "figures/s1_trend.png",
     "figures/s2_series.png",
+    "figures/s3_series.png",
+    "figures/s4_drought_strip.png",
+    "figures/s5_series.png",
+    "figures/s6_recharge.png",
+    "figures/s7_fdc.png",
+    "figures/s8_series.png",
+    "figures/s8_trend.png",
     "figures/s2.fallback_series.png",
     "figures/s2.fallback_trend.png"
    ],
@@ -92,6 +235,13 @@
     "s1_series.png",
     "s1_trend.png",
     "s2_series.png",
+    "s3_series.png",
+    "s4_drought_strip.png",
+    "s5_series.png",
+    "s6_recharge.png",
+    "s7_fdc.png",
+    "s8_series.png",
+    "s8_trend.png",
     "s2.fallback_series.png",
     "s2.fallback_trend.png"
    ],
@@ -110,20 +260,20 @@
    "status": "done",
    "model": "claude-sonnet-5",
    "provider": "anthropic",
-   "date": "2026-09-07",
-   "recorded": "2026-09-07T13:29:15+00:00",
-   "usd": 0.4468,
-   "seconds": 342.6,
-   "steps": 4,
+   "date": "2026-09-14",
+   "recorded": "2026-09-14T21:19:08+00:00",
+   "usd": 1.1231,
+   "seconds": 529.4,
+   "steps": 5,
    "gates": {
-    "passed": 6,
-    "total": 9
+    "passed": 13,
+    "total": 14
    },
    "checks": {
-    "passed": 7,
-    "total": 7
+    "passed": 10,
+    "total": 10
    },
-   "headline": "At the Environment Agency Kingston gauge (uk_ea, station 8496ce69-482c-406a-a2f0-ac418ef8f099, 142.9 years of daily discharge, 1883-2026), the 100-year flood discharge (Q100) is estimated at 652.5 m3/s by GEV (L-moments) and 624.0 m3/s b...",
+   "headline": "Notice: the Critic's fix requests on limitations were not all resolved; read the report with the list of what this study does not establish.",
    "files": [
     "workspace.json",
     "report.md",
@@ -131,13 +281,19 @@
     "figures/s1_site_map.png",
     "figures/s2_series.png",
     "figures/s2_trend.png",
-    "figures/s3_frequency_curve.png"
+    "figures/s3_frequency_curve.png",
+    "figures/s4_monthly_climate.png",
+    "figures/s4_glofas_series.png",
+    "figures/s5_signatures_band.png"
    ],
    "figures": [
     "s1_site_map.png",
     "s2_series.png",
     "s2_trend.png",
-    "s3_frequency_curve.png"
+    "s3_frequency_curve.png",
+    "s4_monthly_climate.png",
+    "s4_glofas_series.png",
+    "s5_signatures_band.png"
    ],
    "upload": null
   },
@@ -154,34 +310,32 @@
    "status": "done",
    "model": "claude-sonnet-5",
    "provider": "anthropic",
-   "date": "2026-09-07",
-   "recorded": "2026-09-07T14:21:50+00:00",
-   "usd": 0.4347,
-   "seconds": 251.3,
-   "steps": 4,
+   "date": "2026-09-14",
+   "recorded": "2026-09-14T22:24:15+00:00",
+   "usd": 0.4793,
+   "seconds": 255.8,
+   "steps": 3,
    "gates": {
-    "passed": 6,
-    "total": 6
+    "passed": 4,
+    "total": 4
    },
    "checks": {
-    "passed": 4,
-    "total": 5
+    "passed": 7,
+    "total": 7
    },
-   "headline": "Over 2021-09-07 to 2026-09-06, USGS-01646500 (Potomac River near Wash DC, Little Falls Pump Sta) yielded 5,366 water-quality samples across three parameters.",
+   "headline": "Risk screening: CCME WQI = 100 of 100 (Excellent), graded established, computed from the USGS-01646500 Potomac River near Wash DC Little Falls Pump Sta daily record (2021-09-14 to 2026-09-13).",
    "files": [
     "workspace.json",
     "report.md",
     "study.yaml",
     "figures/s1_samples_by_parameter.png",
     "figures/s2_who_exceedances.png",
-    "figures/s3_wqi_bars.png",
-    "figures/s4_wqi_bars.png"
+    "figures/s3_wqi_bars.png"
    ],
    "figures": [
     "s1_samples_by_parameter.png",
     "s2_who_exceedances.png",
-    "s3_wqi_bars.png",
-    "s4_wqi_bars.png"
+    "s3_wqi_bars.png"
    ],
    "upload": null
   },
@@ -198,34 +352,34 @@
    "status": "done",
    "model": "claude-sonnet-5",
    "provider": "anthropic",
-   "date": "2026-09-07",
-   "recorded": "2026-09-07T14:02:08+00:00",
-   "usd": 0.57,
-   "seconds": 368.5,
+   "date": "2026-09-14",
+   "recorded": "2026-09-14T22:01:37+00:00",
+   "usd": 0.7345,
+   "seconds": 420.9,
    "steps": 3,
    "gates": {
-    "passed": 8,
-    "total": 8
+    "passed": 6,
+    "total": 6
    },
    "checks": {
-    "passed": 4,
-    "total": 4
+    "passed": 6,
+    "total": 6
    },
-   "headline": "For the ERA5 reanalysis cell at -1.29, 36.82 (Open-Meteo/ERA5, 1986-09-01 to 2026-08-01, 40-year record, month ending 2026-08-01), SPEI-3 is -1.08 (moderately dry) while SPI-3 is -0.39 (normal); SPEI-6, SPEI-12, SPI-6 and SPI-12 are all...",
+   "headline": "Notice: the Critic's fix requests on findings were not all resolved; read the report with the list of what this study does not establish.",
    "files": [
     "workspace.json",
     "report.md",
     "study.yaml",
-    "figures/s1_drought_strip.png",
+    "figures/s1_site_map.png",
     "figures/s2_monthly_climate.png",
     "figures/s2_glofas_series.png",
-    "figures/s3_site_map.png"
+    "figures/s3_drought_strip.png"
    ],
    "figures": [
-    "s1_drought_strip.png",
+    "s1_site_map.png",
     "s2_monthly_climate.png",
     "s2_glofas_series.png",
-    "s3_site_map.png"
+    "s3_drought_strip.png"
    ],
    "upload": null
   },
@@ -242,36 +396,34 @@
    "status": "done",
    "model": "claude-sonnet-5",
    "provider": "anthropic",
-   "date": "2026-09-07",
-   "recorded": "2026-09-07T19:19:38+00:00",
-   "usd": 0.6572,
-   "seconds": 376.3,
-   "steps": 5,
+   "date": "2026-09-14",
+   "recorded": "2026-09-14T22:49:44+00:00",
+   "usd": 0.9592,
+   "seconds": 578.9,
+   "steps": 3,
    "gates": {
-    "passed": 10,
-    "total": 12
+    "passed": 8,
+    "total": 8
    },
    "checks": {
-    "passed": 6,
-    "total": 7
+    "passed": 9,
+    "total": 9
    },
-   "headline": "The Loire at Orleans (Hub'Eau K435001010, La Loire a Orleans - Pont Royal, 62.0 years of daily discharge) is currently in low-flow drought: the last 30 days averaged 27.6 m3/s and the last 90 days 31.9 m3/s, both below the record's Q95 o...",
+   "headline": "Notice: the Critic's fix requests on findings were not all resolved; read the report with the list of what this study does not establish.",
    "files": [
     "workspace.json",
     "report.md",
     "study.yaml",
     "figures/s1_drought_strip.png",
     "figures/s2_fdc.png",
-    "figures/s3_fdc.png",
-    "figures/s4_fdc.png",
-    "figures/s4.fallback_fdc.png"
+    "figures/s3_series.png",
+    "figures/s3_trend.png"
    ],
    "figures": [
     "s1_drought_strip.png",
     "s2_fdc.png",
-    "s3_fdc.png",
-    "s4_fdc.png",
-    "s4.fallback_fdc.png"
+    "s3_series.png",
+    "s3_trend.png"
    ],
    "upload": null
   },
@@ -288,20 +440,20 @@
    "status": "done",
    "model": "claude-sonnet-5",
    "provider": "anthropic",
-   "date": "2026-09-07",
-   "recorded": "2026-09-07T14:25:38+00:00",
-   "usd": 0.3719,
-   "seconds": 228.2,
-   "steps": 5,
+   "date": "2026-09-14",
+   "recorded": "2026-09-14T22:31:40+00:00",
+   "usd": 0.7673,
+   "seconds": 445.3,
+   "steps": 4,
    "gates": {
     "passed": 5,
-    "total": 5
+    "total": 7
    },
    "checks": {
-    "passed": 6,
-    "total": 6
+    "passed": 8,
+    "total": 8
    },
-   "headline": "Using the client's own daily discharge record (upload:my_flows.csv, station upload:my_flows.csv, 1994-01-01 to 2023-12-31, 30 years, n=10957), the 50-year flood discharge is 166.7 m3/s (95% band 112.9-297.8 m3/s) from a GEV fit and 164.7...",
+   "headline": "Notice: the Critic's fix requests on answer, decision, key_numbers were not all resolved; read the report with the list of what this study does not establish.",
    "files": [
     "workspace.json",
     "report.md",
@@ -309,13 +461,13 @@
     "figures/s1_series.png",
     "figures/s3_frequency_curve.png",
     "figures/s4_frequency_curve.png",
-    "figures/s5_fdc.png"
+    "figures/s2.fallback_donors_map.png"
    ],
    "figures": [
     "s1_series.png",
     "s3_frequency_curve.png",
     "s4_frequency_curve.png",
-    "s5_fdc.png"
+    "s2.fallback_donors_map.png"
    ],
    "upload": "my_flows.csv"
   },
@@ -332,30 +484,34 @@
    "status": "done",
    "model": "claude-sonnet-5",
    "provider": "anthropic",
-   "date": "2026-09-07",
-   "recorded": "2026-09-07T13:35:32+00:00",
-   "usd": 0.5691,
-   "seconds": 359.6,
-   "steps": 6,
+   "date": "2026-09-14",
+   "recorded": "2026-09-14T23:04:55+00:00",
+   "usd": 0.9542,
+   "seconds": 606.3,
+   "steps": 4,
    "gates": {
-    "passed": 4,
-    "total": 6
+    "passed": 11,
+    "total": 11
    },
    "checks": {
-    "passed": 5,
-    "total": 5
+    "passed": 9,
+    "total": 9
    },
-   "headline": "At USGS-01646500 (Potomac River near Washington, DC, Little Falls Pump Station, 1930-03-01 to 2026-09-06, 96.5 years of daily discharge), the flow-duration screening finds Q95 = 35.7 m3/s and a 7-day 10-year low flow (7Q10) of 18.79 m3/s...",
+   "headline": "Notice: the Critic's fix requests on findings, results-s2 were not all resolved; read the report with the list of what this study does not establish.",
    "files": [
     "workspace.json",
     "report.md",
     "study.yaml",
     "figures/s1_site_map.png",
-    "figures/s1.fallback_reliability_curve.png"
+    "figures/s2_fdc.png",
+    "figures/s3_fdc.png",
+    "figures/s4_reliability_curve.png"
    ],
    "figures": [
     "s1_site_map.png",
-    "s1.fallback_reliability_curve.png"
+    "s2_fdc.png",
+    "s3_fdc.png",
+    "s4_reliability_curve.png"
    ],
    "upload": null
   },
@@ -372,32 +528,32 @@
    "status": "done",
    "model": "claude-sonnet-5",
    "provider": "anthropic",
-   "date": "2026-09-07",
-   "recorded": "2026-09-07T14:08:38+00:00",
-   "usd": 0.7564,
-   "seconds": 389.9,
+   "date": "2026-09-14",
+   "recorded": "2026-09-14T23:24:08+00:00",
+   "usd": 0.8341,
+   "seconds": 578.9,
    "steps": 3,
    "gates": {
     "passed": 6,
-    "total": 6
+    "total": 8
    },
    "checks": {
-    "passed": 3,
-    "total": 4
+    "passed": 7,
+    "total": 7
    },
-   "headline": "Regionalised low-flow transfer from 10 donor gauges to the 478.7 km2 catchment (BasinATLAS/HydroATLAS, hybas_id 2120018870) gives a mean flow of about 0.60 m3/s (52 ML/day), a median of about 0.38 m3/s (33 ML/day) and a Q95 low flow of a...",
+   "headline": "Whether an ungauged Sintra hills stream (38.80 N, -9.38 W, BasinATLAS HYBAS id 2120018870) can sustain a 4 ML/day run-of-river municipal offtake, and how reliable that supply would be: not established.",
    "files": [
     "workspace.json",
     "report.md",
     "study.yaml",
     "figures/s1_site_map.png",
     "figures/s2_donors_map.png",
-    "figures/s3_signatures_band.png"
+    "figures/s3.fallback_donors_map.png"
    ],
    "figures": [
     "s1_site_map.png",
     "s2_donors_map.png",
-    "s3_signatures_band.png"
+    "s3.fallback_donors_map.png"
    ],
    "upload": null
   },
@@ -414,33 +570,37 @@
    "status": "done",
    "model": "claude-sonnet-5",
    "provider": "anthropic",
-   "date": "2026-09-07",
-   "recorded": "2026-09-07T13:43:31+00:00",
-   "usd": 0.6405,
-   "seconds": 478.8,
-   "steps": 4,
+   "date": "2026-09-14",
+   "recorded": "2026-09-14T21:38:30+00:00",
+   "usd": 0.7473,
+   "seconds": 615.0,
+   "steps": 3,
    "gates": {
-    "passed": 8,
-    "total": 11
+    "passed": 9,
+    "total": 12
    },
    "checks": {
-    "passed": 5,
-    "total": 6
+    "passed": 8,
+    "total": 8
    },
-   "headline": "Using taiwan_cwa station 467490 (Taichung), the nearest available station in this catalog, current SPI-3 is 0.87 and SPEI-3 is 0.77 as of 2026-06-01, both classed normal; Taichung is not in drought by this reading.",
+   "headline": "Taichung is not currently in meteorological drought (grade: indicative).",
    "files": [
     "workspace.json",
     "report.md",
     "study.yaml",
     "figures/s1_drought_strip.png",
+    "figures/s1.fallback_monthly_climate.png",
     "figures/s2_series.png",
     "figures/s2_trend.png",
+    "figures/s3_series.png",
     "figures/s2.fallback_drought_strip.png"
    ],
    "figures": [
     "s1_drought_strip.png",
+    "s1.fallback_monthly_climate.png",
     "s2_series.png",
     "s2_trend.png",
+    "s3_series.png",
     "s2.fallback_drought_strip.png"
    ],
    "upload": null
@@ -458,36 +618,32 @@
    "status": "done",
    "model": "claude-sonnet-5",
    "provider": "anthropic",
-   "date": "2026-09-07",
-   "recorded": "2026-09-07T19:19:28+00:00",
-   "usd": 0.4567,
-   "seconds": 320.8,
-   "steps": 5,
+   "date": "2026-09-14",
+   "recorded": "2026-09-14T22:40:05+00:00",
+   "usd": 0.9052,
+   "seconds": 504.7,
+   "steps": 3,
    "gates": {
-    "passed": 13,
-    "total": 13
+    "passed": 8,
+    "total": 8
    },
    "checks": {
-    "passed": 7,
-    "total": 7
+    "passed": 10,
+    "total": 10
    },
-   "headline": "A 40 ha maize crop planted in April needs a gross seasonal irrigation depth of about 564 mm (net 395 mm), or roughly 225,778 m3 over a 125-day season, with a peak-month rate of 0.033 m3/s against a mean-season rate of 0.021 m3/s (FAO-56...",
+   "headline": "Notice: the Critic's fix requests on site_data were not all resolved; read the report with the list of what this study does not establish.",
    "files": [
     "workspace.json",
     "report.md",
     "study.yaml",
     "figures/s1_demand_monthly.png",
     "figures/s2_fdc.png",
-    "figures/s3_reliability_curve.png",
-    "figures/s4_site_map.png",
-    "figures/s5_series.png"
+    "figures/s3_reliability_curve.png"
    ],
    "figures": [
     "s1_demand_monthly.png",
     "s2_fdc.png",
-    "s3_reliability_curve.png",
-    "s4_site_map.png",
-    "s5_series.png"
+    "s3_reliability_curve.png"
    ],
    "upload": null
   },
@@ -504,32 +660,36 @@
    "status": "done",
    "model": "claude-sonnet-5",
    "provider": "anthropic",
-   "date": "2026-09-07",
-   "recorded": "2026-09-07T14:17:39+00:00",
-   "usd": 0.8441,
-   "seconds": 540.9,
+   "date": "2026-09-14",
+   "recorded": "2026-09-14T23:33:14+00:00",
+   "usd": 1.1512,
+   "seconds": 545.5,
    "steps": 4,
    "gates": {
-    "passed": 5,
-    "total": 9
+    "passed": 7,
+    "total": 7
    },
    "checks": {
-    "passed": 4,
-    "total": 4
+    "passed": 6,
+    "total": 6
    },
-   "headline": "No Q100 discharge in cubic metres per second can be defended from this study.",
+   "headline": "Notice: the Critic's fix requests on decision, limitations, summary were not all resolved; read the report with the list of what this study does not establish.",
    "files": [
     "workspace.json",
     "report.md",
     "study.yaml",
     "figures/s1_site_map.png",
     "figures/s2_donors_map.png",
-    "figures/s3_signatures_band.png"
+    "figures/s3_signatures_band.png",
+    "figures/s4_monthly_climate.png",
+    "figures/s4_glofas_series.png"
    ],
    "figures": [
     "s1_site_map.png",
     "s2_donors_map.png",
-    "s3_signatures_band.png"
+    "s3_signatures_band.png",
+    "s4_monthly_climate.png",
+    "s4_glofas_series.png"
    ],
    "upload": null
   }

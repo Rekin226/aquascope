@@ -324,7 +324,7 @@ class TestNotifier:
             assert results["file"] is True
             assert log_path.exists()
 
-            lines = log_path.read_text().strip().split("\n")
+            lines = log_path.read_text(encoding="utf-8").strip().split("\n")
             assert len(lines) == 2
             record = json.loads(lines[0])
             assert record["parameter"] == "nitrate"

@@ -2,40 +2,19 @@
  "id": "ungauged-regime",
  "question": "There is no gauge on my river in central Portugal (40.2 N, 8.0 W). What flow should I expect?",
  "shows": "Prediction in ungauged basins: similar catchments, transferred signatures, and the skill of that transfer.",
- "answer": "**Estimated flow regime for the point (40.2 ° N, 8.0 ° W) – central Portugal**\n\n| Signature | Estimate (mm d⁻¹) | Band (low – high) | Leave‑one‑out skill* |\n|-----------|-------------------|-------------------|----------------------|\n| Mean daily flow | 1.83 | 1.29 – 2.60 | NSE = 0.48 ; R² = 0.48 |\n| Median daily flow | 1.04 | 0.79 – 1.36 | NSE = 0.48 ; R² = 0.48 |\n| Low‑flow (Q95 – exceeded 95 % of days) | 0.22 | 0.17 – 0.30 | NSE = 0.34 ; R² = 0.34 |\n| High‑flow (Q05 – exceeded 5 % of days) | 6.01 | 3.81 – 9.48 | NSE = 0.47 ; R² = 0.47 |\n| Mean annual daily maximum (Qmax) | 16.99 | 9.94 – 29.03 | NSE = 0.51 ; R² = 0.51 |\n| Runoff ratio (flow / precip.) | 0.73 | 0.48 – 0.99 | NSE = 0.19 ; R² = 0.20 |\n| Base‑flow index | 0.70 | 0.64 – 0.76 | NSE = 0.35 ; R² = 0.35 |\n| Flow‑duration‑curve slope (33‑66 %) | 2.86 | 2.13 – 3.58 | NSE = 0.17 ; R² = 0.18 |\n| High‑flow frequency (days yr⁻¹ > 3 × median) | 55.3 days yr⁻¹ | 36.9 – 73.7 days yr⁻¹ | NSE = 0.28 ; R² = 0.28 |\n| Low‑flow frequency (days yr⁻¹ < 0.2 × median) | 15.4 days yr⁻¹ | 8.3 – 22.6 days yr⁻¹ | NSE = 0.29 ; R² = 0.30 |\n| Seasonality index (Markham) | 0.39 | 0.32 – 0.45 | NSE = 0.41 ; R² = 0.42 |\n| Flashiness index (Richards‑Baker) | 0.21 | 0.16 – 0.26 | NSE = 0.41 ; R² = 0.41 |\n\n\\*Skill values are the leave‑one‑out Nash‑Sutcliffe Efficiency (NSE) and coefficient of determination (R²) reported for each signature across the 5 donor basins used in the similarity‑based regionalisation.\n\n**What this means**\n\n- **Typical flow** is low‑moderate: on an average day the river would convey about **1.8 mm d⁻¹** (≈ 0.16 m³ s⁻¹ per 100 km²), with a plausible range of **1.3–2.6 mm d⁻¹**.\n- **Dry periods** can drop to ~0.2 mm d⁻¹ (≈ 0.02 m³ s⁻¹ per 100 km²) and will occur on roughly 15 days yr⁻¹.\n- **High‑flow events** are relatively rare but can reach **≈ 6 mm d⁻¹** (≈ 0.5 m³ s⁻¹ per 100 km²) and are expected on about **55 days yr⁻¹** when flows exceed three times the median.\n- The **annual peak** is on the order of **17 mm d⁻¹** (≈ 1.4 m³ s⁻¹ per 100 km²), with a wide uncertainty band (10–29 mm d⁻¹) reflecting natural variability and the limited similarity of donor basins.\n\nThese figures are derived from five physically similar gauged catchments (all in the French Alps) and represent the best quantitative expectation for the ungauged Portuguese river, with the reported uncertainty bands and predictive skill.",
- "markdown": "# There is no gauge on my river in central Portugal (40.2 N, 8.0 W). What flow should I expect?\n\n**Estimated flow regime for the point (40.2 ° N, 8.0 ° W) – central Portugal**\n\n| Signature | Estimate (mm d⁻¹) | Band (low – high) | Leave‑one‑out skill* |\n|-----------|-------------------|-------------------|----------------------|\n| Mean daily flow | 1.83 | 1.29 – 2.60 | NSE = 0.48 ; R² = 0.48 |\n| Median daily flow | 1.04 | 0.79 – 1.36 | NSE = 0.48 ; R² = 0.48 |\n| Low‑flow (Q95 – exceeded 95 % of days) | 0.22 | 0.17 – 0.30 | NSE = 0.34 ; R² = 0.34 |\n| High‑flow (Q05 – exceeded 5 % of days) | 6.01 | 3.81 – 9.48 | NSE = 0.47 ; R² = 0.47 |\n| Mean annual daily maximum (Qmax) | 16.99 | 9.94 – 29.03 | NSE = 0.51 ; R² = 0.51 |\n| Runoff ratio (flow / precip.) | 0.73 | 0.48 – 0.99 | NSE = 0.19 ; R² = 0.20 |\n| Base‑flow index | 0.70 | 0.64 – 0.76 | NSE = 0.35 ; R² = 0.35 |\n| Flow‑duration‑curve slope (33‑66 %) | 2.86 | 2.13 – 3.58 | NSE = 0.17 ; R² = 0.18 |\n| High‑flow frequency (days yr⁻¹ > 3 × median) | 55.3 days yr⁻¹ | 36.9 – 73.7 days yr⁻¹ | NSE = 0.28 ; R² = 0.28 |\n| Low‑flow frequency (days yr⁻¹ < 0.2 × median) | 15.4 days yr⁻¹ | 8.3 – 22.6 days yr⁻¹ | NSE = 0.29 ; R² = 0.30 |\n| Seasonality index (Markham) | 0.39 | 0.32 – 0.45 | NSE = 0.41 ; R² = 0.42 |\n| Flashiness index (Richards‑Baker) | 0.21 | 0.16 – 0.26 | NSE = 0.41 ; R² = 0.41 |\n\n\\*Skill values are the leave‑one‑out Nash‑Sutcliffe Efficiency (NSE) and coefficient of determination (R²) reported for each signature across the 5 donor basins used in the similarity‑based regionalisation.\n\n**What this means**\n\n- **Typical flow** is low‑moderate: on an average day the river would convey about **1.8 mm d⁻¹** (≈ 0.16 m³ s⁻¹ per 100 km²), with a plausible range of **1.3–2.6 mm d⁻¹**.\n- **Dry periods** can drop to ~0.2 mm d⁻¹ (≈ 0.02 m³ s⁻¹ per 100 km²) and will occur on roughly 15 days yr⁻¹.\n- **High‑flow events** are relatively rare but can reach **≈ 6 mm d⁻¹** (≈ 0.5 m³ s⁻¹ per 100 km²) and are expected on about **55 days yr⁻¹** when flows exceed three times the median.\n- The **annual peak** is on the order of **17 mm d⁻¹** (≈ 1.4 m³ s⁻¹ per 100 km²), with a wide uncertainty band (10–29 mm d⁻¹) reflecting natural variability and the limited similarity of donor basins.\n\nThese figures are derived from five physically similar gauged catchments (all in the French Alps) and represent the best quantitative expectation for the ungauged Portuguese river, with the reported uncertainty bands and predictive skill.\n\n## What this answer does not establish\n\n- These numbers are not in any tool result: 0.19, -2.6, 0.02, 0.5.\n\n## Data\n\n- **catchment at 40.2, -8.0** · licence CC-BY-4.0 · HydroATLAS v1.0 (BasinATLAS), CC BY 4.0. Linke, S., Lehner, B., Ouellet Dallaire, C., et al. (2019). Global hydro-environmental sub-basin and river reach characteristics at high spatial resolution. Scientific Data 6: 283. https://doi.org/10.1038/s41597-019-0300-6\n- **similar-basins search** · licence CC-BY-4.0 · HydroATLAS v1.0 (BasinATLAS), CC BY 4.0. Linke, S., Lehner, B., Ouellet Dallaire, C., et al. (2019). Global hydro-environmental sub-basin and river reach characteristics at high spatial resolution. Scientific Data 6: 283. https://doi.org/10.1038/s41597-019-0300-6\n- **regionalised signatures at 40.2, -8.0** · licence per-source (streamflow), CC-BY-4.0 (BasinATLAS) · donor gauges (per-source licences); BasinATLAS (CC BY 4.0)\n\n## Methods and citations\n\n1. **Catchment attributes from BasinATLAS (HydroATLAS v1.0).** Level-12 HydroBASINS sub-basins traced upstream through the NEXT_DOWN routing field; attributes aggregated as area-weighted means (or outlet / total values where the field is already an upstream aggregate). _HydroATLAS v1.0 (BasinATLAS), CC BY 4.0. Linke, S., Lehner, B., Ouellet Dallaire, C., et al. (2019). Global hydro-environmental sub-basin and river reach characteristics at high spatial resolution. Scientific Data 6: 283. https://doi.org/10.1038/s41597-019-0300-6_\n2. **Similar gauged basins (physical similarity / spatial proximity).** Gauged stations ranked by weighted Euclidean distance in standardised BasinATLAS catchment attribute space (area, relief, climate, land cover, soils, human pressure), by great-circle distance, or both; the donor-selection step of regionalisation. _Bloeschl, G., Sivapalan, M., Wagener, T., Viglione, A., Savenije, H. (eds.) (2013). Runoff Prediction in Ungauged Basins. Cambridge University Press; Oudin, L. et al. (2008). Spatial proximity, physical similarity, regression and ungaged catchments. Water Resour. Res. 44, W03413. Attributes: HydroATLAS v1.0 (BasinATLAS), CC BY 4.0. Linke, S., Lehner, B., Ouellet Dallaire, C., et al. (2019). Global hydro-environmental sub-basin and river reach characteristics at high spatial resolution. Scientific Data 6: 283. https://doi.org/10.1038/s41597-019-0300-6_\n3. **Regionalisation of flow signatures from similar gauged basins.** Donor gauges ranked by physical similarity (standardised BasinATLAS catchment attributes); signatures transferred as an inverse-distance-weighted average over the k nearest donors (geometric mean for magnitudes) and/or by ridge regression on the attributes over all donors; the band is one weighted standard deviation of the donors (or the regression residual). _Bloeschl, G. et al. (eds.) (2013). Runoff Prediction in Ungauged Basins. Cambridge University Press; Oudin, L. et al. (2008). Water Resour. Res. 44, W03413; Addor, N. et al. (2018). A ranking of hydrological signatures based on their predictability in space. Water Resour. Res. 54, 8792-8812._\n\n---\nProduced by aquascope 0.12.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-08-22 03:50 UTC. Tools called: describe_catchment, similar_basins, similar_basins, regionalize_signatures. Numbers come from the tool results; the model wrote the prose.",
+ "answer": "**Ungauged‑flow estimate for the point (40.2 N, 8.0 W)**  \n\nThe AquaScope regionalisation (similarity method, k = 5 donors) transfers flow‑signatures from five gauged basins that are most similar to your catchment (area ≈ 597 km², mean elevation ≈ 674 m, mean annual precipitation ≈ 1 228 mm yr⁻¹, aridity ≈ 1.31, no regulation).  \n\n| Flow metric | Estimate | Uncertainty band ( low – high ) | Units |\n|-------------|----------|--------------------------------|-------|\n| Mean daily flow | **1.83** | 1.29 – 2.60 | mm day⁻¹ |\n| Median daily flow | **1.03** | 0.79 – 1.35 | mm day⁻¹ |\n| Q95 (exceeded 95 % of days) | **0.22** | 0.166 – 0.299 | mm day⁻¹ |\n| Q05 (exceeded 5 % of days) | **6.00** | 3.81 – 9.45 | mm day⁻¹ |\n| Mean annual‑maximum daily flow | **17.0** | 9.95 – 29.1 | mm day⁻¹ |\n\nAdditional signatures (for context)  \n\n* Runoff ratio ≈ 0.73 (0.48 – 0.98)  \n* Base‑flow index ≈ 0.70 (0.64 – 0.76)  \n* Flow‑duration‑curve slope ≈ 2.87 (2.14 – 3.59)  \n* Seasonality index ≈ 0.39 (0.32 – 0.45)  \n\n**Skill of the regionalisation** – The tool did not return a leave‑one‑out cross‑validation skill metric (e.g., R²), so no quantitative skill value can be quoted.\n\nThese numbers are derived solely from the similarity‑based regionalisation of five donor stations (see the *similarity* block in the tool output). They represent the best‑available quantitative expectation of discharge at your ungauged river segment.",
+ "markdown": "# There is no gauge on my river in central Portugal (40.2 N, 8.0 W). What flow should I expect?\n\n**Ungauged‑flow estimate for the point (40.2 N, 8.0 W)**  \n\nThe AquaScope regionalisation (similarity method, k = 5 donors) transfers flow‑signatures from five gauged basins that are most similar to your catchment (area ≈ 597 km², mean elevation ≈ 674 m, mean annual precipitation ≈ 1 228 mm yr⁻¹, aridity ≈ 1.31, no regulation).  \n\n| Flow metric | Estimate | Uncertainty band ( low – high ) | Units |\n|-------------|----------|--------------------------------|-------|\n| Mean daily flow | **1.83** | 1.29 – 2.60 | mm day⁻¹ |\n| Median daily flow | **1.03** | 0.79 – 1.35 | mm day⁻¹ |\n| Q95 (exceeded 95 % of days) | **0.22** | 0.166 – 0.299 | mm day⁻¹ |\n| Q05 (exceeded 5 % of days) | **6.00** | 3.81 – 9.45 | mm day⁻¹ |\n| Mean annual‑maximum daily flow | **17.0** | 9.95 – 29.1 | mm day⁻¹ |\n\nAdditional signatures (for context)  \n\n* Runoff ratio ≈ 0.73 (0.48 – 0.98)  \n* Base‑flow index ≈ 0.70 (0.64 – 0.76)  \n* Flow‑duration‑curve slope ≈ 2.87 (2.14 – 3.59)  \n* Seasonality index ≈ 0.39 (0.32 – 0.45)  \n\n**Skill of the regionalisation** – The tool did not return a leave‑one‑out cross‑validation skill metric (e.g., R²), so no quantitative skill value can be quoted.\n\nThese numbers are derived solely from the similarity‑based regionalisation of five donor stations (see the *similarity* block in the tool output). They represent the best‑available quantitative expectation of discharge at your ungauged river segment.\n\n## Data\n\n- **regionalised signatures at 40.2, -8.0** · licence per-source (streamflow), CC-BY-4.0 (BasinATLAS) · donor gauges (per-source licences); BasinATLAS (CC BY 4.0)\n\n## Methods and citations\n\n1. **Regionalisation of flow signatures from similar gauged basins.** Donor gauges ranked by physical similarity (standardised BasinATLAS catchment attributes); signatures transferred as an inverse-distance-weighted average over the k nearest donors (geometric mean for magnitudes) and/or by ridge regression on the attributes over all donors; the band is one weighted standard deviation of the donors (or the regression residual). _Bloeschl, G. et al. (eds.) (2013). Runoff Prediction in Ungauged Basins. Cambridge University Press; Oudin, L. et al. (2008). Water Resour. Res. 44, W03413; Addor, N. et al. (2018). A ranking of hydrological signatures based on their predictability in space. Water Resour. Res. 54, 8792-8812._\n\n---\nProduced by aquascope 0.18.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-09-21 10:59 UTC. Tools called: assess_site, regionalize_signatures. Numbers come from the tool results; the model wrote the prose.",
  "tool_calls": [
   {
-   "name": "describe_catchment",
+   "name": "assess_site",
    "arguments": {
     "lat": 40.2,
     "lon": -8,
-    "upstream": false
+    "problem": "ungauged_flow",
+    "radius_km": 50
    },
    "ok": true,
-   "summary": "{\"latitude\": 40.2, \"longitude\": -8.0, \"sub_basin\": {\"hybas_id\": 2121225550, \"next_down\": 2120637390, \"main_bas\": 2120019030, \"sub_area\": 110.5, \"up_area\": 596.4"
-  },
-  {
-   "name": "similar_basins",
-   "arguments": {
-    "k": 5,
-    "lat": 40.2,
-    "lon": -8,
-    "method": "similar"
-   },
-   "ok": false,
-   "summary": "{\"error\": \"similar basins lookup failed: ValueError: method must be similarity, proximity or combined\"}"
-  },
-  {
-   "name": "similar_basins",
-   "arguments": {
-    "k": 5,
-    "lat": 40.2,
-    "lon": -8,
-    "method": "similarity"
-   },
-   "ok": true,
-   "summary": "{\"method\": \"similarity\", \"features_used\": [\"log_area\", \"elevation\", \"slope\", \"precipitation\", \"aridity\", \"temperature\", \"snow\", \"forest\", \"cropland\", \"urban\", \""
+   "summary": "{\"point\": {\"lat\": 40.2, \"lon\": -8.0}, \"stations\": [], \"catchment\": {\"hybas_id\": 2121225550, \"area_km2\": 596.6, \"upstream_area_km2\": 596.4, \"n_sub_basins\": 4, \"e"
   },
   {
    "name": "regionalize_signatures",
@@ -51,18 +30,6 @@
  ],
  "data_used": [
   {
-   "label": "catchment at 40.2, -8.0",
-   "period": null,
-   "license": "CC-BY-4.0",
-   "attribution": "HydroATLAS v1.0 (BasinATLAS), CC BY 4.0. Linke, S., Lehner, B., Ouellet Dallaire, C., et al. (2019). Global hydro-environmental sub-basin and river reach characteristics at high spatial resolution. Scientific Data 6: 283. https://doi.org/10.1038/s41597-019-0300-6"
-  },
-  {
-   "label": "similar-basins search",
-   "period": null,
-   "license": "CC-BY-4.0",
-   "attribution": "HydroATLAS v1.0 (BasinATLAS), CC BY 4.0. Linke, S., Lehner, B., Ouellet Dallaire, C., et al. (2019). Global hydro-environmental sub-basin and river reach characteristics at high spatial resolution. Scientific Data 6: 283. https://doi.org/10.1038/s41597-019-0300-6"
-  },
-  {
    "label": "regionalised signatures at 40.2, -8.0",
    "period": null,
    "license": "per-source (streamflow), CC-BY-4.0 (BasinATLAS)",
@@ -70,16 +37,6 @@
   }
  ],
  "methods": [
-  {
-   "name": "Catchment attributes from BasinATLAS (HydroATLAS v1.0)",
-   "text": "Level-12 HydroBASINS sub-basins traced upstream through the NEXT_DOWN routing field; attributes aggregated as area-weighted means (or outlet / total values where the field is already an upstream aggregate).",
-   "citation": "HydroATLAS v1.0 (BasinATLAS), CC BY 4.0. Linke, S., Lehner, B., Ouellet Dallaire, C., et al. (2019). Global hydro-environmental sub-basin and river reach characteristics at high spatial resolution. Scientific Data 6: 283. https://doi.org/10.1038/s41597-019-0300-6"
-  },
-  {
-   "name": "Similar gauged basins (physical similarity / spatial proximity)",
-   "text": "Gauged stations ranked by weighted Euclidean distance in standardised BasinATLAS catchment attribute space (area, relief, climate, land cover, soils, human pressure), by great-circle distance, or both; the donor-selection step of regionalisation.",
-   "citation": "Bloeschl, G., Sivapalan, M., Wagener, T., Viglione, A., Savenije, H. (eds.) (2013). Runoff Prediction in Ungauged Basins. Cambridge University Press; Oudin, L. et al. (2008). Spatial proximity, physical similarity, regression and ungaged catchments. Water Resour. Res. 44, W03413. Attributes: HydroATLAS v1.0 (BasinATLAS), CC BY 4.0. Linke, S., Lehner, B., Ouellet Dallaire, C., et al. (2019). Global hydro-environmental sub-basin and river reach characteristics at high spatial resolution. Scientific Data 6: 283. https://doi.org/10.1038/s41597-019-0300-6"
-  },
   {
    "name": "Regionalisation of flow signatures from similar gauged basins",
    "text": "Donor gauges ranked by physical similarity (standardised BasinATLAS catchment attributes); signatures transferred as an inverse-distance-weighted average over the k nearest donors (geometric mean for magnitudes) and/or by ridge regression on the attributes over all donors; the band is one weighted standard deviation of the donors (or the regression residual).",
@@ -94,15 +51,25 @@
   },
   {
    "name": "numbers_come_from_tools",
-   "passed": false,
-   "detail": "These numbers are not in any tool result: 0.19, -2.6, 0.02, 0.5."
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "years_traceable",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "record_is_named",
+   "passed": true,
+   "detail": ""
   }
  ],
- "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"There is no gauge on my river in central Portugal (40.2 N, 8.0 W). What flow sho\"\nquestion: \"There is no gauge on my river in central Portugal (40.2 N, 8.0 W). What flow should I expect?\"\ncreated: \"2026-08-22T03:50:15+00:00\"\naquascope_version: \"0.12.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"describe_catchment\"\n    arguments:\n      lat: 40.2\n      lon: -8\n      upstream: false\n  - tool: \"similar_basins\"\n    arguments:\n      k: 5\n      lat: 40.2\n      lon: -8\n      method: \"similarity\"\n  - tool: \"regionalize_signatures\"\n    arguments:\n      k: 5\n      lat: 40.2\n      lon: -8\n      method: \"similarity\"\n",
- "steps": 5,
+ "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"There is no gauge on my river in central Portugal (40.2 N, 8.0 W). What flow sho\"\nquestion: \"There is no gauge on my river in central Portugal (40.2 N, 8.0 W). What flow should I expect?\"\ncreated: \"2026-09-21T10:59:35+00:00\"\naquascope_version: \"0.18.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"assess_site\"\n    arguments:\n      lat: 40.2\n      lon: -8\n      problem: \"ungauged_flow\"\n      radius_km: 50\n  - tool: \"regionalize_signatures\"\n    arguments:\n      k: 5\n      lat: 40.2\n      lon: -8\n      method: \"similarity\"\n",
+ "steps": 3,
  "model": "openai/gpt-oss-120b",
  "provider": "groq",
- "recorded": "2026-08-22T03:50:15+00:00",
- "aquascope_version": "0.12.0",
+ "recorded": "2026-09-21T10:59:35+00:00",
+ "aquascope_version": "0.18.0",
  "error": null
 }

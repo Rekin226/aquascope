@@ -695,6 +695,9 @@ class NonStationaryGEVResult:
         aic: Akaike information criterion.
         bic: Bayesian information criterion.
         trend_significant: ``True`` if the trend p-value < 0.05 (likelihood-ratio test).
+        lr_statistic, p_value: The likelihood-ratio statistic and its chi-squared p-value.
+        aic_stationary: AIC of the stationary GEV fitted by the same likelihood.
+        stationary_params: ``(shape, loc, scale)`` of that stationary GEV.
     """
 
     loc_intercept: float = 0.0
@@ -706,6 +709,12 @@ class NonStationaryGEVResult:
     aic: float = 0.0
     bic: float = 0.0
     trend_significant: bool = False
+    #: Likelihood-ratio test of the trend term (1 degree of freedom) and the stationary model it is tested against.
+    lr_statistic: float = 0.0
+    p_value: float = 1.0
+    aic_stationary: float = 0.0
+    #: The stationary GEV (scipy sign convention for the shape), fitted by the same likelihood.
+    stationary_params: tuple[float, float, float] = (0.0, 0.0, 1.0)
 
 
 def _gev_neg_loglik(params: np.ndarray, data: np.ndarray, years_c: np.ndarray) -> float:
@@ -751,16 +760,28 @@ def fit_nonstationary_gev(
     annual_maxima: np.ndarray | pd.Series,
     years: np.ndarray | pd.Series,
     return_periods: list[float] | None = None,
+    max_abs_shape: float | None = 0.5,
 ) -> NonStationaryGEVResult:
     """Fit GEV with time-varying location: ``loc(t) = mu0 + mu1 * (t − t̄)``.
 
     The trend significance is assessed via a likelihood-ratio test comparing
-    the non-stationary model to a stationary GEV.
+    the non-stationary model to a stationary GEV fitted by the same
+    likelihood. The likelihood is written in the Coles convention (shape
+    ``xi``, heavy tail for ``xi > 0``); the result reports the shape in the
+    scipy convention (``c = -xi``) and the return levels use it as such.
+
+    Both fits start from scipy's stationary maximum-likelihood estimate (the
+    non-stationary one with no trend), so the non-stationary likelihood is
+    never worse than the stationary one and the test statistic is not negative.
+    ``max_abs_shape`` bounds ``|xi|`` (0.5 by default, the plausible range for
+    floods, Martins and Stedinger 2000), which keeps short or bootstrap samples
+    from running to an absurd tail; ``None`` leaves it free.
 
     Parameters:
         annual_maxima: Array of annual maximum values.
         years: Corresponding year values (same length as *annual_maxima*).
         return_periods: Return periods in years.  Defaults to standard set.
+        max_abs_shape: Bound on the absolute Coles shape, or ``None``.
 
     Returns:
         A :class:`NonStationaryGEVResult`.
@@ -785,57 +806,73 @@ def fit_nonstationary_gev(
 
     year_mean = np.mean(yrs)
     years_c = yrs - year_mean
+    bound = float(max_abs_shape) if max_abs_shape is not None else None
 
-    # Initial estimates from stationary GEV
-    shape0, loc0, scale0 = genextreme.fit(data)
-    x0_ns = np.array([loc0, 0.0, np.log(scale0), shape0])
-    x0_st = np.array([loc0, np.log(scale0), shape0])
+    def clip(xi: float) -> float:
+        return float(np.clip(xi, -bound, bound)) if bound is not None else float(xi)
 
-    res_ns = minimize(_gev_neg_loglik, x0_ns, args=(data, years_c), method="Nelder-Mead",
-                      options={"maxiter": 10000, "xatol": 1e-8, "fatol": 1e-8})
-    res_st = minimize(_gev_neg_loglik_stationary, x0_st, args=(data,), method="Nelder-Mead",
-                      options={"maxiter": 10000, "xatol": 1e-8, "fatol": 1e-8})
+    def nll_ns(x: np.ndarray) -> float:
+        if bound is not None and abs(x[3]) > bound:
+            return 1e12
+        return _gev_neg_loglik(x, data, years_c)
 
-    mu0, mu1, log_scale, shape = res_ns.x
+    def nll_st(x: np.ndarray) -> float:
+        if bound is not None and abs(x[2]) > bound:
+            return 1e12
+        return _gev_neg_loglik_stationary(x, data)
+
+    # Initial estimates from scipy's stationary GEV; scipy's shape c is -xi.
+    c0, loc0, scale0 = genextreme.fit(data)
+    x0_st = np.array([loc0, np.log(scale0), clip(-c0)])
+    opts = {"maxiter": 20000, "xatol": 1e-8, "fatol": 1e-10}
+    res_st = minimize(nll_st, x0_st, method="Nelder-Mead", options=opts)
+    best_st = res_st.x if res_st.fun <= nll_st(x0_st) else x0_st
+    fun_st = float(min(res_st.fun, nll_st(x0_st)))
+
+    # The non-stationary fit starts at the stationary optimum with no trend, so it can only improve on it.
+    x0_ns = np.array([best_st[0], 0.0, best_st[1], best_st[2]])
+    res_ns = minimize(nll_ns, x0_ns, method="Nelder-Mead", options=opts)
+    best_ns, fun_ns = (res_ns.x, float(res_ns.fun)) if res_ns.fun <= fun_st else (x0_ns, fun_st)
+
+    mu0, mu1, log_scale, xi = best_ns
     scale = float(np.exp(log_scale))
+    shape = float(-xi)  # scipy convention
     n = len(data)
 
-    nll_ns = res_ns.fun
-    nll_st = res_st.fun
-
     # AIC / BIC for non-stationary model (4 parameters)
-    aic = 2 * nll_ns + 2 * 4
-    bic = 2 * nll_ns + np.log(n) * 4
+    aic = 2 * fun_ns + 2 * 4
+    bic = 2 * fun_ns + np.log(n) * 4
+    aic_st = 2 * fun_st + 2 * 3
 
     # Likelihood-ratio test (1 df for the additional mu1 parameter)
-    lr_stat = 2 * (nll_st - nll_ns)
-    p_value = 1 - chi2.cdf(max(lr_stat, 0), df=1)
+    lr_stat = max(2 * (fun_st - fun_ns), 0.0)
+    p_value = float(1 - chi2.cdf(lr_stat, df=1))
     trend_significant = bool(p_value < 0.05)
 
     # Return levels for each year
     rl: dict[float, np.ndarray] = {}
     for rp in return_periods:
         prob = 1 - 1.0 / rp
-        levels = np.array([
-            float(genextreme.ppf(prob, shape, loc=mu0 + mu1 * yc, scale=scale))
-            for yc in years_c
-        ])
-        rl[rp] = levels
+        rl[rp] = np.asarray(genextreme.ppf(prob, shape, loc=mu0 + mu1 * years_c, scale=scale), dtype=float)
 
     logger.info(
-        "Non-stationary GEV: mu0=%.3f, mu1=%.5f, scale=%.3f, shape=%.3f, trend_sig=%s",
-        mu0, mu1, scale, shape, trend_significant,
+        "Non-stationary GEV: mu0=%.3f, mu1=%.5f, scale=%.3f, shape=%.3f, LR p=%.3f",
+        mu0, mu1, scale, shape, p_value,
     )
     return NonStationaryGEVResult(
         loc_intercept=float(mu0),
         loc_trend=float(mu1),
         scale=scale,
-        shape=float(shape),
+        shape=shape,
         return_levels=rl,
         years=yrs,
         aic=float(aic),
         bic=float(bic),
         trend_significant=trend_significant,
+        lr_statistic=float(lr_stat),
+        p_value=p_value,
+        aic_stationary=float(aic_st),
+        stationary_params=(float(-best_st[2]), float(best_st[0]), float(np.exp(best_st[1]))),
     )
 
 

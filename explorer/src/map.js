@@ -2,11 +2,12 @@
 // the URL state. Layer choice (basemaps, imagery, terrain, climate rasters)
 // is #232; this module keeps the seams for it (setBasemap, overlay helpers).
 
-import { EMPTY_FC, actions, dbg, escapeHtml, sourceStyle, state, trace } from "./core.js?v=__BUILD__";
+import { EMPTY_FC, actions, clickLayers, dbg, escapeHtml, sourceStyle, state, trace } from "./core.js?v=__BUILD__";
 import { toFeatureCollection } from "./catalog.js?v=__BUILD__";
 import { TERRAIN_DEM, basemapById, overlayById, tileUrls } from "./layers.js?v=__BUILD__";
 import { SHAPE_NAMES, shapeSdf } from "./shapes.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
+import { availabilityLabel } from "./availability.js?v=__BUILD__";
 
 export let map = null;
 
@@ -16,11 +17,12 @@ export function whenMapLoadsLate(cb) { onLate = cb; }
 
 // Our own sources and layers, which must survive a basemap change: setStyle
 // replaces the whole style, so they are carried across explicitly.
-const OUR_SOURCES = ["stations", "catchment", "basins6", "basins12", "terrain-dem"];
+const OUR_SOURCES = ["stations", "stations-now", "catchment", "basins6", "basins12", "terrain-dem"];
 const OUR_LAYERS = ["catchment-fill", "catchment-line", "basins6-line", "basins12-line", "basins12-up",
-  "gauge-heat", "clusters", "cluster-count", "points", "selected", "hillshade"];
-const isOurs = (id) => OUR_SOURCES.includes(id) || id.startsWith("ov-");
-const isOurLayer = (id) => OUR_LAYERS.includes(id) || id.startsWith("ov-");
+  "gauge-heat", "clusters", "now-dots", "cluster-count", "points", "selected", "hillshade"];
+// river- is the stream network and the trace to the sea (river-map.js, #516).
+const isOurs = (id) => OUR_SOURCES.includes(id) || id.startsWith("ov-") || id.startsWith("study-") || id.startsWith("river-");
+const isOurLayer = (id) => OUR_LAYERS.includes(id) || id.startsWith("ov-") || id.startsWith("study-") || id.startsWith("river-");
 
 // WebGL is what the map actually needs; test it directly instead of blaming it
 // for every slow style load (the old code said "WebGL is off" after a 12 s
@@ -153,7 +155,7 @@ const FALLBACK_STYLE = {
   layers: [{ id: "base", type: "raster", source: "base" }],
 };
 
-function styleFor(basemapId, date) {
+export function styleFor(basemapId, date) {
   const b = basemapById(basemapId);
   return b.kind === "style" ? b.url : rasterStyle(b, date);
 }
@@ -195,6 +197,14 @@ export function initMap(initialView, { basemap = "light", date = null, globe = f
   // Bottom left, both of them: the inspector floats over the bottom right.
   map.addControl(new maplibregl.ScaleControl(), "bottom-left");
   map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
+  // On a phone the open attribution runs under the time bar, now that a dated layer is on from the start
+  // (#543): it starts folded to its (i) there, a tap opens it, and the legends carry their own credits.
+  if (globalThis.matchMedia && globalThis.matchMedia("(max-width: 640px)").matches) {
+    map.once("load", () => {
+      const el = map.getContainer().querySelector(".maplibregl-ctrl-attrib.maplibregl-compact");
+      if (el) { el.classList.remove("maplibregl-compact-show"); el.removeAttribute("open"); }
+    });
+  }
   return new Promise((resolve) => {
     let settled = false;
     let timer = null;
@@ -204,7 +214,7 @@ export function initMap(initialView, { basemap = "light", date = null, globe = f
     timer = setTimeout(() => done({ ok: false, reason: "slow" }), 20000);
     map.once("load", () => {
       // The twenty seconds are a promise to the reader, not a verdict on the
-      // map: a cold cache with Pyodide's 15 MB downloading alongside it can
+      // map: a cold cache with Pyodide's 30 MB downloading alongside it can
       // take longer, and a tab that was in the background renders nothing at
       // all until it is looked at, so `load` can arrive minutes late. It used
       // to be terminal, which left a working map with no gauges on it under a
@@ -260,7 +270,7 @@ export function setBasemap(id, { date = null, then = null } = {}) {
   map.setStyle(styleFor(id, date), { diff: false, transformStyle: carryOver });
   // The new style is not usable until it has loaded; terrain in particular is a
   // style property and has to be set again afterwards.
-  map.once("idle", () => {
+  onceIdle(() => {
     if (terrainOn && map.getSource("terrain-dem")) {
       map.setTerrain({ source: "terrain-dem", exaggeration: 1.3 });
     }
@@ -287,7 +297,8 @@ export function ensureShapeImages() {
 }
 
 function firstDataLayerId() {
-  for (const id of ["gauge-heat", "clusters", "points", "catchment-fill"]) {
+  // Rasters go under the river network (#545), which sits under the gauges.
+  for (const id of ["river-net-line", "gauge-heat", "clusters", "points", "catchment-fill"]) {
     if (map.getLayer(id)) return id;
   }
   return undefined;
@@ -332,6 +343,67 @@ export function applyDate(date, activeOverlays, basemapId) {
     const src = map.getSource("base");
     if (src && src.setTiles) src.setTiles(tileUrls(b, date));
   }
+}
+
+// ── time (#522) ─────────────────────────────────────────────────────────────
+
+// Waiting for "idle" (#545). The rivers' flow animation (river-map.js) changes the style many times a second,
+// and every style change restarts MapLibre's 300 ms sky and projection transitions, so while the dash moves the
+// map never goes idle. Whoever waits for idle says so here, and the dash holds still until it comes.
+let idleWaits = 0;
+export const waitingForIdle = () => idleWaits > 0;
+
+function onceIdle(fn) {
+  idleWaits++;
+  map.once("idle", () => { idleWaits = Math.max(0, idleWaits - 1); fn(); });
+}
+
+// Work outside the tile pipeline that a frame has to wait for: the world
+// river status decodes its own image for each month (status-layer.js, #544).
+const holds = new Set();
+export function holdSettle(promise) {
+  holds.add(promise);
+  const drop = () => holds.delete(promise);
+  promise.then(drop, drop);
+  return promise;
+}
+
+/** Resolves once the map has drawn every tile it asked for (true), or after `timeoutMs` (false). */
+export async function whenSettled(timeoutMs = 4000) {
+  if (holds.size) {
+    await Promise.race([Promise.allSettled([...holds]), new Promise((r) => setTimeout(r, timeoutMs))]);
+  }
+  return new Promise((resolve) => {
+    if (!state.mapOk || !map) { resolve(false); return; }
+    let timer = null;
+    idleWaits++;
+    const finish = (ok) => {
+      clearTimeout(timer);
+      map.off("idle", onIdle);
+      idleWaits = Math.max(0, idleWaits - 1);
+      resolve(ok);
+    };
+    const onIdle = () => finish(true);
+    timer = setTimeout(() => finish(false), timeoutMs);
+    map.on("idle", onIdle);
+    map.triggerRepaint();
+  });
+}
+
+/**
+ * Hand the map's canvas to `draw` while its pixels are still there. WebGL clears
+ * the drawing buffer once a frame is shown, so reading it later gives a blank
+ * image; inside the render event of the same frame it is intact, which saves
+ * turning on preserveDrawingBuffer (a cost on every frame) for an occasional GIF.
+ */
+export function captureMap(draw) {
+  return new Promise((resolve) => {
+    if (!state.mapOk || !map) { resolve(false); return; }
+    map.once("render", () => {
+      try { draw(map.getCanvas()); resolve(true); } catch (err) { console.warn("capture failed", err); resolve(false); }
+    });
+    map.triggerRepaint();
+  });
 }
 
 export function ensureTerrainSource() {
@@ -383,11 +455,20 @@ export function globeSupported() {
 
 // ── how the gauges are drawn ────────────────────────────────────────────────
 
-const COLOR_FIELD = { source: "color", record: "colorRecord", recent: "colorRecent" };
+const COLOR_FIELD = {
+  source: "color", record: "colorRecord", recent: "colorRecent", skill: "colorSkill", now: "colorNow",
+  bulletin: "colorBulletin",
+};
 
 export function setGaugeStyle(mode) {
   if (!state.mapOk || !map.getLayer("points")) return;
   map.setPaintProperty("points", "icon-color", ["get", COLOR_FIELD[mode] || "color"]);
+  // Under "Today vs normal" the gauges with a status today stand out, drawn on top; the rest keep their
+  // agency colour and step back (#544).
+  const now = mode === "now";
+  map.setPaintProperty("points", "icon-opacity", now ? ["case", ["get", "hasNow"], 0.98, 0.35] : 0.98);
+  map.setLayoutProperty("points", "symbol-sort-key", now ? ["case", ["get", "hasNow"], 1, 0] : 0);
+  if (map.getSource("stations-now")) map.getSource("stations-now").setData(nowDotsFC(toFeatureCollection(state.stations)));
 }
 
 export function setHeatmap(on) {
@@ -416,22 +497,42 @@ export function addStationLayers(fc) {
   // separated circles, and handing over to real dots at zoom 6 means you are
   // looking at gauges as soon as you are looking at a river basin.
   map.addSource("stations", { type: "geojson", data: fc, cluster: true, clusterMaxZoom: 6, clusterRadius: 92 });
+  // Quiet clusters (#543 design pass): small, light and see-through, with a small count, so the river status
+  // under them and the rivers read first. A dark bubble per region was the loudest thing on the globe.
   map.addLayer({
     id: "clusters", type: "circle", source: "stations", filter: ["has", "point_count"],
     paint: {
-      "circle-color": ["interpolate", ["linear"], ["get", "point_count"],
-        1, "#4d9fe0", 100, "#2b7fc4", 1000, "#125ea3", 10000, "#0b3f76"],
-      "circle-opacity": 0.92,
-      "circle-stroke-color": "rgba(255,255,255,.85)",
-      "circle-stroke-width": ["step", ["get", "point_count"], 1.5, 250, 2],
-      "circle-radius": ["interpolate", ["linear"], ["sqrt", ["get", "point_count"]],
-        1, 11, 10, 17, 40, 23, 130, 29],
+      "circle-color": "rgba(248,251,255,0.5)",
+      "circle-stroke-color": "rgba(29,58,85,0.38)",
+      "circle-stroke-width": 1,
+      "circle-radius": ["interpolate", ["linear"], ["zoom"],
+        1, ["interpolate", ["linear"], ["sqrt", ["get", "point_count"]], 1, 4.5, 10, 6, 40, 7.5, 130, 9],
+        6, ["interpolate", ["linear"], ["sqrt", ["get", "point_count"]], 1, 8, 10, 10, 40, 12, 130, 14]],
+    },
+  });
+  // The gauges with a status today, as small dots in their today-vs-normal colour while the rest are still
+  // clustered: the globe shows where the measured rivers are low or high (#544), not how many gauges a
+  // country has. Past the cluster zoom the gauges' own marks take over.
+  map.addSource("stations-now", { type: "geojson", data: nowDotsFC(fc) });
+  map.addLayer({
+    id: "now-dots", type: "circle", source: "stations-now", maxzoom: 7,
+    paint: {
+      "circle-color": ["get", "colorNow"],
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 2.1, 4, 3, 6.9, 4],
+      "circle-stroke-color": "rgba(16,34,47,0.45)",
+      "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 1, 0.3, 5, 0.6],
+      "circle-opacity": 0.95,
     },
   });
   map.addLayer({
     id: "cluster-count", type: "symbol", source: "stations", filter: ["has", "point_count"],
-    layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": ["step", ["get", "point_count"], 11, 250, 12.5], "text-font": LABEL_FONT },
-    paint: { "text-color": "#fff", "text-halo-color": "rgba(10,45,80,.35)", "text-halo-width": 0.6 },
+    layout: {
+      "text-field": ["get", "point_count_abbreviated"], "text-font": LABEL_FONT,
+      "text-size": ["interpolate", ["linear"], ["zoom"], 1, 8.5, 6, 10.5],
+      "text-allow-overlap": false,
+    },
+    paint: { "text-color": "#1d3a55", "text-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.7, 4, 0.85],
+      "text-halo-color": "rgba(255,255,255,.8)", "text-halo-width": 1 },
   });
   // A symbol layer rather than a circle, so which agency a gauge belongs to is
   // carried by outline as well as by hue (#283). SDF icons keep the colour
@@ -449,6 +550,9 @@ export function addStationLayers(fc) {
       "icon-size": ["interpolate", ["linear"], ["zoom"], 4, 0.57, 7, 0.77, 10, 1.08, 14, 1.5],
       "icon-allow-overlap": true,
       "icon-ignore-placement": true,
+      "icon-offset": ["get", "offset"],
+      "icon-rotation-alignment": "viewport",
+      "icon-pitch-alignment": "viewport",
     },
     paint: {
       "icon-color": ["get", "color"],
@@ -458,10 +562,18 @@ export function addStationLayers(fc) {
     },
   });
   map.addLayer({
-    id: "selected", type: "circle", source: "stations", filter: ["==", ["get", "key"], "__none__"],
+    id: "selected", type: "symbol", source: "stations", filter: ["==", ["get", "key"], "__none__"],
+    layout: {
+      "icon-image": ["concat", "gauge-", ["get", "shape"]],
+      "icon-size": ["interpolate", ["linear"], ["zoom"], 4, 0.57, 7, 0.77, 10, 1.08, 14, 1.5],
+      "icon-offset": ["get", "offset"],
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+      "icon-rotation-alignment": "viewport",
+      "icon-pitch-alignment": "viewport",
+    },
     paint: {
-      "circle-color": "#ffc400", "circle-radius": 10,
-      "circle-stroke-color": "#10222f", "circle-stroke-width": 2.5, "circle-opacity": 1,
+      "icon-color": "#ffc400", "icon-halo-color": "#10222f", "icon-halo-width": 2.5,
     },
   });
 
@@ -470,18 +582,26 @@ export function addStationLayers(fc) {
     const zoom = await map.getSource("stations").getClusterExpansionZoom(f.properties.cluster_id);
     map.easeTo({ center: f.geometry.coordinates, zoom });
   });
-  map.on("click", "points", (e) => actions.selectStation(e.features[0].properties.key, { fly: false }));
   const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 8 });
+  // The hover label gives way to the map card (#548) once the gauge is clicked.
+  map.on("click", "points", (e) => { popup.remove(); actions.selectStation(e.features[0].properties.key, { fly: false }); });
+  map.on("click", "now-dots", (e) => {
+    if (map.queryRenderedFeatures(e.point, { layers: ["points"] }).length) return;
+    actions.selectStation(e.features[0].properties.key, { fly: false });
+  });
+  map.on("mouseenter", "now-dots", () => (map.getCanvas().style.cursor = "pointer"));
+  map.on("mouseleave", "now-dots", () => (map.getCanvas().style.cursor = ""));
   map.on("mouseenter", "points", (e) => {
     map.getCanvas().style.cursor = "pointer";
     const p = e.features[0].properties;
     popup.setLngLat(e.features[0].geometry.coordinates)
-      .setHTML(`<strong>${escapeHtml(p.name || p.key.split("/")[1])}</strong><br><span class="muted">${escapeHtml(sourceStyle(p.source).label)}</span>`)
+      .setHTML(`<strong>${escapeHtml(p.name || p.key.split("/")[1])}</strong><br><span class="muted">${escapeHtml(sourceStyle(p.source).label)}<br>${escapeHtml(availabilityLabel(p.source))}</span>`)
       .addTo(map);
   });
   map.on("mouseleave", "points", () => { map.getCanvas().style.cursor = ""; popup.remove(); });
   map.on("click", (e) => {
-    const hit = map.queryRenderedFeatures(e.point, { layers: ["points", "clusters"] });
+    const taken = [...clickLayers].filter((id) => map.getLayer(id));
+    const hit = map.queryRenderedFeatures(e.point, { layers: ["points", "clusters", "now-dots", ...taken] });
     if (hit.length) return; // handled by the layer handlers
     actions.selectPoint(e.lngLat.lat, e.lngLat.lng);
   });
@@ -501,7 +621,27 @@ export function addStationLayers(fc) {
 }
 
 export function refreshMapData() {
-  if (state.mapOk && map.getSource("stations")) map.getSource("stations").setData(toFeatureCollection(state.stations));
+  if (!state.mapOk || !map.getSource("stations")) return;
+  const fc = toFeatureCollection(state.stations);
+  map.getSource("stations").setData(fc);
+  if (map.getSource("stations-now")) map.getSource("stations-now").setData(nowDotsFC(fc));
+}
+
+// The gauges with a status today, while the map is coloured by today vs normal and the snapshot has loaded.
+function nowDotsFC(fc) {
+  if (state.gaugeStyle !== "now" || !state.nowStatus) return EMPTY_FC;
+  return { type: "FeatureCollection",
+    features: fc.features.filter((f) => f.properties.hasNow).map((f) => ({ type: "Feature", geometry: f.geometry,
+      properties: { key: f.properties.key, colorNow: f.properties.colorNow } })) };
+}
+
+/** Show or hide every gauge mark (the legend's Gauges row); a selected gauge keeps its ring. */
+export function setGaugesVisible(on) {
+  state.gaugesOn = Boolean(on);
+  if (!state.mapOk) return;
+  for (const id of ["clusters", "now-dots", "cluster-count", "points", "gauge-heat"]) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", state.gaugesOn ? "visible" : "none");
+  }
 }
 
 export function highlightStation(key) {

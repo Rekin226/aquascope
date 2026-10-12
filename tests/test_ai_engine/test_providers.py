@@ -99,12 +99,9 @@ def test_resolve_llm_nvidia_explicit():
 
 
 def test_resolve_llm_nvidia_env(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
-    monkeypatch.delenv("HF_TOKEN", raising=False)
-    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("AQUASCOPE_LLM_API_KEY", raising=False)
+    # every provider's variable, not a hand-picked few: an ANTHROPIC_API_KEY in the shell must not answer here
+    for k in {p.env for p in PROVIDERS.values() if p.env} | {"AQUASCOPE_LLM_API_KEY", "AQUASCOPE_LLM_MODEL"}:
+        monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("NVIDIA_API_KEY", "nv-env-key-1234")
 
     cfg = resolve_llm()

@@ -334,7 +334,7 @@ class TestGEMStatCollector:
 
         cache_key = hashlib.md5(checksum.encode()).hexdigest()
         corrupt_zip = cache_dir / f"gemstat_{cache_key}.zip"
-        corrupt_zip.write_text("CORRUPTED EXISTING ARCHIVE")
+        corrupt_zip.write_text("CORRUPTED EXISTING ARCHIVE", encoding="utf-8")
 
         c.client.get_json = mock.MagicMock(
             return_value={

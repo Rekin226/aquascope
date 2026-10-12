@@ -1,0 +1,36 @@
+/* Water balance (#557): its row in the shared "On the map" legend (the variable switch, the ramp) and the
+   subbasin's bars in the map card. */
+.wb-mark { display: inline-block; width: 18px; height: 8px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(11, 36, 64, .18); }
+.wb-seg {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0 0 .4rem;
+  border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+}
+.wb-seg-b {
+  font: inherit; font-size: .68rem; border: 0; background: none; padding: .2rem .35rem; color: var(--ink-2); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wb-seg-b:nth-child(even) { border-left: 1px solid var(--line); }
+.wb-seg-4 .wb-seg-b:nth-child(n+3) { border-top: 1px solid var(--line); }
+.wb-seg-b.on { background: var(--bg-sunken); color: var(--ink); font-weight: 600; }
+.wb-seg-b:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.wb-ramp { display: block; height: 9px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(11, 36, 64, .12); }
+.wb-ends {
+  display: flex; justify-content: space-between; margin: 2px 0 0;
+  font-size: .64rem; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.ml-body .wb-note { margin: .35rem 0 0; font-size: .68rem; line-height: 1.38; color: var(--ink-2); }
+.ml-body .wb-note.muted { display: flex; align-items: flex-start; gap: .4rem; color: var(--muted); }
+.wb-none { flex: 0 0 auto; display: inline-block; width: 14px; height: 8px; margin-top: 3px; border-radius: 2px; opacity: .8; }
+
+.mc-chart { margin: .1rem 0 0; }
+.mc-chart svg { display: block; overflow: visible; }
+.mc-chart-key {
+  display: flex; flex-wrap: wrap; gap: .15rem .65rem; margin: .15rem 0 .3rem;
+  font-size: .63rem; color: var(--muted);
+}
+.mc-chart-key .wb-k { display: inline-flex; align-items: center; gap: .28rem; white-space: nowrap; }
+.mc-chart-key i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
+.mc-chart-key i.wb-tick { width: 10px; height: 0; border-top: 1.6px solid var(--ink); border-radius: 0; }
+@media (prefers-color-scheme: dark) {
+  .mc-chart svg text { fill: #aab6c2; }
+}

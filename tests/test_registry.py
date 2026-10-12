@@ -155,6 +155,23 @@ def test_station_catalogs_keeps_failures_visible():
     assert empty == []
 
 
+def test_a_wrapped_catalog_failure_keeps_its_cause():
+    """BOM wraps every failed parameter type in one RuntimeError; the 503 under it must reach the health report
+    (#498), or the harvest files the outage as an unclassified code fault."""
+
+    class _Wrapped:
+        def stations(self, **kw):
+            try:
+                raise RuntimeError("All 3 attempts failed for https://www.bom.gov.au/waterdata/services (status 503)")
+            except RuntimeError as exc:
+                raise RuntimeError("BOM getStationList failed for all 10 parameter type(s)") from exc
+
+    with patch("aquascope.registry.build_collector", return_value=_Wrapped()):
+        cat = station_catalogs(sources=["bom"])["bom"]
+    assert cat.error.startswith("RuntimeError: BOM getStationList failed for all 10")
+    assert "(from RuntimeError: All 3 attempts failed" in cat.error and "status 503" in cat.error
+
+
 def test_station_catalogs_rejects_unknown_source():
     with pytest.raises(ValueError):
         station_catalogs(sources=["nope"])
@@ -166,3 +183,39 @@ def test_station_catalogs_filters_by_variable():
         cats = station_catalogs(sources=["ireland_opw"], variable="discharge")
     assert cats == {}
     fake.assert_not_called()
+
+
+def _plain_http_hosts(collector: BaseCollector) -> list[str]:
+    """Module-level and class-level ``http://`` URLs a collector calls (station page links inside functions are not)."""
+    import sys
+
+    module = sys.modules[type(collector).__module__]
+    found: list[str] = []
+    for name, value in list(vars(module).items()) + list(vars(type(collector)).items()):
+        if name.startswith("__"):
+            continue
+        values = value.values() if isinstance(value, dict) else [value]
+        found.extend(v for v in values if isinstance(v, str) and v.startswith("http://"))
+    return found
+
+
+def test_plain_http_catalog_sources_are_declared_browser_unreachable(built):
+    """A plain-http API cannot be called from the https Explorer (mixed content), so its pins must say so (#408).
+
+    Hydroscope shipped 704 clickable pins whose every click failed silently.
+    This refuses the next one: a catalogue source whose collector talks to an
+    ``http://`` host has to carry ``browser_reachable=False`` so the station
+    card explains itself instead of reporting an empty record.
+    """
+    undeclared = {
+        key for key in station_sources()
+        if _plain_http_hosts(built[key]) and SOURCES[key].browser_reachable
+    }
+    assert not undeclared, f"http-only catalogue sources not declared browser_reachable=False: {sorted(undeclared)}"
+    # The check is not vacuous: it sees the known case.
+    assert _plain_http_hosts(built["greece_hydroscope"]) and not SOURCES["greece_hydroscope"].browser_reachable
+
+
+def test_browser_reachable_defaults_on():
+    unreachable = sorted(k for k, m in SOURCES.items() if not m.browser_reachable)
+    assert unreachable == ["bom", "greece_hydroscope", "greece_openhi", "poland_imgw"], unreachable

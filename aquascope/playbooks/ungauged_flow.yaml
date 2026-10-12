@@ -121,6 +121,19 @@ branches:
         expects:
           - check: not_empty
             path: glofas
+      - id: s5
+        tool: reach_record
+        optional: true
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: >-
+          The GEOGLOWS v2 river reach the site snaps to, and its simulated daily flow since 1940 (MODELLED, not
+          measured): a continuous record at the point itself to set beside the transferred numbers, or a sentence
+          that no stream runs within 1 km.
+        expects:
+          - check: not_empty
+            path: ffa
 declines:
   - when:
       - path: context.ungauged
@@ -144,9 +157,13 @@ caveats:
   - >-
     GloFAS discharge is a model output for a grid cell of about 5 km, not a gauge reading; it is a
     cross-check, not an observation.
+  - >-
+    The GEOGLOWS v2 reach record is simulated (ERA5 runoff routed down the TDX-Hydro river network), not
+    measured: it is quoted as modelled, beside the transferred signatures, never in place of a gauge.
 citations:
   - "Oudin, L. et al. (2008). Spatial proximity, physical similarity, regression and ungaged catchments. Water Resour. Res. 44, W03413."
   - "National-scale validation of donor regionalisation: Hydrol. Earth Syst. Sci. 28 (2024), doi:10.5194/hess-28-3367-2024"
   - "Parameter regionalisation at national scale: Sci. Rep. (2026), doi:10.1038/s41598-026-49424-z"
   - "Vogel, R. M. and Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage. 120, 485-504."
+  - "Hales, R. C. et al. (2022). Advancing global hydrologic modeling with the GEOGloWS ECMWF streamflow service. J. Flood Risk Manag., doi:10.1111/jfr3.12859"
   - "Harrigan, S. et al. (2020). GloFAS-ERA5 operational global river discharge reanalysis 1979-present. Earth Syst. Sci. Data 12, 2043-2060."

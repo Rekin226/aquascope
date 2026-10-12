@@ -49,6 +49,28 @@ FLOW = {"source": "uk_ea", "station_id": "3400TH", "name": "Kingston", "license"
 CATCHMENT = {"latitude": 51.415, "longitude": -0.308, "sub_basin": {"hybas_id": 1},
              "attributes": {"upstream_area_km2": 9948.0}, "license": "CC BY 4.0", "attribution": "BasinATLAS"}
 
+# The reviewer's-eye fields the flood payload carries since #416: the sampling block, the record maximum with the
+# fit evaluated at its own return period, the quantiles by return period and the trend on the annual maxima.
+FLOW["sampling"] = {"n": 14555, "span_years": 39.9, "per_year": 364.8, "inferred_resolution": "daily"}
+FLOW.setdefault("ffa", {"n_years": 39, "return_periods": [2, 5, 10, 25, 50, 100],
+                        "fits": {"gev_lmoments": {"q": [250, 330, 380, 440, 480, 520]},
+                                 "lp3": {"q": [252, 335, 388, 452, 500, 548]}}})
+FLOW["ffa"]["record_max"] = {"value": 520.0, "year": 2014, "empirical_return_period": 40.0, "n_years": 39}
+FLOW["ffa"]["amax_trend"] = {"on": "annual maxima", "p_value": 0.37, "tau": 0.08, "trend": "no trend",
+                             "sens_slope_per_year": 0.4, "n_years": 39}
+for _fit in FLOW["ffa"]["fits"].values():
+    if isinstance(_fit, dict) and _fit.get("q"):
+        _fit["q_by_T"] = {f"{t:g}": v for t, v in zip(FLOW["ffa"]["return_periods"], _fit["q"])}
+        _fit["at_record_max"] = round(_fit["q"][3] + 0.6 * (_fit["q"][4] - _fit["q"][3]), 1)
+
+
+
+GLOFAS = {"stats": {"mean": 60.0},
+          "ffa": {"return_periods": [2, 5, 10, 25, 50, 100],
+                  "fits": {"gev_lmoments": {"q": [260, 340, 395, 460, 505, 560],
+                                            "q_by_T": {"2": 260, "5": 340, "10": 395, "25": 460, "50": 505,
+                                                       "100": 560}}}}}
+
 
 def _tools(calls, *, flow=FLOW, donors_k=5):
     def rec(name):
@@ -62,7 +84,7 @@ def _tools(calls, *, flow=FLOW, donors_k=5):
                 "anywhere": {"latitude": 51.415, "longitude": -0.308, "start": "2006-01-01", "end": "2026-01-01",
                              "climate": {"precipitation_mm_per_year": 700.0, "et0_mm_per_year": 600.0,
                                          "aridity_index": 1.17, "aridity_class": "humid"},
-                             "glofas": {"stats": {"mean": 60.0}}, "attribution": "Open-Meteo"},
+                             "glofas": GLOFAS, "attribution": "Open-Meteo"},
             }[name]
         return f
     names = ("describe_catchment", "analyze_station", "flood_frequency", "similar_basins", "anywhere")
@@ -88,8 +110,8 @@ def test_keyless_solve_runs_end_to_end_with_zero_model_calls():
     assert "narrator" in roles and events == res.timeline
     assert res.study.plan["playbook"] == "flood_risk" and res.study.plan["branch"] == "at_site"
     assert res.problem["params"]["return_period"] == 100, "the return period was read off the text"
-    assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency"]
-    assert all(g["passed"] for g in res.gates) and len(res.gates) == 7
+    assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency", "anywhere"]
+    assert all(g["passed"] for g in res.gates) and len(res.gates) == 12
     assert "520" in res.answer and "m3/s" in res.answer and "Kingston" in res.answer
     assert all(c["passed"] for c in res.checks), res.checks
     md = res.to_markdown()
@@ -97,7 +119,7 @@ def test_keyless_solve_runs_end_to_end_with_zero_model_calls():
                     "## Data", "uk_ea / 3400TH", "## Methods and citations", "Hosking 1990", "Model calls: 0"):
         assert section in md, section
     back = loads(res.study_yaml)
-    assert [s.id for s in back.steps] == ["s1", "s2", "s3"] and back.results["s3"]["ok"]
+    assert [s.id for s in back.steps] == ["s1", "s2", "s3", "s4"] and back.results["s3"]["ok"]
     assert res.to_dict()["study"]["version"] == 2
 
 
@@ -112,6 +134,8 @@ def test_a_model_run_plans_replans_after_a_failed_gate_and_narrates():
     client = FakeChat([
         "The plan rests on 39.5 years at Kingston; the gates check the record and the spread.",
         json.dumps(proposal),
+        # s4, the cross-check, cannot compare with an at-site quantile the fallback replaced: no fallback for it
+        json.dumps({"tool": None, "rationale": "nothing at-site to cross-check against"}),
         "The 100-year flow at Kingston (uk_ea 3400TH, 1986-08-17 to 2026-08-15, 39.9 years) is about 520 m3/s "
         "by GEV (90 % CI 420 to 650 m3/s); the LP3 fit gives 900 m3/s, so the fits disagree and GloFAS was "
         "used as a cross-check.",
@@ -120,7 +144,8 @@ def test_a_model_run_plans_replans_after_a_failed_gate_and_narrates():
                provider="custom", tools=tools)
     assert not res.declined and res.model == "fake"
     assert set(res.cost) == {"coordinator", "specialist", "narrator"}
-    assert all(v == {"calls": 1, "prompt_tokens": 100, "completion_tokens": 20} for v in res.cost.values())
+    assert res.cost["specialist"]["calls"] == 2, "one proposal for s3, one refusal for s4"
+    assert res.cost["coordinator"] == {"calls": 1, "prompt_tokens": 100, "completion_tokens": 20}
     assert res.study.plan["rationale"].startswith("The plan rests") and res.study.plan["tree_rationale"]
     # each role call was stateless: two messages, no growing transcript
     assert all(len(r["messages"]) == 2 and r["messages"][0]["role"] == "system" for r in client.requests)
@@ -129,15 +154,18 @@ def test_a_model_run_plans_replans_after_a_failed_gate_and_narrates():
     assert step.fallback["step"]["tool"] == "anywhere" and res.study.plan["replans"][0]["step"] == "s3"
     r3 = [r for r in res.run.results if r["id"] == "s3"][0]
     assert r3["fallback_used"] and r3["fallback"]["tool"] == "anywhere" and r3["fallback"]["ok"]
-    assert res.run.stop_reason is None and res.ok
+    assert res.run.stop_reason is None and not res.ok, "the cross-check cannot compare with a replaced at-site fit"
+    s4 = [r for r in res.run.results if r["id"] == "s4"][0]
+    # s4 snaps its GloFAS cell to s3's mean flow, which the replaced fit does not carry: it is not called
+    assert not s4["ok"] and not s4["gates_passed"] and "stats.mean" in s4["error"]
     assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency", "similar_basins",
-                                     "flood_frequency", "anywhere"], "the passed steps were reused, not fetched again"
+                                     "flood_frequency", "anywhere"], "the passed steps were reused"
     kinds = [(e["role"], e["event"]) for e in res.timeline]
     assert ("specialist", "replan") in kinds and ("runner", "reused") in kinds and ("narrator", "template") not in kinds
     assert res.answer.startswith("The 100-year flow")
     assert any("spread_within" in n for n in res.not_established)
     md = res.to_markdown()
-    assert "fallback `anywhere(" in md and "model fake via custom" in md and "Model calls: 3" in md
+    assert "fallback `anywhere(" in md and "model fake via custom" in md and "Model calls: 4" in md
 
 
 def test_without_a_model_a_failed_gate_and_failed_fallback_stop_and_are_reported():
@@ -145,9 +173,12 @@ def test_without_a_model_a_failed_gate_and_failed_fallback_stop_and_are_reported
     wide = json.loads(json.dumps(FLOW))
     wide["ffa"]["fits"]["lp3"]["q"][5] = 900
     res = _run("Design flow, 100-year return period", tools=_tools(calls, flow=wide, donors_k=1))
-    assert not res.declined and not res.ok and res.run.stopped_at == "s3"
-    assert any("stopped at s3" in n for n in res.not_established)
-    assert "The study stopped at step s3" in res.answer and "**Stopped at s3:**" in res.to_markdown()
+    assert not res.declined and not res.ok and res.run.stopped_at is None
+    failed = [f for f in res.run.failed_steps if not f["skipped"]]
+    assert [f["id"] for f in failed] == ["s3"] and "spread_within" in failed[0]["reason"]
+    assert any("gate spread_within" in n for n in res.not_established)
+    assert "Step s3 (flood_frequency) did not establish its result" in res.answer
+    assert "**Steps:** 2 of 4 established, 1 failed, 1 skipped." in res.to_markdown()
     assert res.cost == {}
 
 
@@ -161,8 +192,8 @@ def test_the_review_callback_can_edit_or_decline_the_plan():
         return study
 
     res = _run("Design flow, 100-year return period", calls=calls, review=drop_first)
-    assert seen["steps"] == ["s1", "s2", "s3"] and [s.id for s in res.study.steps] == ["s2", "s3"]
-    assert [c[0] for c in calls] == ["analyze_station", "flood_frequency"]
+    assert seen["steps"] == ["s1", "s2", "s3", "s4"] and [s.id for s in res.study.steps] == ["s2", "s3", "s4"]
+    assert [c[0] for c in calls] == ["analyze_station", "flood_frequency", "anywhere"]
     assert ("coordinator", "review") in [(e["role"], e["event"]) for e in res.timeline]
 
     res = _run("Design flow, 100-year return period", calls=[], review=lambda s: None)
@@ -197,7 +228,7 @@ def test_an_explicit_playbook_and_intake_win_over_the_text():
 def test_execute_false_returns_the_plan_without_running_it():
     calls: list = []
     res = _run("Design flow, 100-year return period", calls=calls, execute=False)
-    assert res.run is None and res.answer == "" and calls == [] and len(res.study.steps) == 3
+    assert res.run is None and res.answer == "" and calls == [] and len(res.study.steps) == 4
     assert res.timeline[-1]["event"] == "plan_ready"
 
 
@@ -248,8 +279,8 @@ def test_a_planned_study_runs_through_run_reviewed_like_solve_would():
     events: list = []
     res = _run_reviewed(planned.study.to_dict(), recon=RECON, calls=calls, on_event=events.append)
     assert res.ok and not res.declined and res.cost == {} and res.model is None
-    assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency"]
-    assert len(res.gates) == 7 and all(g["passed"] for g in res.gates)
+    assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency", "anywhere"]
+    assert len(res.gates) == 12 and all(g["passed"] for g in res.gates)
     assert "520" in res.answer and "Kingston" in res.answer
     assert res.not_established == [] and all(c["passed"] for c in res.checks)
     assert events == res.timeline
@@ -311,5 +342,5 @@ def test_a_caller_may_serve_a_tool_itself():
     calls: list = []
     res = _run_reviewed(planned.study.to_dict(), recon=RECON, calls=calls, tools={"describe_catchment": page_catchment})
     assert res.ok and served == [(51.415, -0.308)]
-    assert [c[0] for c in calls] == ["analyze_station", "flood_frequency"], "the registry's tool was not called"
+    assert [c[0] for c in calls] == ["analyze_station", "flood_frequency", "anywhere"], "the registry's tool ran"
     assert "9,948" in res.answer

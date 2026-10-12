@@ -1,4 +1,4 @@
-"""Drift guard ensuring the dashboard Collect page stays in sync with all registered collectors."""
+"""Drift guard ensuring every DataSource is carried by the shared registry."""
 
 from __future__ import annotations
 
@@ -19,14 +19,22 @@ ENUM_TO_SOURCE_KEY = {
 
 
 def test_dashboard_collect_page_covers_all_registered_sources():
-    """The Collect page source map must cover every registered collector."""
+    """Every DataSource must have a registry entry, which is what the Collect page reads.
+
+    The Collect page's ``SOURCES`` is derived from ``aquascope.registry`` (#163, #187)
+    rather than hand-maintained, so a gap here is a missing registry entry, not a
+    missing branch in ``collect.py``.
+    """
     raw_sources = {ds.value for ds in DataSource} - UNIMPLEMENTED_SOURCES
     mapped_sources = {ENUM_TO_SOURCE_KEY.get(s, s) for s in raw_sources}
     missing = mapped_sources - set(SOURCES.keys())
     assert not missing, (
-        f"The dashboard Collect page (aquascope/dashboard/views/collect.py) is missing "
-        f"the following registered data sources: {sorted(missing)}. "
-        f"Please wire them into `SOURCES`, `_source_form`, and `_run_collector`."
+        f"These data sources are not in the shared registry: {sorted(missing)}. "
+        f"Add a `SOURCES` entry in `aquascope/registry.py` and a factory line in its "
+        f"`build_collector()`. The dashboard, the CLI and the MCP tools all read from "
+        f"the registry, so they pick the source up once it is there. A `_source_form()` "
+        f"branch in `aquascope/dashboard/views/collect.py` is only needed if the source "
+        f"takes extra fetch parameters."
     )
 
 

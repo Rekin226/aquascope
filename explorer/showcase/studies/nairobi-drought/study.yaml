@@ -1,10 +1,10 @@
 # An AquaScope study (version 3): the plan behind an answer, its gates, and what happened.
 #   aquascope run study.yaml
 version: 3
-title: "Determine whether the current season around Nairobi (-1.29, : -1.29, 36.82"
+title: "Determine whether the current growing season around Nairobi : -1.29, 36.82"
 question: "Is Nairobi in a meteorological drought this season, for the smallholder farms around the city? No rain gauge is in the catalog here."
-created: "2026-09-07T13:57:51+00:00"
-aquascope_version: "0.14.0"
+created: "2026-09-14T21:57:13+00:00"
+aquascope_version: "0.16.0"
 author: "methodologist"
 model: "claude-sonnet-5"
 problem:
@@ -15,57 +15,56 @@ problem:
 plan:
   author: "methodologist"
   playbook: "drought_status"
-  objective: "Determine whether the current season around Nairobi (-1.29, 36.82) qualifies as a meteorological drought for smallholder agriculture, using SPEI at 3, 6 and 12 month accumulation periods and a severity classification, given that no rain gauge station exists within a usable distance of the site."
-  decision: "whether the current season around Nairobi qualifies as a meteorological drought for smallholder agriculture, to inform local drought advisories and planting/irrigation decisions"
-  methodology: ["Because the nearest catalog gauge is 755 km away and at-site SPI/SPEI is not defensible, fall back to the reanalysis path and compute SPI and SPEI for the ERA5 grid cell at Nairobi's coordinates.", "Request SPEI at the three timescales the brief needs (3, 6 and 12 months) with FAO-56-consistent ET0 built from ERA5 forcing, over a record long enough to classify severity reliably.", "Cross-check the reanalysis-derived drought signal against GloFAS modelled discharge for the same point, since no local gauge exists to validate the climate-only picture.", "Pull the BasinATLAS catchment description for the point to give the smallholder area's hydrologic context (drainage area, no dams) alongside the drought classification.", "Report the current SPEI value and class at each timescale, the worst recent month, the drought events history, and the SPEI-vs-SPI divergence as the basis for the drought/no-drought call."]
-  assumptions: ["ERA5 reanalysis precipitation and temperature for this point are reachable via Open-Meteo and stand in for a local gauge record", "FAO-56 reference evapotranspiration is computed from ERA5 temperature/forcing for the SPEI water balance", "flash_drought left at its default (false) since the concern stated is seasonal agricultural drought, not sub-monthly onset", "ERA5 reanalysis precipitation and temperature for this point are reachable via Open-Meteo and stand in for a local gauge record.", "FAO-56 reference evapotranspiration is computed from ERA5 temperature/forcing for the SPEI water balance.", "flash_drought is left at its default (false) since the stated concern is seasonal agricultural drought, not sub-monthly onset.", "The ERA5 grid cell (about 9 km resolution) is taken to represent the smallholder farming area around Nairobi in the absence of a local gauge."]
-  alternatives: [{"method": "spi", "why_not": "Sufficiency table marks at-site SPI not_defensible: no precipitation record exists at this site."}, {"method": "spei", "why_not": "Sufficiency table marks at-site SPEI not_defensible: no precipitation record exists at this site."}, {"method": "low_flow_frequency", "why_not": "No discharge record at this site; sufficiency table marks it not_defensible."}, {"method": "sgi", "why_not": "No groundwater level record at this site; sufficiency table marks it not_defensible."}]
-  limitations_expected: ["Monthly resolution: the indices see droughts a month and longer; this week's conditions and any flash drought are outside their reach.", "SPI and SPEI say how unusual a deficit is against this record; they say nothing about cause.", "SPEI depends on the PET formulation used from ERA5 temperature; FAO-56 Penman-Monteith is the better PET where humidity, wind and radiation data exist, but a temperature-only approximation may be what is actually computed.", "No rain gauge within reach means the indices describe the ERA5 cell (about 9 km), a reanalysis climate, not a gauge-verified station record.", "The GloFAS cross-check is itself a model, not an observed discharge record, so it corroborates but does not independently validate the reanalysis-based drought signal."]
-  citations: ["McKee, T. B., Doesken, N. J., & Kleist, J. (1993). The relationship of drought frequency and duration to time scales. Proc. 8th Conf. on Applied Climatology, 179-184.", "Vicente-Serrano, S. M., Begueria, S., & Lopez-Moreno, J. I. (2010). A multiscalar drought index sensitive to global warming: the Standardized Precipitation Evapotranspiration Index. J. Climate 23, 1696-1718. doi:10.1175/2009JCLI2909.1", "Begueria, S., Vicente-Serrano, S. M., Reig, F., & Latorre, B. (2014). Standardized precipitation evapotranspiration index (SPEI) revisited. Int. J. Climatol. 34, 3001-3023. doi:10.1002/joc.3887", "Thornthwaite, C. W. (1948). An approach toward a rational classification of climate. Geographical Review 38, 55-94.", "Bloomfield, J. P., & Marchant, B. P. (2013). Analysis of groundwater drought building on the standardised precipitation index approach. Hydrol. Earth Syst. Sci. 17, 4769-4787.", "WMO (2012). Standardized Precipitation Index User Guide (Svoboda, Hayes, Wood). WMO-No. 1090.", "SPI against SPEI at 219 stations across Turkiye: Earth Science Informatics (2024), doi:10.1007/s12145-024-01401-8", "SPI-SPEI correlation under warming in Umbria: Environ. Sci. Pollut. Res. (2024), doi:10.1007/s11356-024-35740-2", "Hersbach, H. et al. (2020). The ERA5 global reanalysis. Q. J. R. Meteorol. Soc. 146, 1999-2049.", "ERA5 reanalysis (Hersbach et al. 2020)", "FAO-56 Penman-Monteith (Allen et al. 1998)", "Thornthwaite (1948)", "BasinATLAS (HydroATLAS v1.0)"]
+  objective: "Determine whether the current growing season around Nairobi shows a meteorological drought severe enough to warrant an agricultural drought-response advisory for smallholder farms, using reanalysis-derived precipitation and temperature since no rain gauge sits within a defensible distance."
+  decision: "whether current seasonal rainfall and moisture deficit (SPEI at 3, 6 and 12 months, built on FAO-56 ET0) constitute a meteorological drought (none, moderate, severe, extreme) affecting smallholder farms around Nairobi"
+  methodology: ["Establish the site's catchment context from BasinATLAS to ground the analysis in the smallholder farming area around the point (lat -1.29, lon 36.82).", "Fetch ERA5-derived climate for the same point, including FAO-56 reference evapotranspiration, aridity and a GloFAS discharge context, since no rain gauge exists within 50 km of Nairobi.", "Compute SPI and SPEI at 3, 6 and 12 month accumulations from ERA5 reanalysis precipitation and FAO-56 PET to read off the current drought classification and the worst recent month."]
+  assumptions: ["no gauge station exists within a defensible distance, so SPEI will be computed from ERA5 reanalysis precipitation and temperature rather than a station SPI/SPEI", "FAO-56 ET0 from reanalysis forcing is used for the moisture balance behind SPEI", "flash_drought left at default false since the concern is seasonal agricultural drought, not sub-monthly onset", "the smallholder farming area around the city is represented by the given point/catchment (HydroATLAS basin 1121172940)", "No gauge station exists within a defensible distance (nearest catalog gauge is 755 km away), so SPEI is computed from ERA5 reanalysis precipitation and temperature rather than a station SPI/SPEI.", "FAO-56 ET0 from ERA5 reanalysis forcing is used for the moisture balance behind SPEI, as the anywhere tool's climate output and drought_indices' pet=fao56 argument both draw on it.", "flash_drought is left at its default false since the concern is seasonal agricultural drought, not sub-monthly onset.", "The smallholder farming area around Nairobi is represented by the given point and its BasinATLAS catchment (HydroATLAS basin 1121172940)."]
+  alternatives: [{"method": "spi", "why_not": "not_defensible: no precipitation record at this site (sufficiency table)"}, {"method": "spei", "why_not": "not_defensible: no precipitation record at this site (sufficiency table)"}, {"method": "trend_mann_kendall", "why_not": "not_defensible: no local record exists to test a trend against"}, {"method": "baseflow_separation / flow_duration / low_flow_frequency", "why_not": "not_defensible: no discharge record at this site"}, {"method": "sgi", "why_not": "not_defensible: no groundwater level record at this site"}]
+  limitations_expected: ["Monthly resolution: the indices see droughts a month and longer; a flash drought or a single dry week is out of their reach.", "SPI and SPEI say how unusual a deficit is against the ERA5 record; they say nothing about its cause (e.g. pumping, land use), and cannot attribute impacts to specific farms.", "SPEI needs a PET series; FAO-56 Penman-Monteith is used here since ERA5 supplies humidity, wind and radiation, but this is still a modelled PET, not an observed one.", "No rain gauge within reach: the indices describe the ERA5 cell (about 9 km), a reanalysis climate, not a gauge; a 20-year gauge record would be needed to turn this into a station-based answer.", "The GloFAS discharge context from the anywhere step is indicative only; with no local discharge record it cannot be validated against an observed flow series here."]
+  citations: ["McKee, T. B., Doesken, N. J., & Kleist, J. (1993). The relationship of drought frequency and duration to time scales. Proc. 8th Conf. on Applied Climatology, 179-184.", "Vicente-Serrano, S. M., Begueria, S., & Lopez-Moreno, J. I. (2010). A multiscalar drought index sensitive to global warming: the Standardized Precipitation Evapotranspiration Index. J. Climate 23, 1696-1718. doi:10.1175/2009JCLI2909.1", "Begueria, S., Vicente-Serrano, S. M., Reig, F., & Latorre, B. (2014). Standardized precipitation evapotranspiration index (SPEI) revisited. Int. J. Climatol. 34, 3001-3023. doi:10.1002/joc.3887", "Thornthwaite, C. W. (1948). An approach toward a rational classification of climate. Geographical Review 38, 55-94.", "Bloomfield, J. P., & Marchant, B. P. (2013). Analysis of groundwater drought building on the standardised precipitation index approach. Hydrol. Earth Syst. Sci. 17, 4769-4787.", "WMO (2012). Standardized Precipitation Index User Guide (Svoboda, Hayes, Wood). WMO-No. 1090.", "SPI against SPEI at 219 stations across Turkiye: Earth Science Informatics (2024), doi:10.1007/s12145-024-01401-8", "SPI-SPEI correlation under warming in Umbria: Environ. Sci. Pollut. Res. (2024), doi:10.1007/s11356-024-35740-2", "Hersbach, H. et al. (2020). The ERA5 global reanalysis. Q. J. R. Meteorol. Soc. 146, 1999-2049.", "Thornthwaite (1948) PET formulation (fallback reference for reanalysis PET)", "FAO-56 Penman-Monteith reference evapotranspiration"]
   caveats: ["Monthly resolution: the indices see droughts a month and longer; what happened this week is not in them, and a flash drought is out of their reach.", "SPI and SPEI say how unusual a deficit is against this record; they say nothing about its cause, and the SPI-to-SGI lag is a statistical association read off the two series, not a model of the aquifer.", "SPEI needs a PET series: here PET is Thornthwaite (1948) from ERA5 temperature, a temperature-only approximation and the formulation SPEI was introduced with; FAO-56 Penman-Monteith is the better PET where humidity, wind and radiation exist.", "No rain gauge within reach: the indices describe the ERA5 cell (about 9 km), a reanalysis climate, not a gauge; a gauge record with twenty years is what turns this into a station answer."]
-  rationale: "Determine whether the current season around Nairobi (-1.29, 36.82) qualifies as a meteorological drought for smallholder agriculture, using SPEI at 3, 6 and 12 month accumulation periods and a severity classification, given that no rain gauge station exists within a usable distance of the site."
-  recon_notes: ["No catalog gauge within 50 km; the nearest is Le Tech [Source Sainte C\u00e9cile - Ravin Sainte C\u00e9cile - Affluent du Tech] au Tech - Tech Sainte c\u00e9cile (hubeau_hydrometrie/Y021401101) at 755 km.", "10 donor gauges from a pool of 37,071 gauged catchments.", "ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land (Open-Meteo); not checked here.", "CMIP6 change factors need model output you supply (aquascope.climate works on downloaded data); not counted.", "No gauge with a usable record within 50 km: at-site methods are not defensible; what remains is the regionalisation path (similar_basins, regionalize_signatures) and the GloFAS cross-check."]
+  rationale: "Determine whether the current growing season around Nairobi shows a meteorological drought severe enough to warrant an agricultural drought-response advisory for smallholder farms, using reanalysis-derived precipitation and temperature since no rain gauge sits within a defensible distance."
+  recon_notes: ["No catalog gauge within 50 km; the nearest is Le Tech [Source Sainte C\u00e9cile - Ravin Sainte C\u00e9cile - Affluent du Tech] au Tech - Tech Sainte c\u00e9cile (hubeau_hydrometrie/Y021401101) at 755 km.", "10 donor gauges from a pool of 34,786 gauged catchments.", "ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land (Open-Meteo); not checked here.", "CMIP6 change factors need model output you supply (aquascope.climate works on downloaded data); not counted.", "No gauge with a usable record within 50 km: at-site methods are not defensible; what remains is the regionalisation path (similar_basins, regionalize_signatures) and the GloFAS cross-check."]
 steps:
-  - tool: "drought_indices"
-    id: "s1"
-    rationale: "No usable rain gauge exists within reach, so SPI/SPEI must be computed from ERA5 reanalysis precipitation and temperature at the site, per the sufficiency table marking spei_reanalysis defensible and spei/spi at-site not_defensible."
-    method: "spei_reanalysis"
-    arguments:
-      lat: -1.29
-      lon: 36.82
-      timescales: [3, 6, 12]
-      years: 40
-    expects:
-      - {"check": "min_years", "path": "years", "value": 30}
-      - {"check": "not_empty", "path": "indices"}
-      - {"check": "not_empty", "path": "current.spei"}
-      - {"check": "not_empty", "path": "current.spi"}
-    outputs: [{"kind": "figure", "id": "s1_drought_strip", "caption": "SPEI/SPI drought strip at 3, 6, 12 months from ERA5 reanalysis for the Nairobi cell"}, {"kind": "table", "id": "s1_indices_monthly", "caption": "Monthly SPI and SPEI values and classes at 3, 6, 12 months"}, {"kind": "table", "id": "s1_drought_events", "caption": "Identified drought events and their severity over the record"}, {"kind": "table", "id": "s1_index_divergence", "caption": "SPEI-minus-SPI divergence, reflecting the temperature-driven ET0 signal"}]
-  - tool: "anywhere"
-    id: "s2"
-    rationale: "GloFAS modelled discharge for the point offers an independent cross-check on the reanalysis-based drought signal since there is no discharge gauge to validate against directly."
-    method: "glofas_cross_check"
-    arguments:
-      lat: -1.29
-      lon: 36.82
-      years: 40
-    expects:
-      - {"check": "not_empty", "path": "climate"}
-      - {"check": "not_empty", "path": "climate", "repaired_from": "glofas"}
-    depends_on: ["s1"]
-    outputs: [{"kind": "table", "id": "s2_glofas_context", "caption": "GloFAS modelled discharge context for the Nairobi point, checked against the SPEI/SPI classification"}]
   - tool: "describe_catchment"
-    id: "s3"
-    rationale: "The catchment description (area, dams) gives the physical setting for the smallholder farms around Nairobi that the drought classification is meant to serve."
+    id: "s1"
+    rationale: "Anchors the analysis in the catchment (BasinATLAS unit near HydroATLAS basin 1121172940) that represents the smallholder farming area around Nairobi."
     arguments:
       lat: -1.29
       lon: 36.82
       upstream: true
     expects:
       - {"check": "not_empty", "path": "sub_basin"}
-      - {"check": "max_area_km2", "path": "sub_basin.up_area", "value": 101.8}
-    outputs: [{"kind": "table", "id": "s3_catchment_summary", "caption": "BasinATLAS catchment attributes for the Nairobi point (area 101.8 km2, no dams)"}]
+    outputs: [{"kind": "table", "id": "s1_catchment", "caption": "BasinATLAS sub-basin and area-weighted attributes for the point near Nairobi"}]
+  - tool: "anywhere"
+    id: "s2"
+    rationale: "With no rain gauge within 50 km, ERA5 reanalysis at the point supplies precipitation, temperature, FAO-56 reference evapotranspiration and a GloFAS discharge cross-check for context."
+    method: "spei_reanalysis"
+    arguments:
+      lat: -1.29
+      lon: 36.82
+      years: 40
+    expects:
+      - {"check": "not_empty", "path": "climate"}
+    outputs: [{"kind": "table", "id": "s2_climate", "caption": "ERA5 precipitation, temperature and FAO-56 ET0 for the Nairobi cell"}]
+  - tool: "drought_indices"
+    id: "s3"
+    rationale: "Computes SPI and SPEI at 3, 6 and 12 months from ERA5 precipitation and FAO-56 PET, giving the current drought class, worst month, events and SPEI-minus-SPI divergence needed for the advisory decision."
+    method: "spei_reanalysis"
+    arguments:
+      lat: -1.29
+      lon: 36.82
+      timescales: [3, 6, 12]
+      years: 40
+      pet: "fao56"
+    expects:
+      - {"check": "min_years", "value": 30, "path": "years"}
+      - {"check": "not_empty", "path": "indices"}
+      - {"check": "not_empty", "path": "current.spei"}
+      - {"check": "not_empty", "path": "current.spi"}
+    depends_on: ["s2"]
+    outputs: [{"kind": "figure", "id": "s3_drought_strip", "caption": "drought strip (SPI/SPEI at 3, 6, 12 months) from drought_indices"}, {"kind": "table", "id": "s3_indices_monthly", "caption": "monthly SPI/SPEI indices from drought_indices"}, {"kind": "table", "id": "s3_drought_events", "caption": "drought events table from drought_indices"}, {"kind": "table", "id": "s3_index_divergence", "caption": "SPEI-minus-SPI divergence and temperature trend from drought_indices"}]
 results:
-  s1: {"ok": true, "gates": [{"check": "min_years", "passed": true, "detail": "40 years of record, 30 needed"}, {"check": "not_empty", "passed": true, "detail": "'indices' is present"}, {"check": "not_empty", "passed": true, "detail": "'current.spei' is present"}, {"check": "not_empty", "passed": true, "detail": "'current.spi' is present"}], "summary": "years=40.0, start=1986-09-01, end=2026-08-01", "fallback_used": false, "sha256": "1b3882ddebc54180"}
-  s2: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'climate' is present"}, {"check": "not_empty", "passed": true, "detail": "'climate' is present"}], "summary": "years=40, start=1986-08-31, end=2026-08-31", "fallback_used": false, "sha256": "56a54e77777b2d3a"}
-  s3: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'sub_basin' is present"}, {"check": "max_area_km2", "passed": true, "detail": "catchment of 102 km2 against a ceiling of 102 km2"}], "summary": "latitude=-1.29, longitude=36.82, license=CC-BY-4.0, attribution=HydroATLAS v1.0 (BasinATLAS), CC BY 4.0. Linke, S., Lehner, B., Ouellet Dallaire, C., et al. (2019). Global hydro-environmental sub-basi", "fallback_used": false, "sha256": "9299bbf97b72d743"}
+  s1: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'sub_basin' is present"}], "summary": "latitude=-1.29, longitude=36.82, license=CC-BY-4.0, attribution=HydroATLAS v1.0 (BasinATLAS), CC BY 4.0. Linke, S., Lehner, B., Ouellet Dallaire, C., et al. (2019). Global hydro-environmental sub-basi", "fallback_used": false, "sha256": "9299bbf97b72d743"}
+  s2: {"ok": true, "gates": [{"check": "not_empty", "passed": true, "detail": "'climate' is present"}], "summary": "years=40, start=1986-09-07, end=2026-09-07", "fallback_used": false, "sha256": "1a0eb7283f1655a3"}
+  s3: {"ok": true, "gates": [{"check": "min_years", "passed": true, "detail": "39.9 years of record, 30 needed"}, {"check": "not_empty", "passed": true, "detail": "'indices' is present"}, {"check": "not_empty", "passed": true, "detail": "'current.spei' is present"}, {"check": "not_empty", "passed": true, "detail": "'current.spi' is present"}], "summary": "years=39.9, start=1986-10-01, end=2026-08-01", "fallback_used": false, "sha256": "98eb6fea213a79a0"}

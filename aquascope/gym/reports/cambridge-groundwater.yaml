@@ -1,0 +1,54 @@
+# HydroGym report-quality reference (#382); the authoring rules are in _authoring.yaml.
+# Recorded 2026-09-15 on the engineer-in-the-middle crew (#411). The brief asks whether Chalk levels near
+# Cambridge declined over the last ten years relative to the full record. The full record at Haggis Farm rises
+# significantly (Sen's slope +0.1659 mAOD/yr, Mann-Kendall p < 0.001, 48.7 years); the last-ten-year window
+# holds 9.7 years and failed its ten-year gate, so the comparison the brief asked for is not established, and
+# the honest answer is "no decline is visible, and the recent-window trend could not be computed". A faithful
+# report states the rising direction, says the ten-year window fell short, and claims no decline.
+id: cambridge-groundwater
+study: cambridge-groundwater
+title: A rising Chalk record answers a decline question with "no", and says what it could not compute
+rationale: >-
+  The full-record trend is the number the decision rests on (+0.1659 mAOD/yr, significant); the ten-year
+  window the brief singled out fell one third of a year short of the gate and is reported as not established,
+  which is what lowers the grade. A report that turned the brief's own word "decline" into a finding, or that
+  quietly quoted a ten-year slope the run never computed, would be wrong; the recorded one does neither and
+  names the abstraction records the cause question would need.
+tags: [direction, failed_step, groundwater_decline]
+must_say:
+  - kind: number
+    value: 0.1659
+    tol: 0.02
+    unit: mAOD/yr
+    label: the full-record Sen's slope
+  - kind: number
+    value: 48.7
+    tol: 0.01
+    unit: years
+    label: the full record length
+  - kind: phrase
+    any: ["rising", "increasing", "not a decline", "no decline", "no declining"]
+    label: the record's actual direction is stated
+  - kind: phrase
+    any: ["9.7 years", "not established", "could not be computed"]
+    label: the failed ten-year window is named
+  - kind: phrase
+    any: ["abstraction", "pumping records"]
+    label: the cause question names the data it would need
+must_not_say:
+  - kind: phrase
+    any: ["shows a decline", "confirms a decline", "the water table is declining", "levels are falling",
+          "indicates a decline", "the levels are declining", "a declining trend is established"]
+    label: no claim that levels are actually declining
+decision:
+  value: 0.1659
+  unit: mAOD/yr
+  tolerance: 0.05
+  grade: not_established
+findings:
+  decision:
+    grade: not_established
+    value: 0.1659
+    unit: mAOD/yr
+    tolerance: 0.05
+  data_requests: ["abstraction"]

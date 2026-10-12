@@ -147,7 +147,9 @@
         "code",
         "test",
         "doc",
-        "bug"
+        "bug",
+        "infra",
+        "ideas"
       ]
     },
     {
@@ -268,6 +270,75 @@
       "name": "Satya Srujana Pilli",
       "avatar_url": "https://avatars.githubusercontent.com/u/59142214?v=4",
       "profile": "https://github.com/mohanasrujana",
+      "contributions": [
+        "code",
+        "test"
+      ]
+    },
+    {
+      "login": "itsnevu",
+      "name": "0x",
+      "avatar_url": "https://avatars.githubusercontent.com/u/129736887?v=4",
+      "profile": "https://github.com/itsnevu",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "bazinga0027-gif",
+      "name": "bazinga0027-gif",
+      "avatar_url": "https://avatars.githubusercontent.com/u/241781992?v=4",
+      "profile": "https://travelsafepilot.com",
+      "contributions": [
+        "code",
+        "test",
+        "doc"
+      ]
+    },
+    {
+      "login": "HarshRajSinghania",
+      "name": "Harsh Raj Singhania",
+      "avatar_url": "https://avatars.githubusercontent.com/u/40535627?v=4",
+      "profile": "https://github.com/HarshRajSinghania",
+      "contributions": [
+        "code",
+        "test"
+      ]
+    },
+    {
+      "login": "kudala-bharani",
+      "name": "Kudala Bharani Kumar Reddy",
+      "avatar_url": "https://avatars.githubusercontent.com/u/121555407?v=4",
+      "profile": "https://bharani-kudala.me/",
+      "contributions": [
+        "test",
+        "doc"
+      ]
+    },
+    {
+      "login": "Berserker-GM",
+      "name": "Berserker-GM",
+      "avatar_url": "https://avatars.githubusercontent.com/u/229895835?v=4",
+      "profile": "https://github.com/Berserker-GM",
+      "contributions": [
+        "code",
+        "test"
+      ]
+    },
+    {
+      "login": "Galabavamsi",
+      "name": "GALABA VAMSI",
+      "avatar_url": "https://avatars.githubusercontent.com/u/51828882?v=4",
+      "profile": "https://galabavamsi.github.io/portfolio/",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "didemkastan",
+      "name": "Didem KAŞTAN",
+      "avatar_url": "https://avatars.githubusercontent.com/u/273810938?v=4",
+      "profile": "https://github.com/didemkastan",
       "contributions": [
         "code",
         "test"

@@ -35,14 +35,14 @@ def test_stations_writes_requested_format(tmp_path, monkeypatch, fmt):
     cli.main()
     assert out.exists()
     if fmt == "geojson":
-        data = json.loads(out.read_text())
+        data = json.loads(out.read_text(encoding="utf-8"))
         assert data["type"] == "FeatureCollection"
         feat = data["features"][0]
         assert feat["geometry"]["coordinates"] == [-6.2, 53.3]
         assert feat["properties"]["source"] == "ireland_opw"
         assert "latitude" not in feat["properties"]
     elif fmt == "json":
-        rows = json.loads(out.read_text())
+        rows = json.loads(out.read_text(encoding="utf-8"))
         assert rows[0]["station_id"] == "1" and rows[0]["variables"] == ["water_level"]
     else:
         with out.open() as fh:

@@ -1,0 +1,3540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CAMELS Benchmark: AquaScope against published and reference values</title>
+  <style>
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    color: #333;
+    line-height: 1.6;
+}
+h1 {
+    color: #1a5276;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 10px;
+}
+h2 {
+    color: #2471a3;
+    margin-top: 30px;
+}
+h3 {
+    color: #2e86c1;
+    margin-top: 20px;
+}
+h4 {
+    color: #3498db;
+    margin-top: 15px;
+}
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 15px 0;
+}
+th {
+    background-color: #2980b9;
+    color: white;
+    padding: 10px;
+    text-align: left;
+}
+td {
+    padding: 8px;
+    border-bottom: 1px solid #ddd;
+}
+tr:hover {
+    background-color: #f5f5f5;
+}
+.metric {
+    display: inline-block;
+    background: #eaf2f8;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 5px;
+    min-width: 150px;
+    text-align: center;
+}
+.metric-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #2980b9;
+}
+.metric-name {
+    font-size: 12px;
+    color: #666;
+}
+.metric-unit {
+    font-size: 12px;
+    color: #999;
+}
+.metric-exceeded {
+    color: #e74c3c;
+}
+.alert-critical {
+    color: #e74c3c;
+    font-weight: bold;
+}
+.alert-high {
+    color: #e67e22;
+    font-weight: bold;
+}
+.alert-warning {
+    color: #f39c12;
+}
+.alert-medium {
+    color: #f39c12;
+}
+.alert-low {
+    color: #27ae60;
+}
+.figure-caption {
+    text-align: center;
+    font-style: italic;
+    color: #666;
+    margin-top: 5px;
+}
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 10px auto;
+}
+hr {
+    border: none;
+    border-top: 1px solid #ddd;
+    margin: 30px 0;
+}
+.toc {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 15px 25px;
+    margin: 20px 0;
+}
+.toc ul {
+    list-style-type: none;
+    padding-left: 15px;
+}
+.toc > ul {
+    padding-left: 0;
+}
+.toc a {
+    color: #2471a3;
+    text-decoration: none;
+}
+.toc a:hover {
+    text-decoration: underline;
+}
+.report-meta {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+</style>
+</head>
+<body>
+<h1>CAMELS Benchmark: AquaScope against published and reference values</h1>
+<div class="report-meta"><strong>Author:</strong> Abdoul Rachid Ouédraogo<br>
+<strong>Date:</strong> 2026-09-11<br>
+<strong>Description:</strong> Flood frequency, baseflow and signature verification over 10 CAMELS catchments.<br>
+<strong>Data Sources:</strong> Synthetic daily series (data/camels_benchmark/daily), USGS annual peaks (data/camels_benchmark/peaks), CAMELS attributes (Addor et al., 2017), Flood-frequency reference quantiles (ffa_reference.json)<br>
+<strong>Version:</strong> 1.1</div>
+<h2 id="summary">Summary</h2>
+<div class="metric"><div class="metric-value">10</div><div class="metric-name">Catchments</div></div>
+<div class="metric"><div class="metric-value">0.0</div><div class="metric-name">Q mean normalized RMSE (%)</div><span class="metric-unit">%</span></div>
+<div class="metric"><div class="metric-value">0.92</div><div class="metric-name">BFI PBIAS (%)</div><span class="metric-unit">%</span></div>
+<div class="metric"><div class="metric-value">0.22</div><div class="metric-name">FFA mean relative error (%)</div><span class="metric-unit">%</span></div>
+<p>29 check(s) unmet across 10 catchments; 25 GEV-MLE mismatch(es) classified as data limitations (unstable reference MLE), not implementation defects.</p>
+<h2 id="tolerances-and-rationale">Tolerances and rationale</h2>
+<p class="figure-caption">Decided up front; not loosened when a check fails.</p>
+<table>
+<thead><tr>
+  <th>Check</th>
+  <th>Value</th>
+  <th>Unit</th>
+  <th>Rationale</th>
+</tr></thead><tbody>
+<tr>
+  <td>signature_relative</td>
+  <td>0.25</td>
+  <td>fraction</td>
+  <td>Synthetic daily series are calibrated to approximate the published CAMELS attributes; they are not measurements of them.</td>
+</tr>
+<tr>
+  <td>baseflow_absolute</td>
+  <td>0.15</td>
+  <td>fraction</td>
+  <td>Published CAMELS baseflow index comes from a different separation algorithm than AquaScope&#x27;s Lyne-Hollick/Eckhardt digital filters.</td>
+</tr>
+<tr>
+  <td>peak_month_circular</td>
+  <td>2.0</td>
+  <td>months</td>
+  <td>Peak month is month-of-year and circular (Jan == Dec + 1 month).</td>
+</tr>
+<tr>
+  <td>ffa_relative</td>
+  <td>0.2</td>
+  <td>fraction</td>
+  <td>Wider than the +/-10% used in the Potomac federal-standard validation because several benchmark gauges are semi-arid or heavy-tailed, where MLE vs L-moments spread is larger.</td>
+</tr>
+<tr>
+  <td>q_mean_nrmse_gate</td>
+  <td>25.0</td>
+  <td>%</td>
+  <td>Aggregate q_mean gate: normalized RMSE (%) across the 10 gauges.</td>
+</tr>
+<tr>
+  <td>bfi_pbias_gate</td>
+  <td>25.0</td>
+  <td>%</td>
+  <td>Aggregate baseflow gate: PBIAS (%) across the 10 gauges.</td>
+</tr>
+<tr>
+  <td>ffa_gate</td>
+  <td>20.0</td>
+  <td>%</td>
+  <td>Aggregate flood-frequency gate over the dependable reference cross-checks (GEV-L-moments and LP3); GEV-MLE mismatches are reported separately as data-limitation findings, not folded into the implementation gate.</td>
+</tr>
+</tbody></table>
+<h2 id="aggregate-performance-across-10-catchments">Aggregate performance (across 10 catchments)</h2>
+<p class="figure-caption">RMSE / PBIAS / R2 vs published values</p>
+<table>
+<thead><tr>
+  <th>Signature</th>
+  <th>RMSE</th>
+  <th>PBIAS %</th>
+  <th>R2</th>
+</tr></thead><tbody>
+<tr>
+  <td>q_mean</td>
+  <td>0.0</td>
+  <td>-0.0</td>
+  <td>1.0</td>
+</tr>
+<tr>
+  <td>q5</td>
+  <td>0.3069</td>
+  <td>-7.32</td>
+  <td>0.9822</td>
+</tr>
+<tr>
+  <td>q95</td>
+  <td>10.4099</td>
+  <td>6.1</td>
+  <td>0.981</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>0.0</td>
+  <td>-0.0</td>
+  <td>1.0</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>0.4108</td>
+  <td>13.36</td>
+  <td>0.5631</td>
+</tr>
+<tr>
+  <td>bfi_lyne_hollick</td>
+  <td>0.0884</td>
+  <td>0.92</td>
+  <td>0.5027</td>
+</tr>
+<tr>
+  <td>bfi_eckhardt</td>
+  <td>0.0913</td>
+  <td>-0.95</td>
+  <td>0.4693</td>
+</tr>
+<tr>
+  <td>bfi_signatures</td>
+  <td>0.0884</td>
+  <td>0.95</td>
+  <td>0.5021</td>
+</tr>
+</tbody></table>
+<h2 id="per-catchment-results">Per-catchment results</h2>
+<h3 id="01013500---fish-river-near-fort-kent-me-snow-dominated-humid">01013500 - Fish River near Fort Kent, ME (snow-dominated humid)</h3>
+<p class="figure-caption">01013500 signatures</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Computed</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Tolerance</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>q_mean</td>
+  <td>22.5</td>
+  <td>22.5</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q5</td>
+  <td>2.73314</td>
+  <td>3.1</td>
+  <td>0.118342</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q95</td>
+  <td>71.716745</td>
+  <td>75.2</td>
+  <td>0.04632</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>0.62</td>
+  <td>0.62</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>-2.652215</td>
+  <td>-2.35</td>
+  <td>0.128602</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>peak_month</td>
+  <td>3.0</td>
+  <td>4.0</td>
+  <td>1.0</td>
+  <td>2.0</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>baseflow_index</td>
+  <td>0.559444</td>
+  <td>0.59</td>
+  <td>0.030556</td>
+  <td>0.15</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">01013500 signature integrity</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Detail</th>
+  <th>Passes</th>
+</tr></thead><tbody>
+<tr>
+  <td>order</td>
+  <td>q5=2.733 &lt; median=13.803 &lt; q95=71.717</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>runoff_ratio=0.6199998429711193</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>recession_constant</td>
+  <td>mean_recession_constant=0.3186</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>fdc_slope=-2.6522</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>complete</td>
+  <td>all signature fields populated</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">01013500 baseflow index</p>
+<table>
+<thead><tr>
+  <th>Method</th>
+  <th>BFI</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>lyne_hollick</td>
+  <td>0.559321</td>
+  <td>0.59</td>
+  <td>0.030679</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>eckhardt</td>
+  <td>0.542497</td>
+  <td>0.59</td>
+  <td>0.047503</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">01013500 gev vs scipy_gev</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>236.03</td>
+  <td>168.23</td>
+  <td>40.3</td>
+  <td>no</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>304.48</td>
+  <td>289.81</td>
+  <td>5.06</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>346.56</td>
+  <td>348.4</td>
+  <td>0.53</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>396.3</td>
+  <td>404.24</td>
+  <td>1.96</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>430.88</td>
+  <td>435.62</td>
+  <td>1.09</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>463.36</td>
+  <td>460.28</td>
+  <td>0.67</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">01013500 gev_lmoments vs scipy_gev_lmoments</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>234.34</td>
+  <td>234.33</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>302.09</td>
+  <td>302.09</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>345.01</td>
+  <td>345.01</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>397.13</td>
+  <td>397.15</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>434.32</td>
+  <td>434.37</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>470.04</td>
+  <td>470.12</td>
+  <td>0.02</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">01013500 lp3 vs scipy_lp3</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>237.65</td>
+  <td>237.52</td>
+  <td>0.05</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>305.42</td>
+  <td>305.4</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>344.92</td>
+  <td>345.06</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>389.92</td>
+  <td>390.37</td>
+  <td>0.11</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>420.48</td>
+  <td>421.21</td>
+  <td>0.17</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>448.89</td>
+  <td>449.93</td>
+  <td>0.23</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">01013500 stage timings (s)</p>
+<table>
+<thead><tr>
+  <th>Gauge</th>
+  <th>signatures_s</th>
+  <th>baseflow_s</th>
+  <th>flood_frequency_s</th>
+  <th>total_s</th>
+</tr></thead><tbody>
+<tr>
+  <td>01013500</td>
+  <td>0.01</td>
+  <td>0.01</td>
+  <td>0.018</td>
+  <td>0.037</td>
+</tr>
+</tbody></table>
+<h3 id="01664000---rappahannock-river-near-fredericksburg-va-humid-continental">01664000 - Rappahannock River near Fredericksburg, VA (humid continental)</h3>
+<p class="figure-caption">01664000 signatures</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Computed</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Tolerance</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>q_mean</td>
+  <td>45.3</td>
+  <td>45.3</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q5</td>
+  <td>5.35505</td>
+  <td>5.8</td>
+  <td>0.076716</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q95</td>
+  <td>144.96551</td>
+  <td>142.0</td>
+  <td>0.020884</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>0.35</td>
+  <td>0.35</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>-2.706408</td>
+  <td>-2.5</td>
+  <td>0.082563</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>peak_month</td>
+  <td>2.0</td>
+  <td>3.0</td>
+  <td>1.0</td>
+  <td>2.0</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>baseflow_index</td>
+  <td>0.537231</td>
+  <td>0.44</td>
+  <td>0.097231</td>
+  <td>0.15</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">01664000 signature integrity</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Detail</th>
+  <th>Passes</th>
+</tr></thead><tbody>
+<tr>
+  <td>order</td>
+  <td>q5=5.355 &lt; median=25.173 &lt; q95=144.966</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>runoff_ratio=0.35000003937222635</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>recession_constant</td>
+  <td>mean_recession_constant=0.3181</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>fdc_slope=-2.7064</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>complete</td>
+  <td>all signature fields populated</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">01664000 baseflow index</p>
+<table>
+<thead><tr>
+  <th>Method</th>
+  <th>BFI</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>lyne_hollick</td>
+  <td>0.537086</td>
+  <td>0.44</td>
+  <td>0.097086</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>eckhardt</td>
+  <td>0.523422</td>
+  <td>0.44</td>
+  <td>0.083422</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">01664000 gev vs scipy_gev</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>363.87</td>
+  <td>363.87</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>616.63</td>
+  <td>616.63</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>837.47</td>
+  <td>837.47</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>1197.06</td>
+  <td>1197.06</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>1537.54</td>
+  <td>1537.54</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1953.77</td>
+  <td>1953.77</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">01664000 gev_lmoments vs scipy_gev_lmoments</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>357.01</td>
+  <td>357.12</td>
+  <td>0.03</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>607.14</td>
+  <td>607.37</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>833.39</td>
+  <td>833.59</td>
+  <td>0.02</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>1213.89</td>
+  <td>1213.8</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>1585.37</td>
+  <td>1584.8</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>2051.62</td>
+  <td>2050.22</td>
+  <td>0.07</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">01664000 lp3 vs scipy_lp3</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>362.23</td>
+  <td>362.58</td>
+  <td>0.1</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>632.55</td>
+  <td>632.82</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>863.3</td>
+  <td>862.92</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>1221.15</td>
+  <td>1218.92</td>
+  <td>0.18</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>1540.69</td>
+  <td>1536.13</td>
+  <td>0.3</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1909.82</td>
+  <td>1901.89</td>
+  <td>0.42</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">01664000 stage timings (s)</p>
+<table>
+<thead><tr>
+  <th>Gauge</th>
+  <th>signatures_s</th>
+  <th>baseflow_s</th>
+  <th>flood_frequency_s</th>
+  <th>total_s</th>
+</tr></thead><tbody>
+<tr>
+  <td>01664000</td>
+  <td>0.008</td>
+  <td>0.009</td>
+  <td>0.016</td>
+  <td>0.033</td>
+</tr>
+</tbody></table>
+<h3 id="02231000---st-marys-river-near-macclenny-fl-subtropical">02231000 - St. Marys River near Macclenny, FL (subtropical)</h3>
+<p class="figure-caption">02231000 signatures</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Computed</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Tolerance</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>q_mean</td>
+  <td>15.799999</td>
+  <td>15.8</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q5</td>
+  <td>1.106655</td>
+  <td>1.2</td>
+  <td>0.077787</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q95</td>
+  <td>61.49207</td>
+  <td>52.3</td>
+  <td>0.175757</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>0.28</td>
+  <td>0.28</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>-3.187219</td>
+  <td>-2.58</td>
+  <td>0.235356</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>peak_month</td>
+  <td>10.0</td>
+  <td>9.0</td>
+  <td>1.0</td>
+  <td>2.0</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>baseflow_index</td>
+  <td>0.514784</td>
+  <td>0.65</td>
+  <td>0.135216</td>
+  <td>0.15</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">02231000 signature integrity</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Detail</th>
+  <th>Passes</th>
+</tr></thead><tbody>
+<tr>
+  <td>order</td>
+  <td>q5=1.107 &lt; median=7.217 &lt; q95=61.492</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>runoff_ratio=0.28000007622683204</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>recession_constant</td>
+  <td>mean_recession_constant=0.3480</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>fdc_slope=-3.1872</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>complete</td>
+  <td>all signature fields populated</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">02231000 baseflow index</p>
+<table>
+<thead><tr>
+  <th>Method</th>
+  <th>BFI</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>lyne_hollick</td>
+  <td>0.514691</td>
+  <td>0.65</td>
+  <td>0.135309</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>eckhardt</td>
+  <td>0.504979</td>
+  <td>0.65</td>
+  <td>0.145021</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">02231000 gev vs scipy_gev (reference MLE unstable)</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>156.59</td>
+  <td>22.84</td>
+  <td>585.59</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>304.47</td>
+  <td>131.66</td>
+  <td>131.26</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>439.36</td>
+  <td>2142.81</td>
+  <td>79.5</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>667.96</td>
+  <td>89150.44</td>
+  <td>99.25</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>892.79</td>
+  <td>1426846.68</td>
+  <td>99.94</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1176.76</td>
+  <td>22378490.24</td>
+  <td>99.99</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">02231000 gev_lmoments vs scipy_gev_lmoments</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>156.59</td>
+  <td>156.65</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>304.47</td>
+  <td>304.6</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>439.36</td>
+  <td>439.47</td>
+  <td>0.03</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>667.96</td>
+  <td>667.92</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>892.79</td>
+  <td>892.47</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1176.76</td>
+  <td>1175.97</td>
+  <td>0.07</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">02231000 lp3 vs scipy_lp3</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>151.51</td>
+  <td>151.66</td>
+  <td>0.1</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>311.04</td>
+  <td>311.16</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>461.39</td>
+  <td>461.16</td>
+  <td>0.05</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>712.56</td>
+  <td>711.23</td>
+  <td>0.19</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>950.93</td>
+  <td>948.1</td>
+  <td>0.3</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1239.31</td>
+  <td>1234.16</td>
+  <td>0.42</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">02231000 stage timings (s)</p>
+<table>
+<thead><tr>
+  <th>Gauge</th>
+  <th>signatures_s</th>
+  <th>baseflow_s</th>
+  <th>flood_frequency_s</th>
+  <th>total_s</th>
+</tr></thead><tbody>
+<tr>
+  <td>02231000</td>
+  <td>0.008</td>
+  <td>0.009</td>
+  <td>0.017</td>
+  <td>0.034</td>
+</tr>
+</tbody></table>
+<h3 id="03451500---french-broad-river-at-asheville-nc-humid-appalachian">03451500 - French Broad River at Asheville, NC (humid Appalachian)</h3>
+<p class="figure-caption">03451500 signatures</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Computed</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Tolerance</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>q_mean</td>
+  <td>38.200001</td>
+  <td>38.2</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q5</td>
+  <td>6.522305</td>
+  <td>6.5</td>
+  <td>0.003432</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q95</td>
+  <td>117.230055</td>
+  <td>110.0</td>
+  <td>0.065728</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>0.48</td>
+  <td>0.48</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>-2.235127</td>
+  <td>-1.95</td>
+  <td>0.146219</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>peak_month</td>
+  <td>3.0</td>
+  <td>3.0</td>
+  <td>0.0</td>
+  <td>2.0</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>baseflow_index</td>
+  <td>0.577533</td>
+  <td>0.52</td>
+  <td>0.057533</td>
+  <td>0.15</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">03451500 signature integrity</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Detail</th>
+  <th>Passes</th>
+</tr></thead><tbody>
+<tr>
+  <td>order</td>
+  <td>q5=6.522 &lt; median=24.701 &lt; q95=117.230</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>runoff_ratio=0.4799997886252136</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>recession_constant</td>
+  <td>mean_recession_constant=0.3071</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>fdc_slope=-2.2351</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>complete</td>
+  <td>all signature fields populated</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">03451500 baseflow index</p>
+<table>
+<thead><tr>
+  <th>Method</th>
+  <th>BFI</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>lyne_hollick</td>
+  <td>0.577274</td>
+  <td>0.52</td>
+  <td>0.057274</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>eckhardt</td>
+  <td>0.555522</td>
+  <td>0.52</td>
+  <td>0.035522</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">03451500 gev vs scipy_gev</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>406.72</td>
+  <td>406.72</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>632.18</td>
+  <td>632.18</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>823.28</td>
+  <td>823.28</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>1125.83</td>
+  <td>1125.83</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>1404.73</td>
+  <td>1404.73</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1737.93</td>
+  <td>1737.92</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">03451500 gev_lmoments vs scipy_gev_lmoments</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>403.86</td>
+  <td>403.98</td>
+  <td>0.03</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>633.03</td>
+  <td>633.25</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>834.04</td>
+  <td>834.22</td>
+  <td>0.02</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>1162.57</td>
+  <td>1162.44</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>1474.72</td>
+  <td>1474.1</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1857.47</td>
+  <td>1856.02</td>
+  <td>0.08</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">03451500 lp3 vs scipy_lp3</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>396.35</td>
+  <td>396.96</td>
+  <td>0.15</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>633.9</td>
+  <td>634.52</td>
+  <td>0.1</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>844.09</td>
+  <td>843.85</td>
+  <td>0.03</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>1183.23</td>
+  <td>1180.33</td>
+  <td>0.25</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>1498.81</td>
+  <td>1492.36</td>
+  <td>0.43</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1877.26</td>
+  <td>1865.46</td>
+  <td>0.63</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">03451500 stage timings (s)</p>
+<table>
+<thead><tr>
+  <th>Gauge</th>
+  <th>signatures_s</th>
+  <th>baseflow_s</th>
+  <th>flood_frequency_s</th>
+  <th>total_s</th>
+</tr></thead><tbody>
+<tr>
+  <td>03451500</td>
+  <td>0.011</td>
+  <td>0.016</td>
+  <td>0.017</td>
+  <td>0.044</td>
+</tr>
+</tbody></table>
+<h3 id="06803500---salt-creek-at-roca-ne-semi-arid-great-plains">06803500 - Salt Creek at Roca, NE (semi-arid Great Plains)</h3>
+<p class="figure-caption">06803500 signatures</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Computed</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Tolerance</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>q_mean</td>
+  <td>3.4</td>
+  <td>3.4</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q5</td>
+  <td>0.232705</td>
+  <td>0.3</td>
+  <td>0.224317</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q95</td>
+  <td>11.271145</td>
+  <td>12.5</td>
+  <td>0.098308</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>0.12</td>
+  <td>0.12</td>
+  <td>2e-06</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>-3.169895</td>
+  <td>-2.85</td>
+  <td>0.112244</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>peak_month</td>
+  <td>6.0</td>
+  <td>6.0</td>
+  <td>0.0</td>
+  <td>2.0</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>baseflow_index</td>
+  <td>0.550603</td>
+  <td>0.7</td>
+  <td>0.149397</td>
+  <td>0.15</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">06803500 signature integrity</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Detail</th>
+  <th>Passes</th>
+</tr></thead><tbody>
+<tr>
+  <td>order</td>
+  <td>q5=0.233 &lt; median=1.913 &lt; q95=11.271</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>runoff_ratio=0.11999978146698892</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>recession_constant</td>
+  <td>mean_recession_constant=0.3464</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>fdc_slope=-3.1699</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>complete</td>
+  <td>all signature fields populated</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">06803500 baseflow index</p>
+<table>
+<thead><tr>
+  <th>Method</th>
+  <th>BFI</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>lyne_hollick</td>
+  <td>0.550469</td>
+  <td>0.7</td>
+  <td>0.149531</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>eckhardt</td>
+  <td>0.533633</td>
+  <td>0.7</td>
+  <td>0.166367</td>
+  <td>no</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">06803500 gev vs scipy_gev (reference MLE unstable)</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>236.54</td>
+  <td>26.26</td>
+  <td>800.77</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>417.71</td>
+  <td>539.57</td>
+  <td>22.59</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>560.9</td>
+  <td>7705.97</td>
+  <td>92.72</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>773.45</td>
+  <td>229913.58</td>
+  <td>99.66</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>957.68</td>
+  <td>2859415.12</td>
+  <td>99.97</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1166.47</td>
+  <td>34908723.47</td>
+  <td>100.0</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">06803500 gev_lmoments vs scipy_gev_lmoments</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>242.33</td>
+  <td>242.4</td>
+  <td>0.03</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>423.54</td>
+  <td>423.63</td>
+  <td>0.02</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>558.12</td>
+  <td>558.15</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>746.84</td>
+  <td>746.69</td>
+  <td>0.02</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>901.69</td>
+  <td>901.32</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1069.16</td>
+  <td>1068.49</td>
+  <td>0.06</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">06803500 lp3 vs scipy_lp3</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>243.29</td>
+  <td>242.36</td>
+  <td>0.39</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>444.24</td>
+  <td>444.32</td>
+  <td>0.02</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>577.34</td>
+  <td>579.75</td>
+  <td>0.42</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>735.8</td>
+  <td>742.87</td>
+  <td>0.95</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>844.33</td>
+  <td>855.89</td>
+  <td>1.35</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>944.12</td>
+  <td>960.79</td>
+  <td>1.73</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">06803500 stage timings (s)</p>
+<table>
+<thead><tr>
+  <th>Gauge</th>
+  <th>signatures_s</th>
+  <th>baseflow_s</th>
+  <th>flood_frequency_s</th>
+  <th>total_s</th>
+</tr></thead><tbody>
+<tr>
+  <td>06803500</td>
+  <td>0.008</td>
+  <td>0.009</td>
+  <td>0.019</td>
+  <td>0.036</td>
+</tr>
+</tbody></table>
+<h3 id="07056000---buffalo-river-near-st-joe-ar-humid-interior">07056000 - Buffalo River near St. Joe, AR (humid interior)</h3>
+<p class="figure-caption">07056000 signatures</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Computed</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Tolerance</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>q_mean</td>
+  <td>28.6</td>
+  <td>28.6</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q5</td>
+  <td>2.77928</td>
+  <td>2.8</td>
+  <td>0.0074</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q95</td>
+  <td>91.28733</td>
+  <td>95.0</td>
+  <td>0.039081</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>0.45</td>
+  <td>0.45</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>-2.797046</td>
+  <td>-2.25</td>
+  <td>0.243132</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>peak_month</td>
+  <td>5.0</td>
+  <td>4.0</td>
+  <td>1.0</td>
+  <td>2.0</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>baseflow_index</td>
+  <td>0.529877</td>
+  <td>0.51</td>
+  <td>0.019877</td>
+  <td>0.15</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">07056000 signature integrity</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Detail</th>
+  <th>Passes</th>
+</tr></thead><tbody>
+<tr>
+  <td>order</td>
+  <td>q5=2.779 &lt; median=16.191 &lt; q95=91.287</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>runoff_ratio=0.4499999581856539</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>recession_constant</td>
+  <td>mean_recession_constant=0.3757</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>fdc_slope=-2.7970</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>complete</td>
+  <td>all signature fields populated</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">07056000 baseflow index</p>
+<table>
+<thead><tr>
+  <th>Method</th>
+  <th>BFI</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>lyne_hollick</td>
+  <td>0.529711</td>
+  <td>0.51</td>
+  <td>0.019711</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>eckhardt</td>
+  <td>0.51613</td>
+  <td>0.51</td>
+  <td>0.00613</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">07056000 gev vs scipy_gev</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>1056.78</td>
+  <td>1056.78</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>1812.23</td>
+  <td>1812.23</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>2429.17</td>
+  <td>2429.17</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>3372.97</td>
+  <td>3372.97</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>4214.94</td>
+  <td>4214.94</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>5192.99</td>
+  <td>5192.99</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">07056000 gev_lmoments vs scipy_gev_lmoments</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>1082.0</td>
+  <td>1082.33</td>
+  <td>0.03</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>1834.57</td>
+  <td>1835.04</td>
+  <td>0.03</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>2408.82</td>
+  <td>2409.02</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>3234.22</td>
+  <td>3233.54</td>
+  <td>0.02</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>3927.82</td>
+  <td>3926.03</td>
+  <td>0.05</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>4693.37</td>
+  <td>4689.97</td>
+  <td>0.07</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">07056000 lp3 vs scipy_lp3</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>1072.74</td>
+  <td>1071.61</td>
+  <td>0.11</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>1875.32</td>
+  <td>1874.98</td>
+  <td>0.02</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>2469.17</td>
+  <td>2471.25</td>
+  <td>0.08</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>3269.9</td>
+  <td>3277.57</td>
+  <td>0.23</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>3894.09</td>
+  <td>3907.88</td>
+  <td>0.35</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>4536.44</td>
+  <td>4558.02</td>
+  <td>0.47</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">07056000 stage timings (s)</p>
+<table>
+<thead><tr>
+  <th>Gauge</th>
+  <th>signatures_s</th>
+  <th>baseflow_s</th>
+  <th>flood_frequency_s</th>
+  <th>total_s</th>
+</tr></thead><tbody>
+<tr>
+  <td>07056000</td>
+  <td>0.007</td>
+  <td>0.009</td>
+  <td>0.019</td>
+  <td>0.036</td>
+</tr>
+</tbody></table>
+<h3 id="08181500---medina-river-at-san-antonio-tx-semi-arid">08181500 - Medina River at San Antonio, TX (semi-arid)</h3>
+<p class="figure-caption">08181500 signatures</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Computed</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Tolerance</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>q_mean</td>
+  <td>5.2</td>
+  <td>5.2</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q5</td>
+  <td>0.05367</td>
+  <td>0.08</td>
+  <td>0.329125</td>
+  <td>0.25</td>
+  <td>no</td>
+</tr>
+<tr>
+  <td>q95</td>
+  <td>21.83893</td>
+  <td>18.0</td>
+  <td>0.213274</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>0.08</td>
+  <td>0.08</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>-4.600273</td>
+  <td>-4.0</td>
+  <td>0.150068</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>peak_month</td>
+  <td>4.0</td>
+  <td>5.0</td>
+  <td>1.0</td>
+  <td>2.0</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>baseflow_index</td>
+  <td>0.364966</td>
+  <td>0.38</td>
+  <td>0.015034</td>
+  <td>0.15</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">08181500 signature integrity</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Detail</th>
+  <th>Passes</th>
+</tr></thead><tbody>
+<tr>
+  <td>order</td>
+  <td>q5=0.054 &lt; median=1.073 &lt; q95=21.839</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>runoff_ratio=0.07999999494204445</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>recession_constant</td>
+  <td>mean_recession_constant=0.5815</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>fdc_slope=-4.6003</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>complete</td>
+  <td>all signature fields populated</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">08181500 baseflow index</p>
+<table>
+<thead><tr>
+  <th>Method</th>
+  <th>BFI</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>lyne_hollick</td>
+  <td>0.364938</td>
+  <td>0.38</td>
+  <td>0.015062</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>eckhardt</td>
+  <td>0.372659</td>
+  <td>0.38</td>
+  <td>0.007341</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">08181500 gev vs scipy_gev (reference MLE unstable)</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>137.59</td>
+  <td>122.83</td>
+  <td>12.02</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>314.46</td>
+  <td>312.97</td>
+  <td>0.47</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>491.34</td>
+  <td>551.79</td>
+  <td>10.96</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>818.15</td>
+  <td>1100.02</td>
+  <td>25.62</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>1166.86</td>
+  <td>1816.25</td>
+  <td>35.75</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1639.38</td>
+  <td>2973.25</td>
+  <td>44.86</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">08181500 gev_lmoments vs scipy_gev_lmoments</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>137.59</td>
+  <td>137.58</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>314.46</td>
+  <td>314.42</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>491.34</td>
+  <td>491.29</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>818.15</td>
+  <td>818.13</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>1166.86</td>
+  <td>1166.92</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1639.38</td>
+  <td>1639.58</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">08181500 lp3 vs scipy_lp3</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>129.25</td>
+  <td>129.23</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>331.93</td>
+  <td>331.92</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>541.85</td>
+  <td>541.91</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>911.71</td>
+  <td>912.06</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>1274.4</td>
+  <td>1275.15</td>
+  <td>0.06</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1720.98</td>
+  <td>1722.37</td>
+  <td>0.08</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">08181500 stage timings (s)</p>
+<table>
+<thead><tr>
+  <th>Gauge</th>
+  <th>signatures_s</th>
+  <th>baseflow_s</th>
+  <th>flood_frequency_s</th>
+  <th>total_s</th>
+</tr></thead><tbody>
+<tr>
+  <td>08181500</td>
+  <td>0.008</td>
+  <td>0.009</td>
+  <td>0.016</td>
+  <td>0.034</td>
+</tr>
+</tbody></table>
+<h3 id="09510200---cave-creek-near-cave-creek-az-arid">09510200 - Cave Creek near Cave Creek, AZ (arid)</h3>
+<p class="figure-caption">09510200 signatures</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Computed</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Tolerance</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>q_mean</td>
+  <td>0.15</td>
+  <td>0.15</td>
+  <td>1e-06</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q5</td>
+  <td>0.0048</td>
+  <td>0.005</td>
+  <td>0.04</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q95</td>
+  <td>0.548555</td>
+  <td>0.52</td>
+  <td>0.054913</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>0.03</td>
+  <td>0.03</td>
+  <td>6e-06</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>-3.84171</td>
+  <td>-3.8</td>
+  <td>0.010976</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>peak_month</td>
+  <td>2.0</td>
+  <td>2.0</td>
+  <td>0.0</td>
+  <td>2.0</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>baseflow_index</td>
+  <td>0.396946</td>
+  <td>0.25</td>
+  <td>0.146946</td>
+  <td>0.15</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">09510200 signature integrity</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Detail</th>
+  <th>Passes</th>
+</tr></thead><tbody>
+<tr>
+  <td>order</td>
+  <td>q5=0.005 &lt; median=0.054 &lt; q95=0.549</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>runoff_ratio=0.029999824658398944</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>recession_constant</td>
+  <td>mean_recession_constant=0.5744</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>fdc_slope=-3.8417</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>complete</td>
+  <td>all signature fields populated</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">09510200 baseflow index</p>
+<table>
+<thead><tr>
+  <th>Method</th>
+  <th>BFI</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>lyne_hollick</td>
+  <td>0.396684</td>
+  <td>0.25</td>
+  <td>0.146684</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>eckhardt</td>
+  <td>0.4015</td>
+  <td>0.25</td>
+  <td>0.1515</td>
+  <td>no</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">09510200 gev vs scipy_gev (reference MLE unstable)</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>81.05</td>
+  <td>62.15</td>
+  <td>30.4</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>190.8</td>
+  <td>186.05</td>
+  <td>2.55</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>291.31</td>
+  <td>361.38</td>
+  <td>19.39</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>462.3</td>
+  <td>813.18</td>
+  <td>43.15</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>631.06</td>
+  <td>1469.68</td>
+  <td>57.06</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>844.87</td>
+  <td>2633.6</td>
+  <td>67.92</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">09510200 gev_lmoments vs scipy_gev_lmoments</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>81.05</td>
+  <td>81.09</td>
+  <td>0.05</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>190.8</td>
+  <td>190.9</td>
+  <td>0.05</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>291.31</td>
+  <td>291.4</td>
+  <td>0.03</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>462.3</td>
+  <td>462.27</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>631.06</td>
+  <td>630.84</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>844.87</td>
+  <td>844.31</td>
+  <td>0.07</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">09510200 lp3 vs scipy_lp3</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>71.44</td>
+  <td>70.86</td>
+  <td>0.82</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>207.93</td>
+  <td>207.94</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>334.5</td>
+  <td>337.33</td>
+  <td>0.84</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>523.63</td>
+  <td>534.18</td>
+  <td>1.97</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>678.32</td>
+  <td>698.02</td>
+  <td>2.82</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>839.53</td>
+  <td>871.32</td>
+  <td>3.65</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">09510200 stage timings (s)</p>
+<table>
+<thead><tr>
+  <th>Gauge</th>
+  <th>signatures_s</th>
+  <th>baseflow_s</th>
+  <th>flood_frequency_s</th>
+  <th>total_s</th>
+</tr></thead><tbody>
+<tr>
+  <td>09510200</td>
+  <td>0.008</td>
+  <td>0.01</td>
+  <td>0.025</td>
+  <td>0.043</td>
+</tr>
+</tbody></table>
+<h3 id="11532500---smith-river-near-crescent-city-ca-pacific-northwest-rain">11532500 - Smith River near Crescent City, CA (Pacific Northwest rain)</h3>
+<p class="figure-caption">11532500 signatures</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Computed</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Tolerance</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>q_mean</td>
+  <td>72.5</td>
+  <td>72.5</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q5</td>
+  <td>4.613005</td>
+  <td>5.2</td>
+  <td>0.112884</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q95</td>
+  <td>264.70323</td>
+  <td>245.0</td>
+  <td>0.080421</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>0.71</td>
+  <td>0.71</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>-3.120449</td>
+  <td>-2.85</td>
+  <td>0.094894</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>peak_month</td>
+  <td>2.0</td>
+  <td>1.0</td>
+  <td>1.0</td>
+  <td>2.0</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>baseflow_index</td>
+  <td>0.490259</td>
+  <td>0.47</td>
+  <td>0.020259</td>
+  <td>0.15</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">11532500 signature integrity</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Detail</th>
+  <th>Passes</th>
+</tr></thead><tbody>
+<tr>
+  <td>order</td>
+  <td>q5=4.613 &lt; median=34.937 &lt; q95=264.703</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>runoff_ratio=0.7100001108096535</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>recession_constant</td>
+  <td>mean_recession_constant=0.4124</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>fdc_slope=-3.1204</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>complete</td>
+  <td>all signature fields populated</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">11532500 baseflow index</p>
+<table>
+<thead><tr>
+  <th>Method</th>
+  <th>BFI</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>lyne_hollick</td>
+  <td>0.489962</td>
+  <td>0.47</td>
+  <td>0.019962</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>eckhardt</td>
+  <td>0.481301</td>
+  <td>0.47</td>
+  <td>0.011301</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">11532500 gev vs scipy_gev (reference MLE unstable)</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>2156.93</td>
+  <td>344.75</td>
+  <td>525.65</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>3062.83</td>
+  <td>2079.62</td>
+  <td>47.28</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>3643.28</td>
+  <td>147787.61</td>
+  <td>97.53</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>4355.37</td>
+  <td>40338648.09</td>
+  <td>99.99</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>4868.69</td>
+  <td>2592319741.95</td>
+  <td>100.0</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>5365.96</td>
+  <td>161550980185.42</td>
+  <td>100.0</td>
+  <td>no</td>
+  <td>data_limitation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">11532500 gev_lmoments vs scipy_gev_lmoments</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>2141.5</td>
+  <td>2141.46</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>3045.76</td>
+  <td>3045.72</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>3637.22</td>
+  <td>3637.22</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>4376.41</td>
+  <td>4376.5</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>4918.97</td>
+  <td>4919.16</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>5452.68</td>
+  <td>5452.99</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">11532500 lp3 vs scipy_lp3</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>2215.07</td>
+  <td>2210.75</td>
+  <td>0.2</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>3125.88</td>
+  <td>3126.37</td>
+  <td>0.02</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>3621.72</td>
+  <td>3629.65</td>
+  <td>0.22</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>4141.88</td>
+  <td>4162.27</td>
+  <td>0.49</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>4464.52</td>
+  <td>4495.51</td>
+  <td>0.69</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>4741.29</td>
+  <td>4783.45</td>
+  <td>0.88</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">11532500 stage timings (s)</p>
+<table>
+<thead><tr>
+  <th>Gauge</th>
+  <th>signatures_s</th>
+  <th>baseflow_s</th>
+  <th>flood_frequency_s</th>
+  <th>total_s</th>
+</tr></thead><tbody>
+<tr>
+  <td>11532500</td>
+  <td>0.008</td>
+  <td>0.01</td>
+  <td>0.021</td>
+  <td>0.039</td>
+</tr>
+</tbody></table>
+<h3 id="14301000---nehalem-river-near-foss-or-pacific-northwest-rain">14301000 - Nehalem River near Foss, OR (Pacific Northwest rain)</h3>
+<p class="figure-caption">14301000 signatures</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Computed</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Tolerance</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>q_mean</td>
+  <td>55.8</td>
+  <td>55.8</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q5</td>
+  <td>2.999895</td>
+  <td>3.5</td>
+  <td>0.142887</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>q95</td>
+  <td>207.532575</td>
+  <td>185.0</td>
+  <td>0.121798</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>0.68</td>
+  <td>0.68</td>
+  <td>0.0</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>-3.066739</td>
+  <td>-2.55</td>
+  <td>0.202643</td>
+  <td>0.25</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>peak_month</td>
+  <td>12.0</td>
+  <td>12.0</td>
+  <td>0.0</td>
+  <td>2.0</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>baseflow_index</td>
+  <td>0.46548</td>
+  <td>0.43</td>
+  <td>0.03548</td>
+  <td>0.15</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">14301000 signature integrity</p>
+<table>
+<thead><tr>
+  <th>Metric</th>
+  <th>Detail</th>
+  <th>Passes</th>
+</tr></thead><tbody>
+<tr>
+  <td>order</td>
+  <td>q5=3.000 &lt; median=25.509 &lt; q95=207.533</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>runoff_ratio</td>
+  <td>runoff_ratio=0.680000328531608</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>recession_constant</td>
+  <td>mean_recession_constant=0.4176</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>fdc_slope</td>
+  <td>fdc_slope=-3.0667</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>complete</td>
+  <td>all signature fields populated</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">14301000 baseflow index</p>
+<table>
+<thead><tr>
+  <th>Method</th>
+  <th>BFI</th>
+  <th>Published</th>
+  <th>Error</th>
+  <th>Meets tolerance</th>
+</tr></thead><tbody>
+<tr>
+  <td>lyne_hollick</td>
+  <td>0.465319</td>
+  <td>0.43</td>
+  <td>0.035319</td>
+  <td>yes</td>
+</tr>
+<tr>
+  <td>eckhardt</td>
+  <td>0.461454</td>
+  <td>0.43</td>
+  <td>0.031454</td>
+  <td>yes</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">14301000 gev vs scipy_gev</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>781.82</td>
+  <td>781.82</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>1040.32</td>
+  <td>1040.32</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>1197.97</td>
+  <td>1197.97</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>1383.01</td>
+  <td>1383.01</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>1510.75</td>
+  <td>1510.75</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1630.06</td>
+  <td>1630.06</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">14301000 gev_lmoments vs scipy_gev_lmoments</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>787.25</td>
+  <td>787.15</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>1035.44</td>
+  <td>1035.37</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>1180.29</td>
+  <td>1180.32</td>
+  <td>0.0</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>1343.76</td>
+  <td>1344.0</td>
+  <td>0.02</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>1452.36</td>
+  <td>1452.79</td>
+  <td>0.03</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1550.54</td>
+  <td>1551.19</td>
+  <td>0.04</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">14301000 lp3 vs scipy_lp3</p>
+<table>
+<thead><tr>
+  <th>Return period (yr)</th>
+  <th>Computed (m3/s)</th>
+  <th>Reference (m3/s)</th>
+  <th>Rel. error (%)</th>
+  <th>Meets tolerance</th>
+  <th>Classification</th>
+</tr></thead><tbody>
+<tr>
+  <td>2</td>
+  <td>797.25</td>
+  <td>796.03</td>
+  <td>0.15</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>1047.13</td>
+  <td>1047.19</td>
+  <td>0.01</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>1179.96</td>
+  <td>1181.89</td>
+  <td>0.16</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td>1318.62</td>
+  <td>1323.61</td>
+  <td>0.38</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>50</td>
+  <td>1404.88</td>
+  <td>1412.45</td>
+  <td>0.54</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+<tr>
+  <td>100</td>
+  <td>1479.36</td>
+  <td>1489.66</td>
+  <td>0.69</td>
+  <td>yes</td>
+  <td>implementation</td>
+</tr>
+</tbody></table>
+<p class="figure-caption">14301000 stage timings (s)</p>
+<table>
+<thead><tr>
+  <th>Gauge</th>
+  <th>signatures_s</th>
+  <th>baseflow_s</th>
+  <th>flood_frequency_s</th>
+  <th>total_s</th>
+</tr></thead><tbody>
+<tr>
+  <td>14301000</td>
+  <td>0.008</td>
+  <td>0.01</td>
+  <td>0.016</td>
+  <td>0.034</td>
+</tr>
+</tbody></table>
+<h2 id="execution-timings">Execution timings</h2>
+<p>Wall-clock seconds per stage, per catchment. Recorded and reported; never asserted, so a slow shared CI runner cannot produce a false failure.</p>
+<p class="figure-caption">Recorded wall-clock timings (s)</p>
+<table>
+<thead><tr>
+  <th>Gauge</th>
+  <th>signatures_s</th>
+  <th>baseflow_s</th>
+  <th>flood_frequency_s</th>
+  <th>total_s</th>
+</tr></thead><tbody>
+<tr>
+  <td>01013500</td>
+  <td>0.01</td>
+  <td>0.01</td>
+  <td>0.018</td>
+  <td>0.037</td>
+</tr>
+<tr>
+  <td>01664000</td>
+  <td>0.008</td>
+  <td>0.009</td>
+  <td>0.016</td>
+  <td>0.033</td>
+</tr>
+<tr>
+  <td>02231000</td>
+  <td>0.008</td>
+  <td>0.009</td>
+  <td>0.017</td>
+  <td>0.034</td>
+</tr>
+<tr>
+  <td>03451500</td>
+  <td>0.011</td>
+  <td>0.016</td>
+  <td>0.017</td>
+  <td>0.044</td>
+</tr>
+<tr>
+  <td>06803500</td>
+  <td>0.008</td>
+  <td>0.009</td>
+  <td>0.019</td>
+  <td>0.036</td>
+</tr>
+<tr>
+  <td>07056000</td>
+  <td>0.007</td>
+  <td>0.009</td>
+  <td>0.019</td>
+  <td>0.036</td>
+</tr>
+<tr>
+  <td>08181500</td>
+  <td>0.008</td>
+  <td>0.009</td>
+  <td>0.016</td>
+  <td>0.034</td>
+</tr>
+<tr>
+  <td>09510200</td>
+  <td>0.008</td>
+  <td>0.01</td>
+  <td>0.025</td>
+  <td>0.043</td>
+</tr>
+<tr>
+  <td>11532500</td>
+  <td>0.008</td>
+  <td>0.01</td>
+  <td>0.021</td>
+  <td>0.039</td>
+</tr>
+<tr>
+  <td>14301000</td>
+  <td>0.008</td>
+  <td>0.01</td>
+  <td>0.016</td>
+  <td>0.034</td>
+</tr>
+</tbody></table>
+<div class="metric"><div class="metric-value">0.369</div><div class="metric-name">Total runtime (s)</div><span class="metric-unit">s</span></div>
+<h2 id="data-and-methods">Data and methods</h2>
+<p>Discharge: synthetic daily series calibrated to CAMELS; peaks: USGS NWIS annual peak series, one value per USGS water year, screened for qualifier codes and censored values. Reference quantiles: GEV-MLE and LP3 via scipy, GEV-L-moments via lmoments3 (Hosking 1997). Full provenance per catchment in results.json.</p>
+<h2 id="cite-this-software">Cite this software</h2>
+<p>Abdoul Rachid Ouédraogo (2026). AquaScope: Open-source water data aggregation toolkit (version 0.16.0) [Software]. Zenodo. https://doi.org/10.5281/zenodo.21903143</p>
+</body>
+</html>

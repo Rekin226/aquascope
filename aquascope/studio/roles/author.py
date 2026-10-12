@@ -6,12 +6,17 @@ harvested from the payloads, the references are the registry citations of
 the methods used plus the playbook's and the software citation. With a
 model, ONE call writes the prose of every section from the compact results,
 the brief, the "not established" list and the caveats; the numbers must be
-in the results (the Critic checks). With ``issues`` from the Critic, one more
-call applies the fixes. The report's sections, in order: summary, problem,
-site and data, methodology, results (one per step), limitations,
-recommendations, references, appendix. Prose a caller's own model wrote
-arrives through :func:`narrate`: every sentence passes the Critic's number
-check first, and ``report["written_by"]`` says who wrote which section.
+in the results (the Critic checks). Every sentence the model wrote passes
+the Critic's number check before it is kept (:func:`_checked`): one whose
+numbers or years are in no result is dropped and counted in
+``report["dropped"]`` and the footer. With ``issues`` from the Critic (the
+model's fixes and the failed deterministic checks) one more call applies the
+fixes; keyless, the template repair drops the sentences the checks refuse.
+The report's sections, in order: summary, problem, site and data,
+methodology, results (one per step), limitations, recommendations,
+references, appendix. Prose a caller's own model wrote arrives through
+:func:`narrate` and goes through the same sentence check, and
+``report["written_by"]`` says who wrote which section.
 """
 
 from __future__ import annotations
@@ -22,18 +27,21 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aquascope import __version__
+from aquascope.claims import flood_result
 from aquascope.studio.model import Model, compact
 from aquascope.studio.prompts import AUTHOR, AUTHOR_FIX
 from aquascope.studio.workspace import Workspace
 from aquascope.study import Study
 
-__all__ = ["author_report", "key_numbers", "narrate", "references", "report_context", "to_markdown"]
+__all__ = ["author_report", "footer_line", "key_numbers", "narrate", "references", "report_context", "to_markdown"]
 
 #: The concept DOI in CITATION.cff; it resolves to the latest archived version.
 SOFTWARE_DOI = "10.5281/zenodo.21903143"
 
 SECTION_TITLES: dict[str, str] = {
     "summary": "Summary",
+    "decision": "The decision",
+    "findings": "Findings",
     "problem": "Problem and decision",
     "site_data": "Site and data",
     "methodology": "Methodology",
@@ -45,6 +53,28 @@ SECTION_TITLES: dict[str, str] = {
 }
 
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
+
+#: "p = 4.3e-07" or "p = 0.000" in a template sentence: below 0.001 a p-value is reported as "p < 0.001".
+_P_EQUALS = re.compile(r"\bp = (-?\d+(?:\.\d+)?(?:[eE]-?\d+)?)")
+
+
+def p_text(p: Any) -> Any:
+    """A p-value as a report writes it: the number, or ``"< 0.001"`` below that threshold."""
+    if isinstance(p, bool) or not isinstance(p, (int, float)) or p != p:
+        return p
+    return "< 0.001" if 0 <= p < 0.001 else p
+
+
+def _small_p(text: str) -> str:
+    """Every ``p = X`` with X below 0.001 rewritten as ``p < 0.001``."""
+    def swap(m: re.Match[str]) -> str:
+        try:
+            value = float(m.group(1))
+        except ValueError:
+            return m.group(0)
+        return "p < 0.001" if 0 <= value < 0.001 else m.group(0)
+
+    return _P_EQUALS.sub(swap, text)
 
 
 def _sig(x: Any, digits: int = 4) -> Any:
@@ -90,6 +120,114 @@ def _drought_class(value: Any) -> str | None:
     return "extremely dry"
 
 
+#: The advanced study steps (aquascope.advanced): their key numbers come from :func:`_advanced_numbers`.
+_ADVANCED_TOOLS = frozenset({"change_points", "nonstationary_flood", "pot_flood", "catchment_model",
+                             "climate_projection", "regional_flood", "compare_gauges"})
+
+
+def _advanced_numbers(sid: str, tool: str, p: dict[str, Any], rp: Any) -> list[dict[str, Any]]:  # noqa: C901
+    """Key numbers of the advanced steps, each with the path it sits at (``evidence.basis``)."""
+    out: list[dict[str, Any]] = []
+    unit = p.get("unit") or ""
+
+    def add(label: str, value: Any, unit_: str | None, basis: str, band: list[Any] | None = None) -> None:
+        if value is None or (isinstance(value, float) and value != value) or isinstance(value, bool):
+            return
+        evidence: dict[str, Any] = {"basis": basis}
+        if band and len(band) == 2 and all(isinstance(x, (int, float)) for x in band):
+            # the uncertainty that belongs to this number: a bootstrap interval, or the spread across models
+            evidence.update({"result_id": f"{sid}.{basis}",
+                             "interval": {"result_id": f"{sid}.{basis}", "bounds": [float(band[0]), float(band[1])]}})
+        out.append({"label": label, "value": _sig(value) if isinstance(value, (int, float)) else value,
+                    "unit": unit_ if unit_ is not None else unit, "step": sid, "evidence": evidence})
+
+    t = _t(rp)
+    if tool == "change_points":
+        pet, mk = p.get("pettitt") or {}, p.get("mann_kendall") or {}
+        add("Years of annual values tested", p.get("n"), "years", "n")
+        if pet.get("significant"):
+            add("Step change year (Pettitt)", pet.get("change_year"), "", "pettitt.change_year")
+            add("Change in the mean after the step", pet.get("change_pct"), "%", "pettitt.change_pct")
+        add("Pettitt p-value", p_text(pet.get("p_value")), "", "pettitt.p_value")
+        add("Mann-Kendall p-value (annual maxima)" if p.get("tested") == "annual_max" else
+            "Mann-Kendall p-value (annual means)", p_text(mk.get("p_value")), "", "mann_kendall.p_value")
+        add("Sen's slope", mk.get("sen_slope_pct_per_decade"), "% per decade", "mann_kendall.sen_slope_pct_per_decade")
+    elif tool == "nonstationary_flood":
+        key = t if str(t) in ((p.get("stationary") or {}).get("q_by_T") or {}) else None
+        key = str(key) if key is not None else next(iter(reversed(list(((p.get("stationary") or {}).get("q_by_T")
+                                                                          or {}).keys()))), None)
+        if key is None:
+            return out
+        st = (p.get("stationary") or {}).get("q_by_T") or {}
+        ns = p.get("nonstationary") or {}
+        ci = ns.get("ci_last_year") or {}
+        band = ci.get("ci") if str(_t(ci.get("T"))) == key else None
+        # the answer: the level of the model the likelihood-ratio test and AIC prefer, today
+        if p.get("preferred") == "nonstationary":
+            add(f"{key}-year level today, preferred model (nonstationary GEV)",
+                (ns.get("q_by_T_last_year") or {}).get(key), None, f"nonstationary.q_by_T_last_year.{key}", band)
+        else:
+            add(f"{key}-year level today, preferred model (stationary GEV)", st.get(key), None,
+                f"stationary.q_by_T.{key}")
+        add(f"{key}-year level, stationary GEV", st.get(key), None, f"stationary.q_by_T.{key}")
+        add(f"{key}-year level in {p.get('last_year')}, nonstationary GEV", (ns.get("q_by_T_last_year") or {}).get(key),
+            None, f"nonstationary.q_by_T_last_year.{key}")
+        add(f"{key}-year level in {p.get('horizon_year')}, nonstationary GEV (trend extended)",
+            (ns.get("q_by_T_horizon") or {}).get(key), None, f"nonstationary.q_by_T_horizon.{key}")
+        row = next((r for r in p.get("table") or [] if str(_t(r.get("T"))) == key), None)
+        if row:
+            idx = (p.get("table") or []).index(row)
+            add(f"Change in the {key}-year level, {p.get('first_year')} to {p.get('last_year')}",
+                row.get("change_first_to_last_pct"), "%", f"table.{idx}.change_first_to_last_pct")
+        add("Trend term likelihood-ratio p-value", p_text((p.get("likelihood_ratio") or {}).get("p_value")), "",
+            "likelihood_ratio.p_value")
+    elif tool == "pot_flood":
+        q = (p.get("gpd") or {}).get("q_by_T") or {}
+        key = str(t) if str(t) in q else (list(q)[-1] if q else None)
+        if key is not None:
+            add(f"{key}-year return level, peaks over threshold (GPD)", q.get(key), None, f"gpd.q_by_T.{key}")
+        add("Independent peaks per year", p.get("peaks_per_year"), "", "peaks_per_year")
+    elif tool == "catchment_model":
+        val = p.get("validation") or {}
+        add("Validation KGE", val.get("kge"), "", "validation.kge")
+        add("Validation NSE", val.get("nse"), "", "validation.nse")
+        add("90 % band coverage on the validation years", (p.get("band") or {}).get("coverage"), "", "band.coverage")
+        runs = list(enumerate(p.get("scenarios") or []))
+        # the combined scenario (a rainfall change and a warming together) is the one the question describes
+        runs.sort(key=lambda ir: 0 if (ir[1].get("dp_pct") and ir[1].get("dt_c")) else 1)
+        for i, r in runs:
+            label = r.get("label") or f"scenario {i + 1}"
+            add(f"Change in mean flow, {label}", r.get("mean_flow_change_pct"), "%",
+                f"scenarios.{i}.mean_flow_change_pct")
+            add(f"Change in low flow (Q95), {label}", r.get("q95_change_pct"), "%", f"scenarios.{i}.q95_change_pct")
+            add(f"Change in the median annual maximum, {label}", r.get("amax_median_change_pct"), "%",
+                f"scenarios.{i}.amax_median_change_pct")
+    elif tool == "climate_projection":
+        ens = p.get("ensemble") or {}
+        rp_c = _t(p.get("return_period") or 20)
+        names = {"mean_flow_change_pct": "Change in mean flow", "flood_change_pct": f"Change in the {rp_c}-year flood",
+                 "q95_change_pct": "Change in low flow (Q95)", "precip_change_pct": "Change in annual rainfall",
+                 "pet_change_pct": "Change in evaporation", "temp_change_c": "Change in mean temperature",
+                 "wettest_day_change_pct": f"Change in the {rp_c}-year wettest day"}
+        for key, name in names.items():
+            e = ens.get(key) or {}
+            if not e.get("n"):
+                continue
+            u = "°C" if key == "temp_change_c" else "%"
+            add(f"{name}, CMIP6 median", e.get("median"), u, f"ensemble.{key}.median", [e.get("min"), e.get("max")])
+            add(f"{name}, CMIP6 lowest model", e.get("min"), u, f"ensemble.{key}.min")
+            add(f"{name}, CMIP6 highest model", e.get("max"), u, f"ensemble.{key}.max")
+        add("Climate models", p.get("n_models"), "", "n_models")
+    elif tool == "regional_flood":
+        add("Gauges pooled", p.get("n_pooled"), "", "n_pooled")
+        add("Heterogeneity H", p.get("heterogeneity_H"), "", "heterogeneity_H")
+        tg = p.get("target") or {}
+        add("100-year flow at the gauge, pooled (regional)", tg.get("pooled_q100"), "m3/s", "target.pooled_q100")
+        add("100-year flow at the gauge, at-site (Archive record)", tg.get("at_site_q100"), "m3/s",
+            "target.at_site_q100")
+    return out
+
+
 def _numbers_for(sid: str, tool: str, p: dict[str, Any], rp: Any) -> list[dict[str, Any]]:  # noqa: C901
     out: list[dict[str, Any]] = []
     unit = p.get("unit") or ""
@@ -115,13 +253,18 @@ def _numbers_for(sid: str, tool: str, p: dict[str, Any], rp: Any) -> list[dict[s
         others: list[dict[str, Any]] = []
         if fits and idx is not None:
             if gev.get("q"):
-                add(f"{rp}-year return level, GEV (L-moments)", gev["q"][idx])
+                add(f"{rp}-year return level, GEV (L-moments)", gev["q"][idx],
+                    evidence=flood_result(p, sid, "gev_lmoments", idx))
             if lp3.get("q"):
-                add(f"{rp}-year return level, Log-Pearson III", lp3["q"][idx])
+                add(f"{rp}-year return level, Log-Pearson III", lp3["q"][idx],
+                    evidence=flood_result(p, sid, "lp3", idx))
                 ci = (lp3.get("ci") or [None] * (idx + 1))[idx]
                 if isinstance(ci, (list, tuple)) and len(ci) == 2:
                     add(f"{rp}-year LP3 90 % interval, low", ci[0])
                     add(f"{rp}-year LP3 90 % interval, high", ci[1])
+            if boot.get("q"):
+                add(f"{rp}-year return level, GEV (MLE with L-moments fallback)", boot["q"][idx],
+                    evidence=flood_result(p, sid, "gev_bootstrap", idx))
             if boot.get("ci"):
                 ci = (boot.get("ci") or [None] * (idx + 1))[idx]
                 if isinstance(ci, (list, tuple)) and len(ci) == 2:
@@ -132,19 +275,26 @@ def _numbers_for(sid: str, tool: str, p: dict[str, Any], rp: Any) -> list[dict[s
             for i, period in enumerate(periods):
                 if i == idx:
                     continue
-                for name, fit in (("GEV (L-moments)", gev), ("Log-Pearson III", lp3)):
+                for fit_id, name, fit in (("gev_lmoments", "GEV (L-moments)", gev),
+                                          ("lp3", "Log-Pearson III", lp3)):
                     q = fit.get("q") or []
                     if i < len(q) and q[i] is not None:
                         others.append({"label": f"{_t(period)}-year return level, {name}", "value": _sig(q[i]),
-                                       "unit": unit, "step": sid})
+                                       "unit": unit, "step": sid, "evidence": flood_result(p, sid, fit_id, i)})
         fdc = p.get("fdc") or {}
         for key, label in (("q95", "Q95 (exceeded 95 % of days)"), ("q50", "Q50 (median flow)"), ("q10", "Q10")):
             if fdc.get(key) is not None:
                 add(label, fdc[key])
-        trend = p.get("trend") or {}
+        from aquascope.trend_series import reported_trend
+
+        trend = reported_trend(p) or {}  # the annual maxima for a flood question, the annual mean otherwise
         if isinstance(trend, dict) and trend.get("p_value") is not None:
-            add("Mann-Kendall p-value (annual mean)", trend["p_value"], "")
+            add(f"Mann-Kendall p-value ({trend.get('on') or 'annual mean'})", p_text(trend["p_value"]), "")
             add("Sen's slope", trend.get("sens_slope_per_year"), f"{unit} per year" if unit else "per year")
+        shift = (p.get("ffa") or {}).get("amax_change") or {}
+        if shift.get("significant"):  # a stationary fit across a regime shift (#376)
+            add("Step change in the annual maxima (Pettitt), year", shift.get("change_year"), "",
+                evidence={"basis": "ffa.amax_change.change_year"})
         out += others
     elif tool == "describe_catchment":
         attrs = p.get("attributes") or {}
@@ -162,6 +312,8 @@ def _numbers_for(sid: str, tool: str, p: dict[str, Any], rp: Any) -> list[dict[s
                 if e.get("low") is not None and e.get("high") is not None:
                     add(f"{label} band, low", e["low"], u)
                     add(f"{label} band, high", e["high"], u)
+    elif tool in _ADVANCED_TOOLS:
+        out += _advanced_numbers(sid, tool, p, rp)
     elif tool == "anywhere":
         cl = p.get("climate") or {}
         add("ERA5 precipitation", cl.get("precipitation_mm_per_year"), "mm per year")
@@ -280,12 +432,16 @@ def key_numbers(study: Study, results: list[dict[str, Any]]) -> list[dict[str, A
                 out += _numbers_for(sid, tool, payload, rp)
     # Two steps on the same record quote the same number (analyze_station and flood_frequency both carry the
     # fit): keep one row, attributed to the later step, which is the one the plan names for it.
-    seen: dict[tuple[str, Any], int] = {}
+    seen: dict[tuple[Any, ...], int] = {}
     deduped: list[dict[str, Any]] = []
     for kn in out:
-        k = (kn["label"], kn["value"])
+        data = (kn.get("evidence") or {}).get("dataset") or {}
+        k = (kn["label"], kn["value"], kn.get("unit"), data.get("source"),
+             data.get("station_id"), data.get("snapshot"))
         if k in seen:
-            deduped[seen[k]]["step"] = kn["step"]
+            # The later step owns the whole claim, including its input identity
+            # and interval. Updating only "step" would keep the earlier evidence.
+            deduped[seen[k]] = kn
             continue
         seen[k] = len(deduped)
         deduped.append(kn)
@@ -296,11 +452,14 @@ def key_numbers(study: Study, results: list[dict[str, Any]]) -> list[dict[str, A
 
 
 def software_citation() -> str:
-    from aquascope.reporting.builder import ReportBuilder
-
-    builder = ReportBuilder("AquaScope Studio report", author="Rekin226 and contributors")
-    builder.metadata.doi = SOFTWARE_DOI
-    return builder.software_citation()
+    """The software's own reference. The Author must not depend on the deliverables package (a core install, or
+    a face that blocks it), so without it the citation names the concept DOI alone."""
+    try:
+        from aquascope.studio.deliverables._common import citation
+    except ImportError:
+        return (f"Rekin226 and contributors. AquaScope Hydrology {__version__} [Software]. All versions: "
+                f"https://doi.org/{SOFTWARE_DOI}.")
+    return citation()
 
 
 _DOI = re.compile(r"10\.\d{4,9}/[^\s,;)\]]+", re.I)
@@ -402,6 +561,13 @@ def _answer_from(prose: str, key: list[dict[str, Any]], quantities: list[str] | 
             best, best_score = para, score
     if best is not None:
         sentences = [s for s in _SENTENCE.split(best.strip()) if s]
+        # The sentences that speak of the brief's quantities lead (the 100-year flow before the record's mean),
+        # so the answer opens with the number asked for; the order among equals is the paragraph's own.
+        def asked(sentence: str) -> int:
+            low = sentence.lower()
+            return sum(1 for w in words if re.search(rf"\b{re.escape(w)}", low))
+
+        sentences = sorted(sentences, key=lambda sentence: -asked(sentence))
         return " ".join(sentences[:4])
     if key:
         kn = key[0]
@@ -461,8 +627,11 @@ def _step_prose(sid: str, r: dict[str, Any], study: Study) -> str:
             lines.append(f"{r.get('tool')} returned: {_summarise(payload)}.")
     gates = r.get("gates") or []
     if gates:
-        lines.append("Gates: " + "; ".join(f"{g.get('check')} {'passed' if g.get('passed') else 'FAILED'}"
-                                            f" ({g.get('detail')})" for g in gates) + ".")
+        labels = []
+        for g in gates:
+            status = "skipped" if g.get("skipped") else "passed" if g.get("passed") else "FAILED"
+            labels.append(f"{g.get('check')} {status} ({g.get('detail')})")
+        lines.append("Gates: " + "; ".join(labels) + ".")
     fb = r.get("fallback")
     if r.get("fallback_used") and isinstance(fb, dict):
         state = "passed its gates" if fb.get("ok") and fb.get("gates_passed") else (
@@ -470,7 +639,7 @@ def _step_prose(sid: str, r: dict[str, Any], study: Study) -> str:
         lines.append(f"The fallback {fb.get('tool')} ran and {state}.")
         if isinstance(fb.get("result"), dict):
             lines += _sentences_for(str(fb.get("tool")), fb["result"], study)
-    return " ".join(lines)
+    return _small_p(" ".join(lines))
 
 
 def _summary_paragraph(ws: Workspace, study: Study, results: list[dict[str, Any]], key: list[dict[str, Any]],
@@ -489,13 +658,15 @@ def _summary_paragraph(ws: Workspace, study: Study, results: list[dict[str, Any]
             if label not in records:
                 records.append(label)
     gates = run.get("gates") or []
-    passed = sum(1 for g in gates if g.get("passed"))
+    passed = sum(1 for g in gates if g.get("passed") and not g.get("skipped"))
+    skipped = sum(1 for g in gates if g.get("skipped"))
     bits = [f"{plan.get('objective') or ws.brief.problem}."]
     if records:
         bits.append("The record: " + "; ".join(records[:3]) + ".")
     bits.append(f"{len(results)} step(s) ran" + (f" ({plan.get('author')} plan"
                 + (f", playbook {plan['playbook']}" if plan.get("playbook") else "") + ")")
                 + (f"; {passed} of {len(gates)} gates passed" if gates else "")
+                + (f"; {skipped} skipped" if skipped else "")
                 + (f"; the study stopped at {run.get('stopped_at')}" if run.get("stop_reason") else "") + ".")
     head = [s for s in _SENTENCE.split(answer) if re.search(r"\d", s)]
     if head:
@@ -537,7 +708,16 @@ def _recommendations(ws: Workspace, study: Study, missing: list[str]) -> list[st
     run = ws.run or {}
     plan = study.plan or {}
     out: list[str] = []
+    decision = (ws.findings or {}).get("decision") or {}
+    if decision.get("answer"):
+        out.append(f"Adopt this as the answer to the decision: {decision['answer']}")
+        for c in (decision.get("what_would_change_it") or [])[:2]:
+            out.append(f"To firm it up: {c}.")
+        for r in ((ws.findings or {}).get("data_requests") or [])[:1]:
+            out.append(f"Obtain {r.get('what')}: {r.get('effect_on_grade') or r.get('why')}.")
     for g in (run.get("failed_gates") or [])[:2]:
+        if len(out) >= 4:
+            break
         out.append(f"Before relying on step {g.get('step')}, settle the failed gate {g.get('check')}: "
                    f"{g.get('detail')}. A longer record or another source would.")
     if run.get("replans") or any(r.get("fallback_used") for r in run.get("results") or []):
@@ -551,16 +731,17 @@ def _recommendations(ws: Workspace, study: Study, missing: list[str]) -> list[st
             out.append(f"{label} is marginal here ({row.get('reason')}); a longer record would firm it up.")
     for g in run.get("gates") or []:
         if g.get("check") == "spread_within" and g.get("passed") and len(out) < 3:
-            out.append(f"Quote both fits with their intervals: {g.get('detail')}.")
+            out.append(f"Quote both point estimates and only each estimator's own available interval: "
+                       f"{g.get('detail')}.")
             break
     for c in (plan.get("caveats") or []):
-        if len(out) >= 4:
+        if len(out) >= 5:
             break
         out.append(f"Read the numbers with this caveat: {_first_sentence(str(c))}")
     if not out:
         out.append("Re-run the study file when the record is updated; the gates will say whether the estimate "
                    "moved.")
-    return out[:4]
+    return out[:5]
 
 
 _SENTENCE_END = re.compile(r"(?<!\bal)(?<!\bet)(?<!\bvs)(?<![A-Z])[.!?](?=\s+[A-Z(]|$)")
@@ -580,6 +761,30 @@ def _template_sections(ws: Workspace, study: Study, results: list[dict[str, Any]
     site = ws.site or {}
     sections: dict[str, str] = {}
     sections["summary"] = _summary_paragraph(ws, study, results, key, missing, answer)
+    findings = ws.findings or {}
+    decision = findings.get("decision") or {}
+    if findings.get("findings") or decision:
+        lines = []
+        if decision.get("answer"):
+            lines.append(str(decision["answer"]))
+        if decision.get("conditions"):
+            lines.append("It holds under these conditions: " + "; ".join(str(c) for c in decision["conditions"]) + ".")
+        if decision.get("limitations"):
+            lines.append("Limitations and unresolved checks: "
+                         + "; ".join(str(c) for c in decision["limitations"]) + ".")
+        if decision.get("grade_scope"):
+            lines.append("The grade applies to " + str(decision["grade_scope"]) + ".")
+        if decision.get("what_would_change_it"):
+            lines.append("What would change it: " + "; ".join(str(c) for c in decision["what_would_change_it"]) + ".")
+        for r in findings.get("data_requests") or []:
+            lines.append(f"The crew would ask for {r.get('what')}: {r.get('effect_on_grade') or r.get('why')}.")
+        sections["decision"] = " ".join(lines)
+        rows = [f"- [{str(f.get('grade') or '').replace('_', ' ')}] {f.get('claim')} "
+                f"(from {', '.join(f.get('basis') or [])})" for f in findings.get("findings") or []]
+        for c in findings.get("consistency") or []:
+            status = "Not compared" if c.get("agree") is None else "Agrees" if c["agree"] else "Disagrees"
+            rows.append(f"- {status}: {c.get('note')}")
+        sections["findings"] = "\n".join(rows) if rows else ""
 
     parts = [b.problem]
     if b.decision:
@@ -631,7 +836,8 @@ def _template_sections(ws: Workspace, study: Study, results: list[dict[str, Any]
     if not results:
         sections["results-none"] = "No step ran."
 
-    lim = ["\n".join(f"- {m}" for m in missing) if missing else "Every gate and check passed."]
+    lim = ["\n".join(f"- {m}" for m in missing) if missing
+           else "No failed or skipped checks are recorded; the scope and caveats below still apply."]
     if plan.get("caveats"):
         lim.append("Caveats, verbatim from the playbook:\n" + "\n".join(f"- {c}" for c in plan["caveats"]))
     if plan.get("limitations_expected"):
@@ -651,6 +857,26 @@ def _template_sections(ws: Workspace, study: Study, results: list[dict[str, Any]
         f"Model: {ws.model or 'none'} via {ws.provider or 'none'}; ledger: {ledger}. aquascope {__version__}.",
         "```yaml\n" + study.to_yaml() + "```",
     ])
+    identities = []
+    for number in key:
+        evidence = number.get("evidence") or {}
+        if not evidence.get("result_id"):
+            continue
+        data = evidence.get("dataset") or {}
+        interval = evidence.get("interval") or {}
+        identities.append(
+            f"- {number['label']}: result {evidence['result_id']}; estimator {evidence.get('estimator')}; "
+            f"{evidence.get('aggregation')}. Input {data.get('source') or 'not recorded'}/"
+            f"{data.get('station_id') or 'not recorded'}, {data.get('variable')}, {data.get('unit')}, "
+            f"{data.get('start')} to {data.get('end')}; content {data.get('snapshot') or 'not recorded'}. "
+            f"Software {data.get('software_version')}; revision {data.get('software_revision') or 'not recorded'}. "
+            f"Archive revision {data.get('archive_revision') or 'not recorded; content hash is not an archive DOI'}. "
+            + (f"Own interval {interval.get('bounds')}, method {interval.get('method') or 'not recorded'}, "
+               f"level {interval.get('level') or 'not recorded'}." if interval else "No interval for this estimator.")
+        )
+    if identities:
+        sections["appendix"] += ("\n\nResult identities (also in findings.json and the Findings worksheet):\n"
+                                + "\n".join(identities))
     return sections
 
 
@@ -661,9 +887,15 @@ def _section_list(ws: Workspace, texts: dict[str, str], results: list[dict[str, 
     tables = {a.step: [] for a in ws.artifacts}
     figs: dict[str | None, list[str]] = {}
     for a in ws.artifacts:
+        if a.kind == "figure" and a.id.endswith("-svg") and ws.artifact(a.id[:-4]) is not None:
+            continue    # the SVG twin of a PNG figure is the same figure, listed once
+        if a.kind not in ("figure", "table"):
+            continue
         (figs if a.kind == "figure" else tables).setdefault(a.step, []).append(a.id)
     out: list[dict[str, Any]] = []
-    for sid in ("summary", "problem", "site_data", "methodology"):
+    for sid in ("summary", "decision", "findings", "problem", "site_data", "methodology"):
+        if sid in ("decision", "findings") and not texts.get(sid):
+            continue    # only when the Interpreter ran
         out.append({"id": sid, "title": SECTION_TITLES[sid], "text": texts.get(sid, ""),
                     "figures": figs.get(sid, []), "tables": tables.get(sid, [])})
     result_ids = [str(r.get("id")) for r in results] or ["none"]
@@ -687,11 +919,9 @@ def _draft(ws: Workspace) -> dict[str, Any]:
     key = key_numbers(study, results)
     refs = references(ws)
     plan = study.plan or {}
-    missing = list((ws.critique or {}).get("not_established") or [])
-    if not missing:
-        from aquascope.studio.roles.critic import not_established
+    from aquascope.studio.roles.critic import not_established
 
-        missing = not_established(ws)
+    missing = list(dict.fromkeys([*((ws.critique or {}).get("not_established") or []), *not_established(ws)]))
     from aquascope.ai_engine.team import _template_answer
     from aquascope.studio.roles.analysts import prior_run
 
@@ -702,6 +932,11 @@ def _draft(ws: Workspace) -> dict[str, Any]:
         quantities = _rules_quantities(ws.brief.playbook, ws.brief.intake)
     names = _record_names(ws)
     answer = name_records(_answer_from(_template_answer(study, prior_run(ws)), key, quantities), names)
+    decision = (ws.findings or {}).get("decision") or {}
+    if decision.get("answer"):
+        from aquascope.studio.roles.interpreter import decision_text
+
+        answer = f"{decision_text(decision)} {answer}".strip()
     texts = _template_sections(ws, study, results, key, missing, refs, answer)
     for sid in list(texts):
         if sid.startswith("results-") or sid == "summary":
@@ -736,8 +971,11 @@ def report_context(ws: Workspace, *, issues: list[dict[str, Any]] | None = None,
                                         if k in ("tool", "arguments", "ok", "gates", "result")}, max_list=24)
                    if r.get("fallback") else None} for r in results],
         "key_numbers": d["key"],
+        "findings": {k: v for k, v in (ws.findings or {}).items()
+                     if k in ("findings", "consistency", "decision", "data_requests", "assumptions")} or None,
         "numbers_rule": "every number in steps[*].result and steps[*].fallback.result may be quoted; "
-                        "key_numbers is the summary table's subset, not a whitelist",
+                        "key_numbers is the summary table's subset, not a whitelist; the answer opens with the "
+                        "decision's answer and grade, and the findings section walks the findings",
         "not_established": d["missing"],
         "inventory": [{k: v for k, v in ds.to_dict().items() if k in ("id", "kind", "variable", "source",
                                                                        "station_id", "name", "years")}
@@ -755,37 +993,80 @@ def report_context(ws: Workspace, *, issues: list[dict[str, Any]] | None = None,
 
 
 def author_report(ws: Workspace, model: Model | None, *, issues: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """Write ``ws.report``; with ``issues`` (from the Critic) the draft is rewritten once with the fixes."""
+    """Write ``ws.report``; with ``issues`` (from the Critic: its ``fix`` issues and the failed checks) the draft
+    is rewritten once with the fixes. Every sentence the model writes passes the Critic's number check first;
+    keyless, a fix round is the template's own repair: the sentences the checks refuse are dropped. The
+    sentences dropped are counted in ``report["dropped"]`` (across the draft and the fix round)."""
+    from aquascope.studio.roles.critic import tool_results
+
     d = _draft(ws)
     study, results, key, refs, plan, missing = d["study"], d["results"], d["key"], d["refs"], d["plan"], d["missing"]
     answer, texts, title = d["answer"], d["texts"], d["title"]
     prose_by = "template"
     written_by: dict[str, str] = {"answer": "template", **{sid: "template" for sid in texts}}
+    before = int((ws.report or {}).get("dropped") or 0) if issues else 0
+    dropped = 0
     if model:
         system, context = report_context(ws, issues=issues, draft=d)
         obj = model.call_json("author", system, context)
         if obj:
+            pool = tool_results(ws)
             if isinstance(obj.get("title"), str) and obj["title"].strip():
                 title = obj["title"].strip()[:120]
             if isinstance(obj.get("answer"), str) and obj["answer"].strip():
-                answer = obj["answer"].strip()
-                written_by["answer"] = "model"
+                text, k = _checked(obj["answer"].strip(), pool, ws.brief.problem)
+                dropped += k
+                if text:
+                    answer = _with_decision(ws, text)
+                    written_by["answer"] = "model"
             written = obj.get("sections") if isinstance(obj.get("sections"), dict) else {}
             n = 0
             for sid, text in written.items():
                 if sid in texts and sid not in ("references", "appendix") and isinstance(text, str) and text.strip():
-                    texts[sid] = text.strip()
+                    text, k = _checked(text.strip(), pool, ws.brief.problem)
+                    dropped += k
+                    if not text:
+                        continue    # nothing survived the check: the template's text stands
+                    texts[sid] = text
                     written_by[sid] = "model"
                     n += 1
             prose_by = "model"
-            ws.event("author", "prose", f"model wrote {n} section(s)" + (" after the Critic's fixes" if issues else ""))
+            ws.event("author", "prose", f"model wrote {n} section(s)" + (" after the Critic's fixes" if issues else "")
+                     + (f"; {dropped} sentence(s) dropped by the checks" if dropped else ""))
         else:
             ws.event("author", "template", "the model gave no usable prose; template prose stands")
+    elif issues:
+        # Keyless, the template's own repair: the sentences whose numbers or years the checks refuse are dropped,
+        # and every failed check is listed under what the study does not establish either way.
+        names = sorted({str(i.get("check")) for i in issues if i.get("check")})
+        if {"numbers_come_from_tools", "years_traceable"} & set(names):
+            pool = tool_results(ws)
+            text, k = _checked(answer, pool, ws.brief.problem)
+            dropped += k
+            if text:
+                answer = text
+            for sid in list(texts):
+                if sid in ("references", "appendix"):
+                    continue
+                text, k = _checked(texts[sid], pool, ws.brief.problem)
+                dropped += k
+                if text:
+                    texts[sid] = text
+        what = ", ".join(names) or "the Critic's issues"
+        ws.event("author", "template", f"template repair for {what}: {dropped} sentence(s) dropped")
     else:
         ws.event("author", "template", f"{len(texts)} section(s) from the template")
+    if dropped:
+        ws.event("critic", "dropped", f"{dropped} sentence(s) quoted numbers or years in no result")
+    dropped += before
+    findings = ws.findings or {}
     report = {
         "title": title,
         "answer": answer,
+        "grade": (findings.get("decision") or {}).get("grade"),
+        "decision": findings.get("decision"),
+        "findings": findings.get("findings") or [],
+        "data_requests": findings.get("data_requests") or [],
         "key_numbers": key,
         "sections": _section_list(ws, texts, results),
         "not_established": missing,
@@ -793,9 +1074,11 @@ def author_report(ws: Workspace, model: Model | None, *, issues: list[dict[str, 
         "references": refs,
         "caveats": list(plan.get("caveats") or []),
         "written_by": written_by,
+        "dropped": dropped,
         "footer": {
             "model": ws.model, "provider": ws.provider, "prose": prose_by,
             "tokens": {k: dict(v) for k, v in ws.ledger.items()}, "total_tokens": ws.tokens,
+            "total_usd": ws.total_usd, "budget": dict(ws.budget) if ws.budget else None, "dropped": dropped,
             "aquascope_version": __version__,
             "date": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "workspace": ws.id,
             "plan_author": plan.get("author") or study.author,
@@ -804,6 +1087,26 @@ def author_report(ws: Workspace, model: Model | None, *, issues: list[dict[str, 
     }
     ws.report = report
     return report
+
+
+def _with_decision(ws: Workspace, answer: str) -> str:
+    """The answer with the decision's value and grade in front when the prose does not carry them: the grade
+    is the engine's verdict, and it is not the model's to leave out (#418)."""
+    from aquascope.ai_engine.verify import _numbers, normalise
+    from aquascope.studio.roles.interpreter import decision_text
+
+    decision = (ws.findings or {}).get("decision") or {}
+    if not decision.get("answer"):
+        return answer
+    value, grade = decision.get("value"), str(decision.get("grade") or "")
+    text = normalise(answer)
+    has_grade = bool(grade) and grade.replace("_", " ") in text.lower()
+    has_value = not isinstance(value, (int, float)) or isinstance(value, bool) or any(
+        abs(n - float(value)) <= max(abs(float(value)), 1e-9) * 0.02 + 1e-9
+        for n in _numbers(text, claims_only=True) + _numbers(text))
+    if has_grade and has_value:
+        return answer
+    return f"{decision_text(decision)} {answer}".strip()
 
 
 def _bullets(text: str) -> list[str]:
@@ -815,6 +1118,42 @@ def _bullets(text: str) -> list[str]:
 
 
 # ── prose from a caller's own model ─────────────────────────────────────────
+
+
+def _interval_claim_supported(sentence: str, results: list[dict[str, Any]]) -> bool:
+    """A model's numeric flood interval must name its estimator and match one fitted result.
+
+    Merely finding all numbers somewhere in the tool output cannot establish this
+    relationship. Ambiguous interval prose is dropped; the structured result remains.
+    """
+    from aquascope.studio.roles.interpreter import _claimed_numbers, _close
+
+    fits = [(r.get("payload") or {}).get("ffa", {}).get("fits", {}) for r in results
+            if isinstance(r.get("payload"), dict) and isinstance(r["payload"].get("ffa"), dict)]
+    if not fits or not re.search(r"\b(band|interval|bounds|CI)\b", sentence, re.I):
+        return True
+    numbers = _claimed_numbers(sentence)
+    if not numbers:
+        return True
+    if re.search(r"L[ -]moments?", sentence, re.I):
+        name = "gev_lmoments"
+    elif re.search(r"\bLP3\b|log[ -]pearson", sentence, re.I):
+        name = "lp3"
+    elif re.search(r"\bMLE\b|maximum[ -]likelihood|bootstrap", sentence, re.I):
+        name = "gev_bootstrap"
+    else:
+        return False
+    levels = [float(p) / 100 for p in re.findall(r"(\d+(?:\.\d+)?)\s*%", sentence)]
+    for candidates in fits:
+        fit = candidates.get(name) or {}
+        if levels and (fit.get("ci_level") is None or any(not _close(p, fit["ci_level"]) for p in levels)):
+            continue
+        for point, bounds in zip(fit.get("q") or [], fit.get("ci") or []):
+            if (isinstance(bounds, (list, tuple)) and len(bounds) == 2
+                    and all(isinstance(v, (float, int)) for v in [point, *bounds])
+                    and all(any(_close(v, n) for n in numbers) for v in [point, *bounds])):
+                return True
+    return False
 
 
 def _checked(text: str, results: list[dict[str, Any]], question: str) -> tuple[str, int]:
@@ -836,7 +1175,7 @@ def _checked(text: str, results: list[dict[str, Any]], question: str) -> tuple[s
                 continue
             v = verify(sentence, results, question=question)
             bad = [c for c in v.failed if c.name in ("numbers_come_from_tools", "years_traceable")]
-            if bad:
+            if bad or not _interval_claim_supported(sentence, results):
                 dropped += 1
                 continue
             kept.append(sentence.strip())
@@ -873,7 +1212,7 @@ def narrate(ws: Workspace, sections: dict[str, str], *, source: str = "device") 
             ignored.append(sid)
             continue
         if sid == "answer":
-            report["answer"] = new_text
+            report["answer"] = _with_decision(ws, new_text)
         else:
             by_id[sid]["text"] = new_text
             if sid == "recommendations":
@@ -881,7 +1220,11 @@ def narrate(ws: Workspace, sections: dict[str, str], *, source: str = "device") 
         written_by[sid] = source
         written.append(sid)
     report["written_by"] = written_by
-    report.setdefault("footer", {})["written_by"] = written_by
+    report["dropped"] = int(report.get("dropped") or 0) + dropped
+    footer = report.get("footer")
+    if isinstance(footer, dict):
+        footer["written_by"] = written_by
+        footer["dropped"] = report["dropped"]
     ws.event("author", "narrated", f"{source} wrote {len(written)} section(s)"
              + (f", {dropped} sentence(s) dropped" if dropped else "")
              + (f", ignored {', '.join(ignored)}" if ignored else ""))
@@ -908,8 +1251,25 @@ def to_markdown(ws: Workspace) -> str:
             a = by_id.get(tid)
             if a is not None:
                 lines += [f"Table: {a.caption or a.id} ({a.name})", ""]
-    f = r.get("footer") or {}
-    who = (f"model {f.get('model')} via {f.get('provider')}" if f.get("model")
+    lines += ["---", footer_line(ws)]
+    return "\n".join(lines) + "\n"
+
+
+def _usd(x: float) -> str:
+    return f"{x:.2f} USD" if x >= 0.1 else f"{x:.4f} USD"
+
+
+def footer_line(ws: Workspace) -> str:
+    """The one line under every document: who produced the report and who wrote which part, the ledger in
+    calls, tokens and USD, the spend ceiling when it was reached, the sentences the checks dropped, and the
+    honesty sentence. A footer that is already a string (an older workspace) is returned as it is."""
+    r = ws.report or {}
+    f = r.get("footer")
+    if isinstance(f, str):
+        return f
+    f = f if isinstance(f, dict) else {}
+    model, provider = f.get("model", ws.model), f.get("provider", ws.provider)
+    who = (f"model {model} via {provider}" if model
            else "no model: the playbook tree filled the plan and a template wrote the prose")
     by: dict[str, list[str]] = {}
     for sid, src in (f.get("written_by") or r.get("written_by") or {}).items():
@@ -917,13 +1277,25 @@ def to_markdown(ws: Workspace) -> str:
             by.setdefault(str(src), []).append(str(sid))
     if by:
         who += "; " + "; ".join(f"{src} wrote {', '.join(ids)}" for src, ids in by.items())
-    lines += ["---", f"Produced by aquascope {f.get('aquascope_version', __version__)} (`aquascope studio`), "
-              f"plan by {f.get('plan_author') or 'playbook'}, {who}, {f.get('date', '')}. "
-              f"Model calls: {sum(v.get('calls', 0) for v in (f.get('tokens') or {}).values())}"
-              + (f" ({f.get('total_tokens')} tokens)" if f.get("total_tokens") else "") + ". "
-              "Numbers come from the tool results and were checked by the gates and the Critic; the study file "
-              "re-runs the same steps with `aquascope run`."]
-    return "\n".join(lines) + "\n"
+    ledger = f.get("tokens") if isinstance(f.get("tokens"), dict) else ws.ledger
+    calls = sum(int(v.get("calls", 0)) for v in ledger.values() if isinstance(v, dict))
+    tokens = f.get("total_tokens") if f.get("total_tokens") is not None else ws.tokens
+    usd = f.get("total_usd") if "total_usd" in f else ws.total_usd
+    spend = (f" ({tokens} tokens" + (f", {_usd(float(usd))}" if usd is not None else "") + ")") if tokens else ""
+    parts = [f"Produced by aquascope {f.get('aquascope_version', __version__)} (`aquascope studio`), "
+             f"plan by {f.get('plan_author') or 'playbook'}, {who}, {f.get('date', '')}. "
+             f"Model calls: {calls}{spend}."]
+    budget = f.get("budget") if isinstance(f.get("budget"), dict) else ws.budget
+    if budget:
+        parts.append(f"The spend ceiling of {_usd(float(budget.get('max_usd') or 0))} was reached "
+                     f"({_usd(float(budget.get('spent_usd') or 0))} after the {budget.get('role')}'s call); the roles "
+                     "ran keyless from there.")
+    dropped = f.get("dropped") if f.get("dropped") is not None else r.get("dropped")
+    if dropped:
+        parts.append(f"{dropped} sentence(s) were dropped by the checks: their numbers were in no result.")
+    parts.append("Numbers come from the tool results and were checked by the gates and the Critic; the study file "
+                 "re-runs the same steps with `aquascope run`.")
+    return " ".join(parts)
 
 
 def report_json(ws: Workspace) -> str:

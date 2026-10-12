@@ -3,7 +3,7 @@
 ## General
 
 ### What is AquaScope?
-AquaScope is an open-source water data aggregation toolkit with AI-powered research methodology recommendations. It collects water-quality and hydrology data from 10 global sources, normalises them into unified schemas, and uses an AI engine to recommend and auto-execute research methodologies.
+AquaScope is an open-source water data aggregation toolkit with AI-powered research methodology recommendations. It collects water-quality and hydrology data from 37 global sources, normalises them into unified schemas, and uses an AI engine to recommend and auto-execute research methodologies.
 
 ### Who is AquaScope for?
 - **Hydrologists** — flow analysis, flood forecasting, baseflow separation

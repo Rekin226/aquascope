@@ -158,10 +158,10 @@ def test_export_end_to_end_with_fakes(tmp_path, monkeypatch):
     cara = pd.read_csv(tmp_path / "attributes" / prefix / f"attributes_caravan_{prefix}.csv", index_col="gauge_id")
     for c in caravan.CARAVAN_INDEX_REQUIRED:
         assert c in cara.columns
-    prov = json.loads((tmp_path / "provenance.json").read_text())
+    prov = json.loads((tmp_path / "provenance.json").read_text(encoding="utf-8"))
     sub = prov["subdatasets"][prefix]
     assert sub["n_gauges"] == 1 and sub["forcing"]["models"] == "best_match"
-    assert (tmp_path / "licenses" / f"{prefix}.md").read_text().count("CC BY 4.0") >= 1
+    assert (tmp_path / "licenses" / f"{prefix}.md").read_text(encoding="utf-8").count("CC BY 4.0") >= 1
 
     res = caravan.validate_caravan(tmp_path, prefix)
     assert res["ok"], res["problems"]

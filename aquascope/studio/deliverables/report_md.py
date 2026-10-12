@@ -1,4 +1,10 @@
-"""The Markdown and HTML reports of a study, through :class:`aquascope.reporting.builder.ReportBuilder`.
+"""The Markdown and HTML documents of a study.
+
+:func:`report_markdown`, :func:`report_html` and :func:`memo_html` render the
+documents :mod:`aquascope.studio.document` composes. :func:`builder_for` is
+the older run-log view through :class:`aquascope.reporting.builder.ReportBuilder`,
+kept for callers that want every section the Author wrote, step by step.
+
 
 Figures are referenced by their bundle path (``figures/...``) in Markdown and
 embedded as data URIs in HTML, so ``report.html`` stands alone; tables come
@@ -88,7 +94,9 @@ def builder_for(ws: Workspace) -> ReportBuilder:
             if fig is not None:
                 rb.add_figure(fig.name, caption=fig.caption or "")
         for tid in block["tables"]:
-            tab = c.table_artifact(ws, tid)
+            tab, pointer = c.prose_table(ws, tid)
+            if pointer:
+                rb.add_paragraph(f"*{pointer}*")
             if tab is None:
                 continue
             try:
@@ -97,7 +105,8 @@ def builder_for(ws: Workspace) -> ReportBuilder:
                 rb.add_dataframe(df, caption=tab.caption or tab.id, max_rows=MAX_TABLE_ROWS)
             except Exception:  # noqa: BLE001 - a table that will not parse is named, not fatal
                 rb.add_paragraph(f"*Table {tab.id} could not be rendered.*")
-    rb.add_software_citation()
+    rb.add_heading("Cite this software", level=2)
+    rb.add_paragraph(c.citation())
     footer = c.footer_of(ws)
     if footer:
         rb.add_separator()
@@ -105,11 +114,33 @@ def builder_for(ws: Workspace) -> ReportBuilder:
     return rb
 
 
+def house_style(ws: Workspace) -> Any:
+    """The workspace's :class:`~aquascope.studio.document.HouseStyle` (the default when none was set)."""
+    from aquascope.studio.document import HouseStyle
+
+    return HouseStyle.from_dict(ws.house_style)
+
+
 def report_markdown(ws: Workspace) -> str:
-    """``report.md``: figures as relative ``figures/...`` paths, tables as Markdown tables (50 rows at most)."""
-    return builder_for(ws)._render_markdown()
+    """``report.md``: the technical report (:func:`aquascope.studio.document.build_report`) in Markdown, figures
+    as relative ``figures/...`` paths."""
+    from aquascope.studio.document import build_report, render_markdown
+
+    return render_markdown(build_report(ws, house_style(ws)))
 
 
 def report_html(ws: Workspace, *, style: str = "default") -> str:
-    """``report.html``: self-contained, the figures embedded as data URIs."""
-    return builder_for(ws)._render_html(style)
+    """``report.html``: the technical report as one self-contained page that prints to A4. ``style`` is kept for
+    callers of the older builder; the look comes from the workspace's house style."""
+    from aquascope.studio.document import build_report, render_html
+
+    hs = house_style(ws)
+    return render_html(build_report(ws, hs), hs)
+
+
+def memo_html(ws: Workspace) -> str:
+    """``memo.html``: the technical memorandum as one self-contained page."""
+    from aquascope.studio.document import build_memo, render_html
+
+    hs = house_style(ws)
+    return render_html(build_memo(ws, hs), hs)

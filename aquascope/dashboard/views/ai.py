@@ -6,6 +6,7 @@ import logging
 
 import streamlit as st
 
+from aquascope.ai_engine.knowledge_base import METHODOLOGIES
 from aquascope.dashboard import _state
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ def render() -> None:
     st.title("🤖 AI Methodology Recommender")
     st.markdown(
         "Get research-methodology recommendations matched to your dataset's profile — "
-        "26 methodologies scored by parameter mix, record count, spatial and temporal coverage."
+        f"{len(METHODOLOGIES)} methodologies scored by parameter mix, record count, spatial and temporal coverage."
     )
 
     llm_config = _render_llm_config()

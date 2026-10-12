@@ -20,37 +20,47 @@
  "error": null,
  "model": "claude-sonnet-5",
  "provider": "anthropic",
- "recorded": "2026-09-07T14:21:50+00:00",
- "seconds": 251.3,
+ "recorded": "2026-09-14T22:24:15+00:00",
+ "seconds": 255.8,
  "tokens": {
-  "prompt": 39339,
-  "completion": 21109,
-  "calls": 5,
+  "prompt": 48542,
+  "completion": 22246,
+  "calls": 7,
   "by_role": {
    "consultant": {
     "calls": 1,
-    "prompt_tokens": 3210,
-    "completion_tokens": 839
+    "prompt_tokens": 3209,
+    "completion_tokens": 465,
+    "cost_usd": 0.011068
    },
    "methodologist": {
     "calls": 1,
-    "prompt_tokens": 8344,
-    "completion_tokens": 7626
+    "prompt_tokens": 10319,
+    "completion_tokens": 1965,
+    "cost_usd": 0.040288
+   },
+   "interpreter": {
+    "calls": 1,
+    "prompt_tokens": 4596,
+    "completion_tokens": 3577,
+    "cost_usd": 0.044962
    },
    "author": {
     "calls": 2,
-    "prompt_tokens": 19811,
-    "completion_tokens": 8898
+    "prompt_tokens": 17830,
+    "completion_tokens": 8165,
+    "cost_usd": 0.11731
    },
    "critic": {
-    "calls": 1,
-    "prompt_tokens": 7974,
-    "completion_tokens": 3746
+    "calls": 2,
+    "prompt_tokens": 12588,
+    "completion_tokens": 8074,
+    "cost_usd": 0.105916
    }
   },
-  "total": 60448
+  "total": 70788
  },
- "usd": 0.4347,
+ "usd": 0.4793,
  "usd_per_mtoken": [
   3.0,
   15.0
@@ -58,50 +68,40 @@
  "playbook": "water_quality",
  "branch": null,
  "plan_author": "methodologist",
- "steps": 4,
+ "steps": 3,
  "gates": {
-  "passed": 6,
-  "total": 6
+  "passed": 4,
+  "total": 4
  },
  "checks": {
-  "passed": 4,
-  "total": 5
+  "passed": 7,
+  "total": 7
  },
  "replans": 0,
  "stop_reason": null,
- "headline": "Over 2021-09-07 to 2026-09-06, USGS-01646500 (Potomac River near Wash DC, Little Falls Pump Sta) yielded 5,366 water-quality samples across three parameters.",
- "not_established": [
-  "step s4: method 'iwqi' is not one wqi applies; 'water_quality_index' stands in",
-  "These numbers are not in any tool result: -10.0, -100.0."
- ],
+ "headline": "Risk screening: CCME WQI = 100 of 100 (Excellent), graded established, computed from the USGS-01646500 Potomac River near Wash DC Little Falls Pump Sta daily record (2021-09-14 to 2026-09-13).",
+ "not_established": [],
  "figures": [
   {
    "name": "s1_samples_by_parameter.png",
    "id": "fig-s1-samples_by_parameter",
    "step": "s1",
    "caption": "Distribution of the sampled values per parameter at POTOMAC RIVER NEAR WASH, DC LITTLE FALLS PUMP STA (usgs USGS-01646500) (5366 samples, 2021 to 2026): box is the interquartile range, the line the median, points beyond 1.5 IQR shown singly.",
-   "bytes": 46363
+   "bytes": 46108
   },
   {
    "name": "s2_who_exceedances.png",
    "id": "fig-s2-who_exceedances",
    "step": "s2",
    "caption": "Share of samples outside the WHO drinking-water guideline per parameter; red is an alert (over 10 %), orange a warning (any exceedance), green within the guideline.",
-   "bytes": 24742
+   "bytes": 26354
   },
   {
    "name": "s3_wqi_bars.png",
    "id": "fig-s3-wqi_bars",
    "step": "s3",
    "caption": "CCME WQI of 100 (Excellent) over 1788 samples against the drinking guidelines; the CCME factors are the scope, frequency and amplitude of the exceedances.",
-   "bytes": 37982
-  },
-  {
-   "name": "s4_wqi_bars.png",
-   "id": "fig-s4-wqi_bars",
-   "step": "s4",
-   "caption": "CCME WQI of 100 (Excellent) over 1778 samples against the irrigation guidelines; the CCME factors are the scope, frequency and amplitude of the exceedances.",
-   "bytes": 38218
+   "bytes": 39338
   }
  ],
  "files": [
@@ -110,9 +110,8 @@
   "study.yaml",
   "figures/s1_samples_by_parameter.png",
   "figures/s2_who_exceedances.png",
-  "figures/s3_wqi_bars.png",
-  "figures/s4_wqi_bars.png"
+  "figures/s3_wqi_bars.png"
  ],
  "trimmed": [],
- "aquascope_version": "0.14.0"
+ "aquascope_version": "0.16.0"
 }

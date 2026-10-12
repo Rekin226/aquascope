@@ -398,10 +398,23 @@ def _prune(steps: list[dict[str, Any]], ws: Workspace) -> tuple[list[dict[str, A
         if not errors:
             break
         bad: dict[str, str] = {}
+        only_fallback: dict[str, str] = {}
         for e in errors:
             m = _STEP_IN_ERROR.match(e)
-            if m:
+            if not m:
+                continue
+            if e.startswith("fallback of "):
+                only_fallback.setdefault(m.group(1), e)
+            else:
                 bad.setdefault(m.group(1), e)
+        # A step whose only fault is its fallback keeps its place and loses the fallback (#413).
+        stripped = {sid: e for sid, e in only_fallback.items() if sid not in bad}
+        for st in kept:
+            if str(st.get("id")) in stripped and st.get("fallback") is not None:
+                st.pop("fallback", None)
+                notes.append(f"step {st.get('id')}: fallback dropped: {stripped[str(st.get('id'))]}")
+        if stripped and not bad:
+            continue
         if not bad:
             return [], notes + errors
         notes += [f"step {sid} removed: {reason}" for sid, reason in bad.items()]
@@ -558,10 +571,41 @@ def _playbook_rule_decline(ws: Workspace) -> str | None:
 
 
 def _decline(ws: Workspace, reason: str) -> None:
+    """Decline, unless the reason is data the user could bring: then the study waits for it (#419)."""
+    from aquascope.studio.requests import data_request_for
+
+    request = data_request_for(ws, reason)
+    if request is not None and not ws.brief.intake.get("_no_request"):
+        _wait(ws, request)
+        return
     ws.declined_reason = reason
     ws.set_status("declined")
     ws.event("methodologist", "declined", reason)
     ws.say("methodologist", f"Declined: {reason}", kind="declined", payload={"reason": reason})
+
+
+def _wait(ws: Workspace, request: dict[str, Any]) -> None:
+    """Park the study at ``waiting`` with the request the Consultant relays to the user."""
+    ws.pending_request = request
+    ws.set_status("waiting")
+    ws.event("methodologist", "data_request", str(request.get("what")))
+    text = request_text(request)
+    ws.say("consultant", text, kind="data_request", payload=request)
+
+
+def request_text(request: dict[str, Any]) -> str:
+    """The request as the Consultant says it."""
+    if request.get("kind") == "gauge":
+        options = [g["label"] for g in request.get("gauges") or []] + [request.get("keep") or "Keep this gauge"]
+        return "\n".join([str(request.get("ask")), f"({request.get('why')})",
+                          *[f"  {i}. {o}" for i, o in enumerate(options, 1)]])
+    lines = [f"Before this can be planned, the crew needs {request.get('what')}.",
+             f"Why: {request.get('why')}.", f"What it changes: {request.get('effect')}."]
+    if request.get("can_continue"):
+        lines.append("Drop the table in, or say \"continue without\" to go on at the lower grade.")
+    else:
+        lines.append("Drop the table in; without it the study cannot answer this brief.")
+    return " ".join(lines)
 
 
 def _announce(ws: Workspace, study: Study) -> None:
@@ -1045,8 +1089,12 @@ def _rule_steps(ws: Workspace, request: str, study: Study) -> tuple[list[dict[st
             if st is None:
                 reasons.append(f"no {variable} gauge for a trend test")
                 continue
+            from aquascope.trend_series import is_flood_question
+
+            series = ("annual maxima" if is_flood_question(ws.brief.kind, ws.brief.problem, ws.brief.playbook)
+                      else "annual means")
             add("analyze_station", {"source": st.source, "station_id": st.station_id},
-                f"Mann-Kendall trend test with Sen's slope on the annual means at {st.name or st.station_id}.",
+                f"Mann-Kendall trend test with Sen's slope on the {series} at {st.name or st.station_id}.",
                 [{"check": "not_empty", "path": "trend"}], method="trend_mann_kendall")
         elif rule == "drought":
             if site.get("lat") is None:

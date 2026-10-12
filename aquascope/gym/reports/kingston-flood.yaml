@@ -1,0 +1,58 @@
+# HydroGym report-quality reference (#382); the authoring rules are in _authoring.yaml.
+# Recorded 2026-09-15 on the engineer-in-the-middle crew (#411). The at-site fits stand on 142.9 years; the GloFAS
+# cross-check (step s4) ran and its ratio gate failed, because the Open-Meteo grid cell drains a small tributary
+# (14.77 m3/s at T = 100 against 652.5 at the gauge). A faithful report quotes the at-site numbers with their
+# band and grade, names the failed cross-check in its limitations, and quotes no cross-check number it does not
+# have; the recorded report does all three.
+id: kingston-flood
+study: kingston-flood
+title: Design Q100 at a 143-year gauge with a cross-check that disagrees for a mismatched cell
+rationale: >-
+  GEV (L-moments) gives 652.5 m3/s and Log-Pearson III 624.0 m3/s at T = 100 on 142.9 years of daily discharge,
+  a 4 % spread; the GEV bootstrap band is 565.4 to 723.1 m3/s. The annual maxima carry no trend (the
+  trend_on_series gate on the maxima passed) and the record maximum sits inside the fit (fit_envelopes_max
+  passed), so the answer is graded established. The GloFAS cross-check disagrees by a factor of forty because
+  the grid cell is not the Thames, and the report must say that the cross-check failed rather than let a
+  modelled number stand next to the gauge's.
+tags: [failed_step, flood_risk, cross_check]
+must_say:
+  - kind: number
+    value: 652.5
+    tol: 0.02
+    unit: m3/s
+    label: the GEV (L-moments) Q100
+  - kind: number
+    value: 624.0
+    tol: 0.02
+    unit: m3/s
+    label: the Log-Pearson III Q100
+  - kind: number
+    value: 142.9
+    tol: 0.01
+    unit: years
+    label: the record length
+  - kind: phrase
+    any: ["Mann-Kendall"]
+    label: the trend pre-test is named
+  - kind: phrase
+    any: ["GloFAS", "cross-check", "cross check"]
+    section: limitations
+    label: the failed GloFAS cross-check is named in the limitations
+  - kind: grade
+    grade: established
+    label: the answer carries its grade
+must_not_say:
+  - kind: no_number_near
+    keyword: GloFAS
+    label: no fabricated GloFAS cross-check number
+decision:
+  value: 652.5
+  unit: m3/s
+  tolerance: 0.02
+  grade: established
+findings:
+  decision:
+    grade: established
+    value: 652.5
+    unit: m3/s
+    tolerance: 0.02

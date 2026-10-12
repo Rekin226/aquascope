@@ -1,0 +1,149 @@
+name: Forecast archive
+
+# Now and next (#517). Once a day, for the Archive's discharge gauges with a live record (a mirrored series of
+# ten years or more, topped up with the agency's newest days, and a GEOGLOWS river reach the gauge snaps to):
+#   forecasts/status/latest.parquet   where each gauge's flow sits today against normal (the map colouring)
+#   forecasts/issued/<date>.parquet   the GEOGLOWS and GloFAS forecasts as issued, raw and corrected to the gauge
+#   forecasts/reaches.parquet         each gauge's reach, snapped once
+#   forecasts/manifest.json           every issue, and what was dropped and why
+# Then, from those files, the per-gauge Atom feeds (#521):
+#   feeds/<source>/<station_id>.xml   one feed per gauge in the status snapshot (status changes, forecast alerts)
+#   feeds/index.json, feeds/state.parquet
+# It writes ONLY under forecasts/ and feeds/ in the Archive dataset; the catalogue and the observations are never
+# touched. Same HF_TOKEN secret as the harvest. Locally: python -m aquascope.archive.forecasts run --out build,
+# then python -m aquascope.archive.feeds run --out build
+
+on:
+  schedule:
+    # Daily 06:41 UTC. GEOGLOWS's newest run is then usually the previous day's 00 UTC one (checked 2026-10-08:
+    # at 11:00 UTC the newest started at 00 UTC the day before); each row keeps the run's own init_date.
+    - cron: "41 6 * * *"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to the Hugging Face dataset"
+        type: boolean
+        default: true
+      max_items:
+        description: "Gauges looked at, for a smoke run that never publishes (empty = all)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: forecast-archive
+  cancel-in-progress: false
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_DATASET: Rekin226/aquascope-gauges
+      # Optional, as in the harvest: raises the keyless USGS rate limit for the daily top-up.
+      USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
+    steps:
+      - name: Note when the job started (its health record's duration)
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install aquascope with the archive extra
+        run: python -m pip install -q ".[archive]"
+
+      # The cap and the time budget keep the job inside free runner time; gauges past either are counted, by
+      # reason, under "dropped" in forecasts/manifest.json and in the summary below.
+      - name: Status snapshot and today's forecast issue
+        env:
+          HF_HUB_DISABLE_PROGRESS_BARS: "1"
+          MAX_ITEMS: ${{ inputs.max_items }}
+        run: |
+          ARGS="--out build --max-gauges 250 --workers 4 --time-budget-min 75"
+          if [ -n "$MAX_ITEMS" ]; then
+            case "$MAX_ITEMS" in *[!0-9]*) echo "::error::max_items must be a whole number"; exit 1;; esac
+            ARGS="$ARGS --max-items $MAX_ITEMS"
+          fi
+          python -m aquascope.archive.forecasts run $ARGS
+
+      - name: Summary
+        if: always()
+        run: |
+          python - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          p = pathlib.Path("build/forecasts/manifest.json")
+          if not p.exists():
+              print("## Forecast archive\n\nno manifest written (the run stopped early)")
+              raise SystemExit
+          m = json.loads(p.read_text())
+          s, i = m["status"], m["issues"][-1]
+          print(f"## Forecast archive {i['date']}\n")
+          print(f"**Status snapshot:** {s['n']} gauges from {', '.join(s['sources']) or 'no source'}; {s['counts']}\n")
+          print(f"**Issued:** {i['n_gauges']} gauges, {i['n_rows']} rows, in {i['seconds']} s\n")
+          print("| dropped because | gauges |\n| --- | ---: |")
+          for why, n in i["dropped"].items():
+              print(f"| {why} | {n} |")
+          EOF
+
+      # A smoke run (max_items set) never publishes: its few gauges would replace the day's snapshot.
+      - name: Publish forecasts/ to Hugging Face
+        id: publish
+        if: env.HF_TOKEN != '' && inputs.max_items == '' && (github.event_name == 'schedule' || inputs.publish == true)
+        run: python -m aquascope.archive.forecasts publish --out build
+
+      # Feeds read the snapshot and the issue the step above wrote, and the entries already published.
+      - name: Per-gauge Atom feeds
+        if: hashFiles('build/forecasts/status/latest.parquet') != ''
+        env:
+          HF_HUB_DISABLE_PROGRESS_BARS: "1"
+        run: python -m aquascope.archive.feeds run --out build
+
+      - name: Publish feeds/ to Hugging Face
+        id: publish_feeds
+        if: env.HF_TOKEN != '' && inputs.max_items == '' && (github.event_name == 'schedule' || inputs.publish == true) && hashFiles('build/feeds/index.json') != ''
+        run: python -m aquascope.archive.feeds publish --out build
+
+      - name: Say why a smoke run was not published
+        if: inputs.max_items != ''
+        run: echo "::notice::A smoke run (max_items set) builds and summarises but does not publish."
+
+      - name: Warn when HF_TOKEN is missing
+        if: always() && env.HF_TOKEN == '' && github.event_name == 'schedule'
+        run: |
+          echo "::error::HF_TOKEN is not set, so the forecast archive ran but published nothing. Set the \
+          repository secret HF_TOKEN to a Hugging Face token with write access to $HF_DATASET."
+          exit 1
+
+      - name: Upload the run as an artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forecasts-${{ github.run_id }}
+          path: build/
+          retention-days: 7
+
+      # Job health (#593): health/jobs/forecast-archive.json and health/jobs/index.json, written only under
+      # health/jobs/, and one job-health issue, opened or updated when a scheduled run fails and closed by the next
+      # good one. It runs whether the job passed or not, needs only the standard library to record and to file the
+      # issue, and never turns the job red itself. A smoke run's record stays in the job summary.
+      - name: Job health
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PUBLISH: ${{ env.HF_TOKEN != '' && inputs.max_items == '' && (github.event_name == 'schedule' || inputs.publish == true) }}
+          ISSUE: ${{ github.event_name == 'schedule' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 .github/scripts/job_health.py report forecast-archive --root build --status "${{ job.status }}" \
+            --require "publish=${{ steps.publish.outcome }}" --require "feeds=${{ steps.publish_feeds.outcome }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" --publish "$PUBLISH" --issue "$ISSUE"

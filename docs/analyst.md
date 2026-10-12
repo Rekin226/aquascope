@@ -151,10 +151,9 @@ $ aquascope assess 51.4150 -0.3080 --problem flood_risk --return-period 100
 
   notes
     - Record resolution is not in the catalog; daily is assumed for every variable.
-    - The catalog lists Kingston (uk_ea/8496ce69-482c-406a-a2f0-ac418ef8f099) from 1883-10-01 (142.9 yr); a default fetch serves the last 40 years, so a computed answer covers fewer years than this span.
     - 10 donor gauges from a pool of 37,053 gauged catchments.
     - ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land (Open-Meteo); not checked here.
-    - CMIP6 change factors need model output you supply (aquascope.climate works on downloaded data); not counted.
+    - CMIP6 change factors: seven HighResMIP models through the Open-Meteo Climate API (1950-2050, one high-emission pathway), assumed reachable; not checked here.
 ```
 
 The same point with a 12-year record would put the 100-year flood in
@@ -169,8 +168,9 @@ GloFAS cross-check. `--radius-km` sets how far a gauge may be to count
 `catchment`, `context` (years per variable, area, donors, what else is
 available), `sufficiency` (one row per method, with the station it would
 use) and `notes`. The notes are the honest part: the catalog does not record
-resolution, so daily is assumed and said; a fetch serves the last 40 years
-whatever the span; a source that publishes only the last month is named.
+resolution, so daily is assumed and said; a station whose catalog span is
+suspiciously short is flagged; a source that publishes only the last month is
+named.
 
 ## Level 3: code, checks and a study you can run again
 

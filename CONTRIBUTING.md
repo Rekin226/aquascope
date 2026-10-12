@@ -7,6 +7,7 @@ Thank you for your interest in contributing to AquaScope! This project aims to b
 - Browse issues labeled [`good first issue`](https://github.com/Rekin226/aquascope/labels/good%20first%20issue) — these are scoped, self-contained, and have clear acceptance criteria.
 - Want to add your country's water data? See the pinned [**Data sources wanted**](https://github.com/Rekin226/aquascope/issues/11) meta-issue.
 - **To claim an issue**, just comment on it (e.g. "I'd like to work on this"). A maintainer will assign it to you — outside contributors can't self-assign, so the comment is how we hand it over. This avoids two people doing the same work.
+- **If a claim goes quiet for about three weeks** with no push and no update, we put the issue back on the board so someone else can pick it up. No hard feelings, life happens: comment again and it's yours back. If you know you'll be slow, just say so on the issue and we'll leave it with you.
 
 ### The contributor ladder
 
@@ -74,6 +75,28 @@ Example Jupyter notebooks in `notebooks/` help new users get started. Contributi
 ### 5. Fix Bugs / Improve Docs
 
 Bug fixes and documentation improvements are always welcome.
+
+### 6. Write a Reference Plan or Reference Findings (no code needed)
+
+The benchmark suite under `aquascope/gym/` is scored against plans a hydrologist
+would actually write. Each case is one YAML file: the client's brief, the site,
+the steps you would take, the gates that protect each number, what is not
+defensible here, and why. `aquascope/gym/plans/_authoring.yaml` documents every
+key, and the 25 existing cases are worked examples. The same goes for reference
+findings under `aquascope/gym/reports/`.
+
+This needs domain judgement, not Python: no environment, no CI, no tests. If you
+know a basin, a plan for it is a genuinely valuable contribution, and cases
+outside the US, UK and France are the ones the suite most needs. Reference
+authors are credited in the suite's archival record.
+
+### 7. Verify a Source's Licence or Quality Vocabulary (no code needed)
+
+Some of our sources are still marked `unknown` for licence, and most agencies
+publish a quality or approval flag on each observation that we do not yet read.
+Working out what an agency actually says, and writing it down, is a real
+contribution and a good way to get to know a data source before adopting its
+collector. See #207 and the evidence-layer epic #377.
 
 ## Development Setup
 

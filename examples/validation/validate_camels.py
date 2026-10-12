@@ -30,7 +30,8 @@ from aquascope.hydrology.signatures import compute_signatures
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 BENCHMARK_DIR = ROOT / "data" / "camels_benchmark"
-CATCHMENTS_FILE = BENCHMARK_DIR / "catchments.json"
+DAILY_DIR = BENCHMARK_DIR / "daily"
+DAILY_CATCHMENTS_FILE = BENCHMARK_DIR / "daily_catchments.json"
 OUTPUT_CSV = pathlib.Path(__file__).resolve().parent / "validation_results.csv"
 
 TOLERANCE_PCT = 0.25  # ±25 % relative tolerance for synthetic data
@@ -43,7 +44,7 @@ BFI_ABS_TOL = 0.15  # absolute tolerance for baseflow index
 
 def _load_catchments() -> list[dict]:
     """Load benchmark catchment metadata."""
-    with open(CATCHMENTS_FILE) as f:
+    with open(DAILY_CATCHMENTS_FILE) as f:
         return json.load(f)
 
 
@@ -57,7 +58,7 @@ def _load_timeseries(gauge_id: str) -> tuple[pd.Series, pd.Series]:
     precipitation:
         Daily precipitation (mm) with DatetimeIndex.
     """
-    csv_path = BENCHMARK_DIR / f"{gauge_id}.csv"
+    csv_path = DAILY_DIR / f"{gauge_id}_daily.csv"
     df = pd.read_csv(csv_path, parse_dates=["date"])
     df = df.set_index("date")
     discharge = df["discharge_cms"]

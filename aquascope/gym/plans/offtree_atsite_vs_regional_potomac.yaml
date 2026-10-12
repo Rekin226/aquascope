@@ -32,7 +32,7 @@ steps:
   - tool: flood_frequency
     method: at_site_flood_frequency
     gates:
-      - {check: max_return_period_factor, path: years}
+      - {check: max_return_period_factor, path: ffa.n_years}
       - {check: ci_finite, path: ffa.fits.gev_bootstrap.ci}
       - {check: spread_within, path: "ffa.fits.gev_lmoments.q, ffa.fits.lp3.q"}
   - tool: similar_basins

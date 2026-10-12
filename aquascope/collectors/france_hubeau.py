@@ -145,6 +145,7 @@ class HubeauHydrometrieCollector(BaseCollector):
                     Station(
                         source="hubeau_hydrometrie",
                         station_id=str(code),
+                        site_id=str(rec.get("code_site") or str(code)[:8]),
                         name=rec.get("libelle_station") or rec.get("libelle_site"),
                         latitude=lat,
                         longitude=lon,

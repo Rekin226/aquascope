@@ -3,9 +3,12 @@
 Provides writers for the US Army Corps of Engineers Hydrologic Engineering
 Center (HEC) data formats:
 
-- **HEC-DSS CSV** — A CSV representation importable by HEC-DSSVue (the
-  actual DSS binary format requires a proprietary library).
-- **HEC-RAS unsteady flow** — Simplified ``.u##`` files for boundary
+- **HEC-DSS CSV**: a plain CSV listing of DSS records. The DSS binary format
+  itself is open: HEC publishes the ``hecdss`` Python package (MIT licence,
+  https://github.com/HydrologicEngineeringCenter/hec-dss-python), and
+  :mod:`aquascope.io.engineering` writes real ``.dss`` files with it, or the
+  CSV layout ``hecdss`` reads where its native library does not load.
+- **HEC-RAS unsteady flow**: simplified ``.u##`` files for boundary
   conditions.
 
 References

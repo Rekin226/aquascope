@@ -373,7 +373,10 @@ def write_outputs(result: dict[str, Any], out_stem: str | Path) -> dict[str, str
     csv_path = stem.with_suffix(".csv")
     pd.DataFrame({"date": s.index.strftime("%Y-%m-%d %H:%M"), "value": s.values}).to_csv(csv_path, index=False)
     qa_json = stem.with_suffix(".qa.json")
-    qa_json.write_text(json.dumps({"mapping": result["mapping"], "qa": result["qa"]}, indent=2, default=str))
+    qa_json.write_text(
+        json.dumps({"mapping": result["mapping"], "qa": result["qa"]}, indent=2, default=str),
+        encoding="utf-8",
+    )
     m, q = result["mapping"], result["qa"]
     md = [
         f"# Ingest report: {stem.name}", "",

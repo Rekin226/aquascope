@@ -117,7 +117,7 @@ def test_record_writes_the_files_the_meta_and_the_index(tmp_path):
                                                      "meta.json"}
     assert (case_dir / "figures" / "s2_frequency_curve.png").read_bytes() == PNG
     assert not (case_dir / "figures" / "s2_frequency_curve.svg").exists()
-    meta = json.loads((case_dir / "meta.json").read_text())
+    meta = json.loads((case_dir / "meta.json").read_text(encoding="utf-8"))
     assert meta["status"] == "done" and meta["model"] == "claude-sonnet-5" and meta["steps"] == 2
     assert meta["gates"] == {"passed": 2, "total": 3} and meta["checks"] == {"passed": 1, "total": 2}
     assert meta["tokens"] == {"prompt": 50_000, "completion": 5_000, "calls": 2, "total": 55_000,
@@ -132,15 +132,15 @@ def test_record_writes_the_files_the_meta_and_the_index(tmp_path):
     assert meta["figures"][0]["name"] == "s2_frequency_curve.png" and meta["figures"][0]["step"] == "s2"
     assert meta["site"] == {"lat": 51.415, "lon": -0.308, "name": "Thames at Kingston"}
     assert meta["recorded"].endswith("+00:00") and meta["seconds"] >= 0
-    ws = json.loads((case_dir / "workspace.json").read_text())
+    ws = json.loads((case_dir / "workspace.json").read_text(encoding="utf-8"))
     assert ws["status"] == "done" and ws["artifacts"][0].get("data") is None and ws["study"]["version"] == 3
-    assert "520 m3/s" in (case_dir / "report.md").read_text()
-    assert "flood_frequency" in (case_dir / "study.yaml").read_text()
+    assert "520 m³/s" in (case_dir / "report.md").read_text(encoding="utf-8")
+    assert "flood_frequency" in (case_dir / "study.yaml").read_text(encoding="utf-8")
     # the upload travels in the workspace as CSV text
-    ws2 = json.loads((tmp_path / "own-table-flood" / "workspace.json").read_text())
+    ws2 = json.loads((tmp_path / "own-table-flood" / "workspace.json").read_text(encoding="utf-8"))
     assert f"upload:{showcase.TABLE_NAME}" in ws2["tables"] and ws2["tables"][f"upload:{showcase.TABLE_NAME}"]\
         .startswith("date,flow_m3s")
-    index = json.loads((tmp_path / "index.json").read_text())
+    index = json.loads((tmp_path / "index.json").read_text(encoding="utf-8"))
     assert set(index) == {"generated", "aquascope_version", "note", "studies"}
     assert [s["id"] for s in index["studies"]] == ["kingston-flood", "own-table-flood"]
     row = index["studies"][0]
@@ -156,9 +156,9 @@ def test_rerun_skips_fresh_recordings_and_only_forces_them(tmp_path):
     assert len(FakeStudio.made) == 2
     again = record([CASE, OTHER], tmp_path, studio_factory=_factory(), fresh_for_days=30)
     assert again == [] and len(FakeStudio.made) == 2
-    stale = json.loads((tmp_path / "kingston-flood" / "meta.json").read_text())
+    stale = json.loads((tmp_path / "kingston-flood" / "meta.json").read_text(encoding="utf-8"))
     stale["recorded"] = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat(timespec="seconds")
-    (tmp_path / "kingston-flood" / "meta.json").write_text(json.dumps(stale))
+    (tmp_path / "kingston-flood" / "meta.json").write_text(json.dumps(stale), encoding="utf-8")
     third = record([CASE, OTHER], tmp_path, studio_factory=_factory(), fresh_for_days=30)
     assert [m["id"] for m in third] == ["kingston-flood"]
     forced = record([CASE, OTHER], tmp_path, studio_factory=_factory(), only=["own-table-flood"])
@@ -171,13 +171,14 @@ def test_the_budget_stops_the_run(tmp_path):
     written = record([CASE, OTHER], tmp_path, studio_factory=_factory(), max_usd=0.2, on_event=lines.append)
     assert [m["id"] for m in written] == ["kingston-flood"]
     assert any("budget reached" in line and "own-table-flood" in line for line in lines)
-    assert [s["id"] for s in json.loads((tmp_path / "index.json").read_text())["studies"]] == ["kingston-flood"]
+    studies = json.loads((tmp_path / "index.json").read_text(encoding="utf-8"))["studies"]
+    assert [s["id"] for s in studies] == ["kingston-flood"]
 
 
 def test_an_oversized_workspace_is_trimmed_and_says_so(tmp_path):
     (meta,) = record([CASE], tmp_path, studio_factory=_factory(huge=True))
     assert meta["trimmed"] == ["run.results[s2].result.annual_maxima: 400000 entries kept to 50"]
-    ws = json.loads((tmp_path / "kingston-flood" / "workspace.json").read_text())
+    ws = json.loads((tmp_path / "kingston-flood" / "workspace.json").read_text(encoding="utf-8"))
     assert len(ws["run"]["results"][1]["result"]["annual_maxima"]) == 50
     assert (tmp_path / "kingston-flood" / "workspace.json").stat().st_size < showcase.MAX_WORKSPACE_BYTES
 

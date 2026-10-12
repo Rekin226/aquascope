@@ -80,4 +80,26 @@ assert hasattr(client, "_client")
 client.close()
 `);
 
+console.log("Verifying the place-context package and the pure-Python COG reader (#520)…");
+await pyodide.runPythonAsync(`
+import struct, zlib
+from aquascope import context
+from aquascope.utils.cog import COG
+assert "flood_history" in context.LAYERS
+data = zlib.compress(bytes([1, 2, 3, 4]))
+n = 11
+extra = 8 + 2 + n * 12 + 4
+scale_at, tie_at, data_at = extra, extra + 24, extra + 72
+short = lambda tag, v: struct.pack("<HHIHxx", tag, 3, 1, v)
+long_ = lambda tag, v: struct.pack("<HHII", tag, 4, 1, v)
+ifd = struct.pack("<H", n) + b"".join([
+    short(256, 2), short(257, 2), short(258, 8), short(259, 8), long_(273, data_at), short(277, 1),
+    short(278, 2), long_(279, len(data)), struct.pack("<HHII", 33550, 12, 3, scale_at),
+    struct.pack("<HHII", 33922, 12, 6, tie_at), short(339, 1)]) + struct.pack("<I", 0)
+tif = (b"II" + struct.pack("<HI", 42, 8) + ifd + struct.pack("<3d", 0.5, 0.5, 0.0)
+       + struct.pack("<6d", 0, 0, 0, 10.0, 50.0, 0.0) + data)
+c = COG("mem://t.tif", fetch=lambda url, s, e: tif[s:e + 1])
+assert c.value_at(10.75, 49.25) == 4 and c.value_at(10.25, 49.9) == 1, c.transform
+`);
+
 console.log("All Pyodide smoke tests passed.");

@@ -1,6 +1,6 @@
 """The Coordinator: the state machine over the workspace, and the API every face is thin over.
 
-    intake -> scouting -> planning -> review -> running -> critique -> authoring -> done
+    intake -> scouting -> planning -> [waiting] -> review -> running -> interpreting -> critique -> authoring -> done
                                         |                                          |
                                      declined                                  follow-up
 
@@ -14,6 +14,16 @@ workspace consistent, so a face can stop anywhere and resume with
 :meth:`Studio.from_dict`. A role's exception never kills the study: it is an
 event, and a decline (intake, planning) or a report of what happened (the
 run).
+
+The Critic's verdict is acted on, not filed: its ``fix`` issues and every
+failed deterministic check go to the Author for one fix round (keyless, the
+template repair drops the sentences the checks refuse), the second critique
+keeps the model when there is one, and a report whose critique is still not
+ok opens with one line naming the failed checks (``report["notice"]``,
+``report["critique_ok"]`` and the reply payload's ``critique_ok``). A spend
+ceiling (``max_usd``) stops the model calls, not the crew: past it the roles
+run keyless, the event and ``ws.budget`` say so, and the footer shows the
+USD spent.
 
 Bring your own model: a face that runs a model of its own (the Explorer's
 on-device model, any client) hands the crew what that model wrote and the
@@ -47,7 +57,7 @@ _APPROVE = re.compile(r"^\s*(approve|approved|run( it| this| the plan)?|go|yes|y
 
 @dataclass
 class Reply:
-    """What a face gets back: ``kind`` is questions, plan, report, answer or declined."""
+    """What a face gets back: ``kind`` is questions, data_request, plan, report, answer or declined."""
 
     kind: str
     text: str
@@ -59,6 +69,85 @@ class Reply:
 
     def to_dict(self) -> dict[str, Any]:
         return {"kind": self.kind, "text": self.text, "payload": self.payload}
+
+
+def gauge_offer(ws: Workspace) -> dict[str, Any] | None:
+    """When the client's goal picks a branch that needs a longer record than the gauge at the site has (a trend
+    needs 20 years, and a gauge that stopped long ago has no recent ones), the gauges within reach that do,
+    as a request to choose from. None when the goal needs no particular record, or the gauge has it, or no
+    gauge within reach does (the plan then says what it can do at this one)."""
+    from datetime import date
+
+    from aquascope import playbooks as pbk
+
+    b = ws.brief
+    if not b.playbook:
+        return None
+    try:
+        pb = pbk.load(b.playbook)
+    except pbk.PlaybookError:
+        return None
+    ctx = {"intake": dict(b.intake)}
+    need: tuple[str, float] | None = None
+    for branch in pb.branches:
+        goal = [c for c in branch.when if c.path.startswith("intake.")]
+        if goal and pbk._all_hold(goal, ctx):
+            data = [c for c in branch.when if c.path.startswith("context.years_by_variable.") and c.op == ">="]
+            if data:
+                need = (data[0].path.rsplit(".", 1)[-1], float(data[0].value))
+            break
+    if need is None:
+        return None
+    var, years = need
+    window = b.intake.get("years")
+    inv = ws.inventory.to_dict() if hasattr(ws.inventory, "to_dict") else dict(ws.inventory or {})
+    stations = sorted((d for d in inv.get("datasets") or []
+                       if d.get("kind") == "station" and d.get("variable") == var),
+                      key=lambda d: float(d.get("distance_km") or 0))
+    if not stations:
+        return None
+    recent = date.today().year - 2
+
+    def usable(d: dict[str, Any]) -> bool:
+        end = str(d.get("end") or "")[:4]
+        return float(d.get("years") or 0) >= max(years, float(window or 0)) and end.isdigit() and int(end) >= recent
+
+    here = stations[0]
+    if usable(here):
+        return None
+    better = [d for d in stations[1:] if usable(d)][:3]
+    if not better:
+        return None
+    rows: dict[tuple[str, str], dict[str, Any]] = {}
+    if any(d.get("lat") is None or d.get("lon") is None for d in better):
+        from aquascope.archive.catalog import load_stations
+
+        try:
+            rows = {(r["source"], r["station_id"]): r for r in load_stations()}
+        except Exception:  # noqa: BLE001 - no catalog: only the gauges the inventory placed can be offered
+            rows = {}
+    gauges = []
+    for d in better:
+        row = rows.get((d["source"], d["station_id"])) or {}
+        lat, lon = d.get("lat", row.get("latitude")), d.get("lon", row.get("longitude"))
+        if lat is None or lon is None:
+            continue
+        gauges.append({"source": d["source"], "station_id": d["station_id"], "name": d.get("name") or d["station_id"],
+                       "lat": lat, "lon": lon, "years": d.get("years"),
+                       "label": f"{d.get('name') or d['station_id']} ({float(d.get('years') or 0):.0f} years, "
+                                f"{float(d.get('distance_km') or 0):.1f} km away)"})
+    if not gauges:
+        return None
+    span = f"{str(here.get('start') or '')[:4]} to {str(here.get('end') or '')[:4]}"
+    short = float(here.get("years") or 0) < years
+    what = (f"{here.get('name')} has {float(here.get('years') or 0):.0f} years of {var.replace('_', ' ')} ({span})"
+            + ("" if short else ", and its record stops there"))
+    return {"kind": "gauge", "what": what, "can_continue": True,
+            "ask": "Use a gauge with a long enough record?",
+            "why": f"{what}; this question needs at least {max(years, float(window or 0)):g} years up to recent "
+                   "years. These gauges nearby have them.",
+            "effect": "the study moves to the gauge you pick; keeping this one changes the method",
+            "gauges": gauges, "keep": "Keep this gauge (flood estimate instead, no trend test)"}
 
 
 class Studio:
@@ -81,6 +170,7 @@ class Studio:
         workspace: dict[str, Any] | Workspace | None = None,
         tools: dict[str, Any] | None = None,
         intake: dict[str, Any] | None = None,
+        max_usd: float | None = None,
     ):
         if isinstance(workspace, Workspace):
             self.ws = workspace
@@ -105,10 +195,12 @@ class Studio:
                 self._frames[dataset_id] = value
         if intake:
             self.ws.brief.intake.update({k: v for k, v in intake.items() if v is not None})
+        self.max_usd = float(max_usd) if max_usd is not None else None
         self.model = Model.resolve(self.ws, provider=provider, model=model, api_key=api_key, base_url=base_url,
-                                   client=client)
+                                   client=client, max_usd=self.max_usd)
         if self.model:
-            self.ws.event("coordinator", "model", f"{self.ws.model} via {self.ws.provider}")
+            self.ws.event("coordinator", "model", f"{self.ws.model} via {self.ws.provider}"
+                          + (f", ceiling {self.max_usd:.2f} USD" if self.max_usd is not None else ""))
 
     # ── plumbing ──
 
@@ -145,7 +237,44 @@ class Studio:
         return Reply("report", str(report.get("answer") or ""), {
             "report": report, "artifacts": [a.to_dict(with_data=False) for a in self.ws.artifacts],
             "not_established": report.get("not_established") or [], "status": self.ws.status,
+            "critique_ok": bool(report.get("critique_ok", True)), "notice": report.get("notice"),
+            "dropped": int(report.get("dropped") or 0), "cost_usd": self.ws.total_usd, "budget": self.ws.budget,
+            "findings": (self.ws.findings or {}).get("findings") or [],
+            "decision": (self.ws.findings or {}).get("decision"),
+            "data_requests": (self.ws.findings or {}).get("data_requests") or [],
+            "grade": ((self.ws.findings or {}).get("decision") or {}).get("grade"),
         })
+
+    def _apply_verdict(self) -> None:
+        """Carry the Critic's verdict into the report: what is not established, the checks and the issues, and
+        when the critique is not ok, the one-line notice the answer opens with (so the bundle's README and every
+        document open with it too)."""
+        from aquascope.studio.roles.critic import failed_checks, notice
+
+        ws = self.ws
+        if ws.report is None or ws.critique is None:
+            return
+        report, critique = ws.report, ws.critique
+        issues = critique.get("issues") or []
+        ok = bool(critique.get("ok", not failed_checks(critique) and not any(i.get("severity") == "fix"
+                                                                              for i in issues)))
+        report["not_established"] = list(critique.get("not_established") or [])
+        report["critique"] = {"ok": ok, "issues": issues, "failed": failed_checks(critique),
+                              "checks_passed": sum(1 for c in critique.get("checks") or [] if c.get("passed")),
+                              "checks": len(critique.get("checks") or [])}
+        report["critique_ok"] = ok
+        answer = str(report.get("answer") or "")
+        old = report.get("notice")
+        if isinstance(old, str) and old and answer.startswith(old):
+            answer = answer[len(old):].lstrip()
+        line = notice(critique)
+        if line:
+            report["notice"] = line
+            report["answer"] = f"{line}\n\n{answer}" if answer else line
+            ws.event("critic", "notice", line)
+        else:
+            report.pop("notice", None)
+            report["answer"] = answer
 
     # ── the conversation ──
 
@@ -164,6 +293,8 @@ class Studio:
             return self.follow_up(text)
         if ws.status in ("running", "critique", "authoring"):
             return Reply("answer", "The crew is running; the report comes next.", {"status": ws.status})
+        if ws.status == "waiting":
+            return self._answer_request(text)
         if ws.status == "review":
             if _APPROVE.match(text or ""):
                 return self.approve()
@@ -183,6 +314,87 @@ class Studio:
             return self._questions_reply(msg.text)
         return self._scout_and_plan()
 
+    def _request_reply(self) -> Reply:
+        from aquascope.studio.roles.methodologist import request_text
+
+        request = dict(self.ws.pending_request or {})
+        payload = {"request": request, "brief": self.ws.brief.to_dict(), "status": self.ws.status}
+        if request.get("kind") == "gauge":
+            # a choice, asked like the Consultant's questions: the options are the gauges, then "keep"
+            payload["questions"] = [{"id": "gauge", "text": request["ask"], "why": request["why"],
+                                     "options": [g["label"] for g in request["gauges"]] + [request["keep"]],
+                                     "default": request["gauges"][0]["label"]}]
+        return Reply("data_request", request_text(request) if request else "The crew is waiting for data.", payload)
+
+    def _answer_request(self, text: str) -> Reply:
+        """A reply while the study waits for data: "continue without" plans at the lower grade the request
+        named (or declines when it allows no continuation); anything else repeats the request. A table
+        arrives through :meth:`add_table`, which plans again on its own."""
+        from aquascope.studio.requests import continue_without, is_continue
+
+        ws = self.ws
+        request = dict(ws.pending_request or {})
+        ws.say("user", text)
+        if request.get("kind") == "gauge":
+            return self._answer_gauge(request, text)
+        if not is_continue(text):
+            return self._request_reply()
+        if not continue_without(ws, request):
+            ws.pending_request = None
+            return self._decline(str(request.get("reason") or f"{request.get('what')} was not provided"),
+                                 role="methodologist")
+        ws.pending_request = None
+        ws.brief.intake["_no_request"] = True
+        try:
+            return self._plan()
+        finally:
+            ws.brief.intake.pop("_no_request", None)
+
+    def _answer_gauge(self, request: dict[str, Any], text: str) -> Reply:
+        """The reply to a gauge offer: one of the gauges moves the study there and scouts again; "keep" plans at
+        the gauge as it is (the goal's own branch does not apply, and the plan says what it does instead)."""
+        ws = self.ws
+        low = (text or "").strip().lower()
+        pick = next((g for g in request.get("gauges") or [] if low and (low == g["label"].lower()
+                     or low in (g["station_id"].lower(), g["name"].lower()))), None)
+        if pick is None and low and (low == str(request.get("keep", "")).lower() or low.startswith("keep")):
+            ws.pending_request = None
+            ws.event("coordinator", "gauge", "kept the gauge; the goal's branch does not apply")
+            return self._plan()
+        if pick is None:
+            return self._request_reply()
+        ws.pending_request = None
+        ws.site = {"lat": float(pick["lat"]), "lon": float(pick["lon"])}
+        ws.event("coordinator", "gauge", f"moved to {pick['name']} ({pick['source']} {pick['station_id']})")
+        return self._scout_and_plan()
+
+    def add_table(self, name: str, frame_or_csv: Any) -> Reply:
+        """A table of the user's at any point of the study. At intake it is kept for the brief; while the study
+        waits for data or sits at review it is inventoried and the plan is written again; after the report it
+        is a follow-up change ("use the new table"), run and re-authored. The reply is the next one the study
+        would give."""
+        from aquascope.studio.roles.scout import scout
+
+        ws = self.ws
+        dataset_id = name if str(name).startswith("upload:") else f"upload:{name}"
+        ws.add_table(dataset_id, frame_or_csv)
+        if not isinstance(frame_or_csv, str):
+            self._frames[dataset_id] = frame_or_csv
+        ws.event("coordinator", "table", f"{dataset_id} added at {ws.status}")
+        if ws.status in ("waiting", "review"):
+            ws.pending_request = None
+            ws.set_status("scouting")
+            try:
+                scout(ws)
+            except Exception as exc:  # noqa: BLE001
+                ws.event("scout", "error", f"{type(exc).__name__}: {exc}")
+                return self._decline(f"the Scout could not read the table: {exc}", role="scout")
+            return self._plan()
+        if ws.status == "done":
+            return self.follow_up(f"use the new table {dataset_id} and redo the steps it serves")
+        return Reply("answer", f"{dataset_id} is attached; the crew will use it.", {"table": dataset_id,
+                                                                                   "status": ws.status})
+
     def _scout_and_plan(self) -> Reply:
         from aquascope.studio.roles.scout import scout
 
@@ -193,6 +405,12 @@ class Studio:
         except Exception as exc:  # noqa: BLE001
             ws.event("scout", "error", f"{type(exc).__name__}: {exc}")
             return self._decline(f"the Scout could not build the inventory: {exc}", role="scout")
+        offer = gauge_offer(ws)
+        if offer is not None:
+            ws.pending_request = offer
+            ws.set_status("waiting")
+            ws.event("scout", "gauge", offer["what"])
+            return self._request_reply()
         return self._plan()
 
     def _plan(self) -> Reply:
@@ -206,6 +424,8 @@ class Studio:
             ws.event("methodologist", "error", f"{type(exc).__name__}: {exc}")
             return self._decline(f"the Methodologist failed: {exc}", role="methodologist")
         if study is None:
+            if ws.status == "waiting":
+                return self._request_reply()
             if ws.status != "declined":
                 return self._decline(ws.declined_reason or "no plan", role="methodologist")
             return Reply("declined", f"Declined: {ws.declined_reason}", {"reason": ws.declined_reason})
@@ -258,22 +478,28 @@ class Studio:
         reply.payload.update(extra)
         return reply
 
-    def _run_to_report(self, *, prior: Any = None) -> Reply:
+    def _run_to_report(self, *, prior: Any = None, reuse: list[str] | None = None) -> Reply:
         from aquascope.studio.roles.analysts import run
         from aquascope.studio.roles.author import author_report
-        from aquascope.studio.roles.critic import critique
+        from aquascope.studio.roles.critic import critique, fixes_for
+        from aquascope.studio.roles.interpreter import interpret
 
         ws = self.ws
         ws.set_status("running")
         try:
             run(ws, self.model, tools=self._tools, on_artifact=self.on_artifact, max_replans=self.max_replans,
-                prior=prior)
+                prior=prior, reuse=reuse)
         except Exception as exc:  # noqa: BLE001 - the report says what happened
             reason = f"the run failed: {type(exc).__name__}: {exc}"
             ws.event("analyst", "error", reason)
             ws.run = {"ok": False, "results": [], "gates": [], "failed_gates": [], "stopped_at": None,
                       "stop_reason": reason, "started": now(), "finished": now(), "replans": 0}
         ws.set_status("critique")
+        try:
+            interpret(ws, self.model)
+        except Exception as exc:  # noqa: BLE001 - the findings are an aid; the report goes on without them
+            ws.event("interpreter", "error", f"{type(exc).__name__}: {exc}")
+            ws.findings = None
         try:
             author_report(ws, self.model)
         except Exception as exc:  # noqa: BLE001
@@ -287,20 +513,19 @@ class Studio:
             ws.event("critic", "error", f"{type(exc).__name__}: {exc}")
             ws.critique = {"ok": False, "checks": [], "issues": [], "not_established": [f"the Critic failed: {exc}"]}
         ws.set_status("authoring")
-        fixes = [i for i in (ws.critique or {}).get("issues") or [] if i.get("severity") == "fix"]
+        fixes = fixes_for(ws.critique)
         if fixes:
+            checks = [str(i["check"]) for i in fixes if i.get("check")]
+            ws.event("critic", "fixes", f"{len(fixes)} fix(es) for the Author"
+                     + (f", failed checks: {', '.join(checks)}" if checks else ""))
             try:
                 author_report(ws, self.model, issues=fixes)
-                critique(ws, None)
+                critique(ws, self.model)
             except Exception as exc:  # noqa: BLE001
                 ws.event("author", "error", f"{type(exc).__name__}: {exc}")
-        if ws.report is not None and ws.critique is not None:
-            ws.report["not_established"] = list(ws.critique.get("not_established") or [])
-            ws.report["critique"] = {"issues": ws.critique.get("issues") or [],
-                                     "checks_passed": sum(1 for c in ws.critique.get("checks") or []
-                                                          if c.get("passed")),
-                                     "checks": len(ws.critique.get("checks") or [])}
-        self._build_deliverables()
+        self._apply_verdict()
+        if not getattr(self, "_defer_deliverables", False):
+            self._build_deliverables()
         ws.set_status("done")
         report = ws.report or {}
         ws.say("author", str(report.get("answer") or ""), kind="report",
@@ -373,6 +598,111 @@ class Studio:
         ws.event("coordinator", "review", "a follow-up change runs without a second approval")
         return self._run_to_report(prior=prior)
 
+    # ── steering one step (aquascope.studio.steering) ──
+
+    def steer(self, step_id: str, changes: dict[str, Any]) -> Reply:
+        """Change a steerable parameter of one step after the report: validated against the catalogue's
+        declaration, then that step and its dependants rerun (every other result stands as it was), the change
+        is recorded in the plan's ``steering`` list so study.yaml and the notebook reproduce it, and the report
+        is written again. A refused change leaves the study as it was and says why."""
+        from aquascope.studio.roles.analysts import prior_run
+        from aquascope.studio.steering import apply_change
+
+        ws = self.ws
+        if ws.status != "done" or not ws.study:
+            return Reply("answer", f"A step can be adjusted once the report is out (status {ws.status}).",
+                         {"kind": "steer", "status": ws.status})
+        try:
+            out = apply_change(ws.study_obj(), str(step_id), dict(changes or {}))
+        except ValueError as exc:
+            text = f"The change was not accepted: {exc}"
+            ws.say("coordinator", text)
+            return Reply("answer", text, {"kind": "steer", "errors": str(exc).split("; ")})
+        prior = prior_run(ws)
+        keep = [str(r.get("id")) for r in (prior.results if prior else []) if str(r.get("id")) not in out["dirty"]]
+        ws.say("user", out["text"])
+        ws.follow_ups.append({"text": out["text"], "at": now(), "kind": "steer", "steps": out["dirty"],
+                              "change": out["change"]})
+        ws.set_study(out["study"])
+        ws.event("coordinator", "steer", f"{out['text']}; rerunning {', '.join(out['dirty'])}")
+        return self._run_to_report(prior=prior, reuse=keep)
+
+    # ── the Study Desk (aquascope.studio.desk) ──
+
+    def revise(self, changes: dict[str, Any], *, by: str | None = None, note: str | None = None) -> Reply:
+        """Revise a finished study from the Desk: ``changes`` maps levers (:data:`aquascope.studio.desk.LEVERS`)
+        to values. Rerun levers (return period, record window, excluded years) go to every flood step through
+        the steering, which reruns those steps and their dependants with their gates; document levers (the
+        distribution quoted) change what the answer quotes. The documents are written again and a revision is
+        recorded with the answer before and after. A refused lever says why and changes nothing."""
+        from aquascope.studio import desk
+        from aquascope.studio.roles.analysts import prior_run
+        from aquascope.studio.steering import apply_change
+
+        ws = self.ws
+        if ws.status != "done" or not ws.study:
+            return Reply("answer", f"A study can be revised once its report is out (status {ws.status}).",
+                         {"kind": "desk", "status": ws.status})
+        step_changes, doc, errors = desk.split_changes(ws, dict(changes or {}))
+        if errors or not (step_changes or doc):
+            text = "The revision was not made: " + ("; ".join(errors) if errors else "nothing would change")
+            return Reply("answer", text, {"kind": "desk", "errors": errors})
+        desk.baseline(ws)
+        before = desk._headline(ws)
+        words: list[str] = []
+        reply: Reply | None = None
+        if step_changes:
+            study = ws.study_obj()
+            dirty: set[str] = set()
+            for sid, change in step_changes.items():
+                try:
+                    out = apply_change(study, sid, change)
+                except ValueError as exc:
+                    return Reply("answer", f"The revision was not made: {exc}", {"kind": "desk",
+                                                                                 "errors": str(exc).split("; ")})
+                study = out["study"]
+                dirty |= set(out["dirty"])
+                words.append(out["text"])
+            prior = prior_run(ws)
+            keep = [str(r.get("id")) for r in (prior.results if prior else []) if str(r.get("id")) not in dirty]
+            ws.set_study(study)
+            ws.event("coordinator", "revise", f"{'; '.join(words)}; rerunning {', '.join(sorted(dirty))}")
+            self._defer_deliverables = True
+            saved_tools = self._tools
+            # A revision changes assumptions, not data: the flood steps refit the record the study holds.
+            # A caller's own tools (the browser's, a test's) keep precedence.
+            self._tools = {**desk.stored_record_tools(ws), **saved_tools}
+            try:
+                reply = self._run_to_report(prior=prior, reuse=keep)
+            finally:
+                self._defer_deliverables = False
+                self._tools = saved_tools
+        if doc.get("estimator"):
+            desk.desk_state(ws)["estimator"] = doc["estimator"]
+            words.append(f"the answer quotes {desk.ESTIMATORS[doc['estimator']]}")
+        desk.apply_estimator(ws)
+        lever_words = desk.describe({k: v for c in step_changes.values() for k, v in c.items()} | doc, before)
+        parts = lever_words or [w[:1].upper() + w[1:] for w in words]
+        description = note or "; ".join([parts[0], *[p[:1].lower() + p[1:] for p in parts[1:]]])
+        rev = desk.record_revision(ws, description, before=before, by=by)
+        self._build_deliverables()
+        reply = self._report_reply()
+        reply.payload.update({"kind": "desk", "revision": rev, "levers": desk.levers(ws)})
+        return reply
+
+    def sign(self, role: str, name: str, *, date: str | None = None) -> Reply:
+        """Sign the study (prepared_by, checked_by, approved_by); the status and the documents follow."""
+        from aquascope.studio import desk
+
+        try:
+            rev = desk.sign(self.ws, role, name, date=date)
+        except ValueError as exc:
+            return Reply("answer", f"Not signed: {exc}", {"kind": "desk", "errors": [str(exc)]})
+        self._build_deliverables()
+        reply = self._report_reply()
+        reply.payload.update({"kind": "desk", "revision": rev})
+        return reply
+
     def narrate(self, sections: dict[str, str] | list[dict[str, Any]], *, source: str = "device") -> Reply:
         """Prose a model of the caller's own wrote for the report, after the crew's checks (only after the
         report). ``sections`` maps section ids (as in ``ws.report["sections"]``, plus ``answer`` and
@@ -397,12 +727,7 @@ class Studio:
             critique(ws, None)
         except Exception as exc:  # noqa: BLE001
             ws.event("critic", "error", f"{type(exc).__name__}: {exc}")
-        if ws.critique is not None:
-            ws.report["not_established"] = list(ws.critique.get("not_established") or [])
-            ws.report["critique"] = {"issues": ws.critique.get("issues") or [],
-                                     "checks_passed": sum(1 for c in ws.critique.get("checks") or []
-                                                          if c.get("passed")),
-                                     "checks": len(ws.critique.get("checks") or [])}
+        self._apply_verdict()
         self._build_deliverables()
         ws.say("author", str(ws.report.get("answer") or ""), kind="report",
                payload={"title": ws.report.get("title"), "key_numbers": ws.report.get("key_numbers"),
@@ -495,7 +820,7 @@ class Studio:
     @classmethod
     def from_dict(cls, d: dict[str, Any] | Workspace, **kwargs: Any) -> Studio:
         """Resume from a workspace dict; the model kwargs (provider, model, api_key, base_url, client),
-        ``on_event``, ``on_artifact``, ``tools`` and ``data`` are the constructor's."""
+        ``max_usd``, ``on_event``, ``on_artifact``, ``tools`` and ``data`` are the constructor's."""
         return cls(workspace=d, **kwargs)
 
     def add_artifact(self, artifact: Artifact) -> Artifact:

@@ -131,14 +131,15 @@ def test_figures_follow_the_steps_method_and_the_series_is_stripped_after(monkey
         ws = _flood_ws()
         with patched(RECON, tools=fake_tools([], analyze_station=FULL_FLOW, flood_frequency=FULL_FLOW)):
             analysts.run(ws, None)
-        ids = sorted(a.id for a in ws.artifacts)
+        ids = sorted(a.id for a in ws.artifacts if not a.id.startswith("fig-s4-") and a.id != "study-map")
         assert ids == ["fig-s1-annual_maxima", "fig-s1-fdc", "fig-s1-frequency_curve", "fig-s1-series",
                        "fig-s1-trend", "fig-s2-series", "fig-s2-trend", "fig-s3-annual_maxima",
                        "fig-s3-frequency_curve"], with_kinds
+        assert any(a.id.startswith("fig-s4-") for a in ws.artifacts), "the cross-check step draws too"
         assert ids.count("fig-s2-frequency_curve") == 0 and ids.count("fig-s3-frequency_curve") == 1
         s2 = next(m for m in made if m[0] == "s2")
         assert s2[3] is True, "the makers saw the series"
-        for r in ws.run["results"][1:]:
+        for r in ws.run["results"][1:3]:
             assert "series" not in r["result"] and r["result"]["fdc"]["exceedance"] == [1, 50, 99]
             assert r["result"]["station_name"] == "Kingston" and r["result"]["name"] == "Kingston"
         assert '"t": [' not in json.dumps(ws.run) and '"t": [' not in json.dumps(ws.study)
@@ -148,7 +149,8 @@ def test_analyze_station_full_keeps_the_series_and_adds_the_band(monkeypatch):
     import aquascope.explore
 
     def fake(source, station_id, *, years=None, store=None, variable=None, period_start=None):
-        store["series"] = "S"
+        import pandas as pd
+        store["series"] = pd.Series([1.0], index=pd.to_datetime(["2000-01-01"]))
         return {"source": source, "station_id": station_id, "series": {"t": ["2000-01-01"], "v": [1.0]},
                 "fdc": {"exceedance": [1], "q": [1], "q95": 1, "q50": 1, "q10": 1},
                 "ffa": {"fits": {"gev_lmoments": {"q": [1]}}}}
@@ -236,12 +238,12 @@ def test_the_report_names_the_record_lists_long_rows_and_is_not_flagged_for_its_
     with patched(RECON, tools=fake_tools([], analyze_station=unnamed, flood_frequency=unnamed)):
         analysts.run(ws, None)
     report = author.author_report(ws, None)
-    assert report["answer"].startswith("The record at Kingston (uk_ea 3400TH) runs")
+    assert "The record at Kingston (uk_ea 3400TH) runs" in report["answer"]
     by_id = {s["id"]: s["text"] for s in report["sections"]}
     assert "GPRSB5A" not in by_id["site_data"] and "1 more short record" in by_id["site_data"]
     assert "1883-10-01 to present" in by_id["site_data"]
     assert "| Quantity |" not in by_id["summary"] and by_id["summary"] != report["answer"]
-    assert "3 step(s) ran" in by_id["summary"] and "7 of 7 gates passed" in by_id["summary"]
+    assert "4 step(s) ran" in by_id["summary"] and "12 of 12 gates passed" in by_id["summary"]
     md = author.to_markdown(ws)
     assert md.count("| Quantity | Value | Unit | Step |") == 1
     recs = report["recommendations"]

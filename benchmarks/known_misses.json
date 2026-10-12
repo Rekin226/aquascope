@@ -1,0 +1,20 @@
+[
+  {
+    "gauge_id": "06803500",
+    "stage": "baseflow",
+    "metric": "bfi_eckhardt",
+    "reason": "Computed Eckhardt BFI (0.534) is 0.166 below CAMELS published BFI (0.700), exceeding the 0.150 absolute tolerance by 0.016. Published CAMELS BFI was computed with a different hydrograph separation algorithm, and synthetic daily series recession dynamics deviate slightly on this catchment."
+  },
+  {
+    "gauge_id": "09510200",
+    "stage": "baseflow",
+    "metric": "bfi_eckhardt",
+    "reason": "Computed Eckhardt BFI (0.402) is 0.151 above CAMELS published BFI (0.250), exceeding the 0.150 absolute tolerance by 0.001. Standard Eckhardt filter parameterization (a=0.98, BFImax=0.80) yields slightly higher baseflow on the synthetic daily hydrograph."
+  },
+  {
+    "gauge_id": "08181500",
+    "stage": "signatures",
+    "metric": "q5",
+    "reason": "Computed q5 (0.0537 m³/s) has 32.9% relative error against published CAMELS q5 (0.0800 m³/s, tolerance 25.0%). In this semi-arid catchment the absolute difference is only 0.0263 m³/s (26 L/s); relative error is inflated by division near zero on synthetic daily series."
+  }
+]

@@ -23,7 +23,8 @@ import numpy as np
 import pandas as pd
 
 HERE = pathlib.Path(__file__).resolve().parent
-CATCHMENTS_FILE = HERE / "catchments.json"
+DAILY_CATCHMENTS_FILE = HERE / "daily_catchments.json"
+DAILY_DIR = HERE / "daily"
 
 N_YEARS = 10
 START_DATE = "2000-01-01"
@@ -40,7 +41,7 @@ def _generate_one(
     Parameters
     ----------
     catchment:
-        Dictionary with published attributes from *catchments.json*.
+        Dictionary with published attributes from *daily_catchments.json*.
     rng:
         NumPy random generator for reproducibility.
     n_years:
@@ -112,15 +113,16 @@ def main() -> None:
     """Generate CSV files for all benchmark catchments."""
     rng = np.random.default_rng(42)
 
-    with open(CATCHMENTS_FILE) as f:
+    with open(DAILY_CATCHMENTS_FILE) as f:
         catchments = json.load(f)
 
     print(f"Generating synthetic data for {len(catchments)} catchments …\n")
 
+    DAILY_DIR.mkdir(exist_ok=True)
     for c in catchments:
         gauge = c["gauge_id"]
         df = _generate_one(c, rng)
-        out = HERE / f"{gauge}.csv"
+        out = DAILY_DIR / f"{gauge}_daily.csv"
         df.to_csv(out, index=False)
 
         q = df["discharge_cms"]
@@ -131,7 +133,7 @@ def main() -> None:
             f"q95={np.percentile(q, 95):.2f}"
         )
 
-    print(f"\n✓ Generated {len(catchments)} CSV files in {HERE}")
+    print(f"\n✓ Generated {len(catchments)} CSV files in {DAILY_DIR}")
 
 
 if __name__ == "__main__":

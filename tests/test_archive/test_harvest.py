@@ -16,15 +16,15 @@ pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 
 from aquascope.archive import harvest_stations, publish_folder, write_dataset_card  # noqa: E402
-from aquascope.archive.harvest import HarvestReport, stations_to_table  # noqa: E402
+from aquascope.archive.harvest import HarvestReport, infer_site_ids, stations_to_table  # noqa: E402
 
 
 def _stations():
     return [
         Station(source="ireland_opw", station_id="0000001041", name="Sandy Mills", latitude=54.84, longitude=-7.58,
                 variables=("water_level",), url="https://waterlevel.ie/0001/1041/", country="IRL"),
-        Station(source="pegelonline", station_id="u1", name="CELLE", latitude=52.62, longitude=10.06,
-                variables=("discharge", "water_level"), river="ALLER", country="DEU",
+        Station(source="pegelonline", station_id="u1", site_id="celle-site", name="CELLE",
+                latitude=52.62, longitude=10.06, variables=("discharge", "water_level"), river="ALLER", country="DEU",
                 period_start=date(1990, 1, 1), extra={"number": "48300105"}),
     ]
 
@@ -67,7 +67,7 @@ def test_harvest_writes_files_and_health(tmp_path):
     assert (out / "README.md").exists()
 
     assert report.n_stations == 2 and report.n_ok == 2 and report.n_failed == 1
-    health = json.loads((out / "health.json").read_text())
+    health = json.loads((out / "health.json").read_text(encoding="utf-8"))
     by = {s["source"]: s for s in health["sources"]}
     assert by["uk_ea"]["ok"] is False and "503" in by["uk_ea"]["error"]
     assert by["ireland_opw"]["n_stations"] == 1 and by["ireland_opw"]["license"] == "CC-BY-4.0"
@@ -79,19 +79,61 @@ def test_harvest_writes_files_and_health(tmp_path):
     # sorted by (source, station_id)
     assert table.column("source").to_pylist() == ["ireland_opw", "pegelonline"]
 
-    gj = json.loads((out / "stations.geojson").read_text())
+    assert table.column("site_id").to_pylist() == ["0000001041", "celle-site"]
+
+    gj = json.loads((out / "stations.geojson").read_text(encoding="utf-8"))
     assert gj["type"] == "FeatureCollection" and len(gj["features"]) == 2
     f0 = gj["features"][0]
     assert f0["geometry"]["coordinates"] == [-7.58, 54.84]
     assert f0["properties"] == {"source": "ireland_opw", "station_id": "0000001041", "name": "Sandy Mills",
+                                "site_id": "0000001041",
                                 "variables": ["water_level"], "url": "https://waterlevel.ie/0001/1041/"}
     assert "extra" not in gj["features"][1]["properties"]  # extras live in the parquet only
     assert gj["features"][1]["properties"]["period_start"] == "1990-01-01"
+    assert gj["features"][1]["properties"]["site_id"] == "celle-site"
 
-    card = (out / "README.md").read_text()
+    card = (out / "README.md").read_text(encoding="utf-8")
     assert card.startswith("---\nlicense: other")
     assert "| `uk_ea` |" in card and "failed: RuntimeError: 503" in card
     assert "resolve/main/stations.parquet" in card
+    assert "Group by `(source, site_id)`" in card
+
+
+def test_failed_and_unrequested_catalogs_retain_previous_stations(tmp_path):
+    with patch("aquascope.archive.harvest.station_catalogs", side_effect=_fake_catalogs):
+        harvest_stations(tmp_path, write_signatures=False)
+    # A failed requested source and an unrequested source both retain their last good pins.
+    with patch("aquascope.archive.harvest.station_catalogs", return_value={
+        "ireland_opw": StationCatalog(source="ireland_opw", error="offline"),
+    }):
+        report = harvest_stations(tmp_path, sources=["ireland_opw"], write_signatures=False)
+    assert report.n_stations == 2 and report.n_failed == 1
+    assert report.sources[0].retained_stations == 1
+    assert pq.read_table(tmp_path / "stations.parquet").column("source").to_pylist() == [
+        "ireland_opw", "pegelonline",
+    ]
+
+
+def test_catalog_site_ids_round_trip_and_legacy_fallback(tmp_path):
+    from aquascope.archive.catalog import _rows_from_geojson, load_stations
+    from aquascope.archive.harvest import write_stations_geojson
+
+    path = tmp_path / "stations.parquet"
+    table = stations_to_table(_stations())
+    pq.write_table(table, path)
+    assert [r["site_id"] for r in load_stations(path=path)] == ["0000001041", "celle-site"]
+
+    pq.write_table(table.drop(["site_id"]), path)
+    assert [r["site_id"] for r in load_stations(path=path)] == ["0000001041", "u1"]
+
+    geojson_path = tmp_path / "stations.geojson"
+    write_stations_geojson(_stations(), geojson_path)
+    assert [r["site_id"] for r in _rows_from_geojson(geojson_path)] == ["0000001041", "celle-site"]
+    legacy = json.loads(geojson_path.read_text())
+    for feature in legacy["features"]:
+        del feature["properties"]["site_id"]
+    geojson_path.write_text(json.dumps(legacy))
+    assert [r["site_id"] for r in _rows_from_geojson(geojson_path)] == ["0000001041", "u1"]
 
 
 def test_harvest_restricts_sources_and_passes_options(tmp_path):
@@ -124,7 +166,7 @@ def test_empty_harvest_still_writes_valid_files(tmp_path):
 def test_dataset_card_lists_every_source(tmp_path):
     report = HarvestReport(run_at="2026-08-16T00:00:00+00:00", aquascope_version="x", n_stations=0, sources=[])
     path = write_dataset_card(tmp_path / "README.md", report, repo_id="me/ds")
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     assert "hf://datasets/me/ds/stations.parquet" in text
     assert "aquascope harvest stations" in text
 
@@ -148,3 +190,184 @@ def test_publish_folder_rejects_missing_folder(tmp_path):
     with patch("aquascope.archive.publish.require", return_value=MagicMock()):
         with pytest.raises(FileNotFoundError):
             publish_folder(tmp_path / "nope", "me/ds")
+
+
+def test_publish_folder_without_a_token_says_where_the_token_goes(tmp_path, monkeypatch):
+    (tmp_path / "stations.parquet").write_bytes(b"x")
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+    with patch("aquascope.archive.publish.require", return_value=MagicMock()):
+        with pytest.raises(PermissionError, match="HF_TOKEN"):
+            publish_folder(tmp_path, "me/ds")
+
+
+def test_a_rejected_token_is_named_as_the_cause_not_a_missing_dataset(tmp_path, monkeypatch):
+    """Hugging Face reports an expired token as `RepositoryNotFoundError: 401 ... Please use create_repo`,
+    which reads as a missing dataset. When the dataset is public and readable, say the token was refused."""
+    (tmp_path / "stations.parquet").write_bytes(b"x")
+    monkeypatch.setenv("HF_TOKEN", "hf_stale")
+    fake_hub = MagicMock()
+    boom = Exception("401 Client Error. Repository Not Found for url: .../preupload/main. "
+                     "Invalid username or password.")
+    fake_hub.HfApi.return_value.upload_folder.side_effect = boom
+
+    class _Resp:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    with patch("aquascope.archive.publish.require", return_value=fake_hub), \
+         patch("urllib.request.urlopen", return_value=_Resp()):
+        with pytest.raises(PermissionError) as err:
+            publish_folder(tmp_path, "me/ds")
+    text = str(err.value)
+    assert "the token is what was refused" in text and "Rotate" in text
+    assert "401" in text, "the underlying error is kept"
+
+
+def test_an_unrelated_upload_error_is_not_reinterpreted(tmp_path, monkeypatch):
+    (tmp_path / "stations.parquet").write_bytes(b"x")
+    monkeypatch.setenv("HF_TOKEN", "hf_test")
+    fake_hub = MagicMock()
+    fake_hub.HfApi.return_value.upload_folder.side_effect = ValueError("disk full")
+    with patch("aquascope.archive.publish.require", return_value=fake_hub):
+        with pytest.raises(ValueError, match="disk full"):
+            publish_folder(tmp_path, "me/ds")
+
+
+def test_infer_site_ids_groups_colocated_taiwan_cwa_and_usgs_pairs():
+    from aquascope.archive.catalog import search_stations
+
+    st_taipei_xinyi_old = Station(
+        source="taiwan_cwa", station_id="C0A9H0", name="信義",
+        latitude=25.038094, longitude=121.564639, variables=("precipitation",),
+        period_start=date(1997, 8, 21), period_end=date(2009, 3, 31), country="TWN"
+    )
+    st_taipei_xinyi_new = Station(
+        source="taiwan_cwa", station_id="C0AC70", name="信義",
+        latitude=25.037822, longitude=121.564597, variables=("precipitation",),
+        period_start=date(2009, 3, 31), country="TWN"
+    )
+    st_taipei_wenshan_old = Station(
+        source="taiwan_cwa", station_id="C1AC80", name="文山",
+        latitude=25.002083, longitude=121.575704, variables=("precipitation",),
+        period_start=date(2009, 1, 21), period_end=date(2009, 11, 30), country="TWN"
+    )
+    st_taipei_wenshan_new = Station(
+        source="taiwan_cwa", station_id="C0AC80", name="文山",
+        latitude=25.00235, longitude=121.575728, variables=("precipitation",),
+        period_start=date(2009, 12, 1), country="TWN"
+    )
+    st_nantou_xinyi = Station(
+        source="taiwan_cwa", station_id="C0I080", name="信義",
+        latitude=23.689694, longitude=120.851036, variables=("precipitation",), country="TWN"
+    )
+    st_usgs_well_1 = Station(
+        source="usgs", station_id="USGS-02293346", name="Well 1",
+        latitude=26.678405, longitude=-82.040368, variables=("groundwater_level",), country="USA"
+    )
+    st_usgs_well_2 = Station(
+        source="usgs", station_id="USGS-02293347", name="Well 1",
+        latitude=26.678405, longitude=-82.040368, variables=("groundwater_level",), country="USA"
+    )
+
+    all_stations = [
+        st_taipei_xinyi_old, st_taipei_xinyi_new,
+        st_taipei_wenshan_old, st_taipei_wenshan_new,
+        st_nantou_xinyi,
+        st_usgs_well_1, st_usgs_well_2,
+    ]
+
+    inferred = infer_site_ids(all_stations, precision=3)
+
+    # Taipei 信義 pair shares the same synthetic site_id
+    assert inferred[0].site_id == inferred[1].site_id
+    assert inferred[0].site_id.startswith("syn:taiwan_cwa:")
+
+    # Taipei 文山 pair shares a distinct synthetic site_id
+    assert inferred[2].site_id == inferred[3].site_id
+    assert inferred[2].site_id.startswith("syn:taiwan_cwa:")
+    assert inferred[2].site_id != inferred[0].site_id
+
+    # Nantou 信義 is distinct and retains its default station_id
+    assert inferred[4].site_id == "C0I080"
+    assert inferred[4].site_id != inferred[0].site_id
+
+    # USGS pair shares a synthetic site_id
+    assert inferred[5].site_id == inferred[6].site_id
+    assert inferred[5].site_id.startswith("syn:usgs:")
+
+    # Grouping via catalog produces 1 site each for Taipei 信義 and 文山
+    rows = [s.model_dump(mode="json") for s in inferred]
+    grouped_xinyi = search_stations(rows, sources=["taiwan_cwa"], query="信義", group_sites=True)
+    # 2 sites: Taipei 信義 and Nantou 信義
+    assert len(grouped_xinyi) == 2
+    taipei_hit = next(h for h in grouped_xinyi if h["site_id"] == inferred[0].site_id)
+    assert taipei_hit["record_count"] == 2
+    assert {r["station_id"] for r in taipei_hit["records"]} == {"C0A9H0", "C0AC70"}
+
+    grouped_wenshan = search_stations(rows, sources=["taiwan_cwa"], query="文山", group_sites=True)
+    assert len(grouped_wenshan) == 1
+    assert grouped_wenshan[0]["record_count"] == 2
+    assert {r["station_id"] for r in grouped_wenshan[0]["records"]} == {"C0AC80", "C1AC80"}
+
+
+def test_infer_site_ids_preserves_agency_supplied_site_ids():
+    st1 = Station(
+        source="france_hubeau", station_id="M0010001", site_id="M0010000",
+        name="Station Seine", latitude=48.8566, longitude=2.3522, variables=("discharge",)
+    )
+    st2 = Station(
+        source="france_hubeau", station_id="M0010002", site_id="M0010000",
+        name="Station Seine", latitude=48.8566, longitude=2.3522, variables=("discharge",)
+    )
+    st3 = Station(
+        source="france_hubeau", station_id="M0010003", site_id="",
+        name="Station Seine", latitude=48.8566, longitude=2.3522, variables=("discharge",)
+    )
+    # st3 initialized with site_id defaulting to station_id "M0010003"
+    assert st3.site_id == "M0010003"
+
+    inferred = infer_site_ids([st1, st2, st3], precision=3)
+    # Agency-supplied site_id "M0010000" is never overwritten and adopted by co-located default member
+    assert inferred[0].site_id == "M0010000"
+    assert inferred[1].site_id == "M0010000"
+    assert inferred[2].site_id == "M0010000"
+
+
+def test_infer_site_ids_is_deterministic_and_stable():
+    st1 = Station(
+        source="taiwan_cwa", station_id="C0A9H0", name="信義",
+        latitude=25.038094, longitude=121.564639, variables=("precipitation",)
+    )
+    st2 = Station(
+        source="taiwan_cwa", station_id="C0AC70", name="信義",
+        latitude=25.037822, longitude=121.564597, variables=("precipitation",)
+    )
+    res1 = infer_site_ids([st1.model_copy(), st2.model_copy()], precision=3)
+    res2 = infer_site_ids([st1.model_copy(), st2.model_copy()], precision=3)
+    assert res1[0].site_id == res2[0].site_id
+    assert res1[1].site_id == res2[1].site_id
+    assert res1[0].site_id.startswith("syn:taiwan_cwa:")
+
+def test_infer_site_ids_skips_nameless_stations():
+    st1 = Station(
+        source="usgs", station_id="USGS-092359167282201", name=None,
+        latitude=8.716, longitude=167.733, variables=("water_quality",)
+    )
+    st2 = Station(
+        source="usgs", station_id="USGS-092359167282206", name="",
+        latitude=8.716, longitude=167.733, variables=("water_quality",)
+    )
+    st3 = Station(
+        source="usgs", station_id="USGS-092359167282209", name="   ",
+        latitude=8.716, longitude=167.733, variables=("water_quality",)
+    )
+    inferred = infer_site_ids([st1, st2, st3], precision=3)
+    assert inferred[0].site_id == "USGS-092359167282201"
+    assert inferred[1].site_id == "USGS-092359167282206"
+    assert inferred[2].site_id == "USGS-092359167282209"

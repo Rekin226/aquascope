@@ -13,7 +13,7 @@ the way an engineer would: the user agrees the brief and approves the
 methodology, then the crew runs to the bundle.
 
 ```
- you ──► Consultant ──► Scout ──► Methodologist ──► you ──► Analysts ──► Critic ──► Author ──► bundle
+ you ──► Consultant ──► Scout ──► Methodologist ──► you ──► Analysts ──► Interpreter ──► Critic ──► Author ──► bundle
         (the brief)   (inventory)  (the plan)     (approve)  (run, gates)  (review)  (report)
                                                                  ▲                              │
                                                                  └────────── follow-up ◄────────┘
@@ -50,15 +50,17 @@ One serialisable object every role reads and writes:
 | `brief` | Consultant | problem, decision, quantities, period, horizon, constraints, deliverables, kind, playbook, intake, assumptions, questions, ready, source |
 | `inventory` | Scout | site, datasets (station, upload, reanalysis, catchment, donors, samples), the raw `assess_site` recon (the sufficiency table lives there), catchment, donors, notes |
 | `study` | Methodologist | `Study.to_dict()`, version 3 |
-| `run` | Analysts | ok, results per step with gates, stopped_at, stop_reason |
-| `critique` | Critic | checks, issues, not_established |
-| `report` | Author | title, answer, key_numbers, sections (id, title, text, figures, tables), not_established, references, footer |
+| `run` | Analysts | ok, results per step with gates, `failed_steps`, `summary` (planned, ran, ok, failed, skipped), stopped_at and stop_reason for a hard stop only |
+| `findings` | Interpreter | findings (claim, basis paths, grade), consistency, decision (answer, value, unit, band, grade, conditions, what_would_change_it), data_requests, assumptions, written_by, dropped |
+| `critique` | Critic | ok, checks (with `findings_resolve` and `decision_in_answer`), failed, issues, not_established |
+| `report` | Author | title, answer (opening with the notice when the critique is not ok), key_numbers, sections (id, title, text, figures, tables), not_established, critique, critique_ok, dropped, references, footer (ledger in tokens and USD, budget, dropped) |
 | `artifacts` | Analysts, Author | figures, tables, documents, workbook, notebook, study, bundle: bytes with a name, a media type, a caption, a step |
 | `messages` | everyone | the conversation, with a kind a face can render (text, questions, plan, report) |
 | `events` | everyone | the timeline (`role, step, event, detail, at`) |
 | `ledger` | Model | calls and tokens per role |
 | `tables` | Coordinator | the user's uploads as CSV text, so they round-trip |
-| `status` | Coordinator | intake, scouting, planning, review, running, critique, authoring, done, declined |
+| `status` | Coordinator | intake, scouting, planning, waiting, review, running, critique, authoring, done, declined |
+| `pending_request` | Methodologist | while `waiting`: what the crew asks for, why, the effect, `continue_without` (the intake to apply, or None when the decline stands), `grade_without` |
 
 `to_dict` / `from_dict` (bytes as base64), `to_json` / `from_json`. The
 browser holds the dict between worker calls, the CLI writes
@@ -105,14 +107,25 @@ out (`aquascope.studio.model.Model.call_json`).
 | Consultant | keyword rules (`team.choose_playbook`), intake hints, the decision the text names, the gaps as questions (a field with no default, the decision with the playbook's options, a flood question's return period, a drought question's period, an upload's value column; at most three); "just go" takes the defaults and lists them | the brief from the text, the site, the attached tables and a catalog-only recon; at most three questions in one round; "just go" proceeds on assumptions | `brief`, a `questions` message |
 | Scout | `assess_site`, the ERA5 and GloFAS reach, uploads through `ingest` | the same (deterministic) | `inventory`, a `Dataset` per row |
 | Methodologist | the playbook tree (`playbooks.plan`); after the report, a rule table from the follow-up's words to catalogue steps appended to the plan (`FOLLOW_UP_RULES`) | a version-3 study composed from the catalogue; `validate_plan`; one repair call with the errors; then the tree; then a decline with the errors | `study`, a `plan` message |
-| Analysts | `run_study` with gates and the bounded replan of `team._execute`; figures per step as results land | the Specialist's fallback proposal after a failed gate, as in Solve | `run`, figure and table artifacts, events |
-| Critic | `verify.verify` on the draft, the gates, the plan's notes | one independent pass over the draft sections and the compact results: issues with a section, a severity and a fix | `critique` |
+| Analysts | `run_study` with gates; a failed gate fails its step and the run goes on; the bounded replan per failed step of `team._execute`; figures per step as results land | the Specialist's fallback proposal after each failed gate, as in Solve | `run`, figure and table artifacts, events |
+| Interpreter | one finding per key number anchored at the path its value sits at (`find_path`), consistency from the comparison gates, the decision from the brief and the headline number with its band, the grade from the run (`grade_for_study`), data requests from a rule table over the playbooks | one call over the compact results, the gates and the rules' draft; validated: a basis that resolves to nothing drops the finding, a claim number not at its basis drops it, a grade above the rule's is lowered, a decision value at no basis is replaced | `findings` |
+| Critic | `verify.verify` on the draft, the gates, the plan's notes; every failed check is a fix for the Author (`fixes_for`), and the notice when the critique stays not ok | one independent pass over the draft sections and the compact results: issues with a section, a severity and a fix; the second pass after the fix round keeps the model | `critique` |
 | Author | template prose (`team._template_answer` and the sentence makers); the key numbers harvested from every payload (both fits at every return period, every drought timescale with its class, the transferred signatures' bands, the reliability by year) | one call per report for the prose of every section, given the compact results, the critique and the caveats; the numbers come from the results | `report` (with `written_by`), the documents, the workbook, the notebook, the bundle |
 | Coordinator | the state machine, checkpoints, follow-ups | the same; a follow-up is classified by the Consultant as a question (answered from the workspace) or a change (steps appended, run, re-authored) | `status`, `follow_ups` |
 
 Reading between the roles: compact JSON of exactly what the role needs
 (`aquascope.studio.model.compact`), never the whole workspace, never a
 transcript.
+
+## Data requests (`aquascope/studio/requests.py`)
+
+A playbook decline whose reason is data the user could bring becomes a request (a small rule table keyed by
+playbook, matched on the decline sentence and the intake): the study parks at `waiting` with
+`ws.pending_request`, the reply kind is `data_request`, and `Studio.say("continue without")` applies the
+rule's `continue_without` intake and plans again (or declines when the rule allows no continuation);
+`Studio.add_table(name, frame_or_csv)` takes a table at any status: kept at intake, inventoried and planned
+on at `waiting` or `review`, a follow-up change after the report. The Interpreter's post-run
+`data_requests` are the other half: what the run itself could not establish and what would firm it up.
 
 ## The Coordinator's API (`aquascope.studio.Studio`)
 

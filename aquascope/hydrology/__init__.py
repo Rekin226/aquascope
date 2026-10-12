@@ -28,6 +28,7 @@ Quick start::
 from __future__ import annotations
 
 from aquascope.hydrology.baseflow import BaseflowResult, eckhardt, lyne_hollick, ukih
+from aquascope.hydrology.budyko import BUDYKO_CURVES, BudykoResult, budyko
 from aquascope.hydrology.flood_frequency import (
     EMAResult,
     FloodFreqResult,
@@ -160,4 +161,8 @@ __all__ = [
     "similarity_score",
     # streamflow
     "stage_to_runoff",
+    # budyko
+    "BUDYKO_CURVES",
+    "BudykoResult",
+    "budyko",
 ]

@@ -498,6 +498,34 @@ METHODOLOGIES: list[ResearchMethodology] = [
         ],
         tags=["correlation", "Pearson", "Spearman", "bivariate", "association"],
     ),
+    ResearchMethodology(
+        id="budyko_framework",
+        name="Budyko Framework Water-Balance Analysis",
+        category="hydrological_modelling",
+        description=(
+            "Partition long-term mean annual precipitation into evapotranspiration "
+            "and runoff using the Budyko framework: the evaporative ratio (ET/P) is "
+            "treated as a function of the aridity index (PET/P) alone, bounded by "
+            "water and energy limits.  Predictions are available for the Schreiber, "
+            "Ol'dekop, Turc-Pike and Fu/Zhang curves.  A catchment is placed "
+"relative to a curve from exactly one observed flux — long-term actual "
+"evapotranspiration (ET/P) or runoff (ET = P - Q, so ET/P = 1 - Q/P)."
+        ),
+        applicable_parameters=["Precipitation", "Evapotranspiration", "Runoff", "Streamflow"],
+        data_requirements=[
+            "long-term mean precipitation (≥ 10 years)",
+            "long-term mean PET",
+            "optional long-term AET or runoff (mutually exclusive)",
+        ],
+        typical_scale="regional",
+        complexity="low",
+        references=[
+            "Budyko, M.I. (1974). Climate and Life. Academic Press.",
+            "Fu, B. (1981). On the calculation of the evaporation from land surface. Scientia Atmospherica Sinica, 5(1), 23-31 (in Chinese).",
+            "Zhang, L., et al. (2004). A rational function approach for estimating mean annual evapotranspiration. Water Resources Research, 40(2), W02502. DOI: 10.1029/2003WR002710.",
+        ],
+        tags=["Budyko", "water-balance", "aridity", "evapotranspiration", "evaporative-ratio", "catchment"],
+    ),
 ]
 
 

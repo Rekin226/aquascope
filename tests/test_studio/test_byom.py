@@ -118,7 +118,7 @@ def test_a_proposed_plan_with_nothing_valid_falls_back_to_the_tree(studio_factor
     assert r.kind == "report" and r.payload["plan_used"] == "tree" and r.payload["plan_errors"]
     assert ws.study["plan"]["author"] == "playbook" and ws.study["plan"]["branch"] == "at_site"
     assert ws.study["plan"]["proposal"]["used"] == "tree" and ws.study["plan"]["proposal"]["source"] == "gemma"
-    assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency"]
+    assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency", "anywhere"]
     assert any(e["event"] == "fallback" and "gemma" in e["detail"] for e in ws.events)
     s2, _ = studio_factory()
     s2.say(PROBLEM)
@@ -155,20 +155,21 @@ def test_narrate_replaces_sections_after_the_number_check(studio_factory):
         "answer": "About 520 m3/s at Kingston (uk_ea 3400TH), 90 % band 420 to 650 m3/s.",
         "references": "not allowed", "nope": "unknown section", "limitations": "   ",
     }, source="device")
-    assert r.kind == "report" and r.payload["dropped"] == 2 and r.payload["ignored"] == ["references", "nope"]
+    assert r.kind == "report" and r.payload["dropped"] == 4
+    assert r.payload["ignored"] == ["answer", "references", "nope"]
     after = {x["id"]: x["text"] for x in ws.report["sections"]}
     assert after["summary"] == ("The 100-year flow at Kingston (uk_ea 3400TH) is 520 m3/s by GEV, 548 m3/s by LP3. "
                                 "The record runs 39.9 years.")
-    assert after["results-s3"] == "- GEV gives 520 m3/s (90 % band 420 to 650 m3/s).\n- LP3 gives 548 m3/s."
+    assert after["results-s3"] == "- LP3 gives 548 m3/s."
     assert after["problem"] == before["problem"] and after["limitations"] == before["limitations"]
-    assert ws.report["answer"].startswith("About 520") and r.text.startswith("About 520")
+    assert "About 520" not in ws.report["answer"] and "(established)" in r.text
     written_by = ws.report["written_by"]
     assert written_by["summary"] == "device" and written_by["results-s3"] == "device"
-    assert written_by["answer"] == "device"
+    assert written_by["answer"] == "template"
     assert written_by["problem"] == "template" and ws.report["footer"]["written_by"] == written_by
     assert r.payload["written_by"] == written_by
     md = to_markdown(ws)
-    assert "device wrote answer, summary, results-s3" in md
+    assert "device wrote summary, results-s3" in md
     assert ws.report["critique"]["checks"] and ws.report["not_established"] == []
     assert any(e["event"] == "dropped" for e in ws.events if e["role"] == "critic")
     assert len([e for e in ws.events if e["event"] == "deliverables_unavailable"]) == events + 1, "rebuilt"
@@ -184,8 +185,8 @@ def test_narrate_rebuilds_the_deliverables_and_keeps_recommendations_as_a_list(s
     pkg.build = lambda ws: built.append(ws.id) or []
     monkeypatch.setitem(sys.modules, "aquascope.studio.deliverables", pkg)
     r = s.narrate([{"id": "recommendations", "text": "- Adopt 520 m3/s.\n- Quote the 420 to 650 m3/s band."}])
-    assert r.kind == "report" and r.payload["dropped"] == 0 and built == [s.workspace.id]
-    assert s.workspace.report["recommendations"] == ["Adopt 520 m3/s.", "Quote the 420 to 650 m3/s band."]
+    assert r.kind == "report" and r.payload["dropped"] == 1 and built == [s.workspace.id]
+    assert s.workspace.report["recommendations"] == ["Adopt 520 m3/s."]
     assert any(e["event"] == "deliverables" for e in s.workspace.events)
 
 
@@ -226,7 +227,7 @@ def test_the_contexts_are_what_the_roles_send_a_model(studio_factory):
         client.calls("methodologist")[0]["context"]
     k.approve(plan=VALID_PLAN)
     actx = k.author_context()
-    assert actx["system"] == prompts.AUTHOR and actx["section_ids"][:2] == ["summary", "problem"]
+    assert actx["system"] == prompts.AUTHOR and actx["section_ids"][:3] == ["summary", "decision", "findings"]
     sent = client.calls("author")[0]["context"]
     assert json.loads(json.dumps({x: y for x, y in actx.items() if x != "system"})) == sent
     fix = k.author_context(issues=[{"section": "summary", "severity": "fix", "text": "t", "fix": "f"}])
@@ -283,7 +284,7 @@ def test_explorer_prompts_json_matches_the_module():
                          "methodologist_repair", "methodologist_change", "author", "author_fix", "critic",
                          "specialist", "schemas", "version"}
     assert data["consultant"] == prompts.CONSULTANT and data["version"] == prompts.VERSION
-    assert set(data["schemas"]) == {"brief", "plan", "sections"}
+    assert set(data["schemas"]) == {"brief", "plan", "sections", "findings"}
     assert data["schemas"]["plan"]["properties"]["steps"]["items"]["required"] == ["id", "tool", "arguments",
                                                                                      "rationale"]
     assert "\u2014" not in shipped and "\u2013" not in shipped, "no dashes in what the page reads"
@@ -315,12 +316,12 @@ def test_follow_ups_add_steps_without_a_model(studio_factory):
     n = len(calls)
     r = s.follow_up("add the flow duration curve and a trend test")
     assert r.kind == "report" and [st["id"] + ":" + st["tool"] for st in ws.study["steps"]] == [
-        "s1:describe_catchment", "s2:analyze_station", "s3:flood_frequency", "s4:low_flow_context",
-        "s5:analyze_station"]
-    assert ws.study["steps"][4]["method"] == "trend_mann_kendall" and ws.study["plan"]["added"] == ["s4", "s5"]
+        "s1:describe_catchment", "s2:analyze_station", "s3:flood_frequency", "s4:anywhere", "s5:low_flow_context",
+        "s6:analyze_station"]
+    assert ws.study["steps"][5]["method"] == "trend_mann_kendall" and ws.study["plan"]["added"] == ["s5", "s6"]
     assert [c[0] for c in calls[n:]] == ["low_flow_context", "analyze_station"], "the earlier steps are reused"
-    assert ws.follow_ups[-1]["kind"] == "change" and ws.follow_ups[-1]["steps"][-1] == "s5"
-    assert len(ws.study["plan"]["methodology"]) == 5
+    assert ws.follow_ups[-1]["kind"] == "change" and ws.follow_ups[-1]["steps"][-1] == "s6"
+    assert len(ws.study["plan"]["methodology"]) == 6
     assert any(k["label"] == "Baseflow index" for k in ws.report["key_numbers"])
     r = s.follow_up("compare with the donors")
     assert [st["tool"] for st in ws.study["steps"]][-2:] == ["similar_basins", "regionalize_signatures"]
@@ -333,7 +334,7 @@ def test_follow_ups_add_steps_without_a_model(studio_factory):
     r = s.follow_up("and the baseflow, plus the GloFAS cross-check")
     assert [st["tool"] for st in ws.study["steps"]][-2:] == ["low_flow_context", "anywhere"]
     assert ws.study["steps"][-2]["method"] == "baseflow_separation"
-    assert [st["id"] for st in ws.study["steps"]] == [f"s{i}" for i in range(1, 12)]
+    assert [st["id"] for st in ws.study["steps"]] == [f"s{i}" for i in range(1, 13)]
     assert ws.status == "done" and ws.run["ok"]
 
 
@@ -347,12 +348,12 @@ def test_a_return_period_change_carries_the_added_steps_and_unknown_requests_are
     r = s.follow_up("redo it with a 50-year return period")
     assert r.kind == "report" and ws.brief.intake["return_period"] == 50
     assert [st["tool"] for st in ws.study["steps"]] == ["describe_catchment", "analyze_station", "flood_frequency",
-                                                        "low_flow_context"]
-    assert ws.study["plan"]["added"] == ["s4"] and [c[0] for c in calls[n:]] == ["flood_frequency"]
+                                                        "anywhere", "low_flow_context"]
+    assert ws.study["plan"]["added"] == ["s5"] and [c[0] for c in calls[n:]] == ["flood_frequency", "anywhere"]
     r = s.follow_up("add a rainfall-runoff model instead")
     assert r.kind == "answer" and "cannot add that without a model" in r.text and "another gauge" in r.text
     assert ws.follow_ups[-1]["kind"] == "change" and ws.status == "done"
-    assert len(ws.study["steps"]) == 4, "the plan is untouched"
+    assert len(ws.study["steps"]) == 5, "the plan is untouched"
     s2, _ = studio_factory()
     s2.say(PROBLEM)
     s2.approve()

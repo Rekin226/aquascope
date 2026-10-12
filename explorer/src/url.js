@@ -3,17 +3,36 @@
 // view, and "Copy link" hands someone else exactly what you are looking at.
 //
 // #s=<source>/<id>&tab=floods&v=8.1/51.41/-0.31&hide=usgs,uk_ea&basins=1
+// #s=<source>/<id>&yr=40               (the analysis period: yr=40, yr=20, or yr=all for the full record)
 // #p=<lat>,<lon>&tab=climate&v=...
 // #s=<source>/<id>&study=1            (the Study drawer, open at that place)
 // #study=kingston-flood                (a recorded study, by its id)
+// #study=z1.<token>                    (a shared plan, see study-link.js; ?study_url= carries a study.yaml)
+// #fp=0                                (Floods past off; it is on by default, #547)
+// #o=precip&d=2024-05-01&ts=week&r=2024-01-01..2024-06-30&cmp=2023-05-01   (the map date, see timeline.js)
+// #ws=0                                (the world river status off; it is on by default, #544)
 //
 // The legacy forms (#s=key, #p=lat,lon, #solve=...) still parse, so old links
 // keep working: a Solve link opens Study at the same place.
 
-import { LAYER_DEFAULTS, actions, state, trace } from "./core.js?v=__BUILD__";
+import { CONFIG } from "../config.js?v=__BUILD__";
+import { LAYER_DEFAULTS, actions, datedExtras, state, trace } from "./core.js?v=__BUILD__";
+import { datedLayersOn } from "./layers.js?v=__BUILD__";
+import { readTimeParams, writeTimeParams } from "./timeline.js?v=__BUILD__";
 
 let applying = false;      // ignore our own hashchange
 let lastWritten = "";
+
+// The station's analysis period (#270). null is the full record, a number caps it to the last N years.
+// CONFIG.years is where a page starts; a link only carries the period when it differs from that.
+export const PERIODS = [null, 40, 20];
+export const defaultPeriod = () => (PERIODS.includes(CONFIG.years) ? CONFIG.years : null);
+
+export function parsePeriod(value) {
+  if (value === "all") return null;
+  const n = Number(value);
+  return PERIODS.includes(n) ? n : undefined;   // anything else is ignored, not guessed
+}
 
 export function readUrl(hash = location.hash) {
   const raw = String(hash || "").replace(/^#/, "");
@@ -26,12 +45,14 @@ export function readUrl(hash = location.hash) {
     if (m) out.point = { lat: Number(m[1]), lon: Number(m[2]) };
   }
   if (q.has("tab")) out.tab = q.get("tab");
+  if (q.has("yr") && parsePeriod(q.get("yr")) !== undefined) out.period = parsePeriod(q.get("yr"));
   // The Study drawer, open at the selection. A Solve link from before opens it too; #study=<id> with an
   // id from the recorded studies' index opens that recording.
   if (q.has("study") || q.has("solve")) {
     out.study = true;
     const v = q.get("study");
     if (v && v !== "1" && /^[A-Za-z0-9_-]+$/.test(v)) out.studyId = v;
+    if (v && /^[zj]1\.[A-Za-z0-9_-]+$/.test(v)) out.studyLink = v;   // a shared plan (study-link.js)
   }
   if (q.has("v")) {
     const m = String(q.get("v")).match(/^([\d.]+)\/(-?[\d.]+)\/(-?[\d.]+)$/);
@@ -39,16 +60,18 @@ export function readUrl(hash = location.hash) {
   }
   if (q.has("hide")) out.hidden = String(q.get("hide")).split(",").filter(Boolean);
   if (q.has("basins")) out.basins = q.get("basins") === "1";
+  if (q.has("rivers")) out.rivers = q.get("rivers") === "1";
   // layers (#232)
   if (q.has("m")) out.mode = q.get("m");
   if (q.has("b")) out.basemap = q.get("b");
   if (q.has("o")) out.overlays = String(q.get("o")).split(",").filter(Boolean);
-  if (q.has("d")) out.date = q.get("d");
+  Object.assign(out, readTimeParams(q));   // d, ts, r, cmp, cl (#522)
   if (q.has("t")) out.terrain = q.get("t") === "1";
   if (q.has("hs")) out.hillshade = q.get("hs") === "1";
   if (q.has("gl")) out.globe = q.get("gl") === "1";
   if (q.has("gs")) out.gaugeStyle = q.get("gs");
   if (q.has("hm")) out.heat = q.get("hm") === "1";
+  if (q.has("ws")) out.status = q.get("ws") === "1";   // the world river status (#544)
   return out;
 }
 
@@ -57,14 +80,20 @@ function currentHash({ view } = {}) {
   if (state.mode === "workbench") q.set("m", "workbench");
   else if (state.selected) q.set("s", `${state.selected.source}/${state.selected.station_id}`);
   else if (state.point) q.set("p", `${state.point.lat},${state.point.lon}`);
-  if (state.activeTab) q.set("tab", state.activeTab);
+  if (state.activeTab && state.panelOpen !== false) q.set("tab", state.activeTab);   // a tab is a panel that is open (#548)
+  if (state.selected && state.mode !== "workbench" && state.period !== defaultPeriod()) {
+    q.set("yr", state.period === null ? "all" : String(state.period));
+  }
   if (state.drawerOpen && state.drawerMode === "study") q.set("study", state.study.recorded || "1");
+  if (state.drawerOpen && state.drawerMode === "study" && state.study.link) q.set("study", state.study.link);   // a shared study stays in the address
   if (view) q.set("v", `${view.zoom.toFixed(2)}/${view.lat.toFixed(4)}/${view.lon.toFixed(4)}`);
   if (state.hidden.size) q.set("hide", [...state.hidden].join(","));
   if (state.basinsOn) q.set("basins", "1");
+  if (!state.riversOn) q.set("rivers", "0");   // on by default since #545
   if (state.basemap && state.basemap !== LAYER_DEFAULTS.basemap) q.set("b", state.basemap);
   if (state.overlays && state.overlays.size) q.set("o", [...state.overlays].join(","));
-  if (state.date && (state.overlays.size || state.basemap === "daily")) q.set("d", state.date);
+  writeTimeParams(q, { date: state.date, step: state.timeStep, range: state.timeRange, compare: state.compare },
+    { dated: datedLayersOn(state.basemap, state.overlays).length > 0 || datedExtras.size > 0 });
   // Only what differs from LAYER_DEFAULTS, written as 0 or 1 so a link can turn
   // a default-on layer off as well as a default-off layer on.
   const flag = (key, param) => {
@@ -75,6 +104,13 @@ function currentHash({ view } = {}) {
   flag("globe", "gl");
   if (state.gaugeStyle && state.gaugeStyle !== LAYER_DEFAULTS.gaugeStyle) q.set("gs", state.gaugeStyle);
   flag("heat", "hm");
+  flag("floodsPast", "fp");
+  flag("status", "ws");
+  flag("groundwater", "gw");
+  flag("flowNormal", "fn");
+  flag("waterBalance", "wb");
+  if (state.waterBalance && state.wbVar && state.wbVar !== "p") q.set("wbv", state.wbVar);
+  if (state.waterBalance && state.wbMode === "anom") q.set("wbm", "anom");
   return `#${q.toString().replace(/%2F/gi, "/").replace(/%2C/gi, ",")}`;
 }
 

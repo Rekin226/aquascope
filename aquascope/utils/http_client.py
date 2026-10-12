@@ -92,12 +92,64 @@ class _EmscriptenClient:
     def get(self, url: str, params=None, headers=None):
         return self._request("GET", url, params=params, headers=headers)
 
+    def get_bytes(self, url: str, headers=None) -> tuple[int, bytes]:
+        """GET *url* and return ``(status, body bytes)``: a binary body (a byte range of a tile archive)
+        survives, where :meth:`get` decodes to text. pyodide-http hands a worker's XHR back as bytes."""
+        import urllib.error
+        import urllib.request
+
+        req = urllib.request.Request(url, method="GET")
+        for k, v in (headers or {}).items():
+            req.add_header(k, v)
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                return resp.status, resp.read()
+        except urllib.error.HTTPError as exc:
+            return exc.code, exc.read() if exc.fp else b""
+        except (urllib.error.URLError, OSError) as exc:
+            raise httpx.TransportError(f"Browser fetch failed for {url}. ({exc})") from exc
+
     def post(self, url: str, json=None, params=None, headers=None):
         body = None if json is None else _dumps(json).encode("utf-8")
         return self._request("POST", url, params=params, headers=headers, body=body)
 
     def close(self) -> None:
         pass
+
+
+class RateLimitedError(RuntimeError):
+    """The server answered 429 Too Many Requests and kept answering it.
+
+    A ``RuntimeError`` (what callers already catch when retries run out), so it
+    changes nothing for them; a caller that runs many requests in a row, such as
+    the archive harvest, can catch this one and stop asking that host for the rest
+    of the run instead of spending three retries per station on a spent quota.
+    """
+
+    def __init__(self, url: str, retry_after: float | None = None):
+        self.url = url
+        self.retry_after = retry_after
+        wait = f"; the server asks to wait {retry_after:.0f} s" if retry_after else ""
+        super().__init__(f"Rate limited (429) by {url}{wait}")
+
+
+#: Longest Retry-After the client will sleep through; a longer one means the quota is spent for now.
+MAX_RETRY_AFTER_SECONDS = 60.0
+
+
+def _retry_after(exc: Exception) -> float | None:
+    """Seconds from a 429's Retry-After header (seconds form only), or None."""
+    resp = getattr(exc, "response", None)
+    value = resp.headers.get("Retry-After") if resp is not None else None
+    try:
+        return float(value) if value is not None else None
+    except ValueError:
+        return None
+
+
+def _is_429(exc: Exception | None) -> bool:
+    resp = getattr(exc, "response", None)
+    return resp is not None and getattr(resp, "status_code", None) == 429
 
 
 class RateLimiter:
@@ -194,12 +246,22 @@ class CachedHTTPClient:
         if age > self.cache_ttl:
             path.unlink(missing_ok=True)
             return None
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
 
     def _write_cache(self, key: str, data: Any) -> None:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         path = self.cache_dir / f"{key}.json"
-        path.write_text(json.dumps(data, ensure_ascii=False, default=str))
+        path.write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
+
+    def _format_retry_error(self, url: str, exc: Exception | None, method: str = "GET") -> str:
+        if isinstance(exc, httpx.HTTPStatusError):
+            detail = f"status {exc.response.status_code}"
+        elif exc is not None:
+            detail = f"{type(exc).__name__}: {exc}"
+        else:
+            detail = "unknown error"
+        prefix = f"{method} " if method != "GET" else ""
+        return f"All {self.retries} attempts failed for {prefix}{url} ({detail})"
 
     # ── public API ───────────────────────────────────────────────────
     @staticmethod
@@ -243,6 +305,28 @@ class CachedHTTPClient:
                 f"First 200 chars of response: {preview!r}"
             ) from exc
 
+    def _backoff(self, exc: Exception, attempt: int, url: str, label: str = "") -> None:
+        """Sleep before the next attempt, or raise :class:`RateLimitedError` when retrying a 429 is pointless.
+
+        A 429 with a short Retry-After is slept through; a long one, or a second 429 in a row with no header
+        (USGS sends none), means the quota is spent and more retries would only spend the run's time.
+        """
+        if _is_429(exc):
+            after = _retry_after(exc)
+            if after is not None and after > MAX_RETRY_AFTER_SECONDS:
+                raise RateLimitedError(url, after) from exc
+            if after is None and attempt >= 2:
+                raise RateLimitedError(url) from exc
+            if attempt >= self.retries:
+                raise RateLimitedError(url, after) from exc
+            wait = after if after is not None else 2**attempt
+        else:
+            wait = 2**attempt
+        logger.warning(
+            "Attempt %d/%d failed for %s%s: %s — retrying in %ds", attempt, self.retries, label, url, exc, wait,
+        )
+        time.sleep(wait)
+
     def get_json(
         self,
         path: str,
@@ -284,18 +368,10 @@ class CachedHTTPClient:
                 return data
             except (httpx.HTTPStatusError, httpx.TransportError) as exc:
                 last_exc = exc
-                wait = 2**attempt
-                logger.warning(
-                    "Attempt %d/%d failed for %s: %s — retrying in %ds",
-                    attempt,
-                    self.retries,
-                    url,
-                    exc,
-                    wait,
-                )
-                time.sleep(wait)
+                if attempt < self.retries or _is_429(exc):
+                    self._backoff(exc, attempt, url)
 
-        raise RuntimeError(f"All {self.retries} attempts failed for {url}") from last_exc
+        raise RuntimeError(self._format_retry_error(url, last_exc)) from last_exc
 
 
     def get_text(
@@ -325,7 +401,7 @@ class CachedHTTPClient:
                 age = time.time() - path_cache.stat().st_mtime
                 if age <= self.cache_ttl:
                     logger.debug("Cache hit for %s", url)
-                    return path_cache.read_text()
+                    return path_cache.read_text(encoding="utf-8")
                 path_cache.unlink(missing_ok=True)
 
         last_exc: Exception | None = None
@@ -338,22 +414,44 @@ class CachedHTTPClient:
                 text = resp.text
                 if use_cache:
                     self.cache_dir.mkdir(parents=True, exist_ok=True)
-                    (self.cache_dir / f"{key}.txt").write_text(text)
+                    (self.cache_dir / f"{key}.txt").write_text(text, encoding="utf-8")
                 return text
             except (httpx.HTTPStatusError, httpx.TransportError) as exc:
                 last_exc = exc
-                wait = 2**attempt
-                logger.warning(
-                    "Attempt %d/%d failed for %s: %s — retrying in %ds",
-                    attempt,
-                    self.retries,
-                    url,
-                    exc,
-                    wait,
-                )
-                time.sleep(wait)
+                if attempt < self.retries or _is_429(exc):
+                    self._backoff(exc, attempt, url)
 
-        raise RuntimeError(f"All {self.retries} attempts failed for {url}") from last_exc
+        raise RuntimeError(self._format_retry_error(url, last_exc)) from last_exc
+
+    def get_bytes(self, url: str, *, start: int | None = None, end: int | None = None) -> bytes:
+        """GET *url* (or the inclusive byte range ``start``-``end`` of it) and return the body as bytes.
+
+        For binary files read in place, such as a PMTiles archive: no disk cache (the caller keeps what it
+        needs in memory), the same retries. A server that ignores the range and sends the whole file is
+        cut down to the range asked for.
+        """
+        headers = {"Range": f"bytes={int(start)}-{int(end)}"} if start is not None and end is not None else None
+        last_exc: Exception | None = None
+        for attempt in range(1, self.retries + 1):
+            if self.rate_limiter:
+                self.rate_limiter.wait_if_needed()
+            try:
+                if IS_EMSCRIPTEN:
+                    status, body = self._client.get_bytes(url, headers=headers)
+                    if status >= 400:
+                        raise httpx.TransportError(f"HTTP {status} for {url}")
+                else:
+                    resp = self._client.get(url, headers=headers)
+                    resp.raise_for_status()
+                    status, body = resp.status_code, resp.content
+                if headers and status == 200 and start is not None and end is not None:
+                    body = body[int(start): int(end) + 1]
+                return body
+            except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+                last_exc = exc
+                if attempt < self.retries or _is_429(exc):
+                    self._backoff(exc, attempt, url)
+        raise RuntimeError(self._format_retry_error(url, last_exc)) from last_exc
 
     def post_json(
         self,
@@ -406,18 +504,10 @@ class CachedHTTPClient:
                 return data
             except (httpx.HTTPStatusError, httpx.TransportError) as exc:
                 last_exc = exc
-                wait = 2**attempt
-                logger.warning(
-                    "Attempt %d/%d failed for POST %s: %s — retrying in %ds",
-                    attempt,
-                    self.retries,
-                    url,
-                    exc,
-                    wait,
-                )
-                time.sleep(wait)
+                if attempt < self.retries or _is_429(exc):
+                    self._backoff(exc, attempt, url, "POST ")
 
-        raise RuntimeError(f"All {self.retries} attempts failed for POST {url}") from last_exc
+        raise RuntimeError(self._format_retry_error(url, last_exc, method="POST")) from last_exc
 
     def close(self) -> None:
         self._client.close()

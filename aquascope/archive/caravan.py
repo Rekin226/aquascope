@@ -470,7 +470,7 @@ def export_caravan(
     lic_dir.mkdir(parents=True, exist_ok=True)
     (lic_dir / f"{prefix}.md").write_text(_license_text(source, forcing), encoding="utf-8")
     prov_path = out / "provenance.json"
-    prov = json.loads(prov_path.read_text()) if prov_path.exists() else {"subdatasets": {}}
+    prov = json.loads(prov_path.read_text(encoding="utf-8")) if prov_path.exists() else {"subdatasets": {}}
     prov["subdatasets"][prefix] = {
         "source": source, "agency": meta.agency, "license": meta.license, "attribution": meta.attribution,
         "run_at": report.run_at, "aquascope_version": __version__,

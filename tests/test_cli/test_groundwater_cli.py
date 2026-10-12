@@ -17,7 +17,7 @@ def test_groundwater_trend_cli_formats_tiny_p_value(
 ):
     """Verify that a tiny p-value (< 0.001) in well trend CLI outputs '< 0.001' rather than '0.0000'."""
     csv_file = tmp_path / "well_levels.csv"
-    csv_file.write_text("datetime,water_level\n2020-01-01,10.5\n2020-01-02,10.4\n2020-01-03,10.3\n")
+    csv_file.write_text("datetime,water_level\n2020-01-01,10.5\n2020-01-02,10.4\n2020-01-03,10.3\n", encoding="utf-8")
 
     fake_result = WellTrendResult(
         trend="decreasing",
@@ -44,7 +44,7 @@ def test_groundwater_trend_cli_formats_standard_p_value(
 ):
     """Verify that a moderate p-value (>= 0.001) in well trend CLI outputs rounded 3 decimals."""
     csv_file = tmp_path / "well_levels.csv"
-    csv_file.write_text("datetime,water_level\n2020-01-01,10.5\n2020-01-02,10.4\n2020-01-03,10.3\n")
+    csv_file.write_text("datetime,water_level\n2020-01-01,10.5\n2020-01-02,10.4\n2020-01-03,10.3\n", encoding="utf-8")
 
     fake_result = WellTrendResult(
         trend="decreasing",

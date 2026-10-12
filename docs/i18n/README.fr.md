@@ -47,7 +47,7 @@ print(sig.flashiness_index)    # indice de flashiness de Richards-Baker
 22 signatures couvrant l'amplitude, la variabilité, la temporalité, la récession et la flashiness — voir [docs/features.md](../features.md#hydrological-analysis).
 
 ## 💻 CLI
-AquaScope propose une CLI de 29 commandes pour les workflows les plus courants :
+AquaScope propose une CLI de 49 commandes pour les workflows les plus courants :
 ```bash
 # Collecter des données
 aquascope collect --source usgs --days 365
@@ -60,7 +60,7 @@ aquascope agri plan --crop maize --planting-date 2026-04-01 --lat 30.0 --lon 31.
 # Recommandation IA + résolution de problèmes en langage naturel
 aquascope recommend --parameters DO,BOD5,COD --goal "pollution trend detection"
 aquascope solve --problem "Assess flood risk for a 100-year return period"
-# Tableau de bord interactif Streamlit — espace de travail multipage avec 36 sources
+# Tableau de bord interactif Streamlit — espace de travail multipage avec 37 sources
 # en direct, insights automatiques intelligents, et graphiques Plotly entièrement interactifs
 aquascope dashboard
 ```

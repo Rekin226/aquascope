@@ -48,6 +48,7 @@ class DataSource(str, Enum):
     SOUTH_AFRICA_DWS = "south_africa_dws"
     GREECE_HYDROSCOPE = "greece_hydroscope"
     GREECE_OPENHI = "greece_openhi"
+    POLAND_IMGW = "poland_imgw"
 
     PEGELONLINE = "pegelonline"
     BOM = "bom"
@@ -61,6 +62,14 @@ class GeoLocation(BaseModel):
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
     datum: str = Field(default="WGS84")
+
+
+class Quality(str, Enum):
+    APPROVED = "approved"
+    PROVISIONAL = "provisional"
+    ESTIMATED = "estimated"
+    SUSPECT = "suspect"
+    UNKNOWN = "unknown"
 
 
 class WaterQualitySample(BaseModel):
@@ -78,6 +87,8 @@ class WaterQualitySample(BaseModel):
     river: str | None = None
     county: str | None = None
     remark: str | None = None
+    quality: Quality = Quality.UNKNOWN
+    quality_raw: str | None = None
 
     model_config = {
         "json_schema_extra": {
@@ -119,6 +130,8 @@ class ClimateReading(BaseModel):
     value: float
     unit: str
     remark: str | None = None
+    quality: Quality = Quality.UNKNOWN
+    quality_raw: str | None = None
 
 
 class WaterLevelReading(BaseModel):
@@ -132,6 +145,8 @@ class WaterLevelReading(BaseModel):
     water_level: float
     unit: str = "m"
     remark: str | None = None
+    quality: Quality = Quality.UNKNOWN
+    quality_raw: str | None = None
 
 
 class ReservoirStatus(BaseModel):
@@ -178,6 +193,8 @@ class StreamflowReading(BaseModel):
     )
     unit: str = "m3/s"
     remark: str | None = None
+    quality: Quality = Quality.UNKNOWN
+    quality_raw: str | None = None
 
     @property
     def runoff_mm_day(self) -> float | None:

@@ -7,6 +7,8 @@ import { shapeSvg } from "./shapes.js?v=__BUILD__";
 import { sourceCounts } from "./catalog.js?v=__BUILD__";
 import { refreshMapData } from "./map.js?v=__BUILD__";
 import { setBasinsVisible } from "./basins.js?v=__BUILD__";
+import { setFlowOn, setRiversVisible } from "./river-map.js?v=__BUILD__";
+import { renderCredits } from "./layer-ui.js?v=__BUILD__";
 import { writeUrl } from "./url.js?v=__BUILD__";
 
 export function buildRail() {
@@ -36,12 +38,25 @@ export function buildRail() {
     setBasinsVisible(e.target.checked);
     writeUrl();
   });
+  const rivers = $("toggle-rivers");
+  rivers.checked = state.riversOn;
+  rivers.addEventListener("change", (e) => {
+    setRiversVisible(e.target.checked);
+    renderCredits();
+    writeUrl();
+  });
+  const flow = $("toggle-flow");
+  if (flow) {
+    flow.checked = Boolean(state.flowOn);
+    flow.addEventListener("change", (e) => setFlowOn(e.target.checked));
+  }
   updateCount();
 }
 
 export function updateCount() {
   const total = state.stations.length;
-  const visible = state.stations.filter((r) => !state.hidden.has(r.source)).length;
+  const visible = state.stations.filter((r) => !state.hidden.has(r.source)
+    && (!state.sigMatch || state.sigMatch.has(`${r.source}/${r.station_id}`))).length;  // signature filter
   const el = $("count");
   el.textContent = visible === total
     ? `${total.toLocaleString()} shown`
@@ -56,5 +71,7 @@ export function syncRail() {
   }
   const basins = $("toggle-basins");
   if (basins) basins.checked = state.basinsOn;
+  const rivers = $("toggle-rivers");
+  if (rivers) rivers.checked = state.riversOn;
   updateCount();
 }

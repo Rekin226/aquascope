@@ -22,37 +22,53 @@
  "error": null,
  "model": "claude-sonnet-5",
  "provider": "anthropic",
- "recorded": "2026-09-07T14:08:38+00:00",
- "seconds": 389.9,
+ "recorded": "2026-09-14T23:24:08+00:00",
+ "seconds": 578.9,
  "tokens": {
-  "prompt": 81897,
-  "completion": 34048,
-  "calls": 6,
+  "prompt": 86259,
+  "completion": 38353,
+  "calls": 8,
   "by_role": {
    "consultant": {
     "calls": 1,
     "prompt_tokens": 3031,
-    "completion_tokens": 1323
+    "completion_tokens": 1007,
+    "cost_usd": 0.016132
    },
    "methodologist": {
     "calls": 2,
-    "prompt_tokens": 11251,
-    "completion_tokens": 7837
+    "prompt_tokens": 14937,
+    "completion_tokens": 6747,
+    "cost_usd": 0.097344
+   },
+   "analyst": {
+    "calls": 1,
+    "prompt_tokens": 4208,
+    "completion_tokens": 290,
+    "cost_usd": 0.011316
+   },
+   "interpreter": {
+    "calls": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cost_usd": 0.0
    },
    "author": {
     "calls": 2,
-    "prompt_tokens": 46275,
-    "completion_tokens": 11089
+    "prompt_tokens": 39887,
+    "completion_tokens": 10066,
+    "cost_usd": 0.180434
    },
    "critic": {
-    "calls": 1,
-    "prompt_tokens": 21340,
-    "completion_tokens": 13799
+    "calls": 2,
+    "prompt_tokens": 24196,
+    "completion_tokens": 20243,
+    "cost_usd": 0.250822
    }
   },
-  "total": 115945
+  "total": 124612
  },
- "usd": 0.7564,
+ "usd": 0.8341,
  "usd_per_mtoken": [
   3.0,
   15.0
@@ -63,18 +79,18 @@
  "steps": 3,
  "gates": {
   "passed": 6,
-  "total": 6
+  "total": 8
  },
  "checks": {
-  "passed": 3,
-  "total": 4
+  "passed": 7,
+  "total": 7
  },
- "replans": 0,
+ "replans": 1,
  "stop_reason": null,
- "headline": "Regionalised low-flow transfer from 10 donor gauges to the 478.7 km2 catchment (BasinATLAS/HydroATLAS, hybas_id 2120018870) gives a mean flow of about 0.60 m3/s (52 ML/day), a median of about 0.38 m3/s (33 ML/day) and a Q95 low flow of a...",
+ "headline": "Whether an ungauged Sintra hills stream (38.80 N, -9.38 W, BasinATLAS HYBAS id 2120018870) can sustain a 4 ML/day run-of-river municipal offtake, and how reliable that supply would be: not established.",
  "not_established": [
-  "step s4: method 'regionalize_signatures' is not one supply_reliability applies; 'supply_reliability' stands in",
-  "These numbers are not in any tool result: 0.38, 0.046, 0.38, 0.046, 0.38, 0.046."
+  "Step s3, gate not_empty: nothing at 'fdc'",
+  "Step s3.fallback, gate min_donors: no donor count at 'k'"
  ],
  "figures": [
   {
@@ -82,21 +98,21 @@
    "id": "fig-s1-site_map",
    "step": "s1",
    "caption": "The site, in longitude and latitude (no basemap); no catalogue station was listed with it.",
-   "bytes": 27182
+   "bytes": 28446
   },
   {
    "name": "s2_donors_map.png",
    "id": "fig-s2-donors_map",
    "step": "s2",
-   "caption": "The site and the 10 donor gauges the similarity search selected, in longitude and latitude (no basemap); labels are the station ids.",
-   "bytes": 46747
+   "caption": "The site and the 5 donor gauges the similarity search selected, in longitude and latitude (no basemap); labels are the station ids.",
+   "bytes": 45579
   },
   {
-   "name": "s3_signatures_band.png",
-   "id": "fig-s3-signatures_band",
-   "step": "s3",
-   "caption": "Flow signatures transferred to the site from 10 donor catchments, with the one-standard-deviation band across donors as error bars and the leave-one-out skill (NSE) where published.",
-   "bytes": 88882
+   "name": "s3.fallback_donors_map.png",
+   "id": "fig-s3.fallback-donors_map",
+   "step": "s3.fallback",
+   "caption": "The site and the 10 donor gauges the similarity search selected, in longitude and latitude (no basemap); labels are the station ids.",
+   "bytes": 44919
   }
  ],
  "files": [
@@ -105,8 +121,8 @@
   "study.yaml",
   "figures/s1_site_map.png",
   "figures/s2_donors_map.png",
-  "figures/s3_signatures_band.png"
+  "figures/s3.fallback_donors_map.png"
  ],
  "trimmed": [],
- "aquascope_version": "0.14.0"
+ "aquascope_version": "0.16.0"
 }

@@ -12,7 +12,7 @@ class TestKnowledgeBase:
     def test_get_all_returns_list(self):
         methods = get_all_methodologies()
         assert isinstance(methods, list)
-        assert len(methods) >= 20  # We have 26 methodologies
+        assert len(methods) >= 20  # a floor, not the exact count
 
     def test_all_have_required_fields(self):
         for m in get_all_methodologies():

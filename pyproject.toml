@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aquascope"
-version = "0.16.0"
-description = "Open-source water data aggregation toolkit with AI-powered research methodology recommendations"
+version = "0.27.0"
+description = "Explore river records and run reproducible water analyses in your browser or Python"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
@@ -121,9 +121,14 @@ studio = [
     "matplotlib>=3.7",
     "openpyxl>=3.1",
     "python-docx>=1.1",
+    "questionary>=2.0",
+]
+engineering = [
+    "hecdss>=0.1.33",
+    "flopy>=3.8",
 ]
 all = [
-    "aquascope[ml,forecast,copernicus,viz,llm,scientific,dashboard,spatial,interop,archive,mcp,basins,studio]",
+    "aquascope[ml,forecast,copernicus,viz,llm,scientific,dashboard,spatial,interop,archive,mcp,basins,studio,engineering]",
 ]
 dev = [
     "pytest>=7.0",
@@ -147,14 +152,15 @@ test = [
 docs = [
     "mkdocs-material[imaging]>=9.5,<10",
     "mkdocstrings[python]>=0.24,<0.30",
-    "pymdown-extensions>=10.7",
+    # 12.2 (2026-10-10) changed Highlight.__init__ and breaks mkdocstrings 0.29 (the docs build)
+    "pymdown-extensions>=10.7,<12.2",
 ]
 
 [project.scripts]
 aquascope = "aquascope.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Rekin226/aquascope"
+Homepage = "https://rekin226-aquascope-explorer.static.hf.space/"
 Documentation = "https://rekin226.github.io/aquascope/"
 Repository = "https://github.com/Rekin226/aquascope"
 Issues = "https://github.com/Rekin226/aquascope/issues"

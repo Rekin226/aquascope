@@ -280,7 +280,7 @@ class TestExportHecRas:
             export_hec_ras(result, output_path)
 
             assert output_path.exists()
-            content = output_path.read_text()
+            content = output_path.read_text(encoding="utf-8")
             lines = content.strip().split("\n")
 
             # Header lines start with #

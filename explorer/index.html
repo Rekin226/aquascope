@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AquaScope Explorer: click any gauge on Earth</title>
+  <title>AquaScope Hydrology — Explorer</title>
   <meta name="description" content="Every public water gauge AquaScope can reach, on one map. Click a station for the observed record, flood frequency, flow duration and trend, computed in your browser." />
-  <meta property="og:title" content="AquaScope Explorer" />
+  <meta property="og:title" content="AquaScope Hydrology — Explorer" />
   <meta property="og:description" content="Click any public water gauge on Earth: the observed record, flood frequency with confidence limits, flow duration, trend and a rainfall-runoff model, computed in your browser. Nothing to install." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://rekin226-aquascope-explorer.static.hf.space/" />
@@ -20,8 +20,15 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌊</text></svg>" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="./style.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./floods-past.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./groundwater.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./waterbalance.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./flood-depth.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./fews.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./mesh.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./whatif.css?v=__BUILD__" />
 </head>
-<body>
+<body class="panel-collapsed">
   <a class="skip" href="#panel">Skip to the results panel</a>
   <!-- What the cards say on screen ("loading", "failed, retry"), said once,
        politely, for a screen reader. Written by src/a11y.js. -->
@@ -32,23 +39,37 @@
       <button id="btn-home" class="brand-btn" title="Back to the start">
         <span class="logo" aria-hidden="true">🌊</span>
         <span class="brand-text">
-          <span class="brand-name">AquaScope Explorer</span>
-          <span class="tagline">Every public gauge we can reach, on one map.</span>
+          <span class="brand-name">AquaScope Hydrology</span>
+          <span class="tagline">Explorer · river records and reproducible analyses</span>
         </span>
       </button>
     </div>
     <div class="controls">
       <div class="search-wrap">
-        <input id="search" type="search" placeholder="Search a gauge, river or id…  (press /)" autocomplete="off"
+        <input id="search" type="search" placeholder="Search a gauge, river or id…" autocomplete="off"
                role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list" />
         <div id="search-results" class="search-results" role="listbox" aria-label="Search results" hidden></div>
       </div>
+      <details class="header-tools">
+      <summary class="btn">Tools</summary>
+      <div class="header-tools-menu">
       <button id="btn-workbench" class="btn" title="Analyse your own data with the same tools">My data</button>
+      <button id="btn-mesh" class="btn" title="See a HEC-RAS 2D plan or a UGRID mesh result on the globe. The file stays in your browser.">Open model results</button>
+      <input id="mesh-file" type="file" accept=".hdf,.h5,.hdf5,.nc,.nc4,.cdf" hidden />
+      <button id="btn-open-study" class="btn">Open saved study</button>
+      <input id="open-study-file" type="file" accept=".json" hidden />
+      <button id="btn-places" class="btn" title="Gauges you saved in this browser; compare two to five of them">My places<span id="places-count" class="tab-badge" hidden></span></button>
+      <button id="btn-watched" class="btn" title="What changed at the gauges, reaches and areas you watch">Watched<span id="watched-count" class="tab-badge" hidden></span></button>
+      <button id="btn-usage" class="btn">Optional usage log</button>
+      <button id="btn-bulletin" class="btn" title="Last month's state of the rivers: every Archive gauge against normal">Bulletin</button>
       <button id="btn-cite-top" class="btn" title="How to cite AquaScope and the data">Cite</button>
       <button id="btn-ask" class="btn ask-toggle" aria-expanded="false" aria-controls="drawer"
               title="Ask a question in plain language; answered from real gauges by aquascope's tools, in your browser">Ask ✨</button>
       <button id="btn-study" class="btn ask-toggle" aria-expanded="false" aria-controls="drawer"
               title="A complete study at the selected place: the brief agreed with you, the plan approved by you, a report with figures and a bundle">Study</button>
+      <div id="data-status" class="data-status" hidden></div>
+      </div>
+      </details>
     </div>
   </header>
 
@@ -78,6 +99,11 @@
         </div>
       </details>
 
+      <details id="sigfilter" class="rail-group" open hidden>
+        <summary>Filter by flow signatures</summary>
+        <div class="rail-list sigfilter-body"></div>
+      </details>
+
       <details class="rail-group">
         <summary>Basemap</summary>
         <div id="rail-basemaps" class="basemap-grid"></div>
@@ -91,10 +117,14 @@
 
       <details class="rail-group">
         <summary>Overlays</summary>
-        <div id="rail-date" class="rail-date" hidden>
-          <button id="date-prev" class="icon-btn tiny" type="button" title="Previous day">‹</button>
-          <input type="date" id="date-input" aria-label="Date for the time-driven layers" />
-          <button id="date-next" class="icon-btn tiny" type="button" title="Next day">›</button>
+        <!-- the world river status (#544): wired by status-layer.js -->
+        <div id="rail-status" class="rail-list">
+          <div class="overlay-row">
+            <label class="rail-row"><input type="checkbox" id="toggle-status" />
+              <span class="rail-label">World river status (monthly)</span>
+              <button id="status-info" class="icon-btn tiny info" type="button" title="About this layer" aria-label="About World river status">i</button></label>
+            <div class="overlay-controls"><input type="range" id="status-opacity" min="0" max="1" step="0.05" aria-label="World river status opacity" /></div>
+          </div>
         </div>
         <div id="rail-overlays" class="rail-list"></div>
         <div class="rail-list">
@@ -103,7 +133,43 @@
             <i style="background:#6a3ab2;border-radius:2px"></i>
             <span class="rail-label">Catchments (BasinATLAS)</span>
           </label>
+          <label class="rail-row" title="Flood events in the news (Groundsource, CC BY 4.0) and floods seen by Sentinel-1 radar (Microsoft, MIT), following the time bar">
+            <input type="checkbox" id="toggle-floods-past" checked />
+            <i style="background:#e8820c;border-radius:50%"></i>
+            <span class="rail-label">Floods past (news and radar)</span>
+          </label>
+          <label class="rail-row" title="A head surface from the Environment Agency's wells (England, OGL v3.0), drawn only where wells are dense enough, following the time bar; drop your MODFLOW heads on the map">
+            <input type="checkbox" id="toggle-groundwater" />
+            <i style="background:linear-gradient(90deg,#c7e9b4,#41b6c4,#0c2c84);border-radius:2px"></i>
+            <span class="rail-label">Groundwater (wells, your MODFLOW heads)</span>
+          </label>
+          <label class="rail-row" title="HydroBASINS level-4 subbasins by monthly rain, evaporation, runoff and closure error (ERA5, GEOGLOWS v2, CC BY 4.0; modelled), following the time bar">
+            <input type="checkbox" id="toggle-water-balance" />
+            <i style="background:linear-gradient(90deg,#deebf7,#6baed6,#08519c);border-radius:2px"></i>
+            <span class="rail-label">Water balance (subbasins, monthly)</span>
+          </label>
+          <label class="rail-row" title="GEOGLOWS v2 stream network (TDX-Hydro, CC BY-SA 4.0): wider for bigger rivers, small streams as you zoom in">
+            <input type="checkbox" id="toggle-rivers" checked />
+            <i style="background:#3b7fc4;border-radius:2px;height:3px"></i>
+            <span class="rail-label">Rivers (GEOGLOWS)</span>
+          </label>
+          <label class="rail-row" title="A dash moving the way the water flows; off when your system asks for less motion">
+            <input type="checkbox" id="toggle-flow" />
+            <i class="rail-flow-sw" aria-hidden="true"></i>
+            <span class="rail-label">Flow direction (animated)</span>
+          </label>
+          <label class="rail-row" title="River reaches the GEOGLOWS forecast expects to reach their 2-year flow in the next 15 days. Model output, not an official warning.">
+            <input type="checkbox" id="toggle-floods" checked />
+            <i style="background:linear-gradient(90deg,#f2c94c,#e2553f,#8e24aa);border-radius:2px;height:3px"></i>
+            <span class="rail-label">Floods ahead (15 days)</span>
+          </label>
+          <label class="rail-row" title="Where Floods ahead expects a 10-year flow or more: the JRC flood depth map around the reach (CC BY 4.0). May flood in the next 15 days, model estimate.">
+            <input type="checkbox" id="toggle-depth" checked />
+            <i style="background:linear-gradient(90deg,#bfe0f7,#2f7ccc,#173f99);border-radius:2px"></i>
+            <span class="rail-label">Flood depth where floods are forecast</span>
+          </label>
         </div>
+        <p class="rail-note muted">Rivers: wider is bigger (stream order). Click one to light what drains to it and its way to the sea.</p>
       </details>
 
       <details class="rail-group">
@@ -131,14 +197,183 @@
             <circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><ellipse cx="12" cy="12" rx="4.2" ry="9" />
           </svg>
         </button>
+        <button id="btn-time" class="map-tool" type="button" aria-pressed="false" aria-controls="timebar" hidden
+                title="Map date" aria-label="Map date">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.2 2" />
+          </svg>
+        </button>
+      </div>
+      <!-- swipe compare (#522): a second map over the first, cut by the handle -->
+      <div id="compare" class="compare" hidden>
+        <div class="compare-map"></div>
+        <span id="compare-left" class="compare-label left"></span>
+        <span id="compare-right" class="compare-label right"></span>
+        <div id="compare-handle" class="compare-handle" role="slider" tabindex="0" aria-label="Compare divider"
+             aria-valuemin="5" aria-valuemax="95" aria-valuenow="50"><span aria-hidden="true">‹ ›</span></div>
+      </div>
+      <!-- "On the map" (#543): one legend for every layer, a row each (map-legend.js); the layer modules add their rows -->
+      <div id="map-legends" class="map-legends">
+        <section id="map-legend" class="map-legend" aria-label="On the map" hidden></section>
+      </div>
+      <!-- the map date (#522): one control that every dated layer follows -->
+      <div id="timebar-wrap" class="timebar-wrap">
+        <div id="timebar" class="timebar" role="group" aria-label="Map date" hidden>
+          <div id="tb-panel" class="tb-panel" hidden>
+            <div class="tb-row">
+              <span class="tb-key">Step</span>
+              <div id="tb-steps" class="tb-seg" role="radiogroup" aria-label="Step">
+                <label><input type="radio" name="tb-step" value="day" checked /><span>Day</span></label>
+                <label><input type="radio" name="tb-step" value="week" /><span>Week</span></label>
+                <label><input type="radio" name="tb-step" value="month" /><span>Month</span></label>
+              </div>
+            </div>
+            <div class="tb-row">
+              <span class="tb-key">Range</span>
+              <input type="date" id="tb-from" aria-label="Play from" />
+              <span class="muted">to</span>
+              <input type="date" id="tb-to" aria-label="Play to" />
+            </div>
+            <div class="tb-row">
+              <label class="tb-key tb-check"><input type="checkbox" id="tb-compare" /> Compare</label>
+              <input type="date" id="tb-cmp-date" aria-label="Date on the right of the divider" />
+              <select id="tb-cmp-layer" aria-label="Layer on the right of the divider"></select>
+            </div>
+            <div class="tb-row">
+              <button id="tb-gif" class="btn tiny" type="button">Make a GIF</button>
+              <span id="tb-gif-status" class="muted" role="status"></span>
+            </div>
+          </div>
+          <div class="tb-main">
+            <button id="tb-prev" class="tb-btn" type="button" title="Back one step" aria-label="Back one step">‹</button>
+            <input type="date" id="tb-date" aria-label="Map date" />
+            <output id="tb-model" class="tb-model" aria-live="polite" hidden></output>
+            <button id="tb-next" class="tb-btn" type="button" title="Forward one step" aria-label="Forward one step">›</button>
+            <button id="tb-play" class="tb-btn tb-play" type="button" aria-pressed="false" title="Play" aria-label="Play">
+              <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" /></svg>
+              <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" fill="currentColor" /></svg>
+            </button>
+            <button id="tb-more" class="tb-btn" type="button" aria-expanded="false" aria-controls="tb-panel"
+                    title="Step, range, compare and GIF" aria-label="Step, range, compare and GIF">⋯</button>
+          </div>
+          <div id="tb-note" class="tb-note" role="status" hidden></div>
+        </div>
+      </div>
+      <section id="area-study" class="area-study" aria-label="Study this area" hidden></section>
+      <!-- map first (#548): what was clicked, answered on the map; filled by src/map-card.js -->
+      <div id="mesh-drop" class="mesh-drop" hidden>
+        <div class="md-box">
+          <p class="md-title">Drop your model results</p>
+          <p>A HEC-RAS 2D plan file (.p01.hdf) or a UGRID NetCDF mesh (.nc), up to 2 GB, or MODFLOW heads (.hds with its .dis or .dis.grb). They stay in your browser.</p>
+        </div>
+      </div>
+      <section id="mesh-status" class="mesh-status" role="status" aria-live="polite" hidden></section>
+      <section id="map-card" class="map-card" role="dialog" aria-modal="false" aria-labelledby="mc-title" tabindex="-1" hidden></section>
+      <!-- what if, on the map (#565): a scenario for the basin, painted on the rivers downstream; src/whatif-map.js -->
+      <div id="wi-swipe" class="wi-swipe" hidden>
+        <span class="wi-sw-line" aria-hidden="true"></span>
+        <span class="wi-sw-label wi-sw-before">Before</span>
+        <span id="wi-sw-after" class="wi-sw-label wi-sw-after">After</span>
+        <div class="wi-sw-handle" role="slider" tabindex="0" aria-label="Before and after divider"
+             aria-valuemin="5" aria-valuemax="95" aria-valuenow="50"><span aria-hidden="true">‹ ›</span></div>
+      </div>
+      <section id="whatif" class="whatif" aria-labelledby="wi-title" hidden>
+        <header class="wi-head">
+          <div>
+            <p class="wi-kicker">What if</p>
+            <h2 id="wi-title" class="wi-title">River reach</h2>
+            <p id="wi-sub" class="wi-sub"></p>
+          </div>
+          <button type="button" class="wi-close" aria-label="Close What if" title="Close (Esc)">×</button>
+        </header>
+        <form id="wi-line" class="wi-line" role="search">
+          <input id="wi-text" type="text" autocomplete="off" spellcheck="false" enterkeyhint="go"
+                 placeholder="“20% less rain and 2 degrees warmer”" aria-label="What if, in words" />
+          <button type="submit" class="btn small" title="Read the words into the sliders, then run">Read</button>
+        </form>
+        <p id="wi-read" class="wi-read" hidden></p>
+        <form id="wi-form" class="wi-form">
+          <label class="wi-slider"><span>Rain</span>
+            <input id="wi-rain" type="range" min="-50" max="50" step="5" value="-20" />
+            <output id="wi-rain-out" for="wi-rain">−20%</output></label>
+          <label class="wi-slider"><span>Warming</span>
+            <input id="wi-warm" type="range" min="-2" max="6" step="0.5" value="0" />
+            <output id="wi-warm-out" for="wi-warm">0 °C</output></label>
+          <label class="wi-slider"><span>Demand</span>
+            <input id="wi-demand" type="number" min="0" step="any" inputmode="decimal" placeholder="0" />
+            <output>m³/s taken</output></label>
+          <div class="wi-run-row">
+            <span id="wi-scn" class="wi-scn"></span>
+            <button id="wi-run" type="submit" class="btn small primary">Run</button>
+          </div>
+        </form>
+        <p id="wi-status" class="wi-status" role="status" hidden></p>
+        <div id="wi-result" class="wi-result" hidden>
+          <div id="wi-measures" class="wi-measures" role="group" aria-label="Paint the rivers by"></div>
+          <p id="wi-model" class="wi-model"></p>
+          <div class="wi-foot">
+            <label class="wi-check"><input id="wi-swipe-on" type="checkbox" /> Before/after swipe</label>
+            <button id="wi-edit" type="button" class="link-btn wi-edit">Change the scenario</button>
+          </div>
+        </div>
+      </section>
+      <!-- talk to the map (#561): one line on the map and the action log under it; src/map-command.js and src/map-actions.js -->
+      <div id="map-ask" class="map-ask">
+        <div class="ma-bar">
+          <button id="btn-map-ask" class="ma-open" type="button" aria-expanded="false" aria-controls="ma-form"
+                  title="Ask the map in plain words (press /)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3.5 13.6 8a2 2 0 0 0 1.3 1.3L19.5 11l-4.6 1.7a2 2 0 0 0-1.3 1.3L12 18.5 10.4 14a2 2 0 0 0-1.3-1.3L4.5 11l4.6-1.7A2 2 0 0 0 10.4 8Z" />
+            </svg>
+            <span class="ma-open-label">Ask the map</span><kbd>/</kbd>
+          </button>
+          <!-- explain what is on screen (#562): notes pinned on the map, each with its source; src/map-explain.js -->
+          <button id="btn-map-explain" class="ma-open ma-explain" type="button"
+                  title="Explain this view: a few short notes pinned on the map, each with its source" aria-label="Explain this view">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 21s6.5-6.1 6.5-11A6.5 6.5 0 0 0 5.5 10c0 4.9 6.5 11 6.5 11Z" /><path d="M12 7.6v3.2" /><path d="M12 13.3h.01" />
+            </svg>
+            <span class="ma-open-label">Explain this view</span>
+          </button>
+          <form id="ma-form" class="ma-form" role="search" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3.5 13.6 8a2 2 0 0 0 1.3 1.3L19.5 11l-4.6 1.7a2 2 0 0 0-1.3 1.3L12 18.5 10.4 14a2 2 0 0 0-1.3-1.3L4.5 11l4.6-1.7A2 2 0 0 0 10.4 8Z" />
+            </svg>
+            <input id="ma-input" type="text" autocomplete="off" spellcheck="false" enterkeyhint="go"
+                   placeholder="Ask the map: “trace the Nile to the sea”" aria-label="Ask the map" />
+            <button type="submit" class="ma-go" aria-label="Run" title="Run (Enter)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+            </button>
+            <button type="button" class="ma-x" aria-label="Close" title="Close (Esc)">×</button>
+          </form>
+          <!-- Scout (#563): up to ten numbered pins on what stands out in the view; src/scout.js -->
+          <button id="btn-scout" class="ma-open ma-scout" type="button" aria-busy="false" aria-label="Scout"
+                  title="Scout: pin what stands out in this view, each with its reason and source">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="6.5" cy="15.5" r="3.5" /><circle cx="17.5" cy="15.5" r="3.5" />
+              <path d="M3.4 14 5.6 6.2A1.6 1.6 0 0 1 7.1 5H9l.8 7.4M20.6 14l-2.2-7.8A1.6 1.6 0 0 0 16.9 5H15l-.8 7.4M10 12.5h4" />
+            </svg>
+            <span class="ma-open-label">Scout</span>
+          </button>
+          <button id="ma-log-toggle" class="ma-count" type="button" aria-expanded="false" aria-controls="ma-log" hidden></button>
+        </div>
+        <p id="ma-status" class="ma-status" role="status" hidden></p>
+        <div id="ma-tries" class="ma-tries" hidden></div>
+        <section id="ma-log" class="ma-log" aria-label="Map actions" hidden></section>
+      </div>
+      <!-- the first view's one line (#543): where the rivers are low or high this month, made from the river status
+           file (status-layer.js); and, until the first click, how to ask the map -->
+      <div class="map-lead">
+        <p id="map-caption" class="map-caption" hidden></p>
+        <p id="map-hint" class="map-hint" hidden>Click a gauge, a river or anywhere on the map</p>
       </div>
       <div id="map-fallback" class="map-fallback" hidden>
         <div id="map-fallback-text" class="status warn"></div>
       </div>
     </div>
 
-    <button id="btn-panel" class="map-tool" type="button" aria-expanded="true" aria-controls="panel"
-            title="Hide the panel and see the whole map" aria-label="Hide the panel and see the whole map">
+    <button id="btn-panel" class="map-tool" type="button" aria-expanded="false" aria-controls="panel"
+            title="Show the panel" aria-label="Show the panel">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="m9 6 6 6-6 6" />
       </svg>
@@ -147,21 +382,22 @@
     <aside id="panel" class="panel">
       <!-- welcome -->
       <div id="panel-empty" class="panel-empty">
-        <h2>Pick a gauge</h2>
-        <p>Click a dot for its record, floods, flows and trend. Click anywhere else for the
-          hydrology of that spot.</p>
-        <div class="try">
-          <button class="chip" data-try="s" data-key="usgs/USGS-01013500">A US gauge</button>
-          <button class="chip" data-try="p" data-lat="25.05" data-lon="121.55">Climate of Taipei</button>
-          <button class="chip" data-try="ask">Ask the Analyst</button>
+        <h2>Find a usable river record</h2>
+        <p>Search a river or gauge. Check the available period and units, then export the data or start a study.</p>
+        <div class="entry-routes">
+          <button class="btn primary" data-try="s" data-key="usgs/USGS-01013500">Find river data · Fish River</button>
+          <button class="btn" data-try="study">Explore a worked analysis</button>
+          <button class="btn" data-try="table">Analyse my table · try a sample</button>
         </div>
+        <p class="muted">No installation or API key for these workflows. Coverage varies by agency.
+          Recorded analyses show their original version and limitations.</p>
         <details class="tips">
           <summary>What works today</summary>
           <ul>
-            <li><strong>USGS</strong>, <strong>UK EA</strong>, <strong>Hub'Eau</strong>: full daily records, so flood frequency, flow duration and trend.</li>
+            <li><strong>USGS</strong>, <strong>UK EA</strong>, <strong>Hub'Eau</strong>: daily records where available. The returned period determines which analyses can run.</li>
             <li><strong>PEGELONLINE</strong>, <strong>OPW</strong>: the last month only. <strong>Taiwan CWA</strong>: daily rainfall.</li>
             <li>Anywhere on land: ERA5 climate, GloFAS modelled discharge, and the upstream catchment.</li>
-            <li>The first analysis loads Python here (about 15 MB, once).</li>
+            <li>The first analysis loads Python here (about 30 MB, once).</li>
           </ul>
         </details>
       </div>
@@ -173,29 +409,53 @@
           <h2 id="st-name">Station</h2>
           <div class="st-meta">
             <span id="st-id"></span> · <span id="st-vars"></span><span id="st-period"></span>
+            <span id="st-grade" class="grade-badge" hidden></span>
           </div>
+          <label id="st-site-records" class="site-records" hidden>
+            <span id="st-site-count"></span>
+            <select id="st-site-select" aria-label="Station record at this site"></select>
+          </label>
           <div class="st-actions">
             <button id="btn-study-st" class="btn" title="A complete study at this gauge, planned and checked, with a report">Study this place</button>
+            <button id="btn-place" class="btn" aria-pressed="false" title="Add this gauge to My places">☆ Save</button>
+            <button id="btn-watch-st" class="btn" aria-pressed="false" title="Watch this gauge: what changed shows the next time you open the Explorer">☆ Watch</button>
             <button id="btn-csv" class="btn" disabled title="Download the observed record as CSV">Download CSV</button>
+            <select id="st-export" class="btn export-select" hidden aria-label="Export the record for an engineering tool" title="Inputs for HEC-HMS, HEC-RAS, HEC-SSP, SWMM, MODFLOW 6, Delft-FEWS or Raven, as a zip"></select>
             <button id="btn-unit" class="btn" hidden title="Switch the displayed discharge unit. Analyses and CSV downloads stay in m³/s.">Show ft³/s</button>
             <details class="more">
               <summary class="btn" title="More actions" aria-label="More actions">···</summary>
               <div class="more-menu">
                 <a id="st-agency" href="#" target="_blank" rel="noopener" title="Open this gauge on the agency’s own site">Agency page ↗</a>
+                <a id="st-feed" href="#" target="_blank" rel="noopener" hidden title="An Atom feed of this gauge's status changes and forecast alerts, for a feed reader">Follow (Atom) ↗</a>
                 <button id="btn-share" title="Copy a link to exactly this view">Copy link</button>
                 <button id="btn-to-workbench" title="Analyse this record with the workbench tools">Send to workbench</button>
                 <button id="btn-cite" title="How to cite this">Cite</button>
               </div>
             </details>
           </div>
+          <div id="st-watch-row" class="watch-row" hidden>
+            <label for="st-watch-threshold">Watching. Flag the forecast above</label>
+            <select id="st-watch-threshold"></select>
+            <input id="st-watch-value" type="number" step="any" inputmode="decimal" aria-label="Threshold value" hidden />
+            <span id="st-watch-unit" class="muted"></span>
+          </div>
+          <p id="st-export-help" class="muted" hidden>Useful in your work? <a href="https://github.com/Rekin226/aquascope" target="_blank" rel="noopener">Star AquaScope on GitHub</a> or <a href="https://github.com/Rekin226/aquascope/issues" target="_blank" rel="noopener">report a problem</a>.</p>
           <div id="status" class="status" hidden></div>
+          <details class="record-availability"><summary>Data coverage and freshness</summary>
+            <p id="st-observation-status" class="muted">Observation coverage is checked when the record opens.</p>
+            <p id="st-analysis-period" class="muted"></p>
+          </details>
         </div>
 
         <div class="tabs" role="tablist" aria-label="Station analyses">
           <button role="tab" data-tab="overview" aria-controls="tab-overview" aria-selected="true" id="t-overview">Overview</button>
+          <button role="tab" data-tab="now" aria-controls="tab-now" aria-selected="false" tabindex="-1" id="t-now">Now</button>
           <button role="tab" data-tab="floods" aria-controls="tab-floods" aria-selected="false" tabindex="-1" id="t-floods">Floods</button>
           <button role="tab" data-tab="flows" aria-controls="tab-flows" aria-selected="false" tabindex="-1" id="t-flows">Flows</button>
           <button role="tab" data-tab="model" aria-controls="tab-model" aria-selected="false" tabindex="-1" id="t-model">Model</button>
+          <button role="tab" data-tab="river" aria-controls="tab-river" aria-selected="false" tabindex="-1" id="t-river">River</button>
+          <button role="tab" data-tab="context" aria-controls="tab-context" aria-selected="false" tabindex="-1" id="t-context">Context</button>
+          <button role="tab" data-tab="evidence" aria-controls="tab-evidence" aria-selected="false" tabindex="-1" id="t-evidence">Evidence</button>
           <button role="tab" data-tab="catchment" aria-controls="tab-catchment" aria-selected="false" tabindex="-1" id="t-catchment">Catchment</button>
           <button role="tab" data-tab="similar" aria-controls="tab-similar" aria-selected="false" tabindex="-1" id="t-similar">Similar<span class="tab-badge" hidden></span></button>
           <button role="tab" data-tab="methods" aria-controls="tab-methods" aria-selected="false" tabindex="-1" id="t-methods">Methods</button>
@@ -204,6 +464,14 @@
         <div class="panes">
           <section id="tab-overview" role="tabpanel" aria-labelledby="t-overview" tabindex="0">
             <div id="st-kpis-card" class="card" hidden>
+              <div class="card-title period-pick" id="st-period-pick">
+                <label for="st-period-select">Period</label>
+                <select id="st-period-select" title="How much of the agency's record to fetch and analyse">
+                  <option value="all">Full record</option>
+                  <option value="40">Last 40 years</option>
+                  <option value="20">Last 20 years</option>
+                </select>
+              </div>
               <div class="card-body"><div class="kpis" id="kpis"></div></div>
             </div>
             <div id="st-hydro-card" class="card" hidden>
@@ -224,6 +492,10 @@
               <div class="card-title"><h3>Notes</h3></div>
               <div class="card-body"><ul id="notes"></ul></div>
             </div>
+          </section>
+
+          <section id="tab-now" role="tabpanel" aria-labelledby="t-now" tabindex="0" hidden>
+            <div id="st-now" class="now"></div>
           </section>
 
           <section id="tab-floods" role="tabpanel" aria-labelledby="t-floods" tabindex="0" hidden>
@@ -278,6 +550,40 @@
             </div>
           </section>
 
+          <section id="tab-river" role="tabpanel" aria-labelledby="t-river" tabindex="0" hidden>
+            <div id="st-river" class="river"></div>
+          </section>
+
+          <section id="tab-context" role="tabpanel" aria-labelledby="t-context" tabindex="0" hidden>
+            <div id="st-context" class="card ctx" hidden>
+              <div class="card-title"><h3>What this place has seen</h3></div>
+              <div class="card-body">
+                <ul id="st-context-lines" class="ctx-lines" aria-live="polite"></ul>
+                <div id="st-context-chart" hidden>
+                  <h4 id="st-context-chart-title"></h4>
+                  <div id="plot-st-context" class="plot small"></div>
+                </div>
+                <div id="st-context-credits" class="ctx-credits muted"></div>
+              </div>
+            </div>
+          </section>
+
+          <section id="tab-evidence" role="tabpanel" aria-labelledby="t-evidence" tabindex="0" hidden>
+            <div id="st-evidence" class="card evidence" hidden>
+              <div class="card-title">
+                <h3>Models against this gauge</h3>
+                <span id="ev-actions" class="card-tools"></span>
+              </div>
+              <div class="card-body">
+                <p id="ev-sentence" class="ev-sentence"></p>
+                <div id="plot-evidence" class="plot"></div>
+                <div class="table-scroll"><table class="ffa" id="ev-table"></table></div>
+                <div id="ev-status" class="status" hidden></div>
+                <div id="ev-foot" class="basin-foot muted"></div>
+              </div>
+            </div>
+          </section>
+
           <section id="tab-catchment" role="tabpanel" aria-labelledby="t-catchment" tabindex="0" hidden>
             <div id="st-catchment" class="card catchment" hidden><div class="card-body"></div></div>
             <div id="st-basin" class="card basin" hidden><div class="card-body"></div></div>
@@ -309,8 +615,10 @@
           <span class="badge" style="background:#455a64">Anywhere</span>
           <h2 id="pt-title">Point</h2>
           <div class="st-meta"><span id="pt-coords"></span> · ERA5 climate + GloFAS modelled discharge, last 10 years</div>
+          <div id="pt-snap" class="st-meta pt-snap" role="status" hidden></div>
           <div class="st-actions">
             <button id="btn-study-pt" class="btn" title="A complete study at this point, planned and checked, with a report">Study this place</button>
+            <button id="btn-watch-pt" class="btn" aria-pressed="false" hidden title="Watch this river reach">☆ Watch</button>
             <button id="btn-share-pt" class="btn" title="Copy a link to exactly this view">Copy link</button>
             <button id="btn-cite-pt" class="btn" title="How to cite this">Cite</button>
           </div>
@@ -318,6 +626,9 @@
 
         <div class="tabs" role="tablist" aria-label="Point analyses">
           <button role="tab" data-tab="overview" aria-controls="pt-tab-overview" aria-selected="true" id="pt-t-overview">Overview</button>
+          <button role="tab" data-tab="now" aria-controls="pt-tab-now" aria-selected="false" tabindex="-1" id="pt-t-now">Now</button>
+          <button role="tab" data-tab="river" aria-controls="pt-tab-river" aria-selected="false" tabindex="-1" id="pt-t-river">River</button>
+          <button role="tab" data-tab="context" aria-controls="pt-tab-context" aria-selected="false" tabindex="-1" id="pt-t-context">Context</button>
           <button role="tab" data-tab="modelled" aria-controls="pt-tab-modelled" aria-selected="false" tabindex="-1" id="pt-t-modelled">Modelled</button>
           <button role="tab" data-tab="catchment" aria-controls="pt-tab-catchment" aria-selected="false" tabindex="-1" id="pt-t-catchment">Catchment</button>
           <button role="tab" data-tab="similar" aria-controls="pt-tab-similar" aria-selected="false" tabindex="-1" id="pt-t-similar">Similar<span class="tab-badge" hidden></span></button>
@@ -354,6 +665,14 @@
             </div>
           </section>
 
+          <section id="pt-tab-now" role="tabpanel" aria-labelledby="pt-t-now" tabindex="0" hidden>
+            <div id="pt-now" class="now"></div>
+          </section>
+
+          <section id="pt-tab-river" role="tabpanel" aria-labelledby="pt-t-river" tabindex="0" hidden>
+            <div id="pt-river" class="river"></div>
+          </section>
+
           <section id="pt-tab-modelled" role="tabpanel" aria-labelledby="pt-t-modelled" tabindex="0" hidden>
             <div id="pt-glofas-card" class="card" hidden>
               <div class="card-title">
@@ -363,6 +682,20 @@
               <div class="card-body">
                 <div id="pt-glofas-kpis" class="kpis"></div>
                 <table class="ffa" id="pt-ffa-table"></table>
+              </div>
+            </div>
+          </section>
+
+          <section id="pt-tab-context" role="tabpanel" aria-labelledby="pt-t-context" tabindex="0" hidden>
+            <div id="pt-context" class="card ctx" hidden>
+              <div class="card-title"><h3>What this place has seen</h3></div>
+              <div class="card-body">
+                <ul id="pt-context-lines" class="ctx-lines" aria-live="polite"></ul>
+                <div id="pt-context-chart" hidden>
+                  <h4 id="pt-context-chart-title"></h4>
+                  <div id="plot-context" class="plot small"></div>
+                </div>
+                <div id="pt-context-credits" class="ctx-credits muted"></div>
               </div>
             </div>
           </section>
@@ -392,6 +725,85 @@
         </div>
       </div>
 
+      <!-- my places and compare (places.js, compare.js) -->
+      <!-- Watch (#521): what changed at the watched gauges, reaches and areas (watch.js) -->
+      <div id="panel-watch" hidden>
+        <div class="head">
+          <h2 id="watch-title">Since you were here</h2>
+          <div id="watch-summary" class="st-meta" aria-live="polite"></div>
+          <div class="st-actions">
+            <button id="watch-refresh" class="btn" type="button">Check again</button>
+            <button id="watch-close" class="btn" type="button">Dismiss</button>
+          </div>
+          <div id="watch-status" class="status" hidden></div>
+        </div>
+        <div class="panes">
+          <p id="watch-empty" class="muted" hidden>Nothing watched yet. Press ☆ Watch on a gauge, a river reach or a drawn area.</p>
+          <ul id="watch-list" class="watch-list"></ul>
+          <p class="muted watch-foot">Kept in this browser only, no account. Forecasts are model output (GEOGLOWS v2, CC BY 4.0).
+            Flood events in the news: Google Groundsource (CC BY 4.0).</p>
+        </div>
+      </div>
+
+      <div id="panel-places" hidden>
+        <div class="head">
+          <h2>My places</h2>
+          <div class="st-meta">Gauges you saved with ☆ Save. They stay in this browser only.</div>
+          <div class="st-actions">
+            <button id="btn-compare" class="btn" disabled>Compare</button>
+            <button id="places-back" class="btn">Back</button>
+          </div>
+          <div id="places-status" class="status" hidden></div>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="My places and the comparison">
+          <button role="tab" data-tab="list" aria-controls="pl-tab-list" aria-selected="true" id="pl-t-list">Places</button>
+          <button role="tab" data-tab="hydro" aria-controls="pl-tab-hydro" aria-selected="false" tabindex="-1" id="pl-t-hydro" disabled title="Tick two to five places and press Compare">Hydrographs</button>
+          <button role="tab" data-tab="fdc" aria-controls="pl-tab-fdc" aria-selected="false" tabindex="-1" id="pl-t-fdc" disabled title="Tick two to five places and press Compare">Flow duration</button>
+          <button role="tab" data-tab="ffa" aria-controls="pl-tab-ffa" aria-selected="false" tabindex="-1" id="pl-t-ffa" disabled title="Tick two to five places and press Compare">Floods</button>
+        </div>
+
+        <div class="panes">
+          <section id="pl-tab-list" role="tabpanel" aria-labelledby="pl-t-list" tabindex="0">
+            <p id="places-empty" class="muted">No places yet. Open a gauge and press ☆ Save to keep it here.</p>
+            <ul id="places-list" class="places-list"></ul>
+            <p id="places-hint" class="muted">Tick 2 to 5 places to compare them.</p>
+          </section>
+          <section id="pl-tab-hydro" role="tabpanel" aria-labelledby="pl-t-hydro" tabindex="0" hidden>
+            <div id="cmp-hydro-card" class="card" hidden>
+              <div class="card-title"><h3>Daily hydrographs <span class="muted" id="cmp-window"></span></h3></div>
+              <div class="card-body">
+                <p id="cmp-basis" class="muted"></p>
+                <div id="plot-cmp-hydro" class="plot"></div>
+              </div>
+            </div>
+            <div id="cmp-summary-card" class="card" hidden>
+              <div class="card-title"><h3>Side by side</h3><span id="cmp-actions" class="card-tools"></span></div>
+              <div class="card-body">
+                <table class="ffa" id="cmp-table"></table>
+                <ul id="cmp-notes" class="muted" hidden></ul>
+                <ol id="cmp-methods" class="methods"></ol>
+              </div>
+            </div>
+          </section>
+          <section id="pl-tab-fdc" role="tabpanel" aria-labelledby="pl-t-fdc" tabindex="0" hidden>
+            <div id="cmp-fdc-card" class="card" hidden>
+              <div class="card-title"><h3>Flow duration curves</h3></div>
+              <div class="card-body"><div id="plot-cmp-fdc" class="plot"></div></div>
+            </div>
+          </section>
+          <section id="pl-tab-ffa" role="tabpanel" aria-labelledby="pl-t-ffa" tabindex="0" hidden>
+            <div id="cmp-ffa-card" class="card" hidden>
+              <div class="card-title"><h3>Flood frequency (GEV, L-moments)</h3></div>
+              <div class="card-body">
+                <div id="plot-cmp-ffa" class="plot"></div>
+                <p class="muted">Lines are the fitted curves; dots are each gauge's observed annual maxima.</p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
       <!-- your own data -->
       <div id="panel-workbench" hidden>
         <div class="head">
@@ -415,6 +827,9 @@
         <div class="panes">
           <section id="wb-tab-data" role="tabpanel" aria-labelledby="wb-t-data" tabindex="0">
             <div id="wb-empty">
+              <p><button id="wb-sample" class="btn">Try a sample CSV</button>
+                <a href="./samples/daily-flow.csv" download>Download sample</a></p>
+              <p class="muted">The sample is synthetic daily discharge for learning the workflow, not observed river data.</p>
               <div id="wb-drop" class="wb-drop">
                 <p><strong>Drop a file here</strong>, or <label class="link" for="wb-file">choose one</label>.</p>
                 <input type="file" id="wb-file" accept=".csv,.txt,.xlsx,.xls" hidden />

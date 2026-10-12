@@ -65,7 +65,7 @@ class TestExportGeoJSON:
     def test_export_geojson(self, tmp_path: Path) -> None:
         out = export_geojson(self.records, tmp_path / "test.geojson")
         assert out.exists()
-        data = json.loads(out.read_text())
+        data = json.loads(out.read_text(encoding="utf-8"))
         assert data["type"] == "FeatureCollection"
         assert len(data["features"]) == 2
         feat = data["features"][0]
@@ -81,7 +81,7 @@ class TestExportGeoJSON:
             _RecordNoLocation(station_id="X2", value=2.0),
         ]
         out = export_geojson(no_loc_records, tmp_path / "empty.geojson")
-        data = json.loads(out.read_text())
+        data = json.loads(out.read_text(encoding="utf-8"))
         assert data["type"] == "FeatureCollection"
         assert len(data["features"]) == 0
 
@@ -89,7 +89,7 @@ class TestExportGeoJSON:
         out = save_records(self.records, tmp_path, prefix="test", fmt="geojson")
         assert out.suffix == ".geojson"
         assert out.exists()
-        data = json.loads(out.read_text())
+        data = json.loads(out.read_text(encoding="utf-8"))
         assert data["type"] == "FeatureCollection"
         assert len(data["features"]) == 2
         assert data["features"][0]["geometry"]["type"] == "Point"

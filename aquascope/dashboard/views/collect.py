@@ -9,6 +9,7 @@ from io import StringIO
 import pandas as pd
 import streamlit as st
 
+from aquascope.collectors.base import CollectorError
 from aquascope.dashboard import _insights, _state
 from aquascope.registry import SOURCES as _REGISTRY
 
@@ -237,6 +238,10 @@ def _render_api_tab() -> None:
                 df = _records_to_df(records)
                 _state.set_data(df, source_key, label)
                 st.success(f"✅ Collected **{len(df):,} records** from {label} — saved to the workspace.")
+            except CollectorError as exc:
+                st.error(f"Collector error ({exc.source or source_key}): {exc}")
+                logger.error("Collector error for %s: %s", source_key, exc)
+                return
             except Exception as exc:  # noqa: BLE001 — surface any API failure to the user
                 st.error(f"Collection failed: {exc}")
                 logger.exception("Data collection error")

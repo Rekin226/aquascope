@@ -20,8 +20,8 @@ RAIN = {"source": "uk_ea", "station_id": "R1", "name": "Teddington rain", "dista
         "variables": ["precipitation"], "years": 36.0}
 BORE = {"source": "uk_ea", "station_id": "W1", "name": "Bore", "distance_km": 5.0,
         "variables": ["groundwater_level"], "years": 15}
-ALL_IDS = ["drought_status", "flood_risk", "groundwater_decline", "irrigation_feasibility", "supply_reliability",
-           "ungauged_flow", "water_quality"]
+ALL_IDS = ["catchment_response", "climate_change", "drought_status", "flood_change", "flood_risk",
+           "groundwater_decline", "irrigation_feasibility", "supply_reliability", "ungauged_flow", "water_quality"]
 #: What assess_site reports as reachable for any point on land.
 POINT_PRODUCTS = ("glofas", "temperature", "forcing")
 
@@ -76,14 +76,14 @@ def test_the_files_stay_within_the_yaml_subset_the_browser_reads():
 
 @pytest.mark.parametrize("pid, site, intake, branch, tools", [
     ("flood_risk", LONG, {"return_period": 100}, "at_site",
-     ["describe_catchment", "analyze_station", "flood_frequency"]),
+     ["describe_catchment", "analyze_station", "flood_frequency", "anywhere"]),
     ("flood_risk", SHORT, {"return_period": 100}, "short_record",
      ["describe_catchment", "analyze_station", "similar_basins", "regionalize_signatures", "anywhere"]),
     ("flood_risk", UNGAUGED, {"return_period": 100}, "regional",
-     ["describe_catchment", "similar_basins", "regionalize_signatures", "anywhere"]),
+     ["describe_catchment", "similar_basins", "regionalize_signatures", "anywhere", "reach_record"]),
     ("ungauged_flow", LONG, {}, "at_gauge", ["describe_catchment", "analyze_station", "regionalize_signatures"]),
     ("ungauged_flow", UNGAUGED, {}, "regional",
-     ["describe_catchment", "similar_basins", "regionalize_signatures", "anywhere"]),
+     ["describe_catchment", "similar_basins", "regionalize_signatures", "anywhere", "reach_record"]),
     ("groundwater_decline", WELL, {}, "well",
      ["analyze_station", "get_timeseries", "sgi_drought", "get_timeseries", "recharge"]),
     ("groundwater_decline", UNGAUGED, {}, "regional", ["anywhere"]),
@@ -130,8 +130,16 @@ def test_placeholders_resolve_to_typed_values_and_prose():
     rp = [g for g in fetch.expects if g["check"] == "max_return_period_factor"][0]
     assert rp["return_period"] == 200 and isinstance(rp["return_period"], int)
     assert "T = 200 year" in fetch.rationale and "39.5 years" in study.plan["rationale"]
-    assert study.problem["params"] == {"return_period": 200, "decision": "design flow"}
+    assert study.problem["params"] == {"return_period": 200, "decision": "design flow", "years": None}
     assert study.plan["station"]["station_id"] == "3400TH"
+
+
+def test_flood_gates_use_complete_maxima_not_the_calendar_span():
+    step = pbk.plan("flood_risk", LONG, {"return_period": 100}).step_by_id("s3")
+    checks = [g for g in step.expects if g["check"] in {"min_years", "max_return_period_factor"}]
+    outcomes = evaluate(checks, {"years": 120, "ffa": {"n_years": 10}})
+    assert len(outcomes) == 2 and all(not g["passed"] for g in outcomes)
+    assert all(g["passed"] for g in evaluate(checks, {"years": 120, "ffa": {"n_years": 100}}))
 
 
 def test_intake_defaults_and_coercion():
@@ -198,7 +206,10 @@ def test_the_273_scenario_is_refused_at_plan_time_and_by_the_gate():
 
 def test_an_optional_step_is_dropped_with_a_note_not_refused():
     study = pbk.plan("flood_risk", recon(None, [], donors=5, available=[]))
-    assert [s.tool for s in study.steps] == ["describe_catchment", "similar_basins", "regionalize_signatures"]
+    # GloFAS (a registry method the site does not support) is dropped; the GEOGLOWS reach record names no
+    # method and stays, as an optional modelled step (#516).
+    assert [s.tool for s in study.steps] == ["describe_catchment", "similar_basins", "regionalize_signatures",
+                                             "reach_record"]
     assert study.plan["notes"] and "glofas" in study.plan["notes"][0]
 
 
@@ -231,14 +242,23 @@ def test_a_gauged_branch_without_its_station_is_an_authoring_error():
 def test_the_study_a_playbook_emits_runs_with_no_model():
     study = pbk.plan("flood_risk", LONG, {"return_period": 100})
     payload = {"source": "uk_ea", "station_id": "3400TH", "unit": "m3/s", "years": 39.9, "trend": {"p_value": 0.3},
-               "ffa": {"return_periods": [2, 5, 10, 25, 50, 100],
-                       "fits": {"gev_lmoments": {"q": [1, 2, 3, 4, 5, 6]}, "lp3": {"q": [1, 2, 3, 4, 5, 6.5]},
+               "stats": {"mean": 1.2},
+               "sampling": {"n": 14555, "span_years": 39.9, "per_year": 364.8, "inferred_resolution": "daily"},
+               "ffa": {"n_years": 39, "return_periods": [2, 5, 10, 25, 50, 100],
+                       "record_max": {"value": 5.5, "year": 2000, "empirical_return_period": 40.0, "n_years": 39},
+                       "amax_trend": {"on": "annual maxima", "p_value": 0.5, "tau": 0.0},
+                       "fits": {"gev_lmoments": {"q": [1, 2, 3, 4, 5, 6], "at_record_max": 4.8,
+                                                 "q_by_T": {"100": 6}},
+                                "lp3": {"q": [1, 2, 3, 4, 5, 6.5], "at_record_max": 4.9},
                                 "gev_bootstrap": {"q": [1, 2, 3, 4, 5, 6], "ci": [[5, 7]] * 6}}}}
+    glofas = {"climate": {"aridity_index": 1.0},
+              "glofas": {"ffa": {"return_periods": [100], "fits": {"gev_lmoments": {"q_by_T": {"100": 6.6}}}}}}
     tools = {"describe_catchment": lambda **kw: {"sub_basin": {"hybas_id": 1}, "attributes": {}},
-             "analyze_station": lambda **kw: payload, "flood_frequency": lambda **kw: payload}
+             "analyze_station": lambda **kw: payload, "flood_frequency": lambda **kw: payload,
+             "anywhere": lambda **kw: glofas}
     with patch("aquascope.study._tools", return_value=tools):
         run = run_study(study)
-    assert run.ok and all(g["passed"] for g in run.gates) and len(run.gates) == 7
+    assert run.ok and all(g["passed"] for g in run.gates) and len(run.gates) == 12
     assert "gate spread_within: passed" in run.to_markdown()
 
 
@@ -252,7 +272,7 @@ def test_the_explorer_playbook_list_is_the_package_s_own():
     data = json.loads(as_json())
     ids = [p["id"] for p in data["playbooks"]]
     assert ids == ALL_IDS
-    flood = data["playbooks"][1]
+    flood = next(p for p in data["playbooks"] if p["id"] == "flood_risk")
     assert flood["title"] and flood["problem"] == "flood_risk"
     fields = {f["name"]: f for f in flood["intake"]}
     assert fields["return_period"]["type"] == "int" and fields["return_period"]["default"] == 100
@@ -431,6 +451,21 @@ FLOW = {"source": "uk_ea", "station_id": "3400TH", "name": "Kingston", "unit": "
         "start": "1986-08-17", "end": "2026-08-15", "years": 39.9, "stats": {"mean": 65.2, "min": 3.1, "max": 520.0},
         "fdc": {"q95": 12.3, "q50": 43.0, "q10": 148.0}}
 
+# The reviewer's-eye fields the flood payload carries since #416: the sampling block, the record maximum with the
+# fit evaluated at its own return period, the quantiles by return period and the trend on the annual maxima.
+FLOW["sampling"] = {"n": 14555, "span_years": 39.9, "per_year": 364.8, "inferred_resolution": "daily"}
+FLOW.setdefault("ffa", {"n_years": 39, "return_periods": [2, 5, 10, 25, 50, 100],
+                        "fits": {"gev_lmoments": {"q": [250, 330, 380, 440, 480, 520]},
+                                 "lp3": {"q": [252, 335, 388, 452, 500, 548]}}})
+FLOW["ffa"]["record_max"] = {"value": 520.0, "year": 2014, "empirical_return_period": 40.0, "n_years": 39}
+FLOW["ffa"]["amax_trend"] = {"on": "annual maxima", "p_value": 0.37, "tau": 0.08, "trend": "no trend",
+                             "sens_slope_per_year": 0.4, "n_years": 39}
+for _fit in FLOW["ffa"]["fits"].values():
+    if isinstance(_fit, dict) and _fit.get("q"):
+        _fit["q_by_T"] = {f"{t:g}": v for t, v in zip(FLOW["ffa"]["return_periods"], _fit["q"])}
+        _fit["at_record_max"] = round(_fit["q"][3] + 0.6 * (_fit["q"][4] - _fit["q"][3]), 1)
+
+
 
 def _solve(text, recon_value, tools, **kw):
     calls = []
@@ -505,7 +540,7 @@ def test_the_scout_asks_the_registry_by_the_playbooks_problem_not_its_id():
     """drought_status is the playbook, drought the problem the sufficiency table knows; the live run had crashed."""
     seen = {}
 
-    def fake_assess(lat, lon, *, problem=None, return_period=None):
+    def fake_assess(lat, lon, *, problem=None, return_period=None, probe_km=0.0):
         seen["problem"] = problem
         return RICH
 
@@ -519,9 +554,11 @@ def test_the_scout_asks_the_registry_by_the_playbooks_problem_not_its_id():
 def test_coerce_intake_makes_a_model_s_reply_safe():
     """The lenient twin of fill_intake: a small model's mistake costs a default, never the plan."""
     good = pbk.coerce_intake("flood_risk", {"return_period": "50", "decision": "Design Flow", "foo": 1})
-    assert good == {"return_period": 50, "decision": "design flow"}      # coerced, options case-folded, foo dropped
+    # coerced, options case-folded, foo dropped
+    assert good == {"return_period": 50, "decision": "design flow", "years": None}
     bad = pbk.coerce_intake("flood_risk", {"return_period": -3, "decision": "mapping"})
-    assert bad == {"return_period": 100, "decision": "design flow"}      # below min 2 and outside the options
+    # below min 2 and outside the options
+    assert bad == {"return_period": 100, "decision": "design flow", "years": None}
     assert pbk.coerce_intake("flood_risk", {"return_period": float("nan")})["return_period"] == 100
     assert pbk.coerce_intake("flood_risk", {"return_period": [50]})["return_period"] == 100
     assert pbk.coerce_intake("flood_risk", {"return_period": True})["return_period"] == 100
@@ -578,3 +615,86 @@ def test_the_water_quality_playbook_follows_the_use_and_carries_its_guideline_ca
     unnamed = recon({"water_quality": 7.5}, [dict(WQ_STATION, name=None)])
     assert "listed at USGS-01646500 (usgs USGS-01646500" in pbk.plan("water_quality", unnamed).plan["rationale"]
     assert pbk.select_branch("water_quality", WQ_SITE, {"use": "irrigation"}).id == "irrigation"
+
+
+# ── compound briefs: the tree composes several branches (#383) ──
+
+
+def _gym_case(cid: str):
+    from aquascope.gym.plans import load_reference, recon_for
+
+    ref = load_reference(cid)
+    return ref, recon_for(ref)
+
+
+def test_companions_fire_only_on_a_compound_brief_that_names_another_playbook():
+    from aquascope import playbooks as pbk
+
+    two = ("For the bridge design I want two independent 100-year estimates: the at-site fit and a regional "
+           "estimate transferred from similar gauged catchments. Do they agree?")
+    assert pbk.companions(two, "flood_risk") == [("ungauged_flow", "regional")]
+    three = ("Is the area in drought, has the deficit reached the borehole, and where does the flow sit in its "
+             "record?")
+    assert pbk.companions(three, "drought_status") == [("groundwater_decline", None)]
+    # one question, one playbook: nothing to compose
+    assert pbk.companions("Give me the 100-year design flow with its uncertainty band.", "flood_risk") == []
+    # a compound cue without another playbook's intent named: nothing either
+    assert pbk.companions("Is it in drought, and how severe is this year against the record?", "drought_status") == []
+    # the primary is never its own companion
+    own = "Is the water table falling, and how fast? The borehole is close."
+    assert pbk.companions(own, "groundwater_decline") == []
+    assert pbk.companions("", "flood_risk") == [] and pbk.companions(None, None) == []
+
+
+def test_a_compound_flood_brief_gets_the_regional_estimate_as_required_steps():
+    from aquascope import playbooks as pbk
+
+    ref, recon = _gym_case("offtree_atsite_vs_regional_potomac")
+    alone = pbk.plan(ref.playbook, recon, dict(ref.intake), problem_text=ref.brief, compose=False)
+    assert [s.tool for s in alone.steps] == ["describe_catchment", "analyze_station", "flood_frequency", "anywhere"]
+    study = pbk.plan(ref.playbook, recon, dict(ref.intake), problem_text=ref.brief)
+    tools = [s.tool for s in study.steps]
+    assert tools == ["describe_catchment", "analyze_station", "flood_frequency", "anywhere", "similar_basins",
+                     "regionalize_signatures"], "the ungauged regional branch adds its two estimate steps once"
+    assert [s.id for s in study.steps] == ["s1", "s2", "s3", "s4", "s5", "s6"]
+    comp = study.plan["companions"]
+    assert comp == [{"playbook": "ungauged_flow", "branch": "regional", "steps": ["s5", "s6"],
+                     "rationale": comp[0]["rationale"]}]
+    assert study.plan["compound"] and "side by side" in study.plan["rationale"]
+    assert study.plan["playbook"] == "flood_risk" and study.plan["branch"] == "at_site"
+    assert study.problem["params"]["return_period"] == 100
+
+
+def test_a_compound_drought_brief_adds_the_well_trend_and_not_the_helper_steps_of_a_dropped_duplicate():
+    from aquascope import playbooks as pbk
+
+    ref, recon = _gym_case("offtree_drought_well_river_tetbury")
+    study = pbk.plan(ref.playbook, recon, dict(ref.intake), problem_text=ref.brief)
+    pairs = [(s.tool, s.method) for s in study.steps]
+    assert ("analyze_station", "groundwater_trend") in pairs
+    assert ("sgi_drought", "sgi") not in pairs, "the drought playbook already computes the SGI"
+    assert "get_timeseries" not in [s.tool for s in study.steps], "the series fetch only served the dropped step"
+
+
+def test_a_compound_irrigation_brief_reads_the_demand_the_crop_step_derives():
+    from aquascope import playbooks as pbk
+
+    ref, recon = _gym_case("offtree_supply_crop_vegre")
+    study = pbk.plan(ref.playbook, recon, dict(ref.intake), problem_text=ref.brief)
+    pairs = [(s.tool, s.method) for s in study.steps]
+    assert ("analyze_station", "flow_duration") in pairs, "the river's record in dry years, from the supply playbook"
+    assert pairs.count(("supply_reliability", "supply_reliability")) == 1
+    assert "demand_m3s" not in study.problem["params"], "a derived quantity is not a parameter"
+    assert not any("demand" in n for n in study.plan.get("notes") or [])
+
+
+def test_a_companion_that_cannot_plan_here_leaves_a_note_and_the_primary_plan_stands():
+    from aquascope import playbooks as pbk
+
+    ref, recon = _gym_case("flood_at_site_potomac")
+    text = ref.brief + " Also, is the water table under the site falling, and how fast? Use the borehole."
+    study = pbk.plan(ref.playbook, recon, dict(ref.intake), problem_text=text)
+    assert [s.tool for s in study.steps][:4] == ["describe_catchment", "analyze_station", "flood_frequency", "anywhere"]
+    notes = study.plan.get("notes") or []
+    comp = study.plan.get("companions") or []
+    assert comp or any("groundwater decline" in n for n in notes), "the branch was added or the reason is noted"

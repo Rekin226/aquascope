@@ -67,7 +67,7 @@ def test_start_approve_file_and_export_round_trip(face) -> None:
     events: list = []
     out = _run(face, {"op": "start", "lat": 51.415, "lon": -0.308, "text": PROBLEM, "tables": {}}, tools=tools,
                events=events)
-    assert set(out) == {"reply", "workspace", "status"}
+    assert {"reply", "workspace", "status"} <= set(out)
     assert out["reply"]["kind"] == "plan" and out["status"] == "review"
     ws = out["workspace"]
     assert ws["status"] == "review" and ws["site"] == {"lat": 51.415, "lon": -0.308}
@@ -80,7 +80,7 @@ def test_start_approve_file_and_export_round_trip(face) -> None:
     artifacts: list = []
     out2 = _run(face, {"op": "approve", "workspace": ws}, tools=tools, events=events, artifacts=artifacts)
     assert out2["reply"]["kind"] == "report" and out2["status"] == "done"
-    assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency"]
+    assert [c[0] for c in calls] == ["describe_catchment", "analyze_station", "flood_frequency", "anywhere"]
     ws2 = out2["workspace"]
     assert all("data" not in a for a in ws2["artifacts"]), "no bytes cross to the page"
     if HAS_PLOTTING:

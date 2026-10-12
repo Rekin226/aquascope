@@ -7,12 +7,25 @@ the same words.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from aquascope.studio.workspace import Artifact, Workspace
 
 #: The concept DOI of the software (the one CITATION.cff carries), for the "how to cite" line.
 CONCEPT_DOI = "10.5281/zenodo.21903143"
+RELEASE_DOIS = {
+    "0.18.0": "10.5281/zenodo.22787700",
+    "0.19.0": "10.5281/zenodo.22930129",
+    "0.20.0": "10.5281/zenodo.23009178",
+    "0.21.0": "10.5281/zenodo.23048856",
+    "0.22.0": "10.5281/zenodo.23132668",
+    "0.23.0": "10.5281/zenodo.23200452",
+    "0.24.0": "10.5281/zenodo.23214018",
+    "0.25.0": "10.5281/zenodo.23219118",
+    "0.26.0": "10.5281/zenodo.23246553",
+    "0.27.0": "10.5281/zenodo.23301359",
+}
 
 #: The report's sections in the order the Author writes them; anything else the Author adds goes after ``results``.
 SECTION_ORDER = ("summary", "problem", "site_data", "methodology", "results", "limitations", "recommendations",
@@ -56,12 +69,22 @@ def site_text(ws: Workspace) -> str:
 def model_line(ws: Workspace) -> str:
     if ws.model:
         return f"Model: {ws.model}" + (f" via {ws.provider}" if ws.provider else "") + f"; {ws.tokens:,} tokens."
-    return "No model was used: the keyless path (rules, playbooks and templates) wrote this study."
+    return "No language model was used: the keyless path (rules, playbooks and templates) wrote this study."
 
 
 def citation() -> str:
-    return (f"AquaScope {version()} [Software]. Zenodo. https://doi.org/{CONCEPT_DOI} "
-            f"(cite the version DOI of the release you used).")
+    release = version()
+    doi = RELEASE_DOIS.get(release)
+    text = f"Rekin226 and contributors. AquaScope Hydrology {release} [Software]. "
+    if doi:
+        text += f"Release DOI: https://doi.org/{doi}. "
+    else:
+        text += "Version DOI not recorded. "
+    text += f"All versions: https://doi.org/{CONCEPT_DOI}."
+    revision = os.environ.get("AQUASCOPE_REVISION")
+    if revision:
+        text += f" Analysis software revision: {revision}; the release DOI does not archive later code changes."
+    return text
 
 
 def key_numbers(ws: Workspace) -> list[dict[str, Any]]:
@@ -119,6 +142,28 @@ def png_figure(ws: Workspace, artifact_id: str) -> Artifact | None:
 def table_artifact(ws: Workspace, artifact_id: str) -> Artifact | None:
     a = ws.artifact(artifact_id)
     return a if a is not None and a.kind == "table" else None
+
+
+#: Tables that are data, not evidence a reader checks in a document: the raw record and the raw samples. They
+#: stay in the workbook and the notebook; the prose documents name where they live instead (#415).
+BULK_TABLES = frozenset({"series", "samples"})
+
+
+def prose_table(ws: Workspace, artifact_id: str) -> tuple[Artifact | None, str | None]:
+    """The table to print in a document, or None with the one-line pointer to print instead when the table is
+    bulk data (the workbook sheet that carries it)."""
+    a = table_artifact(ws, artifact_id)
+    if a is None:
+        return None, None
+    name = str((a.meta or {}).get("name") or "")
+    if name in BULK_TABLES:
+        sheet = f"{a.step}_{name}" if a.step else name
+        rows = (a.meta or {}).get("rows")
+        what = "The record" if name == "series" else "The samples"
+        return None, (f"{what} ({rows} rows) is in the workbook (`workbook.xlsx`, sheet `{sheet}`) and the "
+                      f"notebook, not printed here." if rows else
+                      f"{what} is in the workbook (`workbook.xlsx`, sheet `{sheet}`) and the notebook.")
+    return a, None
 
 
 def steps_of(ws: Workspace) -> list[dict[str, Any]]:

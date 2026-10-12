@@ -20,6 +20,7 @@ accepted. Importing this module imports no plotting or document library.
 from __future__ import annotations
 
 import inspect
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -54,6 +55,9 @@ class Entry:
     figures: list[str] = field(default_factory=list)
     tables: list[str] = field(default_factory=list)
     citation: str | None = None
+    #: The parameters a reader may change after the result, with type and allowed values
+    #: (:mod:`aquascope.studio.steering`).
+    steer: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -61,6 +65,7 @@ class Entry:
             "arguments": self.arguments, "required": self.required,
             "yields": self.yields, "methods": self.methods, "gates": self.gates,
             "figures": self.figures, "tables": self.tables, "citation": self.citation,
+            "steer": self.steer,
         }
 
     def compact(self) -> dict[str, Any]:
@@ -102,17 +107,21 @@ _ANNOTATIONS: dict[str, dict[str, Any]] = {
                     "low_flow_frequency"],
         "tables": ["series", "summary", "annual_maxima", "return_levels", "fdc_percentiles", "trend"],
         "figures": ["series", "annual_maxima", "frequency_curve", "fdc", "trend"],
-        "gates": [{"check": "min_years", "path": "years"}, {"check": "not_empty", "path": "trend"},
+        "gates": [{"check": "sampling_density", "path": "sampling"},
+                  {"check": "min_years", "path": "years"}, {"check": "not_empty", "path": "trend"},
                   {"check": "unit_present", "path": "unit"},
-                  {"check": "max_return_period_factor", "path": "years"}],
+                  {"check": "max_return_period_factor", "path": "ffa.n_years"}],
     },
     "flood_frequency": {
         "kind": "station", "yields": ["ffa", "annual_maxima"],
         "methods": ["at_site_flood_frequency"],
         "tables": ["return_levels", "annual_maxima", "fit_spread"], "figures": ["frequency_curve", "annual_maxima"],
-        "gates": [{"check": "max_return_period_factor", "path": "years"},
+        "gates": [{"check": "min_years", "path": "ffa.n_years"},
+                  {"check": "max_return_period_factor", "path": "ffa.n_years"},
                   {"check": "ci_finite", "path": "ffa.fits.gev_bootstrap.ci"},
-                  {"check": "spread_within", "path": "ffa.fits.gev_lmoments.q, ffa.fits.lp3.q"}],
+                  {"check": "spread_within", "paths": ["ffa.fits.gev_lmoments.q", "ffa.fits.lp3.q"], "value": 0.25},
+                  {"check": "fit_envelopes_max", "path": "ffa"},
+                  {"check": "trend_on_series", "path": "ffa.amax_trend"}],
     },
     "water_quality_samples": {
         "kind": "station", "yields": ["samples"], "tables": ["samples", "sample_counts"],
@@ -122,7 +131,17 @@ _ANNOTATIONS: dict[str, dict[str, Any]] = {
     "anywhere": {
         "kind": "site", "yields": ["climate", "glofas"], "methods": ["glofas_cross_check", "spei_reanalysis"],
         "tables": ["monthly_climate", "glofas_summary"], "figures": ["monthly_climate", "glofas_series"],
-        "gates": [{"check": "not_empty", "path": "climate"}],
+        "gates": [{"check": "not_empty", "path": "climate"},
+                  {"check": "cross_check_ratio", "path": "glofas.ffa.fits.gev_lmoments.q_by_T",
+                   "reference": "{{ result.<the flood_frequency step>.ffa.fits.gev_lmoments.q_by_T }}",
+                   "value": 0.5}],
+    },
+    "reach_record": {
+        "kind": "site", "yields": ["series", "summary", "annual_maxima", "ffa", "fdc", "trend"],
+        "tables": ["summary", "annual_maxima", "return_levels", "fdc_percentiles"],
+        "figures": ["annual_maxima", "frequency_curve"],
+        "gates": [{"check": "not_empty", "path": "ffa"}, {"check": "min_years", "path": "years"},
+                  {"check": "unit_present", "path": "unit"}],
     },
     "similar_basins": {
         "kind": "site", "yields": ["donors"], "methods": ["similar_basins"],
@@ -192,6 +211,39 @@ _ANNOTATIONS: dict[str, dict[str, Any]] = {
     "recharge": {"yields": ["recharge"], "methods": ["recharge_wtf"], "tables": ["recharge_events"],
                  "figures": ["recharge"]},
     "aquifer_drawdown": {"kind": "none", "yields": ["drawdown"], "tables": ["drawdown"]},
+    # the advanced study steps (aquascope.advanced)
+    "change_points": {
+        "kind": "station", "yields": ["change_points", "trend"], "methods": ["change_point_test"],
+        "tables": ["change_tests"], "figures": ["change_points"],
+        "gates": [{"check": "min_years", "path": "n"}, {"check": "stationary", "path": "stationary"}],
+    },
+    "nonstationary_flood": {
+        "kind": "station", "yields": ["ffa", "nonstationary", "annual_maxima"], "methods": ["nonstationary_gev"],
+        "tables": ["nonstationary_table", "annual_maxima"], "figures": ["nonstationary_levels"],
+        "gates": [{"check": "min_years", "path": "n_years"},
+                  {"check": "ci_finite", "path": "nonstationary.ci_last_year.ci"}],
+    },
+    "pot_flood": {
+        "kind": "station", "yields": ["ffa", "peaks"], "methods": ["pot_gpd"],
+        "tables": ["pot_table"], "figures": ["pot_frequency"],
+        "gates": [{"check": "min_years", "path": "n_years"}, {"check": "min_samples", "path": "n_peaks"}],
+    },
+    "catchment_model": {
+        "kind": "station", "yields": ["model", "skill", "scenarios", "params"], "methods": ["gr4j_calibration"],
+        "tables": ["model_skill", "scenarios"], "figures": ["model_fit", "scenario_bars"],
+        "gates": [{"check": "kge_min", "path": "validation.kge"}, {"check": "max_area_km2", "path": "area_km2"}],
+    },
+    "climate_projection": {
+        "kind": "site", "yields": ["projection", "ensemble"], "methods": ["climate_projection"],
+        "tables": ["projection_ensemble", "projection_models"], "figures": ["projection_spread"],
+        "gates": [{"check": "min_models", "path": "n_models"}],
+    },
+    "regional_flood": {
+        "kind": "site", "yields": ["regional", "stations"], "methods": ["regional_index_flood"],
+        "tables": ["regional_sites"], "figures": ["regional_growth"],
+        "gates": [{"check": "min_sites", "path": "n_pooled"}],
+    },
+    "compare_gauges": {"kind": "site", "yields": ["compare"], "methods": ["gauge_comparison"], "tables": ["compare"]},
     LOAD_TABLE: {
         "kind": "table", "yields": ["series", "samples"], "tables": ["series"], "figures": ["series"],
         "gates": [{"check": "not_empty", "path": "n"}],
@@ -238,7 +290,24 @@ def _schema_of_function(func: Callable[..., Any], *,
     return props, required
 
 
+def _choices() -> dict[str, dict[str, tuple[str, ...]]]:
+    """The closed sets of values the workbench tools accept, read from the constants the functions check
+    against, so the validator can refuse a value the tool would refuse (#413)."""
+    from aquascope import workbench
+
+    return {
+        "wqi": {"use": tuple(workbench.WQI_USES), "variant": tuple(workbench.WQI_VARIANTS)},
+        "baseflow": {"method": tuple(workbench.BASEFLOW_METHODS)},
+        "return_periods": {"distribution": tuple(workbench.DISTRIBUTIONS)},
+        "irrigation": {"method": ("single", "dual")},
+    }
+
+
+_CHOICES: dict[str, dict[str, tuple[str, ...]]] = {}
+
+
 def _build() -> dict[str, Entry]:
+    _CHOICES.update(_choices())
     from aquascope import workbench
     from aquascope.ai_engine.analyst import _tool_specs
     from aquascope.methods import METHODS
@@ -264,6 +333,9 @@ def _build() -> dict[str, Entry]:
             continue
         ann = _ANNOTATIONS.get(name, {})
         props, required = _schema_of_function(spec["func"])
+        for arg, values in _CHOICES.get(name, {}).items():
+            if arg in props and isinstance(props[arg], dict):
+                props[arg] = {**props[arg], "enum": list(values)}
         needs = spec.get("needs")
         if needs in ("frame", "weather"):
             props = {"from_step": {"type": "string", "description": "the id of the step whose payload is the table"},
@@ -294,6 +366,11 @@ def _build() -> dict[str, Entry]:
                    "value_column": {"type": "string"}, "datetime_column": {"type": "string"}},
         required=["table"], yields=ann["yields"], tables=ann["tables"], figures=ann["figures"], gates=ann["gates"],
     )
+    # steerable parameters (aquascope.studio.steering)
+    from aquascope.studio.steering import declared
+
+    for e in out.values():
+        e.steer = declared(e.id)
     # citations from the registry, by the first method an entry applies
     for e in out.values():
         for m in e.methods:
@@ -379,7 +456,8 @@ def validate_step(step: dict[str, Any], *, known_ids: set[str] | None = None,
 
     Checks: the tool exists; the arguments are the tool's (``from_step`` allowed
     for table analyses, ``{{ result.<step>.<path> }}`` references only to known
-    ids); required arguments are present; ``depends_on`` names known ids; every
+    ids); an argument with a closed set of values holds one of them (never
+    substituted); required arguments are present; ``depends_on`` names known ids; every
     gate is a check in :data:`aquascope.gates.CHECKS`; a ``method`` is a registry
     id the tool can apply and, when ``sufficiency`` (from the reconnaissance) is
     given, one the registry does not call not defensible here.
@@ -409,14 +487,15 @@ def validate_step(step: dict[str, Any], *, known_ids: set[str] | None = None,
     for k, v in list(args.items()):
         schema = entry.arguments.get(k)
         allowed_values = schema.get("enum") if isinstance(schema, dict) else None
-        if allowed_values and isinstance(v, str) and v not in allowed_values:
-            if repair:
-                # A model often invents a label for a choice ("regionalization", "physio_climatic"); the tool
-                # would reject it at run time, so the first allowed value stands in and the step records it.
-                step.setdefault("notes", []).append(f"{k}={v!r} is not a choice of {tool}; used {allowed_values[0]!r}")
-                args[k] = allowed_values[0]
-            else:
-                errors.append(f"step {sid}: {tool} argument {k}={v!r} is not one of {allowed_values}")
+        if not allowed_values or (isinstance(v, str) and "{{" in v):
+            continue
+        # A model often invents a label for a choice ("regionalization", "physio_climatic"). The tool would
+        # reject it at run time, so the validator rejects it here and names the choices: the Methodologist's
+        # repair round takes the error, and a fallback with such a value is dropped rather than run (#413).
+        given = v if isinstance(v, list) else [v]
+        bad = [x for x in given if not isinstance(x, (int, float)) and x not in allowed_values]
+        if bad:
+            errors.append(f"step {sid}: {tool} argument {k}={v!r} is not one of {allowed_values}")
     if stations is not None and entry.kind == "station" and args.get("source") and args.get("station_id"):
         key = (str(args["source"]), str(args["station_id"]))
         if key not in stations and "{{" not in key[0] and "{{" not in key[1]:
@@ -455,8 +534,15 @@ def validate_step(step: dict[str, Any], *, known_ids: set[str] | None = None,
                 errors.append(f"step {sid}: the registry calls {method!r} not defensible here: {row.get('reason')}")
     fb = step.get("fallback")
     if isinstance(fb, dict) and isinstance(fb.get("step"), dict):
-        errors += [f"fallback of {e}" for e in validate_step(fb["step"], known_ids=ids, sufficiency=sufficiency,
+        # The fallback is checked under its step's id, so a fault in it reads "fallback of step s4: ..." and
+        # the Methodologist can drop the fallback alone (#413).
+        inner = {**fb["step"], "id": sid}
+        errors += [f"fallback of {e}" for e in validate_step(inner, known_ids=ids, sufficiency=sufficiency,
                                                              repair=repair, stations=stations)]
+        if repair:
+            for k in ("arguments", "expects", "notes"):
+                if k in inner:
+                    fb["step"][k] = inner[k]
     return errors
 
 
@@ -476,4 +562,65 @@ def validate_plan(steps: list[dict[str, Any]], *, sufficiency: list[dict[str, An
         errors += validate_step(step, known_ids=set(seen), sufficiency=sufficiency, repair=repair,
                                 stations=stations)
         seen.add(str(sid))
+    if repair:
+        repair_cross_checks(steps)
     return errors
+
+
+_PLACEHOLDER = re.compile(r"<[^>]+>")
+_REF_STEP = re.compile(r"\{\{\s*result\.([A-Za-z0-9_]+)\.")
+
+
+def _snap_to_gauge(step: dict[str, Any], reference: Any) -> None:
+    """A GloFAS cross-check (an ``anywhere`` step) is told the gauge's mean flow, so the model cell is snapped
+    to the gauge's river (``aquascope.explore.snap_glofas_cell``) rather than read at the gauge's coordinates."""
+    if str(step.get("tool")) != "anywhere" or not isinstance(reference, str):
+        return
+    m = _REF_STEP.search(reference)
+    args = step.setdefault("arguments", {})
+    if m and isinstance(args, dict) and args.get("match_mean_flow") is None:
+        args["match_mean_flow"] = f"{{{{ result.{m.group(1)}.stats.mean }}}}"
+
+
+def repair_cross_checks(steps: list[dict[str, Any]]) -> list[str]:
+    """A ``cross_check_ratio`` gate needs a ``reference`` that points at an earlier step's result. A model
+    writes the catalogue's template (``{{ result.<the flood_frequency step>... }}``) or nothing: the
+    placeholder is filled with the latest earlier flood step, the return period is taken from that step's
+    own gate when the cross-check names none, and a cross-check with no flood step to compare with loses the
+    gate and keeps a note. Returns the notes."""
+    notes: list[str] = []
+    flood_ids: list[str] = []
+    for step in steps:
+        sid = str(step.get("id") or "")
+        for g in step.get("expects") or []:
+            if not isinstance(g, dict) or g.get("check") != "cross_check_ratio":
+                continue
+            ref = g.get("reference")
+            if isinstance(ref, str) and "{{" in ref and not _PLACEHOLDER.search(ref):
+                _snap_to_gauge(step, ref)
+                continue
+            if not flood_ids:
+                step["expects"] = [x for x in step["expects"] if x is not g]
+                note = f"step {sid}: cross_check_ratio dropped, no earlier flood_frequency step to compare with"
+                step.setdefault("notes", []).append(note)
+                notes.append(note)
+                continue
+            target = flood_ids[-1]
+            if isinstance(ref, str) and "{{" in ref:
+                g["reference"] = _PLACEHOLDER.sub(target, ref)
+            else:
+                g["reference"] = f"{{{{ result.{target}.ffa.fits.gev_lmoments.q_by_T }}}}"
+            if g.get("return_period") is None:
+                flood = next((st for st in steps if str(st.get("id")) == target), {})
+                rp = next((x.get("return_period") for x in flood.get("expects") or []
+                           if isinstance(x, dict) and x.get("return_period") is not None), None)
+                if rp is not None:
+                    g["return_period"] = rp
+            if not any(str(d) == target for d in step.get("depends_on") or []):
+                step["depends_on"] = [*(step.get("depends_on") or []), target]
+            _snap_to_gauge(step, g["reference"])
+            notes.append(f"step {sid}: cross_check_ratio compares with {target}")
+        tool, method = str(step.get("tool")), str(step.get("method") or "")
+        if tool == "flood_frequency" or (tool == "analyze_station" and method == "at_site_flood_frequency"):
+            flood_ids.append(sid)
+    return notes

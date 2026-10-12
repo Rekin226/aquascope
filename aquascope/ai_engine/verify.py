@@ -90,9 +90,13 @@ _COMPASS = re.compile(r"(\d+\.?\d*)\s*°?\s*([NSEW])\b")
 #: low flow" is a statement about something the test never measured.
 _OTHER_SERIES = re.compile(r"\b(low[- ]flow|q95|q05|q90|q10|baseflow|base flow|peak|maxim|minim|"
                            r"groundwater|rainfall|precipitation)\b", re.I)
+_OTHER_SERIES_BUT_PEAKS = re.compile(r"\b(low[- ]flow|q95|q05|q90|q10|baseflow|base flow|minim|"
+                                     r"groundwater|rainfall|precipitation)\b", re.I)
 
-#: Conventional thresholds, not claims about anyone's data.
-_CONVENTIONS = {0.05, 0.01, 0.1, 0.9, 0.95, 0.99}
+#: Conventional thresholds, not claims about anyone's data. 0.001 is how a
+#: tiny p-value is reported ("p < 0.001"), which the Studio's key numbers and
+#: template prose write rather than a figure like 4.3e-07.
+_CONVENTIONS = {0.05, 0.01, 0.1, 0.9, 0.95, 0.99, 0.001}
 
 #: Digit grouping with a space: "14 555" is one number, not 14 and 555. Only
 #: before groups of exactly three digits, which is what grouping means, and
@@ -333,20 +337,28 @@ def verify(answer: str, tool_results: list[dict[str, Any]], *, question: str = "
     trend_payloads = [r for r in ok_results if isinstance(r.get("payload"), dict) and "trend" in str(r.get("payload"))]
     if trend_payloads and re.search(r"\btrend|increasing|decreasing|drier|wetter\b", answer, re.I):
         significance = None
-        for r in trend_payloads:
-            payload = r["payload"]
-            trend = payload.get("trend") if isinstance(payload, dict) else None
-            if isinstance(trend, dict) and "p_value" in trend:
-                significance = trend
+        # The series the report quotes (trend_reported: the annual maxima for a flood question,
+        # trend_series.py) is the one its significance wording is held to, on whichever step carries it;
+        # the first annual-mean test is the fallback.
+        for key in ("trend_reported", "trend"):
+            for r in trend_payloads:
+                trend = r["payload"].get(key)
+                if isinstance(trend, dict) and "p_value" in trend:
+                    significance = trend
+                    break
+            if significance is not None:
                 break
         if significance is not None:
             p = significance.get("p_value")
+            # A test on the maxima (a flood report's trend_reported) is about the peaks, so sentences on the
+            # peaks are exactly the ones to weigh; the other series stay out.
+            other = _OTHER_SERIES_BUT_PEAKS if "maxim" in str(significance.get("on", "")) else _OTHER_SERIES
             # Only weigh sentences that are about the series the test ran on.
             # An answer that says "no significant trend in low flow" while the
             # tool tested annual means is being precise, not contradictory, and
             # flagging it taught the reader to distrust the checks.
             claims = [s for s in re.split(r"(?<=[.!?])\s+|\n", answer)
-                      if re.search(r"\bsignificant\b", s, re.I) and not _OTHER_SERIES.search(s)]
+                      if re.search(r"\bsignificant\b", s, re.I) and not other.search(s)]
             said = " ".join(claims)
             says_significant = bool(said) and not re.search(r"\bno significant|not significant\b", said, re.I)
             actually = p is not None and p < 0.05
@@ -355,6 +367,48 @@ def verify(answer: str, tool_results: list[dict[str, Any]], *, question: str = "
                 "trend_matches_the_test", agrees,
                 "" if agrees else
                 f"The answer's wording about significance does not match the test (p = {p}).",
+            ))
+
+    # 4b. A stationarity claim about the maxima is held to the test on the maxima, when one ran. The pre-test
+    # on annual means says nothing about the floods; "no trend in the annual means, so the record is stationary"
+    # is the sentence a reviewer marks (#416).
+    amax = None
+    for r in ok_results:
+        payload = r.get("payload")
+        ffa = payload.get("ffa") if isinstance(payload, dict) else None
+        block = ffa.get("amax_trend") if isinstance(ffa, dict) else None
+        if isinstance(block, dict) and block.get("p_value") is not None:
+            amax = block
+            break
+    if amax is not None:
+        maxima = re.compile(r"\b(maxim|peak|flood|annual max|amax)\w*", re.I)
+        sentences = re.split(r"(?<=[.!?])\s+|\n", answer)
+        # "stationary" is always a claim about the maxima a flood fit rests on; a trend sentence is one only
+        # when it names the maxima (a trend in the annual means is another series, tested elsewhere).
+        # Prose only: a gate listing ("trend_on_series passed (...)") or a step line names the test, not a claim.
+        prose = [s for s in sentences if not re.search(r"\bgates?\b|_|`|passed \(|FAILED", s)]
+        stationary = [s for s in prose if re.search(r"\bstationar", s, re.I)]
+        trend_word = re.compile(r"\b(?:a|an|the|no|any|significant|increasing|decreasing|upward|downward|rising|"
+                                r"falling|monotonic)\s+(?:\w+\s+){0,2}trend\b", re.I)
+        trend_max = [s for s in prose if trend_word.search(s) and maxima.search(s)
+                     and not re.search(r"annual mean", s, re.I)]
+        if stationary or trend_max:
+            p_am = float(amax["p_value"])
+            # "stationary" with a word boundary: "nonstationary" is one word and does not count, "not stationary"
+            # is a denial; a sentence that says the estimate is stationary and names a nonstationary fit it
+            # did not make still claims stationarity.
+            says_stationary = any(re.search(r"(?<!not )\bstationar", s, re.I) for s in stationary)
+            if not stationary:
+                says_stationary = bool(re.search(r"\bno (?:significant |monotonic )?trend", " ".join(trend_max), re.I))
+            actually_trend = p_am < 0.05
+            agrees = says_stationary != actually_trend
+            v.checks.append(Check(
+                "stationarity_matches_the_maxima", agrees,
+                "" if agrees else
+                (f"The answer treats the maxima as stationary, but the Mann-Kendall test on the annual maxima "
+                 f"finds a trend (p = {p_am:.3g})." if says_stationary else
+                 f"The answer claims a trend in the maxima that the test on the annual maxima does not find "
+                 f"(p = {p_am:.3g})."),
             ))
 
     # 5. Units: if every result carries a unit, the answer should name one.

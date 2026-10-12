@@ -373,7 +373,7 @@ def validate_reference(ref: Reference, plans_dir: str | Path | None = None) -> l
             if g["check"] not in CHECKS:
                 errors.append(f"{where}: unknown check {g['check']!r}")
                 continue
-            listed = [x.get("path") for x in entry.gates if x.get("check") == g["check"]]
+            listed = [_gate_path(x) for x in entry.gates if x.get("check") == g["check"]]
             if listed and g.get("path") and g["path"] not in listed:
                 errors.append(f"{where}: gate {g['check']} reads {g['path']!r}; the catalogue lists {listed}")
         if not s.optional and (s.tool in ref.forbidden_tools or (s.method and s.method in ref.forbidden_methods)):

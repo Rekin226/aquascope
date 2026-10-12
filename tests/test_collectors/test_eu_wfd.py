@@ -5,6 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import patch
 
+import pytest
+
+from aquascope.collectors.base import CollectorError
 from aquascope.collectors.eu_wfd import (
     _EQS_THRESHOLDS,
     WFD_STATUS_CLASSES,
@@ -113,14 +116,16 @@ class TestEUWFDFetchRaw:
         self.collector = EUWFDCollector()
 
     def test_fetch_raw_handles_connection_error(self):
-        """API unavailability returns empty list with no exception."""
+        """API unavailability raises CollectorError."""
         import httpx
 
-        with patch.object(
-            self.collector.client, "get_json", side_effect=httpx.ConnectError("offline")
-        ):
-            result = self.collector.fetch_raw(country="DE")
-        assert result == []
+        with pytest.raises(CollectorError) as exc_info:
+            with patch.object(
+                self.collector.client, "get_json", side_effect=httpx.ConnectError("offline")
+            ):
+                self.collector.fetch_raw(country="DE")
+        assert exc_info.value.source == "eu_wfd"
+        assert isinstance(exc_info.value.cause, httpx.ConnectError)
 
     def test_build_query_country_filter(self):
         q = self.collector._build_query(country="DE")

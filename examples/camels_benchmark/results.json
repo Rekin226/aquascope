@@ -1,0 +1,3396 @@
+{
+  "metadata": {
+    "schema_version": "1.1",
+    "generated": "2026-09-11",
+    "aquascope_version": "0.16.0",
+    "note": "AquaScope's own implementations compared against published CAMELS attributes and the flood-frequency reference quantiles. Per-catchment integrity checks record internal invariants on the signature object and are surfaced in the report but never folded into the gates. results.md and results.html are renderings of this file. This file is validated against benchmarks/results.schema.json, generated from the Pydantic models in benchmarks/results_models.py. Execution times are recorded and reported, never asserted.",
+    "timings_not_asserted": true,
+    "tolerances": {
+      "signature_relative": {
+        "value": 0.25,
+        "unit": "fraction",
+        "rationale": "Synthetic daily series are calibrated to approximate the published CAMELS attributes; they are not measurements of them."
+      },
+      "baseflow_absolute": {
+        "value": 0.15,
+        "unit": "fraction",
+        "rationale": "Published CAMELS baseflow index comes from a different separation algorithm than AquaScope's Lyne-Hollick/Eckhardt digital filters."
+      },
+      "peak_month_circular": {
+        "value": 2.0,
+        "unit": "months",
+        "rationale": "Peak month is month-of-year and circular (Jan == Dec + 1 month)."
+      },
+      "ffa_relative": {
+        "value": 0.2,
+        "unit": "fraction",
+        "rationale": "Wider than the +/-10% used in the Potomac federal-standard validation because several benchmark gauges are semi-arid or heavy-tailed, where MLE vs L-moments spread is larger."
+      },
+      "q_mean_nrmse_gate": {
+        "value": 25.0,
+        "unit": "%",
+        "rationale": "Aggregate q_mean gate: normalized RMSE (%) across the 10 gauges."
+      },
+      "bfi_pbias_gate": {
+        "value": 25.0,
+        "unit": "%",
+        "rationale": "Aggregate baseflow gate: PBIAS (%) across the 10 gauges."
+      },
+      "ffa_gate": {
+        "value": 20.0,
+        "unit": "%",
+        "rationale": "Aggregate flood-frequency gate over the dependable reference cross-checks (GEV-L-moments and LP3); GEV-MLE mismatches are reported separately as data-limitation findings, not folded into the implementation gate."
+      }
+    }
+  },
+  "catchments": {
+    "01013500": {
+      "name": "Fish River near Fort Kent, ME",
+      "climate": "snow-dominated humid",
+      "signatures": {
+        "checks": [
+          {
+            "metric": "q_mean",
+            "computed": 22.5,
+            "published": 22.5,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q5",
+            "computed": 2.73314,
+            "published": 3.1,
+            "error_type": "relative",
+            "error": 0.118342,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q95",
+            "computed": 71.716745,
+            "published": 75.2,
+            "error_type": "relative",
+            "error": 0.04632,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "computed": 0.62,
+            "published": 0.62,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "computed": -2.652215,
+            "published": -2.35,
+            "error_type": "relative",
+            "error": 0.128602,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "peak_month",
+            "computed": 3.0,
+            "published": 4.0,
+            "error_type": "circular_months",
+            "error": 1.0,
+            "tolerance": 2.0,
+            "check_passes": true
+          },
+          {
+            "metric": "baseflow_index",
+            "computed": 0.559444,
+            "published": 0.59,
+            "error_type": "absolute",
+            "error": 0.030556,
+            "tolerance": 0.15,
+            "check_passes": true
+          }
+        ],
+        "values": {
+          "q_mean": 22.49999983561644,
+          "q5": 2.73314,
+          "q95": 71.71674499999999,
+          "median_flow": 13.80285,
+          "runoff_ratio": 0.6199998429711193,
+          "mean_recession_constant": 0.31856995994276927,
+          "fdc_slope": -2.6522145466850553,
+          "peak_month": 3,
+          "baseflow_index": 0.5594442690532987
+        },
+        "integrity": [
+          {
+            "metric": "order",
+            "detail": "q5=2.733 < median=13.803 < q95=71.717",
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "detail": "runoff_ratio=0.6199998429711193",
+            "check_passes": true
+          },
+          {
+            "metric": "recession_constant",
+            "detail": "mean_recession_constant=0.3186",
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "detail": "fdc_slope=-2.6522",
+            "check_passes": true
+          },
+          {
+            "metric": "complete",
+            "detail": "all signature fields populated",
+            "check_passes": true
+          }
+        ],
+        "seconds": 0.009725332000016351
+      },
+      "baseflow": {
+        "methods": {
+          "lyne_hollick": {
+            "bfi": 0.559321,
+            "published_bfi": 0.59,
+            "seconds": 0.007348210999907678,
+            "check": {
+              "metric": "bfi_lyne_hollick",
+              "computed": 0.559321,
+              "published": 0.59,
+              "error_type": "absolute",
+              "error": 0.030679,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          },
+          "eckhardt": {
+            "bfi": 0.542497,
+            "published_bfi": 0.59,
+            "seconds": 0.002503693999983625,
+            "check": {
+              "metric": "bfi_eckhardt",
+              "computed": 0.542497,
+              "published": 0.59,
+              "error_type": "absolute",
+              "error": 0.047503,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          }
+        },
+        "seconds": 0.009851904999891303
+      },
+      "flood_frequency": {
+        "methods": {
+          "gev": {
+            "reference_key": "scipy_gev",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 8.27,
+            "max_relative_error_pct": 40.3,
+            "warnings": [],
+            "seconds": 0.014514186000042173,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 236.03,
+                "reference_m3s": 168.23,
+                "relative_error_pct": 40.3,
+                "check_passes": false,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 304.48,
+                "reference_m3s": 289.81,
+                "relative_error_pct": 5.06,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 346.56,
+                "reference_m3s": 348.4,
+                "relative_error_pct": 0.53,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 396.3,
+                "reference_m3s": 404.24,
+                "relative_error_pct": 1.96,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 430.88,
+                "reference_m3s": 435.62,
+                "relative_error_pct": 1.09,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 463.36,
+                "reference_m3s": 460.28,
+                "relative_error_pct": 0.67,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "gev_lmoments": {
+            "reference_key": "scipy_gev_lmoments",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.01,
+            "max_relative_error_pct": 0.02,
+            "warnings": [],
+            "seconds": 0.0013170859999718232,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 234.34,
+                "reference_m3s": 234.33,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 302.09,
+                "reference_m3s": 302.09,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 345.01,
+                "reference_m3s": 345.01,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 397.13,
+                "reference_m3s": 397.15,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 434.32,
+                "reference_m3s": 434.37,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 470.04,
+                "reference_m3s": 470.12,
+                "relative_error_pct": 0.02,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "lp3": {
+            "reference_key": "scipy_lp3",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.1,
+            "max_relative_error_pct": 0.23,
+            "warnings": [],
+            "seconds": 0.0018642310000132056,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 237.65,
+                "reference_m3s": 237.52,
+                "relative_error_pct": 0.05,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 305.42,
+                "reference_m3s": 305.4,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 344.92,
+                "reference_m3s": 345.06,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 389.92,
+                "reference_m3s": 390.37,
+                "relative_error_pct": 0.11,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 420.48,
+                "reference_m3s": 421.21,
+                "relative_error_pct": 0.17,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 448.89,
+                "reference_m3s": 449.93,
+                "relative_error_pct": 0.23,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          }
+        },
+        "seconds": 0.017695503000027202
+      },
+      "timings": {
+        "signatures_s": 0.01,
+        "baseflow_s": 0.01,
+        "flood_frequency_s": 0.018,
+        "total_s": 0.037
+      }
+    },
+    "01664000": {
+      "name": "Rappahannock River near Fredericksburg, VA",
+      "climate": "humid continental",
+      "signatures": {
+        "checks": [
+          {
+            "metric": "q_mean",
+            "computed": 45.3,
+            "published": 45.3,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q5",
+            "computed": 5.35505,
+            "published": 5.8,
+            "error_type": "relative",
+            "error": 0.076716,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q95",
+            "computed": 144.96551,
+            "published": 142.0,
+            "error_type": "relative",
+            "error": 0.020884,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "computed": 0.35,
+            "published": 0.35,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "computed": -2.706408,
+            "published": -2.5,
+            "error_type": "relative",
+            "error": 0.082563,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "peak_month",
+            "computed": 2.0,
+            "published": 3.0,
+            "error_type": "circular_months",
+            "error": 1.0,
+            "tolerance": 2.0,
+            "check_passes": true
+          },
+          {
+            "metric": "baseflow_index",
+            "computed": 0.537231,
+            "published": 0.44,
+            "error_type": "absolute",
+            "error": 0.097231,
+            "tolerance": 0.15,
+            "check_passes": true
+          }
+        ],
+        "values": {
+          "q_mean": 45.29999975342465,
+          "q5": 5.35505,
+          "q95": 144.96550999999977,
+          "median_flow": 25.172800000000002,
+          "runoff_ratio": 0.35000003937222635,
+          "mean_recession_constant": 0.3180758121896449,
+          "fdc_slope": -2.7064076746797694,
+          "peak_month": 2,
+          "baseflow_index": 0.5372314843051168
+        },
+        "integrity": [
+          {
+            "metric": "order",
+            "detail": "q5=5.355 < median=25.173 < q95=144.966",
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "detail": "runoff_ratio=0.35000003937222635",
+            "check_passes": true
+          },
+          {
+            "metric": "recession_constant",
+            "detail": "mean_recession_constant=0.3181",
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "detail": "fdc_slope=-2.7064",
+            "check_passes": true
+          },
+          {
+            "metric": "complete",
+            "detail": "all signature fields populated",
+            "check_passes": true
+          }
+        ],
+        "seconds": 0.0076329820000182735
+      },
+      "baseflow": {
+        "methods": {
+          "lyne_hollick": {
+            "bfi": 0.537086,
+            "published_bfi": 0.44,
+            "seconds": 0.00694519700005003,
+            "check": {
+              "metric": "bfi_lyne_hollick",
+              "computed": 0.537086,
+              "published": 0.44,
+              "error_type": "absolute",
+              "error": 0.097086,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          },
+          "eckhardt": {
+            "bfi": 0.523422,
+            "published_bfi": 0.44,
+            "seconds": 0.0024196279999841863,
+            "check": {
+              "metric": "bfi_eckhardt",
+              "computed": 0.523422,
+              "published": 0.44,
+              "error_type": "absolute",
+              "error": 0.083422,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          }
+        },
+        "seconds": 0.009364825000034216
+      },
+      "flood_frequency": {
+        "methods": {
+          "gev": {
+            "reference_key": "scipy_gev",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.0,
+            "max_relative_error_pct": 0.0,
+            "warnings": [],
+            "seconds": 0.013068946999965192,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 363.87,
+                "reference_m3s": 363.87,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 616.63,
+                "reference_m3s": 616.63,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 837.47,
+                "reference_m3s": 837.47,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 1197.06,
+                "reference_m3s": 1197.06,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 1537.54,
+                "reference_m3s": 1537.54,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1953.77,
+                "reference_m3s": 1953.77,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "gev_lmoments": {
+            "reference_key": "scipy_gev_lmoments",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.03,
+            "max_relative_error_pct": 0.07,
+            "warnings": [],
+            "seconds": 0.0012282430000141176,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 357.01,
+                "reference_m3s": 357.12,
+                "relative_error_pct": 0.03,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 607.14,
+                "reference_m3s": 607.37,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 833.39,
+                "reference_m3s": 833.59,
+                "relative_error_pct": 0.02,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 1213.89,
+                "reference_m3s": 1213.8,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 1585.37,
+                "reference_m3s": 1584.8,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 2051.62,
+                "reference_m3s": 2050.22,
+                "relative_error_pct": 0.07,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "lp3": {
+            "reference_key": "scipy_lp3",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.18,
+            "max_relative_error_pct": 0.42,
+            "warnings": [],
+            "seconds": 0.0016044320000219159,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 362.23,
+                "reference_m3s": 362.58,
+                "relative_error_pct": 0.1,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 632.55,
+                "reference_m3s": 632.82,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 863.3,
+                "reference_m3s": 862.92,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 1221.15,
+                "reference_m3s": 1218.92,
+                "relative_error_pct": 0.18,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 1540.69,
+                "reference_m3s": 1536.13,
+                "relative_error_pct": 0.3,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1909.82,
+                "reference_m3s": 1901.89,
+                "relative_error_pct": 0.42,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          }
+        },
+        "seconds": 0.015901622000001225
+      },
+      "timings": {
+        "signatures_s": 0.008,
+        "baseflow_s": 0.009,
+        "flood_frequency_s": 0.016,
+        "total_s": 0.033
+      }
+    },
+    "02231000": {
+      "name": "St. Marys River near Macclenny, FL",
+      "climate": "subtropical",
+      "signatures": {
+        "checks": [
+          {
+            "metric": "q_mean",
+            "computed": 15.799999,
+            "published": 15.8,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q5",
+            "computed": 1.106655,
+            "published": 1.2,
+            "error_type": "relative",
+            "error": 0.077787,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q95",
+            "computed": 61.49207,
+            "published": 52.3,
+            "error_type": "relative",
+            "error": 0.175757,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "computed": 0.28,
+            "published": 0.28,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "computed": -3.187219,
+            "published": -2.58,
+            "error_type": "relative",
+            "error": 0.235356,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "peak_month",
+            "computed": 10.0,
+            "published": 9.0,
+            "error_type": "circular_months",
+            "error": 1.0,
+            "tolerance": 2.0,
+            "check_passes": true
+          },
+          {
+            "metric": "baseflow_index",
+            "computed": 0.514784,
+            "published": 0.65,
+            "error_type": "absolute",
+            "error": 0.135216,
+            "tolerance": 0.15,
+            "check_passes": true
+          }
+        ],
+        "values": {
+          "q_mean": 15.799999260273971,
+          "q5": 1.1066550000000002,
+          "q95": 61.49207,
+          "median_flow": 7.21735,
+          "runoff_ratio": 0.28000007622683204,
+          "mean_recession_constant": 0.3480045777789963,
+          "fdc_slope": -3.187219038608757,
+          "peak_month": 10,
+          "baseflow_index": 0.5147838207398892
+        },
+        "integrity": [
+          {
+            "metric": "order",
+            "detail": "q5=1.107 < median=7.217 < q95=61.492",
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "detail": "runoff_ratio=0.28000007622683204",
+            "check_passes": true
+          },
+          {
+            "metric": "recession_constant",
+            "detail": "mean_recession_constant=0.3480",
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "detail": "fdc_slope=-3.1872",
+            "check_passes": true
+          },
+          {
+            "metric": "complete",
+            "detail": "all signature fields populated",
+            "check_passes": true
+          }
+        ],
+        "seconds": 0.007665137999993021
+      },
+      "baseflow": {
+        "methods": {
+          "lyne_hollick": {
+            "bfi": 0.514691,
+            "published_bfi": 0.65,
+            "seconds": 0.006984445000057349,
+            "check": {
+              "metric": "bfi_lyne_hollick",
+              "computed": 0.514691,
+              "published": 0.65,
+              "error_type": "absolute",
+              "error": 0.135309,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          },
+          "eckhardt": {
+            "bfi": 0.504979,
+            "published_bfi": 0.65,
+            "seconds": 0.002378975000056016,
+            "check": {
+              "metric": "bfi_eckhardt",
+              "computed": 0.504979,
+              "published": 0.65,
+              "error_type": "absolute",
+              "error": 0.145021,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          }
+        },
+        "seconds": 0.009363420000113365
+      },
+      "flood_frequency": {
+        "methods": {
+          "gev": {
+            "reference_key": "scipy_gev",
+            "reference_mle_unstable": true,
+            "mean_relative_error_pct": 182.59,
+            "max_relative_error_pct": 585.59,
+            "warnings": [],
+            "seconds": 0.013724002000003566,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 156.59,
+                "reference_m3s": 22.84,
+                "relative_error_pct": 585.59,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 304.47,
+                "reference_m3s": 131.66,
+                "relative_error_pct": 131.26,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 439.36,
+                "reference_m3s": 2142.81,
+                "relative_error_pct": 79.5,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 667.96,
+                "reference_m3s": 89150.44,
+                "relative_error_pct": 99.25,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 892.79,
+                "reference_m3s": 1426846.68,
+                "relative_error_pct": 99.94,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1176.76,
+                "reference_m3s": 22378490.24,
+                "relative_error_pct": 99.99,
+                "check_passes": false,
+                "classification": "data_limitation"
+              }
+            ]
+          },
+          "gev_lmoments": {
+            "reference_key": "scipy_gev_lmoments",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.04,
+            "max_relative_error_pct": 0.07,
+            "warnings": [],
+            "seconds": 0.001215426999920055,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 156.59,
+                "reference_m3s": 156.65,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 304.47,
+                "reference_m3s": 304.6,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 439.36,
+                "reference_m3s": 439.47,
+                "relative_error_pct": 0.03,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 667.96,
+                "reference_m3s": 667.92,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 892.79,
+                "reference_m3s": 892.47,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1176.76,
+                "reference_m3s": 1175.97,
+                "relative_error_pct": 0.07,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "lp3": {
+            "reference_key": "scipy_lp3",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.18,
+            "max_relative_error_pct": 0.42,
+            "warnings": [],
+            "seconds": 0.001572528999986389,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 151.51,
+                "reference_m3s": 151.66,
+                "relative_error_pct": 0.1,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 311.04,
+                "reference_m3s": 311.16,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 461.39,
+                "reference_m3s": 461.16,
+                "relative_error_pct": 0.05,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 712.56,
+                "reference_m3s": 711.23,
+                "relative_error_pct": 0.19,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 950.93,
+                "reference_m3s": 948.1,
+                "relative_error_pct": 0.3,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1239.31,
+                "reference_m3s": 1234.16,
+                "relative_error_pct": 0.42,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          }
+        },
+        "seconds": 0.01651195799991001
+      },
+      "timings": {
+        "signatures_s": 0.008,
+        "baseflow_s": 0.009,
+        "flood_frequency_s": 0.017,
+        "total_s": 0.034
+      }
+    },
+    "03451500": {
+      "name": "French Broad River at Asheville, NC",
+      "climate": "humid Appalachian",
+      "signatures": {
+        "checks": [
+          {
+            "metric": "q_mean",
+            "computed": 38.200001,
+            "published": 38.2,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q5",
+            "computed": 6.522305,
+            "published": 6.5,
+            "error_type": "relative",
+            "error": 0.003432,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q95",
+            "computed": 117.230055,
+            "published": 110.0,
+            "error_type": "relative",
+            "error": 0.065728,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "computed": 0.48,
+            "published": 0.48,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "computed": -2.235127,
+            "published": -1.95,
+            "error_type": "relative",
+            "error": 0.146219,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "peak_month",
+            "computed": 3.0,
+            "published": 3.0,
+            "error_type": "circular_months",
+            "error": 0.0,
+            "tolerance": 2.0,
+            "check_passes": true
+          },
+          {
+            "metric": "baseflow_index",
+            "computed": 0.577533,
+            "published": 0.52,
+            "error_type": "absolute",
+            "error": 0.057533,
+            "tolerance": 0.15,
+            "check_passes": true
+          }
+        ],
+        "values": {
+          "q_mean": 38.200000712328766,
+          "q5": 6.522305,
+          "q95": 117.23005499999967,
+          "median_flow": 24.700699999999998,
+          "runoff_ratio": 0.4799997886252136,
+          "mean_recession_constant": 0.30710157888818246,
+          "fdc_slope": -2.235126994161603,
+          "peak_month": 3,
+          "baseflow_index": 0.5775333408024704
+        },
+        "integrity": [
+          {
+            "metric": "order",
+            "detail": "q5=6.522 < median=24.701 < q95=117.230",
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "detail": "runoff_ratio=0.4799997886252136",
+            "check_passes": true
+          },
+          {
+            "metric": "recession_constant",
+            "detail": "mean_recession_constant=0.3071",
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "detail": "fdc_slope=-2.2351",
+            "check_passes": true
+          },
+          {
+            "metric": "complete",
+            "detail": "all signature fields populated",
+            "check_passes": true
+          }
+        ],
+        "seconds": 0.011462602999927185
+      },
+      "baseflow": {
+        "methods": {
+          "lyne_hollick": {
+            "bfi": 0.577274,
+            "published_bfi": 0.52,
+            "seconds": 0.011807059999910052,
+            "check": {
+              "metric": "bfi_lyne_hollick",
+              "computed": 0.577274,
+              "published": 0.52,
+              "error_type": "absolute",
+              "error": 0.057274,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          },
+          "eckhardt": {
+            "bfi": 0.555522,
+            "published_bfi": 0.52,
+            "seconds": 0.0037409850000358347,
+            "check": {
+              "metric": "bfi_eckhardt",
+              "computed": 0.555522,
+              "published": 0.52,
+              "error_type": "absolute",
+              "error": 0.035522,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          }
+        },
+        "seconds": 0.015548044999945887
+      },
+      "flood_frequency": {
+        "methods": {
+          "gev": {
+            "reference_key": "scipy_gev",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.0,
+            "max_relative_error_pct": 0.0,
+            "warnings": [],
+            "seconds": 0.01384264799992252,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 406.72,
+                "reference_m3s": 406.72,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 632.18,
+                "reference_m3s": 632.18,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 823.28,
+                "reference_m3s": 823.28,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 1125.83,
+                "reference_m3s": 1125.83,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 1404.73,
+                "reference_m3s": 1404.73,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1737.93,
+                "reference_m3s": 1737.92,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "gev_lmoments": {
+            "reference_key": "scipy_gev_lmoments",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.04,
+            "max_relative_error_pct": 0.08,
+            "warnings": [],
+            "seconds": 0.0015265199999703327,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 403.86,
+                "reference_m3s": 403.98,
+                "relative_error_pct": 0.03,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 633.03,
+                "reference_m3s": 633.25,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 834.04,
+                "reference_m3s": 834.22,
+                "relative_error_pct": 0.02,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 1162.57,
+                "reference_m3s": 1162.44,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 1474.72,
+                "reference_m3s": 1474.1,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1857.47,
+                "reference_m3s": 1856.02,
+                "relative_error_pct": 0.08,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "lp3": {
+            "reference_key": "scipy_lp3",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.26,
+            "max_relative_error_pct": 0.63,
+            "warnings": [],
+            "seconds": 0.0017518450000579833,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 396.35,
+                "reference_m3s": 396.96,
+                "relative_error_pct": 0.15,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 633.9,
+                "reference_m3s": 634.52,
+                "relative_error_pct": 0.1,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 844.09,
+                "reference_m3s": 843.85,
+                "relative_error_pct": 0.03,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 1183.23,
+                "reference_m3s": 1180.33,
+                "relative_error_pct": 0.25,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 1498.81,
+                "reference_m3s": 1492.36,
+                "relative_error_pct": 0.43,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1877.26,
+                "reference_m3s": 1865.46,
+                "relative_error_pct": 0.63,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          }
+        },
+        "seconds": 0.017121012999950835
+      },
+      "timings": {
+        "signatures_s": 0.011,
+        "baseflow_s": 0.016,
+        "flood_frequency_s": 0.017,
+        "total_s": 0.044
+      }
+    },
+    "06803500": {
+      "name": "Salt Creek at Roca, NE",
+      "climate": "semi-arid Great Plains",
+      "signatures": {
+        "checks": [
+          {
+            "metric": "q_mean",
+            "computed": 3.4,
+            "published": 3.4,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q5",
+            "computed": 0.232705,
+            "published": 0.3,
+            "error_type": "relative",
+            "error": 0.224317,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q95",
+            "computed": 11.271145,
+            "published": 12.5,
+            "error_type": "relative",
+            "error": 0.098308,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "computed": 0.12,
+            "published": 0.12,
+            "error_type": "relative",
+            "error": 2e-06,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "computed": -3.169895,
+            "published": -2.85,
+            "error_type": "relative",
+            "error": 0.112244,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "peak_month",
+            "computed": 6.0,
+            "published": 6.0,
+            "error_type": "circular_months",
+            "error": 0.0,
+            "tolerance": 2.0,
+            "check_passes": true
+          },
+          {
+            "metric": "baseflow_index",
+            "computed": 0.550603,
+            "published": 0.7,
+            "error_type": "absolute",
+            "error": 0.149397,
+            "tolerance": 0.15,
+            "check_passes": true
+          }
+        ],
+        "values": {
+          "q_mean": 3.4000004931506855,
+          "q5": 0.23270500000000002,
+          "q95": 11.271144999999997,
+          "median_flow": 1.9134,
+          "runoff_ratio": 0.11999978146698892,
+          "mean_recession_constant": 0.3464175941381838,
+          "fdc_slope": -3.16989450012042,
+          "peak_month": 6,
+          "baseflow_index": 0.5506031437163306
+        },
+        "integrity": [
+          {
+            "metric": "order",
+            "detail": "q5=0.233 < median=1.913 < q95=11.271",
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "detail": "runoff_ratio=0.11999978146698892",
+            "check_passes": true
+          },
+          {
+            "metric": "recession_constant",
+            "detail": "mean_recession_constant=0.3464",
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "detail": "fdc_slope=-3.1699",
+            "check_passes": true
+          },
+          {
+            "metric": "complete",
+            "detail": "all signature fields populated",
+            "check_passes": true
+          }
+        ],
+        "seconds": 0.007712826000101813
+      },
+      "baseflow": {
+        "methods": {
+          "lyne_hollick": {
+            "bfi": 0.550469,
+            "published_bfi": 0.7,
+            "seconds": 0.0069967079999742054,
+            "check": {
+              "metric": "bfi_lyne_hollick",
+              "computed": 0.550469,
+              "published": 0.7,
+              "error_type": "absolute",
+              "error": 0.149531,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          },
+          "eckhardt": {
+            "bfi": 0.533633,
+            "published_bfi": 0.7,
+            "seconds": 0.002374903000031736,
+            "check": {
+              "metric": "bfi_eckhardt",
+              "computed": 0.533633,
+              "published": 0.7,
+              "error_type": "absolute",
+              "error": 0.166367,
+              "tolerance": 0.15,
+              "check_passes": false
+            }
+          }
+        },
+        "seconds": 0.009371611000005942
+      },
+      "flood_frequency": {
+        "methods": {
+          "gev": {
+            "reference_key": "scipy_gev",
+            "reference_mle_unstable": true,
+            "mean_relative_error_pct": 202.62,
+            "max_relative_error_pct": 800.77,
+            "warnings": [],
+            "seconds": 0.016058660999988206,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 236.54,
+                "reference_m3s": 26.26,
+                "relative_error_pct": 800.77,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 417.71,
+                "reference_m3s": 539.57,
+                "relative_error_pct": 22.59,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 560.9,
+                "reference_m3s": 7705.97,
+                "relative_error_pct": 92.72,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 773.45,
+                "reference_m3s": 229913.58,
+                "relative_error_pct": 99.66,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 957.68,
+                "reference_m3s": 2859415.12,
+                "relative_error_pct": 99.97,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1166.47,
+                "reference_m3s": 34908723.47,
+                "relative_error_pct": 100.0,
+                "check_passes": false,
+                "classification": "data_limitation"
+              }
+            ]
+          },
+          "gev_lmoments": {
+            "reference_key": "scipy_gev_lmoments",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.03,
+            "max_relative_error_pct": 0.06,
+            "warnings": [],
+            "seconds": 0.0010642570000527485,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 242.33,
+                "reference_m3s": 242.4,
+                "relative_error_pct": 0.03,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 423.54,
+                "reference_m3s": 423.63,
+                "relative_error_pct": 0.02,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 558.12,
+                "reference_m3s": 558.15,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 746.84,
+                "reference_m3s": 746.69,
+                "relative_error_pct": 0.02,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 901.69,
+                "reference_m3s": 901.32,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1069.16,
+                "reference_m3s": 1068.49,
+                "relative_error_pct": 0.06,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "lp3": {
+            "reference_key": "scipy_lp3",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.81,
+            "max_relative_error_pct": 1.73,
+            "warnings": [],
+            "seconds": 0.0015378870000404277,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 243.29,
+                "reference_m3s": 242.36,
+                "relative_error_pct": 0.39,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 444.24,
+                "reference_m3s": 444.32,
+                "relative_error_pct": 0.02,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 577.34,
+                "reference_m3s": 579.75,
+                "relative_error_pct": 0.42,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 735.8,
+                "reference_m3s": 742.87,
+                "relative_error_pct": 0.95,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 844.33,
+                "reference_m3s": 855.89,
+                "relative_error_pct": 1.35,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 944.12,
+                "reference_m3s": 960.79,
+                "relative_error_pct": 1.73,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          }
+        },
+        "seconds": 0.018660805000081382
+      },
+      "timings": {
+        "signatures_s": 0.008,
+        "baseflow_s": 0.009,
+        "flood_frequency_s": 0.019,
+        "total_s": 0.036
+      }
+    },
+    "07056000": {
+      "name": "Buffalo River near St. Joe, AR",
+      "climate": "humid interior",
+      "signatures": {
+        "checks": [
+          {
+            "metric": "q_mean",
+            "computed": 28.6,
+            "published": 28.6,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q5",
+            "computed": 2.77928,
+            "published": 2.8,
+            "error_type": "relative",
+            "error": 0.0074,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q95",
+            "computed": 91.28733,
+            "published": 95.0,
+            "error_type": "relative",
+            "error": 0.039081,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "computed": 0.45,
+            "published": 0.45,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "computed": -2.797046,
+            "published": -2.25,
+            "error_type": "relative",
+            "error": 0.243132,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "peak_month",
+            "computed": 5.0,
+            "published": 4.0,
+            "error_type": "circular_months",
+            "error": 1.0,
+            "tolerance": 2.0,
+            "check_passes": true
+          },
+          {
+            "metric": "baseflow_index",
+            "computed": 0.529877,
+            "published": 0.51,
+            "error_type": "absolute",
+            "error": 0.019877,
+            "tolerance": 0.15,
+            "check_passes": true
+          }
+        ],
+        "values": {
+          "q_mean": 28.600000082191777,
+          "q5": 2.77928,
+          "q95": 91.2873299999999,
+          "median_flow": 16.191,
+          "runoff_ratio": 0.4499999581856539,
+          "mean_recession_constant": 0.37573108135663724,
+          "fdc_slope": -2.7970460201666016,
+          "peak_month": 5,
+          "baseflow_index": 0.5298772993514281
+        },
+        "integrity": [
+          {
+            "metric": "order",
+            "detail": "q5=2.779 < median=16.191 < q95=91.287",
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "detail": "runoff_ratio=0.4499999581856539",
+            "check_passes": true
+          },
+          {
+            "metric": "recession_constant",
+            "detail": "mean_recession_constant=0.3757",
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "detail": "fdc_slope=-2.7970",
+            "check_passes": true
+          },
+          {
+            "metric": "complete",
+            "detail": "all signature fields populated",
+            "check_passes": true
+          }
+        ],
+        "seconds": 0.007394265000016276
+      },
+      "baseflow": {
+        "methods": {
+          "lyne_hollick": {
+            "bfi": 0.529711,
+            "published_bfi": 0.51,
+            "seconds": 0.007063700999992761,
+            "check": {
+              "metric": "bfi_lyne_hollick",
+              "computed": 0.529711,
+              "published": 0.51,
+              "error_type": "absolute",
+              "error": 0.019711,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          },
+          "eckhardt": {
+            "bfi": 0.51613,
+            "published_bfi": 0.51,
+            "seconds": 0.0023617509999667163,
+            "check": {
+              "metric": "bfi_eckhardt",
+              "computed": 0.51613,
+              "published": 0.51,
+              "error_type": "absolute",
+              "error": 0.00613,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          }
+        },
+        "seconds": 0.009425451999959478
+      },
+      "flood_frequency": {
+        "methods": {
+          "gev": {
+            "reference_key": "scipy_gev",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.0,
+            "max_relative_error_pct": 0.0,
+            "warnings": [],
+            "seconds": 0.016297336999969048,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 1056.78,
+                "reference_m3s": 1056.78,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 1812.23,
+                "reference_m3s": 1812.23,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 2429.17,
+                "reference_m3s": 2429.17,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 3372.97,
+                "reference_m3s": 3372.97,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 4214.94,
+                "reference_m3s": 4214.94,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 5192.99,
+                "reference_m3s": 5192.99,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "gev_lmoments": {
+            "reference_key": "scipy_gev_lmoments",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.03,
+            "max_relative_error_pct": 0.07,
+            "warnings": [],
+            "seconds": 0.001186367000059363,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 1082.0,
+                "reference_m3s": 1082.33,
+                "relative_error_pct": 0.03,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 1834.57,
+                "reference_m3s": 1835.04,
+                "relative_error_pct": 0.03,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 2408.82,
+                "reference_m3s": 2409.02,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 3234.22,
+                "reference_m3s": 3233.54,
+                "relative_error_pct": 0.02,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 3927.82,
+                "reference_m3s": 3926.03,
+                "relative_error_pct": 0.05,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 4693.37,
+                "reference_m3s": 4689.97,
+                "relative_error_pct": 0.07,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "lp3": {
+            "reference_key": "scipy_lp3",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.21,
+            "max_relative_error_pct": 0.47,
+            "warnings": [],
+            "seconds": 0.0016619160001027922,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 1072.74,
+                "reference_m3s": 1071.61,
+                "relative_error_pct": 0.11,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 1875.32,
+                "reference_m3s": 1874.98,
+                "relative_error_pct": 0.02,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 2469.17,
+                "reference_m3s": 2471.25,
+                "relative_error_pct": 0.08,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 3269.9,
+                "reference_m3s": 3277.57,
+                "relative_error_pct": 0.23,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 3894.09,
+                "reference_m3s": 3907.88,
+                "relative_error_pct": 0.35,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 4536.44,
+                "reference_m3s": 4558.02,
+                "relative_error_pct": 0.47,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          }
+        },
+        "seconds": 0.019145620000131203
+      },
+      "timings": {
+        "signatures_s": 0.007,
+        "baseflow_s": 0.009,
+        "flood_frequency_s": 0.019,
+        "total_s": 0.036
+      }
+    },
+    "08181500": {
+      "name": "Medina River at San Antonio, TX",
+      "climate": "semi-arid",
+      "signatures": {
+        "checks": [
+          {
+            "metric": "q_mean",
+            "computed": 5.2,
+            "published": 5.2,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q5",
+            "computed": 0.05367,
+            "published": 0.08,
+            "error_type": "relative",
+            "error": 0.329125,
+            "tolerance": 0.25,
+            "check_passes": false
+          },
+          {
+            "metric": "q95",
+            "computed": 21.83893,
+            "published": 18.0,
+            "error_type": "relative",
+            "error": 0.213274,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "computed": 0.08,
+            "published": 0.08,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "computed": -4.600273,
+            "published": -4.0,
+            "error_type": "relative",
+            "error": 0.150068,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "peak_month",
+            "computed": 4.0,
+            "published": 5.0,
+            "error_type": "circular_months",
+            "error": 1.0,
+            "tolerance": 2.0,
+            "check_passes": true
+          },
+          {
+            "metric": "baseflow_index",
+            "computed": 0.364966,
+            "published": 0.38,
+            "error_type": "absolute",
+            "error": 0.015034,
+            "tolerance": 0.15,
+            "check_passes": true
+          }
+        ],
+        "values": {
+          "q_mean": 5.199999890410958,
+          "q5": 0.05367000000000001,
+          "q95": 21.838929999999994,
+          "median_flow": 1.0733000000000001,
+          "runoff_ratio": 0.07999999494204445,
+          "mean_recession_constant": 0.5815070696928664,
+          "fdc_slope": -4.600273406499064,
+          "peak_month": 4,
+          "baseflow_index": 0.3649656219042249
+        },
+        "integrity": [
+          {
+            "metric": "order",
+            "detail": "q5=0.054 < median=1.073 < q95=21.839",
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "detail": "runoff_ratio=0.07999999494204445",
+            "check_passes": true
+          },
+          {
+            "metric": "recession_constant",
+            "detail": "mean_recession_constant=0.5815",
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "detail": "fdc_slope=-4.6003",
+            "check_passes": true
+          },
+          {
+            "metric": "complete",
+            "detail": "all signature fields populated",
+            "check_passes": true
+          }
+        ],
+        "seconds": 0.007861251999997876
+      },
+      "baseflow": {
+        "methods": {
+          "lyne_hollick": {
+            "bfi": 0.364938,
+            "published_bfi": 0.38,
+            "seconds": 0.007053763000044455,
+            "check": {
+              "metric": "bfi_lyne_hollick",
+              "computed": 0.364938,
+              "published": 0.38,
+              "error_type": "absolute",
+              "error": 0.015062,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          },
+          "eckhardt": {
+            "bfi": 0.372659,
+            "published_bfi": 0.38,
+            "seconds": 0.0024042679999638494,
+            "check": {
+              "metric": "bfi_eckhardt",
+              "computed": 0.372659,
+              "published": 0.38,
+              "error_type": "absolute",
+              "error": 0.007341,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          }
+        },
+        "seconds": 0.009458031000008305
+      },
+      "flood_frequency": {
+        "methods": {
+          "gev": {
+            "reference_key": "scipy_gev",
+            "reference_mle_unstable": true,
+            "mean_relative_error_pct": 21.62,
+            "max_relative_error_pct": 44.86,
+            "warnings": [],
+            "seconds": 0.013425438000012946,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 137.59,
+                "reference_m3s": 122.83,
+                "relative_error_pct": 12.02,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 314.46,
+                "reference_m3s": 312.97,
+                "relative_error_pct": 0.47,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 491.34,
+                "reference_m3s": 551.79,
+                "relative_error_pct": 10.96,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 818.15,
+                "reference_m3s": 1100.02,
+                "relative_error_pct": 25.62,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 1166.86,
+                "reference_m3s": 1816.25,
+                "relative_error_pct": 35.75,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1639.38,
+                "reference_m3s": 2973.25,
+                "relative_error_pct": 44.86,
+                "check_passes": false,
+                "classification": "data_limitation"
+              }
+            ]
+          },
+          "gev_lmoments": {
+            "reference_key": "scipy_gev_lmoments",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.01,
+            "max_relative_error_pct": 0.01,
+            "warnings": [],
+            "seconds": 0.001281435999999303,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 137.59,
+                "reference_m3s": 137.58,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 314.46,
+                "reference_m3s": 314.42,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 491.34,
+                "reference_m3s": 491.29,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 818.15,
+                "reference_m3s": 818.13,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 1166.86,
+                "reference_m3s": 1166.92,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1639.38,
+                "reference_m3s": 1639.58,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "lp3": {
+            "reference_key": "scipy_lp3",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.03,
+            "max_relative_error_pct": 0.08,
+            "warnings": [],
+            "seconds": 0.0015508980000049633,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 129.25,
+                "reference_m3s": 129.23,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 331.93,
+                "reference_m3s": 331.92,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 541.85,
+                "reference_m3s": 541.91,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 911.71,
+                "reference_m3s": 912.06,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 1274.4,
+                "reference_m3s": 1275.15,
+                "relative_error_pct": 0.06,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1720.98,
+                "reference_m3s": 1722.37,
+                "relative_error_pct": 0.08,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          }
+        },
+        "seconds": 0.016257772000017212
+      },
+      "timings": {
+        "signatures_s": 0.008,
+        "baseflow_s": 0.009,
+        "flood_frequency_s": 0.016,
+        "total_s": 0.034
+      }
+    },
+    "09510200": {
+      "name": "Cave Creek near Cave Creek, AZ",
+      "climate": "arid",
+      "signatures": {
+        "checks": [
+          {
+            "metric": "q_mean",
+            "computed": 0.15,
+            "published": 0.15,
+            "error_type": "relative",
+            "error": 1e-06,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q5",
+            "computed": 0.0048,
+            "published": 0.005,
+            "error_type": "relative",
+            "error": 0.04,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q95",
+            "computed": 0.548555,
+            "published": 0.52,
+            "error_type": "relative",
+            "error": 0.054913,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "computed": 0.03,
+            "published": 0.03,
+            "error_type": "relative",
+            "error": 6e-06,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "computed": -3.84171,
+            "published": -3.8,
+            "error_type": "relative",
+            "error": 0.010976,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "peak_month",
+            "computed": 2.0,
+            "published": 2.0,
+            "error_type": "circular_months",
+            "error": 0.0,
+            "tolerance": 2.0,
+            "check_passes": true
+          },
+          {
+            "metric": "baseflow_index",
+            "computed": 0.396946,
+            "published": 0.25,
+            "error_type": "absolute",
+            "error": 0.146946,
+            "tolerance": 0.15,
+            "check_passes": true
+          }
+        ],
+        "values": {
+          "q_mean": 0.14999986301369864,
+          "q5": 0.0048,
+          "q95": 0.5485549999999983,
+          "median_flow": 0.0543,
+          "runoff_ratio": 0.029999824658398944,
+          "mean_recession_constant": 0.5743585162836233,
+          "fdc_slope": -3.841710483630005,
+          "peak_month": 2,
+          "baseflow_index": 0.3969462986294255
+        },
+        "integrity": [
+          {
+            "metric": "order",
+            "detail": "q5=0.005 < median=0.054 < q95=0.549",
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "detail": "runoff_ratio=0.029999824658398944",
+            "check_passes": true
+          },
+          {
+            "metric": "recession_constant",
+            "detail": "mean_recession_constant=0.5744",
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "detail": "fdc_slope=-3.8417",
+            "check_passes": true
+          },
+          {
+            "metric": "complete",
+            "detail": "all signature fields populated",
+            "check_passes": true
+          }
+        ],
+        "seconds": 0.007753539000077581
+      },
+      "baseflow": {
+        "methods": {
+          "lyne_hollick": {
+            "bfi": 0.396684,
+            "published_bfi": 0.25,
+            "seconds": 0.007285485000011249,
+            "check": {
+              "metric": "bfi_lyne_hollick",
+              "computed": 0.396684,
+              "published": 0.25,
+              "error_type": "absolute",
+              "error": 0.146684,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          },
+          "eckhardt": {
+            "bfi": 0.4015,
+            "published_bfi": 0.25,
+            "seconds": 0.003015215999994325,
+            "check": {
+              "metric": "bfi_eckhardt",
+              "computed": 0.4015,
+              "published": 0.25,
+              "error_type": "absolute",
+              "error": 0.1515,
+              "tolerance": 0.15,
+              "check_passes": false
+            }
+          }
+        },
+        "seconds": 0.010300701000005574
+      },
+      "flood_frequency": {
+        "methods": {
+          "gev": {
+            "reference_key": "scipy_gev",
+            "reference_mle_unstable": true,
+            "mean_relative_error_pct": 36.75,
+            "max_relative_error_pct": 67.92,
+            "warnings": [],
+            "seconds": 0.02223658799994155,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 81.05,
+                "reference_m3s": 62.15,
+                "relative_error_pct": 30.4,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 190.8,
+                "reference_m3s": 186.05,
+                "relative_error_pct": 2.55,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 291.31,
+                "reference_m3s": 361.38,
+                "relative_error_pct": 19.39,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 462.3,
+                "reference_m3s": 813.18,
+                "relative_error_pct": 43.15,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 631.06,
+                "reference_m3s": 1469.68,
+                "relative_error_pct": 57.06,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 844.87,
+                "reference_m3s": 2633.6,
+                "relative_error_pct": 67.92,
+                "check_passes": false,
+                "classification": "data_limitation"
+              }
+            ]
+          },
+          "gev_lmoments": {
+            "reference_key": "scipy_gev_lmoments",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.04,
+            "max_relative_error_pct": 0.07,
+            "warnings": [],
+            "seconds": 0.0012899930000003224,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 81.05,
+                "reference_m3s": 81.09,
+                "relative_error_pct": 0.05,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 190.8,
+                "reference_m3s": 190.9,
+                "relative_error_pct": 0.05,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 291.31,
+                "reference_m3s": 291.4,
+                "relative_error_pct": 0.03,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 462.3,
+                "reference_m3s": 462.27,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 631.06,
+                "reference_m3s": 630.84,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 844.87,
+                "reference_m3s": 844.31,
+                "relative_error_pct": 0.07,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "lp3": {
+            "reference_key": "scipy_lp3",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 1.68,
+            "max_relative_error_pct": 3.65,
+            "warnings": [],
+            "seconds": 0.0016668580000214206,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 71.44,
+                "reference_m3s": 70.86,
+                "relative_error_pct": 0.82,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 207.93,
+                "reference_m3s": 207.94,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 334.5,
+                "reference_m3s": 337.33,
+                "relative_error_pct": 0.84,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 523.63,
+                "reference_m3s": 534.18,
+                "relative_error_pct": 1.97,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 678.32,
+                "reference_m3s": 698.02,
+                "relative_error_pct": 2.82,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 839.53,
+                "reference_m3s": 871.32,
+                "relative_error_pct": 3.65,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          }
+        },
+        "seconds": 0.02519343899996329
+      },
+      "timings": {
+        "signatures_s": 0.008,
+        "baseflow_s": 0.01,
+        "flood_frequency_s": 0.025,
+        "total_s": 0.043
+      }
+    },
+    "11532500": {
+      "name": "Smith River near Crescent City, CA",
+      "climate": "Pacific Northwest rain",
+      "signatures": {
+        "checks": [
+          {
+            "metric": "q_mean",
+            "computed": 72.5,
+            "published": 72.5,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q5",
+            "computed": 4.613005,
+            "published": 5.2,
+            "error_type": "relative",
+            "error": 0.112884,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q95",
+            "computed": 264.70323,
+            "published": 245.0,
+            "error_type": "relative",
+            "error": 0.080421,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "computed": 0.71,
+            "published": 0.71,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "computed": -3.120449,
+            "published": -2.85,
+            "error_type": "relative",
+            "error": 0.094894,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "peak_month",
+            "computed": 2.0,
+            "published": 1.0,
+            "error_type": "circular_months",
+            "error": 1.0,
+            "tolerance": 2.0,
+            "check_passes": true
+          },
+          {
+            "metric": "baseflow_index",
+            "computed": 0.490259,
+            "published": 0.47,
+            "error_type": "absolute",
+            "error": 0.020259,
+            "tolerance": 0.15,
+            "check_passes": true
+          }
+        ],
+        "values": {
+          "q_mean": 72.50000010958905,
+          "q5": 4.613005,
+          "q95": 264.7032299999996,
+          "median_flow": 34.937200000000004,
+          "runoff_ratio": 0.7100001108096535,
+          "mean_recession_constant": 0.41237785080315037,
+          "fdc_slope": -3.120448963785441,
+          "peak_month": 2,
+          "baseflow_index": 0.49025942025558744
+        },
+        "integrity": [
+          {
+            "metric": "order",
+            "detail": "q5=4.613 < median=34.937 < q95=264.703",
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "detail": "runoff_ratio=0.7100001108096535",
+            "check_passes": true
+          },
+          {
+            "metric": "recession_constant",
+            "detail": "mean_recession_constant=0.4124",
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "detail": "fdc_slope=-3.1204",
+            "check_passes": true
+          },
+          {
+            "metric": "complete",
+            "detail": "all signature fields populated",
+            "check_passes": true
+          }
+        ],
+        "seconds": 0.008191597999939404
+      },
+      "baseflow": {
+        "methods": {
+          "lyne_hollick": {
+            "bfi": 0.489962,
+            "published_bfi": 0.47,
+            "seconds": 0.007481956999981776,
+            "check": {
+              "metric": "bfi_lyne_hollick",
+              "computed": 0.489962,
+              "published": 0.47,
+              "error_type": "absolute",
+              "error": 0.019962,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          },
+          "eckhardt": {
+            "bfi": 0.481301,
+            "published_bfi": 0.47,
+            "seconds": 0.002447567000103845,
+            "check": {
+              "metric": "bfi_eckhardt",
+              "computed": 0.481301,
+              "published": 0.47,
+              "error_type": "absolute",
+              "error": 0.011301,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          }
+        },
+        "seconds": 0.009929524000085621
+      },
+      "flood_frequency": {
+        "methods": {
+          "gev": {
+            "reference_key": "scipy_gev",
+            "reference_mle_unstable": true,
+            "mean_relative_error_pct": 161.74,
+            "max_relative_error_pct": 525.65,
+            "warnings": [],
+            "seconds": 0.018374648999952115,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 2156.93,
+                "reference_m3s": 344.75,
+                "relative_error_pct": 525.65,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 3062.83,
+                "reference_m3s": 2079.62,
+                "relative_error_pct": 47.28,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 3643.28,
+                "reference_m3s": 147787.61,
+                "relative_error_pct": 97.53,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 4355.37,
+                "reference_m3s": 40338648.09,
+                "relative_error_pct": 99.99,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 4868.69,
+                "reference_m3s": 2592319741.95,
+                "relative_error_pct": 100.0,
+                "check_passes": false,
+                "classification": "data_limitation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 5365.96,
+                "reference_m3s": 161550980185.42,
+                "relative_error_pct": 100.0,
+                "check_passes": false,
+                "classification": "data_limitation"
+              }
+            ]
+          },
+          "gev_lmoments": {
+            "reference_key": "scipy_gev_lmoments",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.0,
+            "max_relative_error_pct": 0.01,
+            "warnings": [],
+            "seconds": 0.0011936729999888485,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 2141.5,
+                "reference_m3s": 2141.46,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 3045.76,
+                "reference_m3s": 3045.72,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 3637.22,
+                "reference_m3s": 3637.22,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 4376.41,
+                "reference_m3s": 4376.5,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 4918.97,
+                "reference_m3s": 4919.16,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 5452.68,
+                "reference_m3s": 5452.99,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "lp3": {
+            "reference_key": "scipy_lp3",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.42,
+            "max_relative_error_pct": 0.88,
+            "warnings": [],
+            "seconds": 0.001600884000026781,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 2215.07,
+                "reference_m3s": 2210.75,
+                "relative_error_pct": 0.2,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 3125.88,
+                "reference_m3s": 3126.37,
+                "relative_error_pct": 0.02,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 3621.72,
+                "reference_m3s": 3629.65,
+                "relative_error_pct": 0.22,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 4141.88,
+                "reference_m3s": 4162.27,
+                "relative_error_pct": 0.49,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 4464.52,
+                "reference_m3s": 4495.51,
+                "relative_error_pct": 0.69,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 4741.29,
+                "reference_m3s": 4783.45,
+                "relative_error_pct": 0.88,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          }
+        },
+        "seconds": 0.021169205999967744
+      },
+      "timings": {
+        "signatures_s": 0.008,
+        "baseflow_s": 0.01,
+        "flood_frequency_s": 0.021,
+        "total_s": 0.039
+      }
+    },
+    "14301000": {
+      "name": "Nehalem River near Foss, OR",
+      "climate": "Pacific Northwest rain",
+      "signatures": {
+        "checks": [
+          {
+            "metric": "q_mean",
+            "computed": 55.8,
+            "published": 55.8,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q5",
+            "computed": 2.999895,
+            "published": 3.5,
+            "error_type": "relative",
+            "error": 0.142887,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "q95",
+            "computed": 207.532575,
+            "published": 185.0,
+            "error_type": "relative",
+            "error": 0.121798,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "computed": 0.68,
+            "published": 0.68,
+            "error_type": "relative",
+            "error": 0.0,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "computed": -3.066739,
+            "published": -2.55,
+            "error_type": "relative",
+            "error": 0.202643,
+            "tolerance": 0.25,
+            "check_passes": true
+          },
+          {
+            "metric": "peak_month",
+            "computed": 12.0,
+            "published": 12.0,
+            "error_type": "circular_months",
+            "error": 0.0,
+            "tolerance": 2.0,
+            "check_passes": true
+          },
+          {
+            "metric": "baseflow_index",
+            "computed": 0.46548,
+            "published": 0.43,
+            "error_type": "absolute",
+            "error": 0.03548,
+            "tolerance": 0.15,
+            "check_passes": true
+          }
+        ],
+        "values": {
+          "q_mean": 55.79999978082192,
+          "q5": 2.999895,
+          "q95": 207.53257499999984,
+          "median_flow": 25.50855,
+          "runoff_ratio": 0.680000328531608,
+          "mean_recession_constant": 0.4176052067189005,
+          "fdc_slope": -3.0667393360082182,
+          "peak_month": 12,
+          "baseflow_index": 0.4654796651704745
+        },
+        "integrity": [
+          {
+            "metric": "order",
+            "detail": "q5=3.000 < median=25.509 < q95=207.533",
+            "check_passes": true
+          },
+          {
+            "metric": "runoff_ratio",
+            "detail": "runoff_ratio=0.680000328531608",
+            "check_passes": true
+          },
+          {
+            "metric": "recession_constant",
+            "detail": "mean_recession_constant=0.4176",
+            "check_passes": true
+          },
+          {
+            "metric": "fdc_slope",
+            "detail": "fdc_slope=-3.0667",
+            "check_passes": true
+          },
+          {
+            "metric": "complete",
+            "detail": "all signature fields populated",
+            "check_passes": true
+          }
+        ],
+        "seconds": 0.008026328000028116
+      },
+      "baseflow": {
+        "methods": {
+          "lyne_hollick": {
+            "bfi": 0.465319,
+            "published_bfi": 0.43,
+            "seconds": 0.00721147399997335,
+            "check": {
+              "metric": "bfi_lyne_hollick",
+              "computed": 0.465319,
+              "published": 0.43,
+              "error_type": "absolute",
+              "error": 0.035319,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          },
+          "eckhardt": {
+            "bfi": 0.461454,
+            "published_bfi": 0.43,
+            "seconds": 0.0024429989999816826,
+            "check": {
+              "metric": "bfi_eckhardt",
+              "computed": 0.461454,
+              "published": 0.43,
+              "error_type": "absolute",
+              "error": 0.031454,
+              "tolerance": 0.15,
+              "check_passes": true
+            }
+          }
+        },
+        "seconds": 0.009654472999955033
+      },
+      "flood_frequency": {
+        "methods": {
+          "gev": {
+            "reference_key": "scipy_gev",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.0,
+            "max_relative_error_pct": 0.0,
+            "warnings": [],
+            "seconds": 0.013218952999977773,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 781.82,
+                "reference_m3s": 781.82,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 1040.32,
+                "reference_m3s": 1040.32,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 1197.97,
+                "reference_m3s": 1197.97,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 1383.01,
+                "reference_m3s": 1383.01,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 1510.75,
+                "reference_m3s": 1510.75,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1630.06,
+                "reference_m3s": 1630.06,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "gev_lmoments": {
+            "reference_key": "scipy_gev_lmoments",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.02,
+            "max_relative_error_pct": 0.04,
+            "warnings": [],
+            "seconds": 0.0011642860000620203,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 787.25,
+                "reference_m3s": 787.15,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 1035.44,
+                "reference_m3s": 1035.37,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 1180.29,
+                "reference_m3s": 1180.32,
+                "relative_error_pct": 0.0,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 1343.76,
+                "reference_m3s": 1344.0,
+                "relative_error_pct": 0.02,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 1452.36,
+                "reference_m3s": 1452.79,
+                "relative_error_pct": 0.03,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1550.54,
+                "reference_m3s": 1551.19,
+                "relative_error_pct": 0.04,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          },
+          "lp3": {
+            "reference_key": "scipy_lp3",
+            "reference_mle_unstable": false,
+            "mean_relative_error_pct": 0.32,
+            "max_relative_error_pct": 0.69,
+            "warnings": [],
+            "seconds": 0.0015840900000512192,
+            "fits": [
+              {
+                "return_period": 2,
+                "computed_m3s": 797.25,
+                "reference_m3s": 796.03,
+                "relative_error_pct": 0.15,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 5,
+                "computed_m3s": 1047.13,
+                "reference_m3s": 1047.19,
+                "relative_error_pct": 0.01,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 10,
+                "computed_m3s": 1179.96,
+                "reference_m3s": 1181.89,
+                "relative_error_pct": 0.16,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 25,
+                "computed_m3s": 1318.62,
+                "reference_m3s": 1323.61,
+                "relative_error_pct": 0.38,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 50,
+                "computed_m3s": 1404.88,
+                "reference_m3s": 1412.45,
+                "relative_error_pct": 0.54,
+                "check_passes": true,
+                "classification": "implementation"
+              },
+              {
+                "return_period": 100,
+                "computed_m3s": 1479.36,
+                "reference_m3s": 1489.66,
+                "relative_error_pct": 0.69,
+                "check_passes": true,
+                "classification": "implementation"
+              }
+            ]
+          }
+        },
+        "seconds": 0.015967329000091013
+      },
+      "timings": {
+        "signatures_s": 0.008,
+        "baseflow_s": 0.01,
+        "flood_frequency_s": 0.016,
+        "total_s": 0.034
+      }
+    }
+  },
+  "summary": {
+    "n_catchments": 10,
+    "n_unmet": 29,
+    "n_data_limitation_findings": 25,
+    "n_integrity_failures": 0,
+    "gates": {
+      "q_mean_nrmse_pct": 0.0,
+      "q_mean_nrmse_tolerance_pct": 25.0,
+      "q_mean_gate_met": true,
+      "bfi_pbias_pct": 0.92,
+      "bfi_pbias_tolerance_pct": 25.0,
+      "bfi_gate_met": true,
+      "ffa_cross_method_mean_relative_error_pct": 0.22,
+      "ffa_tolerance_pct": 20.0,
+      "ffa_gate_met": true
+    },
+    "aggregate": {
+      "q_mean": {
+        "rmse": 0.0,
+        "pbias": -0.0,
+        "r2": 1.0
+      },
+      "q5": {
+        "rmse": 0.3069,
+        "pbias": -7.32,
+        "r2": 0.9822
+      },
+      "q95": {
+        "rmse": 10.4099,
+        "pbias": 6.1,
+        "r2": 0.981
+      },
+      "runoff_ratio": {
+        "rmse": 0.0,
+        "pbias": -0.0,
+        "r2": 1.0
+      },
+      "fdc_slope": {
+        "rmse": 0.4108,
+        "pbias": 13.36,
+        "r2": 0.5631
+      },
+      "bfi_lyne_hollick": {
+        "rmse": 0.0884,
+        "pbias": 0.92,
+        "r2": 0.5027
+      },
+      "bfi_eckhardt": {
+        "rmse": 0.0913,
+        "pbias": -0.95,
+        "r2": 0.4693
+      },
+      "bfi_signatures": {
+        "rmse": 0.0884,
+        "pbias": 0.95,
+        "r2": 0.5021
+      }
+    },
+    "timings": {
+      "total_seconds": 0.369
+    }
+  },
+  "software": {
+    "version": "0.16.0",
+    "author": "Abdoul Rachid Ou\u00e9draogo",
+    "doi": "10.5281/zenodo.21903143",
+    "citation": "Abdoul Rachid Ou\u00e9draogo (2026). AquaScope: Open-source water data aggregation toolkit (version 0.16.0) [Software]. Zenodo. https://doi.org/10.5281/zenodo.21903143"
+  }
+}

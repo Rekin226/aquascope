@@ -30,13 +30,14 @@ from aquascope.analysis.metrics import crps_from_quantiles, picp
 from aquascope.models.rainfall_runoff import predict_quantiles
 
 BENCHMARK_DIR = pathlib.Path(__file__).resolve().parents[1] / "data" / "camels_benchmark"
+DAILY_DIR = BENCHMARK_DIR / "daily"
 CRPS_GRID = [round(q, 2) for q in np.arange(0.05, 1.0, 0.05)]
 RELIABILITY_LEVELS = [0.1, 0.25, 0.5, 0.75, 0.9]
 
 
 def load_basin(gauge_id: str, area_km2: float, max_days: int | None = None):
     """Load a basin as (precip, pet_proxy, discharge_mm_per_day)."""
-    df = pd.read_csv(BENCHMARK_DIR / f"{gauge_id}.csv", parse_dates=["date"]).set_index("date")
+    df = pd.read_csv(DAILY_DIR / f"{gauge_id}_daily.csv", parse_dates=["date"]).set_index("date")
     if max_days:
         df = df.iloc[:max_days]
     precip = df["precipitation_mm"]
@@ -51,7 +52,7 @@ def load_basin(gauge_id: str, area_km2: float, max_days: int | None = None):
 
 def run_benchmark(basin_ids=None, *, max_days=None, maxiter=20, warmup_days=365):
     """Run the GR4J UQ benchmark; returns a per-basin results list."""
-    catchments = {c["gauge_id"]: c for c in json.loads((BENCHMARK_DIR / "catchments.json").read_text())}
+    catchments = {c["gauge_id"]: c for c in json.loads((BENCHMARK_DIR / "daily_catchments.json").read_text())}
     ids = basin_ids or list(catchments)
     quantiles = sorted(set(CRPS_GRID) | {0.05, 0.5, 0.95} | set(RELIABILITY_LEVELS))
     results = []

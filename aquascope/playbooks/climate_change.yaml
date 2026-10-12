@@ -1,0 +1,161 @@
+# How will climate change affect the river? CMIP6 change factors through a calibrated catchment model.
+#
+# Evidence rules:
+# - a model future is a change factor, not a forecast: each climate model is compared with its own baseline so its
+#   bias cancels (delta change), and the spread across models is the result (Wasko et al. 2024)
+# - the catchment model is trusted only as far as its validation on years it never saw (split-sample test,
+#   Klemeš 1986); below a KGE of 0.5 the flow changes are not quoted and the study falls back to climate only
+# - one emission pathway: the HighResMIP future runs are close to SSP5-8.5, to 2050; say so every time
+id: climate_change
+title: Climate change and the river
+problem: climate_change
+variable: discharge
+description: How rainfall, evaporation, mean flow, low flow and floods change by 2050 in seven CMIP6 models, through a calibrated GR4J.
+intake:
+  - name: return_period
+    label: Flood return period to project (years)
+    type: int
+    default: 20
+    min: 2
+    max: 100
+  - name: decision
+    label: What is being decided
+    type: choice
+    options: [design flow, water supply, adaptation screening]
+    default: adaptation screening
+  - name: horizon_year
+    label: Horizon year
+    type: int
+    default: 2050
+    min: 2030
+    max: 2100
+# What the study must know before it plans, asked one at a time as a pick list when the question leaves it open.
+checklist:
+  - field: return_period
+    ask: Which flood should the projection follow?
+    why: The change in a frequent flood and in a rare one can differ in sign; the models are read at the one you pick.
+    options:
+      - value: 20
+        label: The 20-year flood (well inside 30 years of model data)
+      - value: 10
+        label: The 10-year flood
+      - value: 50
+        label: The 50-year flood (an extrapolation from 30 model years)
+branches:
+  - id: gauged
+    when:
+      - path: context.years_by_variable.discharge
+        op: ">="
+        value: 8
+    station_variable: discharge
+    rationale: >-
+      {{ station.years }} years of daily discharge at {{ station.name }} ({{ station.source }}
+      {{ station.station_id }}): enough to calibrate GR4J on ERA5 forcing and test it on years it never saw, then
+      drive it with seven CMIP6 models' rainfall and temperature, each against its own 1985-2014 baseline.
+    steps:
+      - id: s1
+        tool: describe_catchment
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+        rationale: The catchment area turns the gauge's flow into a depth the model can balance against rainfall.
+        expects:
+          - check: not_empty
+            path: sub_basin
+          - check: max_area_km2
+            value: 10000
+            path: sub_basin.up_area
+      - id: s2
+        tool: catchment_model
+        method: gr4j_calibration
+        depends_on: [s1]
+        arguments:
+          source: "{{ station.source }}"
+          station_id: "{{ station.station_id }}"
+          lat: "{{ station.latitude }}"
+          lon: "{{ station.longitude }}"
+          area_km2: "{{ result.s1.sub_basin.up_area }}"
+          scenarios: []
+        rationale: >-
+          GR4J (with a degree-day snow store where it snows) calibrated on the first half of the last 20 years and
+          validated on the second: the model is only as good as its skill on years it did not see.
+        expects:
+          - check: kge_min
+            value: 0.5
+            path: validation.kge
+          - check: max_area_km2
+            value: 10000
+            path: area_km2
+      - id: s3
+        tool: climate_projection
+        method: climate_projection
+        depends_on: [s1, s2]
+        arguments:
+          lat: "{{ station.latitude }}"
+          lon: "{{ station.longitude }}"
+          params: "{{ result.s2.params }}"
+          area_km2: "{{ result.s1.sub_basin.up_area }}"
+          pet_climatology: "{{ result.s2.pet_climatology }}"
+          return_period: "{{ intake.return_period }}"
+        rationale: >-
+          Seven CMIP6 HighResMIP models, 2020-2049 against 1985-2014, each driving the calibrated model: the change
+          in mean flow, low flow (Q95) and the {{ intake.return_period }}-year flood, model by model and as a spread.
+        expects:
+          - check: min_models
+            value: 3
+            path: n_models
+        fallback:
+          step:
+            tool: climate_projection
+            arguments:
+              lat: "{{ site.lat }}"
+              lon: "{{ site.lon }}"
+              return_period: "{{ intake.return_period }}"
+            rationale: >-
+              The catchment model did not pass its validation gate, so the flow changes are not quoted: the climate
+              change factors alone (rainfall, evaporation, temperature, the wettest day) still answer part of it.
+            expects:
+              - check: min_models
+                value: 3
+                path: n_models
+  - id: climate_only
+    when: []
+    rationale: >-
+      No gauge with eight years of discharge within reach, so no catchment model can be tested here: the answer is
+      the climate change factors at the point (rainfall, evaporation, temperature and the wettest day), not flow.
+    steps:
+      - id: s1
+        tool: climate_projection
+        method: climate_projection
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          return_period: "{{ intake.return_period }}"
+        rationale: Seven CMIP6 HighResMIP models, 2020-2049 against 1985-2014, each against its own baseline.
+        expects:
+          - check: min_models
+            value: 3
+            path: n_models
+declines:
+  - when:
+      - path: intake.horizon_year
+        op: ">"
+        value: 2050
+    say: >-
+      The projections this study can reach (CMIP6 HighResMIP through Open-Meteo) end in 2050, so a
+      {{ intake.horizon_year }} horizon cannot be answered from them, and stretching a 2050 change to
+      {{ intake.horizon_year }} would be invented. Ask for 2050, or bring projections that reach
+      {{ intake.horizon_year }} as an uploaded table.
+caveats:
+  - >-
+    One emission pathway only: the HighResMIP future runs follow the highest CMIP6 forcing (close to SSP5-8.5) and
+    end in 2050. A lower-emission future changes less, and nothing here reaches 2100.
+  - >-
+    The spread across models is the answer, not the median. When the models disagree on the sign, the honest
+    finding is that the direction of change is not established.
+  - >-
+    The flow changes hold the calibrated model, land use, abstraction and regulation fixed, and use daily-mean flow.
+citations:
+  - "Haarsma, R. J. et al. (2016). High Resolution Model Intercomparison Project (HighResMIP v1.0) for CMIP6. Geosci. Model Dev., 9, 4185-4208."
+  - "Perrin, C., Michel, C., & Andréassian, V. (2003). Improvement of a parsimonious model for streamflow simulation. J. Hydrol., 279, 275-289."
+  - "Wasko, C. et al. (2024). A systematic review of climate change science relevant to Australian design flood estimation. HESS, 28, 1251-1285."

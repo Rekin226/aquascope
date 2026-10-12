@@ -340,7 +340,7 @@ async function runAsk() {
   $("ask-stations").hidden = true;
   $("ask-log").innerHTML = "";
   $("ask-log").hidden = true;
-  askStatus(state.workerReady ? "Preparing…" : "Loading Python in your browser (about 15 MB, once)…");
+  askStatus(state.workerReady ? "Preparing…" : "Loading Python in your browser (about 30 MB, once)…");
   try {
     await ensureCatalogInWorker();
     askStatus(`Asking ${model} via ${provider}…`);
@@ -377,6 +377,7 @@ function renderAsk(res) {
   $("ask-copy").hidden = false;
   $("ask-download").hidden = false;
   renderChecks(res.checks || [], res.verified);
+  actions.applyAskFilter?.(res);  // a filter_gauges call also filters the map (signature-filter.js)
   state.ask.study = res.study || "";
   $("ask-study").hidden = !state.ask.study;
   // chips for every station the tools touched: click to open it on the map

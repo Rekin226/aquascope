@@ -394,6 +394,128 @@ no well within reach, where the reference takes the ERA5 water balance for the c
 groundwater is the weakest kind for a model; Haiku still uses a forbidden method on two cases. The device-class
 row waits for a free small-model endpoint. The discussion is in `results/2026-09-08/discussion.md`.
 
+## Phase 3: report quality
+
+Phase 2 scores the *plan*; a plan that covers the reference exactly can still turn into a report that invents a
+number, drops a failed step from its limitations, or calls a p = 0.302 trend "downward". `aquascope.gym.reports`
+(#382) scores the document instead: deterministic, no model, over a finished study bundle
+(`workspace.json`), reusing the Studio Critic's own checks (`aquascope.studio.roles.critic.tool_results`,
+`not_established`, `aquascope.ai_engine.verify.verify`) rather than reimplementing them.
+
+```bash
+aquascope gym reports list                              # the reference cases
+aquascope gym reports show kingston-flood                # one case, the YAML
+aquascope gym reports score explorer/showcase/studies/kingston-flood            # scored, no reference
+aquascope gym reports score explorer/showcase/studies/kingston-flood \
+    --reference kingston-flood                           # scored against its hand-written reference
+aquascope gym reports bench --out results/reports.jsonl   # every recorded study under the Explorer's showcase
+aquascope gym leaderboard results/reports.jsonl            # the report-quality leaderboard, next to plans and tasks
+```
+
+### Scoring
+
+`aquascope.gym.reports.score_report(ws_dict, reference=None)` scores six dimensions in `[0, 1]` (`None`, left
+out of the mean, when the study gives nothing to judge that dimension on, the same convention Phase 2 uses for
+a part its reference cannot judge):
+
+| dimension | what |
+| --- | --- |
+| `traceability` | the share of the report's own numeric claims that trace to a tool result or its arguments, within 2 percent or the prose's own rounding |
+| `not_established_completeness` | the share of what the Critic's `not_established` lists (a failed gate, a step that did not run, the stop reason) that the report's own prose — not the mechanical checklist a bundle appends after it — actually names |
+| `no_filled_holes` | no number quoted near a step that did not establish its result, and no direction word (increasing, declining, ...) asserted where the run's own trend test does not support it |
+| `interval_discipline` | a return level, or any result gated by `ci_finite`, is not quoted without its interval |
+| `citations` | the registry citations of the methods actually used (`aquascope.methods.METHODS[...].citation`, carried on the run's results) are traceable in the report's own reference list |
+| `recommendation_support` | the recommendations section adds no new untraced number and no attribution ("because of", "due to") the run did not establish |
+
+`evidence` carries, per dimension, what failed (the untraced numbers, the not-established items the prose never
+names, the filled holes and inversions, the missing citations). `metrics` adds two literature checks dated
+2026-09-14, over and above the six dimensions:
+
+* **Evidence-chain precision and recall, and the earliest failure layer**, from a citation check
+  (["SciRigor"](https://arxiv.org/abs/2609.06192), arXiv:2609.06192): a claim's score is the weakest link of its
+  evidence chain. Precision is `traceability`'s own fraction; recall is the share of the run's own numbers that
+  made it into the report at all (a report need not recite everything it fetched, but what it fetched is the
+  ceiling on what it can honestly claim); `earliest_failure_layer` is `data` (a fetch tool failed), `transform`
+  (an analysis tool failed), `result` (every step ran but a gate failed on what it returned) or `claim` (the run
+  is clean but the prose has an untraced number or a direction inversion), read off `run.failed_steps` when the
+  run carries it (added 2026-09-08, #412) and derived the same way otherwise.
+* **Direction inversions**, from a claim-locked reporting check
+  (arXiv:2608.25336): a claim saying "increasing"/"rising" where the result says decreasing, "above" where it
+  says below, "significant" against p > 0.05. `score_report` implements the trend-direction half of this (the
+  half a single run can check; the paper's other half, cross-run agreement of report-visible numbers as a
+  Jaccard index, needs more than one run of the same case and is not computed here — a caller diffing
+  `metrics.numbers_without_evidence` across repeated `score_report` calls on the same case has what it needs
+  for that) and folds a caught inversion into `no_filled_holes`, since an inverted claim is worse than a merely
+  untraced one.
+* **Grounding rate**, from
+  ["VeriGraph"](https://arxiv.org/abs/2606.16603) (arXiv:2606.16603): the share of atomic claims (here, numeric
+  claims) recoverable from the evidence — `metrics.grounding_rate`, the same number `traceability` reports.
+
+### The reference schema
+
+A reference (`aquascope/gym/reports/<id>.yaml`, the rules in `_authoring.yaml`) is a small set of assertions a
+faithful report of one *recorded* study must and must not make, written by a hydrologist from the recorded
+`workspace.json` after the fact (unlike a Phase 2 plan reference, written before any run against a saved
+reconnaissance): `must_say` and `must_not_say` are lists of `Assertion` — a number with a tolerance, a phrase, a
+failed step that must be named under a section (default `limitations`), a forbidden number near a keyword (a
+fabricated cross-check where the tool that would have produced it failed), a grade phrase — and `decision` is
+the headline answer (value, unit, tolerance, grade). `findings`, once `#417` adds that block to a workspace, is
+scored too when a workspace carries one, every part optional and skipped rather than failed when absent:
+`basis_resolution_rate` (the share of a finding's `basis` paths that resolve against the run's results with
+`aquascope.gates.resolve_path`, the path's first segment read as the step id), `wrong_but_valid_rate` (of the
+resolving bases, the share whose value is not within 2 percent of any number in the claim), `grade_agreement`
+and `decision_agreement` with a reference grade (exact match, and value-within-tolerance with a grade at least
+as cautious, in the order established, indicative, screening, not_established), and
+`asked_when_reference_asks` (the reference's data-request keywords found among the findings' own).
+
+### 2026-09-14: the twelve recorded studies
+
+The Explorer's twelve recorded studies (`explorer/showcase/studies/*/`, Claude Sonnet 5, recorded 2026-09-07)
+scored with no reference, and the three with one (`aquascope/gym/results/2026-09-14/`):
+
+```bash
+aquascope gym reports bench --out aquascope/gym/results/2026-09-14/reports.jsonl
+aquascope gym leaderboard aquascope/gym/results/2026-09-14/reports.jsonl \
+    --out aquascope/gym/results/2026-09-14/leaderboard.md
+```
+
+| model | studies | mean | traceability | not-established | no filled holes | intervals | citations | recommendations | reference | cost USD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Claude Sonnet 5 | 12 | 99 % | 99 % | 100 % | 96 % | 100 % | 100 % | 100 % | 96 % (3) | 6.957 |
+
+Ten of the twelve score a clean 1.00. The other two, and the three references, are what the family is for:
+Sintra's regionalised supply screen converts transferred mm/d signatures to m3/s by hand (0.38 and 0.046 m3/s
+appear nowhere in a tool payload, only their mm/d originals do), a real gap the study's own Critic pass already
+flagged (`checks: 3/4`) and `traceability` reproduces at 0.94 rather than as a single failed boolean. Toulouse's
+irrigation-feasibility report gets every number right (`traceability` 1.00) but calls its p = 0.302 Mann-Kendall
+result a "(statistically insignificant) downward trend" in its limitations, a direction word the test itself
+gives no basis for; the study's own Critic pass flagged the sentence as risking "readers taking away a
+directional signal that the test did not establish" and it shipped unfixed, which `no_filled_holes` catches
+(0.50 on the one dimension) and the `toulouse-irrigation` reference marks as its one `must_not_say` violation
+(reference score 0.875 of 1.00). Kingston and Cambridge score a clean 1.00 against their references: Kingston
+correctly names its failed GloFAS cross-check in its limitations and quotes no cross-check number it never
+obtained; Cambridge correctly answers an "is it declining" question with "no, it is rising" (n = 227, 48.7
+years, Sen's slope +0.1659 mAOD/yr) and flags its assumed-daily resolution. The 6.957 USD is what recording the
+twelve studies cost in 2026-09-07 (`meta.json`'s own ledger); scoring them again costs nothing, no model.
+
+The 2026-09-15 row (`aquascope/gym/results/2026-09-15/`) is the same twelve briefs recorded again on the crew of
+#411 (a failed gate fails its step, the reviewer's-eye gates, the Interpreter's findings and grades, the data
+requests), 10.19 USD for the twelve. Mean 1.00 on the document checks, and the three references, rewritten for
+the new recordings, pass: Kingston's GloFAS cross-check now runs and its ratio gate fails for a mismatched cell,
+which the report says; Cambridge answers "rising, and the ten-year comparison is not established" because the
+window it was asked about holds 9.7 years; Toulouse states the significant decreasing trend the longer record
+carries. Both defects of the first row are gone, one by the plumbing (a failed check is now a fix) and one by
+the data (the trend is significant on the 116 years the new run fetched). `reports.md` in that folder reads the
+row per case, including the three studies whose data fell short and say so in their decision.
+
+What this run does not establish: one hydrologist's three references on one model's twelve studies; the
+`not_established_completeness` and `no_filled_holes` dimensions match a failed step's id, tool or a quoted field
+from its gate detail (or, failing that, the numbers in the gate's own message) against the report's prose, which
+is a keyword heuristic and not a semantic one; the direction-inversion check is scoped to sentences that mention
+a trend by name, so a direction claim written without the word "trend" nearby would not be caught; and
+`interval_discipline` and `citations` are document-level (did an interval appear anywhere, are the citations
+present anywhere), not tied to which specific number or method they sit next to.
+
 ## Leaderboard
 
 ### 2026-09-03: the 60-task suite

@@ -32,6 +32,7 @@ All notable changes to AquaScope are documented here.
   - The film check's share of wet cells under 1% read "0%"; it now reads, for example, "0.13%".
 - `test_a_second_scenario_reuses_the_calibration_and_agrees` allows one display step (0.01) between the two runs' percentages; the bound of exactly 0.01 failed on floating point about half the time on CI.
 - Record the verified v0.27.0 Zenodo DOI (`10.5281/zenodo.23301359`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
+- The CHANGELOG guard checks where a pull request's lines land, not only that it adds one. It reads the pull request merged with `main` (GitHub's merge ref), and fails when a line the pull request adds sits outside `## [Unreleased]` there, naming the section it landed in and asking to merge `main` and move the line. Before, a branch that waited across a release had its line merged into the released section and the guard stayed green, as #485 did under 0.27.0 and #505 under 0.24.0. A release roll may edit the version section it creates, and the `no-changelog` label still skips the check.
 
 ## [0.27.0] - 2026-10-12
 

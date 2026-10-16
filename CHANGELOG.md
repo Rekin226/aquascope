@@ -153,6 +153,7 @@ All notable changes to AquaScope are documented here.
 - The docs build again: pymdown-extensions 12.2 (released 2026-10-10) changed `Highlight.__init__` and broke mkdocstrings 0.29, so every docs build failed. The docs extra now asks for `pymdown-extensions<12.2`.
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.
 - The world river status credit linked to `https://geoglows.org`, which does not resolve (no DNS record). It now links to `https://www.geoglows.org`.
+- `tests/test_nownext.py`: the forecast test pins today to the fixture's run date, so its status sentence no longer turns from "is" to "was" once 7 October 2026 is more than two days past. The production wording is unchanged.
 
 ## [0.26.0] - 2026-10-09
 

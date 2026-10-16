@@ -81,6 +81,23 @@ class LLMHTTPError(RuntimeError):
         super().__init__(f"HTTP {status} from {url}: {hint}. {body[:300]}")
 
 
+class LLMConnectionError(RuntimeError):
+    """The request never got an answer: a timeout, a refused or dropped connection, a DNS failure.
+
+    Worth one or two more tries (a long reply that timed out once often lands the second time), but not
+    ``max_retries`` of them: a run that times out four times in a row spends half an hour saying nothing.
+    """
+
+    def __init__(self, url: str, reason: str):
+        self.url = url
+        self.reason = reason
+        super().__init__(f"{url}: no answer ({reason})")
+
+
+#: How many times a timeout or dropped connection is tried again, separately from the 429/5xx budget.
+MAX_CONNECTION_RETRIES = 2
+
+
 #: Providers state the wait in the error body, in seconds ("try again in 14.5725s")
 #: or as a bare number of milliseconds. Prefer what they say over a guess.
 _RETRY_HINT = re.compile(r"try again in ([0-9.]+)\s*(ms|s\b|seconds?)", re.I)
@@ -151,17 +168,26 @@ class UrllibChatClient:
         spends a question's whole budget in a few seconds. Providers say how
         long to wait ("Please try again in 14.5725s"), so the honest thing is to
         wait that long and go again, up to ``max_retries``. Only 429 and 5xx are
-        retried: a rejected key or a bad request will not improve with time.
+        retried: a rejected key or a bad request will not improve with time. A
+        timeout or a dropped connection is tried again too, but at most
+        ``MAX_CONNECTION_RETRIES`` times, so a role that cannot be reached fails
+        in minutes and says so instead of silently never running.
         """
-        for attempt in range(self.max_retries + 1):
+        attempt = dropped = 0
+        while True:
             try:
                 return self._request_once(payload)
             except LLMHTTPError as exc:
                 retryable = exc.status == 429 or 500 <= exc.status < 600
-                if not retryable or attempt == self.max_retries:
+                if not retryable or attempt >= self.max_retries:
                     raise
                 self._sleep(retry_after(exc.body, attempt))
-        raise AssertionError("unreachable")  # pragma: no cover
+                attempt += 1
+            except LLMConnectionError:
+                if dropped >= min(MAX_CONNECTION_RETRIES, self.max_retries):
+                    raise
+                dropped += 1
+                self._sleep(min(2.0 ** dropped, MAX_BACKOFF_SECONDS))
 
     def _request_once(self, payload: dict[str, Any]) -> Any:
         url = f"{self.base_url}/chat/completions"
@@ -199,6 +225,9 @@ class UrllibChatClient:
             except Exception:  # noqa: BLE001
                 detail = ""
             raise LLMHTTPError(exc.code, detail, url) from None
+        except OSError as exc:  # URLError, socket timeouts, resets: the request got no answer at all
+            reason = getattr(exc, "reason", None) or exc
+            raise LLMConnectionError(url, f"{type(exc).__name__}: {reason}") from None
         return json.loads(raw.decode("utf-8"))
 
 
@@ -418,9 +447,35 @@ class AnthropicChatClient(UrllibChatClient):
         except anthropic.APIStatusError as exc:
             body = exc.body if isinstance(exc.body, str) else json.dumps(exc.body, default=str)
             raise LLMHTTPError(exc.status_code, body or str(exc), url) from None
-        except anthropic.APIConnectionError as exc:
-            raise RuntimeError(f"{url}: {exc}") from exc
+        except anthropic.APIConnectionError as exc:  # APITimeoutError included
+            raise LLMConnectionError(url, f"{type(exc).__name__}: {exc}") from None
         return response.model_dump(mode="json", exclude_none=True)
+
+
+class OpenAISDKChatClient(UrllibChatClient):
+    """The ``openai`` SDK behind the same surface and the same error policy as :class:`UrllibChatClient`.
+
+    The SDK raises its own exception classes, so on its own a 413 or a 429 never reached the analyst's
+    recovery (which reads :class:`LLMHTTPError`) and timeouts were not retried by our rules. Here the SDK
+    makes the call, its retries stay off, and its errors are mapped exactly as the Anthropic SDK's are.
+    """
+
+    def __init__(self, api_key: str | None, base_url: str | None = None, *, sdk_client: Any, **kwargs: Any):
+        super().__init__(api_key, base_url, **kwargs)
+        self._sdk = sdk_client
+
+    def _request_once(self, payload: dict[str, Any]) -> Any:
+        import openai
+
+        url = f"{self.base_url}/chat/completions"
+        try:
+            response = self._sdk.chat.completions.create(**{k: v for k, v in payload.items() if v is not None})
+        except openai.APIStatusError as exc:
+            body = exc.body if isinstance(exc.body, str) else json.dumps(exc.body, default=str)
+            raise LLMHTTPError(exc.status_code, body or str(exc), url) from None
+        except openai.APIConnectionError as exc:  # APITimeoutError included
+            raise LLMConnectionError(url, f"{type(exc).__name__}: {exc}") from None
+        return _wrap(response.model_dump(mode="json", exclude_none=True))
 
 
 def in_pyodide() -> bool:
@@ -461,10 +516,15 @@ def make_client(api_key: str | None, base_url: str | None, provider: str | None 
         try:
             from openai import OpenAI
 
-            return OpenAI(api_key=api_key or "none", base_url=base_url)
+            # Our loop owns the retries (429 waits, bounded timeouts), so the SDK's stay off.
+            sdk = OpenAI(api_key=api_key or "none", base_url=base_url, max_retries=0)
+            return OpenAISDKChatClient(api_key, base_url, sdk_client=sdk)
         except ImportError:
             pass
     return UrllibChatClient(api_key, base_url)
 
 
-__all__ = ["AnthropicChatClient", "LLMHTTPError", "UrllibChatClient", "in_pyodide", "make_client"]
+__all__ = [
+    "AnthropicChatClient", "LLMConnectionError", "LLMHTTPError", "OpenAISDKChatClient", "UrllibChatClient",
+    "in_pyodide", "make_client",
+]

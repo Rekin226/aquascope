@@ -145,10 +145,21 @@ All notable changes to AquaScope are documented here.
 - A GIF of the time bar credits the layers on it (GEOGLOWS for the river status), not NASA GIBS alone.
 - The layers keep one order (river status, Floods past, rivers, Floods ahead, gauges), and Floods past shows the latest twelve months on record when the river status opens the map on a month after them.
 - On a phone the map's attribution starts folded to its (i), so the time bar never sits on it.
+- **Current Claude models.** `--provider anthropic` now defaults to `claude-opus-5-5`, and the picker offers `claude-opus-5-5`, `claude-sonnet-5-5` and `claude-haiku-5-5`. The Studio showcase records on `claude-sonnet-5-5` by default.
+- **One price table.** `aquascope.ai_engine.providers.PRICES` lists the current Claude models and the older ids that recorded results ran on. The gym and the Studio showcase now read it instead of keeping their own copies.
 
 ### Fixed
 - **A sign against a placeholder got past the claim lock** (#562, #564): a model's "-{f1}", "–{f1}", "minus {f1}" or "{f1}0" changes the number code fills in. `aquascope.map_explain.placeholder_touches` finds it, `claim_lock` lists it, and Explain, Scout (`check_wording`) and the mesh review now share this one check (a hyphen joining a word or two placeholders, "mid-{month}" or "{f1}-{f2}", is still wording).
 - **A stripped HEC-RAS plan file ended in a KeyError** (#555): a `*.p01.timeseries.hdf` holds the results but not the mesh. The reader now says which part is missing and what to do: open the full plan, or give the geometry file the plan was run with, which it then reads with it (`read_mesh(..., geometry=)`, `aquascope mesh FILE --geometry G01_HDF`, `aquascope mesh review ... --geometry`, the MCP tools' `geometry`, and the two files dropped together in the Explorer, which says the same in plain words when the plan comes alone). Checked on HEC's Bald Eagle Creek example (`BaldEagleDamBrk.p18.timeseries.hdf` with `BaldEagleDamBrk.g11.hdf`). A plan without summary output says its largest is over the saved steps only. A plan file with results but no 2D areas (only 1D results or boundary lines) is now called a HEC-RAS file with no 2D flow areas, not a file with no UGRID mesh.
+- **Claude in `aquascope ingest` and the repair bot.** An Anthropic key no longer goes to an OpenAI-style `/chat/completions` URL: both now build the client for the provider they resolved.
+- **Timeouts and dropped connections are retried.** They are now retried twice with backoff, instead of failing a role on the first try. A Studio role whose reply never arrived used to fall back to keyless without saying why.
+- **The `openai` SDK's errors reach the Analyst's recovery.** A 413 now shrinks the context and a 429 waits, as they already did over urllib. Its own retries are off, so the waits are not doubled.
+- **A reply cut off at its output limit is no longer used as if it were complete.**
+  - A Studio or Solve role whose reply was cut off runs keyless, and the timeline records `model_truncated`.
+  - In Ask, a tool call cut off mid-arguments is not run, and a cut-off answer says it was cut off.
+- **Ask the map on reasoning models.** The model reader's output ceiling rose from 700 to 4,000 tokens, because Claude's current models and gpt-oss spend part of it reasoning before they reply.
+- **Sonnet 5 costs.** The Studio showcase priced Claude Sonnet 5 at $3/$15 per million tokens; its list price is $2/$10. Recordings already made keep the rate they were written with.
+- The "No LLM configured" message names `ANTHROPIC_API_KEY`, which is the first key the CLI looks for.
 - **Floods ahead counted only what the browser draws.** When the daily file keeps only the strongest 10,000 reaches, the legend row and its class chips now give the published totals (for example "20,071 reaches, strongest 10,000 drawn") instead of the cut count.
 - The docs build again: pymdown-extensions 12.2 (released 2026-10-10) changed `Highlight.__init__` and broke mkdocstrings 0.29, so every docs build failed. The docs extra now asks for `pymdown-extensions<12.2`.
 - Record the verified v0.26.0 Zenodo DOI (`10.5281/zenodo.23246553`) in release citations, Explorer BibTeX and generated study reports; retain the concept DOI for the project as a whole.

@@ -163,10 +163,10 @@ Create `tests/test_collectors/test_your_source.py` with:
   the `--source` column. `tests/test_docs_counts.py` asserts the table lists
   exactly the ids in `aquascope.registry.SOURCES`, so a collector without a row
   fails CI
-- Bump the source count wherever it is written out: README (six places),
-  `docs/index.md`, `docs/features.md`, `docs/i18n/README.fr.md` and the
-  `CITATION.cff` abstract. The same test checks each of them, and the failure
-  message names the file
+- Run `python -m aquascope.maintenance.docs_counts --fix` after updating the
+  source table. It refreshes the mirrored source counts across the README,
+  `docs/index.md`, `docs/features.md`, `docs/i18n/README.fr.md` and
+  `CITATION.cff`, and also repairs mirrored CLI-command counts when needed
 - Add your source to the regional bullets in the README ("Data sources at a
   glance") and to `docs/features.md`
 - Update `docs/guides/architecture.md` if needed

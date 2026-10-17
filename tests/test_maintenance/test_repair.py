@@ -97,6 +97,19 @@ GOOD_DIFF = '''--- a/aquascope/collectors/demo.py
 '''
 
 
+def test_apply_and_verify_normalizes_crlf_patch(tmp_path):
+    """A CRLF proposal must be written as an LF patch for Git on Windows."""
+    root = _scratch_repo(tmp_path)
+    ev = repair.Evidence("demo", "404", "HTTP 404", "aquascope/collectors/demo.py", "",
+                         test_paths=["tests/test_collectors/test_demo.py"])
+    crlf_diff = GOOD_DIFF.replace("\n", "\r\n")
+    result = repair.apply_and_verify(repair.Proposal("patch", "moved", 0.9, crlf_diff),
+                                     ev, repo_root=root, live_check=False)
+    assert result.ok, result.log
+    assert "https://new.example.org/api" in (
+        root / "aquascope" / "collectors" / "demo.py").read_text(encoding="utf-8")
+
+
 def test_apply_and_verify_accepts_a_good_patch_and_reverts_a_bad_one(tmp_path):
     root = _scratch_repo(tmp_path)
     ev = repair.Evidence("demo", "404", "HTTP 404", "aquascope/collectors/demo.py", "",

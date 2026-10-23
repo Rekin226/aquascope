@@ -3,9 +3,11 @@
 // and runs analyze_series on a synthetic 30-year record.  Fails the CI job if
 // any core import breaks under Emscripten or a dependency is missing.
 
-import { loadPyodide } from "pyodide";
+import { loadPyodide, version } from "pyodide";
 import { readFileSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import { resolve, basename } from "node:path";
+import { loadPackagesWithRetry } from "./pyodide_packages.mjs";
 
 const wheel = process.argv[2];
 if (!wheel) {
@@ -14,23 +16,34 @@ if (!wheel) {
 }
 const wheelPath = resolve(wheel);
 
+const indexURL = `${(process.env.PYODIDE_INDEX_URL ??
+  `https://cdn.jsdelivr.net/pyodide/v${version}/full/`).replace(/\/+$/, "")}/`;
+const packageCacheDir = process.env.PYODIDE_CACHE_DIR ?? "/tmp/pyodide-cache";
+await mkdir(packageCacheDir, { recursive: true });
+
 console.log(`Loading Pyodide…`);
 const pyodide = await loadPyodide({
-  packageCacheDir: "/tmp/pyodide-cache",
-  packages: ["micropip", "numpy", "scipy", "pandas", "pydantic", "httpx"],
+  // Keep the runtime local to the npm install; only packages come from the CDN.
+  packageBaseUrl: indexURL,
+  packageCacheDir,
 });
+// Stop on missing packages before Python imports obscure the download failure.
+const packages = [
+  "micropip", "typing-extensions", "libopenblas", "numpy", "scipy",
+  "pandas", "pydantic", "httpx", "pyodide-http",
+];
+await loadPackagesWithRetry(pyodide, packages);
 
 const wheelName = basename(wheelPath);
-console.log(`Installing ${wheelName} + pyodide-http…`);
+console.log(`Installing ${wheelName}…`);
 // Write the wheel into Emscripten's MEMFS so micropip reads it via emfs:
 // (emfs:/path — single slash, MEMFS-absolute; not an authority-style URL).
-// httpx is not in Pyodide's built-in package set, so install it via micropip.
 // The filename in MEMFS must retain standard PEP 427 wheel tags for micropip.
 const wheelData = readFileSync(wheelPath);
 pyodide.FS.writeFile(`/tmp/${wheelName}`, new Uint8Array(wheelData));
 await pyodide.runPythonAsync(`
 import micropip
-await micropip.install(["pyodide-http", "emfs:/tmp/${wheelName}"])
+await micropip.install("emfs:/tmp/${wheelName}")
 `);
 
 console.log("Applying pyodide_http.patch_all()…");

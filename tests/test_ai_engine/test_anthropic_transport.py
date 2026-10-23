@@ -72,7 +72,7 @@ def _headers(req):
 
 def test_registry_lists_anthropic_with_its_protocol():
     p = PROVIDERS["anthropic"]
-    assert p.api == "anthropic" and p.env == "ANTHROPIC_API_KEY" and p.model == "claude-opus-5"
+    assert p.api == "anthropic" and p.env == "ANTHROPIC_API_KEY" and p.model == "claude-opus-5-5"
     assert p.browser and p.context_chars and p.context_chars > analyst.MAX_CONTEXT_CHARS
     assert ENV_SCAN_ORDER[0] == "anthropic"
     assert PROVIDERS["groq"].api == "openai"
@@ -335,7 +335,7 @@ def test_analyst_runs_end_to_end_over_a_scripted_messages_api(monkeypatch):
     ):
         res = analyst.ask("Which methods do you know?", provider="anthropic", api_key="sk-ant-test")
 
-    assert res.provider == "anthropic" and res.model == "claude-opus-5"
+    assert res.provider == "anthropic" and res.model == "claude-opus-5-5"
     assert [c.name for c in res.tool_calls] == ["describe_methods"] and res.tool_calls[0].ok
     assert res.answer == "Methods listed." and res.steps == 2
     assert "Hosking 1990" in res.to_markdown()

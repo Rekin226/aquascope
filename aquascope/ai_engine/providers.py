@@ -69,8 +69,8 @@ PROVIDERS: dict[str, Provider] = {
         id="anthropic",
         label="Anthropic (Claude)",
         base_url="https://api.anthropic.com",
-        model="claude-opus-5",
-        models=["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],
+        model="claude-opus-5-5",
+        models=["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
         env="ANTHROPIC_API_KEY",
         signup="https://console.anthropic.com/settings/keys",
         note="Pay as you go. In the browser use a key created for a single workspace: keys that span "
@@ -146,13 +146,24 @@ PROVIDERS: dict[str, Provider] = {
 #: The order the CLI scans the environment in when no provider was named.
 ENV_SCAN_ORDER = ("anthropic", "openai", "groq", "nvidia", "huggingface", "mistral", "openrouter")
 
-#: USD per million tokens (input, output) by model id, for the cost column of a Studio ledger. Anthropic's
-#: first-party rates for the Claude models the registry offers (Sonnet 5, Haiku 4.5, Opus 5); Groq's
-#: production models cost nothing on its free tier. A model that is not listed is counted in tokens only:
+#: USD per million tokens (input, output) by model id: the one price table every ledger reads (the Studio, the
+#: gym, the showcase). Anthropic's first-party list prices as of October 2026, current models first and then the
+#: older ids that recorded results were run on, so those keep their cost; Groq's production models cost nothing
+#: on its free tier. Claude Haiku 5.5 is listed at its rate for prompts up to 100k tokens ($0.50 / $2.50 beyond).
+#: Cache and batch discounts are not modelled here. A model that is not listed is counted in tokens only:
 #: :func:`usd_for` returns None for it and no spend ceiling can be enforced on it.
 PRICES: dict[str, tuple[float, float]] = {
+    "claude-fable-5-1": (10.0, 50.0),
+    "claude-opus-5-5": (4.0, 20.0),
+    "claude-sonnet-5-5": (2.0, 10.0),
+    "claude-haiku-5-5": (0.10, 0.50),
+    "claude-fable-5": (10.0, 50.0),
     "claude-opus-5": (5.0, 25.0),
+    "claude-opus-4-8": (5.0, 25.0),
+    "claude-opus-4-7": (5.0, 25.0),
+    "claude-opus-4-6": (5.0, 25.0),
     "claude-sonnet-5": (2.0, 10.0),
+    "claude-sonnet-4-6": (3.0, 15.0),
     "claude-haiku-4-5": (1.0, 5.0),
     "openai/gpt-oss-120b": (0.0, 0.0),
     "openai/gpt-oss-20b": (0.0, 0.0),

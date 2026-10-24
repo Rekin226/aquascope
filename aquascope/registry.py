@@ -458,8 +458,8 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://cds.climate.copernicus.eu/",
         variables=("climate", "discharge"),
         output_model="WaterQualitySample",
-        license="Copernicus-licence", redistributable=True,
-        attribution="Copernicus Climate Change Service (C3S), ECMWF",
+        license="CC-BY-4.0", redistributable=True,
+        attribution="Copernicus Climate Change Service (C3S), ECMWF (CC BY 4.0)",
     ),
     "gemstat": _s(
         key="gemstat", label="GEMStat water quality", region="Global",

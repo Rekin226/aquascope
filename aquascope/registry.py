@@ -148,7 +148,7 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("discharge", "water_level"),
         output_model="StreamflowReading | WaterLevelReading",
         license="unknown", redistributable=False,
-        attribution="South African Department of Water and Sanitation (reuse terms not yet verified)",
+        attribution="Department of Water and Sanitation, Republic of South Africa",
     ),
     "colorado_cdss": _s(
         key="colorado_cdss",

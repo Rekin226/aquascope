@@ -2,78 +2,62 @@
  "id": "potomac-trend",
  "question": "Is the Potomac at Little Falls getting drier? Use the annual-mean trend.",
  "shows": "A Mann-Kendall trend, and what a p-value does and does not license you to say.",
- "answer": "**Station used** – USGS 01646500 “Potomac River near Wash, DC (Little Falls Pump Sta)”.  \nRecord 1930‑03‑01 to 2026‑09‑20 (≈ 96 years of daily discharge).\n\n**Annual‑mean flow trend** (from the “Mann‑Kendall trend on annual means” computed in `analyze_station`):\n\n| Statistic | Value |\n|-----------|-------|\n| Sen’s slope (trend) | **+0.059 m³ s⁻¹ per year** |\n| Kendall τ | 0.0158 |\n| p‑value | 0.8222 |\n| Record length | 96 years |\n\n**Interpretation**  \n* The positive slope would imply a very small increase in mean discharge (≈ 0.06 m³ s⁻¹ yr⁻¹, or about 0.02 % yr⁻¹ of the long‑term mean of 321 m³ s⁻¹).  \n* The p‑value (0.82) is far above any conventional significance level (e.g., 0.05), and τ is essentially zero.  \n\n**Conclusion** – Statistically, there is **no significant trend** in the annual‑mean flow at Little Falls. The record does not show the river “getting drier”; if anything, the trend is a non‑significant slight increase.",
- "markdown": "# Is the Potomac at Little Falls getting drier? Use the annual-mean trend.\n\n**Station used** – USGS 01646500 “Potomac River near Wash, DC (Little Falls Pump Sta)”.  \nRecord 1930‑03‑01 to 2026‑09‑20 (≈ 96 years of daily discharge).\n\n**Annual‑mean flow trend** (from the “Mann‑Kendall trend on annual means” computed in `analyze_station`):\n\n| Statistic | Value |\n|-----------|-------|\n| Sen’s slope (trend) | **+0.059 m³ s⁻¹ per year** |\n| Kendall τ | 0.0158 |\n| p‑value | 0.8222 |\n| Record length | 96 years |\n\n**Interpretation**  \n* The positive slope would imply a very small increase in mean discharge (≈ 0.06 m³ s⁻¹ yr⁻¹, or about 0.02 % yr⁻¹ of the long‑term mean of 321 m³ s⁻¹).  \n* The p‑value (0.82) is far above any conventional significance level (e.g., 0.05), and τ is essentially zero.  \n\n**Conclusion** – Statistically, there is **no significant trend** in the annual‑mean flow at Little Falls. The record does not show the river “getting drier”; if anything, the trend is a non‑significant slight increase.\n\n## Data\n\n- **usgs / USGS-01646500** · 1930-03-01 to 2026-09-20 (96.6 years) · licence US-PD · U.S. Geological Survey, National Water Information System (public domain)\n\n## Methods and citations\n\n1. **Flow-duration curve.** Empirical exceedance probabilities of daily flow (Weibull plotting positions); Q95 and Q10 read from the curve. _Vogel, R. M., & Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage., 120(4), 485-504._\n2. **GEV fitted by L-moments.** Annual maxima (calendar years) fitted to a Generalized Extreme Value distribution with L-moment estimators (Hosking 1990); return levels from the fitted quantile function. _Hosking, J. R. M. (1990). L-moments: analysis and estimation of distributions using linear combinations of order statistics. J. R. Stat. Soc. B, 52(1), 105-124._\n3. **Log-Pearson III (Bulletin 17C style).** Log-transformed annual maxima fitted to a Pearson type III distribution; station skew, frequency factors and analytical confidence limits after Bulletin 17C. _England, J. F. Jr. et al. (2018). Guidelines for determining flood flow frequency, Bulletin 17C. USGS Techniques and Methods 4-B5._\n4. **Mann-Kendall trend on annual means.** Non-parametric Mann-Kendall test with Sen's slope on the annual mean series. _Mann, H. B. (1945). Nonparametric tests against trend. Econometrica, 13, 245-259; Sen, P. K. (1968). J. Am. Stat. Assoc., 63, 1379-1389._\n\n---\nProduced by aquascope 0.18.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-09-21 10:55 UTC. Tools called: find_stations, assess_site, assess_site, analyze_station. Numbers come from the tool results; the model wrote the prose.",
+ "answer": "The Little Falls gauge (USGS‑01646500) has a 97‑year record of daily discharge (1930‑10‑25 to 2026‑10‑25).  \n\n**Annual‑mean trend (Mann‑Kendall test)**  \n* Trend*: “no trend”  \n* Sen’s slope*: **‑0.036 m³ s⁻¹ yr⁻¹** (≈ ‑0.11 % per decade)  \n* p‑value*: **0.95** (well above the 0.05 significance level)  \n\n**Interpretation** – The statistical test finds **no significant monotonic change** in the annual‑mean flow. The estimated slope is slightly negative, but the confidence is too low to conclude that the river is getting drier.  \n\n**Supporting checks**  \n* Pettitt change‑point test: no significant shift (p = 0.62).  \n* PELT segmentation shows several mean‑flow segments but none that indicate a persistent downward trend.  \n\n**Conclusion** – Based on the annual‑mean trend analysis, the Potomac River at Little Falls is **not demonstrably getting drier**; the long‑term record is statistically stationary with respect to mean discharge.",
+ "markdown": "# Is the Potomac at Little Falls getting drier? Use the annual-mean trend.\n\nThe Little Falls gauge (USGS‑01646500) has a 97‑year record of daily discharge (1930‑10‑25 to 2026‑10‑25).  \n\n**Annual‑mean trend (Mann‑Kendall test)**  \n* Trend*: “no trend”  \n* Sen’s slope*: **‑0.036 m³ s⁻¹ yr⁻¹** (≈ ‑0.11 % per decade)  \n* p‑value*: **0.95** (well above the 0.05 significance level)  \n\n**Interpretation** – The statistical test finds **no significant monotonic change** in the annual‑mean flow. The estimated slope is slightly negative, but the confidence is too low to conclude that the river is getting drier.  \n\n**Supporting checks**  \n* Pettitt change‑point test: no significant shift (p = 0.62).  \n* PELT segmentation shows several mean‑flow segments but none that indicate a persistent downward trend.  \n\n**Conclusion** – Based on the annual‑mean trend analysis, the Potomac River at Little Falls is **not demonstrably getting drier**; the long‑term record is statistically stationary with respect to mean discharge.\n\n## Methods and citations\n\n1. **Pettitt change-point test.** Non-parametric test for one shift in the median of a series (rank-based Mann-Whitney statistic). _Pettitt, A. N. (1979). A non-parametric approach to the change-point problem. J. R. Stat. Soc. C, 28(2), 126-135._\n2. **PELT segmentation.** Optimal partition of the series into segments of different mean and variance, BIC-type penalty. _Killick, R., Fearnhead, P., & Eckley, I. A. (2012). Optimal detection of changepoints with a linear computational cost. JASA, 107(500), 1590-1598._\n3. **Mann-Kendall test with Sen's slope.** Rank-based monotonic trend test; the slope is the median of pairwise slopes. _Mann (1945); Kendall (1975); Sen, P. K. (1968). JASA, 63(324), 1379-1389._\n\n---\nProduced by aquascope 0.27.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-10-26 11:23 UTC. Tools called: find_stations, assess_site, change_points. Numbers come from the tool results; the model wrote the prose.",
  "tool_calls": [
   {
    "name": "find_stations",
    "arguments": {
     "limit": 5,
-    "query": "Potomac Little Falls",
+    "near": [
+     38.94,
+     -77.13
+    ],
     "variable": "discharge"
    },
    "ok": true,
-   "summary": "{\"n_catalog\": 67912, \"n_returned\": 5, \"limit\": 5, \"stations\": [{\"source\": \"usgs\", \"station_id\": \"USGS-01646500\", \"name\": \"POTOMAC RIVER NEAR WASH, DC LITTLE FAL"
+   "summary": "{\"n_catalog\": 75878, \"n_returned\": 5, \"limit\": 5, \"stations\": [{\"source\": \"usgs\", \"station_id\": \"USGS-01646500\", \"site_id\": \"USGS-01646500\", \"name\": \"POTOMAC RI"
   },
   {
    "name": "assess_site",
    "arguments": {
     "lat": 38.949777777777776,
     "lon": -77.12763888888888,
-    "problem": "trend"
-   },
-   "ok": false,
-   "summary": "{\"error\": \"unknown problem 'trend'; one of ['climate_change', 'drought', 'flood_risk', 'groundwater_decline', 'irrigation', 'supply_reliability', 'ungauged_flow"
-  },
-  {
-   "name": "assess_site",
-   "arguments": {
-    "lat": 38.949777777777776,
-    "lon": -77.12763888888888,
-    "problem": "climate_change"
+    "problem": "drought",
+    "radius_km": 10
    },
    "ok": true,
    "summary": "{\"point\": {\"lat\": 38.94978, \"lon\": -77.12764}, \"stations\": [{\"source\": \"usgs\", \"station_id\": \"USGS-01646500\", \"name\": \"POTOMAC RIVER NEAR WASH, DC LITTLE FALLS "
   },
   {
-   "name": "analyze_station",
+   "name": "change_points",
    "arguments": {
+    "alpha": 0.05,
+    "series": "annual_mean",
     "source": "usgs",
     "station_id": "USGS-01646500",
     "variable": "discharge"
    },
    "ok": true,
-   "summary": "{\"source\": \"usgs\", \"station_id\": \"USGS-01646500\", \"agency\": \"U.S. Geological Survey\", \"license\": \"US-PD\", \"attribution\": \"U.S. Geological Survey, National Water"
+   "summary": "{\"source\": \"usgs\", \"station_id\": \"USGS-01646500\", \"variable\": \"discharge\", \"unit\": \"m3/s\", \"note\": \"USGS daily values (Water Data API, daily mean); full record "
   }
  ],
- "data_used": [
-  {
-   "label": "usgs / USGS-01646500",
-   "period": "1930-03-01 to 2026-09-20 (96.6 years)",
-   "license": "US-PD",
-   "attribution": "U.S. Geological Survey, National Water Information System (public domain)"
-  }
- ],
+ "data_used": [],
  "methods": [
   {
-   "name": "Flow-duration curve",
-   "text": "Empirical exceedance probabilities of daily flow (Weibull plotting positions); Q95 and Q10 read from the curve.",
-   "citation": "Vogel, R. M., & Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage., 120(4), 485-504."
+   "name": "Pettitt change-point test",
+   "text": "Non-parametric test for one shift in the median of a series (rank-based Mann-Whitney statistic).",
+   "citation": "Pettitt, A. N. (1979). A non-parametric approach to the change-point problem. J. R. Stat. Soc. C, 28(2), 126-135."
   },
   {
-   "name": "GEV fitted by L-moments",
-   "text": "Annual maxima (calendar years) fitted to a Generalized Extreme Value distribution with L-moment estimators (Hosking 1990); return levels from the fitted quantile function.",
-   "citation": "Hosking, J. R. M. (1990). L-moments: analysis and estimation of distributions using linear combinations of order statistics. J. R. Stat. Soc. B, 52(1), 105-124."
+   "name": "PELT segmentation",
+   "text": "Optimal partition of the series into segments of different mean and variance, BIC-type penalty.",
+   "citation": "Killick, R., Fearnhead, P., & Eckley, I. A. (2012). Optimal detection of changepoints with a linear computational cost. JASA, 107(500), 1590-1598."
   },
   {
-   "name": "Log-Pearson III (Bulletin 17C style)",
-   "text": "Log-transformed annual maxima fitted to a Pearson type III distribution; station skew, frequency factors and analytical confidence limits after Bulletin 17C.",
-   "citation": "England, J. F. Jr. et al. (2018). Guidelines for determining flood flow frequency, Bulletin 17C. USGS Techniques and Methods 4-B5."
-  },
-  {
-   "name": "Mann-Kendall trend on annual means",
-   "text": "Non-parametric Mann-Kendall test with Sen's slope on the annual mean series.",
-   "citation": "Mann, H. B. (1945). Nonparametric tests against trend. Econometrica, 13, 245-259; Sen, P. K. (1968). J. Am. Stat. Assoc., 63, 1379-1389."
+   "name": "Mann-Kendall test with Sen's slope",
+   "text": "Rank-based monotonic trend test; the slope is the median of pairwise slopes.",
+   "citation": "Mann (1945); Kendall (1975); Sen, P. K. (1968). JASA, 63(324), 1379-1389."
   }
  ],
  "checks": [
@@ -93,11 +77,6 @@
    "detail": ""
   },
   {
-   "name": "trend_matches_the_test",
-   "passed": true,
-   "detail": ""
-  },
-  {
    "name": "units_are_named",
    "passed": true,
    "detail": ""
@@ -108,11 +87,11 @@
    "detail": ""
   }
  ],
- "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"Is the Potomac at Little Falls getting drier? Use the annual-mean trend.\"\nquestion: \"Is the Potomac at Little Falls getting drier? Use the annual-mean trend.\"\ncreated: \"2026-09-21T10:55:19+00:00\"\naquascope_version: \"0.18.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"find_stations\"\n    arguments:\n      limit: 5\n      query: \"Potomac Little Falls\"\n      variable: \"discharge\"\n  - tool: \"assess_site\"\n    arguments:\n      lat: 38.949777777777776\n      lon: -77.12763888888888\n      problem: \"climate_change\"\n  - tool: \"analyze_station\"\n    arguments:\n      source: \"usgs\"\n      station_id: \"USGS-01646500\"\n      variable: \"discharge\"\n",
- "steps": 5,
+ "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"Is the Potomac at Little Falls getting drier? Use the annual-mean trend.\"\nquestion: \"Is the Potomac at Little Falls getting drier? Use the annual-mean trend.\"\ncreated: \"2026-10-26T11:23:26+00:00\"\naquascope_version: \"0.27.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"find_stations\"\n    arguments:\n      limit: 5\n      near: [38.94, -77.13]\n      variable: \"discharge\"\n  - tool: \"assess_site\"\n    arguments:\n      lat: 38.949777777777776\n      lon: -77.12763888888888\n      problem: \"drought\"\n      radius_km: 10\n  - tool: \"change_points\"\n    arguments:\n      alpha: 0.05\n      series: \"annual_mean\"\n      source: \"usgs\"\n      station_id: \"USGS-01646500\"\n      variable: \"discharge\"\n",
+ "steps": 4,
  "model": "openai/gpt-oss-120b",
  "provider": "groq",
- "recorded": "2026-09-21T10:55:19+00:00",
- "aquascope_version": "0.18.0",
+ "recorded": "2026-10-26T11:23:26+00:00",
+ "aquascope_version": "0.27.0",
  "error": null
 }

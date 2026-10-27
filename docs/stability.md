@@ -146,6 +146,8 @@ benchmark:
 - **Added in 1.1:** `aquascope.replay` (replay an event: a past flood as a story on the map, #659), `aquascope replay`
   and the MCP tools `replay_candidates` and `replay_event`; `aquascope.routing.route` takes a real hydrograph
   (`inflow_cms`).
+- **Added in 1.1:** `aquascope.sketch` (Theis drawdown and superposition for a dropped well, #660); the
+  Explorer's "Drop a well" interaction and its CLI/MCP faces are a follow-up.
 
 Experimental means:
 

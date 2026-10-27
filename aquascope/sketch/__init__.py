@@ -3,7 +3,10 @@
 This is the first computation behind the sketchpad's "drop a well and see the drawdown": the
 steady question "what happens to the water table if I pump here?" becomes a transient one,
 answered at a distance and a time. :func:`theis_drawdown` is the Theis (1935) solution for one
-well in a confined aquifer; :func:`superposition_drawdown` adds several wells, each with its own
+well in a confined aquifer, computed by the package's one Theis engine
+(:func:`aquascope.groundwater.aquifer.theis_drawdown`, the same call behind the
+``aquifer_drawdown`` tool and ``aquascope groundwater --analysis theis``);
+:func:`superposition_drawdown` adds several wells, each with its own
 rate, distance and start time, by the superposition principle; :func:`well_function` exposes the
 well function ``W(u) = E1(u)``. Lengths are metres, times days, rates m3/day and transmissivity
 m2/day, and every result is a plain float or a JSON-safe dict.

@@ -69,6 +69,32 @@ def test_well_function_matches_the_published_table():
 
 
 # ---------------------------------------------------------------------------
+# One engine: the shared Theis in aquascope.groundwater.aquifer
+# ---------------------------------------------------------------------------
+
+def test_the_same_metres_as_the_aquifer_engine():
+    """The sketch calls the one Theis engine, so its answers are that engine's answers."""
+    from aquascope.groundwater.aquifer import theis_drawdown as aquifer_theis_drawdown
+
+    cases = [
+        (7.0, 1.0, 2725.0, 299.0, 0.0051),  # Fetter (2001), p. 180
+        (1000.0, 365.0, 1500.0, 600.0, 4e-4),  # GEOS 2J (2019), slide 34
+        (250.0, 0.5, 800.0, 750.0, 5e-5),
+    ]
+    for radius, time, rate, transmissivity, storativity in cases:
+        sketch_s = theis_drawdown(radius, time, rate, transmissivity, storativity)
+        # The engine's signature is (T, S, Q, r, t).
+        engine_s = float(aquifer_theis_drawdown(transmissivity, storativity, rate, radius, time)[0])
+        assert sketch_s == pytest.approx(engine_s, rel=1e-12)
+
+
+def test_an_injection_well_is_the_pumping_answer_negated():
+    """The engine refuses a rate that is not positive; the sketch negates its magnitude's answer."""
+    assert theis_drawdown(100.0, 1.0, -1000.0) == -theis_drawdown(100.0, 1.0, 1000.0)
+    assert theis_drawdown(100.0, 1.0, -1000.0) < 0.0
+
+
+# ---------------------------------------------------------------------------
 # Superposition
 # ---------------------------------------------------------------------------
 
@@ -116,7 +142,8 @@ def test_a_well_that_has_not_started_contributes_zero():
     )
     assert result["total_drawdown_m"] == 0.0
     assert result["wells"][0]["drawdown_m"] == 0.0
-    assert result["wells"][0]["elapsed_days"] == -1.0
+    # A well that has not started has no age yet: elapsed_days is clamped at 0, not -1.
+    assert result["wells"][0]["elapsed_days"] == 0.0
 
 
 def test_each_well_uses_its_own_elapsed_time():

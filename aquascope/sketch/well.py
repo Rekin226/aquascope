@@ -10,6 +10,22 @@ where ``T`` is the transmissivity, ``S`` the storativity, ``r`` the distance fro
 integral). The drawdown is linear in ``Q``, so several wells add: the superposition principle
 (:func:`superposition_drawdown`).
 
+The equation is not implemented here. ``aquascope.groundwater.aquifer`` already has it:
+``theis_drawdown`` and its well function are what the ``aquifer_drawdown`` tool and
+``aquascope groundwater --analysis theis`` compute with, and this module calls that engine, so
+AquaScope keeps one Theis and not two. What this module adds is the sketchpad's own interface
+(one well at a distance and a time, the JSON dict of several) and the boundaries a pumping-test
+fit has no use for:
+
+* ``time <= 0`` is a well that has not started: the drawdown is ``0.0`` rather than an error.
+* ``radius = 0`` is refused before the engine is asked: the well function diverges at the well
+  centre, and this module returns no infinity that is not JSON-safe.
+* ``u < 1e-16`` is evaluated as its limit ``-gamma - ln(u)``, and where ``u`` itself is lost to
+  floating point (``r**2`` or ``S`` underflowing, ``4*T*t`` overflowing to infinity) ``ln(u)``
+  is rebuilt from the logs, so a subnormal ``u`` cannot make the answer infinite.
+* a negative ``rate``, an injection well, is the engine's answer at the rate's magnitude,
+  negated, which is exact because the drawdown is linear in ``Q``.
+
 Units are fixed throughout the module, because the equation is only homogeneous when they agree:
 
 ======================  =========================================  ===========================
@@ -28,8 +44,7 @@ confined aquifer is modelled; an unconfined aquifer needs the delayed yield of t
 (Neuman, 1972), not Theis.
 
 The equation assumes a fully penetrating well of infinitesimal radius, so the drawdown is
-unbounded at ``r = 0`` (:func:`well_function` diverges there). This module refuses ``r = 0``
-rather than returning an infinity that is not JSON-safe.
+unbounded at ``r = 0``: the module refuses that point rather than returning an infinity.
 
 References
 ----------
@@ -46,7 +61,8 @@ import math
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from scipy.special import exp1
+from aquascope.groundwater.aquifer import _well_function as _aquifer_well_function
+from aquascope.groundwater.aquifer import theis_drawdown as _aquifer_theis_drawdown
 
 __all__ = [
     "DEFAULT_RATE",
@@ -60,8 +76,8 @@ __all__ = [
 #: Euler-Mascheroni constant, the leading term of ``W(u)`` as ``u`` goes to zero.
 _EULER_GAMMA = 0.5772156649015329
 
-#: Below this ``u``, ``-gamma - ln(u)`` is ``W(u)`` to better than one part in 1e15 and avoids
-#: ``exp1`` evaluating a subnormal argument. Above it, ``scipy.special.exp1`` is used directly.
+#: Below this ``u``, ``-gamma - ln(u)`` is ``W(u)`` to better than one part in 1e15 and the
+#: answer does not depend on how ``exp1`` treats a subnormal argument.
 _U_ASYMPTOTIC = 1e-16
 
 #: Default pumping rate, m3/day. The middle of the municipal-well range (10 to 10,000 m3/day).
@@ -96,6 +112,9 @@ def _check_positive(name: str, value: float) -> float:
 def well_function(u: float) -> float:
     """The Theis well function ``W(u) = E1(u)``, the exponential integral of ``u``.
 
+    Evaluated by ``aquascope.groundwater.aquifer``'s own well function, the one the Theis engine
+    calls, so there is one definition of ``W(u)`` in the package.
+
     Parameters
     ----------
     u:
@@ -119,13 +138,25 @@ def well_function(u: float) -> float:
         raise ValueError(f"u must be > 0 (W(0) diverges), got {u!r}")
     if value < _U_ASYMPTOTIC:
         return -_EULER_GAMMA - math.log(value) + value
-    return float(exp1(value))
+    return float(_aquifer_well_function(value))
 
 
 def _drawdown(rate: float, transmissivity: float, storativity: float, radius: float, time: float) -> float:
-    """Drawdown in metres for already validated, strictly positive parameters."""
+    """Drawdown in metres for already validated parameters, from the shared Theis engine.
+
+    ``u`` is recomputed here only to choose the numerical path: for ``u`` at or above the
+    asymptotic cut-off the answer is ``aquascope.groundwater.aquifer``'s, and below it the limit
+    of the same expression is finished locally, because the engine's ``u`` can be lost to
+    underflow or its ``4*T*t`` to overflow and ``exp1(0)`` is infinite.
+    """
+    if rate == 0.0:
+        return 0.0
     u = radius * radius * storativity / (4.0 * transmissivity * time)
-    if u < _U_ASYMPTOTIC:
+    if u >= _U_ASYMPTOTIC:
+        # The engine's own drawdown, at the rate's magnitude: (T, S, Q, r, t).
+        magnitude = float(_aquifer_theis_drawdown(transmissivity, storativity, abs(rate), radius, time)[0])
+        drawdown = math.copysign(magnitude, rate)
+    else:
         if u > 0.0:
             w = -_EULER_GAMMA - math.log(u) + u
         else:
@@ -133,9 +164,7 @@ def _drawdown(rate: float, transmissivity: float, storativity: float, radius: fl
             log_u = (2.0 * math.log(radius) + math.log(storativity)
                      - math.log(4.0) - math.log(transmissivity) - math.log(time))
             w = -_EULER_GAMMA - log_u
-    else:
-        w = float(exp1(u))
-    drawdown = rate * w / (4.0 * math.pi * transmissivity)
+        drawdown = (rate / (4.0 * math.pi * transmissivity)) * w
     if not math.isfinite(drawdown):
         raise OverflowError(
             f"drawdown is not finite for rate={rate!r}, transmissivity={transmissivity!r}, "
@@ -153,7 +182,9 @@ def theis_drawdown(
 ) -> float:
     """Drawdown at a distance ``radius`` and time ``time`` from one pumping well (Theis, 1935).
 
-    ``s = Q / (4 * pi * T) * W(u)`` with ``u = r**2 * S / (4 * T * t)``.
+    ``s = Q / (4 * pi * T) * W(u)`` with ``u = r**2 * S / (4 * T * t)``, computed by
+    ``aquascope.groundwater.aquifer.theis_drawdown`` (see the module docstring for the
+    boundaries this wrapper adds).
 
     Parameters
     ----------
@@ -194,8 +225,6 @@ def theis_drawdown(
     aquifer_s = _check_positive("storativity", storativity)
     if t <= 0.0:
         return 0.0
-    if q == 0.0:
-        return 0.0
     return _drawdown(q, aquifer_t, aquifer_s, r, t)
 
 
@@ -216,7 +245,8 @@ def superposition_drawdown(
         Pumping rate in m3/day (default :data:`DEFAULT_RATE`; negative is injection).
     ``start_time``
         Time, on the same clock as ``time``, when the well started, in days (default ``0.0``).
-        A well that has not started yet contributes exactly ``0.0``.
+        A well that has not started yet contributes exactly ``0.0``, and its ``elapsed_days`` is
+        clamped at ``0.0`` rather than reported as a negative age.
     ``name``
         Optional label carried into the result (default ``"well-1"``, ``"well-2"``, ...).
 
@@ -269,6 +299,7 @@ def superposition_drawdown(
         start = _finite(f"well {index} start_time", well.get("start_time", 0.0))
         elapsed = t - start
         if elapsed <= 0.0:
+            elapsed = 0.0
             drawdown = 0.0
         else:
             drawdown = _drawdown(rate, aquifer_t, aquifer_s, radius, elapsed)

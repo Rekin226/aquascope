@@ -29,6 +29,15 @@
   <link rel="stylesheet" href="./mesh.css?v=__BUILD__" />
   <link rel="stylesheet" href="./flood-views.css?v=__BUILD__" />
   <link rel="stylesheet" href="./whatif.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./route.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./sketch.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./floodsim.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./replay.css?v=__BUILD__" />
+        </div>
+      </section>
+  <link rel="stylesheet" href="./paint.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./well.css?v=__BUILD__" />
+  <link rel="stylesheet" href="./landuse.css?v=__BUILD__" />
 </head>
 <body class="panel-collapsed">
   <a class="skip" href="#panel">Skip to the results panel</a>
@@ -199,6 +208,21 @@
             <circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><ellipse cx="12" cy="12" rx="4.2" ry="9" />
           </svg>
         </button>
+        <button id="btn-paint" class="map-tool" type="button" aria-expanded="false" aria-controls="paint"
+                title="Paint this view: one question at every gauge in view" aria-label="Paint this view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19.5 3.5c-3.2 1.2-7.4 5.1-9.6 8.3l1.9 1.9c3.2-2.2 7.1-6.4 8.3-9.6Z" />
+            <path d="M9.4 12.6c-1.9 0-3.3 1.4-3.5 3.3-.2 1.7-.9 2.6-2.4 3.1 3.4 1.4 7.3.3 7.7-3.2.1-1.2-.5-2.3-1.8-3.2Z" />
+          </svg>
+        </button>
+        <!-- the sketchpad (#664): draw on the map and see it compute; src/sketch-menu.js, each tool adds itself -->
+        <button id="btn-sketch" class="map-tool" type="button" aria-expanded="false" aria-controls="sketch-menu" hidden
+                aria-haspopup="menu" title="Sketch on the map: a storm and more" aria-label="Sketch on the map">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 20l4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z" /><path d="M13.5 7.5l3 3" />
+          </svg>
+        </button>
+        <div id="sketch-menu" class="sketch-menu" role="menu" aria-label="Sketch on the map" hidden></div>
         <button id="btn-time" class="map-tool" type="button" aria-pressed="false" aria-controls="timebar" hidden
                 title="Map date" aria-label="Map date">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
@@ -317,6 +341,291 @@
             <label class="wi-check"><input id="wi-swipe-on" type="checkbox" /> Before/after swipe</label>
             <button id="wi-edit" type="button" class="link-btn wi-edit">Change the scenario</button>
           </div>
+        </div>
+      </section>
+      <!-- route it (#656): a flood wave down GEOGLOWS's own river network, on the time bar; src/route-map.js -->
+      <!-- Flood it (#658): the swipe between two runs and the panel, filled by src/floodsim-map.js; floodsim.css -->
+      <div id="fi-swipe" class="wi-swipe" hidden>
+        <span class="wi-sw-line" aria-hidden="true"></span>
+        <span class="wi-sw-label wi-sw-before"></span>
+        <span class="wi-sw-label wi-sw-after"></span>
+        <div class="wi-sw-handle" role="slider" tabindex="0" aria-label="The line between the two runs"
+             aria-valuemin="5" aria-valuemax="95" aria-valuenow="50"><span aria-hidden="true">‹ ›</span></div>
+      </div>
+      <section id="floodit" class="whatif floodit" aria-labelledby="fi-title" hidden></section>
+      <!-- Replay an event (#659): a past flood as a story on the map; src/replay.js plays it, replay.css -->
+      <section id="replay" class="replay" aria-labelledby="rp-title" hidden>
+        <header class="rp-head">
+          <p class="rp-kicker">Replay</p>
+          <h2 id="rp-title" class="rp-title">A flood</h2>
+          <button id="rp-close" class="rp-close" type="button" aria-label="Close the replay" title="Close">×</button>
+        </header>
+        <div id="rp-body" class="rp-body"></div>
+        <div id="rp-stop" class="rp-stop" hidden>
+          <div class="rp-text"><p id="rp-stitle" class="rp-stitle"></p><p id="rp-note" class="rp-note" aria-live="polite"></p></div>
+          <div id="rp-chart" class="rp-chart" hidden></div>
+        </div>
+        <div id="rp-ctrl" class="rp-ctrl" hidden>
+          <button id="rp-prev" class="rp-btn" type="button" aria-label="Previous stop" title="Previous stop (←)">‹</button>
+          <button id="rp-play" class="rp-btn rp-play" type="button" aria-label="Play" aria-pressed="false" title="Play or pause">▶</button>
+          <button id="rp-next" class="rp-btn" type="button" aria-label="Next stop" title="Next stop (→)">›</button>
+          <div id="rp-scrub" class="rp-scrub" role="group" aria-label="The story's stops"></div>
+          <span id="rp-count" class="rp-count" aria-live="off"></span>
+          <button id="rp-more" class="rp-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Export and share" title="Export and share">⋯</button>
+          <div id="rp-menu" class="rp-menu" role="menu" hidden>
+            <button type="button" role="menuitem" data-act="gif">Make a GIF</button>
+            <button type="button" role="menuitem" data-act="video">Record a video (WebM)</button>
+            <button type="button" role="menuitem" data-act="report">The report (Markdown)</button>
+            <button type="button" role="menuitem" data-act="link">Copy the link</button>
+            <p id="rp-export" class="rp-export" role="status"></p>
+          </div>
+        </div>
+        <p id="rp-src" class="rp-src"></p>
+      </section>
+      <section id="route" class="whatif route" aria-labelledby="rt-title" hidden>
+        <header class="wi-head">
+          <div>
+            <p class="wi-kicker">Route a flood</p>
+            <h2 id="rt-title" class="wi-title">River reach</h2>
+            <p class="wi-sub">Down GEOGLOWS's own network, reach by reach</p>
+          </div>
+          <button type="button" class="wi-close rt-close" aria-label="Close Route a flood" title="Close (Esc)">×</button>
+        </header>
+        <form id="rt-form" class="wi-form rt-form">
+          <fieldset class="rt-kind">
+            <legend class="visually-hidden">What enters the river</legend>
+            <label><input id="rt-kind-rp" type="radio" name="rt-kind" value="rp" checked /> The
+              <select id="rt-rp" aria-label="Return period, years">
+                <option value="2">2</option><option value="10" selected>10</option><option value="25">25</option>
+                <option value="100">100</option></select>-year flow here</label>
+            <label><input id="rt-kind-peak" type="radio" name="rt-kind" value="peak" />
+              <input id="rt-peak" type="number" min="1" step="any" inputmode="decimal" placeholder="500"
+                     aria-label="Peak flow, m³/s" /> m³/s</label>
+          </fieldset>
+          <label class="wi-slider"><span>Over</span>
+            <input id="rt-dur" type="range" min="3" max="120" step="3" value="24" />
+            <output id="rt-dur-out" for="rt-dur">24 h</output></label>
+          <label class="wi-check"><input id="rt-block" type="checkbox" /> A steady release, not a flood</label>
+          <div class="wi-run-row">
+            <span class="wi-scn">Muskingum, hourly</span>
+            <button id="rt-run" type="submit" class="btn small primary">Route</button>
+          </div>
+        </form>
+        <p id="rt-status" class="wi-status" role="status" hidden></p>
+        <div id="rt-result" class="wi-result" hidden>
+          <p id="rt-head" class="rt-head"></p>
+          <ol id="rt-places" class="rt-places"></ol>
+          <p id="rt-model" class="wi-model"></p>
+          <div class="wi-foot">
+            <button id="rt-replay" type="button" class="link-btn">Play the wave again</button>
+            <button id="rt-edit" type="button" class="link-btn wi-edit">Change the flood</button>
+          </div>
+        </div>
+      </section>
+      <!-- Drop a well (#660): the drawdown cone of pumping wells (Theis, superposition); src/well-map.js, well.css -->
+      <section id="well" class="whatif well" aria-labelledby="wl-title" hidden>
+        <header class="wi-head">
+          <div>
+            <p class="wi-kicker">Drop a well</p>
+            <h2 id="wl-title" class="wi-title">Drawdown cone</h2>
+            <p class="wi-sub">Theis, several wells added; drag a well to move it</p>
+          </div>
+          <button type="button" class="wi-close wl-close" aria-label="Close Drop a well" title="Close (Esc)">×</button>
+        </header>
+        <div id="wl-empty" class="wl-empty">
+          <p>Click the map where a well pumps, and its cone is drawn round it.</p>
+          <label class="wl-q">New well pumps <input id="wl-rate-new" type="number" min="1" step="any" inputmode="decimal" value="1000" aria-label="New well's rate, m³/day" /> m³/day</label>
+          <button id="wl-place" type="button" class="btn small primary">Drop a well</button>
+        </div>
+        <div id="wl-result" class="wi-result" hidden>
+          <p id="wl-head" class="rt-head"></p>
+          <ol id="wl-wells" class="wl-wells" aria-label="The wells: rate and drawdown at the face"></ol>
+          <div class="wl-row"><button id="wl-add" type="button" class="link-btn">Add a well</button>
+            <button id="wl-play" type="button" class="link-btn">Play the cone growing</button></div>
+        </div>
+        <form id="wl-form" class="wi-form wl-form" onsubmit="return false">
+          <label class="wi-slider"><span>T</span>
+            <input id="wl-t" type="range" min="0" max="1000" step="1" aria-label="Transmissivity, m²/day" />
+            <output id="wl-t-out" for="wl-t">500 m²/day</output></label>
+          <label class="wi-slider"><span>S</span>
+            <input id="wl-s" type="range" min="0" max="1000" step="1" aria-label="Storativity" />
+            <output id="wl-s-out" for="wl-s">1e-4</output></label>
+          <label class="wi-slider"><span>After</span>
+            <input id="wl-days" type="range" min="0" max="1000" step="1" aria-label="Days of pumping" />
+            <output id="wl-days-out" for="wl-days">30 days</output></label>
+          <p id="wl-odd" class="wl-odd" hidden></p>
+        </form>
+        <p id="wl-status" class="wi-status" role="status" hidden></p>
+        <p class="wi-model">Theis (1935), wells added. Checked against Fetter's worked example and USGS PP 708.</p>
+        <details class="wl-how"><summary>Method, assumptions, defaults</summary>
+          <p id="wl-model" class="wl-src">Defaults: 1000 m³/day, T 500 m²/day, S 1e-4, 30 days.</p>
+          <p id="wl-src" class="wl-src"></p></details>
+        <div class="wi-foot"><button id="wl-clear" type="button" class="link-btn">Take the wells off</button></div>
+      </section>
+      <!-- Change land use (#661): a drawn area's runoff and peak before and after (TR-55); src/landuse-map.js -->
+      <section id="landuse" class="whatif route landuse" aria-labelledby="lu-title" hidden>
+        <header class="wi-head">
+          <div>
+            <p class="wi-kicker">Change land use</p>
+            <h2 id="lu-title" class="wi-title">Draw the area</h2>
+            <p class="wi-sub">SCS curve number (TR-55): runoff and peak, now and after</p>
+          </div>
+          <button type="button" class="wi-close lu-close" aria-label="Close Change land use" title="Close (Esc)">×</button>
+        </header>
+        <form id="lu-form" class="wi-form lu-form">
+          <label class="lu-field"><span>Becomes</span><select id="lu-use" aria-label="What the area becomes"></select></label>
+          <label id="lu-imp-row" class="lu-field" hidden><span>Impervious</span>
+            <input id="lu-imp" type="number" min="0" max="100" step="any" inputmode="decimal" aria-label="Impervious share, percent" /> %</label>
+          <label class="lu-field"><span>Storm</span>
+            <input id="lu-rain" type="number" min="1" max="2000" step="any" inputmode="decimal" aria-label="24-hour design storm, mm" /> mm in 24 h,
+            <select id="lu-dist" aria-label="SCS rainfall distribution"></select></label>
+          <p class="lu-plain">100 mm is a placeholder: put your place's 24-hour design storm.</p>
+          <label class="lu-field"><span>Soil</span><select id="lu-soil" aria-label="Hydrologic soil group">
+            <option value="">read from HYSOGs250m</option><option value="A">A (sand, low runoff)</option>
+            <option value="B">B</option><option value="C">C</option><option value="D">D (clay, high runoff)</option></select></label>
+          <div class="wi-run-row">
+            <button id="lu-draw" type="button" class="btn small ghost">Draw the area</button>
+            <button id="lu-run" type="submit" class="btn small primary">Compute</button>
+          </div>
+        </form>
+        <p id="lu-status" class="wi-status" role="status" hidden></p>
+        <div id="lu-result" class="wi-result" hidden>
+          <p id="lu-head" class="rt-head"></p>
+          <table id="lu-table" class="lu-table"></table>
+          <div id="lu-cover"></div>
+          <p id="lu-soil-out" class="lu-plain"></p>
+          <p id="lu-notes" class="lu-notes" hidden></p>
+          <button id="lu-route" type="button" class="btn small" hidden>Route the extra peak downstream</button>
+          <details class="wl-how"><summary>Method, sources and licences</summary>
+            <p id="lu-model" class="wl-src"></p><p id="lu-src" class="wl-src"></p></details>
+          <div class="wi-foot">
+            <button id="lu-edit" type="button" class="link-btn wi-edit">Change the use or the storm</button>
+            <button id="lu-clear" type="button" class="link-btn">Take it off</button>
+          </div>
+        </div>
+      </section>
+      <!-- Draw a storm (#670): rain on a drawn area, routed down the rivers on the time bar; src/storm-map.js -->
+      <section id="storm" class="whatif route storm" aria-labelledby="st-title" hidden>
+        <header class="wi-head">
+          <div>
+            <p class="wi-kicker">Draw a storm</p>
+            <h2 id="st-title" class="wi-title">Draw the storm's area</h2>
+            <p class="wi-sub">Its runoff routed down GEOGLOWS's own network</p>
+          </div>
+          <button type="button" class="wi-close st-close" aria-label="Close Draw a storm" title="Close (Esc)">×</button>
+        </header>
+        <form id="st-form" class="wi-form st-form">
+          <label class="wi-slider"><span>Rain</span>
+            <input id="st-rain" type="number" min="1" max="2000" step="any" inputmode="decimal" aria-label="Rain, mm" />
+            <output>mm</output></label>
+          <label class="wi-slider"><span>Over</span>
+            <input id="st-dur" type="range" min="1" max="72" step="1" />
+            <output id="st-dur-out" for="st-dur">6 h</output></label>
+          <label class="wi-slider"><span>Runs off</span>
+            <input id="st-c" type="range" min="0.05" max="1" step="0.05" aria-label="Runoff coefficient" />
+            <output id="st-c-out" for="st-c">0.30</output></label>
+          <p class="st-plain">The runoff coefficient is a plain share of the rain that runs off: no soil, wetness or snow behind it.</p>
+          <div class="wi-run-row">
+            <button id="st-draw" type="button" class="btn small ghost">Draw the area</button>
+            <button id="st-run" type="submit" class="btn small primary">Route the storm</button>
+          </div>
+        </form>
+        <p id="st-status" class="wi-status" role="status" hidden></p>
+        <div id="st-result" class="wi-result" hidden>
+          <p id="st-head" class="rt-head"></p>
+          <div id="st-chart"></div>
+          <dl id="st-facts" class="st-facts"></dl>
+          <p id="st-rule" class="st-rule"></p>
+          <p id="st-model" class="wi-model"></p>
+          <div class="wi-foot">
+            <button id="st-replay" type="button" class="link-btn">Play the wave again</button>
+            <button id="st-edit" type="button" class="link-btn wi-edit">Change the storm</button>
+          </div>
+        </div>
+      </section>
+      <!-- Draw a reservoir (#662): a lake on a river and the flood it flattens; src/reservoir-map.js -->
+      <section id="reservoir" class="whatif route storm reservoir" aria-labelledby="rv-title" hidden>
+        <header class="wi-head">
+          <div>
+            <p class="wi-kicker">Draw a reservoir</p>
+            <h2 id="rv-title" class="wi-title">Draw the lake across a river</h2>
+            <p class="wi-sub">Level-pool routing at the dam, then on down the river</p>
+          </div>
+          <button type="button" class="wi-close rv-close" aria-label="Close Draw a reservoir" title="Close (Esc)">×</button>
+        </header>
+        <form id="rv-form" class="wi-form rv-form">
+          <label class="wi-slider"><span>Crest</span>
+            <input id="rv-crest" type="range" min="1" max="60" step="0.5" aria-label="Spillway crest, m above the lowest ground" />
+            <output id="rv-crest-out" for="rv-crest">10 m</output></label>
+          <label class="wi-slider"><span>Dam top</span>
+            <input id="rv-top" type="range" min="2" max="80" step="0.5" aria-label="Top of the dam, m above the lowest ground" />
+            <output id="rv-top-out" for="rv-top">15 m</output></label>
+          <label class="wi-slider"><span>Spillway</span>
+            <input id="rv-width" type="range" min="2" max="300" step="1" aria-label="Spillway width, m" />
+            <output id="rv-width-out" for="rv-width">30 m</output></label>
+          <p class="st-plain">Levels above the lowest ground in the lake; the spillway a broad-crested weir.</p>
+          <fieldset class="rt-kind rv-kind">
+            <legend class="visually-hidden">The flood</legend>
+            <label><input id="rv-kind-rp" type="radio" name="rv-kind" value="rp" checked /> The
+              <select id="rv-rp" aria-label="Return period, years">
+                <option value="2">2</option><option value="10">10</option><option value="25">25</option>
+                <option value="100">100</option></select>-year flow, over
+              <input id="rv-dur" type="number" min="1" max="720" step="1" aria-label="Hours" /> h</label>
+            <label><input id="rv-kind-peak" type="radio" name="rv-kind" value="peak" />
+              <input id="rv-peak" type="number" min="1" step="any" inputmode="decimal" placeholder="500"
+                     aria-label="Peak flow, m³/s" /> m³/s at the dam</label>
+            <label><input id="rv-kind-wave" type="radio" name="rv-kind" value="wave" />
+              <span id="rv-wave-words">the flood wave or storm on the map</span></label>
+          </fieldset>
+          <div class="wi-run-row">
+            <button id="rv-draw" type="button" class="btn small ghost">Draw the lake</button>
+            <button id="rv-run" type="submit" class="btn small primary">Route it through</button>
+          </div>
+        </form>
+        <p id="rv-status" class="wi-status" role="status" hidden></p>
+        <div id="rv-result" class="wi-result" hidden>
+          <p id="rv-head" class="rt-head"></p>
+          <div id="rv-chart"></div>
+          <dl id="rv-facts" class="st-facts"></dl>
+          <ul id="rv-notes" class="rv-notes"></ul>
+          <p id="rv-model" class="wi-model"></p>
+          <div class="wi-foot">
+            <button id="rv-replay" type="button" class="link-btn">Play the wave again</button>
+            <button id="rv-edit" type="button" class="link-btn wi-edit">Change the dam</button>
+          </div>
+        </div>
+      </section>
+      <!-- Paint the globe (#657): one question at every gauge in view; src/paint.js and paint.css -->
+      <section id="paint" class="paint" aria-labelledby="pt-title" hidden>
+        <header class="pt-head">
+          <div>
+            <p class="pt-kicker">Paint this view</p>
+            <h2 id="pt-title" class="pt-title">One question, every gauge in view</h2>
+          </div>
+          <button type="button" class="pt-close" aria-label="Close Paint this view" title="Close (Esc)">×</button>
+        </header>
+        <form id="pt-form" class="pt-form">
+          <fieldset class="pt-qs-wrap"><legend class="pt-label">Question</legend><div id="pt-qs" class="pt-qs"></div></fieldset>
+          <div class="pt-row">
+            <label>At least <select id="pt-years" aria-label="Complete years a gauge needs"></select> years</label>
+            <label><select id="pt-period" aria-label="Which years"></select></label>
+          </div>
+          <div class="pt-run-row">
+            <span id="pt-note" class="pt-note">Archive gauges only; up to 300 a view, the longest records first.</span>
+            <button id="pt-run" type="submit" class="btn small primary">Paint this view</button>
+          </div>
+        </form>
+        <p class="pt-asked-row"><span id="pt-asked" class="pt-asked"></span>
+          <button id="pt-change" type="button" class="link-btn pt-change">Change</button></p>
+        <div id="pt-bar" class="pt-bar" hidden><span></span></div>
+        <p id="pt-status" class="pt-status" role="status" hidden></p>
+        <button id="pt-stop" type="button" class="link-btn pt-stop" hidden>Stop</button>
+        <div id="pt-result" class="pt-result" hidden>
+          <p id="pt-verdict" class="pt-verdict" hidden></p>
+          <p id="pt-headline" class="pt-headline"></p>
+          <p class="pt-hint">The key, the counts and the downloads (figure, table, methods) are in the legend, under
+            Painted. Click a dot for its gauge.</p>
+          <button id="pt-more" type="button" class="btn small" hidden>Read more</button>
         </div>
       </section>
       <!-- talk to the map (#561): one line on the map and the action log under it; src/map-command.js and src/map-actions.js -->

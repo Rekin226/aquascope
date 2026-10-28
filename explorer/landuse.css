@@ -1,0 +1,38 @@
+/* Change land use (#661): the panel's own parts (it shares the What if panel's frame, whatif.css, and Route it's,
+   route.css), the before and after table, the cover bar. The area and the reach are painted by src/landuse-map.js. */
+
+.landuse .lu-field { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; font-size: .76rem; color: var(--ink-2); }
+.landuse .lu-field > span { min-width: 4.6rem; color: var(--muted); }
+.landuse select, .landuse input[type="number"] {
+  font: inherit; font-size: .76rem; padding: 2px 4px; border: 1px solid var(--line); border-radius: 4px;
+  background: var(--surface-solid); color: var(--ink); max-width: 100%;
+}
+.landuse #lu-use { flex: 1 1 0; min-width: 0; width: 0; }
+.landuse .lu-form, .landuse .lu-field { min-width: 0; max-width: 100%; }
+.landuse input[type="number"] { width: 4.6rem; }
+.landuse.drawing { opacity: .55; pointer-events: none; }
+.lu-plain { margin: .1rem 0 0; font-size: .7rem; color: var(--muted); }
+.lu-notes { margin: .3rem 0 0; font-size: .7rem; color: #9a5a00; }
+.lu-table { width: 100%; border-collapse: collapse; margin: .2rem 0 .4rem; font-size: .76rem; font-variant-numeric: tabular-nums; }
+.lu-table th, .lu-table td { padding: 2px 4px; text-align: right; border-bottom: 1px solid var(--line-soft); }
+.lu-table th[scope="row"] { text-align: left; font-weight: 500; color: var(--ink-2); }
+.lu-table tr:first-child th { font-size: .66rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+.lu-table td:last-child { font-weight: 700; color: var(--ink); }
+.lu-bar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.lu-bar i { display: block; min-width: 2px; }
+.lu-key { margin: .25rem 0 0; display: flex; flex-wrap: wrap; gap: .1rem .6rem; font-size: .68rem; color: var(--ink-2); }
+.lu-key i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: -1px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+#lu-route { margin-top: .45rem; }
+.lu-handle { border-color: #b5452a; }
+
+@media (max-width: 640px) {
+  .landuse { width: auto; }
+  .landuse.done .lu-form, .landuse.done .wi-sub, .landuse.done .wi-kicker, .landuse.done .wi-status { display: none; }
+  /* after a run: a short bottom sheet above the hint and the time bar, as the storm's and the reservoir's, so the
+     area drawn shows above it (landuse-map.js frames it there) */
+  .landuse.done { top: auto; bottom: 150px; max-height: 34vh; overflow: auto; }
+  .landuse.done .lu-table { font-size: .7rem; margin-bottom: .25rem; }
+  .landuse.done .rt-head { font-size: .74rem; }
+  .landuse .lu-key { display: none; }
+}

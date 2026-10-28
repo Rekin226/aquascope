@@ -1,0 +1,101 @@
+/* Replay an event (#659): the story's note at the bottom of the map, small, with its controls; a sheet on a
+   phone. The subject stays on the map: the camera leaves room below for this card. */
+.replay {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 118px; z-index: 8;
+  width: min(640px, calc(100% - 2 * var(--gap))); padding: 9px 12px 8px;
+  background: var(--surface-solid); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2); font-size: .8rem; line-height: 1.4;
+}
+.replay[hidden] { display: none; }
+.rp-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: .55rem; }
+.rp-kicker { margin: 0; font-size: .64rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); }
+.rp-title { margin: 0; font-size: .86rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-close { font: inherit; font-size: 1.1rem; line-height: 1; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 2px; }
+.rp-body { margin-top: .35rem; }
+.rp-stop { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .7rem; align-items: center; }
+.rp-stitle { margin: 0; font-size: .7rem; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.rp-note { margin: .1rem 0 0; font-size: .84rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rp-chart[hidden] { display: none; }
+.rp-spark { display: block; }
+.rp-spark .rp-obs { fill: none; stroke: var(--ink); stroke-width: 1.8; }
+.rp-spark .rp-mod { fill: none; stroke: #e07b39; stroke-width: 1.6; stroke-dasharray: 3 2; }
+.rp-spark .rp-mk { stroke: var(--blue); stroke-width: 1; stroke-dasharray: 2 2; }
+.rp-spark .rp-bar { fill: #6aa5d8; }
+.rp-spark .rp-bar.pk { fill: var(--blue); }
+.rp-spark .rp-sv { font-size: 9px; fill: var(--muted); }
+.rp-spark .rp-range { fill: #f2b38a; opacity: .55; }
+.rp-spark .rp-med { stroke: #c4581c; stroke-width: 2.4; }
+.rp-spark .rp-obsmk { fill: var(--ink); }
+.rp-ctrl { display: flex; align-items: center; gap: .25rem; margin-top: .45rem; position: relative; }
+.rp-ctrl[hidden] { display: none; }
+.rp-btn {
+  font: inherit; font-size: .95rem; line-height: 1; min-width: 30px; height: 28px; display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: var(--radius-xs); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+.rp-btn:hover { background: var(--bg-soft); }
+.rp-play { font-size: .78rem; background: var(--blue); color: #fff; border-color: var(--blue); }
+.rp-play:hover { background: var(--blue-dark, #08528e); }
+.rp-scrub { flex: 1; display: flex; gap: 3px; min-width: 60px; height: 28px; align-items: center; padding: 0 .3rem; }
+.rp-seg { flex: 1 1 0; min-width: 6px; height: 22px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; align-items: center; }
+.rp-seg span { display: block; height: 5px; border-radius: 3px; background: var(--line); }
+.rp-seg.done span { background: #8fb8dc; }
+.rp-seg.on span { background: var(--blue); height: 7px; }
+.rp-seg:focus-visible span { outline: 2px solid var(--blue); outline-offset: 2px; }
+.rp-count { font-size: .7rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 2.6rem; text-align: right; }
+.rp-menu {
+  position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 2; min-width: 220px; padding: 4px;
+  background: var(--surface-solid); border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-2);
+}
+.rp-menu[hidden] { display: none; }
+.rp-menu button {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: .8rem; padding: .38rem .55rem;
+  border: 0; border-radius: var(--radius-xs); background: none; color: var(--ink); cursor: pointer;
+}
+.rp-menu button:hover { background: var(--bg-soft); }
+.rp-export { margin: .2rem .4rem .1rem; font-size: .7rem; color: var(--muted); }
+.rp-export:empty { display: none; }
+.rp-src { margin: .35rem 0 0; font-size: .66rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-src a { color: inherit; }
+.rp-build { list-style: none; margin: .2rem 0 0; padding: 0; display: grid; gap: .12rem; }
+.rp-build li { display: grid; grid-template-columns: 1.1rem 1fr; gap: .2rem; color: var(--muted); }
+.rp-build li.ok { color: var(--ink); }
+.rp-build li.ok i { color: #2e7d32; font-style: normal; font-weight: 700; }
+.rp-build li i { font-style: normal; }
+.rp-build small { color: var(--muted); }
+.rp-progress { margin: .35rem 0 0; font-size: .74rem; color: var(--ink-2, var(--muted)); display: flex; gap: .4rem; align-items: center; }
+.rp-err { margin: .3rem 0 0; color: #b3261e; }
+.rp-pick { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.rp-pick label { display: flex; gap: .4rem; align-items: center; font-size: .78rem; }
+.rp-pick input { font: inherit; font-size: .78rem; padding: .2rem .4rem; border: 1px solid var(--line); border-radius: var(--radius-xs); background: var(--bg); color: var(--ink); }
+.rp-hint { margin: .35rem 0 0; font-size: .72rem; }
+.rp-cands { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; align-items: center; }
+.rp-cands p { margin: 0; width: 100%; font-size: .72rem; }
+/* the stop's place on the map: a pulsing dot and its name */
+.rp-mark { display: flex; align-items: center; gap: 6px; pointer-events: none; }
+.rp-mark i {
+  width: 14px; height: 14px; border-radius: 50%; background: var(--blue); border: 2px solid #fff;
+  box-shadow: 0 0 0 0 rgba(11, 107, 184, .55); animation: rp-pulse 1.8s ease-out infinite;
+}
+.rp-mark.rp-forecast i { background: #c4581c; box-shadow: 0 0 0 0 rgba(196, 88, 28, .55); }
+.rp-mark span {
+  font-size: .74rem; font-weight: 650; color: #0d1b26; background: rgba(255, 255, 255, .92); padding: 1px 6px;
+  border-radius: 4px; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); white-space: nowrap;
+}
+@keyframes rp-pulse { to { box-shadow: 0 0 0 16px rgba(11, 107, 184, 0); } }
+@media (prefers-reduced-motion: reduce) { .rp-mark i { animation: none; } }
+/* the Replay buttons in a Floods past card */
+.fp-replay { display: flex; flex-wrap: wrap; gap: .3rem; margin: .35rem 0; }
+.fp-replay .fp-pop-note { width: 100%; margin: 0; }
+@media (max-width: 640px) {
+  .replay {
+    left: 0; right: 0; transform: none; bottom: 0; width: auto; border-radius: var(--radius) var(--radius) 0 0;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  }
+  .replay { z-index: 12; }
+  /* the sheet owns the bottom of a phone while a story plays: the time bar and the map's round buttons step aside */
+  body.rp-on .timebar-wrap, body.rp-on #map-ask .ma-bar, body.rp-on #btn-panel { display: none; }
+  .rp-stop { grid-template-columns: 1fr; }
+  .rp-chart { display: none; }
+  .rp-note { font-size: .8rem; }
+  .rp-src { font-size: .62rem; }
+}

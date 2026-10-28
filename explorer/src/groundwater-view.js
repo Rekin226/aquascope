@@ -803,6 +803,14 @@ export function initGroundwater() {
   if (state.groundwater) setGroundwater(true, { write: false });
 }
 
+/** The MODFLOW model on the map, for Drop a well (#660): its cell rings, its name, the layer shown and the layers,
+ * whether it is shown; or null. */
+export function modflowContext() {
+  if (!model) return null;
+  return { name: model.name, rings: model.rings, offsets: model.offsets, layer: model.meta.layers[model.l],
+    layers: model.meta.layers, visible: modelShown() };
+}
+
 /** The MODFLOW model on the map, for the review (#590): { name, bbox: [w, s, e, n], openedAt, visible }, or null. */
 export function modflowShown() {
   if (!model) return null;

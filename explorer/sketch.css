@@ -1,0 +1,77 @@
+/* The sketchpad (#664): the tools menu beside the map tools, and each tool's own parts. Draw a storm (#670) shares
+   the What if panel's frame (whatif.css) and Route it's (route.css); its area is drawn by src/storm-map.js. */
+
+.sketch-menu {
+  position: absolute; left: calc(100% + 8px); top: 0; z-index: 10; min-width: 236px; padding: 4px;
+  display: grid; gap: 2px; background: var(--surface-solid); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-2);
+}
+.sketch-menu[hidden] { display: none; }
+.sk-item {
+  font: inherit; display: grid; grid-template-columns: 20px 1fr; align-items: center; gap: .55rem; width: 100%;
+  padding: .42rem .5rem; border: 0; border-radius: var(--radius-xs); background: none; color: var(--ink);
+  text-align: left; cursor: pointer;
+}
+.sk-item:hover, .sk-item:focus-visible { background: var(--bg-soft); outline: none; }
+.sk-item svg { width: 19px; height: 19px; }
+.sk-item b { display: block; font-size: .8rem; font-weight: 650; }
+.sk-item small { display: block; font-size: .7rem; color: var(--muted); }
+
+/* Draw a storm (#670) */
+.storm .wi-slider input[type="number"] { max-width: 6rem; }
+.storm .wi-slider:first-of-type output { color: var(--muted); text-align: left; }
+/* the reservoir's three values (crest, dam top, spillway) are alike: one column, one colour */
+.reservoir .wi-slider output, .reservoir .wi-slider:first-of-type output, .reservoir .wi-slider:last-of-type output {
+  color: var(--ink); font-size: .74rem; text-align: right; }
+.storm.drawing { opacity: .55; pointer-events: none; }
+.st-plain { margin: .1rem 0 0; font-size: .7rem; color: var(--muted); }
+.st-chart { display: block; width: 100%; height: auto; margin: .2rem 0 .1rem; overflow: visible; }
+.st-chart text { font-size: 9px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.st-axis { stroke: var(--line); stroke-width: 1; }
+.st-q { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.st-q.st-biggest { stroke: #54278f; }
+.st-q.st-outlet { stroke: #4292c6; stroke-dasharray: 4 2; }
+.st-keys { margin: 0 0 .35rem; font-size: .68rem; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: .2rem .7rem; }
+.st-key i { display: inline-block; width: 14px; height: 0; border-top: 2px solid #54278f; vertical-align: middle; margin-right: .25rem; }
+.st-key.st-outlet i { border-top: 2px dashed #4292c6; }
+.st-facts { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: .12rem .6rem; font-size: .74rem; }
+.st-facts dt { color: var(--muted); }
+.st-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.st-rule { margin: .4rem 0 0; font-size: .72rem; color: var(--ink-2); padding: .3rem .45rem; border-left: 3px solid #1f4e8c;
+  background: var(--bg-soft); border-radius: 0 var(--radius-xs) var(--radius-xs) 0; }
+.st-handle {
+  width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2.5px solid #1f4e8c; cursor: grab;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .3); touch-action: none;
+}
+.st-handle:active { cursor: grabbing; }
+
+/* Draw a reservoir (#662): the lake is drawn by src/reservoir-map.js; its card shares the storm's parts */
+.rv-kind { margin-top: .25rem; }
+.rv-kind input[type="number"]#rv-dur { width: 3.6rem; }
+.rv-kind input:disabled + span { color: var(--muted); }
+.st-q.rv-inflow { stroke: #4292c6; stroke-dasharray: 4 2; }
+.st-q.rv-outflow { stroke: #1c6ea4; stroke-width: 2.4; }
+.st-key.rv-inflow i { border-top: 2px dashed #4292c6; }
+.st-key.rv-outflow i { border-top: 2.4px solid #1c6ea4; }
+.rv-notes { margin: .35rem 0 0; padding-left: 1rem; font-size: .7rem; color: var(--ink-2); }
+.rv-notes li + li { margin-top: .15rem; }
+.rv-handle { border-color: #1c6ea4; }
+.reservoir { width: 350px; max-height: calc(100% - 64px); overflow-y: auto; }
+/* after a run the dam's settings fold away on a desktop too, so the card keeps to the answer */
+.reservoir.done .rv-form, .reservoir.done .wi-sub { display: none; }
+.reservoir.done .wi-edit { display: inline; }
+
+@media (max-width: 640px) {
+  .sketch-menu { left: calc(100% + 6px); min-width: 210px; }
+  .storm { width: auto; }
+  .storm.drawing { display: none; }   /* the whole map is the drawing's while it is drawn */
+  .storm.done .st-form, .storm.done .rv-form, .storm.done .wi-sub, .storm.done .st-rule, .storm.done .wi-model,
+  .storm.done .rv-notes { display: none; }
+  .reservoir { width: auto; }
+  .storm.done .wi-edit { display: inline; }
+  /* after a run: a bottom sheet over the time bar's top, short, so the area and the wave show above it */
+  .storm.done { top: auto; bottom: 150px; max-height: 34vh; overflow: auto; }
+  .storm.done .st-facts { font-size: .7rem; }
+  .storm.done .st-chart { max-height: 84px; }
+  .st-handle { width: 18px; height: 18px; }
+}

@@ -411,6 +411,28 @@ function outlineCell(bbox) {
     geometry: { type: "LineString", coordinates: [[w, s], [e, s], [e, n], [w, n], [w, s]] } }] });
 }
 
+// The card grows as its events and Replay buttons arrive: pan the map so all of it is in view (inside the map, clear of
+// its edges), its top first when it is taller than the map.
+function keepPopupInView() {
+  const el = popup && popup.getElement();
+  if (!el || !map) return;
+  requestAnimationFrame(() => {
+    if (!popup || popup.getElement() !== el) return;
+    const r = el.getBoundingClientRect(), c = map.getContainer().getBoundingClientRect();
+    const pad = 12;
+    // Clear of the Ask the map bar along the map's top, where there is one.
+    const bar = document.querySelector("#map-ask .ma-bar");
+    const br = bar && bar.offsetParent !== null ? bar.getBoundingClientRect() : null;
+    const top = br && br.height && br.bottom > c.top && br.bottom < c.top + c.height / 3 ? br.bottom + 8 : c.top + pad;
+    let dx = 0, dy = 0;
+    if (r.top < top || r.height > c.bottom - pad - top) dy = r.top - top;
+    else if (r.bottom > c.bottom - pad) dy = r.bottom - (c.bottom - pad);
+    if (r.left < c.left + pad) dx = r.left - (c.left + pad);
+    else if (r.right > c.right - pad) dx = r.right - (c.right - pad);
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) map.panBy([Math.round(dx), Math.round(dy)], { duration: still() ? 0 : 250 });
+  });
+}
+
 function closePopup() {
   popupRun++;
   if (popup) { const p = popup; popup = null; p.remove(); }
@@ -478,6 +500,7 @@ async function onCellClick(e) {
     .setHTML(cellCard(p, months, '<p class="fp-pop-note muted" role="status">Reading the events…</p>'))
     .addTo(map);
   const opened = popup;
+  keepPopupInView();
   document.body.classList.add("fp-pop-open");
   popup.on("close", () => {
     document.body.classList.remove("fp-pop-open");
@@ -492,10 +515,33 @@ async function onCellClick(e) {
     res = { error: `Could not read the events: ${err.message}` };
   }
   if (my !== popupRun || !popup) return;
-  popup.setHTML(cellCard(p, months, eventsHtml(res, months) +
+  // Replay's buttons (#659) go first: the event list can be long.
+  popup.setHTML(cellCard(p, months, '<div class="fp-rp-slot"></div>' + eventsHtml(res, months) +
     '<button class="btn tiny fp-open" type="button">Open this place</button>'));
   const btn = popup.getElement() && popup.getElement().querySelector(".fp-open");
   if (btn) btn.addEventListener("click", () => { closePopup(); actions.selectPoint(coords[1], coords[0], { fly: false }); });
+  keepPopupInView();
+  void offerReplay(my, coords, months, res);
+}
+
+// Replay an event (#659): the floods the cell's news reports make, as Replay buttons (the package groups the reports
+// into runs of days, aquascope.replay.candidates). Only where the news has events and a replay is on the page.
+async function offerReplay(my, coords, months, res) {
+  if (!actions.replayCandidates || !res || res.error || !((res.news || {}).events || []).length) return;
+  let got;
+  try {
+    got = await actions.replayCandidates({ lat: coords[1], lon: coords[0], start: months[0], end: months[months.length - 1] });
+  } catch { return; }
+  if (my !== popupRun || !popup || !got || !got.list.length) return;
+  const slot = popup.getElement() && popup.getElement().querySelector(".fp-rp-slot");
+  if (!slot) return;
+  slot.innerHTML = got.html;
+  slot.querySelectorAll(".fp-rp").forEach((b) => b.addEventListener("click", () => {
+    const c = got.list[Number(b.dataset.k)];
+    closePopup();
+    actions.startReplay({ event: c, lat: c.lat, lon: c.lon, start: c.start, end: c.end, reports: c.reports });
+  }));
+  keepPopupInView();
 }
 
 // ── boot ────────────────────────────────────────────────────────────────────

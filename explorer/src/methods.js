@@ -80,7 +80,7 @@ export function methodsOnPage(listId) {
 // ── how to cite AquaScope ───────────────────────────────────────────────────
 
 export const AQUASCOPE_DOI = "10.5281/zenodo.21903143";     // concept DOI, all versions
-export const RELEASE_DOI = "10.5281/zenodo.23301359";       // v0.27.0, from CITATION.cff
+export const RELEASE_DOI = AQUASCOPE_DOI;                 // use the concept DOI until v1.1.0 is archived
 export const ARCHIVE_URL = "https://huggingface.co/datasets/Rekin226/aquascope-gauges";
 
 export const BIBTEX = `@software{aquascope,
@@ -88,7 +88,7 @@ export const BIBTEX = `@software{aquascope,
   title   = {AquaScope: the open record of the world's public water gauges,
              and the tools to analyse them},
   url     = {https://github.com/Rekin226/aquascope},
-  version = {0.21.0},
+  version = {1.1.0},
   doi     = {${RELEASE_DOI}},
   note    = {Base software release; Explorer build __BUILD__. Record this build when it differs from the release.}
 }`;

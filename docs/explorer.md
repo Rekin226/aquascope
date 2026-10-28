@@ -430,6 +430,187 @@ a gauge, `--rain`, `--warming`, `--demand`, `--rp`, `--llm` with your own key,
 seeded calibration gives −38.3% mean flow, −38.5% low flow and −46.0% 10-year flood
 for the Thur in both.
 
+## Route a flood
+
+A flood wave travels down the river on the globe, reach by reach, and every town and gauge
+downstream gets the hour it arrives and how big it is. On a river reach's map card (or a
+gauge's, once its river is found), **Route a flood** opens a small panel: what enters the
+river (the reach's 2-, 10-, 25- or 100-year flow, or a number in m³/s), over how many hours,
+and whether it is a flood (a triangle that peaks at a third of the time) or a steady release.
+The T-year flow is the one design flow every tool shares (`aquascope.floodsim.design_flow`):
+Log-Pearson III on GEOGLOWS v2's annual maxima of simulated daily flow since 1940
+(CC BY-NC-SA 4.0), as [Flood it](floodsim.md) and [Draw a reservoir](sketchpad.md#draw-a-reservoir)
+read it; the card names it on its last line.
+
+![Route a flood on a river's map card](img/globe/route-card.png)
+
+**Route** runs Muskingum routing down GEOGLOWS v2's own river network in the worker
+(`aquascope.routing.route`):
+
+- **The network and the parameters are GEOGLOWS's own.** Each processing unit's routing
+  configuration is public on S3 with `Access-Control-Allow-Origin: *`
+  (`routing-configs/vpu=<n>/`): `rapid_connect.csv` (each reach and the reach it drains to),
+  `k.csv` (each reach's travel time, in seconds) and `x.csv` (its weight: 0.36 for every reach
+  of the four units checked, 205, 209, 714 and 718), row for row in the same order, which is
+  upstream first. The unit's `routing_parameters.parquet` holds the same k and x (checked for
+  unit 718); the CSVs are read so the browser needs no Parquet reader.
+- **The step is GEOGLOWS's own hour.** A Muskingum coefficient goes negative when the step is
+  outside `2kx` to `2k(1 - x)`, so, as river-route (the GEOGLOWS team's router,
+  github.com/geoglows/river-route) does, a reach
+  too short for the hour takes sub-steps of its own with its inflow interpolated across them,
+  and a reach too long for it is split into sub-reaches in series: the fewest that keep every
+  coefficient at zero or above (`routing.plan`). The sub-steps fold into one set of
+  coefficients per reach, and each reach's whole series is one first-order filter: the 323
+  reaches from St. Louis down the Mississippi route 30 days in about 1.4 s on a laptop.
+- **What is routed is the water you add.** Muskingum is linear, so the wave routes on its own:
+  the numbers are the flow it adds to whatever the river already carries. Rivers that join
+  below add their own water on top, and a real flood that leaves the channel travels slower
+  and flattens more than one k and x per reach can say.
+
+![The wave on the Rhine 44 hours after 2,000 m³/s enters at Basel](img/globe/route-wave.png)
+
+The map shows the answer while you watch. The time bar takes the run's own clock (hours since
+the water started to enter) and plays it once: each reach is coloured and widened by how much
+of the peak that entered is there at that hour, pale blue for a little, deep purple near full
+strength, over a faint trail of each reach's own peak. **Back to dates** leaves the still
+picture: every reach at its own peak, which shows how the wave flattens on its way.
+
+![Every reach at its own peak: the wave flattens from Basel to Rotterdam](img/globe/route-peaks.png)
+
+The towns (read off the basemap's own labels, OpenMapTiles) and the Archive's gauges on the
+path are placed on it by the package (`routing.places_on_path`) and labelled with the hour of
+the peak and the added flow there; the panel lists a few, spread along the stretch the wave
+reached, with how much flatter the peak is than where it started. A click on a town, a gauge
+or a reach opens its card: the wave's front (the hour the added flow first reaches half its
+own peak there), its peak and the attenuation, with **Route a flood from here**.
+
+![A town's card: when the wave arrives at Rotterdam](img/globe/route-place-card.png)
+
+### The check against GEOGLOWS's own simulation
+
+The routing was checked against the model it borrows from: GEOGLOWS's hourly retrospective
+simulation (`retrospective/hourly.zarr`). `aquascope route check UPSTREAM DOWNSTREAM START END`
+(`routing.retro_check`, which needs `numcodecs`) routes the retrospective flow leaving an
+upstream reach, with every tributary that drains at least 1 % of the area at the downstream
+reach read from the retrospective too, down to the downstream reach, and compares the result
+with the retrospective there, hour by hour. The smaller tributaries and the path's own unit
+catchments get their area times the specific runoff of the flows read, an estimate that does
+not look at the answer. Ten days of spin-up are not scored. "No routing" adds the same inflows
+with no travel time: the baseline routing has to beat.
+
+| River, window | Reaches | Sum of k | NSE | Peak | Peak timing | NSE, no routing |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Elbe, Dresden to Magdeburg, 25 May to 4 July 2013 | 89 | 106.7 h | 0.982 | +2.8 % | 0 h | 0.43 |
+| Rhine, Basel to Cologne, 20 Dec 2017 to 9 Feb 2018 | 166 | 203.4 h | 0.986 | +2.4 % | −4 h | 0.73 |
+| Danube, Passau to Vienna, 25 May to 4 July 2013 | 102 | 124.5 h | 0.966 | +5.9 % | −5 h | −0.31 |
+| Mississippi, St. Louis to Memphis, 15 Apr to 14 July 2019 | 153 | 239.4 h | 0.894 | −0.9 % | +4 h | −0.18 |
+
+The stated tolerance is an NSE of at least 0.85, the largest peak within 10 % and its timing
+within 12 hours; all four meet it, and `aquascope.routing.CHECK` holds the numbers (run on
+2026-10-27). Part of what is left over is the estimated local runoff, 3 to 15 % of the area.
+The check is against the model, not against gauges: the travel times are GEOGLOWS's k, which
+carry a wave from Basel to Rotterdam in about 14 days.
+
+### From words, a CLI and an agent
+
+**Ask the map** reads a route without a model: "route a flood of 500 m3/s from Basel",
+"release 800 m3/s for 2 days from here" (the river you clicked), "route the 100-year flood down
+the Rhine from Basel", "send a flood down the Rhine". The action is `route` in
+`aquascope.map_commands` (a place, a point or `at: here`; `peak_cms` or `return_period`, the
+10-year flow when neither is said; `duration_h`; `shape` triangle or block), checked before it
+runs; a model may pick it, and the package computes it. Every run is in the action log with its
+undo.
+
+![A release from the river selected, read by the keyless rules and logged](img/globe/route-ask.png)
+
+On a phone the panel is a sheet; after a run it moves to the top and keeps to the answer, so
+the wave and the time bar show below it.
+
+![Route a flood on a phone](img/globe/route-phone.png)
+
+The same engine answers outside the page: `aquascope route flood 230301988 --peak 2000`
+(or `--at LAT LON`, `--rp 100`, `--duration`, `--shape block`, `--hours`, `--json`) prints the
+wave and the gauges on the way; `aquascope route storm --polygon '[[lon,lat],...]' --rain 80`
+turns a storm over a polygon into runoff (a plain runoff coefficient, `--runoff`, 0.3 by
+default: no soil, wetness or snow) on every reach whose catchment centre is inside and routes
+it down every river below; the MCP tools `route_flood` and `route_storm` return the same as
+JSON. In the browser a 2,000 m³/s flood from Basel routes in about 20 s, engine start and the
+trace included, measured in headless Chrome.
+
+## The sketchpad
+
+The pencil in the map tools opens the sketchpad: tools that draw on the map and compute on what
+you drew. **Draw a storm** (#670) takes an area you draw, a rain depth, its hours and a plain
+runoff coefficient, and plays the runoff's wave down every river below on the time bar, with
+the hydrographs and the mass balance on its card. See [the sketchpad](sketchpad.md).
+
+**Drop a well** (#660) drops a pumping well where you click and draws its drawdown cone round it as contour lines;
+drop more and they add, drag one and the cone follows, play the cone growing on the time bar, and open a well's card
+for its numbers (and, over your MODFLOW model, what the model's well cell would read). Ask the map reads "drop a well
+at Lyon pumping 2000 m3/day". Theis with superposition, checked against Fetter's worked example and USGS PP 708's
+table of W(u).
+
+![Drop a well: two cones near Lyon](img/sketchpad/well-two-desktop.jpg)
+
+**Change land use** (#661) draws an area and turns it into a new use (housing, a car park, woods, ...): the runoff and
+the area's peak flow now and after for your design storm (SCS curve number, TR-55, with the cover from ESA WorldCover
+and the soil group from HYSOGs250m), the reach it drains to lit on the map, and the extra peak sent down the river
+with Route it. Ask the map reads "turn this field into a car park with 80 mm of rain". Checked against TR-55's worked
+examples.
+
+![Change land use: a field on the edge of Lyon as town houses](img/sketchpad/landuse-result-desktop.jpg)
+
+## Paint this view
+
+The brush in the map tools paints one question at every gauge in view that the
+Archive mirrors (#657): the trend in annual floods, the trend in low flows or the
+baseflow index. The records are read from the Archive ten at a time and answered
+in the worker in batches, so the dots fill in while you watch; a dot with a dark
+ring is significant after the false discovery rate (Wilks, 2016), and the gauges
+with no record, too short a record or past the cap stay on the map, small and grey.
+The legend's Painted row holds the key, the field verdict and the downloads (a PNG
+figure, the table as CSV and a methods paragraph with its references); a click on
+a dot opens its card. "Where are floods getting bigger in Europe?" in Ask the map
+does the same, and undo takes it back. The questions, the methods and the check
+against the single-station trend are in [Paint the globe](paint.md).
+
+## Flood it
+
+On a river reach's map card, **Flood it** floods the valley at the reach's 100-year flow and draws it on the map. The
+grid follows the river up and down from the click and is cut to its valley; every GEOGLOWS river that enters or starts
+in it is burnt in and fed by its own flow at the same return period, so confluences flood together. The water runs on
+your own GPU (WebGPU; a worker on cells twice as large without it) to a near steady state, frame by frame in the flood
+views' depth colours, and the camera frames it when it settles. The small panel at the side picks the flow (the 2- to
+100-year flow, the forecast peak, a number, or a hydrograph: the 15-day forecast or Route it's wave), and opens the
+run in the flood views: hazard, arrival, a section and what gets flooded. Two runs compare with a swipe. Ask the map
+reads "flood Upton upon Severn at the 100-year flow". A screening flood: no bathymetry, terrain errors of metres. The
+scheme, the checks against JRC's 100-year map at four places and the speed are in [Flood it](floodsim.md).
+
+![Flood it on the Severn and the Avon at Tewkesbury](img/floodsim/severn-desktop.jpg)
+
+**Levees and breaches.** Under a run, **Draw a levee** draws a line on the map (tap its points, or drag a straight
+line). A small control shows the ground and the flood along it and suggests a crest 0.5 m above the flood; **Run
+again** floods the same valley with the levee in the terrain, and the new run sits beside the old one in the swipe,
+with what gets flooded before and after (buildings, roads and people, and the change). **Draw a breach** opens a gap.
+Each line can be moved, re-set and removed, and each change is in the undo log; Ask the map reads "draw a levee 1 m
+above the flood" and "breach the levee". See [Levees and breaches](floodsim.md#levees-and-breaches).
+
+![A levee drawn round Upton upon Severn, before and after in the swipe](img/floodsim/levee-swipe-desktop.jpg)
+
+## Replay a flood
+
+A past flood told as a story on the map. In **Floods past**, a news circle's card lists the floods its reports make,
+each with **Replay**; a river's or a gauge's card has **Replay** too, for a date you give. AquaScope gathers the
+event (IMERG's rain over the upstream basin, the gauges against GEOGLOWS, what GEOGLOWS's forecast said 1, 3 and 7
+days before the peak, the observed flow routed downstream with Route it, and Flood it at the peak with what was under
+the water) and plays it: the camera flies between stops, the time bar moves, the layers change, and a small note at the
+bottom (a sheet on a phone) says what each stop shows. Play, pause, step and scrub; export a GIF, a WebM video or a
+Markdown report; copy a link that replays it. Ask the map reads "replay the Severn flood of November 2024". Every
+number in a note is written by code from the data. The pieces, the story format and the checks on two events (the
+Severn in Storm Bert and the French Broad in Hurricane Helene) are in [Replay an event](replay.md).
+
+![Replay: the gauge at Saxons Lode against GEOGLOWS, November 2024](img/replay/severn-gauge-desktop.jpg)
+
 ## Map layers
 
 The rail is a layer stack, and every layer in it is keyless and free to use.

@@ -124,7 +124,11 @@ nav:
     - The AI roles on the device (assessment): assessments/ai-on-the-map.md
     - Use the Archive from R, QGIS, DuckDB: readers.md
     - MODFLOW heads on the map: modflow.md
+    - Flood it, a screening flood: floodsim.md
+    - Replay an event (a past flood as a story): replay.md
+    - The sketchpad (draw a storm, drop a well, and more): sketchpad.md
     - The Explorer (click any gauge): explorer.md
+    - Paint the globe (map-scale studies): paint.md
     - The evidence ladder (model skill at gauges): evidence.md
     - The monthly bulletin (state of the rivers): bulletin.md
     - Save and share a study: adoption/sharing.md

@@ -1,0 +1,50 @@
+{
+ "curve": {
+  "T": [
+   2,
+   5,
+   10,
+   25,
+   50,
+   100,
+   200,
+   500
+  ],
+  "q": [
+   280.91,
+   374.932,
+   435.044,
+   508.953,
+   562.736,
+   615.577,
+   667.937,
+   736.919
+  ],
+  "method": "Log-Pearson III",
+  "n_years": 85,
+  "first_year": 1940,
+  "last_year": 2024
+ },
+ "T": [
+  2,
+  3,
+  10,
+  37,
+  100,
+  250,
+  500,
+  1000
+ ],
+ "q": [
+  280.91,
+  322.515398,
+  435.044,
+  539.372513,
+  615.577,
+  684.736131,
+  736.919,
+  736.919
+ ],
+ "words": "Log-Pearson III on GEOGLOWS v2's annual maxima of simulated daily flow, 1940 to 2024",
+ "note": "tests/test_floodsim.py::test_design_flow_twin_fixture regenerates this; explorer/tests/design-flow-core.test.mjs reads it"
+}

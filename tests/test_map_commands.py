@@ -30,6 +30,25 @@ PHRASES = [
         {"type": "fly_to", "place": "Rhine", "river": True},
         {"type": "highlight_river", "place": "Rhine", "direction": "both", "optional": True}]),
     ("go to Bangladesh", [{"type": "fly_to", "place": "Bangladesh"}]),
+    ("flood Upton upon Severn at the 100-year flow", [
+        {"type": "flood_reach", "place": "Upton upon Severn", "return_period": 100.0}]),
+    ("draw a levee from Upton upon Severn to Hanley Castle at 14 m", [
+        {"type": "draw_levee", "from_place": "Upton upon Severn", "to_place": "Hanley Castle", "crest": 14.0}]),
+    ("breach the levee", [{"type": "draw_breach", "line": "drawn"}]),
+    ("drop a well at Lyon pumping 2000 m3/day", [{"type": "drop_well", "place": "Lyon", "rate_m3_day": 2000.0}]),
+    ("turn this field into a car park with 80 mm of rain", [
+        {"type": "change_landuse", "area": "drawn", "use": "paved", "rain_mm": 80.0}]),
+    ("replay the Severn flood of November 2024", [{"type": "replay", "place": "Severn", "month": "2024-11"}]),
+    ("replay the flood of September 2024 at Asheville", [
+        {"type": "replay", "place": "Asheville", "month": "2024-09"}]),
+    ("replay the November 2024 flood here", [{"type": "replay", "at": "here", "month": "2024-11"}]),
+    ("route a flood of 500 m3/s from Basel", [
+        {"type": "route", "place": "Basel", "peak_cms": 500.0, "duration_h": 24.0, "shape": "triangle"}]),
+    ("50 mm of rain over this area in 6 hours", [
+        {"type": "draw_storm", "rain_mm": 50.0, "duration_h": 6.0, "runoff_coefficient": 0.3, "area": "drawn"}]),
+    ("draw a reservoir here", [
+        {"type": "draw_reservoir", "crest_m": 10.0, "top_m": 15.0, "width_m": 30.0, "return_period": 100.0,
+         "duration_h": 24.0, "area": "drawn"}]),
     ("Fly to Kingston upon Thames", [{"type": "fly_to", "place": "Kingston upon Thames"}]),
     ("take me to Taipei please", [{"type": "fly_to", "place": "Taipei"}]),
     ("go to 23.7, 90.4", [{"type": "fly_to", "center": [23.7, 90.4], "zoom": 8.0}]),
@@ -94,6 +113,16 @@ PHRASES = [
     ("show me the way of the Nile to the sea", [
         {"type": "fly_to", "place": "Nile", "river": True},
         {"type": "highlight_river", "place": "Nile", "direction": "downstream"}]),
+    # Paint the globe (#657): one question at every gauge in view, or in the region named.
+    ("paint the flood trend", [{"type": "paint", "question": "flood_trend"}]),
+    ("paint this view with the baseflow index", [{"type": "paint", "question": "baseflow_index"}]),
+    ("where are floods getting bigger in Europe", [
+        {"type": "fly_to", "region": "europe", "bbox": [-11.0, 35.0, 40.0, 71.0]},
+        {"type": "paint", "question": "flood_trend", "bbox": [-11.0, 35.0, 40.0, 71.0], "region": "europe",
+         "label": "Europe"}]),
+    ("map low-flow trends in France", [
+        {"type": "fly_to", "place": "France"},
+        {"type": "paint", "question": "low_flow_trend", "place": "France", "label": "France"}]),
 ]
 
 
@@ -351,8 +380,13 @@ def test_the_prompt_carries_examples_computed_by_the_grammar():
     for reply in replies:
         assert mc.parse_model_reply(reply, today=TODAY)["errors"] == []
     # A model that copies a stand-in moves nothing.
-    copied = mc.parse_model_reply(replies[-1], today=TODAY, text="what is going on with the drought")
+    river = next(r for r in replies if "<river>" in r)
+    copied = mc.parse_model_reply(river, today=TODAY, text="what is going on with the drought")
     assert copied["actions"] == [] and "<river>, a place the words do not name" in copied["errors"][0]
+    # The paint example (#657) teaches the question, not a region: a copied <region> is refused, the view stays.
+    painted = next(r for r in replies if '"paint"' in r)
+    copied = mc.parse_model_reply(painted, today=TODAY, text="are floods getting bigger")
+    assert [a["type"] for a in copied["actions"]] == ["paint"] and "bbox" not in copied["actions"][0]
     assert "Today is 2026-10-10" in prompt["system"] and "23.7, 90.4" in prompt["system"]
     assert prompt["schema"] == mc.action_schema()
 
@@ -662,3 +696,23 @@ def test_a_pin_is_titled_by_the_package_not_the_model():
     area = mc.parse_model_reply({"actions": [{"type": "draw_area", "place": "Basel", "label": "Danger zone"}]},
                                 TODAY, text="outline Basel")
     assert area["actions"] == [{"type": "draw_area", "place": "Basel"}]
+
+
+# ── #659: replay an event ───────────────────────────────────────────────────
+
+
+def test_a_replay_needs_a_month_on_record():
+    ok, err = mc.validate_action({"type": "replay", "place": "Severn", "month": "2024-11", "pick": 2}, today=TODAY)
+    assert err is None and ok == {"type": "replay", "place": "Severn", "month": "2024-11", "pick": 2}
+    for bad in ({"month": "2024-13"}, {"month": "1999-12"}, {"month": "2099-01"}, {"month": "2024-11", "pick": 9},
+                {}):
+        clean, why = mc.validate_action({"type": "replay", "at": "here", **bad}, today=TODAY)
+        assert clean is None and why.startswith("replay")
+    assert mc.validate_action({"type": "replay", "month": "2024-11"}, today=TODAY)[0] is None
+
+
+def test_replay_month_by_month_is_still_the_time_bar():
+    assert not [a for a in mc.parse_command("replay the last 12 months", today=TODAY)["actions"]
+                if a["type"] == "replay"]
+    assert mc.describe_action({"type": "replay", "place": "Severn", "month": "2024-11"}) == \
+        "Replay the flood of November 2024 at Severn"

@@ -1,0 +1,56 @@
+/* Drop a well (#660): the panel's own parts (it shares the What if panel's frame, whatif.css), the wells' markers
+   and the legend's ramp. The cone itself is painted by src/well-map.js. */
+
+.well { width: 330px; }
+.wl-empty p { margin: 0 0 .45rem; font-size: .78rem; color: var(--ink-2); }
+.wl-empty .btn { margin-top: .4rem; }
+.wl-q { display: inline-flex; align-items: center; gap: .3rem; font-size: .76rem; color: var(--ink-2); }
+.wl-q input {
+  font: inherit; font-size: .76rem; width: 5.6rem; padding: 2px 4px; border: 1px solid var(--line); border-radius: 4px;
+  background: var(--surface-solid); color: var(--ink);
+}
+.wl-wells { list-style: none; margin: 0 0 .3rem; padding: 0; display: grid; gap: 2px; }
+.wl-wells li {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr) 4.2rem 22px; align-items: center; gap: .35rem;
+  font-variant-numeric: tabular-nums;
+}
+.wl-n {
+  width: 18px; height: 18px; border-radius: 50%; background: #1d3f8f; color: #fff; font-size: .66rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.wl-at { text-align: right; font-size: .76rem; font-weight: 600; color: var(--ink); }
+.wl-del { border: 0; background: none; color: var(--muted); font-size: 1rem; cursor: pointer; line-height: 1; }
+.wl-del:hover { color: #cf222e; }
+.wl-row { display: flex; gap: .9rem; margin: .2rem 0 .4rem; }
+.wl-form { margin-top: .3rem; }
+.wl-odd { margin: .2rem 0 0; font-size: .7rem; color: #9a5a00; }
+.wl-src { margin: .3rem 0 0; font-size: .64rem; line-height: 1.35; color: var(--muted); }
+.wl-ramp { display: inline-flex; width: 30px; height: 8px; border-radius: 2px; overflow: hidden; vertical-align: middle; }
+.wl-ramp i { flex: 1; }
+.rk-row .wl-ramp { width: 70px; margin-right: .3rem; }
+.wl-place { cursor: crosshair; }
+
+/* a well on the map: a pump mark with its number, dragged to move */
+.wl-marker {
+  position: relative; width: 30px; height: 30px; padding: 0; border: 0; background: none; cursor: grab;
+  touch-action: none;
+}
+.wl-marker:active { cursor: grabbing; }
+.wl-marker svg { width: 30px; height: 30px; display: block; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .45)); }
+.wl-marker circle { fill: #1d3f8f; stroke: #fff; stroke-width: 2.2; }
+.wl-marker path { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.wl-marker span {
+  position: absolute; right: -6px; top: -6px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px;
+  background: #fff; color: #1d3f8f; font: 700 .62rem/15px system-ui, sans-serif; box-shadow: 0 0 0 1.5px #1d3f8f;
+}
+.wl-marker:focus-visible { outline: 2px solid #f2c94c; outline-offset: 2px; border-radius: 50%; }
+
+@media (max-width: 640px) {
+  .well { width: auto; max-height: 46vh; }
+  .well .wi-sub, .well .wi-model, .well .wl-src { display: none; }
+}
+.wl-how { margin-top: .3rem; }
+.wl-how summary { font-size: .7rem; color: var(--muted); cursor: pointer; }
+@media (max-width: 640px) {
+  .well.carded { display: none; }   /* a well's card is the sheet now; the panel comes back when it closes */
+}

@@ -29,6 +29,9 @@ export function onWorkerRestart(fn) { restartListeners.add(fn); return () => res
 // Study this area: the engine's progress events ({phase, done, total, site}) with the call's id.
 const areaListeners = new Set();
 export function onAreaProgress(fn) { areaListeners.add(fn); return () => areaListeners.delete(fn); }
+// Replay an event (#659): the package's progress lines while it assembles a flood.
+const replayListeners = new Set();
+export function onReplayProgress(fn) { replayListeners.add(fn); return () => replayListeners.delete(fn); }
 
 export function ensureWorker() {
   if (worker) return worker;
@@ -41,6 +44,7 @@ export function ensureWorker() {
     if (m.type === "studio_progress") { for (const fn of studioListeners) fn(m.event, m.id); return; }
     if (m.type === "studio_artifact") { for (const fn of artifactListeners) fn(m.artifact, m.id); return; }
     if (m.type === "area_progress") { for (const fn of areaListeners) fn(m.event, m.id); return; }
+    if (m.type === "replay_progress") { for (const fn of replayListeners) fn(m.text, m.id); return; }
     if (m.type === "ready") {
       state.workerReady = true;
       bootDone();

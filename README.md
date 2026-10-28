@@ -100,7 +100,25 @@ downstream, and it can be coloured by today's flow against its normal. Floods pa
 floods were reported in the news or seen by radar, month by month. **Ask the map** moves the
 view, switches layers and sets the date from plain words. **Explain this view** and **Scout**
 pin short notes and findings on the globe, every number taken from the data. Each action is
-logged and can be undone, and all of it works without a key.
+logged and can be undone, and all of it works without a key. With Chrome's built-in model or
+your own key, the model only picks which facts and actions to use; the code writes every number
+([assessment](docs/assessments/ai-on-the-map.md)).
+
+**Your own model results on the map:** drop a HEC-RAS 2D or UGRID result and see smooth depth,
+depth contours, 3D, hazard and arrival-time lenses, a cross-section and hydrograph you draw,
+and the buildings, roads and people under the water. Drop a MODFLOW run and see head contours,
+flow arrows, drawdown, capture zones, the layers in 3D, cross-sections and the water budget.
+Samples are one click away, and the files never leave your browser
+([mesh](docs/mesh.md), [MODFLOW](docs/modflow.md)).
+
+**A map that computes:** click a river and **Route it** sends a flood wave down GEOGLOWS's own
+network, **Flood it** floods the valley at a design flow in your browser (draw a levee or a
+breach and run again), and **Replay** plays a past flood as a story: the rain, the gauge
+against the model, what the forecast said, the wave and the flood. The sketchpad draws a storm,
+a reservoir, a pumping well or a land-use change on the map and recomputes as you drag, and
+**Paint the globe** answers one question at every gauge in view. Each model is checked against
+a published example or reference data ([Flood it](docs/floodsim.md), [replay](docs/replay.md),
+[sketchpad](docs/sketchpad.md), [paint](docs/paint.md)).
 
 **Study** guides you from a question through a plan you approve to a report and export
 bundle: Word, Excel, figures, notebook, findings and study YAML. Core studies run without
@@ -377,7 +395,7 @@ Switch to MCMC with `degree>1` for polynomial models, or pass `prior_precision` 
 
 ## 💻 CLI
 
-AquaScope ships a 49-command CLI (`agri`, `basins`, `caravan`, `eval`, `evidence`, `groundwater`, `gym`, `layers`, `playbooks` and `river` carry subcommands) for the most common workflows:
+AquaScope ships a 55-command CLI (`agri`, `basins`, `caravan`, `eval`, `evidence`, `groundwater`, `gym`, `layers`, `playbooks`, `river` and `route` carry subcommands) for the most common workflows:
 
 ```bash
 # Find stations, then collect data
@@ -430,6 +448,12 @@ aquascope studio kingston/ --exclude-years 2014 --sign checked="A. Name"  # the 
 aquascope eval score kingston/                       # how the crew did: gates, Critic, report quality, time, cost
 aquascope eval stats studies/ --by model             # many studies at once: grades, gate failures, cost per study
 aquascope area-study --bbox=-0.9,51.2,0.3,51.8       # a flood study over every gauge in a box: Q100, flood trends, a regional curve
+aquascope paint --bbox=-8,49.8,2,59                    # paint every Archive gauge in a box with its flood trend, plus field significance
+aquascope replay --at 51.95 -2.2 --month 2024-11       # a past flood as a story: rain, gauge vs model, forecast, wave, flood
+aquascope route flood 230301988 --peak 2000             # a flood wave down GEOGLOWS's river network
+aquascope flood 230567275 --flow 954 --levee ring.geojson --crest 15.1   # a screening flood of the valley, with a drawn levee
+aquascope well --at 4.88 45.76 --rate 1000 --days 90   # Theis drawdown round a pumping well
+aquascope landuse --polygon '[[4.955,45.70],[4.97,45.70],[4.97,45.708],[4.955,45.708]]' --use residential_1_8 --rain 100
 
 # Interactive Streamlit dashboard — multipage workspace with 37 live sources,
 # smart auto-insights, and fully interactive Plotly charts
@@ -598,8 +622,8 @@ If you use AquaScope in your research, please cite:
   author  = {Ouédraogo, Abdoul Rachid},
   year    = {2026},
   url     = {https://github.com/Rekin226/aquascope},
-  version = {0.27.0},
-  doi     = {10.5281/zenodo.23301359},
+  version = {1.1.0},
+  doi     = {10.5281/zenodo.21903143},
   license = {MIT}
 }
 ```
@@ -607,7 +631,7 @@ If you use AquaScope in your research, please cite:
 Machine-readable metadata lives in [CITATION.cff](CITATION.cff); GitHub's "Cite this
 repository" button renders it in APA and BibTeX. Every tagged release is archived on
 Zenodo; `10.5281/zenodo.21903143` is the concept DOI that always resolves to the latest
-version (v0.27.0 is [10.5281/zenodo.23301359](https://doi.org/10.5281/zenodo.23301359)).
+version (v1.0.0 is [10.5281/zenodo.23671741](https://doi.org/10.5281/zenodo.23671741)).
 
 ## 📄 License
 

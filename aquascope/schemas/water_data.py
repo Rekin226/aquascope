@@ -40,6 +40,7 @@ class DataSource(str, Enum):
     INDIA_WRIS = "india_wris"
     HUBEAU = "france_hubeau"
     UK_EA = "uk_ea"
+    SCOTLAND_SEPA = "scotland_sepa"
     GRDC = "grdc"
     CAMELS_CL = "camels_cl"
     CAMELS_BR = "camels_br"

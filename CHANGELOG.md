@@ -10,6 +10,9 @@ All notable changes to AquaScope are documented here.
 ### Changed
 - **`south_africa_dws` license and attribution** (#473): update license to `DWS NIWIS terms (academic, research or personal use)` and attribution to name the Department of Water and Sanitation, Republic of South Africa as copyright proprietor following the disclaimer on [dws.gov.za/niwis2/Disclaimer](https://www.dws.gov.za/niwis2/Disclaimer) (archived at [web.archive.org](http://web.archive.org/web/20250528170949/https://www.dws.gov.za/niwis2/Disclaimer)).
 
+### Fixed
+- **Cite 1.1.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.1.0's Zenodo DOI (10.5281/zenodo.23718093).
+
 ## [1.1.0] - 2026-10-28
 
 The map computes. Click a river and route a flood wave down it, flood its valley in your

@@ -515,7 +515,7 @@ def resolve_llm(
             provider = "ollama" if base_url or os.environ.get("AQUASCOPE_LLM_BASE_URL") else None
     if provider is None:
         raise RuntimeError(
-            "No LLM configured. Set OPENAI_API_KEY, GROQ_API_KEY, NVIDIA_API_KEY or HF_TOKEN, or "
+            "No LLM configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, GROQ_API_KEY, NVIDIA_API_KEY or HF_TOKEN, or "
             "AQUASCOPE_LLM_API_KEY with AQUASCOPE_LLM_BASE_URL/AQUASCOPE_LLM_MODEL, or pass --provider ollama "
             "for a local model."
         )
@@ -798,6 +798,18 @@ def ask(
         choice = response.choices[0]
         msg = choice.message
         calls = getattr(msg, "tool_calls", None) or []
+        if getattr(choice, "finish_reason", None) == "length":
+            # The reply hit the output limit. A tool call cut off mid-arguments must not run (its arguments are
+            # whatever survived), and a cut-off answer is said to be one rather than passed off as complete.
+            say("the model's reply hit its output limit")
+            partial = (msg.content or "").strip()
+            result.answer = (
+                (partial + "\n\n" if partial else "")
+                + "[The model's reply was cut off at its output limit before it finished"
+                + (" a tool call, so that call was not run" if calls else "")
+                + ". Ask a narrower question.]"
+            )
+            break
         if not calls:
             result.answer = (msg.content or "").strip()
             break

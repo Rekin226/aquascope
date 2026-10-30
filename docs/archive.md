@@ -322,7 +322,7 @@ evidence table) and keeps what stands out, by fixed rules ([explorer.md](explore
 
 | path | what |
 | --- | --- |
-| `scout/latest.json` | the findings (up to 25 per kind), each with `lat`, `lon`, `title`, `reason`, its headline `value` and `unit`, all its numbers under `facts`, its `source`; today's ten `picks`; the record checks (a named region's share much above or below normal against the same calendar month since 1990, flood cells against the same month since 2000); the inputs, the method and the sources |
+| `scout/latest.json` | the findings (up to 25 per kind), each with `lat`, `lon`, `title`, `reason`, its headline `value` and `unit`, all its numbers under `facts`, its `source`; today's ten `picks`; the `usual` basin flow table (`[[lat, lon, m³/s], ...]`, so a live scan in the browser can leave near-dry areas out); the record checks (a named region's share much above or below normal against the same calendar month since 1990, flood cells against the same month since 2000); the inputs, the method and the sources |
 | `scout/<date>.json` | the same file, kept by the day it was made ([retention](#retention-of-the-daily-files): the last 60 days, then the first of each month) |
 
 Each finding carries the licence of the layer it came from (the river status map and the forecast CC BY 4.0, the

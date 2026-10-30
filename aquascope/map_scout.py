@@ -89,9 +89,10 @@ ABOUT = ("Scout (#563): what stands out on the map today, found by fixed rules o
          "hydrological or meteorological service.")
 METHOD = {
     "status": "Connected areas (0.25 degree cells, 4-neighbour) where most of a cell is in the much above or much "
-              "below normal class of the month's GEOGLOWS HydroSOS map, ranked by area. The record check sets "
-              "this month's share of the area in that class against the same calendar month of every year "
-              "since 1990.",
+              "below normal class of the month's GEOGLOWS HydroSOS map, ranked by area. Areas whose basin "
+              "carries almost no water in a usual month are left out: a desert's wet month is not a river much "
+              "above normal. The record check sets this month's share of the area in that class against the "
+              "same calendar month of every year since 1990.",
     "floods_ahead": "The Floods ahead reaches with the highest return-period class, then the largest peak "
                     "against that flow; reaches within {km:g} km of a stronger one are counted with it.",
     "floods_past": "Half-degree cells with at least {news} news events or {radar} radar detections in the month, "
@@ -108,6 +109,12 @@ METHOD = {
 
 STATUS_DEG = 0.25           # the status map is read in blocks of 5 x 5 of its 0.05 degree cells
 STATUS_MIN_AREA_KM2 = 10000.0
+#: A basin whose usual flow is under this (m3/s) carries almost no water, and its areas are not rivers much
+#: above or much below normal (#638). A desert's usual flow is hundredths of a cubic metre a second, so the one
+#: wet month in which the status map paints it much above normal says nothing about the reach: the flow status
+#: classes leave such a month out whole (:func:`aquascope.flowstatus.classify`), and the bulletin names its
+#: records only among gauges whose usual flow is at least this (``aquascope.bulletin.MIN_USUAL_CMS``).
+NEAR_DRY_CMS = 1.0
 AHEAD_GROUP_KM = 200.0
 PAST_FLOOR = {"news": 2, "radar": 2000}   # the Explorer's standout floors (floods-past-core.js STANDOUT_FLOOR)
 GAUGE_GROUP_KM = 150.0
@@ -534,6 +541,16 @@ def retitle(f: dict[str, Any]) -> dict[str, Any]:
 # ── world river status ───────────────────────────────────────────────────────
 
 
+def near_dry(lat: float, lon: float, usual: Any) -> bool:
+    """Whether the basin nearest ``lat``/``lon`` carries almost no water (:data:`NEAR_DRY_CMS`, #638). The
+    points in ``usual`` are representative ones (:func:`usual_flow`), so this is a neighbourhood test."""
+    import numpy as np
+
+    pts = np.asarray(usual, dtype=float)
+    d = (pts[:, 0] - lat) ** 2 + ((pts[:, 1] - lon) * math.cos(math.radians(lat))) ** 2
+    return float(pts[int(d.argmin()), 2]) < NEAR_DRY_CMS
+
+
 def status_blocks(classes: Any, factor: int = 5) -> dict[str, Any]:
     """Count the status map's cells per block of ``factor`` x ``factor``: much below (class 1), much above (5)
     and mapped (any class), on a grid of ``classes.shape / factor`` with each block's centre and area."""
@@ -554,10 +571,12 @@ def status_blocks(classes: Any, factor: int = 5) -> dict[str, Any]:
 
 
 def status_findings(classes: Any, month: str, *, view: dict[str, Any] | None = None, top: int = PER_KIND,
-                    min_area_km2: float = STATUS_MIN_AREA_KM2, blocks: dict[str, Any] | None = None
-                    ) -> list[dict[str, Any]]:
+                    min_area_km2: float = STATUS_MIN_AREA_KM2, blocks: dict[str, Any] | None = None,
+                    usual: list[list[float]] | None = None) -> list[dict[str, Any]]:
     """The largest connected areas much above and much below normal in one month's status classes (0 no data,
-    1 much below to 5 much above, the whole world at any resolution that divides into 0.25 degree blocks)."""
+    1 much below to 5 much above, the whole world at any resolution that divides into 0.25 degree blocks). An
+    area whose basin carries almost no water is marked ``near_dry`` (:data:`NEAR_DRY_CMS`); the caller leaves
+    those out (:func:`split_near_dry`)."""
     import numpy as np
 
     b = blocks or status_blocks(classes, max(1, round(STATUS_DEG / (180.0 / classes.shape[0]))))
@@ -594,14 +613,22 @@ def status_findings(classes: Any, month: str, *, view: dict[str, Any] | None = N
                       float(b["lon"][cols].max()) + half, float(b["lat"][rows].max()) + half]
             km2 = float(sums[k])
             word = "much above" if side == "much_above" else "much below"
+            dry = bool(usual) and near_dry(plat, plon, usual)
             out.append(_finding(
                 f"status:{side}:{month}:{rank}", "status", f"status_{side}", plat, plon,
                 score=km2 / (km2 + 300000.0),
                 slots={"area": f"{fmt_num(km2, 2)} km²", "month": month_words(month), "record": ""},
                 facts=[{"label": f"Area {word} normal, {month_words(month)}", "value": sig(km2, 2), "unit": "km²"}],
                 source=SOURCES["status"], when=month, extent=extent,
-            ) | {"side": side})
+            ) | {"side": side} | ({"near_dry": True} if dry else {}))
     return out
+
+
+def split_near_dry(findings: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """The findings without the near-dry ones, and how many were left out (#638): an area whose basin carries
+    almost no water in a usual month is not a river much above or much below normal, whatever its percentile."""
+    kept = [f for f in findings if not f.get("near_dry")]
+    return kept, len(findings) - len(kept)
 
 
 def _region_of(lat: float, lon: float) -> dict[str, Any] | None:
@@ -1445,20 +1472,51 @@ def load_skill(base: str = ARCHIVE_BASE) -> list[dict[str, Any]] | None:
     return rows
 
 
+def usual_flow(base: str = ARCHIVE_BASE) -> list[list[float]] | None:
+    """``[[lat, lon, usual flow in m3/s], ...]`` for every HydroBASINS level-4 basin (needs pyarrow, else None).
+
+    A basin's usual flow is the median over the twelve months of the flow its outlet exceeded in one year in
+    four in that month: the ``0.75`` column of the HydroSOS thresholds table, the 75th percentile of that
+    month's mean flow across years and the same table the status classes above are drawn from
+    (``aquascope.map_layers.STATUS_THRESHOLDS_URL``). The coordinates are the basin's representative point
+    (``waterbalance/basins.parquet``), so a near-dry test on them is a neighbourhood one."""
+    from aquascope.map_layers import STATUS_THRESHOLDS_URL
+
+    points = _parquet_rows(f"{base}waterbalance/basins.parquet", ["hybas_id", "lat", "lon"])
+    rows = _parquet_rows(STATUS_THRESHOLDS_URL, ["month", "HYBAS_ID", "0.75"])
+    if not points or not rows:
+        return None
+    months: dict[int, list[float]] = {}
+    for r in rows:
+        q = r.get("0.75")
+        if q is not None and math.isfinite(float(q)):
+            months.setdefault(int(r["HYBAS_ID"]), []).append(float(q))
+    usual = {k: sorted(v)[len(v) // 2] for k, v in months.items()}
+    out = []
+    for p in points:
+        u = usual.get(int(p["hybas_id"]))
+        if u is None or p.get("lat") is None or p.get("lon") is None:
+            continue
+        out.append([round(float(p["lat"]), 3), round(float(p["lon"]), 3), sig(u, 3)])
+    return sorted(out) or None
+
+
 # ── one scan ─────────────────────────────────────────────────────────────────
 
 
 def scan(view: dict[str, Any] | None = None, month: str | None = None, *, max_pins: int = MAX_PINS,
          gauges: list[dict[str, Any]] | None = None, skill: list[dict[str, Any]] | None = None,
          warnings: dict[str, Any] | None = None, kinds: list[str] | None = None, places: bool | str = True,
-         base: str = ARCHIVE_BASE, top: int = PER_KIND, extra: int = 0) -> dict[str, Any]:
+         base: str = ARCHIVE_BASE, top: int = PER_KIND, extra: int = 0,
+         usual: list[list[float]] | None = None) -> dict[str, Any]:
     """Scout one view (None for the world) for one month of the status and Floods past layers (their newest by
     default): ``{"picks", "candidates", "findings", "inputs", "notes", "sources", ...}``. ``candidates`` are the
     picks and ``extra`` more after them, for a model to choose among. ``gauges`` and ``skill`` are the snapshot
     and evidence rows when the caller has read them (the browser); otherwise they are read here when pyarrow is
     installed. ``warnings`` is the Floods ahead GeoJSON with its manifest under ``manifest``. ``places`` names the
     candidates with the gazetteer here (True), not at all (False), or ``"page"``: each gets a ``place_url`` the
-    caller fetches and hands to :func:`apply_places`."""
+    caller fetches and hands to :func:`apply_places`. ``usual`` is the basin flow table (:func:`usual_flow`) when
+    the caller has read it; without it the table is read here, and if it cannot be read the notes say so."""
     t0 = time.monotonic()
     view = check_view(view)
     want = set(kinds or KINDS)
@@ -1479,8 +1537,17 @@ def scan(view: dict[str, Any] | None = None, month: str | None = None, *, max_pi
     if "status" in want:
         m, classes = load_status(month)
         if classes is not None:
-            findings += status_findings(classes, m, view=view, top=top)
+            if usual is None:
+                usual = usual_flow(base)
+            if not usual:
+                notes.append("the basin flow table was not read here (it needs pyarrow, or the table from "
+                             "the daily file), so near-dry areas are not set aside")
+            kept, dry = split_near_dry(status_findings(classes, m, view=view, top=top, usual=usual))
+            findings += kept
             inputs["status_month"] = m
+            if dry:
+                notes.append(f"{dry} river status area{'s' if dry > 1 else ''} left out: their basin carries "
+                             f"almost no water in a usual month (under {NEAR_DRY_CMS:g} m3/s)")
         else:
             notes.append(f"the river status map for {month or 'the newest month'} could not be read")
 
@@ -1591,7 +1658,10 @@ def daily(out: str | Path, *, base: str = ARCHIVE_BASE, warnings_dir: str | Path
             warnings["manifest"] = json.loads(mpath.read_text(encoding="utf-8")) if mpath.exists() else {}
             if warnings["manifest"].get("smoke"):
                 warnings = None   # a smoke run is never the day's issue
-    res = scan(None, None, max_pins=MAX_PINS, warnings=warnings, places=False, base=base, top=top)
+    # Read the basin flow table here rather than in scan(): it is ~22 kB, and only this file carries it (a live
+    # scan in the browser reads it back from scout/latest.json).
+    usual = usual_flow(base) or []
+    res = scan(None, None, max_pins=MAX_PINS, warnings=warnings, places=False, base=base, top=top, usual=usual)
     findings = res["findings"]
     # Record checks (the history is read here only: about 36 status files of 500 kB and a few hundred kB of
     # Floods past months).
@@ -1601,7 +1671,7 @@ def daily(out: str | Path, *, base: str = ARCHIVE_BASE, warnings_dir: str | Path
             m, classes = load_status(sm)
             blocks = status_blocks(classes, 5) if classes is not None else None
             if blocks is not None:
-                live = status_findings(classes, m, top=top, blocks=blocks)
+                live, _ = split_near_dry(status_findings(classes, m, top=top, blocks=blocks, usual=usual))
                 past = {}
                 for other in status_months():
                     if other[5:7] == m[5:7] and other < m:
@@ -1639,6 +1709,7 @@ def daily(out: str | Path, *, base: str = ARCHIVE_BASE, warnings_dir: str | Path
     doc = {
         "made": today.strftime("%Y-%m-%dT%H:%M:%SZ"), "date": today.date().isoformat(), "about": ABOUT,
         "method": method_text(), "inputs": res["inputs"], "notes": res["notes"],
+        "usual": usual,       # carried so a live scan in the browser can leave near-dry areas out
         "picks": [p["id"] for p in picks], "findings": [_public(f) for f in findings],
         "counts": {k: sum(1 for f in findings if f["kind"] == k) for k in KINDS},
         "sources": _sources_used(findings), "seconds": round(time.monotonic() - t0, 1),
@@ -1752,6 +1823,9 @@ def scout_view(view: dict[str, Any] | None = None, month: str | None = None, *, 
             name_places(missing, budget_s=10.0)
         res["mode"] = "daily"
         return res
+    # The daily file carries the basin table, so a live scan in the browser (no pyarrow) can still set
+    # near-dry areas aside (#638).
+    kw.setdefault("usual", (doc or {}).get("usual"))
     res = scan(view, month, **kw)
     res["mode"] = "live"
     return res

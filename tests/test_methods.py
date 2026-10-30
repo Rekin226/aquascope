@@ -72,3 +72,19 @@ def test_sufficiency_table_orders_defensible_first():
     assert statuses == sorted(statuses, key=[DEFENSIBLE, MARGINAL, NOT_DEFENSIBLE].index)
     assert {r["method"] for r in rows} == set(method_ids("flood_risk"))
     assert all("label" in r and "reason" in r for r in rows)
+
+
+def test_change_points_are_site_wide_or_per_variable():
+    """#375: the field is per variable now, but a list from before it still means the whole site."""
+    old_style = _gauged(39, change_points=[1991])
+    assert old_style.change_points == {"": [1991]}
+    row = assess_method("at_site_flood_frequency", old_style)
+    assert row["status"] == MARGINAL and "1991" in row["reason"]
+
+    both = SiteContext(
+        years_by_variable={"discharge": 39, "precipitation": 39},
+        resolution_by_variable={"discharge": "daily", "precipitation": "daily"},
+        change_points={"precipitation": [1991]},
+    )
+    assert assess_method("at_site_flood_frequency", both)["status"] == DEFENSIBLE
+    assert assess_method("spi", both)["status"] == MARGINAL

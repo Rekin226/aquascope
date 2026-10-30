@@ -85,11 +85,31 @@ class SiteContext:
     return_period: float | None = None
     #: Donor gauges a similarity search can offer.
     donors: int | None = None
-    #: Years at which a change-point test found a shift inside the record (#376).
-    change_points: list[int] = field(default_factory=list)
+    #: Years at which a change-point test found a shift inside the record, by variable (#375). The empty
+    #: key ``""`` holds years a caller knows for the site as a whole, not for one variable. A plain list is
+    #: still accepted and read as those site-wide years, because that was the shape before #375.
+    change_points: dict[str, list[int]] = field(default_factory=dict)
+    #: Share of the record's daily calendar that carries a value, by variable (#375). Empty when the
+    #: record itself was not read.
+    completeness_by_variable: dict[str, float] = field(default_factory=dict)
+    #: Days missing in the record's longest outage, by variable (#375): the largest step between consecutive
+    #: observations minus one, so a daily record with no missing day is 0. Empty when the record was not read.
+    longest_gap_days: dict[str, int] = field(default_factory=dict)
+    #: Share of observations flagged provisional or suspect, by variable (#375).
+    flagged_fraction: dict[str, float] = field(default_factory=dict)
     #: Other inputs present: ``temperature``, ``forcing``, ``gcms>=3``, ``glofas``, ... and the conditions a
     #: method can be sensitive to (``regulation``, ``snow``).
     available: set[str] = field(default_factory=set)
+
+    def __post_init__(self) -> None:
+        # Before #375 ``change_points`` was one list for the whole site. Calls written against that shape
+        # keep working: their years become the site-wide entry, which every stationarity method reads.
+        if isinstance(self.change_points, (list, tuple)):
+            self.change_points = {"": [int(y) for y in self.change_points]}
+        else:
+            self.change_points = {
+                str(key): [int(y) for y in (years or [])] for key, years in (self.change_points or {}).items()
+            }
 
     @property
     def ungauged(self) -> bool:
@@ -541,11 +561,14 @@ def assess_method(method: MethodPrecondition | str, ctx: SiteContext) -> dict[st
         return {"method": pre.id, "status": NOT_DEFENSIBLE, "reason": "no water-quality samples here"}
 
     # What the method assumes (#376): marginal, never a block. A stationary fit across a shift answers a narrower
-    # question; the point is to say which.
+    # question; the point is to say which. A change point belongs to one variable, so only that variable's years
+    # (#375) and the site-wide years apply here.
     if "stationarity" in pre.assumes and ctx.change_points:
-        years = ", ".join(str(int(y)) for y in sorted(ctx.change_points)[:3])
-        status = MARGINAL
-        reasons.append(f"a regime shift around {years} sits inside the record; a stationary fit spans two regimes")
+        years_found = sorted({int(y) for key in (pre.variable or "", "") for y in ctx.change_points.get(key, ())})
+        if years_found:
+            years = ", ".join(str(y) for y in years_found[:3])
+            status = MARGINAL
+            reasons.append(f"a regime shift around {years} sits inside the record; a stationary fit spans two regimes")
     for cond in pre.sensitive_to:
         if cond in ctx.available:
             status = MARGINAL

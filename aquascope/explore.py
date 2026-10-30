@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -1594,6 +1596,152 @@ def _catchment_subset(desc: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+#: Where a local copy of the Archive dataset is mounted (#375). When it is set, :func:`assess_site` reads
+#: each chosen station's daily values from ``<dir>/obs/<variable>/<source>/<station_id>.csv.gz`` and fills
+#: the quality half of its :class:`~aquascope.methods.SiteContext`. Unset (the default) keeps the fast
+#: metadata-only path: no observation is read, from an agency or from Hugging Face.
+ARCHIVE_MIRROR_ENV = "AQUASCOPE_ARCHIVE_DIR"
+
+
+def _mirror_series(
+    source: str,
+    station_id: str,
+    variable: str,
+    root: str | os.PathLike[str] | None = None,
+) -> tuple[pd.Series, pd.Series] | None:
+    """One station's archived daily values from a local mirror, or None when the mirror does not hold them.
+
+    The layout is the Archive dataset's own (``obs/<variable>/<source>/<station_id>.csv.gz``), so an
+    extracted Zenodo snapshot or a downloaded copy of the Hugging Face dataset both work. Only a local file
+    is read: this function never makes an HTTP request.
+    """
+    directory = root if root is not None else os.environ.get(ARCHIVE_MIRROR_ENV)
+    if not directory:
+        return None
+    from aquascope.archive.observations import obs_path, read_csv_gz
+
+    path = obs_path(Path(directory), variable, source, station_id)
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    try:
+        value, quality = read_csv_gz(data, include_quality=True)  # type: ignore[misc]
+    except Exception:  # noqa: BLE001 - a corrupt mirror file is the same as a missing one here
+        logger.info("archive mirror file unreadable: %s", path, exc_info=True)
+        return None
+    return value, quality
+
+
+def record_quality_half(
+    series: pd.Series,
+    variable: str,
+    *,
+    quality: pd.Series | None = None,
+    station_id: str | None = None,
+) -> dict[str, Any]:
+    """The quality half of a :class:`~aquascope.methods.SiteContext` for one observed record (#375).
+
+    Reuses :func:`aquascope.analysis.quality.assess_quality` for the three quality measures and
+    :func:`aquascope.analysis.changepoint.pettitt_test` on annual means for the change point:
+
+    - ``completeness``: share of the daily calendar between the first and last observation that carries a
+      value. The calendar is daily because the catalog and the Archive both report daily values; an
+      observation-only series has no holes by construction, so the calendar is what makes a gap visible.
+    - ``longest_gap_days``: the number of days the longest outage is missing, taken straight from the record's
+      own index: the largest step between consecutive observations minus one, so a daily record with no
+      missing day is 0 and a six-day outage is 6. ``assess_quality`` reports the first three gaps it finds in
+      date order, so it cannot be asked for the longest one: three short outages before a long hole would
+      hide the hole.
+    - ``flagged_fraction``: share of observations whose ``quality`` flag is provisional or suspect; 0.0
+      when ``quality`` is not given.
+    - ``change_points``: the year of a Pettitt shift in the calendar years' means, when there is one. A
+      year's mean enters the test only when 330 of its days carry a value, the rule
+      :data:`aquascope.paint.MIN_DAYS` applies to a complete year: the mean of a partial year is the mean of
+      part of a season, so a test over those can report a shift in the record's coverage instead.
+
+    ``quality`` is the flag Series the Archive stores next to each value, aligned with ``series``. All four
+    values are plain JSON-safe Python numbers and lists. An empty record returns zeros rather than raising,
+    because a mirror can hold an empty file; an index that cannot be read as dates raises ``ValueError``.
+    """
+    empty = {"completeness": 0.0, "longest_gap_days": 0, "flagged_fraction": 0.0, "change_points": []}
+    if series is None or len(series) == 0:
+        return empty
+
+    from aquascope.analysis.quality import assess_quality
+
+    raw = pd.Series(series)
+    if not isinstance(raw.index, pd.DatetimeIndex) and not all(
+        isinstance(x, (str, datetime, date, pd.Timestamp)) for x in raw.index
+    ):
+        raise ValueError(f"{variable} record needs a DatetimeIndex, got {type(raw.index).__name__}")
+    try:
+        index = pd.DatetimeIndex(pd.to_datetime(raw.index, errors="raise"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{variable} record has dates that cannot be parsed: {exc}") from exc
+    if index.tz is not None:
+        index = index.tz_localize(None)
+
+    values = pd.to_numeric(pd.Series(raw.to_numpy()), errors="coerce")
+    s = pd.Series(values.to_numpy(dtype=float), index=index).dropna()
+    s = s[~s.index.duplicated(keep="first")].sort_index()
+    if s.empty:
+        return empty
+
+    flags: pd.Series | None = None
+    if quality is not None:
+        flags = pd.Series(quality)
+        if len(flags) == len(index):
+            flags.index = index
+            flags = flags[~flags.index.duplicated(keep="first")].reindex(s.index)
+        else:
+            flags = None
+
+    start, end = s.index.min().normalize(), s.index.max().normalize()
+    daily = s.reindex(pd.date_range(start, end, freq="D"))
+    calendar_report = assess_quality(pd.DataFrame({"value": daily.to_numpy(dtype=float)}))
+    completeness = round(float(calendar_report.completeness_pct) / 100.0, 4)
+
+    observed = pd.DataFrame({
+        "station_id": station_id or variable,
+        "reading_datetime": s.index,
+        "parameter": variable,
+        "value": s.to_numpy(dtype=float),
+    })
+    if flags is not None:
+        observed["quality"] = flags.to_numpy(dtype=object)
+    report = assess_quality(observed)
+    # The longest gap comes from the index itself, not from ``report.temporal_gaps``: that keeps only the
+    # first three gaps per station in date order, so a record with three short outages before a long hole
+    # used to report the short one (#375). The count is the days the gap is missing, not the step it spans:
+    # a daily record has no missing day, and a 14-year hole reads as the 5,114 days nobody observed.
+    steps = s.index.to_series().diff().dropna()
+    longest_gap = int(steps.max().days) - 1 if len(steps) else 0
+    flagged_count = report.quality_counts.get("provisional", 0) + report.quality_counts.get("suspect", 0)
+    flagged = round(float(flagged_count) / report.n_records, 4) if report.n_records else 0.0
+
+    # A year's mean is the year's, not its observed months': a year counts only when at least 330 of its
+    # days carry a value, as the map's painting requires of a complete year (#375).
+    from aquascope.paint import MIN_DAYS
+
+    annual_means = daily.resample("YS").mean()
+    annual = annual_means[daily.resample("YS").count() >= MIN_DAYS].dropna()
+    points: list[int] = []
+    if len(annual) >= 4:
+        from aquascope.analysis.changepoint import pettitt_test
+
+        change = pettitt_test(pd.Series(annual.to_numpy(dtype=float), index=annual.index))
+        if change is not None and change.timestamp is not None:
+            points = [int(pd.Timestamp(change.timestamp).year)]
+
+    return {
+        "completeness": completeness,
+        "longest_gap_days": longest_gap,
+        "flagged_fraction": flagged,
+        "change_points": points,
+    }
+
+
 def assess_site(
     lat: float,
     lon: float,
@@ -1624,6 +1772,12 @@ def assess_site(
     whose span the catalog does not know (the two nearest at most), instead of dropping a gauge that may sit at
     the site: the Studio's Scout sets it, because a BOM or ANA gauge at 0 km with a long record is common and
     was being ignored.
+
+    The quality half of the context (#375) comes from a local copy of the Archive dataset when
+    ``AQUASCOPE_ARCHIVE_DIR`` points at one: :func:`record_quality_half` reads each chosen station's daily
+    values and reports completeness, longest gap, flagged fraction and Pettitt change points per variable.
+    Without a mirror those fields stay empty and the judgement uses the catalog span alone; no observation is
+    fetched, so the default path never calls an agency and stays as fast as the catalog.
 
     Returns ``{"point", "stations", "catchment", "context", "sufficiency", "notes"}``.
     """
@@ -1732,6 +1886,49 @@ def assess_site(
         if end is not None and (today - end).days > _STALE_AFTER_YEARS * 365:
             notes.append(f"The {what} record at {_label(st)} ends in {end.year}.")
 
+    # ── the quality half (#375): a local Archive mirror is read; without one the record is metadata-only
+    completeness_by: dict[str, float] = {}
+    longest_gap_by: dict[str, int] = {}
+    flagged_by: dict[str, float] = {}
+    record_change_points: dict[str, list[int]] = {}
+    mirrored: list[str] = []
+    metadata_only: list[str] = []
+    mirror_root = os.environ.get(ARCHIVE_MIRROR_ENV)
+    for var, st in station_by.items():
+        got = _mirror_series(str(st["source"]), str(st["station_id"]), var)
+        if got is None:
+            metadata_only.append(var)
+            continue
+        try:
+            half = record_quality_half(got[0], var, quality=got[1],
+                                       station_id=f"{st['source']}/{st['station_id']}")
+        except Exception:  # noqa: BLE001 - an unreadable record keeps the metadata-only judgement
+            logger.info("quality half failed for %s/%s/%s", st["source"], st["station_id"], var, exc_info=True)
+            metadata_only.append(var)
+            continue
+        mirrored.append(var)
+        completeness_by[var] = half["completeness"]
+        longest_gap_by[var] = half["longest_gap_days"]
+        flagged_by[var] = half["flagged_fraction"]
+        record_change_points[var] = list(half["change_points"])
+    for var in mirrored:
+        day_word = "day" if longest_gap_by[var] == 1 else "days"
+        line = (f"{var.replace('_', ' ').capitalize()} record (local Archive mirror): "
+                f"{completeness_by[var]:.1%} of the days between its first and last observation carry a value, "
+                f"at most {longest_gap_by[var]:,} {day_word} missing in one gap, "
+                f"{flagged_by[var]:.1%} flagged provisional or suspect")
+        if record_change_points[var]:
+            line += ", change point in " + ", ".join(str(y) for y in record_change_points[var])
+        notes.append(line + ".")
+    if metadata_only:
+        names = ", ".join(v.replace("_", " ") for v in metadata_only)
+        if mirror_root:
+            why = f"the local Archive mirror at {mirror_root} holds no usable file for it"
+        else:
+            why = f"no local Archive mirror is configured (set {ARCHIVE_MIRROR_ENV})"
+        notes.append(f"Record quality was not assessed for {names}: {why}; "
+                     "the judgement uses the catalog span only.")
+
     # ── catchment (BasinATLAS), unless the caller already knows the area
     catchment: dict[str, Any]
     if area_km2 is not None:
@@ -1787,6 +1984,10 @@ def assess_site(
         notes.append("Change points found inside the record: " + ", ".join(str(int(y)) for y in change_points)
                      + "; the methods that assume stationarity are marginal here.")
 
+    ctx_change_points = dict(record_change_points)
+    if change_points:
+        # Years the caller knows for the site as a whole, not tied to one variable.
+        ctx_change_points[""] = [int(y) for y in change_points]
     ctx = SiteContext(
         years_by_variable=years_by,
         resolution_by_variable=resolution_by,
@@ -1794,7 +1995,10 @@ def assess_site(
         return_period=float(return_period) if return_period is not None else None,
         donors=ctx_donors,
         available=available,
-        change_points=[int(y) for y in (change_points or [])],
+        change_points=ctx_change_points,
+        completeness_by_variable=completeness_by,
+        longest_gap_days=longest_gap_by,
+        flagged_fraction=flagged_by,
     )
     if ctx.ungauged:
         notes.append(f"No gauge with a usable record within {radius_km:g} km: at-site methods are not defensible; "
@@ -1833,6 +2037,10 @@ def assess_site(
             "area_km2": ctx.area_km2,
             "return_period": ctx.return_period,
             "donors": ctx.donors,
+            "completeness_by_variable": completeness_by,
+            "longest_gap_days": longest_gap_by,
+            "flagged_fraction": flagged_by,
+            "change_points": record_change_points,
             "available": sorted(available),
             "ungauged": ctx.ungauged,
         },

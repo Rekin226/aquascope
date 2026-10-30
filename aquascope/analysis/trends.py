@@ -76,7 +76,7 @@ class SensSlopeResult:
     Attributes
     ----------
     slope:
-        Median pairwise slope estimate (change per unit time).
+        Median pairwise slope estimate (change per step, or per unit of ``years`` when given).
     intercept:
         Intercept estimate corresponding to the median slope.
     n_samples:
@@ -247,6 +247,8 @@ def mann_kendall(
 
 def sens_slope(
     series: pd.Series | np.ndarray | list[float],
+    *,
+    years: pd.Series | np.ndarray | list[float] | None = None,
 ) -> SensSlopeResult:
     """Estimate Sen's slope (median of pairwise slopes) for a time series.
 
@@ -256,16 +258,25 @@ def sens_slope(
     ----------
     series:
         Input data series.
+    years:
+        Optional time coordinate, one value per element of *series* (for an
+        annual record, ``s.index.year``). When given, the slope is the median
+        of ``(y_j - y_i) / (t_j - t_i)`` over every pair, so a gap in the
+        record stays a gap in time. When omitted, the points are treated as
+        equally spaced and one step is one position.
 
     Returns
     -------
     SensSlopeResult
-        Estimated slope, intercept, and sample counts.
+        Estimated slope, intercept, and sample counts. ``intercept`` is the
+        median of ``y - slope * t`` where ``t`` is *years* when given, else
+        the position.
 
     Raises
     ------
     ValueError
-        If fewer than 2 non-NaN values exist.
+        If fewer than 2 non-NaN values exist, or if *years* does not have the
+        same length as *series*.
     """
     import numpy as np
     import pandas as pd
@@ -282,6 +293,19 @@ def sens_slope(
     n_dropped_nans = int(n_total - np.count_nonzero(valid_mask))
     clean = arr[valid_mask]
 
+    t: np.ndarray | None = None
+    if years is not None:
+        if isinstance(years, pd.Series):
+            t = years.to_numpy(dtype=float)
+        elif isinstance(years, np.ndarray):
+            t = years.ravel().astype(float)
+        else:
+            t = np.asarray(years, dtype=float)
+        if len(t) != n_total:
+            msg = f"'years' must have the same length as 'series' (got {len(t)} and {n_total})."
+            raise ValueError(msg)
+        t = t[valid_mask]
+
     if n_dropped_nans > 0:
         logger.warning("Dropped %d NaN value(s) before computing Sen's slope.", n_dropped_nans)
 
@@ -290,18 +314,30 @@ def sens_slope(
         raise ValueError(msg)
 
     n = len(clean)
-    slopes_list: list[np.ndarray] = []
-    for i in range(n - 1):
-        d = clean[i + 1 :] - clean[i]
-        slopes_list.append(d / np.arange(1, n - i))
+    if t is None:
+        slopes_list: list[np.ndarray] = []
+        for i in range(n - 1):
+            d = clean[i + 1 :] - clean[i]
+            slopes_list.append(d / np.arange(1, n - i))
 
-    if slopes_list:
-        all_slopes = np.concatenate(slopes_list)
-        slope_val = float(np.median(all_slopes))
+        if slopes_list:
+            all_slopes = np.concatenate(slopes_list)
+            slope_val = float(np.median(all_slopes))
+        else:
+            slope_val = 0.0
+        time_median = float(np.median(np.arange(n)))
     else:
-        slope_val = 0.0
+        i, j = np.triu_indices(n, k=1)
+        dt = t[j] - t[i]
+        ok = dt != 0
+        if ok.any():
+            slope_val = float(np.median((clean[j] - clean[i])[ok] / dt[ok]))
+        else:
+            logger.warning("All 'years' pairs fall on the same time; Sen's slope is reported as 0.0.")
+            slope_val = 0.0
+        time_median = float(np.median(t))
 
-    intercept_val = float(np.median(clean) - np.median(np.arange(n)) * slope_val)
+    intercept_val = float(np.median(clean) - time_median * slope_val)
 
     return SensSlopeResult(
         slope=slope_val,

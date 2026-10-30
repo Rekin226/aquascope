@@ -52,6 +52,10 @@ def test_calendar_years_match_the_single_station_trend_exactly(seed):
     else:
         # With gaps the slope is per calendar year (a missing year stays a gap in time); on positions it would match.
         assert paint.sen_slope_years(range(len(ref)), ref.values) == pytest.approx(sens_slope(ref.values).slope)
+        # #668: the single-station panel now reads the same calendar year axis, so both numbers agree.
+        assert one["sens_slope_per_year"] == pytest.approx(got["slope_per_year"], rel=1e-3)
+        on_positions = sens_slope(ref.values).slope
+        assert one["sens_slope_per_year"] != pytest.approx(on_positions, rel=1e-2)
 
 
 def test_sen_slope_counts_a_missing_year_as_time():

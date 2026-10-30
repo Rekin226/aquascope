@@ -112,6 +112,44 @@ class TestSensSlope:
             sens_slope([5.0])
 
 
+class TestSensSlopeAlongYears:
+    """Test suite for sens_slope(years=...): Sen's slope on a real time axis (#668)."""
+
+    def test_a_missing_year_is_a_gap_in_time(self):
+        # (2000, 0), (2001, 1), (2003, 3): every pair rises exactly 1 per year.
+        assert sens_slope([0.0, 1.0, 3.0], years=[2000, 2001, 2003]).slope == pytest.approx(1.0)
+        # Without the years the three points are one step apart, so the 2000->2003 jump looks steeper.
+        assert sens_slope([0.0, 1.0, 3.0]).slope == pytest.approx(1.5)
+
+    def test_intercept_uses_the_year_axis(self):
+        res = sens_slope([5.0, 9.0, 15.0, 21.0], years=[0, 2, 5, 8])
+        assert res.slope == pytest.approx(2.0)
+        # median(y) - median(t) * slope = 12 - 3.5 * 2
+        assert res.intercept == pytest.approx(5.0)
+
+    def test_years_follow_the_series_through_nans(self):
+        res = sens_slope([0.0, np.nan, 3.0], years=[2000, 2001, 2003])
+        assert res.n_dropped_nans == 1
+        assert res.slope == pytest.approx(1.0)
+
+    def test_years_must_match_the_series_in_length(self):
+        with pytest.raises(ValueError, match="same length"):
+            sens_slope([1.0, 2.0], years=[2000])
+
+    def test_all_pairs_on_one_year_warn_and_return_zero(self, caplog):
+        with caplog.at_level("WARNING"):
+            res = sens_slope([1.0, 2.0, 3.0], years=[2000, 2000, 2000])
+        assert res.slope == 0.0
+        assert "same time" in caplog.text
+
+    def test_matches_the_paint_implementation(self):
+        from aquascope.paint import sen_slope_years
+
+        years = [1960, 1961, 1965, 1970, 1971, 1980]
+        values = [10.0, 10.4, 11.7, 13.0, 13.1, 15.9]
+        assert sens_slope(values, years=years).slope == pytest.approx(sen_slope_years(years, values))
+
+
 class TestAPIFacade:
     """Test suite for aquascope.api trend functions."""
 

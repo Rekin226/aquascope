@@ -96,6 +96,26 @@ def test_partial_years_are_dropped_from_annual_maxima():
     assert 1990 not in list(am.index.year)
 
 
+def test_trend_slope_counts_a_missing_year_as_time():
+    """#668: Sen's slope follows the calendar year, so a five-year gap in the record stays five years."""
+    from aquascope.analysis.trends import sens_slope
+    from aquascope.paint import sen_slope_years
+
+    idx = pd.date_range("1960-01-01", "2019-12-31", freq="D")
+    s = pd.Series(10.0 + 0.05 * (np.arange(len(idx)) / 365.25), index=idx)
+    s = s[~s.index.year.isin(range(1985, 1990))]  # 55 complete years, five missing in the middle
+
+    out = analysis.analyze_series(s, "discharge", "m3/s")
+    annual_mean = s.resample("YS").mean().dropna()
+    assert out["trend"]["n_years"] == 55
+    assert out["trend"]["sens_slope_per_year"] == pytest.approx(
+        sen_slope_years(annual_mean.index.year, annual_mean.to_numpy()), abs=1e-4
+    )
+    # On positions the same 55 years would be squeezed into 55 steps instead of 60 years of time.
+    on_positions = sens_slope(annual_mean.to_numpy()).slope
+    assert abs(out["trend"]["sens_slope_per_year"] - on_positions) > 0.01 * abs(on_positions)
+
+
 def test_annual_maxima_carry_the_day_of_each_peak():
     s = _daily_flow(12)
     s.loc["1995-03-17"] = s.max() * 3  # a flood on a known day

@@ -914,7 +914,9 @@ def analyze_series(s: pd.Series, variable: str, unit: str, *,
                     from aquascope.analysis.trends import mann_kendall, sens_slope
 
                     mk_am = mann_kendall(am.values)
-                    sl_am = sens_slope(am.values)
+                    # Sen's slope against the calendar year: a year missing from the record is a gap in time,
+                    # not one step (#668).
+                    sl_am = sens_slope(am.values, years=am.index.year)
                     ffa["amax_trend"] = {
                         "on": "annual maxima",
                         "p_value": _clean(float(mk_am.p_value)),
@@ -962,7 +964,8 @@ def analyze_series(s: pd.Series, variable: str, unit: str, *,
 
             annual_mean = s.resample("YS").mean().reindex(covered).dropna()
             mk = mann_kendall(annual_mean.values)
-            slope = sens_slope(annual_mean.values)
+            # As for the annual maxima: the means carry their calendar year (#668).
+            slope = sens_slope(annual_mean.values, years=annual_mean.index.year)
             out["trend"] = {
                 "on": "annual mean",
                 "p_value": _clean(float(mk.p_value)),

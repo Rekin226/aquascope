@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Archive health reports identify partial BOM station catalogs and large station-count drops** (#289). Partial requests appear as non-fatal warnings; count comparisons require an unrestricted run and a previous catalog explicitly marked complete.
+
 ### Fixed
 
 - **HydroGym decline scoring:** mark refusal reasons for explicit review, support cases that accept a plan or a

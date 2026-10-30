@@ -726,12 +726,13 @@ def build_collector(source_key: str, api_key: str | None = None, **ctor_kwargs):
 
 @dataclass
 class StationCatalog:
-    """One source's station lookup result, kept even when it failed."""
+    """One source's station lookup result, including non-fatal warnings."""
 
     source: str
     stations: list[Station] = field(default_factory=list)
     error: str | None = None
     seconds: float = 0.0
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -765,7 +766,8 @@ def station_catalogs(
 
     Returns one :class:`StationCatalog` per source, including the ones that
     failed (``error`` set, ``stations`` empty), so a health report can tell
-    "endpoint failed" from "no stations here".
+    "endpoint failed" from "no stations here". Non-fatal collector warnings
+    are kept separately, so ``ok`` still indicates whether the call failed.
     """
     keys = sources or station_sources(variable)
     unknown = [k for k in keys if k not in SOURCES]
@@ -780,7 +782,12 @@ def station_catalogs(
         try:
             collector = build_collector(key, api_key=api_key)
             found = collector.stations(bbox=bbox, variable=variable, max_items=max_items)
-            return StationCatalog(source=key, stations=list(found), seconds=time.perf_counter() - t0)
+            return StationCatalog(
+                source=key,
+                stations=list(found),
+                seconds=time.perf_counter() - t0,
+                warnings=list(getattr(collector, "station_warnings", ())),
+            )
         except Exception as exc:  # noqa: BLE001 - one bad source must not sink the others
             logger.warning("[%s] station lookup failed: %s", key, exc)
             return StationCatalog(source=key, error=_error_text(exc), seconds=time.perf_counter() - t0)

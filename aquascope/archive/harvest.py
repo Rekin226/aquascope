@@ -57,6 +57,7 @@ class SourceHealth:
     redistributable: bool
     agency: str
     retained_stations: int = 0
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -211,10 +212,13 @@ def stations_to_table(stations: list[Station]):
     return table.replace_schema_metadata(metadata)
 
 
-def write_stations_parquet(stations: list[Station], path: Path) -> Path:
+def write_stations_parquet(stations: list[Station], path: Path, *, complete_baseline: bool = False) -> Path:
     pq = require("pyarrow.parquet", feature="archive parquet output", group="archive")
     path.parent.mkdir(parents=True, exist_ok=True)
-    pq.write_table(stations_to_table(stations), str(path), compression="zstd")
+    table = stations_to_table(stations)
+    metadata = dict(table.schema.metadata or {})
+    metadata[b"aquascope_complete_baseline"] = b"true" if complete_baseline else b"false"
+    pq.write_table(table.replace_schema_metadata(metadata), str(path), compression="zstd")
     return path
 
 
@@ -261,6 +265,7 @@ def _health(catalogs: dict[str, StationCatalog]) -> list[SourceHealth]:
                 license=meta.license,
                 redistributable=meta.redistributable,
                 agency=meta.agency,
+                warnings=list(cat.warnings),
             )
         )
     return out
@@ -283,7 +288,8 @@ def harvest_stations(
     ``health.json`` and, unless disabled, the dataset ``README.md``. Sources
     are the registry's station-capable ones (all of them, whatever their
     observation terms: a station *catalog* is factual metadata and always
-    links back to the agency). Per-source failures are recorded, never raised.
+    links back to the agency). Per-source failures and non-fatal warnings are
+    recorded in ``health.json``; source failures are never raised.
     With ``write_signatures`` (the default) and mirrored discharge under
     ``out_dir/obs``, ``signatures.parquet`` is rebuilt next to the catalog; a
     failure there is logged, never raised.
@@ -297,11 +303,28 @@ def harvest_stations(
     for key in sorted(catalogs):
         stations.extend(catalogs[key].stations)
     health = _health(catalogs)
+    full_run = sources is None and max_items is None and set(catalogs) == set(keys)
     previous_path = out / "stations.parquet"
     if previous_path.exists():
         from aquascope.archive.catalog import load_stations
 
         previous = load_stations(path=previous_path)
+        # Only compare files explicitly marked as complete, and only during a
+        # full run. Older files and scoped runs have unknown provenance.
+        pq = require("pyarrow.parquet", feature="archive parquet input", group="archive")
+        metadata = pq.read_schema(str(previous_path)).metadata or {}
+        if full_run and metadata.get(b"aquascope_complete_baseline") == b"true":
+            previous_counts: dict[str, int] = {}
+            for station in previous:
+                source = station["source"]
+                previous_counts[source] = previous_counts.get(source, 0) + 1
+            for row in health:
+                old_count = previous_counts.get(row.source, 0)
+                if row.ok and old_count > 0 and row.n_stations * 2 <= old_count:
+                    row.warnings.append(
+                        f"Station count dropped by at least 50%: "
+                        f"{old_count} in the previous catalog, {row.n_stations} in this harvest"
+                    )
         failed = {key for key, cat in catalogs.items() if not cat.ok}
         retained = [Station.model_validate(row) for row in previous
                     if row["source"] in failed or row["source"] not in catalogs]
@@ -319,7 +342,8 @@ def harvest_stations(
         sources=health,
     )
 
-    parquet_path = write_stations_parquet(stations, out / "stations.parquet")
+    complete_baseline = full_run and all(row.ok and not row.warnings for row in health)
+    parquet_path = write_stations_parquet(stations, out / "stations.parquet", complete_baseline=complete_baseline)
     report.files["stations.parquet"] = str(parquet_path.name)
     if write_geojson:
         geojson_path = write_stations_geojson(stations, out / "stations.geojson")
@@ -494,7 +518,7 @@ Files:
   `station_id`, `site_id`, `name`, `latitude`, `longitude`, `variables`, `period_start`, `period_end`, `url`
   (deep link to the agency page), `river`, `country`, `agency`, `license`, `redistributable`, `extra`.
 - `stations.geojson`: the same rows as GeoJSON for tools that don't read parquet.
-- `health.json`: per-source status of the last run (station count, seconds, error if any).
+- `health.json`: per-source status of the last run (station count, seconds, error and non-fatal warnings if any).
 {_signatures_section(path.parent)}
 `site_id` identifies a physical site within a source and defaults to `station_id`.
 Group by `(source, site_id)` to associate sub-stations while preserving every station record.

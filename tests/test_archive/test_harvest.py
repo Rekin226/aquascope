@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import struct
 from datetime import date
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -99,6 +100,116 @@ def test_harvest_writes_files_and_health(tmp_path):
     assert "Group by `(source, site_id)`" in card
 
 
+@pytest.mark.parametrize("failure", ["partial", "all", "none"])
+@pytest.mark.parametrize("max_items", [None, 1])
+def test_bom_catalog_health_distinguishes_partial_from_failure_and_caps(tmp_path, failure, max_items):
+    """Carry actual BOM failures into a first harvest, not an intentional cap."""
+    from aquascope.collectors.bom import BOMCollector
+
+    header = ["station_no", "station_name", "station_latitude", "station_longitude", "parametertype_name"]
+    client = MagicMock()
+
+    def get_json(url, params=None, **kwargs):
+        parameter = params["parametertype_name"]
+        if failure == "all" or (failure == "partial" and parameter == "Water Course Discharge"):
+            raise RuntimeError("simulated 503")
+        if parameter == "Water Course Level":
+            return [header, ["1", "One", "-35", "147", parameter], ["2", "Two", "-36", "148", parameter]]
+        return ["No matches."]
+
+    client.get_json.side_effect = get_json
+    collector = BOMCollector(client=client)
+    with patch("aquascope.registry.build_collector", return_value=collector):
+        report = harvest_stations(
+            tmp_path, sources=["bom"], max_items=max_items,
+            write_geojson=False, write_card=False, write_signatures=False,
+        )
+    row = json.loads((tmp_path / "health.json").read_text(encoding="utf-8"))["sources"][0]
+    assert row["retained_stations"] == 0  # no previous published catalogue
+    assert row["ok"] is (failure != "all")
+    assert report.n_failed == (failure == "all")
+    if failure == "all":
+        assert row["n_stations"] == 0 and "failed for all" in row["error"]
+        assert row["warnings"] == []
+    else:
+        assert row["n_stations"] == (1 if max_items else 2)
+        assert row["error"] is None
+        if failure == "partial":
+            assert len(row["warnings"]) == 1
+            assert "Water Course Discharge" in row["warnings"][0]
+            assert "partial catalog" in row["warnings"][0]
+        else:
+            assert row["warnings"] == []  # max_items alone is not a failure
+
+
+def test_workflow_summary_displays_partial_warnings_without_marking_failure(tmp_path, monkeypatch, capsys):
+    """Run the actual workflow summary with partial, failed and legacy health rows."""
+    yaml = pytest.importorskip("yaml")
+    workflow_path = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "harvest.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    step = next(s for s in workflow["jobs"]["harvest"]["steps"] if s.get("name") == "Job summary")
+    body = step["run"].split("python - <<'EOF'", 1)[1].split("\nEOF", 1)[0].split("\n", 1)[1]
+    archive = tmp_path / "archive"
+    archive.mkdir()
+    health = {
+        "run_at": "2026-10-27", "n_stations": 2, "n_ok": 2,
+        "sources": [
+            {"source": "bom", "ok": True, "warnings": ["lost discharge | level"], "n_stations": 1, "seconds": 1},
+            {"source": "old", "ok": True, "n_stations": 1, "seconds": 2},
+            {"source": "down", "ok": False, "error": "offline", "n_stations": 0, "seconds": 3},
+        ],
+    }
+    (archive / "health.json").write_text(json.dumps(health), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    exec(compile(body, str(workflow_path), "exec"), {})  # noqa: S102 - execute the checked-in workflow body
+    output = capsys.readouterr().out
+    assert r"| `bom` | WARN: lost discharge \| level | 1 | 1 |" in output
+    assert "| `old` | ok | 1 | 2 |" in output
+    assert "| `down` | FAILED: `offline` | 0 | 3 |" in output
+
+
+@pytest.mark.parametrize(
+    "old_count,new_count,max_items,failed,requested,warning",
+    [
+        (4, 2, None, False, True, True),
+        (4, 1, None, False, True, True),
+        (4, 3, None, False, True, False),
+        (4, 0, None, False, True, True),
+        (0, 0, None, False, True, False),
+        (4, 2, 2, False, True, False),
+        (4, 0, None, True, True, False),
+        (4, 0, None, False, False, False),
+    ],
+)
+def test_harvest_warns_on_a_full_successful_source_count_drop(
+    tmp_path, old_count, new_count, max_items, failed, requested, warning
+):
+    from aquascope.archive.harvest import write_stations_parquet
+
+    sample = _stations()[0]
+    previous = [sample.model_copy(update={"station_id": f"old{i}"}) for i in range(old_count)]
+    if previous:
+        write_stations_parquet(previous, tmp_path / "stations.parquet", complete_baseline=True)
+    current = [sample.model_copy(update={"station_id": f"new{i}"}) for i in range(new_count)]
+    catalog = StationCatalog(source="ireland_opw", stations=current, error="offline" if failed else None)
+    catalogs = {"ireland_opw": catalog} if requested else {
+        "pegelonline": StationCatalog(source="pegelonline", stations=[_stations()[1]])
+    }
+    with patch("aquascope.archive.harvest.station_catalogs", return_value=catalogs), patch(
+        "aquascope.archive.harvest.station_sources", return_value=list(catalogs)
+    ):
+        report = harvest_stations(
+            tmp_path, max_items=max_items,
+            write_geojson=False, write_card=False, write_signatures=False,
+        )
+    row = report.sources[0]
+    assert any("dropped by at least 50%" in w for w in row.warnings) is warning
+    if warning:
+        assert f"{old_count} in the previous catalog, {new_count} in this harvest" in row.warnings[-1]
+    if failed:
+        assert not row.ok and row.retained_stations == old_count
+
+
 def test_failed_and_unrequested_catalogs_retain_previous_stations(tmp_path):
     with patch("aquascope.archive.harvest.station_catalogs", side_effect=_fake_catalogs):
         harvest_stations(tmp_path, write_signatures=False)
@@ -112,6 +223,79 @@ def test_failed_and_unrequested_catalogs_retain_previous_stations(tmp_path):
     assert pq.read_table(tmp_path / "stations.parquet").column("source").to_pylist() == [
         "ireland_opw", "pegelonline",
     ]
+
+
+def test_partial_source_warning_and_count_drop_are_both_preserved(tmp_path):
+    from aquascope.archive.harvest import write_stations_parquet
+
+    sample = _stations()[0]
+    previous = [sample.model_copy(update={"station_id": f"old{i}"}) for i in range(4)]
+    write_stations_parquet(previous, tmp_path / "stations.parquet", complete_baseline=True)
+    partial = StationCatalog(
+        source="ireland_opw", stations=[sample], warnings=["parameter request failed"]
+    )
+    with patch("aquascope.archive.harvest.station_catalogs", return_value={"ireland_opw": partial}), patch(
+        "aquascope.archive.harvest.station_sources", return_value=["ireland_opw"]
+    ):
+        report = harvest_stations(tmp_path, write_signatures=False)
+    assert report.sources[0].ok
+    assert report.sources[0].warnings[0] == "parameter request failed"
+    assert "4 in the previous catalog, 1 in this harvest" in report.sources[0].warnings[1]
+    health = json.loads((tmp_path / "health.json").read_text(encoding="utf-8"))
+    assert health["sources"][0]["warnings"] == report.sources[0].warnings
+
+
+@pytest.mark.parametrize(
+    "prior_complete,selected,capped", [(False, False, False), (True, True, False), (True, False, True)]
+)
+def test_count_drop_does_not_compare_unproven_or_scoped_runs(tmp_path, prior_complete, selected, capped):
+    from aquascope.archive.harvest import write_stations_parquet
+
+    sample = _stations()[0]
+    write_stations_parquet(
+        [sample.model_copy(update={"station_id": str(i)}) for i in range(4)],
+        tmp_path / "stations.parquet", complete_baseline=prior_complete,
+    )
+    catalog = {"ireland_opw": StationCatalog(source="ireland_opw", stations=[sample])}
+    with patch("aquascope.archive.harvest.station_catalogs", return_value=catalog), patch(
+        "aquascope.archive.harvest.station_sources", return_value=["ireland_opw"]
+    ):
+        report = harvest_stations(
+            tmp_path, sources=["ireland_opw"] if selected else None,
+            max_items=1 if capped else None, write_signatures=False,
+        )
+    assert not report.sources[0].warnings
+    metadata = pq.read_schema(tmp_path / "stations.parquet").metadata
+    assert metadata[b"aquascope_complete_baseline"] == (b"true" if not selected and not capped else b"false")
+
+
+def test_count_baseline_survives_only_unrestricted_healthy_runs(tmp_path):
+    sample = _stations()[0]
+    catalogs = {"ireland_opw": StationCatalog(source="ireland_opw", stations=[
+        sample.model_copy(update={"station_id": str(i)}) for i in range(4)
+    ])}
+    with patch("aquascope.archive.harvest.station_catalogs", return_value=catalogs), patch(
+        "aquascope.archive.harvest.station_sources", return_value=["ireland_opw"]
+    ):
+        harvest_stations(tmp_path, write_signatures=False)
+        catalogs["ireland_opw"].stations = [sample]
+        assert not harvest_stations(tmp_path, max_items=1, write_signatures=False).sources[0].warnings
+        assert not harvest_stations(tmp_path, write_signatures=False).sources[0].warnings
+        catalogs["ireland_opw"].stations = []
+        assert "dropped by at least 50%" in harvest_stations(
+            tmp_path, write_signatures=False
+        ).sources[0].warnings[0]
+
+
+def test_legacy_parquet_is_not_assumed_to_be_a_complete_baseline(tmp_path):
+    sample = _stations()[0]
+    pq.write_table(stations_to_table([sample] * 4), tmp_path / "stations.parquet")
+    catalog = {"ireland_opw": StationCatalog(source="ireland_opw", stations=[sample])}
+    with patch("aquascope.archive.harvest.station_catalogs", return_value=catalog), patch(
+        "aquascope.archive.harvest.station_sources", return_value=["ireland_opw"]
+    ):
+        report = harvest_stations(tmp_path, write_signatures=False)
+    assert not report.sources[0].warnings
 
 
 def test_catalog_site_ids_round_trip_and_legacy_fallback(tmp_path):

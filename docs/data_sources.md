@@ -187,9 +187,9 @@ error page as valid hydrological data. Caching is therefore disabled by
 default for this collector. A successful live collection still depends on the
 DWS/Kisters backend being healthy.
 
-DWS reuse terms have not yet been verified, so the registry marks this source
-as non-redistributable. AquaScope can collect it directly, but the open archive
-must not mirror the observations until the terms are established.
+DWS terms are verified from the NIWIS disclaimer: data may be used for academic,
+research or personal purposes and must not be resold; the source stays
+non-redistributable, so the open archive must not mirror the observations.
 
 ## PEGELONLINE (Germany)
 

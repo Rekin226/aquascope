@@ -147,8 +147,8 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://www.dws.gov.za/Hydrology/",
         variables=("discharge", "water_level"),
         output_model="StreamflowReading | WaterLevelReading",
-        license="unknown", redistributable=False,
-        attribution="South African Department of Water and Sanitation (reuse terms not yet verified)",
+        license="DWS NIWIS terms (academic, research or personal use)", redistributable=False,
+        attribution="Department of Water and Sanitation, Republic of South Africa (copyright proprietor)",
     ),
     "colorado_cdss": _s(
         key="colorado_cdss",

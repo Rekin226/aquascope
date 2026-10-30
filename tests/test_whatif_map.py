@@ -310,6 +310,82 @@ def test_number_tokens_carry_the_unit_the_words_give():
         ("a fifth", 0.2, "fraction"), ("300", 300.0, "l/s"), ("twenty-five", 25.0, "percent"), ("2", 2.0, "degC")]
 
 
+@pytest.mark.parametrize("line, token, unit, value", [
+    ("take half a cubic metre per second", "half", "m3/s", 0.5),
+    ("take a quarter of a litre per second", "a quarter", "l/s", 0.00025),
+    ("take half a megalitre per day", "half", "ML/day", 500 / 86400),
+    ("take a half cubic metre per second", "a half", "m3/s", 0.5),
+    ("take a half litre per second", "a half", "l/s", 0.0005),
+])
+def test_fractional_quantities_keep_their_explicit_units(line, token, unit, value):
+    result = wm.parse_scenario_reply(_reply(("take_water", token, unit)), line)
+    assert not result["errors"], result
+    assert result["scenario"]["demand_cms"] == pytest.approx(value, abs=1e-6)
+
+
+def test_fractional_quantity_does_not_weaken_unit_checks_or_shares():
+    line = "take half a cubic metre per second"
+    bad = wm.parse_scenario_reply(_reply(("take_water", "half", "l/s")), line)
+    assert bad["scenario"] is None and "words say m3/s, not l/s" in bad["errors"][0]
+    share = wm.parse_scenario_reply(_reply(("less_rain", "a quarter", "fraction")), "a quarter less rain")
+    assert not share["errors"] and share["scenario"]["dp_pct"] == -25
+
+
+@pytest.mark.parametrize("phrase", ["a third", "one third", "a quarter", "half"])
+def test_fractional_quantity_schema_aliases_round_trip(phrase):
+    line = f"take {phrase} of a litre per second"
+    token = wm.number_tokens(line)[0]
+    numbers = wm.scenario_schema(line)["properties"]["clauses"]["items"]["properties"]["number"]["enum"]
+    assert phrase in numbers
+    if "third" in phrase:
+        assert "0.333" not in numbers
+    for number in numbers:
+        if number == "none":
+            continue
+        result = wm.parse_scenario_reply(_reply(("take_water", number, "l/s")), line)
+        assert not result["errors"], (number, result)
+        assert result["scenario"]["demand_cms"] == pytest.approx(token["value"] / 1000, abs=1e-6)
+
+
+@pytest.mark.parametrize("phrase", ["a third", "one third"])
+def test_third_share_and_token_reuse(phrase):
+    share = wm.parse_scenario_reply(_reply(("less_rain", phrase, "fraction")), f"{phrase} less rain")
+    assert not share["errors"] and share["scenario"]["dp_pct"] == pytest.approx(-100 / 3, abs=0.001)
+    quantity = wm.parse_scenario_reply(_reply(("take_water", phrase, "m3/s")),
+                                       f"take {phrase} of a cubic metre per second")
+    assert not quantity["errors"] and quantity["scenario"]["demand_cms"] == pytest.approx(1 / 3, abs=1e-6)
+    line = f"take {phrase} of a litre per second"
+    reused = wm.parse_scenario_reply(_reply(("take_water", phrase, "l/s"), ("take_water", phrase, "l/s")), line)
+    assert reused["scenario"]["demand_cms"] == pytest.approx(1 / 3000, abs=1e-6)
+    assert any("as often as it is used" in error for error in reused["errors"])
+
+
+def test_rounded_digit_alias_is_not_offered_for_a_precise_number():
+    line = "take 0.3333 litres per second"
+    numbers = wm.scenario_schema(line)["properties"]["clauses"]["items"]["properties"]["number"]["enum"]
+    assert numbers == ["0.3333", "none"]
+    result = wm.parse_scenario_reply(_reply(("take_water", "0.3333", "l/s")), line)
+    assert not result["errors"]
+    assert result["scenario"]["demand_cms"] == pytest.approx(0.000333, abs=1e-6)
+
+
+@pytest.mark.parametrize("line, key, value", [
+    ("take half a cubic metre per second", "demand_cms", 0.5),
+    ("take a quarter of a litre per second", "demand_cms", 0.00025),
+    ("half a degree warmer", "dt_c", 0.5),
+    ("half a percent less rain", "dp_pct", -0.5),
+    ("a quarter less rain", "dp_pct", -25.0),
+    ("a half cubic metre per second", "demand_cms", 0.5),
+    ("a half litre per second", "demand_cms", 0.0005),
+    ("a half degree warmer", "dt_c", 0.5),
+    ("a half percent less rain", "dp_pct", -0.5),
+])
+def test_rules_distinguish_fractional_quantities_from_proportions(line, key, value):
+    result = wm.parse_scenario(line)
+    assert result["matched"], result
+    assert result["scenario"][key] == pytest.approx(value)
+
+
 @pytest.mark.parametrize("line, key, value", [
     ("take 300 litres per second", "demand_cms", 0.3),
     ("take 300 liters a second", "demand_cms", 0.3),

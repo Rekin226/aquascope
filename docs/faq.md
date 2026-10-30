@@ -41,7 +41,7 @@ pip install aquascope[all]
 - `forecast` — Prophet, PyTorch (for time-series forecasting)
 - `viz` — matplotlib, seaborn, folium (for visualisation)
 - `scientific` — xarray, netCDF4, h5py (for NetCDF/HDF5 export)
-- `copernicus` — cdsapi, cfgrib, xarray (for Copernicus data)
+- `copernicus` — cdsapi, cfgrib, xarray, netcdf4 (for GloFAS from the EWDS)
 - `llm` — openai (for LLM-enhanced recommendations)
 - `dev` — pytest, ruff, mypy (for development)
 - `all` — everything above

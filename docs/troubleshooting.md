@@ -45,7 +45,7 @@ pip install aquascope[scientific]
 - **taiwan_moenv**: Data updates monthly; ensure the API is accessible
 - **usgs**: Specify valid site numbers or use default (major gauges)
 - **openmeteo**: Ensure `--lat`/`--lon` are valid coordinates
-- **copernicus**: Requires a valid CDS API key in `~/.cdsapirc`
+- **copernicus**: Requires a valid EWDS API key in `~/.cdsapirc` (or `CDSAPI_KEY`)
 
 ### `ValueError: Unknown source`
 Check available sources:

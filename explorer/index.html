@@ -845,13 +845,18 @@
               </div>
               <div class="card-body">
                 <p class="muted">Fit the four-parameter GR4J model to this record with ERA5-Land/ERA5 rainfall and FAO-56 ET0 at the gauge
-                  (Open-Meteo), 65 % of the record to calibrate, the rest to validate. Runs in your browser in a few seconds.</p>
+                  (Open-Meteo), 65 % of the record to calibrate, the rest to validate. Downloading the forcing can take
+                  a minute or two; the fit itself takes a few seconds.</p>
                 <div class="row-actions">
                   <button id="btn-gr4j" class="btn small">Calibrate GR4J</button>
                   <button id="btn-gr4j-stop" class="btn small" hidden>Stop</button>
                   <button id="btn-gr4j-csv" class="btn small" hidden>Simulation CSV</button>
                 </div>
                 <div id="gr4j-status" class="status" hidden></div>
+                <div id="gr4j-area-warning" class="status warn" role="status" hidden>
+                  <span id="gr4j-area-message"></span>
+                  <button id="btn-gr4j-continue" class="btn small" type="button">Run anyway</button>
+                </div>
                 <div id="gr4j-out" hidden>
                   <table class="ffa" id="gr4j-table"></table>
                   <div id="plot-gr4j" class="plot"></div>

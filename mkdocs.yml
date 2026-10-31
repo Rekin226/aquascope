@@ -147,6 +147,7 @@ nav:
     - Use cases: use_cases.md
   - Examples:
     - Potomac flood frequency: examples/potomac_flood_frequency.md
+    - Groundwater recharge and GRACE anomalies: examples/groundwater_recharge.md
   - Guides:
     - Architecture: guides/architecture.md
     - Running pipelines: guides/running_pipelines.md

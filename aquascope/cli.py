@@ -2859,7 +2859,7 @@ def cmd_gym(args: argparse.Namespace) -> None:
             else:
                 cand, _detail = gp.tree_candidate(ref, args.plans)
             reviews = json.loads(Path(args.reviews).read_text(encoding="utf-8")) if args.reviews else None
-            scored = gp.score_plan(ref, cand, reviews=reviews)
+            scored = gp.score_plan(ref, cand, reviews=reviews, plans_dir=args.plans)
             if args.json:
                 print(json.dumps({"case": ref.id, **scored, "candidate": cand.to_dict()}, indent=2, default=str))
                 return

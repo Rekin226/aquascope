@@ -44,6 +44,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import re
 import time
 from collections.abc import Callable, Iterable
@@ -259,17 +260,48 @@ def list_references(plans_dir: str | Path | None = None) -> list[dict[str, Any]]
     return out
 
 
-_RECON_CACHE: dict[str, Any] = {}
+_RECON_CACHE: dict[str, Any] = {}  # Cached playbook pairs, not mutable reconnaissance snapshots.
+
+
+def _recon_path(name: str, plans_dir: str | Path | None = None) -> Path:
+    root = (Path(plans_dir) / "recon") if plans_dir else RECON_DIR
+    return root / f"{name}.json"
 
 
 def _load_recon_file(name: str, plans_dir: str | Path | None = None) -> dict[str, Any]:
-    root = (Path(plans_dir) / "recon") if plans_dir else RECON_DIR
-    path = root / f"{name}.json"
-    key = str(path)
-    if key not in _RECON_CACHE:
-        with path.open(encoding="utf-8") as fh:
-            _RECON_CACHE[key] = json.load(fh)
-    return _RECON_CACHE[key]
+    with _recon_path(name, plans_dir).open(encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _checked_recon(raw: Any, source: Path) -> dict[str, Any]:
+    """The reconnaissance a saved file holds, or ``ValueError`` when its shape cannot be read.
+
+    The file is ``assess_site``'s record, either wrapped as ``{"recon": ...}``
+    or the record itself. A null or list root, a ``recon`` value that is not a
+    mapping, a ``sufficiency`` table that is not a list of mappings, or a
+    ``context`` that is not a mapping would otherwise raise ``AttributeError``
+    out of :func:`recon_for`; the scorers catch this ``ValueError`` instead and
+    keep the refusal pending, since the evidence cannot be checked either way.
+    """
+    if not isinstance(raw, dict):
+        raise ValueError(f"{source}: reconnaissance is {type(raw).__name__}, not a mapping")
+    if "recon" in raw:
+        inner = raw["recon"]
+        if not isinstance(inner, dict):
+            raise ValueError(f"{source}: 'recon' is {type(inner).__name__}, not a mapping")
+        recon = inner
+    else:
+        recon = raw
+    sufficiency = recon.get("sufficiency")
+    if sufficiency is not None and not isinstance(sufficiency, list):
+        raise ValueError(f"{source}: 'sufficiency' is {type(sufficiency).__name__}, not a list")
+    for i, row in enumerate(sufficiency or []):
+        if not isinstance(row, dict):
+            raise ValueError(f"{source}: sufficiency row {i} is {type(row).__name__}, not a mapping")
+    context = recon.get("context")
+    if context is not None and not isinstance(context, dict):
+        raise ValueError(f"{source}: 'context' is {type(context).__name__}, not a mapping")
+    return recon
 
 
 def recon_for(ref: Reference, plans_dir: str | Path | None = None) -> dict[str, Any]:
@@ -278,13 +310,14 @@ def recon_for(ref: Reference, plans_dir: str | Path | None = None) -> dict[str, 
     The file holds ``assess_site(lat, lon)`` with the full sufficiency table;
     the Scout asks for the playbook's problem kind, which narrows the table
     to that problem's methods, so the same narrowing is applied here. A
-    deep copy, so a caller may edit it.
+    deep copy, so a caller may edit it. A file whose shape cannot be read
+    raises ``ValueError`` (see :func:`_checked_recon`).
     """
     from aquascope import playbooks as pbk
     from aquascope.methods import METHODS
 
     raw = _load_recon_file(ref.recon_name, plans_dir)
-    recon = json.loads(json.dumps(raw.get("recon") if isinstance(raw.get("recon"), dict) else raw))
+    recon = json.loads(json.dumps(_checked_recon(raw, _recon_path(ref.recon_name, plans_dir))))
     try:
         problem = pbk.load(ref.playbook).problem
     except pbk.PlaybookError:
@@ -640,13 +673,15 @@ def _gate_matches(ref_path: str | None, got_path: str | None) -> bool:
     return got_path == ref_path or got_path.startswith(ref_path + ".")
 
 
-def decline_rubric_version(ref: Reference) -> str:
-    """Bind reviews to the case's entire scoring reference, including its rationale."""
-    raw = json.dumps(ref.to_dict(), sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+def decline_rubric_version(ref: Reference, plans_dir: str | Path | None = None) -> str:
+    """Bind reviews to the reference and effective saved reconnaissance."""
+    evidence = {"reference": ref.to_dict(), "recon": recon_for(ref, plans_dir)}
+    raw = json.dumps(evidence, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def score_plan(reference: Reference | dict[str, Any], candidate: Any, *, reviews: Any = None) -> dict[str, Any]:
+def score_plan(reference: Reference | dict[str, Any], candidate: Any, *, reviews: Any = None,
+               plans_dir: str | Path | None = None) -> dict[str, Any]:
     """Score a candidate plan against a reference; see the module docstring for the formula.
 
     ``reference`` is a :class:`Reference` or its dict; ``candidate`` is
@@ -668,7 +703,15 @@ def score_plan(reference: Reference | dict[str, Any], candidate: Any, *, reviews
                                               for a in ref.accepts)):
         from aquascope.gym.review import lookup_decline_review
 
-        decision = lookup_decline_review(ref.id, cand.reason, decline_rubric_version(ref), reviews)
+        if not isinstance(cand.reason, str) or not cand.reason.strip():
+            decision = {"verdict": "invalid", "explanation": "decline has no reason"}
+        else:
+            try:
+                version = decline_rubric_version(ref, plans_dir)
+            except (OSError, ValueError, TypeError) as exc:
+                decision = {"verdict": "pending", "explanation": f"reconnaissance unavailable: {type(exc).__name__}"}
+            else:
+                decision = lookup_decline_review(ref.id, cand.reason, version, reviews)
         verdict = decision["verdict"]
         out["decline_correct"] = None if verdict == "pending" else verdict == "valid"
         out["score"] = None if verdict == "pending" else float(verdict == "valid")
@@ -840,7 +883,7 @@ def _now() -> str:
 
 def _result(ref: Reference, agent: str, cfg: _Config, repeat: int, cand: Candidate, detail: dict[str, Any],
             seconds: float) -> PlanResult:
-    scored = score_plan(ref, cand)
+    scored = score_plan(ref, cand, plans_dir=cfg.plans_dir)
     usage = detail.get("usage") or {}
     model = detail.get("model") if detail.get("model") is not None else cfg.model
     provider = detail.get("provider") if detail.get("provider") is not None else cfg.provider
@@ -990,7 +1033,7 @@ def rescore_plans(results: Iterable[PlanResult], references: Iterable[Reference]
         cand = Candidate(steps=[dict(st, gates=list(st.get("gates") or []), fallback=st.get("fallback"))
                                 for st in r.steps], declined=r.declined, reason=r.declined_reason,
                          branch=r.branch, author=r.author)
-        scored = score_plan(ref, cand, reviews=reviews)
+        scored = score_plan(ref, cand, reviews=reviews, plans_dir=plans_dir)
         r.score = float(scored["score"]) if scored["score"] is not None else None
         for key in ("coverage_tools", "coverage_methods", "coverage_gates", "extraneous", "decline_correct"):
             setattr(r, key, scored[key])
@@ -1031,6 +1074,26 @@ def _mean(values: Iterable[float | None]) -> float | None:
     return round(sum(xs) / len(xs), 3) if xs else None
 
 
+def _score_stats(results: Iterable[PlanResult]) -> dict[str, Any]:
+    """Describe a mean and its possible range while scores await review.
+
+    Errors count as zero, as they do in the leaderboard. Pending scores can
+    range from zero to one; these bounds do not establish matching case sets.
+    """
+    rs = list(results)
+    scores = [0.0 if r.error else r.score for r in rs]
+    judged = [score for score in scores if score is not None]
+    total = len(scores)
+    pending = total - len(judged)
+    return {
+        "mean": _mean(scores),
+        "judged": len(judged),
+        "total": total,
+        "lower": sum(judged) / total if total else None,
+        "upper": (sum(judged) + pending) / total if total else None,
+    }
+
+
 def summarize_plans(results: Iterable[PlanResult]) -> list[dict[str, Any]]:
     """One row per (agent, model): the mean score over all cases and over the solvable ones, the spread across
     repeats, the decline rates, the coverage means, extraneous and forbidden rates, first-try validity, tree
@@ -1048,10 +1111,9 @@ def summarize_plans(results: Iterable[PlanResult]) -> list[dict[str, Any]]:
             if r.error or r.score is not None:
                 by_repeat.setdefault(int(r.repeat or 0), []).append(r.score if not r.error else 0.0)
         run_means = [sum(v) / len(v) for v in by_repeat.values() if v]
-        by_pb: dict[str, list[float]] = {}
+        by_pb: dict[str, list[PlanResult]] = {}
         for r in rs:
-            if r.error or r.score is not None:
-                by_pb.setdefault(r.playbook, []).append(r.score if not r.error else 0.0)
+            by_pb.setdefault(r.playbook, []).append(r)
         cost = [r.cost_usd if r.cost_usd is not None or r.tokens else 0.0 for r in rs]
         rows.append({
             "agent": agent, "model": model or None, "provider": provider or None,
@@ -1059,6 +1121,9 @@ def summarize_plans(results: Iterable[PlanResult]) -> list[dict[str, Any]]:
             "n_decline": len({r.case_id for r in hard}),
             "repeats": len({int(r.repeat or 0) for r in rs}),
             "score": _mean([r.score if not r.error else 0.0 for r in rs]),
+            "score_stats": _score_stats(rs),
+            "score_solvable_stats": _score_stats(solvable),
+            "score_off_tree_stats": _score_stats(off_tree),
             "score_solvable": _mean([r.score if not r.error else 0.0 for r in solvable]),
             "score_off_tree": _mean([r.score if not r.error else 0.0 for r in off_tree]),
             "score_min_run": round(min(run_means), 3) if run_means else None,
@@ -1084,7 +1149,9 @@ def summarize_plans(results: Iterable[PlanResult]) -> list[dict[str, Any]]:
             "seconds_per_case": _mean([r.seconds for r in rs]),
             "cost_usd": round(sum(c for c in cost if c is not None), 4) if all(c is not None for c in cost) else None,
             "errors": sum(1 for r in rs if r.error),
-            "by_playbook": {k: round(sum(v) / len(v), 3) for k, v in sorted(by_pb.items()) if v},
+            "by_playbook": {k: stats["mean"] for k, v in sorted(by_pb.items())
+                            if (stats := _score_stats(v))["mean"] is not None},
+            "by_playbook_stats": {k: _score_stats(v) for k, v in sorted(by_pb.items())},
         })
     return rows
 
@@ -1095,6 +1162,18 @@ def _pct(x: float | None) -> str:
 
 def _num(x: float | None, digits: int = 0) -> str:
     return "-" if x is None else f"{x:,.{digits}f}"
+
+
+def _score_cell(stats: dict[str, Any]) -> str:
+    if not stats["total"]:
+        return "-"
+    mean = _num(stats["mean"], 2)
+    coverage = f"{stats['judged']}/{stats['total']} judged"
+    if stats["judged"] < stats["total"]:
+        lower = math.floor(stats["lower"] * 100) / 100
+        upper = math.ceil(stats["upper"] * 100) / 100
+        return f"{mean}* [{lower:.2f}–{upper:.2f}] ({coverage})"
+    return f"{mean} ({coverage})"
 
 
 def _label(r: dict[str, Any]) -> str:
@@ -1112,7 +1191,10 @@ def plan_leaderboard(results: Iterable[PlanResult], *, out: str | Path | None = 
         f"{n_cases} cases, {len(rs)} runs, {len(rows)} agent-model pairs. Score is the mean of judged cases of the "
         "plan-quality score (weights " + ", ".join(f"{k} {v:g}" for k, v in WEIGHTS.items())
         + "; an error scores 0). Answers awaiting review are excluded from score means and counted separately; "
-        "solvable is the mean over "
+        "A * marks a provisional mean: brackets give the possible full-set mean if each pending score "
+        "is between 0 and 1, with judged/total runs shown for each score. Different agents can have "
+        "different case or repeat identities even when the counts match; compare only matching sets. "
+        "Spread can also be provisional when reviews are pending. Solvable is the mean over "
         "the cases the reference does not decline, off-tree over the cases no single playbook branch covers; spread "
         "is the range of the per-run means when a model was played more than once; declined is the share of "
         "declining cases with a judged correct refusal; false declines are judged incorrect refusals of solvable "
@@ -1134,7 +1216,8 @@ def plan_leaderboard(results: Iterable[PlanResult], *, out: str | Path | None = 
         lines.append(
             f"| {r['agent']} | {_label(r)} | {r['n_cases']} ({r['n_solvable']} + {r['n_decline']})"
             + (f" x{r['repeats']}" if r["repeats"] > 1 else "")
-            + f" | {_num(r['score'], 2)} | {_num(r['score_solvable'], 2)} | {_num(r['score_off_tree'], 2)} | {spread} "
+            + f" | {_score_cell(r['score_stats'])} | {_score_cell(r['score_solvable_stats'])} "
+            f"| {_score_cell(r['score_off_tree_stats'])} | {spread} "
             f"| {_pct(r['decline_rate'])} | {_pct(r['false_decline_rate'])} | {_pct(r['zero_plan_rate'])} "
             f"| {r['review_pending']} | {_pct(r['coverage_tools'])} "
             f"| {_pct(r['coverage_methods'])} | {_pct(r['coverage_gates'])} | {_pct(r['extraneous'])} "
@@ -1142,12 +1225,13 @@ def plan_leaderboard(results: Iterable[PlanResult], *, out: str | Path | None = 
             f"| {_num(r['tokens_per_case'])} | {_num(r['seconds_per_case'], 1)} | {_num(r['cost_usd'], 3)} "
             f"| {r['errors']} |"
         )
-    playbooks = sorted({p for r in rows for p in r["by_playbook"]})
+    playbooks = sorted({p for r in rows for p in r["by_playbook_stats"]})
     if playbooks:
         lines += ["", "Mean score by playbook:", "", "| agent | model | " + " | ".join(playbooks) + " |",
                   "|---|---|" + "---|" * len(playbooks)]
         for r in rows:
-            cells = [f"{r['by_playbook'][p]:.2f}" if p in r["by_playbook"] else "-" for p in playbooks]
+            cells = [_score_cell(r["by_playbook_stats"][p]) if p in r["by_playbook_stats"] else "-"
+                     for p in playbooks]
             lines.append(f"| {r['agent']} | {_label(r)} | " + " | ".join(cells) + " |")
     lines += ["", PRICES_NOTE, ""]
     text = "\n".join(lines)

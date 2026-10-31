@@ -9,6 +9,10 @@ All notable changes to AquaScope are documented here.
 
 ### Fixed
 
+- **HydroGym refusal reviews:** bind decisions to the saved reconnaissance, score blank refusal reasons as invalid,
+  and mark incomplete benchmark means with coverage and possible bounds (#381). A reconnaissance file whose decoded
+  shape cannot be read (null or list root, non-mapping `recon`, malformed sufficiency table) now raises a
+  `ValueError` that keeps the refusal pending instead of escaping as an `AttributeError` and scoring it zero.
 - **HydroGym decline scoring:** mark refusal reasons for explicit review, support cases that accept a plan or a
   defensible refusal, and report pending reviews separately instead of treating them as zero scores (#381).
 - **Cite 1.1.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.1.0's Zenodo DOI (10.5281/zenodo.23718093).

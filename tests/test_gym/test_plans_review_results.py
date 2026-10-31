@@ -52,3 +52,34 @@ def test_result_and_rescore_preserve_pending(monkeypatch):
     assert row.score is None and row.decline_correct is None
     row.score = 0.0
     assert gp.rescore_plans([row], [ref])[0].score is None
+
+
+def test_leaderboard_bounds_different_pending_sets_and_playbooks():
+    a1 = _row("case-a", score=1.0)
+    a2 = _row("case-b", score=None, declined=True)
+    b1 = _row("case-a", score=None, declined=True)
+    b2 = _row("case-b", score=0.0)
+    for row in (b1, b2):
+        row.model = "other"
+    for row in (a2, b2):
+        row.playbook = "other_playbook"
+    summaries = gp.summarize_plans([a1, a2, b1, b2])
+    one, other = summaries
+    assert one["score_stats"] == {"mean": 1.0, "judged": 1, "total": 2, "lower": 0.5, "upper": 1.0}
+    assert other["score_stats"] == {"mean": 0.0, "judged": 1, "total": 2, "lower": 0.0, "upper": 0.5}
+    assert one["by_playbook_stats"]["other_playbook"]["judged"] == 0
+    assert other["by_playbook_stats"]["groundwater_decline"]["judged"] == 0
+    report = gp.plan_leaderboard([a1, a2, b1, b2])
+    assert "1.00* [0.50–1.00] (1/2 judged)" in report
+    assert "0.00* [0.00–0.50] (1/2 judged)" in report
+    assert "-* [0.00–1.00] (0/1 judged)" in report
+    assert "different case or repeat identities even when the counts match" in report
+
+
+def test_pending_bounds_include_errors_and_outward_rounding():
+    rows = [_row("accepted", score=1.0), _row("error", score=None, error="offline"),
+            _row("pending", score=None)]
+    stats = gp.summarize_plans(rows)[0]["score_stats"]
+    assert stats["judged"] == 2 and stats["total"] == 3
+    assert stats["lower"] == 1 / 3 and stats["upper"] == 2 / 3
+    assert "0.50* [0.33–0.67] (2/3 judged)" in gp.plan_leaderboard(rows)

@@ -194,14 +194,24 @@ aquascope gym leaderboard results/plans-*.jsonl --out leaderboard.md
 
 References can accept a plan, a decline, or both. A decline's reason is not
 automatically accepted just because it contains a phrase: its score is pending
-until a reviewer records a decision. The leaderboard excludes pending decisions
-from score means and reports their count. A review file is a JSON array of
+until a reviewer records a decision; a missing or blank reason is invalid. A gap
+in the evidence also keeps a refusal pending: a missing reconnaissance file,
+malformed JSON, or a decoded record whose shape cannot be read (a null or list
+root, a non-mapping `recon`, a malformed sufficiency table) has no rubric
+version, so the score stays pending rather than becoming a zero. The leaderboard excludes pending decisions
+from score means and reports judged/total counts for overall, subset and playbook
+scores. A starred mean is provisional; its interval bounds the full-set mean
+assuming each pending score lies between 0 and 1. Equal counts do not imply
+the same case and repeat identities across agents; compare matching sets only.
+A review file is a JSON array of
 objects containing `case_id`, `reason_sha256`, `rubric_version`, `verdict`
 (`valid` or `invalid`) and a nonempty `explanation`. Compute the two bindings
 from the exact reason and current reference with
 `aquascope.gym.review.reason_sha256(reason)` and
-`aquascope.gym.plans.decline_rubric_version(reference)`. A changed answer or
-reference needs a new review. The hashes do not authenticate a reviewer; use
+`aquascope.gym.plans.decline_rubric_version(reference, plans_dir)` (omit
+`plans_dir` for the bundled cases). The version binds the effective saved
+reconnaissance as well as the reference; existing reviews must be regenerated.
+A changed answer, reference or reconnaissance needs a new review. The hashes do not authenticate a reviewer; use
 records from a trusted source and disclose AI-assisted or preliminary reviews.
 Use `aquascope gym plans score CASE --candidate plan.json --reviews reviews.json`
 or `aquascope gym plans rescore results.jsonl --reviews reviews.json --out rescored.jsonl`.

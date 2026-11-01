@@ -261,6 +261,14 @@ def test_a_second_collector_reuses_the_parsed_archive(tmp_path, monkeypatch):
 def test_a_recent_year_is_parsed_again_once_its_cache_has_expired(tmp_path, monkeypatch):
     import aquascope.collectors.poland_imgw as imgw
 
+    # Pin today inside hydrological year 2026, so 2025 is still one of the two recent years whose cache
+    # expires. Without this the test broke on 2026-11-01, when hydrological year 2027 began.
+    class _Today(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 1, 15)
+
+    monkeypatch.setattr(imgw, "date", _Today)
     c = _Collector(tmp_path)
     c.collect(variable="discharge", station_ids=["149180020"], start="2024-11-01", end="2025-01-31")
     key = (str(tmp_path), "codz_2025.zip")

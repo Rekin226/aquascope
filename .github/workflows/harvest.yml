@@ -205,7 +205,14 @@ jobs:
           print(f"**{h['n_stations']:,} stations**, {h['n_ok']}/{len(h['sources'])} sources OK\n")
           print("| source | status | stations | seconds |\n| --- | --- | ---: | ---: |")
           for s in h["sources"]:
-              status = "ok" if s["ok"] else f"FAILED: `{s['error']}`"
+              warnings = s.get("warnings") or []
+              if not s["ok"]:
+                  status = f"FAILED: `{s['error']}`"
+              elif warnings:
+                  detail = "; ".join(warnings).replace("|", "\\|").replace("\n", " ")
+                  status = f"WARN: {detail}"
+              else:
+                  status = "ok"
               print(f"| `{s['source']}` | {status} | {s['n_stations']:,} | {s['seconds']} |")
           obs = pathlib.Path("archive/obs/refresh_status.json")
           if obs.exists():

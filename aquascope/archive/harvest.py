@@ -14,7 +14,7 @@ import logging
 import struct
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from aquascope import __version__
@@ -271,6 +271,50 @@ def _health(catalogs: dict[str, StationCatalog]) -> list[SourceHealth]:
     return out
 
 
+def _fill_period_start_from_manifest(stations: list[Station], out: Path) -> int:
+    """Give span-less stations the first date their mirrored series holds.
+
+    A source's catalog says what the agency publishes *now*, so some of them
+    leave ``period_start`` empty — IMGW's founding year is not the start of a
+    record (issue #699). The mirrored manifest does know it: ``first`` is the
+    earliest timestamp this project has stored for that station. Only empty
+    spans are filled; a source that states its own span keeps it.
+    Returns the number of stations filled, and 0 when there is no manifest.
+    """
+    from aquascope.archive.observations import load_manifest
+
+    try:
+        manifest = load_manifest(out)
+    except (OSError, ValueError) as exc:
+        logger.info("period_start left alone: the manifest is unavailable (%s)", exc)
+        return 0
+    firsts: dict[tuple[str, str], date] = {}
+    for entry in (manifest.get("sources") or {}).values():
+        source = (entry or {}).get("source")
+        if not source:
+            continue
+        for station_id, row in ((entry or {}).get("stations") or {}).items():
+            try:
+                first = date.fromisoformat(str((row or {}).get("first"))[:10])
+            except (TypeError, ValueError):
+                continue
+            key = (source, station_id)
+            if key not in firsts or first < firsts[key]:
+                firsts[key] = first
+    filled = 0
+    for station in stations:
+        if station.period_start is not None:
+            continue
+        first = firsts.get((station.source, station.station_id))
+        if first is None:
+            continue
+        station.period_start = first
+        filled += 1
+    if filled:
+        logger.info("%d stations got their period_start from the mirrored first observation", filled)
+    return filled
+
+
 def harvest_stations(
     out_dir: str | Path,
     *,
@@ -290,6 +334,9 @@ def harvest_stations(
     observation terms: a station *catalog* is factual metadata and always
     links back to the agency). Per-source failures and non-fatal warnings are
     recorded in ``health.json``; source failures are never raised.
+    A station the source gives no span for takes one from the mirrored
+    observations when ``out_dir/obs/manifest.json`` is there (see
+    ``_fill_period_start_from_manifest``).
     With ``write_signatures`` (the default) and mirrored discharge under
     ``out_dir/obs``, ``signatures.parquet`` is rebuilt next to the catalog; a
     failure there is logged, never raised.
@@ -332,6 +379,7 @@ def harvest_stations(
         stations.extend(s for s in retained if (s.source, s.station_id) not in current_ids)
         for row in health:
             row.retained_stations = sum(s.source == row.source for s in retained)
+    _fill_period_start_from_manifest(stations, out)
     infer_site_ids(stations)
     stations.sort(key=lambda s: (s.source, s.station_id))
 

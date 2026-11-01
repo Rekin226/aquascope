@@ -14,6 +14,7 @@ All notable changes to AquaScope are documented here.
 - **`south_africa_dws` license and attribution** (#473): update license to `DWS NIWIS terms (academic, research or personal use)` and attribution to name the Department of Water and Sanitation, Republic of South Africa as copyright proprietor following the disclaimer on [dws.gov.za/niwis2/Disclaimer](https://www.dws.gov.za/niwis2/Disclaimer) (archived at [web.archive.org](http://web.archive.org/web/20250528170949/https://www.dws.gov.za/niwis2/Disclaimer)).
 
 ### Fixed
+- **`poland_imgw` station spans** (#699): `period_start` no longer takes the gauge's founding year (`rok_zalozenia_stacji`) — a founding year is not the start of a record and put the spans a median 13.8 years too early. The founding year is kept in `extra["founded_year"]`, and `aquascope harvest stations` fills a span a source leaves empty from the first mirrored observation in `obs/manifest.json`.
 - **What-if fractional quantities** (#646): the model and keyless readings of “half a cubic metre per second”, “a half litre per second” and “half a degree warmer” keep the stated unit instead of treating the quantity as a proportion.
 - **GR4J at large gauges** (#273): the station model asks before using point forcing above 10,000 km², and describes the forcing download separately from the fit.
 

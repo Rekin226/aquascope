@@ -100,6 +100,100 @@ def test_harvest_writes_files_and_health(tmp_path):
     assert "Group by `(source, site_id)`" in card
 
 
+def _write_manifest(out: Path, sources: dict) -> None:
+    (out / "obs").mkdir(parents=True, exist_ok=True)
+    (out / "obs" / "manifest.json").write_text(json.dumps({"version": 2, "sources": sources}), encoding="utf-8")
+
+
+def _harvest_rows(tmp_path: Path) -> dict[str, dict]:
+    out = tmp_path / "archive"
+    with patch("aquascope.archive.harvest.station_catalogs", side_effect=_fake_catalogs):
+        harvest_stations(out, write_signatures=False)
+    return {row["station_id"]: row for row in pq.read_table(out / "stations.parquet").to_pylist()}
+
+
+def test_period_start_is_filled_from_the_mirrored_first_observation(tmp_path):
+    """A source that states no span (#699: IMGW's founding year is not a start) takes the mirrored first date."""
+    _write_manifest(tmp_path / "archive", {
+        "ireland_opw/water_level": {
+            "source": "ireland_opw", "variable": "water_level",
+            "stations": {"0000001041": {"n": 120, "first": "2019-04-03T01:00:00", "last": "2024-01-01T00:00:00"}},
+        },
+    })
+    rows = _harvest_rows(tmp_path)
+    assert rows["0000001041"]["period_start"] == date(2019, 4, 3)
+
+
+def test_period_start_uses_the_earliest_of_every_variable(tmp_path):
+    _write_manifest(tmp_path / "archive", {
+        "ireland_opw/water_level": {
+            "source": "ireland_opw", "variable": "water_level",
+            "stations": {"0000001041": {"n": 2, "first": "2020-01-05"}},
+        },
+        "ireland_opw/discharge": {
+            "source": "ireland_opw", "variable": "discharge",
+            "stations": {"0000001041": {"n": 9, "first": "2018-07-09"}},
+        },
+    })
+    rows = _harvest_rows(tmp_path)
+    assert rows["0000001041"]["period_start"] == date(2018, 7, 9)
+
+
+def test_period_start_is_matched_by_the_entry_source_not_the_key(tmp_path):
+    """The manifest key is history; ``entry["source"]`` is the source a station belongs to."""
+    _write_manifest(tmp_path / "archive", {
+        "ireland/water_level": {
+            "source": "ireland_opw", "variable": "water_level",
+            "stations": {"0000001041": {"n": 4, "first": "2021-06-01"}},
+        },
+    })
+    rows = _harvest_rows(tmp_path)
+    assert rows["0000001041"]["period_start"] == date(2021, 6, 1)
+
+
+def test_period_start_a_source_states_is_never_overwritten(tmp_path):
+    _write_manifest(tmp_path / "archive", {
+        "pegelonline/water_level": {
+            "source": "pegelonline", "variable": "water_level",
+            "stations": {"u1": {"n": 3, "first": "1996-02-01"}},
+        },
+        "ireland_opw/water_level": {
+            "source": "ireland_opw", "variable": "water_level",
+            "stations": {"0000001041": {"n": 3, "first": "2019-04-03"}},
+        },
+    })
+    rows = _harvest_rows(tmp_path)
+    assert rows["u1"]["period_start"] == date(1990, 1, 1)  # the agency's own span wins
+    assert rows["0000001041"]["period_start"] == date(2019, 4, 3)
+
+
+def test_period_start_is_read_from_a_version_1_manifest(tmp_path):
+    """Version 1 keyed ``sources`` by source; the migration supplies ``entry["source"]``."""
+    out = tmp_path / "archive"
+    (out / "obs").mkdir(parents=True, exist_ok=True)
+    (out / "obs" / "manifest.json").write_text(json.dumps({
+        "version": 1,
+        "sources": {"ireland_opw": {
+            "variable": "water_level",
+            "stations": {"0000001041": {"n": 2, "first": "2017-03-02"}},
+        }},
+    }), encoding="utf-8")
+    rows = _harvest_rows(tmp_path)
+    assert rows["0000001041"]["period_start"] == date(2017, 3, 2)
+
+
+@pytest.mark.parametrize("state", ["missing", "unreadable"])
+def test_harvest_without_a_readable_manifest_leaves_the_span_empty(tmp_path, state):
+    out = tmp_path / "archive"
+    if state == "unreadable":
+        (out / "obs").mkdir(parents=True, exist_ok=True)
+        (out / "obs" / "manifest.json").write_text("{not json", encoding="utf-8")
+    rows = _harvest_rows(tmp_path)
+    assert rows["0000001041"]["period_start"] is None
+    assert rows["u1"]["period_start"] == date(1990, 1, 1)
+    assert (out / "stations.parquet").exists()  # the harvest itself is unaffected
+
+
 @pytest.mark.parametrize("failure", ["partial", "all", "none"])
 @pytest.mark.parametrize("max_items", [None, 1])
 def test_bom_catalog_health_distinguishes_partial_from_failure_and_caps(tmp_path, failure, max_items):

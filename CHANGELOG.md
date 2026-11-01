@@ -14,6 +14,7 @@ All notable changes to AquaScope are documented here.
 - **`south_africa_dws` license and attribution** (#473): update license to `DWS NIWIS terms (academic, research or personal use)` and attribution to name the Department of Water and Sanitation, Republic of South Africa as copyright proprietor following the disclaimer on [dws.gov.za/niwis2/Disclaimer](https://www.dws.gov.za/niwis2/Disclaimer) (archived at [web.archive.org](http://web.archive.org/web/20250528170949/https://www.dws.gov.za/niwis2/Disclaimer)).
 
 ### Fixed
+- **`gym plans validate` checks a required method against the full reconnaissance** (#700): validation read the saved sufficiency table narrowed to the brief's playbook problem, so a method serving another problem had no row to check and passed (the `sgi` required step at Nowy Targ); it now reads the full table, while scoring keeps the narrowed one. `gym plans validate --json` prints JSON instead of the report lines, and `plans/_authoring.yaml` says `forbidden` is how a method outside the playbook's problem is covered.
 - **What-if fractional quantities** (#646): the model and keyless readings of “half a cubic metre per second”, “a half litre per second” and “half a degree warmer” keep the stated unit instead of treating the quantity as a proportion.
 - **GR4J at large gauges** (#273): the station model asks before using point forcing above 10,000 km², and describes the forcing download separately from the fit.
 

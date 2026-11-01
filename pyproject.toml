@@ -62,6 +62,7 @@ copernicus = [
     "cdsapi>=0.6",
     "cfgrib>=0.9",
     "xarray>=2023.1",
+    "netcdf4>=1.6",
 ]
 viz = [
     "matplotlib>=3.7",

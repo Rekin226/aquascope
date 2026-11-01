@@ -704,13 +704,19 @@ class TestBOMStations:
             return BOM_BY_PARAMETER_TYPE.get(params["parametertype_name"], BOM_NO_MATCHES)
 
         client.get_json.side_effect = get_json
+        collector = BOMCollector(client=client)
         with caplog.at_level("WARNING"):
-            stations = BOMCollector(client=client).stations()
+            stations = collector.stations()
         # the failing type is skipped, but stations from other types still come back
         assert "410130" in [s.station_id for s in stations]
         # summary warning reports the lost parameter type
         assert "BOM getStationList failed for 1 of" in caplog.text
         assert "Water Course Discharge" in caplog.text
+        assert "Water Course Discharge" in collector.station_warnings[0]
+        # A later request must not inherit the prior partial result warning.
+        client.get_json.side_effect = lambda url, params=None, **kw: BOM_NO_MATCHES
+        assert collector.stations() == []
+        assert collector.station_warnings == ()
 
     def test_all_parameter_types_failing_raises(self):
         client = MagicMock()

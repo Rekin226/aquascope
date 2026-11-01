@@ -107,20 +107,22 @@ print(res["methods"])
 
 **Against the package's own single-station trend, five Archive gauges.** With calendar years and the
 single-station study's completeness rule (292 days), `paint.flood_trend` returns the same annual maxima, value
-for value, and the same Mann-Kendall p-value and sample size at full precision (asserted), and the same tau.
-Sen's slope on positions equals the single-station `sens_slope_per_year` exactly; Paint's slope against the
-year differs only where years are missing (the single-station slope counts the step over a gap as one year):
+for value, so the Mann-Kendall p-value, tau and sample size agree too. Both now measure Sen's slope against
+the calendar year: `analyze_series` hands each annual maximum's year to `sens_slope`, as `aquascope.paint`
+already did (#668), so the panel's `sens_slope_per_year` matches Paint's per-year slope. The last column is
+the slope a positional step would give instead, counting the gap between two records as one year; where years
+are missing it reads the trend steeper than it is:
 
-| Gauge | Years | Missing | p (station) | p (paint) | Sen per step, station | per step, paint | per year, paint |
+| Gauge | Years | Missing | p (station) | p (paint) | Sen per year, station | per year, paint | per step, paint |
 |---|---|---|---|---|---|---|---|
-| usgs/USGS-01049500 | 122 | 13 | 0.1721 | 0.1721 | −0.0765 | −0.07647 | −0.06716 |
-| usgs/USGS-01335754 | 117 | 21 | 0.1268 | 0.1268 | −1.3921 | −1.392 | −1.091 |
+| usgs/USGS-01049500 | 122 | 13 | 0.1721 | 0.1721 | −0.0672 | −0.0672 | −0.0765 |
+| usgs/USGS-01335754 | 117 | 21 | 0.1268 | 0.1268 | −1.0912 | −1.0912 | −1.3921 |
 | uk_ea/001fc3f6-5980-42be-b553-6a09c6b69b69 | 28 | 0 | 0.2281 | 0.2281 | 0.2776 | 0.2776 | 0.2776 |
-| hubeau_hydrometrie/A348020001 | 107 | 2 | 0.4334 | 0.4334 | 0.0594 | 0.05937 | 0.05893 |
+| hubeau_hydrometrie/A348020001 | 107 | 2 | 0.4334 | 0.4334 | 0.0589 | 0.0589 | 0.0594 |
 | poland_imgw/149180020 | 75 | 0 | 0.1986 | 0.1986 | −0.9655 | −0.9655 | −0.9655 |
 
-(Archive as of 27 October 2026. `tests/test_paint.py` repeats the check on synthetic records, with and without
-missing years.)
+(Archive as of 27 October 2026, the five gauges re-run for this check; slopes in m³/s a year, four decimals.
+`tests/test_paint.py` repeats the check on synthetic records, with and without missing years.)
 
 **A region against a published result.** Flood trend over England, Wales and northern France (box 8.0°W to
 2.0°E, 49.8°N to 59.0°N, the 300 longest Archive records with at least 20 complete water years): 298 gauges

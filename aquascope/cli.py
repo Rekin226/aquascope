@@ -2839,9 +2839,10 @@ def cmd_gym(args: argparse.Namespace) -> None:
                 sys.exit(1)
             return
         if args.plans_cmd == "rescore":
+            reviews = json.loads(Path(args.reviews).read_text(encoding="utf-8")) if args.reviews else None
             for path in args.results:
                 rows = gp.load_plan_results([path], latest=False)
-                rows = gp.rescore_plans(rows, plans_dir=args.plans)
+                rows = gp.rescore_plans(rows, plans_dir=args.plans, reviews=reviews)
                 target = Path(args.out) if args.out and len(args.results) == 1 else Path(path)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(
@@ -2857,13 +2858,15 @@ def cmd_gym(args: argparse.Namespace) -> None:
                     cand = gp.candidate_from(json.load(fh))
             else:
                 cand, _detail = gp.tree_candidate(ref, args.plans)
-            scored = gp.score_plan(ref, cand)
+            reviews = json.loads(Path(args.reviews).read_text(encoding="utf-8")) if args.reviews else None
+            scored = gp.score_plan(ref, cand, reviews=reviews, plans_dir=args.plans)
             if args.json:
                 print(json.dumps({"case": ref.id, **scored, "candidate": cand.to_dict()}, indent=2, default=str))
                 return
             pct = lambda x: "-" if x is None else f"{100 * x:.0f} %"  # noqa: E731
+            score_text = "needs review" if scored["score"] is None else f"{scored['score']:.2f}"
             print(
-                f"  {ref.id} ({'the tree' if not args.candidate else args.candidate}): score {scored['score']:.2f}; "
+                f"  {ref.id} ({'the tree' if not args.candidate else args.candidate}): score {score_text}; "
                 f"tools {pct(scored['coverage_tools'])}, methods {pct(scored['coverage_methods'])}, gates "
                 f"{pct(scored['coverage_gates'])}, extraneous {pct(scored['extraneous'])}, forbidden "
                 f"{scored['forbidden_used']}, decline correct {scored['decline_correct']}"
@@ -4093,7 +4096,8 @@ def _print_scorecard(c: dict) -> None:
              if rep.get("numbers_without_evidence") else ""))
     if c.get("plan"):
         pl = c["plan"]
-        print(f"  plan      vs {pl['case']}: {pl['score']:.2f} (tools {_pct(pl['tools'])}, methods "
+        plan_score = "needs review" if pl["score"] is None else f"{pl['score']:.2f}"
+        print(f"  plan      vs {pl['case']}: {plan_score} (tools {_pct(pl['tools'])}, methods "
               f"{_pct(pl['methods'])}, gates {_pct(pl['gates'])}, extraneous {_pct(pl['extraneous'])}, "
               f"forbidden {pl['forbidden']})")
         for line in pl["explain"][:6]:
@@ -5780,6 +5784,8 @@ def main() -> None:
             p_gpc.add_argument("id", help="The case id")
         if name == "score":
             p_gpc.add_argument("--candidate", default=None, help="A plan JSON (a study, a workspace or a decline)")
+        if name in ("score", "rescore"):
+            p_gpc.add_argument("--reviews", default=None, help="Trusted JSON review records for decline reasons")
         if name == "rescore":
             p_gpc.add_argument("results", nargs="+", metavar="RESULTS.jsonl", help="Result files, rewritten in place")
             p_gpc.add_argument("--out", default=None, help="Write the re-scored rows here instead (one file only)")

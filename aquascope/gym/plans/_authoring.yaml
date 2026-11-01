@@ -22,6 +22,9 @@
 #                    one loses the `clean` part of the score.
 #   decline          true when the data or the brief cannot carry the question; decline_kind then names the kind
 #                    (declined: a playbook rule; refused: the registry; no_branch; intake) and steps is empty
+#   accepts          optional answer shapes: plan and decline. For a decline, reason_must_mention lists literal,
+#                    alternative phrases as guidance for reviewers, never automatic evidence of correctness.
+#                    Declines for these cases require explicit review bound to the reason and the reference.
 #   rationale        why this is the plan a hydrologist would write, in a few sentences
 #   tags             off_tree for a brief no single playbook branch covers
 #

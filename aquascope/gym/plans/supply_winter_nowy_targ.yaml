@@ -9,7 +9,7 @@ title: Whether a 0.12 m3/s winter intake fills on a snow-fed Carpathian river
 brief: >-
   Can the Czarny Dunajec at Nowy Targ give us 0.12 m3/s (about 10.4 ML/day) for the hotels and apartments
   through December to March as a run-of-river intake? The permit we are told to expect keeps Q95 in the river
-  and lets us take at most a tenth of what is left. We need to know whether the intake still fills in a dry
+  and lets us take at most a tenth of the whole flow. We need to know whether the intake still fills in a dry
   winter, and how often it would have run short over the gauge's record. Storage is not an option for us.
 intake:
   demand_m3s: 0.12
@@ -50,9 +50,10 @@ steps:
       - {check: not_empty, path: reliability}
       - {check: not_empty, path: fdc}
     note: >-
-      Q95 kept in the river, at most a tenth of the remainder taken, 0.12 m3/s wanted every day: the river has
-      to carry 2.17 m3/s. The step takes months, so the brief's December-March question is asked directly
-      (months [12, 1, 2, 3]); the annual figure beside it is the context, not the answer.
+      Q95 kept in the river and the take capped at a tenth of the whole flow, not of the remainder after Q95:
+      0.12 m3/s wanted every day, so the river has to carry 2.17 m3/s from max(0.12/0.1, 2.05+0.12). The step
+      takes months, so the brief's December-March question is asked directly (months [12, 1, 2, 3]); the annual
+      figure beside it is the context, not the answer.
   - tool: low_flow_context
     method: low_flow_frequency
     optional: true
@@ -61,8 +62,8 @@ steps:
     alternatives:
       - {tool: analyze_station, method: low_flow_frequency}
     note: >-
-      7Q10 and the baseflow index put a depth on the dry winter that the annual percentage hides; the record is
-      ice-affected in winter, so quote them as indicative and not as a licence number.
+      7Q10 puts a depth on the dry winter that the annual percentage hides; the record is ice-affected in
+      winter, so quote 7Q10 as indicative and not as a licence number.
 forbidden:
   tools: [load_table, flow_duration]
   methods: [spi, spei, sgi, groundwater_trend, recharge_wtf, baseflow_separation]
@@ -81,13 +82,14 @@ rationale: >-
 
   The plan is the gauged branch of the playbook, because the number the client needs is the one the reserved-flow
   rule produces. flow_duration gives Q95 2.05, Q50 5.9 and Q10 16.5 m3/s; supply_reliability keeps Q95 in the
-  river, caps the take at a tenth of the remainder and asks for 0.12 m3/s every day, which means the river has to
-  carry 2.17 m3/s. The answer is a qualified yes, and the qualification is the winter: 93.5% of days over the
-  year, 84.4% of days in December-March, 19 of 65 years with no short day at all, and 2006 short on 115 days over
-  the year and 82 in the winter window. low_flow_frequency then puts 7Q10 at 1.305 m3/s, against a 2.17 m3/s
-  requirement: in a one-in-ten dry week the river does not hold enough water for the intake and the reserve
-  together. That is the sentence the client can decide on, and it is why the storage question they ruled out comes
-  back as a number rather than as an opinion.
+  river, caps the take at a tenth of the whole flow (not a tenth of the remainder after Q95) and asks for
+  0.12 m3/s every day, so the river has to carry 2.17 m3/s: max(0.12/0.1, 2.05+0.12). The answer is a
+  qualified yes, and the qualification is the winter: 93.5% of days over the year, 84.4% of days in
+  December-March, 19 of 65 years with no short day at all, and 2006 short on 115 days over the year and 82 in the
+  winter window. low_flow_frequency then puts 7Q10 at 1.305 m3/s, against a 2.17 m3/s requirement: in a
+  one-in-ten dry week the river does not hold enough water for the intake and the reserve together. That is the
+  sentence the client can decide on, and it is why the storage question they ruled out comes back as a number
+  rather than as an opinion.
 
   One trap is worth naming, because it is a trap this record sets. The years-without-a-shortfall figure is 0.29,
   so 46 of the 65 years had at least one short day. That reads dramatic and says almost nothing: a Q95 reserve is
@@ -118,7 +120,6 @@ rationale: >-
   groundwater level record at this site"), so those five methods are forbidden, together with load_table (the table
   path would bypass the register).
 
-  One caveat belongs in the answer: the IMGW catalogue entry for this station carries ice_code and overgrowth_code
-  columns for the reach, so ice-affected winter discharge is a recognised condition here and the winter rating is
-  the weakest part of the record. 7Q10 and the winter fraction are therefore indicative; a permit number would
-  need the raters' winter notes.
+  One caveat belongs in the answer: a snow-fed Carpathian river carries winter ice, so discharge measured
+  through the winter months is the weakest part of the record. 7Q10 and the winter fraction are therefore
+  indicative; a permit number would need the raters' winter notes.

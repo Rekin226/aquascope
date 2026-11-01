@@ -171,11 +171,16 @@ def test_findings_scored_against_a_reference():
     assert out["asked_when_reference_asks"] == 1.0
 
 
-# ── the three references load and score ──
+# ── the four references load and score ──
 
 
-def test_the_three_references_load_and_validate():
-    assert {r.id for r in REFS} == {"kingston-flood", "cambridge-groundwater", "toulouse-irrigation"}
+def test_the_four_references_load_and_validate():
+    assert {r.id for r in REFS} == {
+        "kingston-flood",
+        "cambridge-groundwater",
+        "toulouse-irrigation",
+        "potomac-supply",
+    }
     for ref in REFS:
         assert ref.study and (ref.must_say or ref.must_not_say)
         assert (gr.SHOWCASE_DIR / ref.study / "workspace.json").exists(), ref.study
@@ -204,6 +209,20 @@ def test_toulouse_states_the_significant_decreasing_trend_and_scores_clean():
     assert out["reference"]["must_say"]["failed"] == [], out["reference"]
     assert out["reference"]["must_not_say"]["violated"] == []
     assert out["reference"]["score"] == 1.0 and out["dimensions"]["no_filled_holes"] == 1.0
+
+
+def test_potomac_supply_states_the_screening_verdict_and_scores_clean():
+    """The 2026-09-14 recording answers a dry-year supply question with the screening rule: the demand is met
+    on 82.53 % of days but in only 4.167 % of years with no shortfall day, and the verdict is "seasonal
+    shortfalls". The annual means carry no trend (Mann-Kendall p = 0.5753), so the reference forbids a
+    direction and forbids calling the supply reliable; the recorded report does neither."""
+    ref = BY_ID["potomac-supply"]
+    with (gr.SHOWCASE_DIR / ref.study / "workspace.json").open(encoding="utf-8") as fh:
+        ws = json.load(fh)
+    out = gr.score_report(ws, reference=ref)
+    assert out["reference"]["must_say"]["failed"] == [], out["reference"]
+    assert out["reference"]["must_not_say"]["violated"] == []
+    assert out["reference"]["score"] == 1.0
 
 
 # ── the CLI ──

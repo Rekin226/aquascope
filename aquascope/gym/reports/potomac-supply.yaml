@@ -1,0 +1,73 @@
+# AquaScope Bench report-quality reference (#382); the authoring rules are in _authoring.yaml.
+# Recorded 2026-09-14. USGS-01646502 (Potomac at Little Falls) carries 95.7 years of daily discharge; Q95 is
+# 50.1 m3/s and, with an 8 m3/s demand and a 10 % share cap, the flow the channel has to keep is 80.0 m3/s.
+# The screen meets the demand on 82.53 % of days but in only 4.167 % of years with no shortfall day, so the
+# verdict is a seasonal-shortfall screening result, not a licence answer; 7Q10 is 31.68 m3/s. The annual
+# means carry no trend (Mann-Kendall p = 0.5753), so a direction must not be stated. Two rounding flaws in
+# the recording (the 100-year flood at 11310 against a fitted 11306.4, and Q10 as 733.0 in s3 against 731.0 in
+# s2) are named here rather than asserted: a must_say that the recording itself misses would fail its own
+# score, which the test suite requires to be 1.0.
+id: potomac-supply
+study: potomac-supply
+title: A dry-year supply question answered with a screening verdict, not a licence
+rationale: >-
+  Q95 at USGS-01646502 is 50.1 m3/s on 95.7 years of daily record, and with an 8 m3/s demand the 10 % share cap
+  requires 80.0 m3/s in the channel, so the share cap (not the 58.1 m3/s implied by demand plus the Q95 reserve)
+  is what binds. The screen meets the demand on 82.53 % of days but in only 4.167 % of years with no shortfall
+  day, the worst year (1965) is 195 short days, and 7Q10 is 31.68 m3/s: a faithful report states the screening
+  verdict, keeps the demand and the required flow apart from the low-flow statistics, and does not read a
+  p = 0.5753 Mann-Kendall result as a direction. A report that called the supply reliable, or that answered the
+  licence question the screening rule cannot answer, would be wrong. The recording rounds the 100-year flood to
+  11310 against a fitted 11306.4, and reports Q10 as 733.0 in s3 against 731.0 in s2; both are known, and
+  neither is asserted here because a reference the recording cannot pass is not a reference.
+tags: [supply_reliability, screening_rule, direction]
+must_say:
+  - kind: number
+    value: 50.1
+    tol: 0.02
+    unit: m3/s
+    label: Q95 at the gauge
+  - kind: number
+    value: 31.68
+    tol: 0.02
+    unit: m3/s
+    label: the 7Q10 low-flow statistic
+  - kind: number
+    value: 95.7
+    tol: 0.01
+    unit: years
+    label: the record length
+  - kind: number
+    value: 80.0
+    tol: 0.02
+    unit: m3/s
+    label: the in-channel flow the 10 % share cap requires
+  - kind: number
+    value: 82.53
+    tol: 0.02
+    unit: '%'
+    label: share of days the demand is met
+  - kind: phrase
+    any: ["seasonal shortfalls"]
+    label: the screening verdict band
+  - kind: grade
+    grade: established
+    label: the Q95 statistic carries its grade
+must_not_say:
+  - kind: phrase
+    any: ["declining", "decreasing", "increasing", "downward", "upward"]
+    label: no trend direction on a p = 0.5753 Mann-Kendall result
+  - kind: phrase
+    any: ["is reliable", "reliably met", "guaranteed"]
+    label: no claim that the run-of-river supply is reliable
+decision:
+  value: 50.1
+  unit: m3/s
+  tolerance: 0.02
+  grade: established
+findings:
+  decision:
+    grade: established
+    value: 50.1
+    unit: m3/s
+    tolerance: 0.02

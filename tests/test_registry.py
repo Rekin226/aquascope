@@ -103,6 +103,15 @@ def test_usgs_output_model():
     assert SOURCES["usgs"].output_model == "StreamflowReading | WaterLevelReading | WaterQualitySample"
 
 
+def test_copernicus_points_at_the_early_warning_data_store():
+    meta = SOURCES["copernicus"]
+    assert meta.label == "Copernicus EWDS"
+    assert "EWDS" in meta.description and "ERA5" not in meta.description
+    assert meta.homepage == "https://ewds.climate.copernicus.eu/"
+    assert meta.api_key_signup_url == "https://ewds.climate.copernicus.eu/how-to-api"
+    assert meta.license == "CEMS-FLOODS-licence"
+
+
 def test_station_variables_validated():
     with pytest.raises(ValueError):
         Station(source="x", station_id="1", latitude=0, longitude=0, variables=("lava",))

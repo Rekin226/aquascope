@@ -1,0 +1,124 @@
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# A snow-fed Carpathian catchment (snow on 33% of it in an average year, no dam upstream, 441 km2). The catalogue
+# lists the Nowy Targ gauge from 1898, but the daily discharge actually served starts 1960-11-01: 65 years, read
+# through the supply_reliability gauged branch for the winter, which is both the season the intake is asked about
+# and the season this river is at its lowest.
+id: supply_winter_nowy_targ
+playbook: supply_reliability
+title: Whether a 0.12 m3/s winter intake fills on a snow-fed Carpathian river
+brief: >-
+  Can the Czarny Dunajec at Nowy Targ give us 0.12 m3/s (about 10.4 ML/day) for the hotels and apartments
+  through December to March as a run-of-river intake? The permit we are told to expect keeps Q95 in the river
+  and lets us take at most a tenth of what is left. We need to know whether the intake still fills in a dry
+  winter, and how often it would have run short over the gauge's record. Storage is not an option for us.
+intake:
+  demand_m3s: 0.12
+  demand_ml_day: 10.4
+  use: municipal
+  share: 0.1
+  storage: false
+site:
+  name: Czarny Dunajec at Nowy Targ, Podhale (małopolskie)
+  lat: 49.4844
+  lon: 20.0311
+  source: poland_imgw
+  station_id: "149200030"
+  years: 128.8
+  recon: nowy_targ_czarny_dunajec
+expected_branch: gauged
+steps:
+  - tool: describe_catchment
+    optional: true
+    gates:
+      - {check: not_empty, path: sub_basin}
+    note: >-
+      441 km2, mean elevation 867 m, 1027 mm/yr, snow on 33% of the catchment in an average year, degree of
+      regulation 0 (no dam upstream). A small, natural, snow-fed headwater catchment.
+  - tool: analyze_station
+    method: flow_duration
+    gates:
+      - {check: min_years, path: years}
+      - {check: unit_present, path: unit}
+    note: >-
+      Q95, Q50 and Q10 for the reserve rule. The percentiles are annual exceedance values, not winter ones:
+      Q95 is 2.05 m3/s against a Q50 of 5.9, and the winter window is a months argument on the next step, not
+      something the curve can be read for.
+  - tool: supply_reliability
+    method: supply_reliability
+    gates:
+      - {check: min_years, path: years}
+      - {check: not_empty, path: reliability}
+      - {check: not_empty, path: fdc}
+    note: >-
+      Q95 kept in the river, at most a tenth of the remainder taken, 0.12 m3/s wanted every day: the river has
+      to carry 2.17 m3/s. The step takes months, so the brief's December-March question is asked directly
+      (months [12, 1, 2, 3]); the annual figure beside it is the context, not the answer.
+  - tool: low_flow_context
+    method: low_flow_frequency
+    optional: true
+    gates:
+      - {check: min_years, path: years}
+    alternatives:
+      - {tool: analyze_station, method: low_flow_frequency}
+    note: >-
+      7Q10 and the baseflow index put a depth on the dry winter that the annual percentage hides; the record is
+      ice-affected in winter, so quote them as indicative and not as a licence number.
+forbidden:
+  tools: [load_table, flow_duration]
+  methods: [spi, spei, sgi, groundwater_trend, recharge_wtf, baseflow_separation]
+rationale: >-
+  This is the regime the bench has been missing: a snow-fed Carpathian headwater. BasinATLAS puts the gauge
+  catchment at 441 km2 with a mean elevation of 867 m, 1027 mm of precipitation a year and snow on 33% of it in
+  an average year, and it records no upstream regulation (degree of regulation 0), so the hydrograph is natural:
+  a March-April melt peak and a December-February trough that is the year's low flow. That trough is the season
+  the client asks about, and it is also the reason the answer is not the annual one.
+
+  The record is the first thing to get right. The catalogue lists the station from 1898 and the reconnaissance
+  carries that span, but the daily discharge the archive actually serves runs 1960-11-01 to 2025-10-31: 23,703
+  values, 65.0 years, which is what the payload's years field says and what the min_years gate reads. Sixty-five
+  years is six and a half times the ten-year registry floor, so the answer comes off the record rather than off a
+  regional transfer; the note under the flow-duration step keeps the two lengths apart instead of adding them.
+
+  The plan is the gauged branch of the playbook, because the number the client needs is the one the reserved-flow
+  rule produces. flow_duration gives Q95 2.05, Q50 5.9 and Q10 16.5 m3/s; supply_reliability keeps Q95 in the
+  river, caps the take at a tenth of the remainder and asks for 0.12 m3/s every day, which means the river has to
+  carry 2.17 m3/s. The answer is a qualified yes, and the qualification is the winter: 93.5% of days over the
+  year, 84.4% of days in December-March, 19 of 65 years with no short day at all, and 2006 short on 115 days over
+  the year and 82 in the winter window. low_flow_frequency then puts 7Q10 at 1.305 m3/s, against a 2.17 m3/s
+  requirement: in a one-in-ten dry week the river does not hold enough water for the intake and the reserve
+  together. That is the sentence the client can decide on, and it is why the storage question they ruled out comes
+  back as a number rather than as an opinion.
+
+  One trap is worth naming, because it is a trap this record sets. The years-without-a-shortfall figure is 0.29,
+  so 46 of the 65 years had at least one short day. That reads dramatic and says almost nothing: a Q95 reserve is
+  by construction exceeded on 95% of days, so a river on its own Q95 reserve fails on about 5% of days in nearly
+  every year, and the annual figure collapses for any demand at all. The daily fraction is the one to quote, the
+  winter one is the one that was asked for, and the gate under the step protects the reliability block the
+  fractions are read from rather than the reading itself.
+
+  The winter is also why low_flow_frequency is kept, as the optional step, rather than dropped: the reliability
+  number is a fraction of days, and 7Q10 is the depth that fraction hides. It stays optional because the branch's
+  answer is the reliability number and the case must remain reachable by the tree; the note on the step carries
+  the winter reading, and 7Q10 has a second route (analyze_station), so that route is named as an alternative
+  while the second route to the curve itself, the flow_duration tool, is forbidden.
+
+  The snow decides what the plan must not do. The registry marks at_site_flood_frequency, baseflow_separation,
+  gr4j_calibration and pot_gpd marginal at this site because a third of it is under snow, and the reconnaissance
+  says so in as many words ("snowmelt shapes the flood regime here"). No required step here is a snow-marginal one
+  (flow_duration, supply_reliability and low_flow_frequency are only susceptible to regulation, and the catchment
+  is unregulated), which is what makes this brief answerable at this gauge while a design-flood or baseflow-index
+  brief would not be. baseflow_separation is forbidden anyway: a digital filter reads slow melt as baseflow, and a
+  baseflow index must not be offered to a client as the low-flow evidence behind an abstraction permit. A lumped
+  model would be the modeller's reach (441 km2 is well under the 10,000 km2 ceiling) but gr4j_calibration is
+  marginal here because a model without a snow store misreads the timing of a melt-driven flow, so it is left out
+  rather than silently trusted.
+
+  What cannot be defended is the precipitation and groundwater side: the catalogue has no rain gauge and no well at
+  the point (spi and spei "no precipitation record at this site"; sgi, groundwater_trend and recharge_wtf "no
+  groundwater level record at this site"), so those five methods are forbidden, together with load_table (the table
+  path would bypass the register).
+
+  One caveat belongs in the answer: the IMGW catalogue entry for this station carries ice_code and overgrowth_code
+  columns for the reach, so ice-affected winter discharge is a recognised condition here and the winter rating is
+  the weakest part of the record. 7Q10 and the winter fraction are therefore indicative; a permit number would
+  need the raters' winter notes.

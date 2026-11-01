@@ -270,6 +270,26 @@ def test_a_single_observation_has_no_gap():
     assert half["longest_gap_days"] == 0
 
 
+def test_record_quality_groups_observations_by_calendar_day():
+    index = pd.date_range("2024-01-01 09:00", periods=3, freq="D", tz="Europe/Warsaw")
+    values = pd.Series([1.0, 2.0, 3.0], index=index)
+    complete = explore.record_quality_half(values, "discharge")
+    assert complete["completeness"] == 1.0
+    assert complete["longest_gap_days"] == 0
+
+    hourly_index = pd.date_range("2024-01-01", periods=72, freq="h")
+    hourly = pd.Series(1.0, index=hourly_index)
+    flags = pd.Series("approved", index=hourly_index)
+    flags.iloc[0] = "suspect"
+    complete = explore.record_quality_half(hourly, "discharge", quality=flags)
+    assert complete["completeness"] == 1.0
+    assert complete["longest_gap_days"] == 0
+    assert complete["flagged_fraction"] == round(1 / 72, 4)
+    gappy = explore.record_quality_half(hourly[hourly.index.day != 2], "discharge")
+    assert gappy["completeness"] == 0.667  # assess_quality rounds the percentage to one decimal
+    assert gappy["longest_gap_days"] == 1
+
+
 def test_the_longest_gap_is_the_long_one_after_three_short_ones():
     """#375 review: three short outages sit before a 14-year hole in date order, and the report said 7 days.
     The longest gap is the days the longest outage misses, taken from the index itself."""

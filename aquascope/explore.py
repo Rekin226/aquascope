@@ -1697,8 +1697,11 @@ def record_quality_half(
         else:
             flags = None
 
-    start, end = s.index.min().normalize(), s.index.max().normalize()
-    daily = s.reindex(pd.date_range(start, end, freq="D"))
+    # Daily coverage counts calendar days, while quality flags below describe
+    # the original observations (including multiple readings on one day).
+    day_values = s.groupby(s.index.normalize()).last()
+    start, end = day_values.index.min(), day_values.index.max()
+    daily = day_values.reindex(pd.date_range(start, end, freq="D"))
     calendar_report = assess_quality(pd.DataFrame({"value": daily.to_numpy(dtype=float)}))
     completeness = round(float(calendar_report.completeness_pct) / 100.0, 4)
 
@@ -1715,7 +1718,7 @@ def record_quality_half(
     # first three gaps per station in date order, so a record with three short outages before a long hole
     # used to report the short one (#375). The count is the days the gap is missing, not the step it spans:
     # a daily record has no missing day, and a 14-year hole reads as the 5,114 days nobody observed.
-    steps = s.index.to_series().diff().dropna()
+    steps = day_values.index.to_series().diff().dropna()
     longest_gap = int(steps.max().days) - 1 if len(steps) else 0
     flagged_count = report.quality_counts.get("provisional", 0) + report.quality_counts.get("suspect", 0)
     flagged = round(float(flagged_count) / report.n_records, 4) if report.n_records else 0.0

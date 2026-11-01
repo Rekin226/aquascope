@@ -173,7 +173,10 @@ def test_workflow_summary_displays_partial_warnings_without_marking_failure(tmp_
     [
         (4, 2, None, False, True, True),
         (4, 1, None, False, True, True),
-        (4, 3, None, False, True, False),
+        (4, 3, None, False, True, True),
+        (5, 4, None, False, True, False),
+        (8, 6, None, False, True, True),
+        (8, 7, None, False, True, False),
         (4, 0, None, False, True, True),
         (0, 0, None, False, True, False),
         (4, 2, 2, False, True, False),
@@ -203,7 +206,7 @@ def test_harvest_warns_on_a_full_successful_source_count_drop(
             write_geojson=False, write_card=False, write_signatures=False,
         )
     row = report.sources[0]
-    assert any("dropped by at least 50%" in w for w in row.warnings) is warning
+    assert any("dropped by at least 25%" in w for w in row.warnings) is warning
     if warning:
         assert f"{old_count} in the previous catalog, {new_count} in this harvest" in row.warnings[-1]
     if failed:
@@ -282,7 +285,7 @@ def test_count_baseline_survives_only_unrestricted_healthy_runs(tmp_path):
         assert not harvest_stations(tmp_path, max_items=1, write_signatures=False).sources[0].warnings
         assert not harvest_stations(tmp_path, write_signatures=False).sources[0].warnings
         catalogs["ireland_opw"].stations = []
-        assert "dropped by at least 50%" in harvest_stations(
+        assert "dropped by at least 25%" in harvest_stations(
             tmp_path, write_signatures=False
         ).sources[0].warnings[0]
 

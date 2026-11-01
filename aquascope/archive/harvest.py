@@ -320,9 +320,9 @@ def harvest_stations(
                 previous_counts[source] = previous_counts.get(source, 0) + 1
             for row in health:
                 old_count = previous_counts.get(row.source, 0)
-                if row.ok and old_count > 0 and row.n_stations * 2 <= old_count:
+                if row.ok and old_count > 0 and row.n_stations * 4 <= old_count * 3:
                     row.warnings.append(
-                        f"Station count dropped by at least 50%: "
+                        f"Station count dropped by at least 25%: "
                         f"{old_count} in the previous catalog, {row.n_stations} in this harvest"
                     )
         failed = {key for key, cat in catalogs.items() if not cat.ok}

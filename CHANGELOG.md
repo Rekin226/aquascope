@@ -14,6 +14,7 @@ All notable changes to AquaScope are documented here.
 - **`south_africa_dws` license and attribution** (#473): update license to `DWS NIWIS terms (academic, research or personal use)` and attribution to name the Department of Water and Sanitation, Republic of South Africa as copyright proprietor following the disclaimer on [dws.gov.za/niwis2/Disclaimer](https://www.dws.gov.za/niwis2/Disclaimer) (archived at [web.archive.org](http://web.archive.org/web/20250528170949/https://www.dws.gov.za/niwis2/Disclaimer)).
 
 ### Fixed
+- **What-if plural and compound fractional shares** (#691): read compound fractions and plural shares ("two thirds", "three quarters", "two fifths", "a sixth", "an eighth") as single tokens across model and keyless paths, preserving explicit units on quantities and evaluating shares as proportions. Keyless clauses that name a change without a readable number now report an error in `errors` instead of returning an empty list.
 - **What-if fractional quantities** (#646): the model and keyless readings of “half a cubic metre per second”, “a half litre per second” and “half a degree warmer” keep the stated unit instead of treating the quantity as a proportion.
 - **GR4J at large gauges** (#273): the station model asks before using point forcing above 10,000 km², and describes the forcing download separately from the fit.
 

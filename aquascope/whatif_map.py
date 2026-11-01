@@ -144,8 +144,18 @@ def scenario_label(sc: dict[str, Any]) -> str:
     return ", ".join(bits) or "no change"
 
 
-_FRACTIONS = {"a tenth": 10.0, "one tenth": 10.0, "a fifth": 20.0, "one fifth": 20.0, "a quarter": 25.0,
-              "one quarter": 25.0, "a third": 100.0 / 3, "one third": 100.0 / 3, "half": 50.0}
+_FRACTIONS: dict[str, float] = {
+    "a tenth": 10.0, "one tenth": 10.0, "three tenths": 30.0, "seven tenths": 70.0, "nine tenths": 90.0,
+    "an eighth": 12.5, "one eighth": 12.5, "three eighths": 37.5, "five eighths": 62.5, "seven eighths": 87.5,
+    "a sixth": 100.0 / 6, "one sixth": 100.0 / 6, "five sixths": 500.0 / 6,
+    "a fifth": 20.0, "one fifth": 20.0, "two fifths": 40.0, "three fifths": 60.0, "four fifths": 80.0,
+    "a quarter": 25.0, "one quarter": 25.0, "two quarters": 50.0, "three quarters": 75.0,
+    "a third": 100.0 / 3, "one third": 100.0 / 3, "two thirds": 200.0 / 3,
+    "half": 50.0, "a half": 50.0, "one half": 50.0,
+}
+for _k, _v in list(_FRACTIONS.items()):
+    if " " in _k:
+        _FRACTIONS[_k.replace(" ", "-")] = _v
 _NEG = r"\b(?:less|fewer|lower|drier|dryer|down|minus|decrease[sd]?|reduc(?:e|ed|tion)|cut|drop|falls?|cooler|colder|" \
        r"cooling)\b"
 _POS = r"\b(?:more|higher|wetter|up|plus|increase[sd]?|rise[sn]?|warmer|hotter|warming|heating)\b"
@@ -172,9 +182,11 @@ _WORD_NUMBERS = {w: i for i, w in enumerate(
 _WORD_NUMBERS.update({"thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
                       "ninety": 90, "hundred": 100, "a hundred": 100, "one hundred": 100,
                       "one": 1})
-_WORD_NUMBER = re.compile(r"\b(?:" + "|".join(sorted(map(re.escape, (w for w in _WORD_NUMBERS if w != "one")),
-                                                     key=len, reverse=True))
-                          + r"|one(?=\s*(?:degrees?\b|°|%|m3/s|l/s)))\b(?!\s+(?:tenths?|fifths?|quarters?|thirds?)\b)")
+_WORD_NUMBER = re.compile(
+    r"\b(?:" + "|".join(sorted(map(re.escape, (w for w in _WORD_NUMBERS if w != "one")), key=len, reverse=True))
+    + r"|one(?=\s*(?:degrees?\b|°|%|m3/s|l/s)))\b"
+    r"(?!\s+(?:tenths?|eighths?|sixths?|fifths?|quarters?|thirds?|halves)\b)"
+)
 # Litres (or liters) per second, however written, is l/s; cubic metres per second is m3/s.
 _PER_SECOND = re.compile(r"\b(?:litres?|liters?|l)\s*(?:per|a|/)\s*(?:second|sec|s)\b|\blps\b")
 _CUMECS = re.compile(r"\bcubic\s+met(?:re|er)s?\s*(?:per|a|/)\s*(?:second|sec|s)\b")
@@ -223,8 +235,11 @@ def _clause(raw: str) -> tuple[str | None, float | None, str]:
     for words, v in _FRACTIONS.items():
         if re.search(rf"\b{words}\b", raw):
             value = v
-            # "a half" names the same fraction as "half", but the token keeps the article.
-            token = next((t for t in number_tokens(raw) if t["token"] in (words, f"a {words}")), None)
+            words_space = words.replace("-", " ")
+            token = next(
+                (t for t in number_tokens(raw) if t["token"] in (words, words_space, f"a {words}", f"a {words_space}")),
+                None,
+            )
             if token and not token["share"] and token["unit"] in UNITS:
                 dimension, factor = UNITS[token["unit"]]
                 if dimension == _UNIT_OF_KEY[kind]:
@@ -251,7 +266,7 @@ def _clause(raw: str) -> tuple[str | None, float | None, str]:
     left = re.sub(r"[+-]?\d+(?:\.\d+)?|%|°c?|m3/s|l/s|" + _NEG + "|" + _POS, " ", raw)
     for _k, pattern in _KINDS:
         left = re.sub(pattern, " ", left)
-    for words in _FRACTIONS:
+    for words in sorted(_FRACTIONS, key=len, reverse=True):
         left = left.replace(words, " ")
     unknown = [w for w in re.findall(r"[a-z]+", left) if w not in _FILLER]
     return kind, value, " ".join(unknown)
@@ -278,6 +293,8 @@ def parse_scenario(text: str) -> dict[str, Any]:
         kind, value, left = _clause(part)
         if kind is None or value is None:
             out["unknown"].append(part)
+            if kind is not None and value is None:
+                out["errors"].append(f"{part}: the words give no number for it")
             continue
         found[kind] = value
         out["rules"].append(kind)
@@ -327,12 +344,28 @@ _SMALL = ("zero one two three four five six seven eight nine ten eleven twelve t
           "seventeen eighteen nineteen").split()
 _TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
          "ninety": 90}
-_SHARES = {"tenth": 0.1, "fifth": 0.2, "quarter": 0.25, "third": 1 / 3, "half": 0.5}
+_DENOMINATORS: dict[str, int] = {
+    "half": 2, "halves": 2,
+    "third": 3, "thirds": 3,
+    "quarter": 4, "quarters": 4,
+    "fifth": 5, "fifths": 5,
+    "sixth": 6, "sixths": 6,
+    "eighth": 8, "eighths": 8,
+    "tenth": 10, "tenths": 10,
+}
+_SHARES: dict[str, float] = {k: 1.0 / v for k, v in _DENOMINATORS.items()}
 _WORD_RE = (r"(?:(?:a|one)\s+hundred|hundred|(?:" + "|".join(_TENS) + r")(?:[\s-](?:" + "|".join(_SMALL[1:10])
             + r"))?|" + "|".join(sorted(_SMALL, key=len, reverse=True)) + r")(?:\s+and\s+a\s+half)?")
+_SINGULAR_SHARES = r"tenth|eighth|sixth|fifth|quarter|third"
+_PLURAL_SHARES = r"tenths|eighths|sixths|fifths|quarters|thirds|halves"
+_SHARE_NUMS = "|".join(sorted(_SMALL[1:], key=len, reverse=True)) + r"|\d+"
+_SHARE_RE = (
+    r"(?:\b(?:(?:a|one)[\s-](?:" + _SINGULAR_SHARES + r")|an[\s-]eighth|(?:a[\s-])?half)\b"
+    r"|\b(?:" + _SHARE_NUMS + r")[\s-](?:" + _PLURAL_SHARES + r")\b)"
+)
 _TOKEN = re.compile(
-    r"(?P<digits>(?<![\w.])\d+(?:,\d{3})*(?:\.\d+)?(?![\d]))"
-    r"|(?P<share>\b(?:a|one)\s+(?:tenth|fifth|quarter|third)\b|\b(?:a\s+)?half\b)"
+    r"(?P<share>" + _SHARE_RE + r")"
+    r"|(?P<digits>(?<![\w.])\d+(?:,\d{3})*(?:\.\d+)?(?![\d]))"
     r"|(?P<word>\b" + _WORD_RE + r"\b)")
 
 
@@ -355,12 +388,23 @@ def _word_value(words: str) -> float | None:
 
 def _token_value(token: str) -> tuple[float, bool] | None:
     """A number token's value and whether it is a share ("a fifth" is 0.2 of something), or None."""
-    t = re.sub(r"\s+", " ", str(token or "").strip().lower())
+    t = re.sub(r"[\s-]+", " ", str(token or "").strip().lower())
     if re.fullmatch(r"\d+(?:,\d{3})*(?:\.\d+)?", t):
         return float(t.replace(",", "")), False
-    share = re.fullmatch(r"(?:(?:a|one) )?(tenth|fifth|quarter|third|half)", t)
-    if share:
-        return _SHARES[share.group(1)], True
+    single = re.fullmatch(r"(?:(?:a|an|one) )?(tenth|eighth|sixth|fifth|quarter|third|half)", t)
+    if single:
+        return _SHARES[single.group(1)], True
+    compound = re.fullmatch(r"(\w+|\d+)\s+(tenths|eighths|sixths|fifths|quarters|thirds|halves)", t)
+    if compound:
+        num_str, den_str = compound.group(1), compound.group(2)
+        if num_str.isdigit():
+            num = float(num_str)
+        elif num_str in _SMALL:
+            num = float(_SMALL.index(num_str))
+        else:
+            num = _word_value(num_str)
+        if num is not None and den_str in _DENOMINATORS:
+            return num / _DENOMINATORS[den_str], True
     v = _word_value(t)
     return (v, False) if v is not None else None
 

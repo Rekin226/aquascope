@@ -125,6 +125,9 @@ class BOMCollector(BaseCollector):
                 cache_ttl_seconds=3600,
             )
         )
+        # Diagnostics from the most recent stations() call, separate from the
+        # existing list return value so callers can identify partial catalogs.
+        self.station_warnings: tuple[str, ...] = ()
 
     # ------------------------------------------------------------------ #
     # stations
@@ -164,8 +167,10 @@ class BOMCollector(BaseCollector):
         If every parameter-type request fails, raises a ``RuntimeError`` so
         the harvest and callers report the outage rather than recording an
         empty catalog. If a subset of requests fails, logs a summary warning
-        naming the lost parameter types and returns the partial catalog.
+        naming the lost parameter types, records it in ``station_warnings``,
+        and returns the partial catalog. The warnings are reset on each call.
         """
+        self.station_warnings = ()
         if variable and variable not in PARAMETER_VARIABLE_MAP.values():
             return []
 
@@ -231,14 +236,12 @@ class BOMCollector(BaseCollector):
                     f"BOM getStationList failed for all {len(parameter_types)} parameter type(s): "
                     f"{', '.join(failed_types)}"
                 ) from last_exc
-            logger.warning(
-                "BOM getStationList failed for %d of %d parameter type(s) (%s); "
-                "returning partial catalog of %d station(s)",
-                len(failed_types),
-                len(parameter_types),
-                ", ".join(failed_types),
-                len(grouped),
+            warning = (
+                f"BOM getStationList failed for {len(failed_types)} of {len(parameter_types)} "
+                f"parameter type(s) ({', '.join(failed_types)}); returning a partial catalog"
             )
+            self.station_warnings = (warning,)
+            logger.warning("%s", warning)
 
         if implausible_count:
             logger.warning(

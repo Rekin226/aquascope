@@ -111,6 +111,15 @@ flow arrows, drawdown, capture zones, the layers in 3D, cross-sections and the w
 Samples are one click away, and the files never leave your browser
 ([mesh](docs/mesh.md), [MODFLOW](docs/modflow.md)).
 
+**A map that computes:** click a river and **Route it** sends a flood wave down GEOGLOWS's own
+network, **Flood it** floods the valley at a design flow in your browser (draw a levee or a
+breach and run again), and **Replay** plays a past flood as a story: the rain, the gauge
+against the model, what the forecast said, the wave and the flood. The sketchpad draws a storm,
+a reservoir, a pumping well or a land-use change on the map and recomputes as you drag, and
+**Paint the globe** answers one question at every gauge in view. Each model is checked against
+a published example or reference data ([Flood it](docs/floodsim.md), [replay](docs/replay.md),
+[sketchpad](docs/sketchpad.md), [paint](docs/paint.md)).
+
 **Study** guides you from a question through a plan you approve to a report and export
 bundle: Word, Excel, figures, notebook, findings and study YAML. Core studies run without
 an API key. Optional model setup is available when you choose to use it. Beyond the design
@@ -163,7 +172,7 @@ virtual environment first: `python3 -m venv .venv && source .venv/bin/activate`.
 
 ## ✨ What you can do
 
-- 🌊 **Pull water data** from USGS, NOAA NWPS, Colorado DWR/CDSS, US Water Quality Portal, England's Environment Agency, France Hub'Eau, Germany PEGELONLINE, Ireland OPW, Greece Hydroscope and OpenHi.net, Poland IMGW-PIB, EU WFD, Taiwan MOENV/WRA/CWA/Civil IoT/DataGov, Japan MLIT, Korea WAMIS, India WRIS, South Africa DWS, Australia BOM, Brazil ANA Hidroweb, CAMELS-CL and CAMELS-BR, GRDC, GEMStat, Copernicus ERA5, OpenMeteo, FAO AQUASTAT, FAO WaPOR and UN SDG 6 — **one unified Python API**.
+- 🌊 **Pull water data** from USGS, NOAA NWPS, Colorado DWR/CDSS, US Water Quality Portal, England's Environment Agency, France Hub'Eau, Germany PEGELONLINE, Ireland OPW, Greece Hydroscope and OpenHi.net, Poland IMGW-PIB, EU WFD, Taiwan MOENV/WRA/CWA/Civil IoT/DataGov, Japan MLIT, Korea WAMIS, India WRIS, South Africa DWS, Australia BOM, Brazil ANA Hidroweb, CAMELS-CL and CAMELS-BR, GRDC, GEMStat, Copernicus GloFAS, OpenMeteo, FAO AQUASTAT, FAO WaPOR and UN SDG 6 — **one unified Python API**.
 - 🏞️ **Treat rivers as objects**: snap any point to its GEOGLOWS v2 river reach (about 6.8 million worldwide), read that reach's simulated daily flow since 1940 with return periods, flow-duration curve and monthly regime (labelled modelled), and trace it downstream to the sea with the gauges and dams it passes and the countries it crosses, and see whether dams upstream regulate it (Global Dam Watch), or list every reach that drains to it and the reaches to its outlet. `aquascope river snap|record|area|trace|dams|upstream|downstream`, the MCP tools, the Explorer's River tab, and the Studio's ungauged studies all use the same functions.
 - 🪜 **Grade the global models at a gauge**: GEOGLOWS v2, GloFAS, NWM v3 (US) and Google's Flood Hub reanalysis set against the gauge's own record, with KGE and its parts, bias, the error at the 2-, 10- and 100-year flows, a grade from A to D and one sentence on where they disagree. `aquascope evidence skill`, the MCP tool `model_skill`, the Explorer's Evidence tab and "Best model skill" map colouring, and a monthly CI table in the Archive; the Studio uses it to say which model to lean on near an ungauged site ([how the grades work](docs/evidence.md)).
 - 🔭 **Now and next**: where a gauge's flow sits today against normal for the date (the USGS and WMO HydroSOS classes, at least 10 years behind it), and the next 15 days from GEOGLOWS and GloFAS with return-period thresholds, corrected to the gauge's record by flow-duration quantile mapping with the hindcast skill of that correction. A daily workflow archives the forecasts as issued, so real forecast skill builds up, and another classes the whole global forecast against each reach's return periods every day: the reaches expected to reach their 2-year flow in 15 days (`aquascope warnings`, the MCP tool `flood_warnings`, the Explorer's Floods ahead layer). `aquascope now`, the MCP tools, the Explorer's Now tab and its "Today vs normal" map colouring use the same functions.
@@ -441,6 +450,10 @@ aquascope eval stats studies/ --by model             # many studies at once: gra
 aquascope area-study --bbox=-0.9,51.2,0.3,51.8       # a flood study over every gauge in a box: Q100, flood trends, a regional curve
 aquascope paint --bbox=-8,49.8,2,59                    # paint every Archive gauge in a box with its flood trend, plus field significance
 aquascope replay --at 51.95 -2.2 --month 2024-11       # a past flood as a story: rain, gauge vs model, forecast, wave, flood
+aquascope route flood 230301988 --peak 2000             # a flood wave down GEOGLOWS's river network
+aquascope flood 230567275 --flow 954 --levee ring.geojson --crest 15.1   # a screening flood of the valley, with a drawn levee
+aquascope well --at 4.88 45.76 --rate 1000 --days 90   # Theis drawdown round a pumping well
+aquascope landuse --polygon '[[4.955,45.70],[4.97,45.70],[4.97,45.708],[4.955,45.708]]' --use residential_1_8 --rain 100
 
 # Interactive Streamlit dashboard — multipage workspace with 37 live sources,
 # smart auto-insights, and fully interactive Plotly charts
@@ -459,7 +472,7 @@ Run `aquascope --help` for the full command list.
 37 data collectors spanning five regions (highlights below, full list in the [docs](docs/data_sources.md)):
 
 - 🌎 **Americas** — USGS (streamflow + WQ), NOAA NWPS (US streamflow), Colorado DWR/CDSS, Water Quality Portal (400+ agencies), CAMELS-CL (Chile), CAMELS-BR and ANA Hidroweb (Brazil)
-- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau, Germany PEGELONLINE, England's Environment Agency, Ireland OPW, Greece Hydroscope (national archive) and OpenHi.net (live telemetry), Poland IMGW-PIB (daily archive from 1951 and the live network)
+- 🌍 **Europe** — EU Water Framework Directive, Copernicus GloFAS, France Hub'Eau, Germany PEGELONLINE, England's Environment Agency, Ireland OPW, Greece Hydroscope (national archive) and OpenHi.net (live telemetry), Poland IMGW-PIB (daily archive from 1951 and the live network)
 - 🌍 **Africa** — South Africa DWS (verified discharge and water level)
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / CWA / Civil IoT / DataGov, Japan MLIT, Korea WAMIS, India WRIS, Australia BOM
 - 🌐 **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo, FAO AQUASTAT, FAO WaPOR, GRDC (river discharge)
@@ -609,8 +622,8 @@ If you use AquaScope in your research, please cite:
   author  = {Ouédraogo, Abdoul Rachid},
   year    = {2026},
   url     = {https://github.com/Rekin226/aquascope},
-  version = {1.0.0},
-  doi     = {10.5281/zenodo.23671741},
+  version = {1.1.0},
+  doi     = {10.5281/zenodo.23718093},
   license = {MIT}
 }
 ```
@@ -618,7 +631,7 @@ If you use AquaScope in your research, please cite:
 Machine-readable metadata lives in [CITATION.cff](CITATION.cff); GitHub's "Cite this
 repository" button renders it in APA and BibTeX. Every tagged release is archived on
 Zenodo; `10.5281/zenodo.21903143` is the concept DOI that always resolves to the latest
-version (v1.0.0 is [10.5281/zenodo.23671741](https://doi.org/10.5281/zenodo.23671741)).
+version (v1.1.0 is [10.5281/zenodo.23718093](https://doi.org/10.5281/zenodo.23718093)).
 
 ## 📄 License
 

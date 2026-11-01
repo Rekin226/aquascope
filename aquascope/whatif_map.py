@@ -219,9 +219,17 @@ def _clause(raw: str) -> tuple[str | None, float | None, str]:
     if kind is None:
         return None, None, raw
     value = None
+    converted = False
     for words, v in _FRACTIONS.items():
         if re.search(rf"\b{words}\b", raw):
             value = v
+            # "a half" names the same fraction as "half", but the token keeps the article.
+            token = next((t for t in number_tokens(raw) if t["token"] in (words, f"a {words}")), None)
+            if token and not token["share"] and token["unit"] in UNITS:
+                dimension, factor = UNITS[token["unit"]]
+                if dimension == _UNIT_OF_KEY[kind]:
+                    value = token["value"] * factor
+                    converted = True
             break
     sign_given = False
     if value is None:
@@ -233,7 +241,7 @@ def _clause(raw: str) -> tuple[str | None, float | None, str]:
                 value = -value if m.group("sign") == "-" else value
     if value is None:
         return kind, None, raw
-    if kind == "demand_cms" and re.search(r"\bl/s\b", raw):
+    if kind == "demand_cms" and not converted and re.search(r"\bl/s\b", raw):
         value /= 1000.0
     if not sign_given and kind != "demand_cms":
         if re.search(_NEG, raw):
@@ -378,14 +386,17 @@ def number_tokens(text: str) -> list[dict[str, Any]]:
             continue
         value, share = got
         unit = "fraction" if share else None
-        if not share:
-            rest = low[m.end():m.end() + 40]
-            rest = re.sub(r"^\s*(?:more|less|fewer|of|extra|higher|lower|warmer|cooler)?\s*", "", rest) \
-                if not re.match(r"\s*(?:%|°)", rest) else rest
-            for name, pattern in _UNIT_AFTER:
-                if re.match(r"\s*(?:" + pattern + ")", rest):
-                    unit = name
-                    break
+        rest = low[m.end():m.end() + 40]
+        rest = re.sub(r"^\s*(?:more|less|fewer|of|extra|higher|lower|warmer|cooler)?\s*", "", rest) \
+            if not re.match(r"\s*(?:%|°)", rest) else rest
+        # "half a litre" is a quantity, while "half the rain" is a share.
+        # Strip an article only when testing for an explicitly named unit.
+        if share:
+            rest = re.sub(r"^(?:a|an)\s+", "", rest)
+        for name, pattern in _UNIT_AFTER:
+            if re.match(r"\s*(?:" + pattern + ")", rest):
+                unit, share = name, False
+                break
         out.append({"token": token, "value": value, "share": share, "unit": unit})
     return out
 
@@ -396,9 +407,16 @@ def scenario_schema(text: str = "") -> dict[str, Any]:
     (:data:`UNITS`) and a part of the year (:data:`SEASONS`). Nothing in it is free text."""
     from aquascope.map_pick import choice
 
-    # Each number as the words write it, and the same value in digits ("twenty" and "20"): either is the
-    # reader's own number.
-    tokens = [x for t in number_tokens(text) for x in (t["token"], None if t["share"] else _g(t["value"])) if x]
+    # Offer a digit alias only if the matcher can read it back as the same value. _g is for display and
+    # can lose precision (a third becomes 0.333); conversion must use the original token's value.
+    tokens = []
+    for t in number_tokens(text):
+        tokens.append(t["token"])
+        if not t["share"]:
+            alias = _g(t["value"])
+            parsed = _token_value(alias)
+            if parsed and math.isclose(t["value"], parsed[0], rel_tol=1e-9):
+                tokens.append(alias)
     number = choice([*tokens, "none"]) if text else {"type": "string", "maxLength": 40}
     return {"type": "object", "required": ["clauses"], "additionalProperties": False, "properties": {
         "clauses": {"type": "array", "maxItems": 4, "items": {

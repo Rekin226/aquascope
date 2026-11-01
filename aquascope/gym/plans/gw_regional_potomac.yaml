@@ -19,6 +19,10 @@ site:
   years: 96.5
   recon: potomac_little_falls
 expected_branch: regional
+accepts:
+  - kind: plan
+  - kind: decline
+    reason_must_mention: ["no groundwater level record", "no monitored well"]
 steps:
   - tool: anywhere
     gates:

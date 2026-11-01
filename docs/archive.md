@@ -25,7 +25,7 @@ them**.
 | --- | --- |
 | `stations.parquet` | GeoParquet 1.0 (WKB point geometry, WGS84). One row per station: `source`, `station_id`, `name`, `latitude`, `longitude`, `variables`, `period_start`, `period_end`, `url`, `river`, `country`, `agency`, `license`, `redistributable`, `extra`. |
 | `stations.geojson` | the same rows as GeoJSON, for tools and browsers that don't read parquet |
-| `health.json` | per-source status of the last run: station count, seconds, error message if the endpoint failed |
+| `health.json` | per-source status of the last run: station count, seconds, error message if the endpoint failed, and non-fatal `warnings` for partial results or a large count drop |
 | `health/jobs/<job>.json`, `health/jobs/index.json` | every scheduled job's last run, last success, last failure, counts, data date and expected cadence (see [Job health](#job-health)) |
 | `README.md` | the dataset card, regenerated on every run, with the per-source licence table |
 | `obs/<variable>/<source>/<station_id>.csv.gz` | daily values for one station (`date,value`; discharge m3/s, water and groundwater level m, precipitation mm/day), only for redistributable sources |
@@ -322,7 +322,7 @@ evidence table) and keeps what stands out, by fixed rules ([explorer.md](explore
 
 | path | what |
 | --- | --- |
-| `scout/latest.json` | the findings (up to 25 per kind), each with `lat`, `lon`, `title`, `reason`, its headline `value` and `unit`, all its numbers under `facts`, its `source`; today's ten `picks`; the record checks (a named region's share much above or below normal against the same calendar month since 1990, flood cells against the same month since 2000); the inputs, the method and the sources |
+| `scout/latest.json` | the findings (up to 25 per kind), each with `lat`, `lon`, `title`, `reason`, its headline `value` and `unit`, all its numbers under `facts`, its `source`; today's ten `picks`; the `usual` basin flow table (`[[lat, lon, m³/s], ...]`, so a live scan in the browser can leave near-dry areas out); the record checks (a named region's share much above or below normal against the same calendar month since 1990, flood cells against the same month since 2000); the inputs, the method and the sources |
 | `scout/<date>.json` | the same file, kept by the day it was made ([retention](#retention-of-the-daily-files): the last 60 days, then the first of each month) |
 
 Each finding carries the licence of the layer it came from (the river status map and the forecast CC BY 4.0, the
@@ -444,6 +444,15 @@ aquascope harvest stations --out archive --publish you/your-dataset   # needs HF
 The scheduled run lives in `.github/workflows/harvest.yml` (Mondays 03:17 UTC,
 or on demand from the Actions tab). It never fails because one agency is down;
 `health.json` and the job summary say which one did.
+
+On a full, unrestricted run, a source's station count falling by at least 25%
+from a previous catalog marked as complete is recorded as a non-fatal warning
+in `health.json` and the job summary. The comparison is skipped for old files
+without a completeness marker, source-selected or capped runs, failed sources,
+and sources with no previous stations. A catalog is marked complete only when
+all expected sources succeed without warnings on an unrestricted run. A warning
+signals a change to investigate, not proof of an outage.
+The scheduled workflow syncs the published catalog before harvesting.
 
 ## Job health
 

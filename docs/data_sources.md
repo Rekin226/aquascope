@@ -62,7 +62,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [GEMStat](https://gemstat.org) | `gemstat` | Global | Freshwater quality (170+ countries) | Zenodo | ✅ |
 | [UN SDG 6](https://sdg6data.org) | `sdg6` | Global | SDG 6 indicators (6.1.1 – 6.6.1) | REST | ✅ |
 | [OpenMeteo](https://open-meteo.com) | `openmeteo` | Global | Weather (temp, precip, wind, solar) | REST | ✅ |
-| [Copernicus](https://cds.climate.copernicus.eu) | `copernicus` | Global | ERA5 reanalysis, climate projections | CDS API | ✅ |
+| [Copernicus EWDS](https://ewds.climate.copernicus.eu) | `copernicus` | Global | GloFAS river discharge | EWDS API | ✅ |
 | [FAO AQUASTAT](https://www.fao.org/aquastat) | `aquastat` | Global | Country-level water withdrawal, irrigation | FAOSTAT API | ✅ |
 | [FAO WaPOR](https://www.fao.org/in-action/remote-sensing-for-water-productivity) | `wapor` | Global | Satellite ET, biomass, water productivity | REST | ✅ |
 | [EU WFD](https://www.eea.europa.eu) | `eu_wfd` | Europe | Water Framework Directive status | REST | ✅ |
@@ -119,7 +119,7 @@ Notes, checked on 2026-10-22:
 | GEMStat | No | Open access via Zenodo |
 | UN SDG 6 | No | Open access |
 | OpenMeteo | No | Open access |
-| Copernicus CDS | **Yes** | [Register](https://cds.climate.copernicus.eu/user/register) — free |
+| Copernicus EWDS | **Yes** | [Register](https://ewds.climate.copernicus.eu/how-to-api) — free |
 | FAO AQUASTAT / WaPOR | No | Open access |
 | EU WFD | No | Open access |
 | Hub'Eau | No | Open access |
@@ -187,9 +187,9 @@ error page as valid hydrological data. Caching is therefore disabled by
 default for this collector. A successful live collection still depends on the
 DWS/Kisters backend being healthy.
 
-DWS reuse terms have not yet been verified, so the registry marks this source
-as non-redistributable. AquaScope can collect it directly, but the open archive
-must not mirror the observations until the terms are established.
+DWS terms are verified from the NIWIS disclaimer: data may be used for academic,
+research or personal purposes and must not be resold; the source stays
+non-redistributable, so the open archive must not mirror the observations.
 
 ## PEGELONLINE (Germany)
 

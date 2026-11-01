@@ -120,6 +120,42 @@ def test_status_finds_the_largest_areas_on_each_side():
     assert [f["side"] for f in out] == ["much_below"]
 
 
+def test_a_desert_wet_month_is_not_a_river_much_above_normal():
+    # Ash Shati, Libya (#638): most months carry almost nothing, so the one month the status map paints the
+    # basin much above normal says nothing about the reach. ``usual`` holds the basins' representative points
+    # and their median monthly 75th percentile, as aquascope.map_scout.usual_flow builds them.
+    g = _world()
+    _put(g, 5, 10, 25, 20, 32)                      # much above over Fezzan, a desert basin
+    _put(g, 5, -60, -10, -50, 0)                    # much above over the Amazon, a real river
+    usual = [[27.33, 11.27, 0.019], [-5.0, -55.0, 120000.0]]
+    out = ms.status_findings(g, "2026-09", min_area_km2=1000, usual=usual)
+    dry = [f for f in out if f.get("near_dry")]
+    assert [f["side"] for f in dry] == ["much_above"] and 25 <= dry[0]["lat"] <= 32
+    kept, dropped = ms.split_near_dry(out)
+    assert dropped == 1 and all(not f.get("near_dry") for f in kept)
+    assert any(-10 <= f["lat"] <= 0 for f in kept)                    # the Amazon is still a finding
+    # Without the table nothing is set aside: the table is what says the basin is dry.
+    assert all("near_dry" not in f for f in ms.status_findings(g, "2026-09", min_area_km2=1000))
+
+
+def test_a_river_basin_next_to_the_desert_stays_much_above_normal():
+    # The same map, but the pin's nearest basin is a river: its much above normal area is a real finding, and
+    # the near-dry test reads the nearest basin, not the region. This is what #638 must not break.
+    from aquascope import bulletin
+
+    assert ms.NEAR_DRY_CMS == bulletin.MIN_USUAL_CMS         # one floor for "this carries almost no water"
+    g = _world()
+    _put(g, 5, 10, 25, 20, 32)
+    usual = [[27.33, 11.27, 0.019], [28.0, 14.0, 420.0]]
+    out = ms.status_findings(g, "2026-09", min_area_km2=1000, usual=usual)
+    assert [f["side"] for f in out] == ["much_above"]
+    assert "near_dry" not in out[0]
+    kept, dropped = ms.split_near_dry(out)
+    assert dropped == 0 and kept == out
+    assert out[0]["title"].endswith(": rivers much above normal")
+
+
+
 def test_status_record_uses_the_fixed_named_region_not_the_area_itself():
     g = _world()
     _put(g, 5, 15, -30, 35, -15)
@@ -406,6 +442,8 @@ def offline(monkeypatch):
     r, c = floods_past.cell_of(-6.2, 106.8)
     monkeypatch.setattr(floods_past, "load_month", lambda month, *a, **k: [[r, c, 30, 0]])
     monkeypatch.setattr(ms, "status_months", lambda *a, **k: ["2025-09", "2026-09"], raising=False)
+    # The basin flow table is its own test below: no scan here downloads thresholds.parquet or basins.parquet.
+    monkeypatch.setattr(ms, "usual_flow", lambda base=None: None)
     return g
 
 
@@ -417,8 +455,10 @@ def test_scan_reads_each_layer_and_ranks(offline):
                              "skill_computed": "2026-10-08"}
     kinds = [f["kind"] for f in res["picks"]]
     assert kinds[:5] == ["floods_ahead", "status", "gauges_today", "floods_past", "models_disagree"]
-    assert res["notes"] == [] and res["by"] == "rules"
+    assert res["notes"] == ["the basin flow table was not read here (it needs pyarrow, or the table from "
+                            "the daily file), so near-dry areas are not set aside"] and res["by"] == "rules"
     assert any("Groundsource" in s for s in res["sources"]) and res["sources"][-1].startswith("Places: Photon")
+    assert "usual" not in res                          # the table stays in scout/latest.json, not in a scan's answer
     json.dumps(res)                                   # what the worker posts back
     # Without rows and without pyarrow the gauges and the evidence are said to be missing, not invented.
     res = ms.scan({"bbox": [-80, -40, 40, 10]}, None, places=False, kinds=["status", "gauges_today"],
@@ -426,16 +466,38 @@ def test_scan_reads_each_layer_and_ranks(offline):
     assert any("snapshot" in n for n in res["notes"]) and {f["kind"] for f in res["findings"]} == {"status"}
 
 
+def test_usual_flow_is_the_monthly_median_at_the_basin_point(monkeypatch):
+    # The table: every basin's 0.75 column (the flow its outlet exceeded in one year in four) for every month,
+    # reduced to the median across the twelve and placed at the basin's representative point.
+    points = [{"hybas_id": 1, "lat": 10.2344, "lon": 20.0}, {"hybas_id": 2, "lat": -5.0, "lon": 3.0},
+              {"hybas_id": 3, "lat": 40.0, "lon": 1.0}]
+    rows = [{"month": 1, "HYBAS_ID": 1, "0.75": 10.0}, {"month": 2, "HYBAS_ID": 1, "0.75": 20.0},
+            {"month": 3, "HYBAS_ID": 1, "0.75": 30.0}, {"month": 1, "HYBAS_ID": 2, "0.75": 0.4},
+            {"month": 2, "HYBAS_ID": 2, "0.75": float("nan")}, {"month": 3, "HYBAS_ID": 2, "0.75": 0.6},
+            {"month": 1, "HYBAS_ID": 3, "0.75": None}]   # no number for basin 3: it is left out, not zero
+
+    def fake_rows(url, columns):
+        return points if url.endswith("basins.parquet") else rows
+
+    monkeypatch.setattr(ms, "_parquet_rows", fake_rows)
+    assert ms.usual_flow() == [[-5.0, 3.0, 0.6], [10.234, 20.0, 20.0]]
+    # No pyarrow, or no table: no table rather than a partial one.
+    monkeypatch.setattr(ms, "_parquet_rows", lambda url, columns: None)
+    assert ms.usual_flow() is None
+
+
 def test_daily_file_published_and_read_back(offline, tmp_path, monkeypatch):
     import aquascope.map_layers as ml
 
     monkeypatch.setattr(ml, "status_months", lambda *a, **k: ["2025-09", "2026-09"])
+    monkeypatch.setattr(ms, "usual_flow", lambda base=None: [[0.0, 0.0, 420.0]])
     today = ([_gauge(1, 52, -3, pct=0.0)], {"date": "2026-10-10"})
     monkeypatch.setattr(ms, "load_gauges_today", lambda base=None: today)
     monkeypatch.setattr(ms, "load_skill", lambda base=None: [_skill("big", -0.6, 300.0)])
     info = ms.daily(tmp_path, places=False)
     doc = json.loads((tmp_path / "scout" / "latest.json").read_text(encoding="utf-8"))
     assert info["picks"] == len(doc["picks"]) and (tmp_path / "scout" / f"{doc['date']}.json").exists()
+    assert doc["usual"] == [[0.0, 0.0, 420.0]]         # read by daily() for the browser's live scan (#638)
     assert doc["inputs"]["status_month"] == "2026-09" and doc["counts"]["status"] == 2
     status = next(f for f in doc["findings"] if f["kind"] == "status" and f.get("side") == "much_above")
     assert status["record_rank"] == 1 and "southern Africa as a whole" in status["reason"]
@@ -491,9 +553,10 @@ def test_mcp_tool(offline, monkeypatch):
     monkeypatch.setattr(ms, "load_skill", lambda base=None: None)
     res = m.map_scout(-80, -40, 40, 10, pins=3)
     assert res["available"] and res["mode"] == "live" and len(res["picks"]) <= 3 and "findings" not in res
+    assert "usual" not in res                          # ~22 kB of table never goes to the assistant (#638)
     monkeypatch.setattr(ms, "published", lambda *a, **k: None)
     assert m.map_scout(published=True)["available"] is False
-    src = (ROOT / "aquascope" / "mcp_server.py").read_text()
+    src = (ROOT / "aquascope" / "mcp_server.py").read_text(encoding="utf-8")
     assert "server.tool()(map_scout)" in src
 
 
@@ -501,14 +564,14 @@ def test_mcp_tool(offline, monkeypatch):
 
 
 def test_explorer_kind_labels_match():
-    js = (ROOT / "explorer" / "src" / "scout-core.js").read_text()
+    js = (ROOT / "explorer" / "src" / "scout-core.js").read_text(encoding="utf-8")
     block = re.search(r"export const KIND_LABELS = \{(.*?)\};", js, re.S).group(1)
     labels = dict(re.findall(r'(\w+): "([^"]+)"', block))
     assert labels == {k: v["label"] for k, v in ms.KINDS.items()}
 
 
 def test_worker_runs_the_scout_in_a_light_worker():
-    worker = (ROOT / "explorer" / "worker.js").read_text()
+    worker = (ROOT / "explorer" / "worker.js").read_text(encoding="utf-8")
     lite = re.search(r"const LITE_TYPES = new Set\(\[([^\]]*)\]\)", worker)
     assert lite and '"scout"' in lite.group(1)
     assert "_sc.scout_view(" in worker and "_sc.apply_wording(" in worker
@@ -517,7 +580,7 @@ def test_worker_runs_the_scout_in_a_light_worker():
 def test_daily_workflow_writes_and_publishes_scout_only():
     import yaml
 
-    wf = yaml.safe_load((ROOT / ".github" / "workflows" / "flood-warnings.yml").read_text())
+    wf = yaml.safe_load((ROOT / ".github" / "workflows" / "flood-warnings.yml").read_text(encoding="utf-8"))
     steps = {s.get("name"): s for s in wf["jobs"]["warnings"]["steps"]}
     run = steps["Today's scout"]["run"]
     assert "python -m aquascope.map_scout daily --out build --warnings build" in run
@@ -526,7 +589,7 @@ def test_daily_workflow_writes_and_publishes_scout_only():
     # A failed scout never turns the day's Floods ahead issue red.
     assert steps["Today's scout"]["continue-on-error"] is True
     assert steps["Publish scout/ to Hugging Face"]["continue-on-error"] is True
-    src = (ROOT / "aquascope" / "map_scout.py").read_text()
+    src = (ROOT / "aquascope" / "map_scout.py").read_text(encoding="utf-8")
     assert 'allow_patterns=[f"{FOLDER}/*"]' in src and 'FOLDER = "scout"' in src
 
 

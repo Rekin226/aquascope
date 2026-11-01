@@ -8,6 +8,7 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Fixed
+- **GR4J at large gauges** (#273): the station model asks before using point forcing above 10,000 km², and describes the forcing download separately from the fit.
 
 - **HydroGym refusal reviews:** bind decisions to the saved reconnaissance, score blank refusal reasons as invalid,
   and mark incomplete benchmark means with coverage and possible bounds (#381). A reconnaissance file whose decoded

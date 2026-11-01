@@ -445,7 +445,7 @@ The scheduled run lives in `.github/workflows/harvest.yml` (Mondays 03:17 UTC,
 or on demand from the Actions tab). It never fails because one agency is down;
 `health.json` and the job summary say which one did.
 
-On a full, unrestricted run, a source's station count falling by at least 50%
+On a full, unrestricted run, a source's station count falling by at least 25%
 from a previous catalog marked as complete is recorded as a non-fatal warning
 in `health.json` and the job summary. The comparison is skipped for old files
 without a completeness marker, source-selected or capped runs, failed sources,

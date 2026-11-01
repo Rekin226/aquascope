@@ -157,6 +157,10 @@ export function headline(res) {
 
 /** The action log's line for a run. */
 export function logLabel(res) {
+  const rv = res && res.reservoir;
+  if (rv) return `A flood through a reservoir, ${Number(rv.reduction_pct)} % lower past the dam`;
+  const st = res && res.storm;
+  if (st) return `Route a storm of ${Number(st.rain_mm)} mm in ${hoursWords(st.duration_h)}`;
   const i = (res && res.inflow) || {};
   if (finite(i.return_period)) return `Route the ${Number(i.return_period)}-year flood`;
   return `Route ${flowWords(i.peak_cms)} m³/s${i.shape === "block" ? " released" : ""}`;
@@ -201,7 +205,7 @@ export function routeArgs({ kind, peak, rp, duration, block }) {
     out.peak_cms = q;
   } else {
     const t = Number(rp);
-    if (!(t >= 1.01 && t <= 1000)) throw new Error("the return period must be between 1.01 and 1000 years");
+    if (!(t >= 2 && t <= 500)) throw new Error("the return period must be between 2 and 500 years");
     out.return_period = t;
   }
   return out;

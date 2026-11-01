@@ -28,6 +28,55 @@ export const FLOODSIM_CREDIT = "Local-inertial scheme (Bates et al. 2010; de Alm
   "(TDX-Hydro, CC BY-SA 4.0); flows: GEOGLOWS v2 retrospective annual maxima (CC BY-NC-SA 4.0), Log-Pearson III. " +
   "A screening flood, not a design flood.";
 
+// ── the run's words ─────────────────────────────────────────────────────────
+
+/** Model time in words: "45 min", "27 h", "3 h 20 min". */
+export function hm(s) {
+  const m = Math.round(Number(s) / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`;
+}
+
+/** A run's label with its article: "the 100-year flow", but "954 m³/s" as it is. */
+export function theLabel(label) {
+  const l = String(label || "");
+  return /^[\d,.]+ m³\/s/.test(l) ? l : `the ${l}`;
+}
+
+/**
+ * The flow line of a run: what was chosen and, unless the words already say it, the flow at the reach once.
+ * run: { words, choice, g: { click: { flow_cms, return_period }, sources } }; q formats a flow in m³/s.
+ */
+export function flowLine(run, q) {
+  const c = run.g.click;
+  const said = run.choice.flow_cms || run.choice.forecast === "peak" || String(run.words).includes(q(c.flow_cms));
+  const about = c.return_period && !run.choice.return_period ? `, about the ${Math.round(c.return_period)}-year flow,` : "";
+  return { words: run.words, rest: `${about} at this reach${said ? "" : ` (${q(c.flow_cms)})`}. ` +
+    `Every river in view at the same return period: ${run.g.sources.length} inflows.` };
+}
+
+/**
+ * The time bar's label for frame time t (s). A steady run holds one flow until the flood stops growing, so its
+ * clock is the hours since the water was turned on, not a time of day: "5 h into a steady run", and its last frame
+ * "steady after 27 h". A hydrograph's run counts from the hydrograph's start: "+5 h".
+ */
+export function clockLabel(t, { steady = false, steadyAt = null, last = false } = {}) {
+  if (!steady) return `+${hm(t)}`;
+  if (last && steadyAt) return `steady after ${hm(steadyAt)}`;
+  return `${hm(t)} into a steady run`;
+}
+
+/** The time bar's note for a run (short: on a phone it sits under the sheet; the run's flow is on the card). */
+export function clockSummary({ steady = true } = {}) {
+  return steady ? "Flood it: hours since the water was turned on." : "Flood it: hours from the hydrograph's start.";
+}
+
+/** The legend's line over the depth ramp. */
+export function depthTag(label, t, { steady = false } = {}) {
+  if (t === null || t === undefined) return `Depth of ${theLabel(label)}, a screening flood`;
+  return steady ? `Depth after ${hm(t)} of a steady run at ${theLabel(label)}, a screening flood`
+    : `Depth at +${hm(t)} of ${theLabel(label)}, a screening flood`;
+}
+
 // ── terrain ─────────────────────────────────────────────────────────────────
 
 /** Terrarium RGB(A) bytes -> metres: R*256 + G + B/256 - 32768. `rgba` has `channels` bytes a pixel. */
@@ -401,22 +450,60 @@ export function wetBox(h, nx, ny, wet = WET_M) {
   return r1 < 0 ? null : { r0, r1, c0, c1 };
 }
 
+/** The wall rule's numbers, the same as aquascope.floodsim.WALL_RULE: deeper than wetM, further than `near` cells from
+ * an inflow and `gap` faces from an open edge, at `minFaces` wall faces at least. */
+export const WALL_RULE = { wetM: 0.1, near: 40, gap: 3, minFaces: 3 };
+
 /**
- * Whether water stands at a walled edge away from the rivers that enter there (the grid may be too small: the valley
- * goes on past the wall). sources: [[row, col, ...]]; an edge cell within `near` cells of an inflow does not count.
+ * Where the flood is held by a wall of the grid (aquascope.floodsim.wall_contact, the same rule): the walled edge
+ * faces with water deeper than `wetM` behind them, away from the rivers that enter (`near` cells) and from the open
+ * edges where the river leaves (`gap` faces). There the valley goes on past the grid, and the wall holds water that
+ * would spread. Returns { faces, sides: { n, s, w, e } (faces per side), held } with held true at `minFaces` or more.
+ * h: depth above the terrain (ny*nx, rows north to south); sources: [[row, col, ...]].
  */
-export function wetAtWall(h, nx, ny, edges, sources = [], wet = WET_M, near = 40) {
+export function wallContact(h, nx, ny, edges, sources = [], rule = WALL_RULE) {
+  const { wetM, near, gap, minFaces } = { ...WALL_RULE, ...rule };
   const codes = edgeCodes(nx, ny, edges);
   const far = (r, c) => sources.every(([sr, sc]) => Math.max(Math.abs(sr - r), Math.abs(sc - c)) > near);
-  for (let c = 0; c < nx; c++) {
-    if (codes.n[c] === 0 && h[c] > wet && far(0, c)) return true;
-    if (codes.s[c] === 0 && h[(ny - 1) * nx + c] > wet && far(ny - 1, c)) return true;
-  }
-  for (let r = 0; r < ny; r++) {
-    if (codes.w[r] === 0 && h[r * nx] > wet && far(r, 0)) return true;
-    if (codes.e[r] === 0 && h[r * nx + nx - 1] > wet && far(r, nx - 1)) return true;
-  }
-  return false;
+  const sides = { n: 0, s: 0, w: 0, e: 0 };
+  const side = (k, len, cell) => {
+    const code = codes[k];
+    for (let i = 0; i < len; i++) {
+      if (code[i] !== 0) continue;
+      let open = false;
+      for (let d = -gap; d <= gap && !open; d++) open = i + d >= 0 && i + d < len && code[i + d] !== 0;
+      if (open) continue;
+      const [r, c] = cell(i);
+      if (h[r * nx + c] > wetM && far(r, c)) sides[k]++;
+    }
+  };
+  side("n", nx, (i) => [0, i]);
+  side("s", nx, (i) => [ny - 1, i]);
+  side("w", ny, (i) => [i, 0]);
+  side("e", ny, (i) => [i, nx - 1]);
+  const faces = sides.n + sides.s + sides.w + sides.e;
+  return { faces, sides, held: faces >= minFaces };
+}
+
+/** Whether the flood is held by a wall of the grid (wallContact's `held`). */
+export function wetAtWall(h, nx, ny, edges, sources = [], rule = WALL_RULE) {
+  return wallContact(h, nx, ny, edges, sources, rule).held;
+}
+
+const SIDE_WORDS = { n: "north", s: "south", w: "west", e: "east" };
+
+/**
+ * The warning in plain words, or "" when the flood is not held by a wall: what it means and what to do.
+ * contact: wallContact's answer; dx: the cell's size in m.
+ */
+export function wallWords(contact, dx) {
+  if (!contact || !contact.held) return "";
+  const where = Object.entries(contact.sides).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([k]) => SIDE_WORDS[k]);
+  const km = (contact.faces * dx) / 1000;
+  const along = km >= 1 ? `${km.toFixed(1)} km` : `${Math.round(km * 1000)} m`;
+  const sides = where.length > 1 ? `${where.slice(0, -1).join(", ")} and ${where.at(-1)} edges` : `${where[0]} edge`;
+  return `The water reaches the grid's ${sides} along ${along}. The valley goes on past it, and the edge holds the ` +
+    "water like a wall, so the flood there is deeper and narrower than it would be. Flood a reach nearer that edge to see it.";
 }
 
 // ── the hand-off to the flood views: a UGRID NetCDF-3 file ─────────────────

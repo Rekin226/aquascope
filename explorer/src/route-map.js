@@ -18,6 +18,7 @@ import { STREAMS_PMTILES } from "./river-core.js?v=__BUILD__";
 import { clearRiverNetwork, clearRiverTrace } from "./river-map.js?v=__BUILD__";
 import { releaseModelClock, setModelStep, useModelClock } from "./time-ui.js?v=__BUILD__";
 import { call } from "./worker-client.js?v=__BUILD__";
+import { designFlowLine } from "./design-flow-core.js?v=__BUILD__";
 import {
   RAMP, busiestFrame, cardPlaces, flatterWords, flowWords, frameFeatureStates, frameLabel, headline, hoursWords, logLabel,
   pathFilterExpr, placeFeatures, reachedBounds, routeArgs, townsFrom, waveColorExpr, waveOpacityExpr, waveWidthExpr,
@@ -38,6 +39,10 @@ let running = 0;
 let hooked = false;
 let lastReach = null;    // the reach the selection snapped to, for "from here"
 let litIds = [];         // the ids carrying feature-state now
+const painted = [];      // fn(value) for each module that follows the wave on the map (Draw a storm, #670)
+
+/** fn(value) whenever the wave on the map changes (null: none); a storm's run (#670) shows its card by it. */
+export function onWave(fn) { painted.push(fn); }
 
 const panel = () => $("route");
 
@@ -142,7 +147,7 @@ function takeClock(index = 0) {
   if (!fr || !fr.t_h || !fr.t_h.length) return;
   useModelClock({
     times: fr.t_h, index, label: (i) => frameLabel(fr.t_h[i]),
-    summary: "The flood wave: time since the water started to enter.",
+    summary: shown.result.storm ? "The storm's wave: time since the rain started." : "The flood wave: time since the water started to enter.",
     onStep: (i) => drawFrame(i),
     // "Back to dates": the still picture is the peak everywhere, how the wave flattens on its way.
     onExit: () => drawFrame(0, { peak: true }),
@@ -167,6 +172,7 @@ function paint(value, { frame = true, play = false } = {}) {
     releaseModelClock();
     renderResult();
     refreshLegend("route");
+    for (const fn of painted) fn(null);
     return;
   }
   if (frame) { clearRiverNetwork(); clearRiverTrace(); }
@@ -176,14 +182,17 @@ function paint(value, { frame = true, play = false } = {}) {
   if (frame) frameResult(value.result);
   openLegendRow("route", true);
   if (play) playOnce();
+  for (const fn of painted) fn(shown);
 }
 
 const narrow = () => Boolean(globalThis.matchMedia && matchMedia("(max-width: 640px)").matches);
 
 function frameResult(result) {
-  const box = reachedBounds(result);
+  // A storm's wave (#670) has no single path: the box of the reaches it reaches.
+  const b = result && result.bbox;
+  const box = b ? [[b[0], b[1]], [b[2], b[3]]] : reachedBounds(result);
   if (!box || !state.mapOk || !map) return;
-  const p = panel();
+  const p = [panel(), $("storm"), $("reservoir")].find((el) => el && !el.hidden) || panel();
   const pad = { top: 110, left: 40, right: 40, bottom: 170 };
   const lg = $("map-legend");
   if (lg && !lg.hidden && !narrow()) {
@@ -254,7 +263,7 @@ function placeRow(p) {
 function renderResult() {
   const box = $("rt-result");
   if (!box) return;
-  const mine = shown && target && Number(shown.target.river_id) === target.river_id;
+  const mine = shown && target && !shown.result.storm && !shown.result.reservoir && Number(shown.target.river_id) === target.river_id;
   box.hidden = !mine;
   if (!mine) return;
   const r = shown.result;
@@ -265,7 +274,8 @@ function renderResult() {
       '<span class="rt-q">m³/s</span><span class="rt-flat">flatter</span></li>' + rows.map(placeRow).join("")
     : '<li class="rt-none">No town or gauge on the stretch the wave reached in view.</li>';
   const check = r.check && r.check.summary ? ` ${r.check.summary}` : "";
-  $("rt-model").textContent = `Muskingum, GEOGLOWS's own k and x, ${r.hours} h routed hourly.${check} ` +
+  const flow = designFlowLine(r.inflow && r.inflow.design);
+  $("rt-model").textContent = `${flow ? `${flow} ` : ""}Muskingum, GEOGLOWS's own k and x, ${r.hours} h routed hourly.${check} ` +
     "The flow the wave adds to the river; rivers that join add their own.";
 }
 
@@ -318,6 +328,28 @@ export async function routeFlood(t, args, { by = "rules", command = "", label = 
     syncOutputs();
   }
 }
+
+/**
+ * Draw a wave the package already routed (Replay an event, #659: the observed flow at a gauge, routed with
+ * aquascope.routing.route in the record) and play it on the time bar, without the panel. Logged as a route, so undo
+ * takes it off. `frame` false leaves the camera to the caller.
+ */
+export function showRouted(result, t, { frame = false, label = "", by = "rules", command = "" } = {}) {
+  const before = slotValue("route");
+  const value = { result, target: { ...t, river_id: Number(t.river_id) } };
+  target = value.target;
+  paint(value, { frame, play: true });
+  logAction({ action: { type: "route", river_id: t.river_id, inflow: "series" }, before, after: value,
+    label: label || logLabel(result), by, detail: (result.inflow && result.inflow.source) || (result.storm && result.storm.rule) || "",
+    command });
+  return value;
+}
+
+/** Play the wave on the map again from its start (a storm's card, #670). */
+export function playWave() { if (shown) { takeClock(0); playOnce(); } }
+
+/** Take the wave off the map (a replay moving on from its wave stop). */
+export function clearRouted() { if (shown) paint(null); }
 
 // The path is framed now, so the basemap's labels along it are loaded: the towns not placed yet are placed on it.
 async function addTowns(value) {
@@ -375,7 +407,8 @@ function onClick(e) {
     id: `route:${title}`, lngLat: [e.lngLat.lng, e.lngLat.lat], what: "Flood wave, modelled", title,
     sub: row.along_km !== undefined && row.along_km !== null ? `${Math.round(row.along_km)} km down the river` : "",
     status: { text: status, color: RAMP[5][1] },
-    figure: row.reached ? { value: flowWords(row.peak_cms), unit: " m³/s", label: `peak added, ${flatterWords(row.attenuation_pct)} on the start` } : null,
+    figure: row.reached ? { value: flowWords(row.peak_cms), unit: " m³/s", label: r.storm ? "the peak the storm adds here"
+      : `peak added, ${flatterWords(row.attenuation_pct)} on the start` } : null,
     note: "Muskingum is linear: this is the flow the wave adds to the river.", credit: CREDIT,
     buttons: [{ id: "rt-again", label: "Route a flood from here", title: "Route a flood from this reach",
       onClick: () => openRoute({ river_id: row.river_id, lat: e.lngLat.lat, lon: e.lngLat.lng, name: title }) }],
@@ -389,10 +422,13 @@ function legendBody() {
   const r = shown.result;
   const ramp = RAMP.map(([, c]) => `<i style="background:${c}"></i>`).join("");
   const when = shown.frame === null ? "Each reach at its own peak" : `At ${frameLabel(r.frames.t_h[shown.frame] || 0)}`;
-  return `<p class="ml-when">${escapeHtml(when)}: the share of the peak that entered (${escapeHtml(flowWords(r.inflow.peak_cms))} m³/s) ` +
+  const ref = r.storm ? `the biggest peak the storm adds (${flowWords(r.frames.scale_cms)} m³/s)`
+    : `the peak that entered (${flowWords(r.inflow.peak_cms)} m³/s)`;
+  return `<p class="ml-when">${escapeHtml(when)}: the share of ${escapeHtml(ref)} ` +
     "that is there, wider and darker for more.</p>" +
     `<p class="rk-row"><span class="rt-ramp">${ramp}</span> 0 to 100%</p>` +
-    '<p class="ml-src">Muskingum with GEOGLOWS v2\'s k and x (CC BY 4.0), rivers TDX-Hydro (CC BY-SA 4.0). Modelled.</p>';
+    '<p class="ml-src">Muskingum with GEOGLOWS v2\'s k and x (CC BY 4.0), rivers TDX-Hydro (CC BY-SA 4.0)' +
+    (r.inflow && r.inflow.design ? ", T-year flows from GEOGLOWS v2's annual maxima (CC BY-NC-SA 4.0)" : "") + '. Modelled.</p>';
 }
 
 function registerRow() {

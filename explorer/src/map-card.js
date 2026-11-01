@@ -428,6 +428,15 @@ function floodItButton(t) {
   };
 }
 
+// Replay an event (#659): a past flood at this reach, around a date, as a story on the map.
+function replayButton(t) {
+  return {
+    id: "replay", label: "Replay", hidden: !actions.openReplay || !t,
+    title: "Replay a past flood here as a story: the rain, the gauge against the model, the forecast, the wave and the flood",
+    onClick: () => { if (t && actions.openReplay) actions.openReplay(t); },
+  };
+}
+
 const studyButton = () => ({
   id: "study", label: "Study", title: "A complete study at this place, planned with you, with a report",
   onClick: () => actions.openStudy({ fresh: true }),
@@ -628,10 +637,11 @@ function onSnap(m, snap) {
     details: () => openDetails("panel-point", "now"),
     // A reach taken from the offer above gets its Trace button back.
     buttons: [traceButton("pt", { ready: Boolean(m.reach) }),
-      ...(m.spec.buttons || []).filter((b) => !["trace", "reach", "whatif", "route", "floodit"].includes(b.id)),
+      ...(m.spec.buttons || []).filter((b) => !["trace", "reach", "whatif", "route", "floodit", "replay"].includes(b.id)),
       routeButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, name: named ? named.name : "" }),
       whatIfButton({ kind: "reach", river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon }),
-      floodItButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, order: snap.strahler_order })],
+      floodItButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, order: snap.strahler_order }),
+      replayButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, name: named ? named.name : "" })],
   });
   void loadForecast(m, snap);
 }
@@ -752,9 +762,10 @@ export function initMapCard() {
         const g = state.selected;
         const btn = whatIfButton({ kind: "gauge", river_id: reach.river_id, lat: g.lat, lon: g.lon, source: g.source,
           station_id: g.station_id, name: g.name || g.station_id });
-        const others = (model.spec.buttons || []).filter((b) => b.id !== "whatif" && b.id !== "route");
+        const others = (model.spec.buttons || []).filter((b) => !["whatif", "route", "replay"].includes(b.id));
         const rt = routeButton({ river_id: reach.river_id, lat: reach.lat, lon: reach.lon, name: g.name || g.station_id });
-        updateCard(model.id, { buttons: [...others, rt, btn] });
+        const rp = replayButton({ river_id: reach.river_id, lat: g.lat, lon: g.lon, name: g.name || g.station_id });
+        updateCard(model.id, { buttons: [...others, rt, btn, rp] });
       }
     });
   }

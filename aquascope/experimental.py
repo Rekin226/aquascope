@@ -18,6 +18,13 @@ What is here and why (``docs/stability.md`` has the full policy):
 * Paint the globe (#657, after 1.0.0): ``aquascope.paint``, ``aquascope paint`` and the MCP tool ``paint_map``.
 * Flood it (#658): ``aquascope.floodsim`` (a local-inertial screening flood of a river's valley), ``aquascope flood``
   and the MCP tool ``flood_reach``, new in 1.1.
+* Replay an event (#659): ``aquascope.replay`` (a past flood assembled from its data and told as a story),
+  ``aquascope replay`` and the MCP tools ``replay_candidates`` and ``replay_event``, new in 1.1.
+* The sketchpad (#664): ``aquascope.sketch``. Drop a well (#660): ``aquascope.sketch.drawdown`` (Theis with
+  superposition), ``aquascope well`` and the MCP tool ``drop_well``; change land use (#661):
+  ``aquascope.sketch.landuse`` (the SCS curve number, TR-55), ``aquascope landuse`` and the MCP tool
+  ``change_landuse``; a drawn reservoir (#662: ``aquascope.sketch.reservoir``, ``aquascope route reservoir``
+  and the MCP tool ``route_reservoir``), new in 1.1.
 * ``aquascope.gym`` and ``aquascope gym``: the benchmark, now called AquaScope Bench (#440). Only the name changed;
   the module path and the CLI verb stay, and the task suite is not frozen before its DOI (#175).
 
@@ -58,9 +65,11 @@ MODULES: tuple[str, ...] = (
     "aquascope.mesh_views",
     "aquascope.nownext",
     "aquascope.paint",
+    "aquascope.replay",
     "aquascope.river_path",
     "aquascope.rivers",
     "aquascope.routing",
+    "aquascope.sketch",
     "aquascope.watch",
     "aquascope.waterbalance",
     "aquascope.whatif_map",
@@ -81,18 +90,21 @@ CLI: tuple[str, ...] = (
     "flood",
     "flowstatus",
     "gym",
+    "landuse",
     "layers",
     "map",
     "mesh",
     "modflow",
     "now",
     "paint",
+    "replay",
     "river",
     "route",
     "swmm",
     "warnings",
     "watch",
     "waterbalance",
+    "well",
     "whatif",
 )
 
@@ -104,9 +116,11 @@ CLI_FLAGS: dict[str, tuple[str, ...]] = {
 # MCP tool names (``aquascope mcp``).
 MCP_TOOLS: tuple[str, ...] = (
     "area_context",
+    "change_landuse",
     "correct_to_gauge",
     "dated_layers",
     "downstream_ids",
+    "drop_well",
     "engineering_export",
     "explain_view",
     "flood_depth_overlay",
@@ -130,9 +144,12 @@ MCP_TOOLS: tuple[str, ...] = (
     "paint_map",
     "place_context",
     "reach_record",
+    "replay_candidates",
+    "replay_event",
     "river_status_month",
     "river_status_summary",
     "route_flood",
+    "route_reservoir",
     "route_storm",
     "snap_to_river",
     "status_bulletin",

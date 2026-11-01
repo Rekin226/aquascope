@@ -102,8 +102,8 @@ pip install "aquascope[all]"       # everything: ML, viz, spatial, dashboard
   author  = {AquaScope Contributors},
   year    = {2026},
   url     = {https://github.com/Rekin226/aquascope},
-  version = {1.0.0},
-  doi     = {10.5281/zenodo.23671741},
+  version = {1.1.0},
+  doi     = {10.5281/zenodo.23718093},
   license = {MIT}
 }
 ```

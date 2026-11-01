@@ -36,7 +36,7 @@ scheme is for.
 Terrain: the Terrarium tiles the Explorer's hillshade uses (``elevation-tiles-prod``, Mapzen/Tilezen joerd, a
 mix of SRTM, GMTED, ETOPO1 and national lidar; decode ``h = R*256 + G + B/256 - 32768``). No bathymetry: the river
 is burnt in (:func:`burn_channel`). This is a screening flood: terrain errors of metres, no levees unless the
-terrain shows them, no rain, a constant inflow.
+terrain shows them or one is drawn (:func:`apply_levee`, :func:`apply_breach`, #663), no rain.
 
 numpy and the standard library only (the PNG tiles are decoded with zlib), so it runs in Pyodide too.
 """
@@ -54,10 +54,16 @@ import numpy as np
 
 __all__ = [
     "ALPHA", "CAP_HOURS", "G", "H_DRY", "N_CHANNEL", "N_FLOODPLAIN", "RETURN_PERIODS", "STEADY_TOL", "THETA",
-    "TERRARIUM", "annual_maxima", "burn_channel", "cell_velocity", "channel_depth", "compare_depths", "corridor",
-    "decode_png_rgb", "edge_codes", "flood_reach", "flow_curve", "flow_for", "forecast_series", "frame_times",
-    "depth_over_terrain", "jrc_on_grid", "routed_series", "to_geotiff", "to_ugrid",
-    "matched_flow", "pixel_size_m", "plan_window", "prepare_grid", "return_period_for", "ritter", "run_grid",
+    "TERRARIUM", "WALL_RULE", "WEIR_C", "annual_maxima", "apply_breach", "apply_levee", "burn_channel",
+    "compare_exposure",
+    "compare_runs", "design_flow", "edit_grid", "edits_from", "levee_profile", "read_line", "supercover_cells",
+    "weir_flow",
+    "cell_velocity", "channel_depth", "compare_depths", "corridor",
+    "decode_png_rgb", "edge_codes", "flood_reach", "flow_curve", "flow_for", "flow_words", "forecast_series",
+    "frame_times",
+    "depth_over_terrain", "jrc_on_grid", "routed_series", "to_geotiff", "to_ugrid", "wall_contact", "wall_words",
+    "matched_flow", "pixel_size_m", "plan_window", "prepare_grid", "reach_curve", "return_period_for", "ritter",
+    "run_grid",
     "run_summary", "simulate", "stream_reaches", "terrain_grid", "terrain_window", "terrarium_elevation", "window",
 ]
 
@@ -533,6 +539,299 @@ def _orient(z: np.ndarray, cells: list[tuple[int, int]]) -> list[tuple[int, int]
     return cells
 
 
+# ── levees and breaches (#663) ──────────────────────────────────────────────
+
+#: The broad-crested weir coefficient in SI units for critical depth over the crest: ``Q = C b H^1.5`` with
+#: ``C = (2/3)^(3/2) g^(1/2)`` (about 1.705 m^0.5/s), the ideal weir of the open-channel texts (Henderson 1966,
+#: *Open Channel Flow*).
+WEIR_C = (2.0 / 3.0) ** 1.5 * math.sqrt(G)
+#: The freeboard (m) a suggested crest keeps above the highest water along a drawn line.
+FREEBOARD_M = 0.5
+
+
+def _cell_xy(win: dict[str, Any], line: Any) -> list[tuple[float, float]]:
+    """A (lon, lat) polyline in the window's cell coordinates: x along the columns, y down the rows."""
+    pts = []
+    for p in line:
+        lon, lat = float(p[0]), float(p[1])
+        if not (math.isfinite(lon) and math.isfinite(lat)) or abs(lat) >= 85.06:
+            raise ValueError("a line's points must be finite longitudes and latitudes inside Web Mercator")
+        x, y = _world_px(lon, lat, win["zoom"])
+        pts.append((x - win["x0"], y - win["y0"]))
+    if len(pts) < 2:
+        raise ValueError("a line needs at least two points")
+    return pts
+
+
+def _supercover(ax: float, ay: float, bx: float, by: float) -> list[tuple[int, int]]:
+    """Every cell (row, col) the segment from (ax, ay) to (bx, by) touches, in order: Amanatides and Woo's (1987)
+    traversal, taking both side cells where the segment passes exactly through a cell corner."""
+    c, r = math.floor(ax), math.floor(ay)
+    c1, r1 = math.floor(bx), math.floor(by)
+    dx, dy = bx - ax, by - ay
+    sx = 1 if dx > 0 else -1
+    sy = 1 if dy > 0 else -1
+    tx = ((c + (sx > 0)) - ax) / dx if dx else math.inf
+    ty = ((r + (sy > 0)) - ay) / dy if dy else math.inf
+    ddx = abs(1.0 / dx) if dx else math.inf
+    ddy = abs(1.0 / dy) if dy else math.inf
+    out = [(r, c)]
+    for _ in range(abs(c1 - c) + abs(r1 - r) + 2):
+        if (r, c) == (r1, c1) or min(tx, ty) > 1.0:
+            break
+        if abs(tx - ty) < 1e-12:
+            out += [(r, c + sx), (r + sy, c)]
+            c, r, tx, ty = c + sx, r + sy, tx + ddx, ty + ddy
+        elif tx < ty:
+            c, tx = c + sx, tx + ddx
+        else:
+            r, ty = r + sy, ty + ddy
+        out.append((r, c))
+    return out
+
+
+def supercover_cells(grid: dict[str, Any], line: Any) -> list[tuple[int, int]]:
+    """Every grid cell a (lon, lat) polyline touches, in order along it and without repeats: a supercover
+    rasterisation, so consecutive cells share a face and a line of raised cells has no gap at a corner that water
+    could leak through. ``grid`` is a :func:`prepare_grid` answer or a :func:`window`. Cells off the grid are left
+    out."""
+    win = grid.get("window", grid)
+    pts = _cell_xy(win, line)
+    seen: set[tuple[int, int]] = set()
+    out: list[tuple[int, int]] = []
+    for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+        for rc in _supercover(ax, ay, bx, by):
+            if rc not in seen and 0 <= rc[0] < win["ny"] and 0 <= rc[1] < win["nx"]:
+                seen.add(rc)
+                out.append(rc)
+    return out
+
+
+def _natural(grid: dict[str, Any]) -> dict[str, np.ndarray]:
+    nat = grid.get("natural")
+    return nat if nat else {"z": np.asarray(grid["z"], dtype="f8"), "z_burnt": np.asarray(grid["z_burnt"], dtype="f8")}
+
+
+def _line_m(win: dict[str, Any], line: Any) -> float:
+    pts = [(float(p[0]), float(p[1])) for p in line]
+    return sum(_haversine_km(a[1], a[0], b[1], b[0]) for a, b in zip(pts, pts[1:])) * 1000.0
+
+
+def apply_levee(grid: dict[str, Any], line: Any, crest: float) -> dict[str, Any]:
+    """A levee along ``line`` (a list of [lon, lat]): every cell the line crosses (:func:`supercover_cells`) is
+    raised to ``crest``.
+
+    ``crest`` is an **elevation** in metres on the terrain's own datum (the Terrarium tiles: metres above mean sea
+    level), not a height above the ground: a levee's crest is level along it while the ground under it is not. A
+    cell already higher than the crest is left as it is. A levee drawn across a river dams it: the cells of a burnt
+    channel under the line are raised too, and counted in ``channel_cells``.
+
+    Returns the new terrain the run floods (``terrain``, the grid's ``z_burnt`` with the levee), the new terrain
+    the map and the depths are drawn from (``ground``), the edited cells (``cells``, [row, col] in order along the
+    line) and what changed. The grid itself is not changed; the same line and crest always give the same cells."""
+    crest = float(crest)
+    if not math.isfinite(crest):
+        raise ValueError("a levee's crest must be a number (m above mean sea level)")
+    zb = np.array(grid["z_burnt"], dtype="f8")
+    zg = np.array(grid["z"], dtype="f8")
+    cells = supercover_cells(grid, line)
+    if not cells:
+        raise ValueError("the levee's line does not cross the grid")
+    rr = np.array([r for r, _ in cells], dtype=np.intp)
+    cc = np.array([c for _, c in cells], dtype=np.intp)
+    under = zg[rr, cc].copy()
+    channel = int(np.count_nonzero(zb[rr, cc] < zg[rr, cc] - 1e-9))
+    raised = zb[rr, cc] < crest
+    zb[rr, cc] = np.maximum(zb[rr, cc], crest)
+    zg[rr, cc] = np.maximum(zg[rr, cc], crest)
+    return {"kind": "levee", "terrain": zb, "ground": zg, "cells": [[int(r), int(c)] for r, c in cells],
+            "crest_m": round(crest, 3), "raised": int(raised.sum()), "channel_cells": channel,
+            "ground_m": [round(float(under.min()), 2), round(float(under.max()), 2)],
+            "height_m": [round(float(max(crest - under.max(), 0.0)), 2),
+                         round(float(max(crest - under.min(), 0.0)), 2)],
+            "length_m": round(_line_m(grid.get("window", grid), line), 1)}
+
+
+def apply_breach(grid: dict[str, Any], line: Any, invert: float | None = None) -> dict[str, Any]:
+    """A breach along ``line``: every cell the line crosses (:func:`supercover_cells`) is lowered to ``invert``,
+    an elevation in metres on the terrain's datum, as a levee's crest. A cell already lower is left as it is.
+    Without an ``invert`` each cell goes back to its natural ground (the grid's terrain before any levee: a gap in
+    a drawn levee). Draw a breach along the levee over the stretch that fails; its width is the cells it crosses.
+
+    Returns ``terrain``, ``ground`` and ``cells`` as :func:`apply_levee` does, the cells lowered and the gap's
+    width along the line."""
+    zb = np.array(grid["z_burnt"], dtype="f8")
+    zg = np.array(grid["z"], dtype="f8")
+    nat = _natural(grid)
+    cells = supercover_cells(grid, line)
+    if not cells:
+        raise ValueError("the breach's line does not cross the grid")
+    rr = np.array([r for r, _ in cells], dtype=np.intp)
+    cc = np.array([c for _, c in cells], dtype=np.intp)
+    if invert is None:
+        tb, tg = nat["z_burnt"][rr, cc], nat["z"][rr, cc]
+    else:
+        if not math.isfinite(float(invert)):
+            raise ValueError("a breach's invert must be a number (m above mean sea level)")
+        tb = tg = np.full(rr.size, float(invert))
+    lowered = zb[rr, cc] > tb + 1e-9
+    zb[rr, cc] = np.minimum(zb[rr, cc], tb)
+    zg[rr, cc] = np.minimum(zg[rr, cc], tg)
+    return {"kind": "breach", "terrain": zb, "ground": zg, "cells": [[int(r), int(c)] for r, c in cells],
+            "invert_m": None if invert is None else round(float(invert), 3), "lowered": int(lowered.sum()),
+            "floor_m": [round(float(zg[rr, cc].min()), 2), round(float(zg[rr, cc].max()), 2)],
+            "length_m": round(_line_m(grid.get("window", grid), line), 1)}
+
+
+def read_line(geo: Any) -> list[list[list[float]]]:
+    """Lines from GeoJSON (a LineString, a MultiLineString, a Feature or a FeatureCollection of them, as a dict or
+    text) or a plain list of [lon, lat]: a list of lines, each a list of [lon, lat]."""
+    import json
+
+    if isinstance(geo, (str, bytes)):
+        geo = json.loads(geo)
+    if isinstance(geo, list):
+        if geo and isinstance(geo[0], (list, tuple)) and geo[0] and isinstance(geo[0][0], (int, float)):
+            return [[[float(p[0]), float(p[1])] for p in geo]]
+        return [ln for part in geo for ln in read_line(part)]
+    if not isinstance(geo, dict):
+        raise ValueError("a line must be GeoJSON or a list of [lon, lat]")
+    kind = geo.get("type")
+    if kind == "FeatureCollection":
+        return [ln for f in geo.get("features") or [] for ln in read_line(f)]
+    if kind == "Feature":
+        return read_line(geo.get("geometry") or {})
+    if kind == "LineString":
+        return [[[float(p[0]), float(p[1])] for p in geo["coordinates"]]]
+    if kind == "MultiLineString":
+        return [[[float(p[0]), float(p[1])] for p in ln] for ln in geo["coordinates"]]
+    raise ValueError(f"a levee or a breach is a line, not a {kind}")
+
+
+def edits_from(levees: Any = (), crests: Any = (), breaches: Any = (), inverts: Any = ()) -> list[dict[str, Any]]:
+    """The edits of :func:`edit_grid` from the CLI's and the MCP tool's arguments: ``levees`` and ``breaches`` are
+    each a list of lines (GeoJSON, as text or a dict, or a list of [lon, lat]: :func:`read_line`, so one entry may
+    hold several lines); ``crests`` is one crest for every levee or one per entry (m above mean sea level), and
+    ``inverts`` likewise for the breaches (none: the natural ground). Levees first, then breaches."""
+    def many(x: Any) -> list[Any]:
+        if x is None:
+            return []
+        if isinstance(x, (str, dict)) or (isinstance(x, list) and x and isinstance(x[0], (list, tuple))
+                                          and x[0] and isinstance(x[0][0], (int, float))):
+            return [x]
+        return list(x)
+
+    def pick(vals: list[Any], k: int, what: str) -> Any:
+        if not vals:
+            return None
+        if len(vals) == 1:
+            return vals[0]
+        if k >= len(vals):
+            raise ValueError(f"give one {what} for all, or one for each")
+        return vals[k]
+
+    lv, br = many(levees), many(breaches)
+    cr = [float(c) for c in many(crests) if c is not None] if not isinstance(crests, (int, float)) else [float(crests)]
+    iv = [float(c) for c in many(inverts) if c is not None] if not isinstance(inverts, (int, float)) \
+        else [float(inverts)]
+    out: list[dict[str, Any]] = []
+    for k, geo in enumerate(lv):
+        crest = pick(cr, k, "crest")
+        if crest is None:
+            raise ValueError("a levee needs a crest: an elevation in m above mean sea level")
+        out += [{"kind": "levee", "line": ln, "crest": crest} for ln in read_line(geo)]
+    for k, geo in enumerate(br):
+        out += [{"kind": "breach", "line": ln, "invert": pick(iv, k, "invert")} for ln in read_line(geo)]
+    return out
+
+
+def edit_grid(grid: dict[str, Any], edits: list[dict[str, Any]], *, skip_outside: bool = False) -> dict[str, Any]:
+    """A :func:`prepare_grid` answer with levees and breaches applied in the order given: each edit is
+    ``{"kind": "levee", "line": [[lon, lat], ...], "crest": m}`` or ``{"kind": "breach", "line": [...],
+    "invert": m}`` (the invert may be left out: the natural ground). The answer is a new grid (the arrays copied,
+    the input unchanged) with ``natural`` (the terrain before any edit) and ``edits`` (each edit's cells and
+    numbers). The same edits always give the same grid. With ``skip_outside`` an edit whose line misses the grid
+    is listed with ``skipped`` instead of stopping (the Explorer keeps drawn lines when another river is
+    flooded)."""
+    nat = _natural(grid)
+    g = {**grid, "natural": nat, "z": np.array(nat["z"]), "z_burnt": np.array(nat["z_burnt"]), "edits": []}
+    for k, e in enumerate(edits or []):
+        kind = e.get("kind")
+        if kind not in ("levee", "breach"):
+            raise ValueError(f"edit {k + 1}: kind must be levee or breach, not {kind!r}")
+        if kind == "levee" and e.get("crest") is None:
+            raise ValueError(f"edit {k + 1}: a levee needs a crest (m above mean sea level)")
+        if skip_outside and not supercover_cells(g, e["line"]):
+            g["edits"].append({"kind": kind, "skipped": "the line does not cross this grid", "cells": [],
+                               **({"id": e["id"]} if "id" in e else {})})
+            continue
+        out = (apply_levee(g, e["line"], float(e["crest"])) if kind == "levee"
+               else apply_breach(g, e["line"], e.get("invert")))
+        g["z_burnt"], g["z"] = out.pop("terrain"), out.pop("ground")
+        g["edits"].append({**out, "line": [[round(float(p[0]), 6), round(float(p[1]), 6)] for p in e["line"]],
+                           **({"id": e["id"]} if "id" in e else {})})
+    return g
+
+
+def levee_profile(grid: dict[str, Any], line: Any, h: Any = None, *, wet_m: float = 0.05,
+                  freeboard_m: float = FREEBOARD_M) -> dict[str, Any]:
+    """The ground and the flood level along a drawn line, for setting a levee's crest: for each cell the line
+    crosses (in order), the distance along the line, the natural ground, the terrain now (with any levee) and,
+    given a run's depth ``h`` (over the burnt bed, as :func:`run_grid` returns it), the water level where it is
+    wetter than ``wet_m`` (None where dry). ``suggested_crest_m`` is the highest water along the line plus
+    ``freeboard_m`` (:data:`FREEBOARD_M` by default), rounded up to 10 cm; with no water on the line, the highest
+    ground plus 1 m."""
+    win = grid.get("window", grid)
+    cells = supercover_cells(grid, line)
+    if not cells:
+        raise ValueError("the line does not cross the grid")
+    nat = _natural(grid)
+    rr = np.array([r for r, _ in cells], dtype=np.intp)
+    cc = np.array([c for _, c in cells], dtype=np.intp)
+    dist = np.concatenate([[0.0], np.cumsum(np.hypot(np.diff(rr), np.diff(cc)))]) * float(grid.get("dx", win["dx"]))
+    ground = nat["z"][rr, cc]
+    now = np.asarray(grid["z"], dtype="f8")[rr, cc]
+    water: list[float | None] = [None] * len(cells)
+    if h is not None:
+        hh = np.asarray(h, dtype="f8").reshape(np.shape(grid["z"]))[rr, cc]
+        lvl = np.asarray(grid["z_burnt"], dtype="f8")[rr, cc] + hh
+        water = [round(float(v), 2) if d > wet_m else None for v, d in zip(lvl, hh)]
+    wet = [w for w in water if w is not None]
+    top = max(wet) + float(freeboard_m) if wet else float(ground.max()) + 1.0
+    return {"cells": [[int(r), int(c)] for r, c in cells], "distance_m": [round(float(d), 1) for d in dist],
+            "ground_m": [round(float(v), 2) for v in ground], "terrain_m": [round(float(v), 2) for v in now],
+            "water_m": water, "highest_water_m": round(max(wet), 2) if wet else None,
+            "lowest_ground_m": round(float(ground.min()), 2), "highest_ground_m": round(float(ground.max()), 2),
+            "suggested_crest_m": math.ceil(round(top * 10.0, 6)) / 10.0, "freeboard_m": float(freeboard_m),
+            "length_m": round(_line_m(win, line), 1)}
+
+
+def weir_flow(width_m: float, head_m: float, c: float = WEIR_C) -> float:
+    """A broad-crested weir's flow (m3/s): ``Q = C b H^1.5``, ``b`` the crest's width and ``H`` the upstream water
+    level above the crest (the approach velocity head left out)."""
+    return float(c) * float(width_m) * max(float(head_m), 0.0) ** 1.5
+
+
+def compare_runs(g0: dict[str, Any], h0: Any, g1: dict[str, Any], h1: Any, *, wet_m: float = 0.05
+                 ) -> dict[str, Any]:
+    """Before and after on the same grid (the largest depths of two runs, over the burnt bed as :func:`run_grid`
+    gives them): the wet area of each, the cells kept dry (wet before, dry after), the cells newly wet, and the
+    change in depth where either is wet."""
+    d0 = depth_over_terrain(g0, h0)
+    d1 = depth_over_terrain(g1, h1)
+    w0, w1 = d0 > wet_m, d1 > wet_m
+    a = float(g1["dx"]) ** 2 / 1e6
+    either = w0 | w1
+    diff = (d1 - d0)[either]
+    return {"wet_km2_before": round(float(w0.sum()) * a, 3), "wet_km2_after": round(float(w1.sum()) * a, 3),
+            "wet_km2_change": round(float(w1.sum() - w0.sum()) * a, 3),
+            "kept_dry_km2": round(float((w0 & ~w1).sum()) * a, 3),
+            "newly_wet_km2": round(float((w1 & ~w0).sum()) * a, 3),
+            "max_depth_m_before": round(float(d0.max()), 2), "max_depth_m_after": round(float(d1.max()), 2),
+            "depth_change_m": ({"min": round(float(diff.min()), 2), "max": round(float(diff.max()), 2),
+                                "median": round(float(np.median(diff)), 2)} if diff.size else None)}
+
+
 # ── comparing with a reference map ──────────────────────────────────────────
 
 
@@ -739,6 +1038,45 @@ def return_period_for(curve: dict[str, Any], q: float) -> float | None:
     f = 0.0 if hi <= lo else (q - lo) / (hi - lo)
     lt = math.log(curve["T"][k]) + f * (math.log(curve["T"][k + 1]) - math.log(curve["T"][k]))
     return float(math.exp(lt))
+
+
+def flow_words(curve: dict[str, Any]) -> str:
+    """How every tool names a curve's method and source, the same words in Flood it, Route it, the reservoir and
+    Replay (the Explorer's ``design-flow-core.js`` writes the same from the same fields)."""
+    return (f"{curve['method']} on GEOGLOWS v2's annual maxima of simulated daily flow, "
+            f"{curve['first_year']} to {curve['last_year']}")
+
+
+def reach_curve(river_id: int, *, fetch: Callable[[str], bytes | None] | None = None) -> dict[str, Any]:
+    """One reach's T-year flow curve: :func:`flow_curve` on its :func:`annual_maxima`; ``{"error": ...}`` when the
+    store has no record for it or the fit cannot be made."""
+    rid = int(river_id)
+    years, am = annual_maxima([rid], fetch=fetch)
+    if rid not in am:
+        return {"error": f"reach {rid} is not in GEOGLOWS's annual maxima store"}
+    return flow_curve(years, am[rid])
+
+
+def design_flow(river_id: int, return_period: float, *,
+                fetch: Callable[[str], bytes | None] | None = None) -> dict[str, Any]:
+    """A reach's ``return_period``-year flow, the one design flow every tool uses (Flood it, Route it, Draw a
+    reservoir, Replay): Log-Pearson III on GEOGLOWS v2's annual maxima (:func:`reach_curve`), read on the curve
+    with :func:`flow_for`. ``return_period`` is 2 to 500 years, the range the curve is fitted over.
+
+    Returns ``flow_cms``, ``return_period``, the curve's ``method``, ``n_years``, ``first_year`` and
+    ``last_year``, ``words`` (:func:`flow_words`), the store (``source``) and its ``licence``. Raises
+    ``ValueError`` for a return period outside the range and ``RuntimeError`` when the reach has no curve."""
+    t = float(return_period)
+    lo, hi = FIT_RETURN_PERIODS[0], FIT_RETURN_PERIODS[-1]
+    if not (lo <= t <= hi):
+        raise ValueError(f"return_period must be between {lo} and {hi} years (the range the flows are fitted over)")
+    curve = reach_curve(river_id, fetch=fetch)
+    if curve.get("error"):
+        raise RuntimeError(f"no flood frequency curve for reach {int(river_id)}: {curve['error']}")
+    q = flow_for(curve, t)
+    return {"river_id": int(river_id), "return_period": t, "flow_cms": round(q, 3), "method": curve["method"],
+            "n_years": curve["n_years"], "first_year": curve["first_year"], "last_year": curve["last_year"],
+            "words": flow_words(curve), "source": MAXIMA_ZARR, "licence": MAXIMA_LICENCE}
 
 
 def matched_flow(click: dict[str, Any], q: float, other: dict[str, Any]) -> float:
@@ -1376,12 +1714,69 @@ def depth_over_terrain(g: dict[str, Any], h: Any) -> np.ndarray:
     return np.maximum(np.asarray(g["z_burnt"]) + np.asarray(h) - np.asarray(g["z"]), 0.0)
 
 
+#: When the flood is held by a wall of the grid (:func:`wall_contact`): water deeper than ``wet_m`` behind a walled
+#: edge face, further than ``near`` cells from an inflow and ``gap`` faces from an open edge, at ``min_faces`` faces
+#: or more. The Explorer's ``floodsim-core.js`` (``WALL_RULE``, ``wallContact``) uses the same numbers.
+WALL_RULE = {"wet_m": 0.1, "near": 40, "gap": 3, "min_faces": 3}
+
+
+def wall_contact(depth: Any, edges: dict[str, Any], sources: list[Any], **rule: Any) -> dict[str, Any]:
+    """Where a run's flood is held by a wall of its grid: the walled edge faces (code 0) with water deeper than the
+    rule's ``wet_m`` behind them, away from the rivers that enter (``near`` cells, Chebyshev) and from the open edges
+    where the river leaves (``gap`` faces). There the valley goes on past the grid, and the wall holds water that
+    would spread, so the flood near it is deeper and narrower than it would be. ``depth`` is above the terrain
+    (rows north to south); ``sources`` are ``(row, col)`` cells or dicts with ``"cell"``. Returns ``faces``,
+    ``sides`` (faces per side) and ``held`` (``min_faces`` or more)."""
+    r_ = {**WALL_RULE, **rule}
+    d = np.asarray(depth, dtype="f8")
+    ny, nx = d.shape
+    cells = [tuple(s["cell"]) if isinstance(s, dict) else tuple(s[:2]) for s in sources]
+    near, gap = int(r_["near"]), int(r_["gap"])
+
+    def far(r: int, c: int) -> bool:
+        return all(max(abs(sr - r), abs(sc - c)) > near for sr, sc in cells)
+
+    sides = {}
+    for k, n_faces, cell in (("n", nx, lambda i: (0, i)), ("s", nx, lambda i: (ny - 1, i)),
+                             ("w", ny, lambda i: (i, 0)), ("e", ny, lambda i: (i, nx - 1))):
+        code = np.broadcast_to(np.asarray(edges.get(k, FREE) if edges else FREE, dtype="f8"), (n_faces,))
+        count = 0
+        for i in range(n_faces):
+            if code[i] != 0:
+                continue
+            lo, hi = max(0, i - gap), min(n_faces, i + gap + 1)
+            if np.any(code[lo:hi] != 0):    # NaN (free) and a slope (normal depth) are open
+                continue
+            r, c = cell(i)
+            if d[r, c] > float(r_["wet_m"]) and far(r, c):
+                count += 1
+        sides[k] = count
+    faces = sum(sides.values())
+    return {"faces": faces, "sides": sides, "held": faces >= int(r_["min_faces"])}
+
+
+def wall_words(contact: dict[str, Any], dx: float) -> str:
+    """:func:`wall_contact`'s warning in plain words, or "" when the flood is not held by a wall: what it means and
+    what to do (the Explorer's ``wallWords`` writes the same)."""
+    if not contact or not contact.get("held"):
+        return ""
+    names = {"n": "north", "s": "south", "w": "west", "e": "east"}
+    order = sorted(((k, v) for k, v in contact["sides"].items() if v > 0), key=lambda kv: -kv[1])
+    where = [names[k] for k, _ in order]
+    km = contact["faces"] * float(dx) / 1000.0
+    along = f"{km:.1f} km" if km >= 1 else f"{round(km * 1000)} m"
+    sides = (f"{', '.join(where[:-1])} and {where[-1]} edges" if len(where) > 1 else f"{where[0]} edge")
+    return (f"The water reaches the grid's {sides} along {along}. The valley goes on past it, and the edge holds the "
+            "water like a wall, so the flood there is deeper and narrower than it would be. Flood a reach nearer that "
+            "edge to see it.")
+
+
 def run_summary(g: dict[str, Any], res: dict[str, Any], wet_m: float = 0.05) -> dict[str, Any]:
     """The numbers a card or a JSON file gives for a run (depths above the terrain, :func:`depth_over_terrain`)."""
     hm = depth_over_terrain(g, res["h_max"])
     wet = hm > wet_m
     dx = g["dx"]
-    edge_wet = bool(wet[0, :].any() or wet[-1, :].any() or wet[:, 0].any() or wet[:, -1].any())
+    held = wall_contact(hm, g["edges"], g["sources"])
     return {
         "river_id": g["click"]["river_id"], "flow": g["label"], "flow_cms": g["click"]["flow_cms"],
         "return_period": g["click"]["return_period"], "hours_run": round(res["t_s"] / 3600.0, 2),
@@ -1395,7 +1790,9 @@ def run_summary(g: dict[str, Any], res: dict[str, Any], wet_m: float = 0.05) -> 
                      "peak_cms": s["peak"]} for s in g["sources"]],
         "exits": g["exits"], "channel_slope": g["slope"], "steps": res["steps"],
         "wall_s": round(res["wall_s"], 2), "volume": {k: round(v, 3) for k, v in res["volume"].items()},
-        "water_at_walled_edge": edge_wet and not g["exits"],
+        "water_at_walled_edge": held["held"], "wall_contact": held,
+        **({"edits": [{k: v for k, v in e.items() if k != "cells"} | {"cells": len(e["cells"])}
+                      for e in g["edits"]]} if g.get("edits") else {}),
         "label": LABEL, "method": SCHEME, "flows_from": FLOW_METHOD, "licences": LICENCES,
     }
 
@@ -1416,14 +1813,17 @@ def flood_reach(river_id: int | None = None, lat: float | None = None, lon: floa
                 return_period: float | None = None, flow_cms: float | None = None,
                 series: dict[str, Any] | None = None, hours: float | None = None, coarse: bool = False,
                 terrain_fetch: Callable[[str], bytes] | None = None, frames: bool = True,
+                edits: list[dict[str, Any]] | None = None, compare: bool = False,
                 **plan_kwargs: Any) -> dict[str, Any]:
     """A screening flood from a river reach (``river_id``, or the reach nearest ``lat``/``lon``), the whole way:
     :func:`plan_window`, the terrain (:func:`terrain_window`), :func:`prepare_grid` and :func:`run_grid`.
 
     The flow is ``return_period`` (years; 100 when nothing is given), ``flow_cms`` (m3/s at the clicked reach) or
     ``series`` (a hydrograph at the clicked reach, ``{"t_s": [...], "q": [...], "label": ...}``). ``hours`` caps
-    the run (:data:`CAP_HOURS` by default; a hydrograph runs to its end). Returns ``{"plan", "grid", "run",
-    "summary"}``."""
+    the run (:data:`CAP_HOURS` by default; a hydrograph runs to its end). ``edits`` are levees and breaches
+    (:func:`edit_grid`) applied to the grid before the run; with ``compare`` the grid is also run without them,
+    and the answer has ``before`` (its grid, run and summary) and the summary a ``change`` (:func:`compare_runs`).
+    Returns ``{"plan", "grid", "run", "summary"}``."""
     if series is not None:
         choice: dict[str, Any] = {"series": series, "label": series.get("label") or "a hydrograph"}
     elif flow_cms is not None:
@@ -1434,8 +1834,20 @@ def flood_reach(river_id: int | None = None, lat: float | None = None, lon: floa
     w = plan["window"]
     terr = terrain_window(w["x0"], w["y0"], w["nx"], w["ny"], w["zoom"], fetch=terrain_fetch)
     g = prepare_grid(plan, terr["z"], choice, coarse=coarse)
+    out: dict[str, Any] = {"plan": plan}
+    if edits:
+        edited = edit_grid(g, edits)
+        if compare:
+            r0 = run_grid(g, cap_hours=float(hours or CAP_HOURS), frames=frames)
+            out["before"] = {"grid": g, "run": r0, "summary": run_summary(g, r0)}
+        g = edited
     res = run_grid(g, cap_hours=float(hours or CAP_HOURS), frames=frames)
-    return {"plan": plan, "grid": g, "run": res, "summary": run_summary(g, res)}
+    s = run_summary(g, res)
+    if "before" in out:
+        b = out["before"]["summary"]
+        s["before"] = {k: b[k] for k in ("wet_km2", "max_depth_m", "steady_at_h", "hours_run")}
+        s["change"] = compare_runs(out["before"]["grid"], out["before"]["run"]["h_max"], g, res["h_max"])
+    return {**out, "grid": g, "run": res, "summary": s}
 
 
 def _join(segments: list[tuple[float, float, float, float]]) -> list[list[tuple[float, float]]]:
@@ -1624,6 +2036,57 @@ def to_ugrid(path: str, g: dict[str, Any], res: dict[str, Any], *, start: str | 
             if name == "mesh2d_flowelem_bl":
                 v.standard_name = "altitude"
     return {"path": path, "faces": int(cells.size), "steps": len(frames)}
+
+
+def compare_exposure(g: dict[str, Any], before: Any, after: Any, read: dict[str, Any], *,
+                     threshold_m: float | None = None) -> dict[str, Any]:
+    """What gets flooded before and after a levee or a breach: the buildings, the road length and the people under
+    two depth grids on the same grid (depths above the terrain, :func:`depth_over_terrain`), counted by
+    :func:`aquascope.flood_exposure.exposure_payload` (the flood views' own count) from what
+    :func:`aquascope.flood_exposure.read_sources` read. The two runs go in as two time steps of one UGRID file, so
+    every building and stretch of road says whether it was flooded before, after, or both.
+
+    Returns ``before``, ``after`` and ``change`` for each count, the buildings and road pieces whose state changed
+    (``kept_dry``: flooded before, dry after; ``newly_flooded``: dry before, flooded after) with their outlines,
+    the threshold and each source's licence and credit."""
+    import os
+    import tempfile
+
+    from aquascope.flood_exposure import exposure_payload
+    from aquascope.io.mesh import read_mesh
+
+    d0 = np.maximum(np.asarray(before, dtype="f8").reshape(g["ny"], g["nx"]), 0.0)
+    d1 = np.maximum(np.asarray(after, dtype="f8").reshape(g["ny"], g["nx"]), 0.0)
+    zero = {"before": 0, "after": 0, "change": 0}
+    if not ((d0 > 0.01).any() or (d1 > 0.01).any()):
+        return {"buildings": dict(zero), "roads_km": dict(zero), "people": dict(zero), "kept_dry": [],
+                "newly_flooded": [], "roads_changed": [], "sources": {}, "errors": dict(read.get("errors", {}))}
+    flat = {**g, "z_burnt": g["z"]}
+    run = {"h_max": np.maximum(d0, d1), "frames": [d0, d1], "times_s": [0.0, 3600.0]}
+    fd, path = tempfile.mkstemp(suffix=".nc")
+    os.close(fd)
+    try:
+        to_ugrid(path, flat, run, start="2000-01-01", title="Flood it, before and after")
+        m = read_mesh(path)
+        pay = exposure_payload(m, read, threshold_m=threshold_m)
+        m.close()
+    finally:
+        os.unlink(path)
+    out: dict[str, Any] = {"threshold_m": pay["threshold_m"], "sources": pay["sources"],
+                           "errors": pay.get("errors", {}), "limits": pay.get("limits", {})}
+    for key, src, field in (("buildings", "buildings", "per_step"), ("roads_km", "roads", "per_step_km"),
+                            ("people", "population", "per_step")):
+        if src in pay:
+            b, a = pay[src][field][0], pay[src][field][1]
+            out[key] = {"before": b, "after": a, "change": round(a - b, 3)}
+    feats = pay.get("buildings", {}).get("features", [])
+    out["kept_dry"] = [{"id": f["id"], "ring": f["ring"]} for f in feats if f["wet"] == "10"]
+    out["newly_flooded"] = [{"id": f["id"], "ring": f["ring"]} for f in feats if f["wet"] == "01"]
+    out["still_flooded"] = sum(1 for f in feats if f["wet"] == "11")
+    out["roads_changed"] = [{"coords": p["coords"], "change": "kept_dry" if p["wet"] == "10" else "newly_flooded",
+                             "length_m": p["length_m"]}
+                            for p in pay.get("roads", {}).get("pieces", []) if p["wet"] in ("10", "01")]
+    return out
 
 
 def to_geotiff(path: str, g: dict[str, Any], depth: Any, *, nodata: float = -9999.0) -> dict[str, Any]:

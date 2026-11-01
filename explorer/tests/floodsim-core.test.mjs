@@ -137,3 +137,42 @@ test("the WGSL has every pass, the edge codes and the inflow tables", () => {
   // At most eight storage buffers a stage (the WebGPU default limit).
   assert.ok((FLOODSIM_WGSL.match(/var<storage/g) || []).length <= 8);
 });
+
+test("the run's words: the flow once, a steady run's clock, the wall said only when true (#664 follow-up)", async () => {
+  const { flowLine, clockLabel, clockSummary, depthTag, theLabel, wallContact, wallWords } = await import("../src/floodsim-core.js");
+  const q = (v) => `${Math.round(v)} m³/s`;
+  const g = { click: { flow_cms: 954, return_period: 2154 }, sources: [1, 2] };
+  const typed = flowLine({ words: "954 m³/s", choice: { flow_cms: 954 }, g }, q);
+  assert.equal(`${typed.words}${typed.rest}`.match(/954 m³\/s/g).length, 1);
+  const rp = flowLine({ words: "the 100-year flow", choice: { return_period: 100 }, g: { click: { flow_cms: 343, return_period: 100 }, sources: [1] } }, q);
+  assert.match(rp.rest, /\(343 m³\/s\)/);
+  assert.equal(theLabel("954 m³/s"), "954 m³/s");
+  assert.equal(theLabel("100-year flow"), "the 100-year flow");
+  assert.equal(clockLabel(5 * 3600, { steady: true, steadyAt: 27 * 3600 }), "5 h into a steady run");
+  assert.equal(clockLabel(27 * 3600, { steady: true, steadyAt: 27 * 3600, last: true }), "steady after 27 h");
+  assert.equal(clockLabel(5 * 3600, { steady: false }), "+5 h");
+  assert.equal(clockSummary({ steady: true }), "Flood it: hours since the water was turned on.");
+  assert.equal(clockSummary({ steady: false }), "Flood it: hours from the hydrograph's start.");
+  assert.equal(depthTag("100-year flow", 3600, { steady: true }), "Depth after 1 h of a steady run at the 100-year flow, a screening flood");
+  // The wall: a 12 x 10 grid walled all round but an outfall on the east; water against the north wall far from the inflow.
+  const nx = 12, ny = 10, h = new Float64Array(nx * ny);
+  const edges = { n: 0, s: 0, w: 0, e: Array.from({ length: ny }, (_, r) => (r >= 3 && r <= 6 ? 0.001 : 0)) };
+  const rule = { near: 2 };
+  for (let c = 6; c < 10; c++) h[c] = 0.4;                  // north edge, 4 faces, deep
+  let w = wallContact(h, nx, ny, edges, [[5, 0]], rule);
+  assert.equal(w.held, true); assert.equal(w.sides.n, 4);
+  // the same words as tests/test_floodsim.py's WALL_WORDS_N
+  assert.equal(wallWords(w, 30), "The water reaches the grid's north edge along 120 m. The valley goes on past it, and the " +
+    "edge holds the water like a wall, so the flood there is deeper and narrower than it would be. Flood a reach nearer that " +
+    "edge to see it.");
+  h.fill(0);
+  for (let c = 6; c < 10; c++) h[c] = 0.06;                 // a film under 10 cm: not held
+  assert.equal(wallContact(h, nx, ny, edges, [[5, 0]], rule).held, false);
+  h.fill(0);
+  for (let r = 2; r < 8; r++) h[r * nx + nx - 1] = 1;       // at the outfall and the walls beside it: not held
+  assert.equal(wallContact(h, nx, ny, edges, [[5, 0]], rule).held, false);
+  h.fill(0);
+  for (let r = 3; r < 7; r++) h[r * nx] = 1;                // by the inflow on the west edge: not held
+  assert.equal(wallContact(h, nx, ny, edges, [[5, 0]], rule).held, false);
+  assert.equal(wallWords({ held: false }, 30), "");
+});

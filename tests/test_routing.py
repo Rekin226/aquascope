@@ -144,11 +144,21 @@ def test_route_needs_a_size_and_holds_its_bounds(toy):
         routing.route(TOY_IDS["A"], peak_cms=5, duration_h=9999, along=False)
 
 
-def test_the_return_period_flow_comes_from_the_simulated_record(toy, monkeypatch):
-    monkeypatch.setattr(rivers, "reach_record", lambda rid, return_periods=None: {
-        "ffa": {"n_years": 86, "fits": {"gev_lmoments": {"q_by_T": {"10": 1234.0}}}}})
+def test_the_return_period_flow_is_flood_its_design_flow(toy, monkeypatch):
+    """Route it's T-year flow is floodsim.design_flow: Log-Pearson III on GEOGLOWS's annual maxima, as Flood it."""
+    from aquascope import floodsim
+
+    years = list(range(1940, 2025))
+    am = np.exp(np.random.default_rng(5).normal(np.log(400), 0.4, len(years)))
+    monkeypatch.setattr(floodsim, "annual_maxima", lambda rids, fetch=None: (years, {int(r): am for r in rids}))
     res = routing.route(TOY_IDS["A"], return_period=10, along=False)
-    assert res["inflow"]["peak_cms"] == 1234.0 and "10-year flow" in res["inflow"]["source"]
+    want = floodsim.flow_for(floodsim.flow_curve(years, am), 10)
+    assert res["inflow"]["peak_cms"] == pytest.approx(want, abs=0.01)
+    d = res["inflow"]["design"]
+    assert d["method"] == "Log-Pearson III" and d["n_years"] == 85 and d["words"] in res["inflow"]["source"]
+    assert "10-year flow" in res["inflow"]["source"] and "flows" in res["licence"]
+    with pytest.raises(ValueError):
+        routing.route(TOY_IDS["A"], return_period=1000, along=False)
 
 
 def test_places_on_the_path_get_the_wave_where_they_stand(toy):
@@ -172,6 +182,58 @@ def test_a_storm_runs_off_and_is_routed(toy, monkeypatch):
     assert outlet["river_id"] == TOY_IDS["C"] and outlet["peak_cms"] > 0
     with pytest.raises(ValueError):
         routing.route_storm(ring, rain_mm=50, runoff_coefficient=1.5)
+
+
+def test_a_storm_gives_the_card_its_hydrographs_and_balances_its_water(toy, monkeypatch):
+    """Draw a storm (#670): the card's two hydrographs are the reaches' own routed series, the box covers the reaches
+    the wave reaches, and every m3 of runoff leaves by the outlets once the wave has passed (Muskingum keeps mass)."""
+    monkeypatch.setattr(rivers, "_VPU_BBOX", {231: (7.0, 46.0, 9.0, 48.0)})
+    ring = [[7.95, 46.95], [8.15, 46.95], [8.15, 47.15], [7.95, 47.15]]
+    res = routing.route_storm(ring, rain_mm=50, duration_h=6, runoff_coefficient=0.4, hours=400)
+    hyd = {h["role"]: h for h in res["hydrographs"]}
+    assert hyd["biggest"]["river_id"] == res["biggest"]["river_id"]
+    assert max(hyd["biggest"]["cms"]) == pytest.approx(res["biggest"]["peak_cms"], rel=0.01)
+    assert len(hyd["biggest"]["cms"]) == res["hours"] + 1 and hyd["biggest"]["dt_h"] == 1.0
+    assert res["storm"]["out_m3"] == pytest.approx(res["storm"]["runoff_m3"], rel=0.01)
+    assert res["storm"]["out_pct"] == pytest.approx(100.0, abs=1.0)
+    w, s, e, n = res["bbox"]
+    assert w <= 8.0 and e >= 8.2 and s <= 47.0 and n >= 47.1
+    assert res["polygon"] == ring
+    json.dumps(res)
+
+
+def test_the_map_reads_a_storm_and_checks_it():
+    """Ask the map (#670): "50 mm of rain over this area in 6 hours" is a storm over the area drawn on the map, with
+    route_storm's own defaults for what the words leave out."""
+    import inspect
+
+    defaults = inspect.signature(routing.route_storm).parameters
+    assert mc.STORM_DEFAULTS == {k: defaults[k].default for k in ("duration_h", "runoff_coefficient")}
+    for text, want in [
+        ("50 mm of rain over this area in 6 hours", {"area": "drawn", "rain_mm": 50.0, "duration_h": 6.0}),
+        ("draw a storm of 80 mm over 12 h", {"area": "drawn", "rain_mm": 80.0, "duration_h": 12.0}),
+        ("rain 100 mm on Wales in 2 days with a runoff coefficient of 0.5",
+         {"place": "Wales", "rain_mm": 100.0, "duration_h": 48.0, "runoff_coefficient": 0.5}),
+        ("what if 120 mm of rain fell here", {"area": "drawn", "rain_mm": 120.0, "duration_h": 6.0}),
+    ]:
+        res = mc.parse_command(text, today="2026-10-27")
+        assert res["matched"], text
+        got = res["actions"][0]
+        assert got["type"] == "draw_storm" and {k: got[k] for k in want} == want, text
+    ok, why = mc.validate_action({"type": "draw_storm", "rain_mm": 50, "bbox": [7, 46, 8, 47]})
+    assert why is None and ok["polygon"] == [[7, 46], [8, 46], [8, 47], [7, 47]]
+    assert "needs rain_mm" in mc.validate_action({"type": "draw_storm", "area": "drawn"})[1]
+    assert "runoff_coefficient" in mc.validate_action({"type": "draw_storm", "rain_mm": 5, "runoff_coefficient": 2})[1]
+    assert "3 to 200" in mc.validate_action({"type": "draw_storm", "rain_mm": 5, "polygon": [[7, 46], [8, 46]]})[1]
+    assert mc.describe_action(mc.parse_command("50 mm of rain over this area in 6 hours")["actions"][0]) == \
+        "Rain 50 mm in 6 h over the area drawn on the map, 0.3 of it running off, and route it"
+    assert "draw_storm" in mc.model_prompt()["system"]
+    hits = {"wales": [{"geometry": {"coordinates": [-3.7, 52.3]}, "properties": {
+        "name": "Wales", "osm_key": "place", "osm_value": "state", "country": "GB",
+        "extent": [-5.3, 53.4, -2.6, 51.4]}}]}
+    out = mc.resolve_actions([{"type": "draw_storm", "place": "Wales", "rain_mm": 100.0, "duration_h": 48.0,
+                               "runoff_coefficient": 0.3}], fetch=lambda q, limit=5: hits.get(q.lower(), []))
+    assert out["actions"] and len(out["actions"][0]["polygon"]) == 4
 
 
 # ── the map's action (aquascope.map_commands) ────────────────────────────────

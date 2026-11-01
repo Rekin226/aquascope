@@ -42,7 +42,9 @@ from aquascope.map_layers import STATUS_CLASSES
 
 __all__ = [
     "ACTION_TYPES", "BASEMAPS", "DIRECTIONS", "EXAMPLES", "LAYERS", "PHOTON_URL", "PLACE_CREDIT", "REGIONS",
-    "FLOOD_DEFAULT_RP", "FLOOD_FLOWS", "ROUTE_DEFAULT_RP", "ROUTE_LIMITS", "ROUTE_SHAPES",
+    "FLOOD_DEFAULT_RP", "FLOOD_FLOWS", "ROUTE_DEFAULT_RP", "SKETCH_LIMITS", "ROUTE_LIMITS", "ROUTE_SHAPES",
+    "WELL_LIMITS",
+    "STORM_DEFAULTS", "STORM_LIMITS", "RESERVOIR_DEFAULTS", "RESERVOIR_LIMITS",
     "action_schema", "describe_action", "model_command", "model_prompt", "parse_command", "parse_model_reply",
     "reply_schema", "resolve_actions", "resolve_place", "validate_action", "validate_actions",
 ]
@@ -52,17 +54,62 @@ ACTION_TYPES = (
     "route",
     "paint",
     "flood_reach",
+    "draw_levee", "draw_breach",
+    "replay",
+    "drop_well",
+    "change_landuse",
+    "draw_storm",
+    "draw_reservoir",
 )
 #: Route it (#656): the shapes of the water entering, and the bounds a route action is held to.
 ROUTE_SHAPES = ("triangle", "block")
-ROUTE_LIMITS = {"peak_cms": (0.0, 1_000_000.0), "return_period": (1.01, 1000.0), "duration_h": (0.0, 720.0)}
-#: The flood routed when the words give no size: the 10-year flow of the reach (GEOGLOWS simulated record).
+ROUTE_LIMITS = {"peak_cms": (0.0, 1_000_000.0), "return_period": (2.0, 500.0), "duration_h": (0.0, 720.0)}
+#: The flood routed when the words give no size: the 10-year flow of the reach (floodsim.design_flow).
 ROUTE_DEFAULT_RP = 10.0
 #: Flood it (#658): the flows a flood_reach action may name besides a return period or a number: GEOGLOWS's
 #: forecast peak, its 15-day forecast as a hydrograph, or Route it's wave; and the return period when none is said.
 FLOOD_FLOWS = ("forecast_peak", "forecast", "route")
 FLOOD_DEFAULT_RP = 100.0
 FLOOD_RETURN_PERIODS = (2.0, 500.0)
+#: Levees and breaches on Flood it's grid (#663): a line of at most this many points, a crest or an invert in m
+#: above mean sea level, a freeboard above the highest flood along the line in m.
+SKETCH_LIMITS = {"points": 200, "level_m": (-100.0, 9000.0), "freeboard_m": (0.0, 20.0)}
+SKETCHES = ("draw_levee", "draw_breach")
+#: Drop a well (#660): the bounds a drop_well action is held to (aquascope.sketch.drawdown.LIMITS; a test keeps
+#: them equal, and this module stays importable without scipy, in the light worker).
+WELL_LIMITS = {"rate_m3_day": (0.1, 1_000_000.0), "days": (0.001, 36_500.0),
+               "transmissivity_m2_day": (0.01, 1_000_000.0), "storativity": (1e-7, 0.5)}
+WELL_DEFAULT_RATE = 1000.0
+#: Change land use (#661): what a drawn area can become (aquascope.sketch.landuse.USES), and the bounds.
+LANDUSE_LIMITS = {"rain_mm": (1.0, 2000.0), "impervious_pct": (0.0, 100.0), "points": 200}
+#: Words for each use, for the keyless rules ("build houses here", "pave this area", "plant woods").
+LANDUSE_WORDS: dict[str, str] = {
+    "residential_1_8": r"town ?houses|terraced houses|terraces|dense housing|flats|apartments",
+    "residential_1_4": r"houses|homes|housing|residential|a (?:housing )?estate|a suburb|suburbs|"
+                       r"built (?:over|up|on)|urbani[sz]ed|developed|development",
+    "residential_1_2": r"large gardens|half[- ]acre lots",
+    "residential_1_acre": r"acre lots|large lots",
+    "commercial": r"shops|offices|commercial|business(?: park)?|retail|a (?:shopping )?mall|shopping cent(?:re|er)",
+    "industrial": r"factor(?:y|ies)|industrial(?: estate| park| zone)?|warehouses?|an industrial estate",
+    "paved": r"a car ?park|parking(?: lots?)?|paved|tarmac|asphalt|concrete|roofs",
+    "newly_graded": r"a construction site|construction|bare earth|graded|bulldozed|cleared",
+    "open_space_good": r"a park|parks?|lawns?|open space|playing fields|a golf course",
+    "row_crops": r"crops|cropland|farmland|arable(?: land)?|fields|maize|corn",
+    "pasture_good": r"pasture|grassland|grass|grazing",
+    "meadow": r"(?:a )?meadow|hay",
+    "woods_good": r"woods?|woodland|(?:a )?forest|trees",
+}
+#: Draw a storm (#670): a storm's rain in mm, its hours and its runoff coefficient, the points its outline may
+#: have, and what is used when the words do not say (aquascope.routing.route_storm's own defaults).
+STORM_LIMITS = {"rain_mm": (0.0, 2000.0), "duration_h": (0.0, 720.0), "runoff_coefficient": (0.0, 1.0),
+                "points": 200}
+STORM_DEFAULTS = {"duration_h": 6.0, "runoff_coefficient": 0.3}
+#: Draw a reservoir (#662): the dam's levels (m above the lowest ground in the lake) and its spillway's width, and
+#: what is used when the words do not say (aquascope.sketch.reservoir.DEFAULTS; the flood: the 100-year flow).
+RESERVOIR_LIMITS = {"crest_m": (0.0, 300.0), "top_m": (0.0, 320.0), "width_m": (0.0, 2000.0), "points": 200}
+RESERVOIR_DEFAULTS = {"crest_m": 10.0, "rise_m": 5.0, "width_m": 30.0, "return_period": 100.0, "duration_h": 24.0}
+#: Replay an event (#659): which of Floods past's floods near the place a replay action may pick (by rank).
+REPLAY_PICKS = (1, 5)
 DIRECTIONS = ("upstream", "downstream", "both")
 STEPS = ("day", "week", "month")
 STATUS_IDS = tuple(c["id"] for c in STATUS_CLASSES)
@@ -281,6 +328,12 @@ def _place_text(raw: str) -> str:
 MODEL_CONTROLS = ("review", "explain")
 
 
+def _landuse_uses() -> tuple[str, ...]:
+    from aquascope.sketch.landuse import USES
+
+    return USES
+
+
 def action_schema(places: list[str] | None = None, layers: list[str] | None = None) -> dict[str, Any]:
     """The JSON Schema a model's reply is held to: ``{"actions": [ {type, ...}, ... ]}``.
 
@@ -332,9 +385,59 @@ def action_schema(places: list[str] | None = None, layers: list[str] | None = No
                         "flow": {"type": "string", "enum": list(FLOOD_FLOWS),
                                  "description": "flood_reach: the forecast peak, the 15-day forecast, or Route "
                                                 "it's wave, instead of a return period"},
+                        "line": {"description": "draw_levee, draw_breach: \"drawn\" (the reader draws it on the "
+                                                "map), or a list of [lon, lat] points the reader gave",
+                                 "anyOf": [{"type": "string", "enum": ["drawn"]},
+                                           {"type": "array", "items": {"type": "array", "items": num,
+                                                                       "minItems": 2, "maxItems": 2}}]},
+                        "from_place": {"type": "string", "description": "draw_levee, draw_breach: the line's start, "
+                                                                        "a place by name"},
+                        "to_place": {"type": "string", "description": "draw_levee, draw_breach: the line's end"},
+                        "crest": {"type": "number", "description": "draw_levee: the crest, m above mean sea level, "
+                                                                   "only when the reader gave it"},
+                        "freeboard_m": {"type": "number", "description": "draw_levee: or the crest this many m "
+                                                                         "above the highest flood along the line"},
+                        "invert": {"type": "number", "description": "draw_breach: the gap's floor, m above mean "
+                                                                    "sea level (none: the natural ground)"},
+                        "rate_m3_day": {"type": "number", "description": "drop_well: the pumping rate, m3/day, "
+                                                                          "only when the reader gave it"},
+                        "days": {"type": "number", "description": "drop_well: days of pumping"},
+                        "transmissivity": {"type": "number", "description": "drop_well: m2/day, only when given"},
+                        "storativity": {"type": "number", "description": "drop_well: dimensionless, only when given"},
+                        "use": {"type": "string", "enum": list(_landuse_uses()),
+                                "description": "change_landuse: what the drawn area becomes (TR-55's covers)"},
+                        "soil_group": {"type": "string", "enum": ["A", "B", "C", "D"],
+                                       "description": "change_landuse: the hydrologic soil group, only when given"},
+                        "impervious_pct": {"type": "number", "description": "change_landuse with use impervious: "
+                                                                            "the percent impervious"},
                         "label": {"type": "string"},
                         "title": {"type": "string"},
                         "text": {"type": "string"},
+                        "rain_mm": {"type": "number",
+                                    "description": "draw_storm: the rain, mm, as the reader wrote it; "
+                                                   "change_landuse: the 24-hour design storm, only when given"},
+                        "runoff_coefficient": {"type": "number",
+                                               "description": "draw_storm: the share of the rain that runs off, "
+                                                              "only when the reader gave it"},
+                        "area": {"type": "string", "enum": ["drawn"],
+                                 "description": "draw_storm, draw_reservoir, change_landuse: the area the "
+                                                "reader draws, or the one on the map"},
+                        "polygon": {"type": "array", "items": {"type": "array", "items": num, "minItems": 2,
+                                                               "maxItems": 2},
+                                    "description": "draw_storm, draw_reservoir, change_landuse: a ring of "
+                                                   "[lon, lat] the reader gave"},
+                        "crest_m": {"type": "number", "description": "draw_reservoir: the spillway's crest, m above "
+                                                                     "the lowest ground, only when the reader gave it"},
+                        "top_m": {"type": "number", "description": "draw_reservoir: the top of the dam, m above the "
+                                                                   "lowest ground, only when the reader gave it"},
+                        "width_m": {"type": "number", "description": "draw_reservoir: the spillway's width, m"},
+                        "inflow": {"type": "string", "enum": ["wave"],
+                                   "description": "draw_reservoir: send the flood wave or storm on the map through"},
+                        "month": {"type": "string",
+                                  "description": "replay: the month of the flood, YYYY-MM, not after today"},
+                        "pick": {"type": "integer", "minimum": REPLAY_PICKS[0], "maximum": REPLAY_PICKS[1],
+                                 "description": "replay: which of the floods the code lists there (1: the most "
+                                                "reported)"},
                         "question": {"type": "string", "enum": list(PAINT_QUESTIONS),
                                      "description": "paint: the question to answer at every gauge"},
                         "min_years": {"type": "integer", "minimum": PAINT_MIN_YEARS[0],
@@ -607,6 +710,18 @@ def validate_action(action: Any, today: str | date | None = None) -> tuple[dict[
         return _validate_route(action, out, place)
     if kind == "flood_reach":
         return _validate_flood(action, out, place)
+    if kind in SKETCHES:
+        return _validate_sketch(action, out)
+    if kind == "replay":
+        return _validate_replay(action, out, place, t)
+    if kind == "drop_well":
+        return _validate_well(action, out, place)
+    if kind == "change_landuse":
+        return _validate_landuse(action, out)
+    if kind == "draw_storm":
+        return _validate_storm(action, out, place)
+    if kind == "draw_reservoir":
+        return _validate_reservoir(action, out)
     if kind == "paint":
         if action.get("question") not in PAINT_QUESTIONS:
             return None, f"paint's question must be one of {', '.join(PAINT_QUESTIONS)}"
@@ -743,6 +858,251 @@ def _validate_flood(action: dict[str, Any], out: dict[str, Any], place: str | No
     return out, None
 
 
+def _validate_replay(action: dict[str, Any], out: dict[str, Any], place: str | None, t: date
+                     ) -> tuple[dict[str, Any] | None, str | None]:
+    """Replay an event (#659): where (a place, a point, or ``at: here``, the river selected on the map) and when (a
+    ``month``, YYYY-MM). The code lists Floods past's floods there that month (:func:`aquascope.replay.candidates`)
+    and takes the ``pick``-th (the most reported by default); the model never writes the story or a number."""
+    point = _latlon(action.get("lat"), action.get("lon"))
+    if point:
+        out["lat"], out["lon"] = point
+    elif place:
+        out["place"] = place
+    elif action.get("at") in ("here", "center"):
+        out["at"] = "here"
+    else:
+        return None, "replay needs a place, a lat and lon, or at: here (the river selected on the map)"
+    month = str(action.get("month") or "")[:7]
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+        return None, "replay needs a month, YYYY-MM"
+    if not (date(2000, 1, 1) <= date(int(month[:4]), int(month[5:7]), 1) <= t):
+        return None, "replay's month must be from January 2000 (where Floods past starts) to this month"
+    out["month"] = month
+    pick = action.get("pick")
+    if pick is not None:
+        if not _finite(pick) or not REPLAY_PICKS[0] <= int(pick) <= REPLAY_PICKS[1]:
+            return None, f"replay's pick must be {REPLAY_PICKS[0]} to {REPLAY_PICKS[1]}"
+        out["pick"] = int(pick)
+    label = _text(action.get("label"), 80)
+    if label:
+        out["label"] = label
+    return out, None
+
+
+def _validate_storm(action: dict[str, Any], out: dict[str, Any], place: str | None
+                    ) -> tuple[dict[str, Any] | None, str | None]:
+    """Draw a storm (#670): the rain (``rain_mm``, required), its hours (``duration_h``, 6 when none) and the share
+    that runs off (``runoff_coefficient``, 0.3 when none: aquascope.routing.route_storm's default), over an area: a
+    ``polygon`` of [lon, lat], a ``bbox``, a ``place`` (its outline from the gazetteer) or ``area: "drawn"`` (the
+    reader draws it, or the storm area already on the map). The map turns it into runoff and routes it."""
+    for key in ("rain_mm", "duration_h", "runoff_coefficient"):
+        v = action.get(key)
+        if v is None:
+            continue
+        lo, hi = STORM_LIMITS[key]
+        if not _finite(v) or not (lo < float(v) <= hi):
+            return None, f"draw_storm's {key} must be a number above {lo:g} and at most {hi:g}"
+        out[key] = round(float(v), 3)
+    if "rain_mm" not in out:
+        return None, "draw_storm needs rain_mm, the rain in mm"
+    for key, v in STORM_DEFAULTS.items():
+        out.setdefault(key, v)
+    poly = action.get("polygon")
+    bbox = _bbox(action.get("bbox")) if action.get("bbox") is not None else None
+    if isinstance(poly, (list, tuple)):
+        if not 3 <= len(poly) <= STORM_LIMITS["points"]:
+            return None, f"draw_storm's polygon needs 3 to {STORM_LIMITS['points']} points"
+        pts = []
+        for p in poly:
+            ll = _latlon(p[1], p[0]) if isinstance(p, (list, tuple)) and len(p) == 2 else None
+            if not ll:
+                return None, "draw_storm's polygon is a list of [lon, lat] points"
+            pts.append([ll[1], ll[0]])
+        out["polygon"] = pts
+    elif bbox:
+        w, s_, e, n = bbox
+        out["polygon"] = [[w, s_], [e, s_], [e, n], [w, n]]
+    elif place:
+        out["place"] = place
+    elif action.get("area") in (None, "drawn", "here"):
+        out["area"] = "drawn"
+    else:
+        return None, "draw_storm's area must be \"drawn\", a polygon of [lon, lat], a bbox or a place"
+    label = _text(action.get("label"), 80)
+    if label:
+        out["label"] = label
+    return out, None
+
+
+def _validate_reservoir(action: dict[str, Any], out: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """Draw a reservoir (#662): the lake (``area: "drawn"``, the reader draws it or the one on the map, or a
+    ``polygon``), the dam (``crest_m`` and ``top_m`` above the lowest ground, ``width_m`` of spillway; the package's
+    defaults when not said) and the flood (``return_period``, ``peak_cms`` with ``duration_h``, or ``inflow:
+    "wave"``, the wave on the map; the 100-year flow when none)."""
+    for key in ("crest_m", "top_m", "width_m"):
+        v = action.get(key)
+        if v is None:
+            continue
+        lo, hi = RESERVOIR_LIMITS[key]
+        if not _finite(v) or not (lo < float(v) <= hi):
+            return None, f"draw_reservoir's {key} must be a number above {lo:g} and at most {hi:g}"
+        out[key] = round(float(v), 2)
+    out.setdefault("crest_m", RESERVOIR_DEFAULTS["crest_m"])
+    out.setdefault("top_m", round(out["crest_m"] + RESERVOIR_DEFAULTS["rise_m"], 2))
+    out.setdefault("width_m", RESERVOIR_DEFAULTS["width_m"])
+    if out["top_m"] <= out["crest_m"]:
+        return None, "draw_reservoir's top_m must be above its crest_m"
+    if action.get("inflow") == "wave":
+        out["inflow"] = "wave"
+    else:
+        for key in ("peak_cms", "return_period", "duration_h"):
+            v = action.get(key)
+            if v is None:
+                continue
+            lo, hi = ROUTE_LIMITS[key]
+            if not _finite(v) or not (lo < float(v) <= hi):
+                return None, f"draw_reservoir's {key} must be above {lo:g} and at most {hi:g}"
+            out[key] = round(float(v), 3)
+        if "peak_cms" in out:
+            out.pop("return_period", None)
+        else:
+            out.setdefault("return_period", RESERVOIR_DEFAULTS["return_period"])
+        out.setdefault("duration_h", RESERVOIR_DEFAULTS["duration_h"])
+    poly = action.get("polygon")
+    if isinstance(poly, (list, tuple)):
+        if not 3 <= len(poly) <= RESERVOIR_LIMITS["points"]:
+            return None, f"draw_reservoir's polygon needs 3 to {RESERVOIR_LIMITS['points']} points"
+        pts = []
+        for p in poly:
+            ll = _latlon(p[1], p[0]) if isinstance(p, (list, tuple)) and len(p) == 2 else None
+            if not ll:
+                return None, "draw_reservoir's polygon is a list of [lon, lat] points"
+            pts.append([ll[1], ll[0]])
+        out["polygon"] = pts
+    else:
+        out["area"] = "drawn"
+    return out, None
+
+
+def _validate_sketch(action: dict[str, Any], out: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """A levee or a breach on Flood it's grid (#663): the line (``"drawn"``: the reader draws it on the map; a list
+    of [lon, lat]; or ``from_place`` and ``to_place``, two places the map looks up), and for a levee its crest (m
+    above mean sea level) or a freeboard above the flood along the line (the code computes the crest; 0.5 m when
+    neither is given), for a breach an optional invert. The map rasterises the line and runs Flood it again."""
+    kind = out["type"]
+    line = action.get("line")
+    frm, to = _text(action.get("from_place"), 80), _text(action.get("to_place"), 80)
+    if isinstance(line, (list, tuple)):
+        if not 2 <= len(line) <= SKETCH_LIMITS["points"]:
+            return None, f"{kind}'s line needs 2 to {SKETCH_LIMITS['points']} points"
+        pts = []
+        for p in line:
+            ll = _latlon(p[1], p[0]) if isinstance(p, (list, tuple)) and len(p) == 2 else None
+            if not ll:
+                return None, f"{kind}'s line is a list of [lon, lat] points"
+            pts.append([ll[1], ll[0]])
+        out["line"] = pts
+    elif frm and to:
+        out["from_place"], out["to_place"] = frm, to
+    elif line in (None, "drawn"):
+        out["line"] = "drawn"
+    else:
+        return None, f"{kind}'s line must be \"drawn\", a list of [lon, lat], or from_place and to_place"
+    lo, hi = SKETCH_LIMITS["level_m"]
+    for key in (("crest", "freeboard_m") if kind == "draw_levee" else ("invert",)):
+        v = action.get(key)
+        if v is None:
+            continue
+        rng = SKETCH_LIMITS["freeboard_m"] if key == "freeboard_m" else (lo, hi)
+        if not _finite(v) or not rng[0] <= float(v) <= rng[1]:
+            return None, f"{kind}'s {key} must be a number from {rng[0]:g} to {rng[1]:g} m"
+        out[key] = round(float(v), 2)
+    if kind == "draw_levee" and "crest" in out:
+        out.pop("freeboard_m", None)
+    if kind == "draw_levee" and "crest" not in out and "freeboard_m" not in out:
+        out["freeboard_m"] = 0.5
+    label = _text(action.get("label"), 80)
+    if label:
+        out["label"] = label
+    return out, None
+
+
+def _validate_well(action: dict[str, Any], out: dict[str, Any], place: str | None
+                   ) -> tuple[dict[str, Any] | None, str | None]:
+    """Drop a well (#660): where (a point, a place, or ``at: center``, the middle of the map) and, when the reader
+    gave them, the rate (m3/day), the days of pumping and the aquifer (transmissivity, storativity). The well joins
+    the wells already on the map; the map computes the cone (aquascope.sketch.drawdown)."""
+    point = _latlon(action.get("lat"), action.get("lon"))
+    if point:
+        out["lat"], out["lon"] = point
+    elif place:
+        out["place"] = place
+    elif action.get("at") in (None, "here", "center"):
+        out["at"] = "center"
+    else:
+        return None, "drop_well needs a place, a lat and lon, or at: center"
+    for key, limit in (("rate_m3_day", "rate_m3_day"), ("days", "days"),
+                       ("transmissivity", "transmissivity_m2_day"), ("storativity", "storativity")):
+        v = action.get(key)
+        if v is None:
+            continue
+        lo, hi = WELL_LIMITS[limit]
+        if not _finite(v) or not lo <= float(v) <= hi:
+            return None, f"drop_well's {key} must be a number from {lo:g} to {hi:g}"
+        out[key] = round(float(v), 9 if key == "storativity" else 3)
+    out.setdefault("rate_m3_day", WELL_DEFAULT_RATE)
+    label = _text(action.get("label"), 80)
+    if label:
+        out["label"] = label
+    return out, None
+
+
+def _validate_landuse(action: dict[str, Any], out: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """Change land use (#661): the area (``area: "drawn"``: the reader draws it on the map, or the one on the map;
+    or ``polygon``, a ring of [lon, lat]), what
+    it becomes (``use``), and when the reader gave them the design storm (``rain_mm``), the soil group and, for use
+    ``impervious``, the percent impervious. The map computes the change (aquascope.sketch.landuse)."""
+    uses = _landuse_uses()
+    use = action.get("use")
+    if use not in uses:
+        return None, f"change_landuse's use must be one of {', '.join(uses)}"
+    out["use"] = use
+    poly = action.get("polygon")
+    if isinstance(poly, (list, tuple)):
+        if not 3 <= len(poly) <= LANDUSE_LIMITS["points"]:
+            return None, f"change_landuse's polygon needs 3 to {LANDUSE_LIMITS['points']} points"
+        pts = []
+        for p in poly:
+            ll = _latlon(p[1], p[0]) if isinstance(p, (list, tuple)) and len(p) == 2 else None
+            if not ll:
+                return None, "change_landuse's polygon is a list of [lon, lat] points"
+            pts.append([ll[1], ll[0]])
+        out["polygon"] = pts
+    elif poly is None and action.get("area") in (None, "drawn"):
+        out["area"] = "drawn"
+    else:
+        return None, "change_landuse needs area: drawn, or a polygon of [lon, lat]"
+    for key in ("rain_mm", "impervious_pct"):
+        v = action.get(key)
+        if v is None:
+            continue
+        lo, hi = LANDUSE_LIMITS[key]
+        if not _finite(v) or not lo <= float(v) <= hi:
+            return None, f"change_landuse's {key} must be a number from {lo:g} to {hi:g}"
+        out[key] = round(float(v), 2)
+    if use == "impervious" and "impervious_pct" not in out:
+        return None, "change_landuse's use impervious needs impervious_pct"
+    if action.get("soil_group") is not None:
+        g = str(action["soil_group"]).upper()
+        if g not in ("A", "B", "C", "D"):
+            return None, "change_landuse's soil_group is A, B, C or D"
+        out["soil_group"] = g
+    label = _text(action.get("label"), 80)
+    if label:
+        out["label"] = label
+    return out, None
+
+
 def validate_actions(actions: Any, today: str | date | None = None) -> dict[str, Any]:
     """Check a list of actions: ``{"actions": [the ones that passed], "errors": [why the others did not]}``."""
     if isinstance(actions, dict):
@@ -837,6 +1197,60 @@ def describe_action(a: dict[str, Any]) -> str:
         else:
             what = f"the {float(a.get('return_period') or FLOOD_DEFAULT_RP):g}-year flow"
         return f"Flood {where} at {what}"
+    if kind in SKETCHES:
+        what = "a levee" if kind == "draw_levee" else "a breach"
+        if a.get("from_place"):
+            where = f"from {a['from_place']} to {a['to_place']}"
+        elif isinstance(a.get("line"), list):
+            where = f"along {len(a['line'])} points"
+        else:
+            where = "on the map"
+        if kind == "draw_levee":
+            top = (f", crest {float(a['crest']):g} m" if a.get("crest") is not None
+                   else f", {float(a.get('freeboard_m') or 0.5):g} m above the flood")
+        else:
+            top = f", down to {float(a['invert']):g} m" if a.get("invert") is not None else ""
+        return f"Draw {what} {where}{top}, and flood again"
+    if kind == "change_landuse":
+        from aquascope.sketch.landuse import TR55
+
+        what = (TR55[a["use"]]["label"].split(" (")[0].lower() if a["use"] in TR55
+                else f"{float(a.get('impervious_pct') or 0):g}% impervious")
+        where = "the area drawn" if a.get("area") == "drawn" else f"an area of {len(a.get('polygon') or [])} points"
+        rain = f", {float(a['rain_mm']):g} mm of rain" if a.get("rain_mm") is not None else ""
+        soil = f", soil group {a['soil_group']}" if a.get("soil_group") else ""
+        return f"Change {where} to {what}{rain}{soil}"
+    if kind == "drop_well":
+        where = a.get("label") or a.get("place") or ("the middle of the map" if a.get("at") == "center" else
+                                                     f"{a.get('lat'):.3f}, {a.get('lon'):.3f}")
+        q = float(a.get("rate_m3_day") or WELL_DEFAULT_RATE)
+        days = f" for {float(a['days']):g} days" if a.get("days") is not None else ""
+        return f"Drop a well at {where} pumping {q:,.0f} m³/day ({q / 86.4:.3g} L/s){days}"
+    if kind == "draw_storm":
+        if a.get("place") or a.get("label"):
+            where = a.get("label") or a.get("place")
+        elif a.get("polygon"):
+            where = f"an area of {len(a['polygon'])} points"
+        else:
+            where = "the area drawn on the map"
+        c = float(a.get("runoff_coefficient") or STORM_DEFAULTS["runoff_coefficient"])
+        return (f"Rain {float(a['rain_mm']):g} mm in {float(a.get('duration_h') or STORM_DEFAULTS['duration_h']):g} h "
+                f"over {where}, {c:g} of it running off, and route it")
+    if kind == "draw_reservoir":
+        where = f"an area of {len(a['polygon'])} points" if a.get("polygon") else "the lake drawn on the map"
+        if a.get("inflow") == "wave":
+            what = "the wave on the map"
+        elif a.get("peak_cms") is not None:
+            what = f"{float(a['peak_cms']):,.0f} m³/s"
+        else:
+            what = f"the {float(a.get('return_period') or RESERVOIR_DEFAULTS['return_period']):g}-year flood"
+        return (f"A reservoir on {where} (crest {float(a['crest_m']):g} m, top {float(a['top_m']):g} m, spillway "
+                f"{float(a['width_m']):g} m wide), and route {what} through it")
+    if kind == "replay":
+        where = a.get("label") or a.get("place") or ("the selected river" if a.get("at") == "here" else
+                                                     f"{a.get('lat'):.2f}, {a.get('lon'):.2f}")
+        pick = f" (flood {a['pick']} there)" if a.get("pick", 1) != 1 else ""
+        return f"Replay the flood of {_month_words(a['month'] + '-01')} at {where}{pick}"
     if kind == "paint":
         where = a.get("label") or a.get("place") or ("the box" if a.get("bbox") else "this view")
         return f"Paint {where}: {PAINT_QUESTIONS[a['question']]['label']}"
@@ -1164,6 +1578,244 @@ def _flood_phrase(c: _Clause) -> None:
     c.add("flood_reach", action)
 
 
+def _replay_phrase(c: _Clause) -> None:
+    """Replay an event (#659): "replay the Severn flood of November 2024", "replay the flood of September 2024 at
+    Asheville", "replay the November 2024 flood here", "replay the floods of Nov 2024 on the Severn"."""
+    m = re.search(r"^(?:replay|re-play|tell|show)\s+(?:me\s+)?(?:the\s+|a\s+)?(?P<pre>.*?)\s*floods?\b\s*(?P<tail>.*)$",
+                  c.text)
+    if not m or not re.match(r"^(?:replay|re-play)", c.text):
+        return
+    words = f"{m.group('pre')} {m.group('tail')}".strip()
+    when = re.search(r"(?:\b(?:of|in|from)\s+)?" + _MONTH_RE + r"\s+(?P<y>(?:19|20)\d{2})\b", words)
+    if not when:
+        when = re.search(r"(?:\b(?:of|in|from)\s+)?(?P<y>(?:19|20)\d{2})-(?P<m>0[1-9]|1[0-2])\b", words)
+        if not when:
+            return
+        month = f"{when.group('y')}-{when.group('m')}"
+    else:
+        month = f"{when.group('y')}-{MONTHS[when.group('mon')]:02d}"
+    rest = (words[: when.start()] + " " + words[when.end():]).strip()
+    rest = re.sub(r"^(?:on|at|in|of|along|near|for)\s+", "", re.sub(r"\s+", " ", rest)).strip()
+    rest = re.sub(r"\s+(?:on|at|in|of|along|near)$", "", rest).strip()
+    rest = re.sub(r"^(?:the\s+)?(?:river\s+)?", "", rest) if rest.startswith(("the river ", "river ")) else rest
+    action: dict[str, Any] = {"type": "replay", "month": month}
+    if not rest or rest in ("here", "this river", "this reach", "the selected river", "the river", "it", "this"):
+        action["at"] = "here"
+    else:
+        action["place"] = _place_text(_raw_span(c, re.sub(r"^the\s+", "", rest)))
+    c.text = ""
+    c.add("replay", action)
+
+
+_HOURS = (r"(?P<d>\d+(?:\.\d+)?|an?|one|two|three|four|five|six|eight|ten|twelve|twenty)\s*"
+          r"(?P<du>hours?|hrs?|h|days?|d)\b")
+
+
+def _storm_phrase(c: _Clause) -> None:
+    """Draw a storm (#670): "50 mm of rain over this area in 6 hours", "draw a storm of 80 mm over 12 h",
+    "rain 100 mm on Wales in 2 days with a runoff coefficient of 0.5", "a 40 mm storm here". The area is the one
+    the reader draws (or the one on the map) unless a place is named."""
+    if not re.search(r"\d\s*(?:mm|millimet(?:re|er)s?)\b", c.text) or not re.search(r"\b(?:rain\w*|storms?|downpour)\b",
+                                                                                     c.text):
+        return
+    m = re.search(r"^(?:(?:what if|imagine|suppose)\s+)?(?:(?:draw|make|drop|put|add|let|have|run|simulate)\s+)?"
+                  r"(?:it\s+)?(?:rain\s+)?(?:a\s+|an\s+)?"
+                  r"(?:(?:storm|downpour|rainstorm)\s+(?:of\s+)?)?(?P<mm>\d+(?:\.\d+)?)\s*(?:mm|millimet(?:re|er)s?)\b"
+                  r"\s*(?:of\s+)?(?:rain(?:fall)?|storm|downpour|rainstorm)?\s*(?:storm\s+)?(?:falling|fell|falls?)?\s*"
+                  r"(?P<tail>.*)$", c.text)
+    if not m:
+        return
+    tail = m.group("tail").strip()
+    action: dict[str, Any] = {"type": "draw_storm", "rain_mm": float(m.group("mm"))}
+    coef = re.search(r",?\s*(?:with\s+|and\s+)?(?:a\s+)?runoff\s+coefficient\s+(?:of\s+)?"
+                     r"(?P<c>0?\.\d+|1(?:\.0+)?|0)\b", tail)
+    if coef:
+        action["runoff_coefficient"] = float(coef.group("c"))
+        tail = (tail[:coef.start()] + " " + tail[coef.end():]).strip()
+    dur = re.search(r"\b(?:in|over|for|during|within|lasting)\s+" + _HOURS, tail)
+    if dur:
+        n = dur.group("d")
+        num = float(n) if re.match(r"\d", n) else float(_WORD_NUMBERS.get(n, 1))
+        action["duration_h"] = num * (24.0 if dur.group("du").startswith("d") else 1.0)
+        tail = (tail[:dur.start()] + " " + tail[dur.end():]).strip()
+    tail = re.sub(r"\s+", " ", tail).strip(" ,")
+    tail = re.sub(r"^(?:over|on|across|onto|in|above|upon)\s+", "", tail)
+    if not tail or tail in ("here", "this area", "the area", "that area", "this polygon", "the drawn area",
+                            "the area drawn", "this", "it", "there", "the area on the map", "this catchment"):
+        action["area"] = "drawn"
+    else:
+        action["place"] = _place_text(_raw_span(c, re.sub(r"^the\s+", "", tail)))
+    c.text = ""
+    c.add("draw_storm", action)
+
+
+def _reservoir_phrase(c: _Clause) -> None:
+    """Draw a reservoir (#662): "draw a reservoir here", "draw a reservoir with a 40 m spillway at 12 m", "put a dam
+    here and route the 100-year flood through it", "draw a reservoir and send the wave through it". The lake is the
+    one the reader draws (or the one on the map)."""
+    m = re.search(r"^(?:draw|build|add|put|make|place|create)\s+(?:a\s+|an\s+|the\s+)?(?:reservoir|dam|lake)\b"
+                  r"(?P<tail>.*)$", c.text)
+    if not m:
+        return
+    tail = " " + m.group("tail").strip() + " "
+    action: dict[str, Any] = {"type": "draw_reservoir"}
+    num = r"(?P<v>\d+(?:\.\d+)?)\s*(?:m|metres?|meters?)\b"
+    for key, pat in (("width_m", r"(?:with\s+)?(?:a\s+)?" + num + r"\s*(?:wide\s+)?spillway"),
+                     ("width_m", r"spillway\s+(?:of\s+)?" + num + r"\s*wide"),
+                     ("top_m", num + r"\s*(?:high|tall)"),
+                     ("top_m", r"(?:dam\s+)?top\s+(?:at\s+|of\s+)?" + num),
+                     ("crest_m", r"(?:spillway\s+)?crest\s+(?:at\s+|of\s+)?" + num),
+                     ("crest_m", r"\bat\s+" + num)):
+        if key in action:
+            continue
+        hit = re.search(pat, tail)
+        if hit:
+            action[key] = float(hit.group("v"))
+            tail = tail[:hit.start()] + " " + tail[hit.end():]
+    flood = re.search(r"(?:and\s+)?(?:route|send|pass|run)\s+(?:the\s+|a\s+)?(?:(?P<rp>\d{1,4})[- ]?(?:year|yr)s?\s+)?"
+                      r"(?:(?P<q>\d[\d,]*(?:\.\d+)?)\s*" + _FLOW_UNIT + r"\s*)?(?P<what>flood|wave|storm|flow)?\s*"
+                      r"(?:wave\s+)?(?:on\s+the\s+map\s+)?through(?:\s+it)?", tail)
+    if flood:
+        if flood.group("q"):
+            action["peak_cms"] = float(flood.group("q").replace(",", ""))
+        elif flood.group("rp"):
+            action["return_period"] = float(flood.group("rp"))
+        elif flood.group("what") in ("wave", "storm"):
+            action["inflow"] = "wave"
+        tail = tail[:flood.start()] + " " + tail[flood.end():]
+    rest = re.sub(r"\s+", " ", tail).strip(" ,")
+    rest = re.sub(r"^(?:and\s+)?", "", rest)
+    if rest and rest not in ("here", "on this river", "on the river", "across the river", "across this river",
+                             "on this reach", "there", "and", "with", "on it"):
+        return
+    action["area"] = "drawn"
+    c.text = ""
+    c.add("draw_reservoir", action)
+
+
+def _sketch_phrase(c: _Clause) -> None:
+    """Levees and breaches (#663): "draw a levee", "draw a levee from Upton upon Severn to Hanley Castle at 14 m",
+    "build a flood wall 1 m above the flood", "draw a breach", "breach the levee". The line is drawn on the map
+    unless two places are named; the crest is the reader's number or a freeboard above the flood."""
+    m = re.search(r"^(?:draw|build|add|put|make|raise)\s+(?:a|an|the)?\s*(?P<what>levee|dyke|dike|flood\s*wall|"
+                  r"embankment|bund|breach|gap)\b(?P<tail>.*)$", c.text)
+    if not m:
+        m = re.search(r"^(?P<what>breach)\s+(?:the\s+|a\s+)?(?:levee|dyke|dike|flood\s*wall|embankment|bund)"
+                      r"(?P<tail>.*)$", c.text)
+    if not m:
+        return
+    kind = "draw_breach" if m.group("what") in ("breach", "gap") else "draw_levee"
+    tail = m.group("tail").strip()
+    action: dict[str, Any] = {"type": kind}
+    num = r"(?P<v>-?\d+(?:\.\d+)?)\s*(?:m|metres?|meters?)\b"
+    fb = re.search(num + r"\s+above\s+the\s+(?:flood|water)", tail)
+    lvl = re.search(r"(?:at|with\s+a\s+crest\s+(?:of|at)|crest(?:\s+(?:of|at))?|to|down\s+to|"
+                    r"invert(?:\s+(?:of|at))?)\s+" + num, tail) if not fb else None
+    if fb:
+        if kind == "draw_levee":
+            action["freeboard_m"] = float(fb.group("v"))
+        tail = (tail[:fb.start()] + tail[fb.end():]).strip()
+    elif lvl:
+        action["crest" if kind == "draw_levee" else "invert"] = float(lvl.group("v"))
+        tail = (tail[:lvl.start()] + tail[lvl.end():]).strip()
+    ends = re.search(r"\bfrom\s+(?P<a>.+?)\s+to\s+(?P<b>.+?)\s*,?$", tail)
+    if ends:
+        action["from_place"] = _place_text(_raw_span(c, ends.group("a")))
+        action["to_place"] = _place_text(_raw_span(c, ends.group("b")))
+    else:
+        action["line"] = "drawn"
+    if kind == "draw_levee" and "crest" not in action:
+        action.setdefault("freeboard_m", 0.5)
+    c.text = ""
+    c.add(kind, action)
+
+
+_WELL_RATE = (r"(?P<q>\d[\d,]*(?:\.\d+)?)\s*(?P<u>m3/day|m3/d|m³/day|m³/d|m3 a day|m3 per day|"
+              r"cubic met(?:re|er)s? (?:a|per) day|l/s|lps|litres? (?:a|per) second|liters? (?:a|per) second)")
+_WELL_SPAN = (r"for\s+(?P<n>\d+(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten)\s*"
+              r"(?P<per>days?|weeks?|months?|years?)")
+
+
+def _well_phrase(c: _Clause) -> None:
+    """Drop a well (#660): "drop a well here", "drop a well at Lyon pumping 2000 m3/day", "drill a borehole near
+    Lille pumping 20 l/s for 90 days", "pump 1500 m3/day here for a year". The rate and the days only when said."""
+    m = re.search(r"^(?:drop|put|add|place|drill|sink|dig)\s+(?:a\s+|an\s+|another\s+|one\s+)?(?:pumping\s+)?"
+                  r"(?:well|borehole|bore ?hole)\b(?P<tail>.*)$", c.text)
+    if not m:
+        m = re.search(r"^pump\s+(?P<tail>(?:at\s+)?" + _WELL_RATE + r".*)$", c.text)
+    if not m:
+        return
+    tail = m.group("tail").strip()
+    action: dict[str, Any] = {"type": "drop_well"}
+    q = re.search(r"(?:(?:pumping|that pumps|at|of|with)\s+)?" + _WELL_RATE, tail)
+    if q:
+        v = float(q.group("q").replace(",", ""))
+        action["rate_m3_day"] = round(v * 86.4, 3) if q.group("u") in ("l/s", "lps") or "second" in q.group("u") \
+            else v
+        tail = (tail[:q.start()] + " " + tail[q.end():]).strip()
+    d = re.search(_WELL_SPAN, tail)
+    if d:
+        n = d.group("n")
+        num = float(n) if re.match(r"\d", n) else float(_WORD_NUMBERS.get(n, 1))
+        per = {"d": 1.0, "w": 7.0, "m": 30.0, "y": 365.0}[d.group("per")[0]]
+        action["days"] = round(num * per, 3)
+        tail = (tail[:d.start()] + " " + tail[d.end():]).strip()
+    tail = re.sub(r"\s+", " ", tail).strip(" ,")
+    where = re.fullmatch(r"(?:(?:at|in|near|on|by)\s+)?(?P<p>.+)", tail) if tail else None
+    p = where.group("p").strip() if where else ""
+    if not p or p in ("here", "this point", "the centre", "the center", "the middle", "the map", "this spot"):
+        action["at"] = "center"
+    else:
+        action["place"] = _place_text(_raw_span(c, p))
+    c.text = ""
+    c.add("drop_well", action)
+
+
+_LU_RAIN = r"(?:with|for|under|in)\s+(?:a\s+)?(?P<rain>\d+(?:\.\d+)?)\s*mm(?:\s+(?:of\s+)?(?:rain|storm|rainfall))?"
+_LU_AREA = r"(?:this|the|that)\s+(?:area|field|plot|site|land|polygon|place)|here|it"
+
+
+def _landuse_use(words: str) -> str | None:
+    for key, pat in LANDUSE_WORDS.items():
+        if re.fullmatch(r"(?:" + pat + r")", words.strip()):
+            return key
+    return None
+
+
+def _landuse_phrase(c: _Clause) -> None:
+    """Change land use (#661): "change this area to houses", "turn this field into a car park", "what if this area is
+    built over", "build houses here", "pave this area", "plant woods here", each with an optional "with 80 mm of
+    rain". The area is drawn on the map."""
+    text = c.text
+    rain = re.search(_LU_RAIN, text)
+    if rain:
+        text = (text[:rain.start()] + text[rain.end():]).strip()
+    text = re.sub(r"\s+", " ", text).strip(" ,")
+    use = None
+    for pat in (r"^(?:change|turn|convert|make)\s+(?:" + _LU_AREA + r")\s+(?:to|into)\s+(?P<w>.+)$",
+                r"^(?:change\s+)?(?:the\s+)?land\s*use\s+(?:here\s+)?(?:to|into)\s+(?P<w>.+)$",
+                r"^what if\s+(?:" + _LU_AREA + r")\s+(?:is|was|were|became|becomes|gets|got)\s+(?P<w>.+)$",
+                r"^(?:build|put|plant|develop)\s+(?P<w>.+?)\s+(?:here|on\s+(?:" + _LU_AREA + r")|in\s+(?:" + _LU_AREA
+                + r"))$",
+                r"^(?P<w>pave|build on|build over|develop|urbani[sz]e)\s+(?:" + _LU_AREA + r")$"):
+        m = re.search(pat, text)
+        if not m:
+            continue
+        w = re.sub(r"^(?:a|an|the|some)\s+", "", m.group("w").strip())
+        w = {"pave": "paved", "build on": "built on", "build over": "built over", "develop": "developed",
+             "urbanise": "urbanised", "urbanize": "urbanized"}.get(w, w)
+        use = _landuse_use(w) or _landuse_use(m.group("w").strip())
+        if use:
+            break
+    if not use:
+        return
+    action: dict[str, Any] = {"type": "change_landuse", "area": "drawn", "use": use}
+    if rain:
+        action["rain_mm"] = float(rain.group("rain"))
+    c.text = ""
+    c.add("change_landuse", action)
+
+
 def _river_phrase(c: _Clause) -> None:
     patterns = [
         (r"^(?:show(?: me)?\s+)?(?:the\s+)?(?:way|path|route)\s+(?:of|from)\s+(?:the\s+)?(?P<p>.+?)"
@@ -1351,7 +2003,10 @@ def _place_phrase(c: _Clause) -> None:
 
 
 _ORDER = {k: i for i, k in enumerate(("set_basemap", "set_layer", "focus_status", "set_time", "fly_to", "draw_area",
-                                      "highlight_river", "route", "flood_reach", "add_pin", "paint"))}
+                                      "highlight_river", "route", "flood_reach", "draw_levee", "draw_breach",
+                                      "drop_well", "change_landuse", "replay",
+                                      "draw_storm", "draw_reservoir",
+                                      "add_pin", "paint"))}
 
 
 def _parse_clause(raw: str, today: date) -> _Clause:
@@ -1359,8 +2014,9 @@ def _parse_clause(raw: str, today: date) -> _Clause:
     c.text = re.sub(r"^(?:please|hey|ok|okay|now|can you|could you|would you|i want to|i'd like to|let me|let's)\s+",
                     "", c.text)
     c.text = re.sub(r"\s+(?:please|for me|on the map)$", "", c.text)
-    for step in (_pin_phrase, _paint_phrase, _zoom_phrase, _basemap_phrase, _area_phrase, _flood_phrase,
-                 _route_phrase, _river_phrase):
+    for step in (_pin_phrase, _paint_phrase, _zoom_phrase, _basemap_phrase, _replay_phrase, _sketch_phrase,
+                 _well_phrase, _landuse_phrase, _storm_phrase, _reservoir_phrase,
+                 _area_phrase, _flood_phrase, _route_phrase, _river_phrase):
         step(c)
         if c.actions:
             return c
@@ -1635,10 +2291,29 @@ def resolve_actions(actions: list[dict[str, Any]], fetch: Any = None) -> dict[st
     cache: dict[tuple[str, str], dict[str, Any]] = {}
     out, notes, used = [], [], False
     for a in actions:
+        if a.get("type") in SKETCHES and a.get("from_place"):
+            ends = []
+            for name in (a["from_place"], a["to_place"]):
+                key = (name.lower(), "any")
+                if key not in cache:
+                    cache[key] = resolve_place(name, fetch=fetch)
+                ends.append(cache[key])
+            bad = [e.get("error") or f"{n} has no position" for e, n in zip(ends, (a["from_place"], a["to_place"]))
+                   if e.get("error") or e.get("lat") is None]
+            if bad:
+                notes.extend(bad)
+                continue
+            used = used or any(bool(e.get("credit")) for e in ends)
+            b = {k: v for k, v in a.items() if k not in ("from_place", "to_place")}
+            b["line"] = [[ends[0]["lon"], ends[0]["lat"]], [ends[1]["lon"], ends[1]["lat"]]]
+            b["where"] = f"{ends[0]['name']} to {ends[1]['name']}"
+            out.append(b)
+            continue
         if not a.get("place"):
             out.append({k: v for k, v in a.items() if k != "river"})
             continue
-        want = "river" if a.get("river") or a["type"] in ("highlight_river", "route", "flood_reach") else "any"
+        want = "river" if a.get("river") or a["type"] in ("highlight_river", "route", "flood_reach", "replay") \
+            else "any"
         # "the Nile at Khartoum": the river, found where the second place is.
         river_at = re.match(r"^(?P<river>.+?)\s+(?:at|near|by|in)\s+(?P<where>.+)$", a["place"]) \
             if want == "river" else None
@@ -1675,11 +2350,24 @@ def resolve_actions(actions: list[dict[str, Any]], fetch: Any = None) -> dict[st
                 notes.append(f"{a['place']} has no position to start the river from")
                 continue
             b.update(lat=hit["lat"], lon=hit["lon"], label=hit["name"])
-        elif a["type"] in ("route", "flood_reach"):
+        elif a["type"] == "drop_well":
+            if hit.get("lat") is None:
+                notes.append(f"{a['place']} has no position for a well")
+                continue
+            b.update(lat=hit["lat"], lon=hit["lon"], label=hit["name"])
+        elif a["type"] in ("route", "flood_reach", "replay"):
             if hit.get("lat") is None:
                 notes.append(f"{a['place']} has no position to start the flood from")
                 continue
             b.update(lat=hit["lat"], lon=hit["lon"], label=hit["name"])
+        elif a["type"] == "draw_storm":
+            if not hit.get("bbox"):
+                notes.append(f"the gazetteer gives no outline for {a['place']}, only a point: draw the storm on "
+                             "the map")
+                continue
+            w, s_, e, n = hit["bbox"]
+            b["polygon"] = [[w, s_], [e, s_], [e, n], [w, n]]
+            b.setdefault("label", hit["name"])
         elif a["type"] == "draw_area":
             if not hit.get("bbox"):
                 notes.append(f"the gazetteer gives no outline for {a['place']}, only a point")
@@ -1788,6 +2476,33 @@ def model_prompt(context: str = "", today: str | date | None = None) -> dict[str
         '(or "lat" and "lon", or "at": "here" for the river selected on the map) and the flow: "return_period" '
         '(2 to 500 years; 100 when the request gives none), or "flow_cms" (m3/s, only when the reader wrote it), '
         'or "flow": forecast_peak, forecast (the 15-day forecast) or route (Route it\'s wave).',
+        '- draw_levee: a levee on the flooded valley, then flood again (Flood it must be on the map). "line": '
+        '"drawn" (the reader draws it), a list of [lon, lat] the reader gave, or "from_place" and "to_place". '
+        '"crest" in m above mean sea level only when the reader gave a level; otherwise "freeboard_m", the height '
+        'above the highest flood along the line (0.5 when none is said). The map computes the levee and the flood.',
+        '- draw_breach: a gap in a levee, then flood again. "line" as for draw_levee; "invert" only when the reader '
+        'gave the gap\'s floor level.',
+        '- draw_storm: rain on an area, turned into runoff and routed down every river below it (Route it). '
+        '"rain_mm" and "duration_h" (6 when none is said) as the reader wrote them; "runoff_coefficient" (the share '
+        'of the rain that runs off; 0.3 when none is said) only when the reader gave it; the area: "area": "drawn" '
+        '(the reader draws it, or the storm area already on the map; "this area", "here"), or "place", or "bbox". '
+        'The map computes the runoff and the wave.',
+        '- draw_reservoir: a reservoir on a river, a flood routed through it and on down the river (level-pool '
+        'routing the map computes). "area": "drawn" (the reader draws the lake, or the one on the map) or "polygon"; '
+        '"crest_m" (the spillway crest) and "top_m" (the top of the dam), m above the lowest ground, and "width_m" '
+        '(the spillway) only when the reader gave them; the flood: "return_period" (100 when none is said), '
+        '"peak_cms" (only when the reader wrote it), or "inflow": "wave" (the flood wave or storm on the map).',
+        '- replay: replay a past flood as a story on the map (the rain, the gauge against the model, what the '
+        'forecast said, the wave downstream, a screening flood). "place" (a river or a town; or "lat" and "lon", or '
+        '"at": "here") and "month" (YYYY-MM). The map lists the floods it has there that month and takes the most '
+        'reported; "pick" (2 to 5) only when the reader asked for another. The map writes the story and every number.',
+        '- drop_well: drop a pumping well and draw its drawdown cone (Theis). "place" (or "lat" and "lon", or "at": '
+        '"center" for the middle of the map); "rate_m3_day" only when the reader gave a rate (L/s times 86.4); "days", '
+        '"transmissivity" (m2/day) and "storativity" only when given. The map computes the cone and every number.',
+        '- change_landuse: a drawn area becomes a new land use; the map shows the runoff and peak flow before and '
+        'after (SCS curve number, TR-55). "area": "drawn" (the reader draws it), or "polygon" when the reader '
+        'gave one; "use": one of the listed uses ("impervious" with "impervious_pct"); "rain_mm" and "soil_group" '
+        'only when the reader gave them.',
         "",
         "Never invent numbers, data or places that were not asked for. "
         "Use place names as the reader wrote them; the map looks them up. Give a bbox or a center only when "

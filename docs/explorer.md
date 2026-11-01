@@ -437,6 +437,10 @@ downstream gets the hour it arrives and how big it is. On a river reach's map ca
 gauge's, once its river is found), **Route a flood** opens a small panel: what enters the
 river (the reach's 2-, 10-, 25- or 100-year flow, or a number in m³/s), over how many hours,
 and whether it is a flood (a triangle that peaks at a third of the time) or a steady release.
+The T-year flow is the one design flow every tool shares (`aquascope.floodsim.design_flow`):
+Log-Pearson III on GEOGLOWS v2's annual maxima of simulated daily flow since 1940
+(CC BY-NC-SA 4.0), as [Flood it](floodsim.md) and [Draw a reservoir](sketchpad.md#draw-a-reservoir)
+read it; the card names it on its last line.
 
 ![Route a flood on a river's map card](img/globe/route-card.png)
 
@@ -533,6 +537,29 @@ it down every river below; the MCP tools `route_flood` and `route_storm` return 
 JSON. In the browser a 2,000 m³/s flood from Basel routes in about 20 s, engine start and the
 trace included, measured in headless Chrome.
 
+## The sketchpad
+
+The pencil in the map tools opens the sketchpad: tools that draw on the map and compute on what
+you drew. **Draw a storm** (#670) takes an area you draw, a rain depth, its hours and a plain
+runoff coefficient, and plays the runoff's wave down every river below on the time bar, with
+the hydrographs and the mass balance on its card. See [the sketchpad](sketchpad.md).
+
+**Drop a well** (#660) drops a pumping well where you click and draws its drawdown cone round it as contour lines;
+drop more and they add, drag one and the cone follows, play the cone growing on the time bar, and open a well's card
+for its numbers (and, over your MODFLOW model, what the model's well cell would read). Ask the map reads "drop a well
+at Lyon pumping 2000 m3/day". Theis with superposition, checked against Fetter's worked example and USGS PP 708's
+table of W(u).
+
+![Drop a well: two cones near Lyon](img/sketchpad/well-two-desktop.jpg)
+
+**Change land use** (#661) draws an area and turns it into a new use (housing, a car park, woods, ...): the runoff and
+the area's peak flow now and after for your design storm (SCS curve number, TR-55, with the cover from ESA WorldCover
+and the soil group from HYSOGs250m), the reach it drains to lit on the map, and the extra peak sent down the river
+with Route it. Ask the map reads "turn this field into a car park with 80 mm of rain". Checked against TR-55's worked
+examples.
+
+![Change land use: a field on the edge of Lyon as town houses](img/sketchpad/landuse-result-desktop.jpg)
+
 ## Paint this view
 
 The brush in the map tools paints one question at every gauge in view that the
@@ -560,6 +587,29 @@ reads "flood Upton upon Severn at the 100-year flow". A screening flood: no bath
 scheme, the checks against JRC's 100-year map at four places and the speed are in [Flood it](floodsim.md).
 
 ![Flood it on the Severn and the Avon at Tewkesbury](img/floodsim/severn-desktop.jpg)
+
+**Levees and breaches.** Under a run, **Draw a levee** draws a line on the map (tap its points, or drag a straight
+line). A small control shows the ground and the flood along it and suggests a crest 0.5 m above the flood; **Run
+again** floods the same valley with the levee in the terrain, and the new run sits beside the old one in the swipe,
+with what gets flooded before and after (buildings, roads and people, and the change). **Draw a breach** opens a gap.
+Each line can be moved, re-set and removed, and each change is in the undo log; Ask the map reads "draw a levee 1 m
+above the flood" and "breach the levee". See [Levees and breaches](floodsim.md#levees-and-breaches).
+
+![A levee drawn round Upton upon Severn, before and after in the swipe](img/floodsim/levee-swipe-desktop.jpg)
+
+## Replay a flood
+
+A past flood told as a story on the map. In **Floods past**, a news circle's card lists the floods its reports make,
+each with **Replay**; a river's or a gauge's card has **Replay** too, for a date you give. AquaScope gathers the
+event (IMERG's rain over the upstream basin, the gauges against GEOGLOWS, what GEOGLOWS's forecast said 1, 3 and 7
+days before the peak, the observed flow routed downstream with Route it, and Flood it at the peak with what was under
+the water) and plays it: the camera flies between stops, the time bar moves, the layers change, and a small note at the
+bottom (a sheet on a phone) says what each stop shows. Play, pause, step and scrub; export a GIF, a WebM video or a
+Markdown report; copy a link that replays it. Ask the map reads "replay the Severn flood of November 2024". Every
+number in a note is written by code from the data. The pieces, the story format and the checks on two events (the
+Severn in Storm Bert and the French Broad in Hurricane Helene) are in [Replay an event](replay.md).
+
+![Replay: the gauge at Saxons Lode against GEOGLOWS, November 2024](img/replay/severn-gauge-desktop.jpg)
 
 ## Map layers
 

@@ -32,8 +32,23 @@ PHRASES = [
     ("go to Bangladesh", [{"type": "fly_to", "place": "Bangladesh"}]),
     ("flood Upton upon Severn at the 100-year flow", [
         {"type": "flood_reach", "place": "Upton upon Severn", "return_period": 100.0}]),
+    ("draw a levee from Upton upon Severn to Hanley Castle at 14 m", [
+        {"type": "draw_levee", "from_place": "Upton upon Severn", "to_place": "Hanley Castle", "crest": 14.0}]),
+    ("breach the levee", [{"type": "draw_breach", "line": "drawn"}]),
+    ("drop a well at Lyon pumping 2000 m3/day", [{"type": "drop_well", "place": "Lyon", "rate_m3_day": 2000.0}]),
+    ("turn this field into a car park with 80 mm of rain", [
+        {"type": "change_landuse", "area": "drawn", "use": "paved", "rain_mm": 80.0}]),
+    ("replay the Severn flood of November 2024", [{"type": "replay", "place": "Severn", "month": "2024-11"}]),
+    ("replay the flood of September 2024 at Asheville", [
+        {"type": "replay", "place": "Asheville", "month": "2024-09"}]),
+    ("replay the November 2024 flood here", [{"type": "replay", "at": "here", "month": "2024-11"}]),
     ("route a flood of 500 m3/s from Basel", [
         {"type": "route", "place": "Basel", "peak_cms": 500.0, "duration_h": 24.0, "shape": "triangle"}]),
+    ("50 mm of rain over this area in 6 hours", [
+        {"type": "draw_storm", "rain_mm": 50.0, "duration_h": 6.0, "runoff_coefficient": 0.3, "area": "drawn"}]),
+    ("draw a reservoir here", [
+        {"type": "draw_reservoir", "crest_m": 10.0, "top_m": 15.0, "width_m": 30.0, "return_period": 100.0,
+         "duration_h": 24.0, "area": "drawn"}]),
     ("Fly to Kingston upon Thames", [{"type": "fly_to", "place": "Kingston upon Thames"}]),
     ("take me to Taipei please", [{"type": "fly_to", "place": "Taipei"}]),
     ("go to 23.7, 90.4", [{"type": "fly_to", "center": [23.7, 90.4], "zoom": 8.0}]),
@@ -681,3 +696,23 @@ def test_a_pin_is_titled_by_the_package_not_the_model():
     area = mc.parse_model_reply({"actions": [{"type": "draw_area", "place": "Basel", "label": "Danger zone"}]},
                                 TODAY, text="outline Basel")
     assert area["actions"] == [{"type": "draw_area", "place": "Basel"}]
+
+
+# ── #659: replay an event ───────────────────────────────────────────────────
+
+
+def test_a_replay_needs_a_month_on_record():
+    ok, err = mc.validate_action({"type": "replay", "place": "Severn", "month": "2024-11", "pick": 2}, today=TODAY)
+    assert err is None and ok == {"type": "replay", "place": "Severn", "month": "2024-11", "pick": 2}
+    for bad in ({"month": "2024-13"}, {"month": "1999-12"}, {"month": "2099-01"}, {"month": "2024-11", "pick": 9},
+                {}):
+        clean, why = mc.validate_action({"type": "replay", "at": "here", **bad}, today=TODAY)
+        assert clean is None and why.startswith("replay")
+    assert mc.validate_action({"type": "replay", "month": "2024-11"}, today=TODAY)[0] is None
+
+
+def test_replay_month_by_month_is_still_the_time_bar():
+    assert not [a for a in mc.parse_command("replay the last 12 months", today=TODAY)["actions"]
+                if a["type"] == "replay"]
+    assert mc.describe_action({"type": "replay", "place": "Severn", "month": "2024-11"}) == \
+        "Replay the flood of November 2024 at Severn"

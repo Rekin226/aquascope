@@ -122,7 +122,7 @@ body.workbench-mode .map-legends { display: none; }
 
 /* the popup of a clicked cell, above the time bar and the legend */
 .fp-popup { z-index: 7; }
-.fp-popup .maplibregl-popup-content { padding: .55rem .7rem .5rem; }
+.fp-popup .maplibregl-popup-content { padding: .55rem .7rem .5rem; max-height: min(64vh, 30rem); overflow-y: auto; }
 .fp-pop { font-size: .76rem; line-height: 1.4; color: var(--ink); min-width: 13rem; }
 .fp-pop-head { display: flex; flex-direction: column; gap: .05rem; margin: 0 1rem .3rem 0; }
 .fp-pop-head strong { font-size: .82rem; }

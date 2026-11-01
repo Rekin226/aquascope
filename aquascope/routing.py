@@ -227,20 +227,24 @@ def _route_reach(inflow: Any, lateral: Any, coef: tuple[float, float, float, flo
 
 def route_network(order: Any, ds_index: Any, k: Any, x: Any, n_steps: int, *, dt: float = DT_S,
                   inflow: dict[int, Any] | None = None, lateral: dict[int, Any] | None = None,
-                  outflow: dict[int, Any] | None = None, q0: dict[int, float] | None = None) -> dict[int, Any]:
+                  outflow: dict[int, Any] | None = None, q0: dict[int, float] | None = None,
+                  through: dict[int, Any] | None = None) -> dict[int, Any]:
     """Route a set of reaches (row indices ``order``, upstream first) for ``n_steps`` steps of ``dt`` seconds.
 
     ``inflow[i]`` (``n_steps + 1`` values at the step ends, m3/s) enters reach ``i`` at its top, on top of what
     the reaches in the set above it send; ``lateral[i]`` (``n_steps`` values, one per step) is its own
     catchment's runoff; ``outflow[i]`` replaces the routed outflow of reach ``i`` (a reach whose flow is given,
-    not routed). ``q0[i]`` is the starting outflow (0 by default). Returns ``{i: outflow series}`` for every
-    reach in ``order``. A reach's water goes on to ``ds_index[i]`` when that reach is in the set."""
+    not routed). ``q0[i]`` is the starting outflow (0 by default). ``through[i]`` is a function the reach's
+    outflow passes through before it goes on (a reservoir at the reach's downstream end, #662): it takes the series
+    and returns the series that leaves. Returns ``{i: outflow series}`` for every reach in ``order``. A reach's
+    water goes on to ``ds_index[i]`` when that reach is in the set."""
     import numpy as np
 
     inflow = inflow or {}
     lateral = lateral or {}
     outflow = outflow or {}
     q0 = q0 or {}
+    through = through or {}
     order = [int(i) for i in order]
     members = set(order)
     nn, mm = plan(np.asarray(k, dtype=float)[order], np.asarray(x, dtype=float)[order], dt)
@@ -265,6 +269,8 @@ def route_network(order: Any, ds_index: Any, k: Any, x: Any, n_steps: int, *, dt
             lat = lateral.get(i)
             q = _route_reach(top, None if lat is None else np.asarray(lat, dtype=float), coef_cache[key], n,
                              float(q0.get(i, 0.0)))
+        if i in through:
+            q = np.asarray(through[i](q), dtype=float)
         out[i] = q
         d = int(ds_index[i])
         if d >= 0 and d in members:
@@ -307,21 +313,14 @@ def _check_inputs(duration_h: Any, hours: Any, shape: str) -> tuple[float, int |
     return d, h
 
 
-def _rp_flow(river_id: int, return_period: float) -> tuple[float, str]:
-    """The reach's ``return_period``-year flow from its GEOGLOWS simulated record (GEV by L-moments on the
-    annual maxima of daily flow, :func:`aquascope.rivers.reach_record`)."""
-    from aquascope import rivers
+def _rp_flow(river_id: int, return_period: float) -> tuple[float, str, dict[str, Any]]:
+    """The reach's ``return_period``-year flow: :func:`aquascope.floodsim.design_flow`, the design flow every tool
+    shares (Log-Pearson III on GEOGLOWS v2's annual maxima, as Flood it)."""
+    from aquascope import floodsim
 
-    rec = rivers.reach_record(river_id, return_periods=[float(return_period)])
-    if rec.get("error"):
-        raise RuntimeError(rec["error"])
-    fit = (((rec.get("ffa") or {}).get("fits") or {}).get("gev_lmoments") or {})
-    q = (fit.get("q_by_T") or {}).get(f"{float(return_period):g}")
-    if q is None or not math.isfinite(float(q)):
-        raise RuntimeError("no flood frequency fit for this reach's simulated record")
-    n_years = (rec.get("ffa") or {}).get("n_years")
-    return float(q), (f"the {float(return_period):g}-year flow of this reach, {float(q):,.0f} m³/s (GEV by "
-                      f"L-moments on {n_years} years of GEOGLOWS simulated daily flow)")
+    d = floodsim.design_flow(river_id, return_period)
+    q = float(d["flow_cms"])
+    return q, f"the {d['return_period']:g}-year flow of this reach, {q:,.0f} m³/s ({d['words']})", d
 
 
 # ── the answer per reach ────────────────────────────────────────────────────
@@ -463,11 +462,13 @@ def route(river_id: int | str | None = None, *, lat: float | None = None, lon: f
           peak_cms: float | None = None, return_period: float | None = None, duration_h: float = 24.0,
           shape: str = "triangle", hours: int | None = None, max_reaches: int = MAX_PATH,
           along: bool = True, places: list[dict[str, Any]] | None = None, frames: bool = True,
-          stations: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+          stations: list[dict[str, Any]] | None = None, inflow_cms: list[float] | None = None,
+          inflow_source: str | None = None, through: dict[int, Any] | None = None) -> dict[str, Any]:
     """A flood wave from a reach down its river to the sea: what arrives where, when, and how flat.
 
     Water enters at the downstream end of ``river_id`` (or the reach snapped at ``lat``/``lon``): a hydrograph
-    with ``peak_cms`` (or the reach's ``return_period``-year flow, from its GEOGLOWS simulated record) of
+    with ``peak_cms`` (or the reach's ``return_period``-year flow, 2 to 500 years, from
+    :func:`aquascope.floodsim.design_flow`) of
     ``shape`` (``triangle`` or ``block``, a release) over ``duration_h`` hours. It is routed reach by reach down
     the path with GEOGLOWS's own k and x for ``hours`` (by default long enough for the peak to reach the last
     reach followed, at most 30 days). ``max_reaches`` caps the path.
@@ -478,12 +479,29 @@ def route(river_id: int | str | None = None, *, lat: float | None = None, lon: f
     (:func:`aquascope.rivers.trace_downstream`) and ``places`` lists the Archive gauges on it and any ``places``
     given (``[{"name", "lat", "lon"}]``, towns for example) with the wave where they stand. ``frames`` is the
     animation for the map (each reach's flow as a share of the peak that entered, every few hours).
+
+    ``inflow_cms`` replaces the made-up hydrograph with a real one (#659): the flow leaving the reach, one value an
+    hour from the first (m3/s), routed for as many hours as it has (``hours`` at most) with every reach on the path
+    starting at its first value, so a river already in flow does not fill from empty. ``inflow_source`` says where
+    the series came from. The answer is then the flow that water alone brings down the path.
+
+    ``through`` maps a reach on the path (its ``river_id``) to a function its outflow passes through, a reservoir
+    at its downstream end (:func:`aquascope.sketch.reservoir.route_reservoir`, #662).
     """
     import numpy as np
 
     from aquascope import rivers
 
-    d, h = _check_inputs(duration_h, hours, shape)
+    series_in = None
+    design: dict[str, Any] | None = None
+    if inflow_cms is not None:
+        series_in = np.asarray([float(v) for v in inflow_cms], dtype=float)
+        if not (2 <= len(series_in) <= MAX_HOURS + 1) or not np.all(np.isfinite(series_in)) or series_in.min() < 0:
+            raise ValueError(f"inflow_cms must be 2 to {MAX_HOURS + 1} hourly flows, none negative")
+        duration_h, shape = float(len(series_in) - 1), "series"
+        d, h = duration_h, (None if hours in (None, "", 0) else min(int(hours), len(series_in) - 1))
+    else:
+        d, h = _check_inputs(duration_h, hours, shape)
     snap = None
     if river_id is None:
         if lat is None or lon is None:
@@ -493,18 +511,20 @@ def route(river_id: int | str | None = None, *, lat: float | None = None, lon: f
             return {"ok": False, "error": snap["message"], "snap": snap, "attribution": ATTRIBUTION}
         river_id = snap["river_id"]
     rid = rivers._river_id(river_id)
-    if peak_cms is None and return_period is None:
+    if series_in is None and peak_cms is None and return_period is None:
         raise ValueError("give peak_cms (m3/s) or return_period (years)")
-    if peak_cms is not None:
+    if series_in is not None:
+        peak = float(series_in.max())
+        if peak <= 0:
+            raise ValueError("inflow_cms has no flow in it")
+        source = inflow_source or f"a hydrograph of {len(series_in) - 1} h, peaking at {peak:,.0f} m³/s"
+    elif peak_cms is not None:
         peak = float(peak_cms)
         if not (0 < peak <= 1e6):
             raise ValueError("peak_cms must be above 0 and at most 1,000,000 m3/s")
         source = f"{peak:,.0f} m³/s set by hand"
     else:
-        rp = float(return_period)  # type: ignore[arg-type]
-        if not (1.01 <= rp <= 1000):
-            raise ValueError("return_period must be between 1.01 and 1000 years")
-        peak, source = _rp_flow(rid, rp)
+        peak, source, design = _rp_flow(rid, float(return_period))  # type: ignore[arg-type]
     net = rivers._network_for(rid, lat, lon)
     k, x, ds_index = _params(net)
     i0 = net.index(rid)
@@ -519,9 +539,17 @@ def route(river_id: int | str | None = None, *, lat: float | None = None, lon: f
         path.append(nxt)
     truncated = len(path) >= int(max_reaches) and int(ds_index[path[-1]]) >= 0
     k_path = float(np.sum(k[path[1:]])) if len(path) > 1 else 0.0
-    n_steps = h if h is not None else _auto_hours(d, k_path)
-    q_in = hydrograph(peak, d, n_steps, shape=shape)
-    routed = route_network(path, ds_index, k, x, n_steps, outflow={i0: q_in}) if len(path) > 1 else {i0: q_in}
+    if series_in is not None:
+        n_steps = h if h is not None else len(series_in) - 1
+        q_in = series_in[: n_steps + 1]
+        start_q = {i: float(q_in[0]) for i in path}
+    else:
+        n_steps = h if h is not None else _auto_hours(d, k_path)
+        q_in = hydrograph(peak, d, n_steps, shape=shape)
+        start_q = None
+    passes = {net.index(int(r)): fn for r, fn in (through or {}).items() if net.index(int(r)) is not None}
+    routed = (route_network(path, ds_index, k, x, n_steps, outflow={i0: q_in}, q0=start_q, through=passes)
+              if len(path) > 1 else {i0: passes[i0](q_in) if i0 in passes else q_in})
     ids = [int(net.ids[i]) for i in path]
     series = [routed[i] for i in path]
     rows = _reach_rows(ids, series, peak, DT_S, n_steps)
@@ -533,14 +561,17 @@ def route(river_id: int | str | None = None, *, lat: float | None = None, lon: f
     res: dict[str, Any] = {
         "ok": True, "river_id": rid, "vpu": net.vpu, "snap": snap,
         "inflow": {"peak_cms": round(peak, 2), "duration_h": d, "shape": shape, "source": source,
-                   "volume_m3": _sig(volume), "return_period": return_period},
+                   "volume_m3": _sig(volume), "return_period": return_period, "design": design},
         "hours": n_steps, "dt_s": DT_S, "n_reaches": len(path), "truncated": truncated,
         "reaches": rows,
         "furthest": {"river_id": ids[last], "index": last, **{kk: rows[last][kk] for kk in
                                                              ("peak_cms", "peak_h", "front_h", "attenuation_pct")}},
         "method": METHOD, "check": {"summary": CHECK["summary"], "tolerance": CHECK["tolerance"]},
-        "notes": [NOTE_LINEAR, NOTE_MODEL], "attribution": ATTRIBUTION, "licence": LICENCE, "modelled": True,
+        "notes": [NOTE_LINEAR, NOTE_MODEL], "attribution": ATTRIBUTION, "licence": dict(LICENCE), "modelled": True,
     }
+    if design is not None:
+        res["licence"]["flows"] = f"{design['licence']} (GEOGLOWS v2 annual maxima)"
+        res["attribution"] = f"{ATTRIBUTION} T-year flows: GEOGLOWS v2 annual maxima, {design['licence']}."
     if truncated:
         res["notes"].append(f"Followed {len(path):,} reaches; the river goes on.")
     if frames:
@@ -573,7 +604,8 @@ def _message(res: dict[str, Any]) -> str:
     inflow = res["inflow"]
     f = res["furthest"]
     reached = sum(1 for r in res["reaches"] if r["reached"])
-    head = (f"A {inflow['shape']} of {inflow['peak_cms']:,.0f} m³/s over {inflow['duration_h']:g} h from reach "
+    what = ("A hydrograph peaking at" if inflow["shape"] == "series" else f"A {inflow['shape']} of")
+    head = (f"{what} {inflow['peak_cms']:,.0f} m³/s over {inflow['duration_h']:g} h from reach "
             f"{res['river_id']}, routed {res['hours']} h down {reached:,} reaches.")
     if f["index"] == 0:
         return head + " It does not get past the first reach in the hours routed."
@@ -605,9 +637,16 @@ def _inside(lon: Any, lat: Any, ring: list[list[float]]) -> Any:
     return inside
 
 
+def _hydro(row: dict[str, Any], q: Any) -> dict[str, Any]:
+    """A reach's hourly flow for a card's chart: its id, peak and the series (m3/s, three significant figures)."""
+    return {"river_id": row["river_id"], "peak_cms": row["peak_cms"], "peak_h": row.get("peak_h"),
+            "dt_h": DT_S / 3600.0, "cms": [_sig(float(v)) for v in q]}
+
+
 def route_storm(polygon: list[list[float]], *, rain_mm: float, duration_h: float = 6.0,
                 runoff_coefficient: float = 0.3, hours: int | None = None, vpu: int | None = None,
-                lat: float | None = None, lon: float | None = None, frames: bool = True) -> dict[str, Any]:
+                lat: float | None = None, lon: float | None = None, frames: bool = True,
+                through: dict[int, Any] | None = None) -> dict[str, Any]:
     """A drawn storm turned into runoff and routed down every river below it.
 
     ``polygon`` is a ring of ``[lon, lat]``. Every reach whose unit catchment's centre (GEOGLOWS's ERA5 weight
@@ -615,7 +654,11 @@ def route_storm(polygon: list[list[float]], *, rain_mm: float, duration_h: float
     evenly over ``duration_h`` hours; the runoff coefficient is a plain share of the rain that runs off, said as
     such, with no soil or wetness behind it. All the reaches below are routed for ``hours``. The unit is the one
     the polygon's centre falls in (``vpu`` overrides it; ``lat``/``lon`` give the point to find it by).
-    Returns the reaches with the biggest peaks, the outlet reaches' waves and the animation frames.
+    ``through`` maps a reach (its ``river_id``) to a function its outflow passes through (a reservoir, #662).
+    Returns the reaches with the biggest peaks, the outlet reaches' waves and the animation frames, the hourly
+    hydrographs of the reach with the biggest peak and of the main outlet (``hydrographs``), the box of the reaches
+    the wave reaches (``bbox``) and, in ``storm``, the water that has left by the outlets by the end (``out_m3``,
+    ``out_pct`` of the runoff: the mass balance).
     """
     import numpy as np
 
@@ -685,7 +728,8 @@ def route_storm(polygon: list[list[float]], *, rain_mm: float, duration_h: float
         q = c * rain / 1000.0 * float(net.area_m2[i]) / (d * 3600.0)
         lateral[int(i)] = q * on
         volume += c * rain / 1000.0 * float(net.area_m2[i])
-    routed = route_network(order, ds_index, k, x, n_steps, lateral=lateral)
+    passes = {net.index(int(r)): fn for r, fn in (through or {}).items() if net.index(int(r)) is not None}
+    routed = route_network(order, ds_index, k, x, n_steps, lateral=lateral, through=passes)
     peaks = {i: float(np.max(routed[i])) for i in order}
     top = max(peaks.values()) if peaks else 0.0
     ids = [int(net.ids[i]) for i in order]
@@ -695,14 +739,25 @@ def route_storm(polygon: list[list[float]], *, rain_mm: float, duration_h: float
         r["in_storm"] = bool(i in lateral)
     outlets = [j for j, i in enumerate(order) if int(ds_index[i]) < 0 or int(ds_index[i]) not in members]
     best = max(range(len(rows)), key=lambda j: rows[j]["peak_cms"])
+    # The water that has left by the end, for the mass balance the card states (#670): what the outlets passed.
+    out_m3 = float(sum(np.sum((routed[order[j]][1:] + routed[order[j]][:-1]) / 2.0) * DT_S for j in outlets))
+    main = max(outlets, key=lambda j: rows[j]["peak_cms"]) if outlets else best
+    hydro = [{"role": "biggest", **_hydro(rows[best], routed[order[best]])}]
+    if main != best:
+        hydro.append({"role": "outlet", **_hydro(rows[main], routed[order[main]])})
+    lit = [order[j] for j, r in enumerate(rows) if r.get("reached")] or list(under)
     res: dict[str, Any] = {
         "ok": True, "vpu": net.vpu,
         "storm": {"rain_mm": rain, "duration_h": d, "runoff_coefficient": c, "n_reaches": int(len(under)),
                   "area_km2": round(float(np.sum(net.area_m2[under])) / 1e6, 1), "runoff_m3": _sig(volume),
+                  "out_m3": _sig(out_m3), "out_pct": round(100.0 * out_m3 / volume, 1) if volume > 0 else None,
                   "rule": (f"{c:g} of the rain runs off: {c * rain:g} mm over each unit catchment under the storm, "
                            f"spread evenly over {d:g} h. A plain coefficient, no soil, wetness or snow.")},
         "hours": n_steps, "dt_s": DT_S, "n_reaches": len(order),
-        "biggest": rows[best], "outlets": [rows[j] for j in outlets],
+        "biggest": rows[best], "outlets": [rows[j] for j in outlets], "hydrographs": hydro,
+        "bbox": [round(float(np.min(net.lon[lit])), 4), round(float(np.min(net.lat[lit])), 4),
+                 round(float(np.max(net.lon[lit])), 4), round(float(np.max(net.lat[lit])), 4)],
+        "polygon": [[round(p[0], 5), round(p[1], 5)] for p in ring],
         "reaches": sorted(rows, key=lambda r: -r["peak_cms"])[:500],
         "method": METHOD, "check": {"summary": CHECK["summary"], "tolerance": CHECK["tolerance"]},
         "notes": [NOTE_MODEL, "Only the storm's runoff is routed: these are the flows it adds."],

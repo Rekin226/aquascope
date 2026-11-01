@@ -1762,7 +1762,17 @@ json.dumps(_out, default=str)
 // routes water entering at a reach down its path to the sea, with the gauges (the page's catalog) and the towns
 // the page read off the basemap placed on the way; op "places" places more towns on a result's path (the page reads
 // them once the path is framed); op "storm" routes a drawn storm's runoff.
+// The T-year flows (floodsim.design_flow) read GEOGLOWS's annual maxima store, which needs numcodecs: loaded once,
+// the first time a run asks for a return period.
+let maximaReady = null;
+async function maximaCodec(args) {
+  if (!args || args.return_period == null) return;
+  if (!maximaReady) maximaReady = pyodide.loadPackage(["numcodecs"]).catch(() => null);
+  await maximaReady;
+}
+
 async function routeOp({ id, op, args }) {
+  await maximaCodec(args);
   const payload = JSON.stringify(JSON.stringify({ op: String(op || "flood"), args: args || {} }));
   const code = `
 import json
@@ -1788,16 +1798,57 @@ json.dumps(_out, default=str)
   post("result", { id, result: JSON.parse(out) });
 }
 
+// ── Draw a reservoir (#662): aquascope.sketch.reservoir, the same functions as `aquascope route reservoir` and the
+// MCP tool route_reservoir. Type "reservoir" (the main worker: the routing needs pandas and scipy): op "plan" finds
+// the river and the dam under a drawn lake and the terrain window to read; op "run" takes that window's terrain (a
+// Float32Array the page read from the Terrarium tiles) and routes a flood through the lake and on down the river.
+async function reservoirOp({ id, op, args, z }) {
+  await maximaCodec(args);
+  pyodide.globals.set("_rv_args", JSON.stringify({ op: String(op || "plan"), args: args || {} }));
+  pyodide.globals.set("_rv_z", z || null);
+  const code = `
+import json
+import numpy as _np
+from aquascope.sketch import reservoir as _rv
+_a = json.loads(_rv_args)
+_k = dict(_a["args"])
+try:
+    if _a["op"] == "plan":
+        _out = _rv.plan(_k["polygon"])
+    elif _a["op"] == "run":
+        _poly = _k.pop("polygon")
+        _zz = _np.frombuffer(_rv_z.to_py(), dtype="<f4").astype("f8")
+        _out = _rv.route_reservoir(_poly, z=_zz, **_k)
+    else:
+        _out = {"ok": False, "error": "unknown op"}
+except (ValueError, RuntimeError, LookupError, TypeError) as exc:
+    _out = {"ok": False, "error": str(exc)}
+json.dumps(_out, default=str)
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    pyodide.globals.set("_rv_z", null);
+  }
+}
+
 // ── Flood it (#658): aquascope.floodsim, the same functions as `aquascope flood` and the MCP tool flood_reach.
 // Type "floodsim" (the main worker: the network needs pandas, the valley scipy, the flows' store numcodecs):
 // op "plan" finds the window, the reaches and their flows (kept here for the next ops); op "prepare" takes the
 // window's terrain (a Float32Array the page read from the Terrarium tiles) and returns the grid the GPU or the
 // fallback worker floods: the burnt bed and Manning's n as Float32Arrays, the inflows, the edges and the words;
-// op "forecast" and op "routed" return a hydrograph at the clicked reach.
+// op "forecast" and op "routed" return a hydrograph at the clicked reach. Levees and breaches (#663): "prepare" takes
+// the drawn lines as edits (aquascope.floodsim.edit_grid) and returns the edited terrain; op "profile" gives the
+// ground and the flood level along a line and the crest the code suggests (levee_profile, z: the run's largest
+// depth); op "exposure" counts what gets flooded before and after (compare_exposure, z: the two depths over the
+// terrain, one after the other; read: what the light worker read).
 let floodsimReady = null;
 async function floodsimOp({ id, op, args, z }) {
   if (!floodsimReady) floodsimReady = pyodide.loadPackage(["numcodecs"]).catch(() => null);
   await floodsimReady;
+  // Before and after (#663) reads the two runs back as a mesh, which places it with pyproj.
+  if (op === "exposure" && !pyprojLoaded) { await pyodide.loadPackage(["pyproj"]); pyprojLoaded = true; }
   pyodide.globals.set("_fs_args", JSON.stringify({ op: String(op || "plan"), args: args || {} }));
   pyodide.globals.set("_fs_z", z || null);
   const code = `
@@ -1819,6 +1870,11 @@ try:
         _p = _FS[str(_k["river_id"])]
         _zz = _np.frombuffer(_fs_z.to_py(), dtype="<f4").astype("f8")
         _g = _fs.prepare_grid(_p, _zz, _k.get("choice") or {"return_period": 100}, coarse=bool(_k.get("coarse")))
+        _FS["grid"] = _g
+        _edits = None
+        if _k.get("edits"):
+            _g = _fs.edit_grid(_g, _k["edits"], skip_outside=True)
+            _edits = [{k: v for k, v in e.items() if k != "cells"} | {"cells": len(e["cells"])} for e in _g["edits"]]
         _arrays = {"z": _g["z_burnt"].astype("<f4").ravel(), "n": _g["n"].astype("<f4").ravel(),
                    "ground": _g["z"].astype("<f4").ravel()}
         _out = {"ok": True, "window": _g["window"], "nx": _g["nx"], "ny": _g["ny"], "dx": _g["dx"],
@@ -1829,7 +1885,16 @@ try:
                 "exits": _g["exits"], "slope": _g["slope"], "table_dt_s": _g["table_dt_s"], "hours": _g["hours"],
                 "click": {k: v for k, v in _g["click"].items() if k != "curve"}, "label": _g["label"],
                 "coarse": _g["coarse"], "channels": len(_g["channels"]), "reaches": len(_p["reaches"]),
-                "flow_method": _fs.FLOW_METHOD, "licences": _fs.LICENCES}
+                "flow_method": _fs.FLOW_METHOD, "licences": _fs.LICENCES, "edits": _edits}
+    elif _a["op"] == "profile":
+        _g = _fs.edit_grid(_FS["grid"], _k.get("edits") or [], skip_outside=True)
+        _h = _np.frombuffer(_fs_z.to_py(), dtype="<f4").astype("f8") if _fs_z is not None else None
+        _out = {"ok": True, **_fs.levee_profile(_g, _k["line"], _h,
+                                                freeboard_m=float(_k.get("freeboard_m") or _fs.FREEBOARD_M))}
+    elif _a["op"] == "exposure":
+        _g = _fs.edit_grid(_FS["grid"], _k.get("edits") or [], skip_outside=True)
+        _two = _np.frombuffer(_fs_z.to_py(), dtype="<f4").astype("f8").reshape(2, -1)
+        _out = {"ok": True, **_fs.compare_exposure(_g, _two[0], _two[1], _k["read"])}
     elif _a["op"] == "forecast":
         _out = {"ok": True, **_fs.forecast_series(int(_k["river_id"]))}
     elif _a["op"] == "routed":
@@ -1856,6 +1921,104 @@ _fs_out = json.dumps(_out, default=str)
   }
   pyodide.globals.set("_fs_z", null);
   self.postMessage({ type: "result", id, result }, transfer);
+}
+
+// ── Replay an event (#659): aquascope.replay, the same functions as `aquascope replay` and the MCP tools
+// replay_candidates and replay_event. Type "replay" (the main worker: the gauges need pandas, the forecast archive
+// numcodecs): op "candidates" lists Floods past's floods near a point in a month; op "record" assembles the event
+// without the flood (the page runs Flood it on the GPU) and leaves the rain as a ClimateSERV request; op "rain"
+// looks at that request once (the page asks again every few seconds); op "story" writes the story and the report,
+// with the page's own flood and exposure numbers when it has them.
+let replayReady = null;
+async function replayOp({ id, op, args }) {
+  if (!replayReady) replayReady = pyodide.loadPackage(["numcodecs"]).catch(() => null);
+  await replayReady;
+  pyodide.globals.set("_rp_args", JSON.stringify({ op: String(op || "record"), args: args || {} }));
+  pyodide.globals.set("_rp_say", (text) => post("replay_progress", { id, text: String(text) }));
+  const code = `
+import json
+from aquascope import replay as _rp
+_a = json.loads(_rp_args)
+_k = dict(_a["args"])
+try:
+    if _a["op"] == "candidates":
+        _out = _rp.candidates(float(_k["lat"]), float(_k["lon"]), month=_k.get("month"), start=_k.get("start"),
+                              end=_k.get("end"), radius_km=float(_k.get("radius_km") or 40))
+    elif _a["op"] == "record":
+        _out = _rp.event_record(_k.get("river_id"), lat=_k.get("lat"), lon=_k.get("lon"), start=_k.get("start"),
+                                end=_k.get("end"), event=_k.get("event"), places=_k.get("places"),
+                                with_flood=False, rain_wait=False, progress=_rp_say)
+    elif _a["op"] == "rain":
+        _out = _rp.rain_poll(_k["piece"])
+    elif _a["op"] == "story":
+        _st = _rp.story(_k["record"], flood_result=_k.get("flood"))
+        _out = {"story": _st, "report": _rp.report(_k["record"], _st, flood_result=_k.get("flood"))}
+    else:
+        _out = {"ok": False, "error": "unknown op"}
+except (ValueError, RuntimeError, LookupError, TypeError, KeyError, OSError) as exc:
+    _out = {"ok": False, "error": str(exc)}
+json.dumps(_out, default=str)
+`;
+  try {
+    const out = await pyodide.runPythonAsync(code);
+    post("result", { id, result: JSON.parse(out) });
+  } finally {
+    pyodide.globals.set("_rp_say", null);
+  }
+}
+
+// ── Drop a well (#660): aquascope.sketch.drawdown, the same functions as `aquascope well` and the MCP tool
+// drop_well. Type "well" (the main worker: the well function is scipy's exp1): op "map" draws the cone of the wells
+// on the map (contours, the fill's grid, each well's drawdown at its face, and with frames the cone at a series of
+// times for the time bar); op "point" gives the drawdown at a point with each well's share.
+async function wellOp({ id, op, args }) {
+  pyodide.globals.set("_wl_args", JSON.stringify({ op: String(op || "map"), args: args || {} }));
+  const code = `
+import json
+from aquascope.sketch import drawdown as _wl
+_a = json.loads(_wl_args)
+_k = dict(_a["args"])
+try:
+    if _a["op"] == "map":
+        _out = _wl.drawdown_map(_k.pop("wells"), **_k)
+    elif _a["op"] == "point":
+        _out = _wl.drawdown_at(_k.pop("lon"), _k.pop("lat"), _k.pop("wells"), **_k)
+    elif _a["op"] == "check":
+        _out = _wl.check()
+    else:
+        _out = {"ok": False, "error": "unknown op"}
+except (ValueError, TypeError, KeyError) as exc:
+    _out = {"ok": False, "error": str(exc)}
+json.dumps(_out)
+`;
+  const out = await pyodide.runPythonAsync(code);
+  post("result", { id, result: JSON.parse(out) });
+}
+
+// ── Change land use (#661): aquascope.sketch.landuse, the same function as `aquascope landuse` and the MCP tool
+// change_landuse. Type "landuse" (the main worker: the soil group's COG and the network need numpy, the outlet the
+// stream tiles): op "change" reads the cover, the soil and the slope under the polygon and computes TR-55 before
+// and after, with the reach it drains to; op "check" recomputes TR-55's worked examples.
+async function landuseOp({ id, op, args }) {
+  pyodide.globals.set("_lu_args", JSON.stringify({ op: String(op || "change"), args: args || {} }));
+  const code = `
+import json
+from aquascope.sketch import landuse as _lu
+_a = json.loads(_lu_args)
+_k = dict(_a["args"])
+try:
+    if _a["op"] == "change":
+        _out = _lu.landuse_change(_k.pop("polygon"), _k.pop("use"), **_k)
+    elif _a["op"] == "check":
+        _out = _lu.check()
+    else:
+        _out = {"ok": False, "error": "unknown op"}
+except (ValueError, TypeError, KeyError, RuntimeError, OSError) as exc:
+    _out = {"ok": False, "error": str(exc)}
+json.dumps(_out, default=str)
+`;
+  const out = await pyodide.runPythonAsync(code);
+  post("result", { id, result: JSON.parse(out) });
 }
 
 self.onmessage = async (e) => {
@@ -1897,7 +2060,11 @@ self.onmessage = async (e) => {
     if (m.type === "flood_exposure") return await floodExposureOp(m);
     if (m.type === "whatif" || m.type === "whatif_words") return await whatIf(m);
     if (m.type === "route") return await routeOp(m);
+    if (m.type === "reservoir") return await reservoirOp(m);
     if (m.type === "floodsim") return await floodsimOp(m);
+    if (m.type === "replay") return await replayOp(m);
+    if (m.type === "well") return await wellOp(m);
+    if (m.type === "landuse") return await landuseOp(m);
     if (m.type === "groundwater") return await groundwater(m);
     if (m.type === "gw_layers") return await gwLayers(m);
   } catch (err) {

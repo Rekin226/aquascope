@@ -7,7 +7,19 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Changed
+- **`south_africa_dws` license and attribution** (#473): update license to `DWS NIWIS terms (academic, research or personal use)` and attribution to name the Department of Water and Sanitation, Republic of South Africa as copyright proprietor following the disclaimer on [dws.gov.za/niwis2/Disclaimer](https://www.dws.gov.za/niwis2/Disclaimer) (archived at [web.archive.org](http://web.archive.org/web/20250528170949/https://www.dws.gov.za/niwis2/Disclaimer)).
+
 ### Fixed
+- **What-if fractional quantities** (#646): the model and keyless readings of “half a cubic metre per second”, “a half litre per second” and “half a degree warmer” keep the stated unit instead of treating the quantity as a proportion.
+- **GR4J at large gauges** (#273): the station model asks before using point forcing above 10,000 km², and describes the forcing download separately from the fit.
+
+- **HydroGym refusal reviews:** bind decisions to the saved reconnaissance, score blank refusal reasons as invalid,
+  and mark incomplete benchmark means with coverage and possible bounds (#381). A reconnaissance file whose decoded
+  shape cannot be read (null or list root, non-mapping `recon`, malformed sufficiency table) now raises a
+  `ValueError` that keeps the refusal pending instead of escaping as an `AttributeError` and scoring it zero.
+- **HydroGym decline scoring:** mark refusal reasons for explicit review, support cases that accept a plan or a
+  defensible refusal, and report pending reviews separately instead of treating them as zero scores (#381).
 - **Cite 1.1.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.1.0's Zenodo DOI (10.5281/zenodo.23718093).
 
 ## [1.1.0] - 2026-10-28
@@ -33,6 +45,7 @@ map. All of it is experimental (docs/stability.md); nothing stable changed.
 - **One design flow in every tool** (part of #664). Route it and Draw a reservoir read a reach's T-year flow as Flood it does, Log-Pearson III on GEOGLOWS v2's annual maxima of simulated daily flow (`retrospective/maximums.zarr`, CC BY-NC-SA 4.0), instead of a GEV by L-moments on the daily record, so the same reach and T give the same m³/s in Flood it, Route it, the reservoir and Replay. `aquascope.floodsim.design_flow` (with `reach_curve` and `flow_words`) is the shared function, and the Explorer's `design-flow-core.js` reads the curve and words the method and source the same way on every card; Route it's card now names its flow. The return period of `route`, `route_reservoir`, their CLI and MCP faces and Ask the map's `route` is now 2 to 500 years, the range the curve is fitted over. On the Severn above Newtown the 100-year flow is 65 m³/s (64.6; it was 64 by the GEV).
 
 ### Fixed
+- **A missing year is a gap in time for Sen's slope** (#668). `aquascope.explore.analyze_series` reads the trend's `sens_slope_per_year`, on the annual maxima and on the annual means, against the calendar year, the median of `(x_j - x_i) / (t_j - t_i)` over every pair as `aquascope.paint` already did, instead of one step per record; on USGS-01335754, with 21 of its years missing, the flood trend goes from -1.392 to -1.091 per year. `aquascope.analysis.trends.sens_slope` gains an optional `years` argument for the same; without it the positional step is unchanged. Mann-Kendall's p-value and tau are not affected.
 - **A desert's wet month is not a river much above normal** (#638). Scout's status findings ranked the connected areas of the HydroSOS map by area alone, so a basin that carries almost nothing most of the year and is painted much above normal in one month led the list (Ash Shati, Libya: 430,000 km²). A basin's usual flow — the median over the twelve months of the flow its outlet exceeded in one year in four (the 75th percentile of that month's mean flow across years), from the same HydroSOS thresholds table the classes are painted from — now sets those areas aside when it is under 1 m³/s, the floor `aquascope.bulletin.MIN_USUAL_CMS` already uses for a gauge's usual flow, and the same reason the flow status classes leave a zero-flow month out whole. The scan says how many areas it left out. The table is carried in `scout/latest.json` so the Explorer's live scan, which has no pyarrow, applies the same rule.
 - **Phone layout of the sketchpad and Flood it** (part of #664). Change land use's result is now a short bottom sheet like the storm's and the reservoir's (it was a top sheet over most of the screen), and the camera keeps the drawn area above it; the reservoir's Dam top value lines up with the other two, and its camera keeps the lake and its corners above the sheet, so a corner can be dragged at phone width; Flood it's sheet sits above the time bar.
 - **Flood it's labels** (part of #664). A flow typed in m³/s is said once ("954 m³/s at this reach", not "954 m³/s (954 m³/s)"), also in `aquascope flood`'s output. A steady run's time bar counts hours since the water was turned on ("5 h into a steady run", "steady after 27 h") instead of reading like a clock time. The warning that the valley is wider than the grid now says what it means and what to do, sits under the result instead of in a fold, and appears only when the water stands against a wall away from the rivers (`floodsim.wall_contact`, the same rule in the Explorer; it was raised by a single wall cell with 5 cm of water, even beside the river's outlet).

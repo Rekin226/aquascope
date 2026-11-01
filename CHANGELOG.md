@@ -8,6 +8,7 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Fixed
+- **GR4J at large gauges** (#273): the station model asks before using point forcing above 10,000 km², and describes the forcing download separately from the fit.
 
 - **HydroGym decline scoring:** mark refusal reasons for explicit review, support cases that accept a plan or a
   defensible refusal, and report pending reviews separately instead of treating them as zero scores (#381).

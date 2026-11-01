@@ -36,7 +36,7 @@ def lookup_decline_review(case_id: str, reason: str | None, rubric_version: str,
     if not isinstance(case_id, str) or not case_id.strip():
         return pending("missing case id")
     if not isinstance(reason, str) or not reason.strip():
-        return pending("missing decline reason")
+        return {"verdict": "invalid", "explanation": "decline has no reason"}
     if not isinstance(rubric_version, str) or not rubric_version.strip():
         return pending("missing rubric version")
     if not isinstance(records, list):

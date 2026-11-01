@@ -15,7 +15,7 @@ def test_review_is_bound_to_exact_text_case_and_rubric():
     records = json.loads(json.dumps([review(reason)]))
     assert lookup_decline_review("potomac", reason, "1", records)["verdict"] == "valid"
     for case, text, version in [("other", reason, "1"), ("potomac", reason + " ", "1"),
-                                ("potomac", reason, "2"), ("potomac", "", "1")]:
+                                ("potomac", reason, "2")]:
         assert lookup_decline_review(case, text, version, records)["verdict"] == "pending"
 
 

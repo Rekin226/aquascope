@@ -18,7 +18,9 @@ flow duration and trend, computed **in your browser** by aquascope running on
 Pyodide. Nothing to install, no server, no account.
 
 - Station catalog: [`Rekin226/aquascope-gauges`](https://huggingface.co/datasets/Rekin226/aquascope-gauges)
-  (GeoParquet, harvested weekly), read in place with DuckDB-WASM.
+  (GeoParquet, harvested weekly), read in place with DuckDB-WASM. The catalog
+  holds **75,878 stations** and the observation mirror holds daily records for
+  **5,788 of them** (2026-10-26 harvest).
 - Sources with a catalog today: USGS, the Environment Agency (England), Hub'Eau (France),
   PEGELONLINE (Germany), Ireland OPW, Taiwan CWA.
 - Full daily records: USGS, UK EA and Hub'Eau (obs_elab). Real-time feeds

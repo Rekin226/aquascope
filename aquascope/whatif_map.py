@@ -146,6 +146,10 @@ def scenario_label(sc: dict[str, Any]) -> str:
 
 _FRACTIONS = {"a tenth": 10.0, "one tenth": 10.0, "a fifth": 20.0, "one fifth": 20.0, "a quarter": 25.0,
               "one quarter": 25.0, "a third": 100.0 / 3, "one third": 100.0 / 3, "half": 50.0}
+# The plural fraction is a ratio in one piece ("two thirds" is 2/3, not "two", #691). A share of rain or
+# evaporation is read as the percentage that share is; a quantity keeps its unit ("two thirds l/s", below).
+_FRACTIONS.update({f"{n} {d}": 100.0 * num / den for n, num in (("two", 2), ("three", 3), ("four", 4))
+                   for d, den in (("tenths", 10), ("fifths", 5), ("quarters", 4), ("thirds", 3))})
 _NEG = r"\b(?:less|fewer|lower|drier|dryer|down|minus|decrease[sd]?|reduc(?:e|ed|tion)|cut|drop|falls?|cooler|colder|" \
        r"cooling)\b"
 _POS = r"\b(?:more|higher|wetter|up|plus|increase[sd]?|rise[sn]?|warmer|hotter|warming|heating)\b"
@@ -174,7 +178,8 @@ _WORD_NUMBERS.update({"thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seve
                       "one": 1})
 _WORD_NUMBER = re.compile(r"\b(?:" + "|".join(sorted(map(re.escape, (w for w in _WORD_NUMBERS if w != "one")),
                                                      key=len, reverse=True))
-                          + r"|one(?=\s*(?:degrees?\b|°|%|m3/s|l/s)))\b(?!\s+(?:tenths?|fifths?|quarters?|thirds?)\b)")
+                          + r"|one(?=\s*(?:degrees?\b|°|%|m3/s|l/s)))\b"
+                            r"(?!\s+(?:tenths?|fifths?|quarters?|thirds?|halves?)\b)")
 # Litres (or liters) per second, however written, is l/s; cubic metres per second is m3/s.
 _PER_SECOND = re.compile(r"\b(?:litres?|liters?|l)\s*(?:per|a|/)\s*(?:second|sec|s)\b|\blps\b")
 _CUMECS = re.compile(r"\bcubic\s+met(?:re|er)s?\s*(?:per|a|/)\s*(?:second|sec|s)\b")
@@ -278,6 +283,10 @@ def parse_scenario(text: str) -> dict[str, Any]:
         kind, value, left = _clause(part)
         if kind is None or value is None:
             out["unknown"].append(part)
+            # A parameter was named but its number was not read: say so, rather than leave the page with no error
+            # to show (#691).
+            if kind is not None:
+                out["errors"].append(f"{part}: the words give no number I can read")
             continue
         found[kind] = value
         out["rules"].append(kind)
@@ -286,7 +295,8 @@ def parse_scenario(text: str) -> dict[str, Any]:
     if not found:
         return out
     checked, errors = check_scenario(found)
-    out.update(scenario=checked, errors=errors, said=scenario_label(checked))
+    out.update(scenario=checked, said=scenario_label(checked))
+    out["errors"] += errors
     changed = any(checked[k] for k in ("dp_pct", "dt_c", "demand_cms")) or bool(checked["dpet_pct"])
     out["matched"] = changed and not out["unknown"]
     return out
@@ -328,10 +338,14 @@ _SMALL = ("zero one two three four five six seven eight nine ten eleven twelve t
 _TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
          "ninety": 90}
 _SHARES = {"tenth": 0.1, "fifth": 0.2, "quarter": 0.25, "third": 1 / 3, "half": 0.5}
+# The plural of each share, as the ratio its count makes: "two thirds" is 2/3, "three quarters" 3/4 (#691).
+_PLURAL_SHARES = {"halves": 2, "thirds": 3, "quarters": 4, "fifths": 5, "tenths": 10}
 _WORD_RE = (r"(?:(?:a|one)\s+hundred|hundred|(?:" + "|".join(_TENS) + r")(?:[\s-](?:" + "|".join(_SMALL[1:10])
             + r"))?|" + "|".join(sorted(_SMALL, key=len, reverse=True)) + r")(?:\s+and\s+a\s+half)?")
 _TOKEN = re.compile(
-    r"(?P<digits>(?<![\w.])\d+(?:,\d{3})*(?:\.\d+)?(?![\d]))"
+    r"(?P<plural>\b(?:" + _WORD_RE + r"|\d+)\s+(?:" + "|".join(sorted(_PLURAL_SHARES, key=len, reverse=True))
+    + r")\b)"
+    r"|(?P<digits>(?<![\w.])\d+(?:,\d{3})*(?:\.\d+)?(?![\d]))"
     r"|(?P<share>\b(?:a|one)\s+(?:tenth|fifth|quarter|third)\b|\b(?:a\s+)?half\b)"
     r"|(?P<word>\b" + _WORD_RE + r"\b)")
 
@@ -361,6 +375,12 @@ def _token_value(token: str) -> tuple[float, bool] | None:
     share = re.fullmatch(r"(?:(?:a|one) )?(tenth|fifth|quarter|third|half)", t)
     if share:
         return _SHARES[share.group(1)], True
+    # The plural fraction is one token: a count over its denominator ("two thirds" is 2/3, "three quarters" 3/4).
+    plural = re.fullmatch(r"(.+?)\s+(halves|tenths|fifths|quarters|thirds)", t)
+    if plural and plural.group(2) in _PLURAL_SHARES:
+        count = float(plural.group(1)) if re.fullmatch(r"\d+", plural.group(1)) else _word_value(plural.group(1))
+        if count is not None:
+            return count / _PLURAL_SHARES[plural.group(2)], True
     v = _word_value(t)
     return (v, False) if v is not None else None
 
@@ -408,9 +428,13 @@ def scenario_schema(text: str = "") -> dict[str, Any]:
     from aquascope.map_pick import choice
 
     # Offer a digit alias only if the matcher can read it back as the same value. _g is for display and
-    # can lose precision (a third becomes 0.333); conversion must use the original token's value.
+    # can lose precision (a third becomes 0.333); conversion must use the original token's value. The token
+    # itself must round-trip too, so every number the schema offers is one code reads back (#691).
     tokens = []
     for t in number_tokens(text):
+        parsed = _token_value(t["token"])
+        if parsed is None or not math.isclose(parsed[0], t["value"], rel_tol=1e-9):
+            continue
         tokens.append(t["token"])
         if not t["share"]:
             alias = _g(t["value"])

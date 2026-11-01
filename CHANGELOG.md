@@ -15,6 +15,7 @@ All notable changes to AquaScope are documented here.
 
 ### Fixed
 - **What-if fractional quantities** (#646): the model and keyless readings of “half a cubic metre per second”, “a half litre per second” and “half a degree warmer” keep the stated unit instead of treating the quantity as a proportion.
+- **What-if plural fractions** (#691): the model and keyless readings of “two thirds less rain”, “three quarters less rain” and “two thirds l/s” read the plural fraction as the ratio it is (2/3, 3/4) instead of its count, keeping the stated unit, so two thirds of a litre per second is 0.000667 m³/s. The schema offers each number only when it can be read back, and a named parameter whose number cannot be read now says so instead of leaving the page with no error.
 - **GR4J at large gauges** (#273): the station model asks before using point forcing above 10,000 km², and describes the forcing download separately from the fit.
 
 - **HydroGym refusal reviews:** bind decisions to the saved reconnaissance, score blank refusal reasons as invalid,

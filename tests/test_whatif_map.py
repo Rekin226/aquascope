@@ -450,3 +450,60 @@ def test_a_season_the_words_name_is_said_not_widened():
     # Words that only look like a season are not one: "rain may fall", "rain falls by a fifth".
     assert wm.season_words("rain may fall 20%, and it falls by a fifth") == []
     assert wm.season_words("in May rain falls 10%, less in the fall") == ["in May", "in the fall"]
+
+
+# ── a plural fraction is a ratio, not its count (#691) ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("line, token, unit, value", [
+    ("what if two thirds less rain", "two thirds", "fraction", 2 / 3),
+    ("three quarters less rain", "three quarters", "fraction", 3 / 4),
+    ("take two thirds l/s for irrigation", "two thirds", "l/s", 2 / 3),
+    ("take three quarters of a litre per second", "three quarters", "l/s", 3 / 4),
+])
+def test_a_plural_fraction_is_one_token_not_its_count(line, token, unit, value):
+    toks = wm.number_tokens(line)
+    assert [(t["token"], t["unit"]) for t in toks] == [(token, unit)], toks
+    assert toks[0]["value"] == pytest.approx(value)
+    # The schema offers the ratio in one piece and never the count alone, and each candidate round-trips.
+    numbers = wm.scenario_schema(line)["properties"]["clauses"]["items"]["properties"]["number"]["enum"]
+    assert token in numbers and "two" not in numbers and "three" not in numbers, numbers
+    for number in numbers:
+        if number == "none":
+            continue
+        parsed = wm._token_value(number)
+        assert parsed is not None and parsed[0] == pytest.approx(value)
+
+
+@pytest.mark.parametrize("line, change, token, unit, key, value, tol", [
+    ("what if two thirds less rain", "less_rain", "two thirds", "fraction", "dp_pct", -200 / 3, 1e-3),
+    ("three quarters less rain", "less_rain", "three quarters", "fraction", "dp_pct", -75.0, 1e-3),
+    ("take two thirds l/s for irrigation", "take_water", "two thirds", "l/s", "demand_cms", 2 / 3000, 1e-6),
+    ("what if the factory takes three quarters of a litre per second", "take_water", "three quarters", "l/s",
+     "demand_cms", 3 / 4000, 1e-6),
+])
+def test_a_plural_fraction_is_read_as_its_ratio(line, change, token, unit, key, value, tol):
+    out = wm.parse_scenario_reply(_reply((change, token, unit)), line)
+    assert not out["errors"], out
+    assert out["scenario"][key] == pytest.approx(value, abs=tol)
+    # The ratio is one number, not a proportion and a count: the page says "66.7% less rain", not "2".
+    assert out["read"] == [f"{token} {unit}" if unit not in ("fraction", "none") else token]
+
+
+@pytest.mark.parametrize("line, key, value, tol", [
+    ("what if two thirds less rain", "dp_pct", -200 / 3, 1e-3),
+    ("three quarters less rain", "dp_pct", -75.0, 1e-3),
+    ("take two thirds l/s for irrigation", "demand_cms", 2 / 3000, 1e-6),
+    ("take three quarters of a litre per second", "demand_cms", 3 / 4000, 1e-6),
+])
+def test_the_rules_read_a_plural_fraction_whole(line, key, value, tol):
+    out = wm.parse_scenario(line)
+    assert out["matched"] and out["unknown"] == [], out
+    assert out["scenario"][key] == pytest.approx(value, abs=tol)
+
+
+def test_a_parameter_with_no_readable_number_says_so():
+    # Before #691 the keyless reading answered matched False with errors []: the page had nothing to show.
+    out = wm.parse_scenario("rain less by a bit")
+    assert not out["matched"] and out["scenario"] is None
+    assert out["errors"] == ["rain less by a bit: the words give no number I can read"]

@@ -147,8 +147,8 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://www.dws.gov.za/Hydrology/",
         variables=("discharge", "water_level"),
         output_model="StreamflowReading | WaterLevelReading",
-        license="unknown", redistributable=False,
-        attribution="South African Department of Water and Sanitation (reuse terms not yet verified)",
+        license="DWS NIWIS terms (academic, research or personal use)", redistributable=False,
+        attribution="Department of Water and Sanitation, Republic of South Africa (copyright proprietor)",
     ),
     "colorado_cdss": _s(
         key="colorado_cdss",
@@ -451,9 +451,9 @@ SOURCES: dict[str, SourceMeta] = {
         attribution="Open-Meteo.com (CC BY 4.0); ERA5 and GloFAS via Copernicus",
     ),
     "copernicus": _s(
-        key="copernicus", label="Copernicus CDS", region="Global",
-        description="ERA5 / GloFAS climate reanalysis (requires free CDS key)",
-        requires_api_key=True, api_key_signup_url="https://cds.climate.copernicus.eu/how-to-api",
+        key="copernicus", label="Copernicus EWDS", region="Global",
+        description="GloFAS river discharge from the Early Warning Data Store (requires free EWDS key)",
+        requires_api_key=True, api_key_signup_url="https://ewds.climate.copernicus.eu/how-to-api",
         agency="ECMWF / Copernicus Emergency Management Service (CEMS)", country="GLOBAL",
         homepage="https://ewds.climate.copernicus.eu/",
         variables=("climate", "discharge"),

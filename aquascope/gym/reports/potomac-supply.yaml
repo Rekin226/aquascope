@@ -54,11 +54,14 @@ must_say:
     grade: established
     label: the Q95 statistic carries its grade
 must_not_say:
+  # Phrase assertions are case-insensitive plain substrings over the whole report, so a bare word such as
+  # "decreasing" or "guaranteed" also fires inside a faithful sentence ("flow is decreasing toward its
+  # seasonal low", "not a guaranteed supply"). Each set therefore names the claim, not the word (#695).
   - kind: phrase
-    any: ["declining", "decreasing", "increasing", "downward", "upward"]
+    any: ["declining trend", "decreasing trend", "increasing trend", "rising trend", "downward trend", "upward trend"]
     label: no trend direction on a p = 0.5753 Mann-Kendall result
   - kind: phrase
-    any: ["is reliable", "reliably met", "guaranteed"]
+    any: ["supply is reliable", "is reliably met", "supply is guaranteed"]
     label: no claim that the run-of-river supply is reliable
 decision:
   value: 50.1

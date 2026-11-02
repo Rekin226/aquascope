@@ -2,9 +2,32 @@
  "id": "cambridge-groundwater",
  "question": "Which UK boreholes near Cambridge have the longest groundwater records?",
  "shows": "Searching the catalog by place and variable rather than by name.",
- "answer": "**UK boreholes (ground‑water‑level gauges) closest to Cambridge with the longest continuous records**\n\n| Borehole (station name) | Station ID (UK‑EA) | Record length (years) | Distance from Cambridge centre (km) |\n|--------------------------|-------------------|-----------------------|--------------------------------------|\n| Horningsea Road | 56104429‑a23b‑42d2‑9fc2‑ed1aa6c15ba6 | **49.5 yr** (from 07 Apr 1977) | 5.7 km |\n| Haggis Farm | b3272d5b‑f4fd‑48eb‑8bc7‑67c102d65943 | **49.0 yr** (from 29 Sep 1977) | 3.8 km |\n| Unwins Farm | e0878c24‑d93f‑47be‑9bbf‑8e6d7b318f84 | **49.4 yr** (from 21 Apr 1977) | 6.4 km |\n| New Farm, Landbeach | 5cff5cc6‑4110‑4602‑895f‑ebbf0eee91ba | **49.0 yr** (from 30 Sep 1977) | 8.4 km |\n| School Road | ca379592‑00be‑4043‑9e35‑b3c63177f120 | **49.4 yr** (from 21 Apr 1977) | 9.4 km |\n| Stapleford (ground‑water) | 996023f9‑5a1d‑42c6‑8ba4‑6889e0ed6de6 | **46.7 yr** (from 07 Jan 1980) | 6.3 km |\n| Westlands | dae44533‑b902‑44f5‑8792‑25492acb9f37 | **43.4 yr** (from 21 Apr 1983) | 7.6 km |\n\n*Why these are the longest:* The **assess_site** query (Cambridge ≈ 52.2053 N, 0.1218 E, 50 km radius) returned 34 gauges. Among those measuring *groundwater_level*, the six stations above have the greatest “years” values (≈ 49 yr), far exceeding the next‑longest (≈ 46 yr).  \n\n*Defensibility:* The sufficiency table marks **groundwater‑trend** and **recharge‑by‑water‑table‑fluctuation** as *defensible* for the longest‑record borehole (Haggis Farm) because the record length supports robust statistical analysis.\n\nAll figures (record length, distance) come directly from the catalog response; no values have been inferred or invented.",
- "markdown": "# Which UK boreholes near Cambridge have the longest groundwater records?\n\n**UK boreholes (ground‑water‑level gauges) closest to Cambridge with the longest continuous records**\n\n| Borehole (station name) | Station ID (UK‑EA) | Record length (years) | Distance from Cambridge centre (km) |\n|--------------------------|-------------------|-----------------------|--------------------------------------|\n| Horningsea Road | 56104429‑a23b‑42d2‑9fc2‑ed1aa6c15ba6 | **49.5 yr** (from 07 Apr 1977) | 5.7 km |\n| Haggis Farm | b3272d5b‑f4fd‑48eb‑8bc7‑67c102d65943 | **49.0 yr** (from 29 Sep 1977) | 3.8 km |\n| Unwins Farm | e0878c24‑d93f‑47be‑9bbf‑8e6d7b318f84 | **49.4 yr** (from 21 Apr 1977) | 6.4 km |\n| New Farm, Landbeach | 5cff5cc6‑4110‑4602‑895f‑ebbf0eee91ba | **49.0 yr** (from 30 Sep 1977) | 8.4 km |\n| School Road | ca379592‑00be‑4043‑9e35‑b3c63177f120 | **49.4 yr** (from 21 Apr 1977) | 9.4 km |\n| Stapleford (ground‑water) | 996023f9‑5a1d‑42c6‑8ba4‑6889e0ed6de6 | **46.7 yr** (from 07 Jan 1980) | 6.3 km |\n| Westlands | dae44533‑b902‑44f5‑8792‑25492acb9f37 | **43.4 yr** (from 21 Apr 1983) | 7.6 km |\n\n*Why these are the longest:* The **assess_site** query (Cambridge ≈ 52.2053 N, 0.1218 E, 50 km radius) returned 34 gauges. Among those measuring *groundwater_level*, the six stations above have the greatest “years” values (≈ 49 yr), far exceeding the next‑longest (≈ 46 yr).  \n\n*Defensibility:* The sufficiency table marks **groundwater‑trend** and **recharge‑by‑water‑table‑fluctuation** as *defensible* for the longest‑record borehole (Haggis Farm) because the record length supports robust statistical analysis.\n\nAll figures (record length, distance) come directly from the catalog response; no values have been inferred or invented.\n\n---\nProduced by aquascope 0.18.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-09-21 10:58 UTC. Tools called: assess_site. Numbers come from the tool results; the model wrote the prose.",
+ "answer": "I ran out of tool-call steps before finishing. Here is what the tools returned so far; ask a narrower question or raise --max-steps.",
+ "markdown": "# Which UK boreholes near Cambridge have the longest groundwater records?\n\nI ran out of tool-call steps before finishing. Here is what the tools returned so far; ask a narrower question or raise --max-steps.\n\n## What this answer does not establish\n\n- The answer does not say which station or record the numbers come from.\n\n---\nProduced by aquascope 0.27.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-10-26 11:30 UTC. Tools called: assess_site, find_stations, assess_site, find_stations, assess_site, run_python, find_stations, run_python. Numbers come from the tool results; the model wrote the prose.",
  "tool_calls": [
+  {
+   "name": "assess_site",
+   "arguments": {
+    "lat": 52.2053,
+    "lon": 0.1218,
+    "problem": "groundwater_decline"
+   },
+   "ok": true,
+   "summary": "{\"point\": {\"lat\": 52.2053, \"lon\": 0.1218}, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"b3272d5b-f4fd-48eb-8bc7-67c102d65943\", \"name\": \"Haggis Farm\", \"distan"
+  },
+  {
+   "name": "find_stations",
+   "arguments": {
+    "limit": 20,
+    "near": [
+     52.2053,
+     0.1218
+    ],
+    "variable": "groundwater_level"
+   },
+   "ok": true,
+   "summary": "{\"n_catalog\": 75878, \"n_returned\": 20, \"limit\": 20, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"b3272d5b-f4fd-48eb-8bc7-67c102d65943\", \"site_id\": \"b3272d5b-"
+  },
   {
    "name": "assess_site",
    "arguments": {
@@ -15,6 +38,59 @@
    },
    "ok": true,
    "summary": "{\"point\": {\"lat\": 52.2053, \"lon\": 0.1218}, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"b3272d5b-f4fd-48eb-8bc7-67c102d65943\", \"name\": \"Haggis Farm\", \"distan"
+  },
+  {
+   "name": "find_stations",
+   "arguments": {
+    "limit": 100,
+    "near": [
+     52.2053,
+     0.1218
+    ],
+    "variable": "groundwater_level"
+   },
+   "ok": true,
+   "summary": "{\"n_catalog\": 75878, \"n_returned\": 100, \"limit\": 100, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"b3272d5b-f4fd-48eb-8bc7-67c102d65943\", \"site_id\": \"b3272d5"
+  },
+  {
+   "name": "assess_site",
+   "arguments": {
+    "lat": 52.2053,
+    "lon": 0.1218,
+    "problem": "groundwater_decline",
+    "radius_km": 30
+   },
+   "ok": true,
+   "summary": "{\"point\": {\"lat\": 52.2053, \"lon\": 0.1218}, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"b3272d5b-f4fd-48eb-8bc7-67c102d65943\", \"name\": \"Haggis Farm\", \"distan"
+  },
+  {
+   "name": "run_python",
+   "arguments": {
+    "code": "import pandas as pd, json, math, sys, itertools, textwrap, json\n# The previous find_stations output is in variable 'df'? Actually we don't have it. We'll call find_stations again with larger limit and retrieve full data.\n"
+   },
+   "ok": false,
+   "summary": "{\"ok\": false, \"error\": \"import of 'sys' is not allowed here (allowed: aquascope, collections, dataclasses, datetime, functools, itertools, json, math, np, numpy"
+  },
+  {
+   "name": "find_stations",
+   "arguments": {
+    "limit": 200,
+    "near": [
+     52.2053,
+     0.1218
+    ],
+    "variable": "groundwater_level"
+   },
+   "ok": true,
+   "summary": "{\"n_catalog\": 75878, \"n_returned\": 200, \"limit\": 200, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"b3272d5b-f4fd-48eb-8bc7-67c102d65943\", \"site_id\": \"b3272d5"
+  },
+  {
+   "name": "run_python",
+   "arguments": {
+    "code": "import json, datetime, math\n# The previous find_stations output is not directly available as a variable. We'll request it again with a smaller limit for manageability.\n"
+   },
+   "ok": true,
+   "summary": "{\"ok\": true, \"seconds\": 0.0}"
   }
  ],
  "data_used": [],
@@ -37,15 +113,15 @@
   },
   {
    "name": "record_is_named",
-   "passed": true,
-   "detail": ""
+   "passed": false,
+   "detail": "The answer does not say which station or record the numbers come from."
   }
  ],
- "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"Which UK boreholes near Cambridge have the longest groundwater records?\"\nquestion: \"Which UK boreholes near Cambridge have the longest groundwater records?\"\ncreated: \"2026-09-21T10:58:13+00:00\"\naquascope_version: \"0.18.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"assess_site\"\n    arguments:\n      lat: 52.2053\n      lon: 0.1218\n      problem: \"groundwater_decline\"\n      radius_km: 50\n",
- "steps": 2,
+ "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"Which UK boreholes near Cambridge have the longest groundwater records?\"\nquestion: \"Which UK boreholes near Cambridge have the longest groundwater records?\"\ncreated: \"2026-10-26T11:30:03+00:00\"\naquascope_version: \"0.27.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"assess_site\"\n    arguments:\n      lat: 52.2053\n      lon: 0.1218\n      problem: \"groundwater_decline\"\n  - tool: \"find_stations\"\n    arguments:\n      limit: 20\n      near: [52.2053, 0.1218]\n      variable: \"groundwater_level\"\n  - tool: \"assess_site\"\n    arguments:\n      lat: 52.2053\n      lon: 0.1218\n      problem: \"groundwater_decline\"\n      radius_km: 50\n  - tool: \"find_stations\"\n    arguments:\n      limit: 100\n      near: [52.2053, 0.1218]\n      variable: \"groundwater_level\"\n  - tool: \"assess_site\"\n    arguments:\n      lat: 52.2053\n      lon: 0.1218\n      problem: \"groundwater_decline\"\n      radius_km: 30\n  - tool: \"find_stations\"\n    arguments:\n      limit: 200\n      near: [52.2053, 0.1218]\n      variable: \"groundwater_level\"\n  - tool: \"run_python\"\n    arguments:\n      code: \"import json, datetime, math\\n# The previous find_stations output is not directly available as a variable. We'll request it again with a smaller limit for manageability.\\n\"\n",
+ "steps": 8,
  "model": "openai/gpt-oss-120b",
  "provider": "groq",
- "recorded": "2026-09-21T10:58:13+00:00",
- "aquascope_version": "0.18.0",
+ "recorded": "2026-10-26T11:30:03+00:00",
+ "aquascope_version": "0.27.0",
  "error": null
 }

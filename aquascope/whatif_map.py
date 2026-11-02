@@ -144,18 +144,6 @@ def scenario_label(sc: dict[str, Any]) -> str:
     return ", ".join(bits) or "no change"
 
 
-_FRACTIONS: dict[str, float] = {
-    "a tenth": 10.0, "one tenth": 10.0, "three tenths": 30.0, "seven tenths": 70.0, "nine tenths": 90.0,
-    "an eighth": 12.5, "one eighth": 12.5, "three eighths": 37.5, "five eighths": 62.5, "seven eighths": 87.5,
-    "a sixth": 100.0 / 6, "one sixth": 100.0 / 6, "five sixths": 500.0 / 6,
-    "a fifth": 20.0, "one fifth": 20.0, "two fifths": 40.0, "three fifths": 60.0, "four fifths": 80.0,
-    "a quarter": 25.0, "one quarter": 25.0, "two quarters": 50.0, "three quarters": 75.0,
-    "a third": 100.0 / 3, "one third": 100.0 / 3, "two thirds": 200.0 / 3,
-    "half": 50.0, "a half": 50.0, "one half": 50.0,
-}
-for _k, _v in list(_FRACTIONS.items()):
-    if " " in _k:
-        _FRACTIONS[_k.replace(" ", "-")] = _v
 _NEG = r"\b(?:less|fewer|lower|drier|dryer|down|minus|decrease[sd]?|reduc(?:e|ed|tion)|cut|drop|falls?|cooler|colder|" \
        r"cooling)\b"
 _POS = r"\b(?:more|higher|wetter|up|plus|increase[sd]?|rise[sn]?|warmer|hotter|warming|heating)\b"
@@ -175,7 +163,7 @@ _FILLER = frozenset("""what if a an the of in on by with and than to for at this
 
 
 # Numbers in words, two to twenty and the tens: "three degrees" is 3 degrees. "One" counts only before a unit
-# ("one degree"): elsewhere it is mostly a pronoun ("a hotter one"), and "one fifth" is read by _FRACTIONS.
+# ("one degree"): elsewhere it is mostly a pronoun ("a hotter one"), and "one fifth" is read as a share.
 _WORD_NUMBERS = {w: i for i, w in enumerate(
     "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
     "seventeen eighteen nineteen twenty".split()) if w != "one"}
@@ -185,7 +173,7 @@ _WORD_NUMBERS.update({"thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seve
 _WORD_NUMBER = re.compile(
     r"\b(?:" + "|".join(sorted(map(re.escape, (w for w in _WORD_NUMBERS if w != "one")), key=len, reverse=True))
     + r"|one(?=\s*(?:degrees?\b|°|%|m3/s|l/s)))\b"
-    r"(?!\s+(?:tenths?|eighths?|sixths?|fifths?|quarters?|thirds?|halves)\b)"
+    r"(?![\s-]+(?:tenths?|eighths?|sixths?|fifths?|quarters?|thirds?|halves)\b)"
 )
 # Litres (or liters) per second, however written, is l/s; cubic metres per second is m3/s.
 _PER_SECOND = re.compile(r"\b(?:litres?|liters?|l)\s*(?:per|a|/)\s*(?:second|sec|s)\b|\blps\b")
@@ -232,28 +220,21 @@ def _clause(raw: str) -> tuple[str | None, float | None, str]:
         return None, None, raw
     value = None
     converted = False
-    for words, v in _FRACTIONS.items():
-        if re.search(rf"\b{words}\b", raw):
-            value = v
-            words_space = words.replace("-", " ")
-            token = next(
-                (t for t in number_tokens(raw) if t["token"] in (words, words_space, f"a {words}", f"a {words_space}")),
-                None,
-            )
-            if token and not token["share"] and token["unit"] in UNITS:
-                dimension, factor = UNITS[token["unit"]]
-                if dimension == _UNIT_OF_KEY[kind]:
-                    value = token["value"] * factor
-                    converted = True
-            break
+    tokens = number_tokens(raw)
+    tok = tokens[0] if tokens else None
+    if tok and (tok["share"] or (tok["unit"] in UNITS and UNITS[tok["unit"]][0] == _UNIT_OF_KEY.get(kind))):
+        unit = tok["unit"]
+        dimension, factor = UNITS[unit]
+        value = tok["value"] * factor
+        converted = True
     sign_given = False
-    if value is None:
-        m = _NUMBER.search(raw)
-        if m:
+    m = _NUMBER.search(raw)
+    if m:
+        if value is None:
             value = float(m.group("n"))
-            if m.group("sign"):
-                sign_given = True
-                value = -value if m.group("sign") == "-" else value
+        if m.group("sign"):
+            sign_given = True
+            value = -value if m.group("sign") == "-" else value
     if value is None:
         return kind, None, raw
     if kind == "demand_cms" and not converted and re.search(r"\bl/s\b", raw):
@@ -263,11 +244,13 @@ def _clause(raw: str) -> tuple[str | None, float | None, str]:
             value = -abs(value)
         elif not re.search(_POS, raw) and kind != "dt_c":
             return kind, None, raw   # "20% rain": more or less?
-    left = re.sub(r"[+-]?\d+(?:\.\d+)?|%|°c?|m3/s|l/s|" + _NEG + "|" + _POS, " ", raw)
+    left = raw
+    if tok:
+        left = left.replace(tok["token"], " ").replace(tok["token"].replace("-", " "), " ")
+    left = re.sub(_SHARE_RE, " ", left)
+    left = re.sub(r"[+-]?\d+(?:\.\d+)?|%|°c?|m3/s|l/s|" + _NEG + "|" + _POS, " ", left)
     for _k, pattern in _KINDS:
         left = re.sub(pattern, " ", left)
-    for words in sorted(_FRACTIONS, key=len, reverse=True):
-        left = left.replace(words, " ")
     unknown = [w for w in re.findall(r"[a-z]+", left) if w not in _FILLER]
     return kind, value, " ".join(unknown)
 

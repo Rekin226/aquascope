@@ -496,3 +496,19 @@ def test_compound_fractional_shares_and_quantities():
     model_s = wm.parse_scenario_reply(_reply(("less_rain", "three quarters", "fraction")), "three quarters less rain")
     assert not model_s["errors"]
     assert model_s["scenario"]["dp_pct"] == pytest.approx(-75.0)
+
+
+def test_keyless_fractional_hyphen_and_digit_forms():
+    """Hyphenated words and digit numerators ('2 thirds', '2-thirds') parse keyless to fractional shares."""
+    for text, expected in [
+        ("two-thirds less rain", -200.0 / 3),
+        ("2 thirds less rain", -200.0 / 3),
+        ("2-thirds less rain", -200.0 / 3),
+        ("two tenths less rain", -20.0),
+        ("four sixths less rain", -400.0 / 6),
+        ("two eighths less rain", -25.0),
+    ]:
+        res = wm.parse_scenario(text)
+        assert res["matched"], f"{text}: not matched ({res})"
+        assert res["scenario"]["dp_pct"] == pytest.approx(expected, abs=1e-3)
+        assert not res["unknown"], f"{text}: unknown tokens {res['unknown']}"

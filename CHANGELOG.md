@@ -11,6 +11,7 @@ All notable changes to AquaScope are documented here.
 - **Archive health reports identify partial BOM station catalogs and large station-count drops** (#289). Partial requests appear as non-fatal warnings; count comparisons require an unrestricted run and a previous catalog explicitly marked complete.
 
 ### Changed
+- **Explorer live smoke diagnostics** (#702): retain catalog boot errors, browser console errors, trace entries and failed HTTP requests when a case fails, to help identify where a cold load stopped.
 - **`south_africa_dws` license and attribution** (#473): update license to `DWS NIWIS terms (academic, research or personal use)` and attribution to name the Department of Water and Sanitation, Republic of South Africa as copyright proprietor following the disclaimer on [dws.gov.za/niwis2/Disclaimer](https://www.dws.gov.za/niwis2/Disclaimer) (archived at [web.archive.org](http://web.archive.org/web/20250528170949/https://www.dws.gov.za/niwis2/Disclaimer)).
 
 ### Fixed

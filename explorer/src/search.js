@@ -141,9 +141,11 @@ export function initSearch() {
   const choosePlace = (p) => {
     close();
     input.value = "";
-    // A river lands on the River tab with the panel open; a town on the map with its card (#548).
+    // A river lands on the River tab with the panel open; a town on the map with its card (#548). The label
+    // says which of them it is (#637): the River card's title takes `river` only, never a lake's or a town's name.
     actions.selectPoint(p.lat, p.lon, { fly: true, tab: p.river ? "river" : null,
-      label: { name: p.name, detail: p.detail, water: p.water, from: "search" } });
+      label: { name: p.name, detail: p.detail, water: p.water, from: "search",
+        river: p.river ? { name: p.name, detail: p.detail, water: true, river: true } : null } });
   };
 
   const chooseGauge = (r) => {

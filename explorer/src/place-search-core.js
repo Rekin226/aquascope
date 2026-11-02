@@ -118,13 +118,14 @@ export function rankPlaces(features, query, limit = 5) {
   return [...best.values()].sort((a, b) => b.score - a.score || b.span - a.span).slice(0, Math.max(0, limit));
 }
 
+// A name a reader can use: not one with a digit (a postcode, a road number), as place_name does in the package.
+const clean = (v) => (v && !/\d/.test(String(v)) ? String(v) : "");
+
 /**
  * A name for a point that came without one (a link, a click): the nearest named water Photon knows within
  * the reverse radius, else the nearest place. `{ name, detail, water }`, or null when there is neither.
- * Names with a digit (a postcode, a road number) are left out, as place_name does in the package.
  */
 export function pointLabel(waterFeatures, anyFeatures) {
-  const clean = (v) => (v && !/\d/.test(String(v)) ? String(v) : "");
   const w = (waterFeatures || []).map((f) => (f && f.properties) || {}).find((p) => isWater(p) && clean(p.name));
   if (w) {
     const where = [clean(w.city) || clean(w.county), clean(w.state), clean(w.country)].filter(Boolean);
@@ -138,6 +139,23 @@ export function pointLabel(waterFeatures, anyFeatures) {
   return town
     ? { name: `Near ${town}`, detail: [...new Set(region)].join(", "), water: false }
     : { name: region[0], detail: region.slice(1).join(", "), water: false };
+}
+
+/**
+ * The river at a point (#637): the nearest named waterway in the same reverse answer that is a river, a canal
+ * or a stream, as `{ name, detail, water: true, river: true }`, or null. A lake, a pond or a fountain is not a
+ * river, so a River card or a routing panel's title falls back to its reach instead of taking that name.
+ */
+export function riverLabel(waterFeatures) {
+  const r = (waterFeatures || []).map((f) => (f && f.properties) || {}).find((p) => isRiver(p) && clean(p.name));
+  if (!r) return null;
+  const where = [clean(r.city) || clean(r.county), clean(r.state), clean(r.country)].filter(Boolean);
+  return { name: clean(r.name), detail: [...new Set(where)].join(", "), water: true, river: true };
+}
+
+/** The river's name in a point's label (#637): "" when the label is a lake, a fountain or a town. */
+export function riverName(label) {
+  return (label && label.river && label.river.name) || "";
 }
 
 /**

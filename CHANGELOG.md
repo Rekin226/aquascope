@@ -9,6 +9,9 @@ All notable changes to AquaScope are documented here.
 
 ### Added
 - **Archive health reports identify partial BOM station catalogs and large station-count drops** (#289). Partial requests appear as non-fatal warnings; count comparisons require an unrestricted run and a previous catalog explicitly marked complete.
+- **Report-quality reference for `potomac-supply`** (#441): the fourth HydroGym report reference, and the first
+  `supply_reliability` case. A faithful report of that recording states the screening verdict and its numbers, and
+  does not read a p = 0.5753 Mann-Kendall result as a trend direction.
 
 ### Changed
 - **`south_africa_dws` license and attribution** (#473): update license to `DWS NIWIS terms (academic, research or personal use)` and attribution to name the Department of Water and Sanitation, Republic of South Africa as copyright proprietor following the disclaimer on [dws.gov.za/niwis2/Disclaimer](https://www.dws.gov.za/niwis2/Disclaimer) (archived at [web.archive.org](http://web.archive.org/web/20250528170949/https://www.dws.gov.za/niwis2/Disclaimer)).

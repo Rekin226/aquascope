@@ -15,6 +15,7 @@ All notable changes to AquaScope are documented here.
 - **The Archive's counts follow the latest harvest** (#443): `README.md`, `docs/index.md`, `ROADMAP.md`, `docs/archive.md` and `explorer/SPACE_README.md` now state the 2026-10-26 harvest: **75,878 catalogued stations** and **5,788 with mirrored daily observations** (discharge 4,070, water level 1,088, precipitation 591, groundwater level 521) — instead of the 2026-10-19 figures. The dataset card is generated from `obs/manifest.json` (`_mirrored_station_count`) and picks both numbers up on the next harvest.
 
 ### Fixed
+- **A capped harvest no longer publishes** (#692): a manual `harvest.yml` run with `max_items` set is a smoke test, and its subset used to replace the live `stations.parquet` on the Hugging Face dataset (the `publish` input defaults to true and the publish step never looked at the cap; this is the 2026-09-16 run that left the Explorer showing 33 pins). It now skips publishing, says so in the job summary, and leaves scheduled runs unchanged.
 - **What-if fractional quantities** (#646): the model and keyless readings of “half a cubic metre per second”, “a half litre per second” and “half a degree warmer” keep the stated unit instead of treating the quantity as a proportion.
 - **GR4J at large gauges** (#273): the station model asks before using point forcing above 10,000 km², and describes the forcing download separately from the fit.
 

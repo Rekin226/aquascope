@@ -215,7 +215,7 @@ Written by `flood-warnings.yml`, daily, after the Floods ahead issue (`python -m
 
 | File | What |
 | --- | --- |
-| `scout/latest.json` | `made`, `date`, `method`, `inputs`, `findings`, `picks`, `counts`, `sources`: the world's findings, each of one kind (`status`, `floods_ahead`, `floods_past`, `gauges_today`, `models_disagree`), with its place, numbers, reason and source |
+| `scout/latest.json` | `made`, `date`, `method`, `inputs`, `usual`, `findings`, `picks`, `counts`, `sources`: the world's findings, each of one kind (`status`, `floods_ahead`, `floods_past`, `gauges_today`, `models_disagree`), with its place, numbers, reason and source; `usual` is `[[lat, lon, usual flow in m³/s], ...]` per basin, so a live scan in the browser (no pyarrow) can leave near-dry areas out |
 | `scout/<YYYY-MM-DD>.json` | the same, kept by date (the last 60 days, then the first of each month; see [retention](archive.md#retention-of-the-daily-files)) |
 
 Licence: each finding names its layer, under that layer's licence.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import pathlib
 import struct
 from datetime import date
 from pathlib import Path
@@ -606,3 +607,24 @@ def test_infer_site_ids_skips_nameless_stations():
     assert inferred[0].site_id == "USGS-092359167282201"
     assert inferred[1].site_id == "USGS-092359167282206"
     assert inferred[2].site_id == "USGS-092359167282209"
+
+
+def test_a_capped_harvest_never_publishes_the_catalogue():
+    """#692: a run with max_items is a smoke test and must not replace the live catalogue.
+
+    The publish step fired on `schedule || inputs.publish == true` alone, and `publish`
+    defaults to true for a manual run, so a 2026-09-16 smoke run replaced the ~62k-station
+    catalogue with its subset and the Explorer showed 33 pins. forecast-archive.yml has
+    guarded its publish against this since it was written; harvest.yml did not.
+    """
+    yaml = pytest.importorskip("yaml")
+    workflow = pathlib.Path(__file__).parents[2] / ".github" / "workflows" / "harvest.yml"
+    wf = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    steps = wf["jobs"]["harvest"]["steps"]
+    publish = next(s for s in steps if "publish_folder" in s.get("run", ""))
+    assert "inputs.max_items == ''" in publish["if"]
+    assert "(github.event_name == 'schedule' || inputs.publish == true)" in publish["if"]
+    # An empty cap is the full-catalogue run, so the scheduled path keeps publishing:
+    # on that path max_items is null, which Actions coerces to 0 like '' does.
+    notice = next(s for s in steps if "capped catalogue" in s.get("run", ""))
+    assert notice["if"] == "inputs.max_items != ''"

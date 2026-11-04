@@ -12,6 +12,7 @@ All notable changes to AquaScope are documented here.
 - **Report-quality reference for `potomac-supply`** (#441): the fourth HydroGym report reference, and the first
   `supply_reliability` case. A faithful report of that recording states the screening verdict and its numbers, and
   does not read a p = 0.5753 Mann-Kendall result as a trend direction.
+- **中文 quickstart** (#31): `docs/i18n/README.zh.md` translates the README's introduction, install steps, first two examples and CLI snippet, and the README's language line now links it. Code blocks, commands, paths, package names and outputs are unchanged.
 
 ### Changed
 - **`south_africa_dws` license and attribution** (#473): update license to `DWS NIWIS terms (academic, research or personal use)` and attribution to name the Department of Water and Sanitation, Republic of South Africa as copyright proprietor following the disclaimer on [dws.gov.za/niwis2/Disclaimer](https://www.dws.gov.za/niwis2/Disclaimer) (archived at [web.archive.org](http://web.archive.org/web/20250528170949/https://www.dws.gov.za/niwis2/Disclaimer)).

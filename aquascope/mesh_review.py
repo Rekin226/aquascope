@@ -25,8 +25,9 @@ facts, written here. The model picks, the code writes (#590, round 3): a model (
 on-device model) decides which findings to pin, in what order, and which of three fixed variants of each to
 show (:func:`review_variants`), as ids held to a JSON Schema of enums (:func:`review_schema`). It writes no word
 of a pin, so it cannot change a value, a count, a bound, a severity or a "not"; a problem is pinned even when it
-is left out, and the review's counts are always the rules' counts. A reply outside the enums is refused whole and
-the rules' wording stands (:func:`apply_words`). The older checks (:func:`negation_flip`, the claim lock of
+is left out, and a finding the modeller's own question names — "is the model stable?", "are there numerical
+instabilities?" — is pinned too (:func:`named_findings`); the review's counts are always the rules' counts. A
+reply outside the enums is refused whole and the rules' wording stands (:func:`apply_words`). The older checks (:func:`negation_flip`, the claim lock of
 :func:`aquascope.map_explain.claim_lock`) stay as a second line of defence; the tests hold every variant to
 them.
 
@@ -46,7 +47,8 @@ from aquascope.io.mesh import DRY_DEPTH, Mesh, MeshError
 
 __all__ = [
     "CHECKS", "SEVERITIES", "apply_words", "cells_at", "check_volume", "gather_context", "gather_floods",
-    "gauges_inside", "model_words", "review", "review_file", "review_prompt", "review_schema", "review_variants",
+    "gauges_inside", "model_words", "named_findings", "review", "review_file", "review_prompt", "review_schema",
+    "review_variants",
 ]
 
 #: The checks, in the order the review lists them, with the words a reader sees for each.
@@ -928,10 +930,34 @@ def review_schema(ids: list[str]) -> dict[str, Any]:
             "properties": {"id": choice(ids), "variant": choice(VARIANTS)}}}}}
 
 
-def review_prompt(findings: list[dict[str, Any]], context: str = "") -> dict[str, Any]:
+#: The words with which a modeller's question names a check: asking about them is asking about that check's
+#: findings, which the review pins whatever the model picked (:func:`named_findings`). The stability words name
+#: the wet and dry flicker: "is the model stable?" and "are there numerical instabilities in this run?" were the
+#: two questions of eight in which the model dropped the flicker findings (docs/assessments/ai-on-the-map.md).
+_NAMED_BY_QUESTION: dict[str, re.Pattern[str]] = {
+    "flicker": re.compile(r"\bflicker|\bwet[- ]and[- ]dry\b|\bwet[- ]dry\b|\bstable\b|\bstabilit|\binstabilit|"
+                          r"\bunstable\b|\boscillat|flip[- ]?flop", re.IGNORECASE),
+}
+
+
+def named_findings(findings: list[dict[str, Any]], question: str = "") -> list[str]:
+    """The ids of the findings a question explicitly asks about, in the review's order. A question about
+    stability or instabilities — "is the model stable?", "are there any numerical instabilities in this run?" —
+    asks about the wet and dry flicker (:data:`_NAMED_BY_QUESTION`); a question naming none of those words names
+    nothing, and no finding is added to the pins."""
+    words = (question or "").strip()
+    if not words:
+        return []
+    named = {check for check, pattern in _NAMED_BY_QUESTION.items() if pattern.search(words)}
+    return [f["id"] for f in findings if f.get("check") in named]
+
+
+def review_prompt(findings: list[dict[str, Any]], context: str = "", question: str = "") -> dict[str, Any]:
     """The system prompt, the user message and the reply schema for a model that picks which findings to pin,
     in what order, and a variant of each. It writes no word of a pin: every title, reason, value, count and
-    severity is the package's, and the review's counts are always the rules' counts."""
+    severity is the package's, and the review's counts are always the rules' counts. ``question`` is the
+    modeller's own words (Ask the map): it goes into the system prompt verbatim, and a finding it names is said
+    to be always pinned (:func:`named_findings`; :func:`apply_words` holds the reply to it)."""
     from aquascope.map_pick import VARIANTS
 
     lines = []
@@ -950,19 +976,26 @@ def review_prompt(findings: list[dict[str, Any]], context: str = "") -> dict[str
         "before information), and for each the variant that reads best. A problem is always pinned.",
         'Reply with ONE JSON object and nothing else: {"pins": [{"id": "r1", "variant": "a"}]}',
     ])
+    asks = (question or "").strip()
+    if asks:
+        system += f"\n\nThe modeller asks: {asks}"
+        named = named_findings(findings, asks)
+        if named:
+            system += f"\nThe findings that answer it are always pinned: {', '.join(named)}."
     if context:
         system += f"\n\nWhat the modeller is looking at: {context}"
     return {"system": system, "prompt": "Choose the pins.", "schema": review_schema([f["id"] for f in findings])}
 
 
-def apply_words(findings: list[dict[str, Any]], reply: Any, *, by: str = "model") -> dict[str, Any]:
+def apply_words(findings: list[dict[str, Any]], reply: Any, *, by: str = "model",
+                question: str = "") -> dict[str, Any]:
     """Hold a model's reply to :func:`review_schema` and apply it: ``{"findings", "refused", "ordered",
     "left_out"}``. A reply with any id or variant outside the schema's enums, or any other field, is refused
     whole (:func:`aquascope.map_pick.pick`): every finding is pinned in the rules' order and wording, and
     ``refused`` says why. A reply that fits pins the findings it picks, in its order, each in its variant
-    (``by`` marks them); a problem it left out is pinned after them all the same, and ``left_out`` lists the
-    other findings it did not pin. Values, places, severities, counts and the flagged cells are never the
-    model's."""
+    (``by`` marks them); a problem it left out is pinned after them all the same, and so is a finding the
+    modeller's ``question`` names (:func:`named_findings`), and ``left_out`` lists the other findings it did not
+    pin. Values, places, severities, counts and the flagged cells are never the model's."""
     from aquascope.map_pick import pick
 
     data, errors = pick(reply, review_schema([f["id"] for f in findings]))
@@ -975,22 +1008,25 @@ def apply_words(findings: list[dict[str, Any]], reply: Any, *, by: str = "model"
     for p in data["pins"]:
         picked.setdefault(p["id"], p["variant"])
     problems = [f["id"] for f in findings if f["severity"] == "problem" and f["id"] not in picked]
+    asked = [fid for fid in named_findings(findings, question) if fid not in picked and fid not in problems]
     out = []
-    for rank, fid in enumerate([*picked, *problems], 1):
+    for rank, fid in enumerate([*picked, *problems, *asked], 1):
         f = {**byid[fid], "rank": rank}
         if fid in picked:
             f["title"], f["reason"] = review_variants(f)[picked[fid]]
             f.update(variant=picked[fid], by=by)
         out.append(f)
-    left = [f["id"] for f in findings if f["id"] not in picked and f["id"] not in problems]
+    left = [f["id"] for f in findings
+            if f["id"] not in picked and f["id"] not in problems and f["id"] not in asked]
     return {"findings": out, "refused": [], "ordered": True, "left_out": left}
 
 
 def model_words(findings: list[dict[str, Any]], *, provider: str | None = None, model: str | None = None,
                 api_key: str | None = None, base_url: str | None = None, context: str = "",
-                client: Any = None) -> dict[str, Any]:
+                question: str = "", client: Any = None) -> dict[str, Any]:
     """Ask the reader's own model (their key, the provider registry) to pick, order and choose a variant of the
-    findings, and hold its reply to the schema (:func:`apply_words`). No key of ours is ever used."""
+    findings, and hold its reply to the schema (:func:`apply_words`). ``question`` is the modeller's own words,
+    as in :func:`review_prompt`. No key of ours is ever used."""
     from aquascope.ai_engine.analyst import resolve_llm
     from aquascope.ai_engine.llm_transport import make_client
 
@@ -998,12 +1034,12 @@ def model_words(findings: list[dict[str, Any]], *, provider: str | None = None, 
         cfg = resolve_llm(provider, model, api_key, base_url)
         client = make_client(cfg["api_key"], cfg["base_url"], provider=cfg["provider"])
         model, provider = cfg["model"], cfg["provider"]
-    p = review_prompt(findings, context)
+    p = review_prompt(findings, context, question)
     resp = client.chat.completions.create(
         model=model, temperature=0, max_tokens=600,
         messages=[{"role": "system", "content": p["system"]}, {"role": "user", "content": p["prompt"]}],
     )
-    res = apply_words(findings, resp.choices[0].message.content or "", by="key")
+    res = apply_words(findings, resp.choices[0].message.content or "", by="key", question=question)
     res["model"] = f"{model} via {provider}" if provider else str(model)
     return res
 

@@ -12,6 +12,11 @@ All notable changes to AquaScope are documented here.
 - **Report-quality reference for `potomac-supply`** (#441): the fourth HydroGym report reference, and the first
   `supply_reliability` case. A faithful report of that recording states the screening verdict and its numbers, and
   does not read a p = 0.5753 Mann-Kendall result as a trend direction.
+- **Report-quality reference for `nairobi-drought`** (#441): the fifth HydroGym report reference, and the first
+  `drought_status` case. A faithful report of that recording states the short-term SPEI-3 screening result
+  (-1.404 in a 39.9-year ERA5 record, SPI-3 -0.390, all 6- and 12-month indices near normal) and does not read
+  the SPEI/SPI divergence as a rainfall deficit, the reanalysis as a gauge measurement, a non-significant GloFAS
+  trend as a decline, or moderately dry as a severe drought.
 
 ### Changed
 - **`south_africa_dws` license and attribution** (#473): update license to `DWS NIWIS terms (academic, research or personal use)` and attribution to name the Department of Water and Sanitation, Republic of South Africa as copyright proprietor following the disclaimer on [dws.gov.za/niwis2/Disclaimer](https://www.dws.gov.za/niwis2/Disclaimer) (archived at [web.archive.org](http://web.archive.org/web/20250528170949/https://www.dws.gov.za/niwis2/Disclaimer)).

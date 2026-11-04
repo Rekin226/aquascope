@@ -503,7 +503,7 @@ def _layers_named(text: str) -> list[str]:
 #: Words of a request that are never part of a place's name.
 _NOT_PLACE = frozenset("""find gauges gauge stations station compared compare comparing right now zoom today month year
 week doing any numerical run model results result tell plain words showing me interesting driest wettest highest
-lowest turn take fly go show trace light highlight play set switch open move pan head""".split())
+lowest turn take fly go show trace light highlight play set switch open move pan head modflow""".split())
 
 
 def _places_named(text: str) -> list[str]:
@@ -531,17 +531,43 @@ def _places_named(text: str) -> list[str]:
                     out.append(phrase)
         if out:
             break
+        if named and any(i and w[:1].isupper() for i, w in enumerate(words)):
+            # The request names something capitalised that is not a place (e.g. MODFLOW): do not fall back to
+            # every run of words, which would offer sentence fragments as places (#646).
+            break
     region = _region_in(_fold(text))
     if region and REGIONS[region]["label"] not in out:
         out.append(REGIONS[region]["label"])
     return out[:40]
 
 
+_TIME_CUES = re.compile(
+    r"\b(?:19|20)\d{2}\b|\b\d{4}-\d{2}-\d{2}\b|"
+    r"\b(?:january|february|march|april|june|july|august|september|october|november|december|"
+    r"jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b|"
+    r"\b(?:today|yesterday|tomorrow|tonight)\b|"
+    r"\b(?:last|next|this|past|coming|previous|following)\s+(?:\d+\s+)?"
+    r"(?:day|days|week|weeks|month|months|year|years|decade|decades|spring|summer|autumn|fall|winter)\b|"
+    r"\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|"
+    r"\b(?:play|playing|animate|animation|stop playing)\b"
+)
+
+
+def _asks_for_time(text: str) -> bool:
+    """Do the words name a date or a playback? A request that does not may not move the map date: ``set_time``
+    passed whenever a model offered it, even when the words asked for no date at all (#646)."""
+    return bool(_TIME_CUES.search(_fold(text)))
+
+
 def reply_schema(text: str) -> dict[str, Any]:
     """:func:`action_schema` for one request: the place a model may name is a run of the request's words, the
     layers it may switch are those the words ask for, and it writes no label, title or text (#590 round 3:
-    the model picks, the package writes)."""
-    return action_schema(places=_places_named(text), layers=_layers_named(text))
+    the model picks, the package writes). A date is offered only when the words ask for one (#646)."""
+    schema = action_schema(places=_places_named(text), layers=_layers_named(text))
+    if not _asks_for_time(text):
+        item = schema["properties"]["actions"]["items"]["properties"]
+        item["type"]["enum"] = [t for t in item["type"]["enum"] if t != "set_time"]
+    return schema
 
 
 def _is_iso(value: Any) -> bool:
@@ -1419,7 +1445,28 @@ _STATUS_STATE = (r"(?:much |far |very |extremely |unusually )?(?:above normal|be
                  r"in flood|in drought)")
 
 
+#: "compared with normal" compares a place with normal; it does not ask which rivers are normal (#646).
+_COMPARISON = re.compile(r"\b(?:compared|compare|compares|comparing)\s+(?:with|to|against)\s+(?:the\s+)?"
+                         r"(?:normal|average)\b|\b(?:than|against|relative to)\s+(?:the\s+)?(?:normal|average)\b")
+
+
+def _status_filter_asked(text: str) -> bool:
+    """Do the words ask to keep only some status classes ("which rivers are normal")? A comparison does not."""
+    t = _COMPARISON.sub(" ", _fold(text))
+    for words, _ in _STATUS_WORDS:
+        patterns = (
+            r"\b(?:where\s+(?:are|is)\s+)?(?:the\s+)?(?:rivers?|flows?|streams?|basins?)\s+"
+            r"(?:are\s+|is\s+|running\s+|flowing\s+)?(?:" + words + r")\b",
+            r"\b(?:where\s+(?:are|is)\s+)?(?:" + words + r")\s+(?:rivers?|flows?|streams?|basins?)\b",
+            r"\bwhere\s+(?:is it|are things|is the water)\s+(?:" + words + r")\b",
+        )
+        if any(re.search(p, t) for p in patterns):
+            return True
+    return False
+
+
 def _status_phrase(c: _Clause) -> None:
+    c.text = _COMPARISON.sub(" ", c.text)
     m = re.search(r"\b(?P<noun>rivers?|flows?|streams?|basins?)\s+(?P<where>(?:in|across|over|around)\s+"
                   r"(?!the map\b)[a-z][a-z' .-]*?)\s+(?:(?:are|is)\s+)?(?:(?:running|flowing|doing)\s+)?"
                   r"(?P<state>" + _STATUS_STATE + r")\b", c.text)
@@ -2636,6 +2683,23 @@ def _ground_layers(actions: Any, text: str) -> tuple[Any, list[str]]:
             if layer in LAYERS and layer not in asked:
                 notes.append(f"action {i + 1}: {LAYERS[layer]['label']}, a layer the words do not ask for")
                 continue
+            if a.get("type") == "focus_status" and not _status_filter_asked(text):
+                notes.append(f"action {i + 1}: a status filter the words do not ask for")
+                continue
+        kept.append(a)
+    return kept, notes
+
+
+def _ground_time(actions: Any, text: str) -> tuple[Any, list[str]]:
+    """Drop a map-date move the words do not ask for (#646: ``set_time`` passed whenever a model offered it)."""
+    items = _actions_list(actions)
+    if items is None or _asks_for_time(text):
+        return actions, []
+    kept, notes = [], []
+    for i, a in enumerate(items):
+        if isinstance(a, dict) and a.get("type") == "set_time":
+            notes.append(f"action {i + 1}: a date the words do not ask for")
+            continue
         kept.append(a)
     return kept, notes
 
@@ -2712,8 +2776,9 @@ def parse_model_reply(reply: Any, today: str | date | None = None, text: str | N
         data = _no_free_text(data)
         data, notes = ground_places(data, text)
         data, layer_notes = _ground_layers(data, text)
+        data, time_notes = _ground_time(data, text)
         data = _package_labels(data, text)
-        notes += layer_notes
+        notes += layer_notes + time_notes
     checked = validate_actions(data, today)
     checked["errors"] = notes + checked["errors"]
     checked["said"] = [describe_action(a) for a in checked["actions"]]

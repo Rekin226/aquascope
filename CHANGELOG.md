@@ -9,12 +9,18 @@ All notable changes to AquaScope are documented here.
 
 ### Added
 - **Archive health reports identify partial BOM station catalogs and large station-count drops** (#289). Partial requests appear as non-fatal warnings; count comparisons require an unrestricted run and a previous catalog explicitly marked complete.
+- **Report-quality reference for `potomac-supply`** (#441): the fourth HydroGym report reference, and the first
+  `supply_reliability` case. A faithful report of that recording states the screening verdict and its numbers, and
+  does not read a p = 0.5753 Mann-Kendall result as a trend direction.
 
 ### Changed
 - **`south_africa_dws` license and attribution** (#473): update license to `DWS NIWIS terms (academic, research or personal use)` and attribution to name the Department of Water and Sanitation, Republic of South Africa as copyright proprietor following the disclaimer on [dws.gov.za/niwis2/Disclaimer](https://www.dws.gov.za/niwis2/Disclaimer) (archived at [web.archive.org](http://web.archive.org/web/20250528170949/https://www.dws.gov.za/niwis2/Disclaimer)).
+- **The Archive's counts follow the latest harvest** (#443): `README.md`, `docs/index.md`, `ROADMAP.md`, `docs/archive.md` and `explorer/SPACE_README.md` now state the 2026-10-26 harvest: **75,878 catalogued stations** and **5,788 with mirrored daily observations** (discharge 4,070, water level 1,088, precipitation 591, groundwater level 521) — instead of the 2026-10-19 figures. The dataset card is generated from `obs/manifest.json` (`_mirrored_station_count`) and picks both numbers up on the next harvest.
 
 ### Fixed
 - **`poland_imgw` station spans** (#699): `period_start` no longer takes the gauge's founding year (`rok_zalozenia_stacji`) — a founding year is not the start of a record and put the spans a median 13.8 years too early. The founding year is kept in `extra["founded_year"]`, and `aquascope harvest stations` fills a span a source leaves empty from the first mirrored observation in `obs/manifest.json`.
+- **A capped harvest no longer publishes** (#692): a manual `harvest.yml` run with `max_items` set is a smoke test, and its subset used to replace the live `stations.parquet` on the Hugging Face dataset (the `publish` input defaults to true and the publish step never looked at the cap; this is the 2026-09-16 run that left the Explorer showing 33 pins). It now skips publishing, says so in the job summary, and leaves scheduled runs unchanged.
+- **What-if plural and compound fractional shares** (#691): read compound fractions and plural shares ("two thirds", "three quarters", "two fifths", "a sixth", "an eighth") as single tokens across model and keyless paths, preserving explicit units on quantities and evaluating shares as proportions. Keyless clauses that name a change without a readable number now report an error in `errors` instead of returning an empty list.
 - **What-if fractional quantities** (#646): the model and keyless readings of “half a cubic metre per second”, “a half litre per second” and “half a degree warmer” keep the stated unit instead of treating the quantity as a proportion.
 - **GR4J at large gauges** (#273): the station model asks before using point forcing above 10,000 km², and describes the forcing download separately from the fit.
 

@@ -27,9 +27,9 @@ show (:func:`review_variants`), as ids held to a JSON Schema of enums (:func:`re
 of a pin, so it cannot change a value, a count, a bound, a severity or a "not"; a problem is pinned even when it
 is left out, and a finding the modeller's own question names — "is the model stable?", "are there numerical
 instabilities?" — is pinned too (:func:`named_findings`); the review's counts are always the rules' counts. A
-reply outside the enums is refused whole and the rules' wording stands (:func:`apply_words`). The older checks (:func:`negation_flip`, the claim lock of
-:func:`aquascope.map_explain.claim_lock`) stay as a second line of defence; the tests hold every variant to
-them.
+reply outside the enums is refused whole and the rules' wording stands (:func:`apply_words`). The older checks
+(:func:`negation_flip`, the claim lock of :func:`aquascope.map_explain.claim_lock`) stay as a second line of
+defence; the tests hold every variant to them.
 
 numpy and the standard library only, so it runs in the Explorer's mesh worker beside the reader.
 """

@@ -112,6 +112,22 @@ def test_copernicus_points_at_the_early_warning_data_store():
     assert meta.license == "CEMS-FLOODS-licence"
 
 
+def test_korea_wamis_records_the_hrfco_open_api_terms():
+    """korea_wamis is mirrored under the operating agency's terms, so both the id and the credit must stay.
+
+    The licence comes from the Han River Flood Control Office (HRFCO), which runs WAMIS: article 10 of its
+    Open API terms permits free re-use "저작자 및 출처 표시 조건으로" (with the author and the source named),
+    and data.go.kr lists the same WAMIS dataset as 이용허락범위 제한 없음 (no restriction on use).
+    """
+    meta = SOURCES["korea_wamis"]
+    assert meta.license != "unknown"
+    assert meta.license == "HRFCO Open API Terms (free use with attribution)"
+    assert meta.redistributable is True
+    assert "한강홍수통제소" in meta.attribution, "the operating agency must be named"
+    assert "기후에너지환경부" in meta.attribution
+    assert "wamis.go.kr" in meta.attribution, "the source site must be named"
+
+
 def test_station_variables_validated():
     with pytest.raises(ValueError):
         Station(source="x", station_id="1", latitude=0, longitude=0, variables=("lava",))

@@ -401,8 +401,12 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="http://www.wamis.go.kr/",
         variables=("water_level", "discharge", "water_quality", "reservoir_storage"),
         output_model="WaterQualitySample",
-        license="unknown", redistributable=False,
-        attribution="WAMIS (terms not yet verified)",
+        license="HRFCO Open API Terms (free use with attribution)", redistributable=True,
+        attribution=(
+            "출처: 기후에너지환경부 한강홍수통제소 · 국가수자원관리종합정보시스템(WAMIS), "
+            "https://www.wamis.go.kr/ (source: Han River Flood Control Office, Ministry of Climate, "
+            "Energy and Environment, WAMIS; free re-use under the HRFCO Open API terms, attribution required)"
+        ),
     ),
     "india_wris": _s(
         key="india_wris", label="India WRIS", region="India",

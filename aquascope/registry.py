@@ -486,8 +486,10 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://gemstat.org/",
         variables=("water_quality",),
         output_model="WaterQualitySample",
-        license="unknown", redistributable=False,
-        attribution="UNEP GEMS/Water Data Centre (terms not yet verified)",
+        license="CC-BY-4.0", redistributable=True,
+        attribution=("Heinle, Lisniak and Saile, UNEP GEMS/Water Global Freshwater Quality Archive "
+                     "(https://doi.org/10.5281/zenodo.13881899); "
+                     "observations provided by national hydrological services"),
     ),
     "sdg6": _s(
         key="sdg6", label="UN SDG 6 indicators", region="Global",

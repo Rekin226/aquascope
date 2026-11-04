@@ -136,6 +136,14 @@ def test_usgs_output_model():
     assert SOURCES["usgs"].output_model == "StreamflowReading | WaterLevelReading | WaterQualitySample"
 
 
+def test_gemstat_open_archive_licence_and_attribution():
+    meta = SOURCES["gemstat"]
+    assert meta.license == "CC-BY-4.0"
+    assert "gemstat" in redistributable_sources()
+    assert "zenodo.13881899" in meta.attribution
+    assert "national hydrological services" in meta.attribution
+
+
 def test_copernicus_points_at_the_early_warning_data_store():
     meta = SOURCES["copernicus"]
     assert meta.label == "Copernicus EWDS"

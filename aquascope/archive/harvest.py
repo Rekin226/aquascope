@@ -275,7 +275,7 @@ def _fill_period_start_from_manifest(stations: list[Station], out: Path) -> int:
     """Give span-less stations the first date their mirrored series holds.
 
     A source's catalog says what the agency publishes *now*, so some of them
-    leave ``period_start`` empty — IMGW's founding year is not the start of a
+    leave ``period_start`` empty; IMGW's founding year is not the start of a
     record (issue #699). The mirrored manifest does know it: ``first`` is the
     earliest timestamp this project has stored for that station. Only empty
     spans are filled; a source that states its own span keeps it.

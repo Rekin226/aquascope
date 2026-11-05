@@ -2828,12 +2828,20 @@ def cmd_gym(args: argparse.Namespace) -> None:
             return
         if args.plans_cmd == "validate":
             refs = gp.load_references(args.plans)
-            bad = 0
-            for ref in refs:
-                errors = gp.validate_reference(ref, args.plans)
-                if errors:
-                    bad += 1
-                    print(f"  {ref.id}: " + "; ".join(errors))
+            rows = [{"id": ref.id, "errors": gp.validate_reference(ref, args.plans)} for ref in refs]
+            bad = sum(1 for row in rows if row["errors"])
+            if args.json:
+                print(json.dumps(
+                    {"total": len(rows), "valid": len(rows) - bad, "invalid": bad,
+                     "references": [{"id": row["id"], "valid": not row["errors"], "errors": row["errors"]}
+                                    for row in rows]},
+                    indent=2, default=str))
+                if bad:
+                    sys.exit(1)
+                return
+            for row in rows:
+                if row["errors"]:
+                    print(f"  {row['id']}: " + "; ".join(row["errors"]))
             print(f"  {len(refs)} reference plans, {len(refs) - bad} valid, {bad} with errors")
             if bad:
                 sys.exit(1)

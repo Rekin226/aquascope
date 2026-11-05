@@ -1,0 +1,51 @@
+{
+  "_note": "Built for #637 from the issue's own evidence, not recorded from Photon: the Rhine at a point beside Galgenbergsee (a pond nearer the point than the river), the Rhine alone, Lake Constance with no river near the point, and Basel's Fischmarktbrunnen in the any-features answer. Shape is Photon's reverse answer, trimmed.",
+  "rhine_galgenbergsee_water": [
+    {
+      "properties": {
+        "osm_type": "W", "osm_id": 39012734, "osm_key": "natural", "osm_value": "water",
+        "name": "Galgenbergsee", "county": "Baden-Württemberg", "country": "Germany",
+        "extent": [8.196, 47.6585, 8.2042, 47.6538]
+      },
+      "geometry": { "type": "Point", "coordinates": [8.2011, 47.6601] }
+    },
+    {
+      "properties": {
+        "osm_type": "R", "osm_id": 1204924, "osm_key": "waterway", "osm_value": "river",
+        "name": "Rhine", "state": "Baden-Württemberg", "country": "Germany",
+        "extent": [7.6, 50.9, 9.6, 46.5]
+      },
+      "geometry": { "type": "Point", "coordinates": [8.1987, 47.6592] }
+    }
+  ],
+  "rhine_alone_water": [
+    {
+      "properties": {
+        "osm_type": "R", "osm_id": 1204924, "osm_key": "waterway", "osm_value": "river",
+        "name": "Rhine", "state": "Baden-Württemberg", "country": "Germany",
+        "extent": [7.6, 50.9, 9.6, 46.5]
+      },
+      "geometry": { "type": "Point", "coordinates": [8.1987, 47.6592] }
+    }
+  ],
+  "bodensee_water": [
+    {
+      "properties": {
+        "osm_type": "R", "osm_id": 923516, "osm_key": "natural", "osm_value": "water",
+        "name": "Lake Constance", "state": "Baden-Württemberg", "country": "Germany",
+        "extent": [9.17, 47.81, 9.65, 47.48]
+      },
+      "geometry": { "type": "Point", "coordinates": [9.3801, 47.6102] }
+    }
+  ],
+  "basel_fountain_any": [
+    {
+      "properties": {
+        "osm_type": "N", "osm_id": 2638110, "osm_key": "amenity", "osm_value": "fountain",
+        "name": "Fischmarktbrunnen", "state": "Basel-Stadt", "country": "Switzerland",
+        "extent": [7.5875, 47.559, 7.5935, 47.553]
+      },
+      "geometry": { "type": "Point", "coordinates": [7.5916, 47.5584] }
+    }
+  ]
+}

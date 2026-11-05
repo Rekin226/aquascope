@@ -85,7 +85,7 @@ weekly (Mondays 03:17 UTC), with `aquascope harvest stations`.
 | `name` | string | station name as the agency gives it |
 | `latitude`, `longitude` | double | WGS84 degrees |
 | `variables` | list of string | what the station measures (`discharge`, `water_level`, `groundwater_level`, `precipitation`, ...) |
-| `period_start`, `period_end` | date | the record's span where the agency says it, else empty |
+| `period_start`, `period_end` | date | the record's span where the agency states it; an empty start takes the station's first mirrored observation from `obs/manifest.json`, else stays empty |
 | `url` | string | deep link to the agency's page |
 | `river`, `country`, `agency` | string | where known |
 | `license` | string | the source's licence identifier |

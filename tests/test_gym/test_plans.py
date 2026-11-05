@@ -71,6 +71,22 @@ def test_the_recon_is_narrowed_to_the_playbooks_problem_like_the_scout_does():
     assert gp.recon_for(ref)["stations"], "a deep copy: the cache is not edited"
 
 
+def test_validation_checks_a_required_method_outside_the_playbooks_problem_against_the_full_recon():
+    """A method that serves another problem is not exempt: the site still calls it not defensible (#700)."""
+    from aquascope.methods import METHODS
+
+    ref = BY_ID["flood_short_record_fish_creek"]
+    raw = gp._load_recon_file(ref.recon_name)["recon"]
+    status = {r["method"]: r["status"] for r in raw["sufficiency"]}
+    assert status["sgi"] == "not_defensible" and "flood_risk" not in METHODS["sgi"].problems
+    narrowed = {r["method"] for r in gp.recon_for(ref)["sufficiency"]}
+    assert "sgi" not in narrowed, "the scorer's table is narrowed to the playbook's problem, so it cannot see sgi"
+    assert gp.validate_reference(ref) == []
+    with_sgi = {**ref.to_dict(), "steps": [*ref.to_dict()["steps"], {"tool": "sgi_drought", "method": "sgi"}]}
+    errors = gp.validate_reference(gp.Reference.from_dict(with_sgi))
+    assert any("sgi" in e and "not defensible" in e for e in errors), errors
+
+
 def test_validation_catches_an_unknown_tool_a_forbidden_required_step_and_a_missing_recon():
     ref = gp.Reference.from_dict({**BY_ID["flood_at_site_potomac"].to_dict(), "id": "x", "steps": [
         {"tool": "frobnicate"}, {"tool": "flood_frequency", "method": "at_site_flood_frequency",
@@ -358,6 +374,24 @@ def test_repeats_and_the_spread_with_a_scripted_model(tmp_path):
 
 
 # ── the CLI ──
+
+
+def test_the_validate_verb_prints_json_and_exits_nonzero_on_an_error(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["aquascope", "gym", "plans", "validate", "--json"])
+    cli.main()
+    text = capsys.readouterr().out
+    data = json.loads(text)
+    assert data["total"] == data["valid"] == len(REFS) and data["invalid"] == 0
+    assert [r["id"] for r in data["references"]] == [r.id for r in REFS]
+    assert all(r["valid"] and r["errors"] == [] for r in data["references"])
+    assert "with errors" not in text, "no human-readable lines on --json"
+    broken = BY_ID["flood_short_record_fish_creek"].to_dict()
+    bad = gp.Reference.from_dict({**broken, "steps": [*broken["steps"], {"tool": "sgi_drought", "method": "sgi"}]})
+    monkeypatch.setattr(gp, "load_references", lambda *_a, **_k: [bad])
+    with pytest.raises(SystemExit):
+        cli.main()
+    data = json.loads(capsys.readouterr().out)
+    assert data["invalid"] == 1 and "not defensible" in data["references"][0]["errors"][0]
 
 
 def test_the_cli_plans_verbs_and_the_bench(monkeypatch, capsys, tmp_path):

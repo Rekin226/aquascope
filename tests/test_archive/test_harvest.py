@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import pathlib
 import struct
 from datetime import date
 from pathlib import Path
@@ -98,6 +99,100 @@ def test_harvest_writes_files_and_health(tmp_path):
     assert "| `uk_ea` |" in card and "failed: RuntimeError: 503" in card
     assert "resolve/main/stations.parquet" in card
     assert "Group by `(source, site_id)`" in card
+
+
+def _write_manifest(out: Path, sources: dict) -> None:
+    (out / "obs").mkdir(parents=True, exist_ok=True)
+    (out / "obs" / "manifest.json").write_text(json.dumps({"version": 2, "sources": sources}), encoding="utf-8")
+
+
+def _harvest_rows(tmp_path: Path) -> dict[str, dict]:
+    out = tmp_path / "archive"
+    with patch("aquascope.archive.harvest.station_catalogs", side_effect=_fake_catalogs):
+        harvest_stations(out, write_signatures=False)
+    return {row["station_id"]: row for row in pq.read_table(out / "stations.parquet").to_pylist()}
+
+
+def test_period_start_is_filled_from_the_mirrored_first_observation(tmp_path):
+    """A source that states no span (#699: IMGW's founding year is not a start) takes the mirrored first date."""
+    _write_manifest(tmp_path / "archive", {
+        "ireland_opw/water_level": {
+            "source": "ireland_opw", "variable": "water_level",
+            "stations": {"0000001041": {"n": 120, "first": "2019-04-03T01:00:00", "last": "2024-01-01T00:00:00"}},
+        },
+    })
+    rows = _harvest_rows(tmp_path)
+    assert rows["0000001041"]["period_start"] == date(2019, 4, 3)
+
+
+def test_period_start_uses_the_earliest_of_every_variable(tmp_path):
+    _write_manifest(tmp_path / "archive", {
+        "ireland_opw/water_level": {
+            "source": "ireland_opw", "variable": "water_level",
+            "stations": {"0000001041": {"n": 2, "first": "2020-01-05"}},
+        },
+        "ireland_opw/discharge": {
+            "source": "ireland_opw", "variable": "discharge",
+            "stations": {"0000001041": {"n": 9, "first": "2018-07-09"}},
+        },
+    })
+    rows = _harvest_rows(tmp_path)
+    assert rows["0000001041"]["period_start"] == date(2018, 7, 9)
+
+
+def test_period_start_is_matched_by_the_entry_source_not_the_key(tmp_path):
+    """The manifest key is history; ``entry["source"]`` is the source a station belongs to."""
+    _write_manifest(tmp_path / "archive", {
+        "ireland/water_level": {
+            "source": "ireland_opw", "variable": "water_level",
+            "stations": {"0000001041": {"n": 4, "first": "2021-06-01"}},
+        },
+    })
+    rows = _harvest_rows(tmp_path)
+    assert rows["0000001041"]["period_start"] == date(2021, 6, 1)
+
+
+def test_period_start_a_source_states_is_never_overwritten(tmp_path):
+    _write_manifest(tmp_path / "archive", {
+        "pegelonline/water_level": {
+            "source": "pegelonline", "variable": "water_level",
+            "stations": {"u1": {"n": 3, "first": "1996-02-01"}},
+        },
+        "ireland_opw/water_level": {
+            "source": "ireland_opw", "variable": "water_level",
+            "stations": {"0000001041": {"n": 3, "first": "2019-04-03"}},
+        },
+    })
+    rows = _harvest_rows(tmp_path)
+    assert rows["u1"]["period_start"] == date(1990, 1, 1)  # the agency's own span wins
+    assert rows["0000001041"]["period_start"] == date(2019, 4, 3)
+
+
+def test_period_start_is_read_from_a_version_1_manifest(tmp_path):
+    """Version 1 keyed ``sources`` by source; the migration supplies ``entry["source"]``."""
+    out = tmp_path / "archive"
+    (out / "obs").mkdir(parents=True, exist_ok=True)
+    (out / "obs" / "manifest.json").write_text(json.dumps({
+        "version": 1,
+        "sources": {"ireland_opw": {
+            "variable": "water_level",
+            "stations": {"0000001041": {"n": 2, "first": "2017-03-02"}},
+        }},
+    }), encoding="utf-8")
+    rows = _harvest_rows(tmp_path)
+    assert rows["0000001041"]["period_start"] == date(2017, 3, 2)
+
+
+@pytest.mark.parametrize("state", ["missing", "unreadable"])
+def test_harvest_without_a_readable_manifest_leaves_the_span_empty(tmp_path, state):
+    out = tmp_path / "archive"
+    if state == "unreadable":
+        (out / "obs").mkdir(parents=True, exist_ok=True)
+        (out / "obs" / "manifest.json").write_text("{not json", encoding="utf-8")
+    rows = _harvest_rows(tmp_path)
+    assert rows["0000001041"]["period_start"] is None
+    assert rows["u1"]["period_start"] == date(1990, 1, 1)
+    assert (out / "stations.parquet").exists()  # the harvest itself is unaffected
 
 
 @pytest.mark.parametrize("failure", ["partial", "all", "none"])
@@ -606,3 +701,24 @@ def test_infer_site_ids_skips_nameless_stations():
     assert inferred[0].site_id == "USGS-092359167282201"
     assert inferred[1].site_id == "USGS-092359167282206"
     assert inferred[2].site_id == "USGS-092359167282209"
+
+
+def test_a_capped_harvest_never_publishes_the_catalogue():
+    """#692: a run with max_items is a smoke test and must not replace the live catalogue.
+
+    The publish step fired on `schedule || inputs.publish == true` alone, and `publish`
+    defaults to true for a manual run, so a 2026-09-16 smoke run replaced the ~62k-station
+    catalogue with its subset and the Explorer showed 33 pins. forecast-archive.yml has
+    guarded its publish against this since it was written; harvest.yml did not.
+    """
+    yaml = pytest.importorskip("yaml")
+    workflow = pathlib.Path(__file__).parents[2] / ".github" / "workflows" / "harvest.yml"
+    wf = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    steps = wf["jobs"]["harvest"]["steps"]
+    publish = next(s for s in steps if "publish_folder" in s.get("run", ""))
+    assert "inputs.max_items == ''" in publish["if"]
+    assert "(github.event_name == 'schedule' || inputs.publish == true)" in publish["if"]
+    # An empty cap is the full-catalogue run, so the scheduled path keeps publishing:
+    # on that path max_items is null, which Actions coerces to 0 like '' does.
+    notice = next(s for s in steps if "capped catalogue" in s.get("run", ""))
+    assert notice["if"] == "inputs.max_items != ''"

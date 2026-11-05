@@ -165,13 +165,24 @@ jobs:
         id: publish
         # inputs.publish is a boolean input: compare it as one (a string compare
         # against 'true' is always false and silently skipped the first CI runs).
-        if: env.HF_TOKEN != '' && (github.event_name == 'schedule' || inputs.publish == true)
+        # A capped run (max_items set) is a smoke test and never publishes (#692): its
+        # subset would replace the live catalogue, which is how a 2026-09-16 smoke run
+        # left the Explorer showing 33 pins. forecast-archive.yml guards its publish the
+        # same way. On the schedule path max_items is null, which compares equal to ''
+        # (Actions coerces both to 0), so a scheduled run publishes as before.
+        if: env.HF_TOKEN != '' && inputs.max_items == '' && (github.event_name == 'schedule' || inputs.publish == true)
         run: |
           python - <<'EOF'
           import os
           from aquascope.archive import publish_folder
           print(publish_folder("archive", os.environ["HF_DATASET"], commit_message=f"harvest {os.environ.get('GITHUB_RUN_ID','')}"))
           EOF
+
+      # A skipped publish looks the same as a publish with nothing to do, so a capped run
+      # says why it published nothing, in the log and in the job summary below.
+      - name: Say why a capped run does not publish
+        if: inputs.max_items != ''
+        run: echo "::notice::max_items=${{ inputs.max_items }} is set, so this run harvested a capped catalogue and published nothing. Re-run without max_items to publish."
 
       # A weekly archive that quietly stops publishing looks healthy for months. If the secret is gone on a
       # scheduled run, say so loudly rather than skipping the publish in silence.
@@ -193,9 +204,15 @@ jobs:
 
       - name: Job summary
         if: always()
+        env:
+          CAPPED: ${{ inputs.max_items != '' }}
         run: |
           python - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
-          import json, pathlib
+          import json, os, pathlib
+          if os.environ.get("CAPPED") == "true":
+              print("> **Nothing was published.** `max_items` was set, so this run harvested a capped "
+                    "catalogue; publishing it would replace the live station count with the subset. "
+                    "Re-run without `max_items` to publish.\n")
           p = pathlib.Path("archive/health.json")
           if not p.exists():
               print("## Harvest\n\nno health.json written (harvest crashed before writing)")

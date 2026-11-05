@@ -316,6 +316,10 @@ def test_number_tokens_carry_the_unit_the_words_give():
     ("take half a megalitre per day", "half", "ML/day", 500 / 86400),
     ("take a half cubic metre per second", "a half", "m3/s", 0.5),
     ("take a half litre per second", "a half", "l/s", 0.0005),
+    ("take two thirds of a litre per second", "two thirds", "l/s", 2 / 3000),
+    ("take three quarters of a cubic metre per second", "three quarters", "m3/s", 0.75),
+    ("take a sixth of a cubic metre per second", "a sixth", "m3/s", 1 / 6),
+    ("take an eighth of a cubic metre per second", "an eighth", "m3/s", 0.125),
 ])
 def test_fractional_quantities_keep_their_explicit_units(line, token, unit, value):
     result = wm.parse_scenario_reply(_reply(("take_water", token, unit)), line)
@@ -331,14 +335,16 @@ def test_fractional_quantity_does_not_weaken_unit_checks_or_shares():
     assert not share["errors"] and share["scenario"]["dp_pct"] == -25
 
 
-@pytest.mark.parametrize("phrase", ["a third", "one third", "a quarter", "half"])
+@pytest.mark.parametrize("phrase", [
+    "a third", "one third", "two thirds", "a quarter", "three quarters", "half", "a sixth", "an eighth",
+])
 def test_fractional_quantity_schema_aliases_round_trip(phrase):
     line = f"take {phrase} of a litre per second"
     token = wm.number_tokens(line)[0]
     numbers = wm.scenario_schema(line)["properties"]["clauses"]["items"]["properties"]["number"]["enum"]
     assert phrase in numbers
-    if "third" in phrase:
-        assert "0.333" not in numbers
+    if "third" in phrase or "sixth" in phrase:
+        assert "0.333" not in numbers and "0.667" not in numbers and "0.167" not in numbers
     for number in numbers:
         if number == "none":
             continue
@@ -379,6 +385,12 @@ def test_rounded_digit_alias_is_not_offered_for_a_precise_number():
     ("a half litre per second", "demand_cms", 0.0005),
     ("a half degree warmer", "dt_c", 0.5),
     ("a half percent less rain", "dp_pct", -0.5),
+    ("take two thirds of a litre per second", "demand_cms", 0.000667),
+    ("three quarters less rain", "dp_pct", -75.0),
+    ("two thirds less rain", "dp_pct", -66.667),
+    ("two fifths less rain", "dp_pct", -40.0),
+    ("take a sixth of a cubic metre per second", "demand_cms", 0.166667),
+    ("an eighth less rain", "dp_pct", -12.5),
 ])
 def test_rules_distinguish_fractional_quantities_from_proportions(line, key, value):
     result = wm.parse_scenario(line)
@@ -450,3 +462,53 @@ def test_a_season_the_words_name_is_said_not_widened():
     # Words that only look like a season are not one: "rain may fall", "rain falls by a fifth".
     assert wm.season_words("rain may fall 20%, and it falls by a fifth") == []
     assert wm.season_words("in May rain falls 10%, less in the fall") == ["in May", "in the fall"]
+
+
+def test_keyless_clause_with_unreadable_number_reports_error():
+    """A keyless clause that names a change but gives no readable number reports an error."""
+    res1 = wm.parse_scenario("take water for irrigation")
+    assert not res1["matched"]
+    assert res1["errors"] == ["take water for irrigation: the words give no number for it"]
+
+    res2 = wm.parse_scenario("less rain")
+    assert not res2["matched"]
+    assert res2["errors"] == ["less rain: the words give no number for it"]
+
+
+def test_compound_fractional_shares_and_quantities():
+    """'two thirds of a litre per second' runs as 0.000667 m3/s and 'three quarters less rain' as -75% on both paths."""
+    # Keyless path
+    keyless_q = wm.parse_scenario("take two thirds of a litre per second")
+    assert keyless_q["matched"]
+    assert keyless_q["scenario"]["demand_cms"] == pytest.approx(0.000667, abs=1e-6)
+
+    keyless_s = wm.parse_scenario("three quarters less rain")
+    assert keyless_s["matched"]
+    assert keyless_s["scenario"]["dp_pct"] == pytest.approx(-75.0)
+
+    # Model path
+    model_q = wm.parse_scenario_reply(
+        _reply(("take_water", "two thirds", "l/s")), "take two thirds of a litre per second"
+    )
+    assert not model_q["errors"]
+    assert model_q["scenario"]["demand_cms"] == pytest.approx(0.000667, abs=1e-6)
+
+    model_s = wm.parse_scenario_reply(_reply(("less_rain", "three quarters", "fraction")), "three quarters less rain")
+    assert not model_s["errors"]
+    assert model_s["scenario"]["dp_pct"] == pytest.approx(-75.0)
+
+
+def test_keyless_fractional_hyphen_and_digit_forms():
+    """Hyphenated words and digit numerators ('2 thirds', '2-thirds') parse keyless to fractional shares."""
+    for text, expected in [
+        ("two-thirds less rain", -200.0 / 3),
+        ("2 thirds less rain", -200.0 / 3),
+        ("2-thirds less rain", -200.0 / 3),
+        ("two tenths less rain", -20.0),
+        ("four sixths less rain", -400.0 / 6),
+        ("two eighths less rain", -25.0),
+    ]:
+        res = wm.parse_scenario(text)
+        assert res["matched"], f"{text}: not matched ({res})"
+        assert res["scenario"]["dp_pct"] == pytest.approx(expected, abs=1e-3)
+        assert not res["unknown"], f"{text}: unknown tokens {res['unknown']}"

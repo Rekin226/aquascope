@@ -310,6 +310,10 @@ class PolandIMGWCollector(BaseCollector):
         ``variables`` reflects what the station is reporting *now*; the
         archive may hold more (a gauge whose discharge rating lapsed still
         has decades of discharge behind it).
+        ``period_start`` stays empty on purpose: ``rok_zalozenia_stacji`` is the
+        year the gauge was founded, not the start of its record (issue #699), so
+        the gauge keeps that year in ``extra["founded_year"]`` and the archive
+        harvest fills the span from the mirrored observations.
         """
         if variable is not None and variable not in VARIABLES_SERVED:
             return []
@@ -327,6 +331,7 @@ class PolandIMGWCollector(BaseCollector):
             ]
             latest = max((s for s in stamps if s is not None), default=None)
             founded = _as_float(raw.get("rok_zalozenia_stacji"))
+            founded_year = int(founded) if founded and 1800 < founded <= date.today().year else None
             out.append(
                 Station(
                     source=self.name,
@@ -335,11 +340,15 @@ class PolandIMGWCollector(BaseCollector):
                     latitude=lat,
                     longitude=lon,
                     variables=variables,
-                    period_start=date(int(founded), 1, 1) if founded and 1800 < founded <= date.today().year else None,
+                    # ``rok_zalozenia_stacji`` is the year the gauge was founded, not
+                    # the first year of its record (issue #699): the span is left to
+                    # the archive harvest, which fills it from the mirrored data.
+                    period_start=None,
                     period_end=latest.date() if latest else None,
                     river=(raw.get("rzeka") or "").strip() or None,
                     country="POL",
                     extra={
+                        "founded_year": founded_year,
                         "voivodeship": raw.get("wojewodztwo"),
                         "gauge_datum_m_asl": _as_float(raw.get("rzedna_zerawodowskazu")),
                         "river_km": _as_float(raw.get("kilometr_biegu_rzeki")),

@@ -26,7 +26,7 @@ import { shapeSvg } from "./shapes.js?v=__BUILD__";
 import { forecastPoints, gaugePlume } from "./fews.js?v=__BUILD__";
 import { plumeAlt, plumeKey, plumeSvg } from "./fews-core.js?v=__BUILD__";
 import { riverName } from "./place-search-core.js?v=__BUILD__";
-import { lookupWaterway } from "./waterway-name.js?v=__BUILD__";
+import { createWaterwayLookup } from "./waterway-name.js?v=__BUILD__";
 import {
   cardNumber, dayMonth, forecastPeak, lastDays, latestValue, placeCard, prettyUnit, snapshotSentence, sparkPaths,
 } from "./map-card-core.js?v=__BUILD__";
@@ -562,6 +562,7 @@ function pointName(m) {
 function pointRiver(m) {
   return m.waterwayName || riverName(pointName(m));
 }
+const lookupWaterway = createWaterwayLookup();
 
 function pointModel(p) {
   const id = `point:${p.lat},${p.lon}`;
@@ -649,7 +650,7 @@ function onSnap(m, snap) {
       const target = m.routeTarget;
       const buttons = target ? (m.spec.buttons || []).map((b) => (b.id === "route" ? routeButton({ ...target, name })
         : b.id === "replay" ? replayButton({ ...target, name }) : b)) : null;
-      const sub = `River reach ${reachId} · ${coords(m.lat, m.lon)}${m.order || ""}`;
+      const sub = `River reach ${reachId} · ${coords(m.lat, m.lon)}${m.order || ""} · © OpenStreetMap contributors`;
       updateCard(m.id, buttons ? { title: name, sub, buttons } : { title: name, sub });
     });
   }
@@ -772,7 +773,8 @@ export function initMapCard() {
     root.addEventListener("pointname", (e) => {
       const d = e.detail || {};
       if (t !== "pt" || !model || model.kind !== "point" || d.lat !== model.lat || d.lon !== model.lon || !d.label) return;
-      const sub = model.reachId ? `River reach ${model.reachId} · ${coords(model.lat, model.lon)}${model.order || ""}`
+      const sub = model.reachId ? `River reach ${model.reachId} · ${coords(model.lat, model.lon)}${model.order || ""}` +
+        (model.waterwayName ? " · © OpenStreetMap contributors" : "")
         : coords(model.lat, model.lon);
       // A card that has snapped to a river takes the river's name only (#637): a lake, a fountain or a town near
       // the point does not rename the reach, which goes on saying "River reach N" when no river is in reach.

@@ -47,3 +47,30 @@ export async function lookupWaterway(lat, lon, { timeout = TIMEOUT_MS, fetcher =
   } catch { return null; }
   finally { clearTimeout(timer); }
 }
+
+// Reopening the same reach should reuse one lookup, including while it is in flight.
+// Do not retain failures: a later attempt can recover when the service is available.
+export function createWaterwayLookup({ request = lookupWaterway, now = Date.now, ttl = 300000, limit = 100 } = {}) {
+  const cache = new Map();
+  return (lat, lon) => {
+    const key = `${lat},${lon}`;
+    const previous = cache.get(key);
+    if (previous && (previous.pending || previous.expires > now())) {
+      cache.delete(key);
+      cache.set(key, previous);
+      return previous.promise;
+    }
+    cache.delete(key);
+    const entry = { pending: true, expires: 0, promise: null };
+    entry.promise = Promise.resolve().then(() => request(lat, lon)).catch(() => null).then((name) => {
+      if (cache.get(key) === entry) {
+        if (!name) cache.delete(key);
+        else { entry.pending = false; entry.expires = now() + ttl; }
+      }
+      return name;
+    });
+    cache.set(key, entry);
+    while (cache.size > limit) cache.delete(cache.keys().next().value);
+    return entry.promise;
+  };
+}

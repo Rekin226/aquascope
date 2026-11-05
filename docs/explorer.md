@@ -37,10 +37,12 @@ whole river before one of its stretches, and picking it opens the point on the
 **River** tab: "Jamuna" lands on the Jamuna River in Bangladesh. A point that
 came without a name (a click, a `#p=` link) is titled with the nearest named
 water within 5 km, else the nearest town, and the line under the title says the
-name comes from OpenStreetMap. The card of the reach it snaps to, and Route it's
-title, take the river from that same answer and never a lake, a pond or a fountain
-beside the point (#637): when no river is among the nearest named waters, they
-say "River reach N".
+name comes from OpenStreetMap. For the reach card and Route it, the Explorer also
+looks for a named OpenStreetMap waterway near the snapped reach using Overpass.
+The card credits OpenStreetMap contributors when it uses that name. If the lookup
+fails or finds nothing, the existing Photon river name is used where available;
+otherwise the title stays "River reach N". A lake, pond or fountain does not name
+the reach.
 
 Stations already mirrored in the [Archive](archive.md) load from it (one small
 file) instead of from the agency, so they are faster and do not add load

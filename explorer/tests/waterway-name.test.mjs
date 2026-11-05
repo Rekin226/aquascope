@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { lookupWaterway, nearestWaterway } from "../src/waterway-name.js";
+import { createWaterwayLookup, lookupWaterway, nearestWaterway } from "../src/waterway-name.js";
 
 // Synthetic geometries, not a recorded Overpass response.
 const way = (name, type, lat, extra = {}) => ({ type: "way", tags: { name, waterway: type, ...extra },
@@ -38,4 +38,30 @@ test("use geometry response and fall back on HTTP failure or abort", async () =>
   assert.equal(await lookupWaterway(0, 0, { fetcher: async () => ({ ok: false }) }), null);
   const hangs = (_url, { signal }) => new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))));
   assert.equal(await lookupWaterway(0, 0, { timeout: 10, fetcher: hangs }), null);
+});
+
+test("share in-flight requests, expire names, and retry failed lookups", async () => {
+  let calls = 0, time = 0, resolve;
+  const lookup = createWaterwayLookup({ ttl: 100, now: () => time, request: () => {
+    calls++;
+    return new Promise((done) => { resolve = done; });
+  } });
+  const first = lookup(1, 2), same = lookup(1, 2);
+  assert.equal(first, same);
+  await Promise.resolve();
+  assert.equal(calls, 1);
+  resolve("Rhine");
+  assert.equal(await first, "Rhine");
+  assert.equal(await lookup(1, 2), "Rhine");
+  assert.equal(calls, 1);
+  time = 101;
+  const retry = lookup(1, 2);
+  await Promise.resolve();
+  resolve(null);
+  assert.equal(await retry, null);
+  const recovered = lookup(1, 2);
+  await Promise.resolve();
+  resolve("Rhine");
+  assert.equal(await recovered, "Rhine");
+  assert.equal(calls, 3);
 });

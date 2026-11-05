@@ -33,6 +33,7 @@ All notable changes to AquaScope are documented here.
 - **HydroGym decline scoring:** mark refusal reasons for explicit review, support cases that accept a plan or a
   defensible refusal, and report pending reviews separately instead of treating them as zero scores (#381).
 - **Cite 1.1.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.1.0's Zenodo DOI (10.5281/zenodo.23718093).
+- **A reach's card is named after the river, not a nearby pond or fountain** (#637): a card that snaps to a reach takes its title from the nearest river, canal or stream in the point's Photon answer, not from the nearest water of any kind (the reverse request now asks for 5 features, so a pond nearer than the river no longer hides it), and Route it's title follows. A lake, a pond, a fountain or a town on its own leaves the card and the routing panel saying "River reach N" instead of "Galgenbergsee" or "Fischmarktbrunnen". A river picked in the search passes the same distinction on.
 
 ## [1.1.0] - 2026-10-28
 

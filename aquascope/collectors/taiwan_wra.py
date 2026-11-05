@@ -175,7 +175,8 @@ def _build_well_metadata(rows: list[dict]) -> dict[str, dict]:
 class TaiwanWRAWaterLevelCollector(BaseCollector):
     """
     Collect real-time water-level readings from WRA river stations.
-    Updated every 10 minutes at source.
+    Updated every 10 minutes at source. Released under Open Government
+    Data License 1.0 (OGDL-Taiwan-1.0; https://data.gov.tw/license).
     """
 
     name = "taiwan_wra_water_level"

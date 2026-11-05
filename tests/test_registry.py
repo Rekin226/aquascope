@@ -90,6 +90,14 @@ def test_metadata_is_complete(key):
         assert meta.api_key_signup_url, f"{key}: requires_api_key needs a signup URL"
 
 
+def test_taiwan_wra_level_attribution_includes_ogdl_exhibit_notice():
+    """#473: OGDL-Taiwan-1.0 Section 3.2 requires attribution in the form of the Exhibit."""
+    attribution = SOURCES["taiwan_wra_level"].attribution
+    assert "經濟部水利署" in attribution
+    assert "Open Government Data License" in attribution
+    assert "https://data.gov.tw/license" in attribution
+
+
 def test_helper_lists():
     assert set(station_sources()) == {k for k, m in SOURCES.items() if m.supports_station_lookup}
     assert set(station_sources("discharge")) <= set(station_sources())

@@ -15,6 +15,7 @@ All notable changes to AquaScope are documented here.
   does not read a p = 0.5753 Mann-Kendall result as a trend direction.
 
 ### Changed
+- **`taiwan_wra_level` attribution includes the OGDL-Taiwan-1.0 exhibit notice** (#473): state the Water Resources Agency (經濟部水利署) and the mandatory license exhibit notice linking to `https://data.gov.tw/license` per Section 3.2 of the Open Government Data License 1.0, replacing the informal paraphrase.
 - **`south_africa_dws` license and attribution** (#473): update license to `DWS NIWIS terms (academic, research or personal use)` and attribution to name the Department of Water and Sanitation, Republic of South Africa as copyright proprietor following the disclaimer on [dws.gov.za/niwis2/Disclaimer](https://www.dws.gov.za/niwis2/Disclaimer) (archived at [web.archive.org](http://web.archive.org/web/20250528170949/https://www.dws.gov.za/niwis2/Disclaimer)).
 - **The Archive's counts follow the latest harvest** (#443): `README.md`, `docs/index.md`, `ROADMAP.md`, `docs/archive.md` and `explorer/SPACE_README.md` now state the 2026-10-26 harvest: **75,878 catalogued stations** and **5,788 with mirrored daily observations** (discharge 4,070, water level 1,088, precipitation 591, groundwater level 521) — instead of the 2026-10-19 figures. The dataset card is generated from `obs/manifest.json` (`_mirrored_station_count`) and picks both numbers up on the next harvest.
 

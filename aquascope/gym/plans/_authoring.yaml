@@ -33,7 +33,7 @@
 #
 # The rules:
 #   1. The registry decides what is defensible. A required step never names a method the saved reconnaissance calls
-#      not defensible — `validate` reads the full table, every problem, not only this playbook's (#700) — and every
+#      not defensible (`validate` reads the full table, every problem, not only this playbook's; #700) and every
 #      method a planner for this problem might reach for that the full table calls not defensible is listed as
 #      forbidden, especially one outside this playbook's problem, which the scorer's narrowed table cannot catch.
 #   2. The playbook branch is the starting point: its required steps and gates are the reference's unless the brief

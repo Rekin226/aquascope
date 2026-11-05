@@ -1,0 +1,721 @@
+{
+ "site": {
+  "lat": 49.4844,
+  "lon": 20.0311,
+  "source": "poland_imgw",
+  "station_id": "149200030",
+  "name": "Nowy Targ",
+  "country": "POL",
+  "variables": [
+   "discharge",
+   "water_level"
+  ],
+  "period_start": "1898-01-01",
+  "period_end": "2026-10-26",
+  "years": 128.8
+ },
+ "captured": "2026-11-01",
+ "command": "aquascope.explore.assess_site(49.4844, 20.0311)",
+ "recon": {
+  "point": {
+   "lat": 49.4844,
+   "lon": 20.0311
+  },
+  "stations": [
+   {
+    "source": "poland_imgw",
+    "station_id": "149200030",
+    "name": "Nowy Targ",
+    "distance_km": 0.0,
+    "latitude": 49.4844,
+    "longitude": 20.0311,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1898-01-01",
+    "period_end": "2026-10-26",
+    "years": 128.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149200050",
+    "name": "Nowy Targ - Kowaniec",
+    "distance_km": 1.6,
+    "latitude": 49.4869,
+    "longitude": 20.0536,
+    "variables": [
+     "discharge",
+     "water_level",
+     "water_quality"
+    ],
+    "period_start": "1940-01-01",
+    "period_end": "2026-10-26",
+    "years": 86.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149190390",
+    "name": "Ludźmierz",
+    "distance_km": 4.2,
+    "latitude": 49.4594,
+    "longitude": 19.9867,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1924-01-01",
+    "period_end": "2026-10-26",
+    "years": 102.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149190360",
+    "name": "Ludźmierz",
+    "distance_km": 4.4,
+    "latitude": 49.4686,
+    "longitude": 19.9756,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1922-01-01",
+    "period_end": "2026-10-26",
+    "years": 104.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149200020",
+    "name": "Szaflary",
+    "distance_km": 6.7,
+    "latitude": 49.4242,
+    "longitude": 20.0247,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1940-01-01",
+    "period_end": "2026-10-26",
+    "years": 86.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149200110",
+    "name": "Trybsz 2",
+    "distance_km": 9.7,
+    "latitude": 49.4178,
+    "longitude": 20.1178,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1994-01-01",
+    "period_end": "2026-10-26",
+    "years": 32.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149190340",
+    "name": "Rabka 2",
+    "distance_km": 15.5,
+    "latitude": 49.6136,
+    "longitude": 19.9489,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1984-01-01",
+    "period_end": "2026-10-26",
+    "years": 42.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149200010",
+    "name": "Poronin",
+    "distance_km": 16.5,
+    "latitude": 49.3372,
+    "longitude": 20.0031,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1917-01-01",
+    "period_end": "2026-10-26",
+    "years": 109.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149190280",
+    "name": "Koniówka",
+    "distance_km": 18.3,
+    "latitude": 49.3956,
+    "longitude": 19.8183,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1966-01-01",
+    "period_end": "2026-10-26",
+    "years": 60.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149190380",
+    "name": "Zakopane Harenda",
+    "distance_km": 19.1,
+    "latitude": 49.3161,
+    "longitude": 19.9772,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1922-01-01",
+    "period_end": "2026-10-26",
+    "years": 104.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149200060",
+    "name": "Mszana Dolna",
+    "distance_km": 19.4,
+    "latitude": 49.6581,
+    "longitude": 20.0592,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1887-01-01",
+    "period_end": "2026-10-26",
+    "years": 139.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149200120",
+    "name": "Niedzica",
+    "distance_km": 21.2,
+    "latitude": 49.4114,
+    "longitude": 20.3022,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1966-01-01",
+    "period_end": "2026-10-26",
+    "years": 60.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149200080",
+    "name": "Mszana Dolna",
+    "distance_km": 21.4,
+    "latitude": 49.6747,
+    "longitude": 20.0794,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1902-01-01",
+    "period_end": "2026-10-26",
+    "years": 124.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149190290",
+    "name": "Jordanów",
+    "distance_km": 22.3,
+    "latitude": 49.6364,
+    "longitude": 19.83,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1928-01-01",
+    "period_end": "2026-10-26",
+    "years": 98.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149190320",
+    "name": "Zakopane-dol.strążyska",
+    "distance_km": 24.2,
+    "latitude": 49.2761,
+    "longitude": 19.9356,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1963-01-01",
+    "period_end": "2026-10-26",
+    "years": 63.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149190250",
+    "name": "Jabłonka",
+    "distance_km": 24.3,
+    "latitude": 49.4722,
+    "longitude": 19.6953,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1954-01-01",
+    "period_end": "2026-10-26",
+    "years": 72.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149200040",
+    "name": "Kasinka Mała",
+    "distance_km": 24.5,
+    "latitude": 49.7047,
+    "longitude": 20.0325,
+    "variables": [
+     "discharge",
+     "water_level",
+     "water_quality"
+    ],
+    "period_start": "1966-01-01",
+    "period_end": "2026-10-26",
+    "years": 60.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149200140",
+    "name": "Sromowce Wyżne",
+    "distance_km": 25.1,
+    "latitude": 49.4006,
+    "longitude": 20.3539,
+    "variables": [
+     "discharge",
+     "water_level",
+     "water_quality"
+    ],
+    "period_start": "1966-01-01",
+    "period_end": "2026-10-25",
+    "years": 60.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149200100",
+    "name": "Łysa Polana",
+    "distance_km": 25.3,
+    "latitude": 49.2636,
+    "longitude": 20.115,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1917-01-01",
+    "period_end": "2026-10-26",
+    "years": 109.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149190490",
+    "name": "Bystra 2",
+    "distance_km": 25.8,
+    "latitude": 49.6517,
+    "longitude": 19.7836,
+    "variables": [
+     "water_level"
+    ],
+    "period_start": "2024-01-01",
+    "period_end": "2026-10-26",
+    "years": 2.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149190300",
+    "name": "Kościelisko-Kiry",
+    "distance_km": 26.0,
+    "latitude": 49.2758,
+    "longitude": 19.8681,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1917-01-01",
+    "period_end": "2026-10-26",
+    "years": 109.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149200150",
+    "name": "Tylmanowa",
+    "distance_km": 26.0,
+    "latitude": 49.5175,
+    "longitude": 20.3872,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1966-01-01",
+    "period_end": "2026-10-26",
+    "years": 60.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149190370",
+    "name": "Lubień",
+    "distance_km": 26.4,
+    "latitude": 49.7197,
+    "longitude": 19.9783,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1957-01-01",
+    "period_end": "2026-10-26",
+    "years": 69.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149190350",
+    "name": "Krzczonów",
+    "distance_km": 28.6,
+    "latitude": 49.7367,
+    "longitude": 19.9539,
+    "variables": [
+     "discharge",
+     "water_level"
+    ],
+    "period_start": "1957-01-01",
+    "period_end": "2026-10-26",
+    "years": 69.8,
+    "url": null
+   },
+   {
+    "source": "poland_imgw",
+    "station_id": "149200160",
+    "name": "Krościenko",
+    "distance_km": 29.2,
+    "latitude": 49.4417,
+    "longitude": 20.4294,
+    "variables": [
+     "discharge",
+     "water_level",
+     "water_quality"
+    ],
+    "period_start": "1898-01-01",
+    "period_end": "2026-10-26",
+    "years": 128.8,
+    "url": null
+   }
+  ],
+  "catchment": {
+   "hybas_id": 2120441940,
+   "area_km2": 441.3,
+   "upstream_area_km2": 441.4,
+   "n_sub_basins": 4,
+   "elevation_m": 867.0,
+   "precipitation_mm_yr": 1027.0,
+   "aridity": 1.56,
+   "dams": 0.0,
+   "snow_cover_pct": 33.0,
+   "source": "BasinATLAS (HydroATLAS v1.0)"
+  },
+  "context": {
+   "years_by_variable": {
+    "discharge": 128.8,
+    "water_level": 128.8,
+    "water_quality": 86.8
+   },
+   "resolution_by_variable": {
+    "discharge": "daily",
+    "water_level": "daily",
+    "water_quality": "daily"
+   },
+   "area_km2": 441.4,
+   "return_period": null,
+   "donors": 10,
+   "available": [
+    "forcing",
+    "gcms>=3",
+    "glofas",
+    "snow",
+    "temperature"
+   ],
+   "ungauged": false
+  },
+  "sufficiency": [
+   {
+    "method": "change_point_test",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Change-point and trend tests (Pettitt, PELT, Mann-Kendall)",
+    "tool": "change_points",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200030"
+    }
+   },
+   {
+    "method": "climate_projection",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "CMIP6 ensemble change factors on the baseline statistic",
+    "tool": "climate_projection",
+    "station": null
+   },
+   {
+    "method": "crop_water_requirement",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Crop water requirement (single or dual Kc)",
+    "tool": "crop_water_demand",
+    "station": null
+   },
+   {
+    "method": "fao56_et0",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "FAO-56 Penman-Monteith reference evapotranspiration",
+    "tool": "reference_et",
+    "station": null
+   },
+   {
+    "method": "flow_duration",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Flow duration curve and Q95",
+    "tool": "analyze_station",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200030"
+    }
+   },
+   {
+    "method": "gauge_comparison",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Gauges side by side (regime, floods and low flows per unit area)",
+    "tool": "compare_gauges",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200030"
+    }
+   },
+   {
+    "method": "glofas_cross_check",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "GloFAS modelled discharge as an independent check",
+    "tool": "anywhere",
+    "station": null
+   },
+   {
+    "method": "iwqi",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Irrigation water quality (SAR, sodium percentage, RSC, FAO 29 restriction)",
+    "tool": "iwqi",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200050"
+    }
+   },
+   {
+    "method": "low_flow_frequency",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Low-flow frequency (annual minima)",
+    "tool": "analyze_station",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200030"
+    }
+   },
+   {
+    "method": "nonstationary_gev",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Nonstationary GEV (time-varying location, likelihood-ratio test)",
+    "tool": "nonstationary_flood",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200030"
+    }
+   },
+   {
+    "method": "regional_index_flood",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Regional index-flood frequency analysis (Hosking and Wallis)",
+    "tool": "regional_flood",
+    "station": null
+   },
+   {
+    "method": "regionalize_signatures",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Flow signatures transferred from donors",
+    "tool": "regionalize_signatures",
+    "station": null
+   },
+   {
+    "method": "spei_reanalysis",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "SPI and SPEI from ERA5 reanalysis for the cell (no rain gauge)",
+    "tool": "drought_indices",
+    "station": null
+   },
+   {
+    "method": "supply_reliability",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Run-of-river supply reliability against a demand (flow-duration screening)",
+    "tool": "supply_reliability",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200030"
+    }
+   },
+   {
+    "method": "trend_mann_kendall",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Mann-Kendall trend with Sen's slope",
+    "tool": "analyze_station",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200030"
+    }
+   },
+   {
+    "method": "water_quality_index",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Water quality index against guideline values (CCME WQI 1.0, NSF WQI)",
+    "tool": "wqi",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200050"
+    }
+   },
+   {
+    "method": "at_site_flood_frequency",
+    "status": "marginal",
+    "reason": "snowmelt shapes the flood regime here: the annual maxima can mix snowmelt and rainfall floods, which one fitted distribution represents less well",
+    "label": "At-site flood frequency (GEV, LP3 / Bulletin 17C)",
+    "tool": "analyze_station",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200030"
+    }
+   },
+   {
+    "method": "baseflow_separation",
+    "status": "marginal",
+    "reason": "snowmelt shapes the regime here: a recession filter can read slow melt as baseflow",
+    "label": "Baseflow separation and baseflow index",
+    "tool": "baseflow",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200030"
+    }
+   },
+   {
+    "method": "gr4j_calibration",
+    "status": "marginal",
+    "reason": "snow shapes the regime here: a method without a snow store misreads the timing of the flow",
+    "label": "GR4J rainfall-runoff calibration",
+    "tool": "catchment_model",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200030"
+    }
+   },
+   {
+    "method": "pot_gpd",
+    "status": "marginal",
+    "reason": "snow shapes the regime here: a method without a snow store misreads the timing of the flow",
+    "label": "Peaks over threshold (Generalised Pareto)",
+    "tool": "pot_flood",
+    "station": {
+     "source": "poland_imgw",
+     "station_id": "149200030"
+    }
+   },
+   {
+    "method": "similar_basins",
+    "status": "marginal",
+    "reason": "meant for an ungauged point; a gauge is available here",
+    "label": "Donor gauges by catchment similarity",
+    "tool": "similar_basins",
+    "station": null
+   },
+   {
+    "method": "groundwater_trend",
+    "status": "not_defensible",
+    "reason": "no groundwater level record at this site",
+    "label": "Groundwater-level trend (m/yr) with confidence interval",
+    "tool": "analyze_station",
+    "station": null
+   },
+   {
+    "method": "recharge_wtf",
+    "status": "not_defensible",
+    "reason": "no groundwater level record at this site",
+    "label": "Recharge by water-table fluctuation",
+    "tool": "recharge",
+    "station": null
+   },
+   {
+    "method": "sgi",
+    "status": "not_defensible",
+    "reason": "no groundwater level record at this site",
+    "label": "Standardized Groundwater Index",
+    "tool": "sgi_drought",
+    "station": null
+   },
+   {
+    "method": "spei",
+    "status": "not_defensible",
+    "reason": "no precipitation record at this site",
+    "label": "Standardized Precipitation-Evapotranspiration Index",
+    "tool": "drought_indices",
+    "station": null
+   },
+   {
+    "method": "spi",
+    "status": "not_defensible",
+    "reason": "no precipitation record at this site",
+    "label": "Standardized Precipitation Index",
+    "tool": "drought_indices",
+    "station": null
+   }
+  ],
+  "notes": [
+   "Record resolution is not in the catalog; daily is assumed for every variable.",
+   "10 donor gauges from a pool of 42,197 gauged catchments.",
+   "ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land (Open-Meteo); not checked here.",
+   "CMIP6 change factors: seven HighResMIP models through the Open-Meteo Climate API (1950-2050, one high-emission pathway), assumed reachable; not checked here.",
+   "Snow covers 33% of the catchment in an average year (BasinATLAS): the methods sensitive to snow are marginal here, and the catchment model adds a snow store."
+  ]
+ }
+}

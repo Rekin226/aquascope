@@ -394,10 +394,13 @@ SOURCES: dict[str, SourceMeta] = {
         license="Public Data License (Version 1.0)", redistributable=True,
         attribution="Ministry of Land, Infrastructure, Transport and Tourism",
     ),
+    # These HRFCO terms cover its own water-level, discharge and rainfall series.
+    # Dam storage and water quality follow their respective owners' terms and must
+    # not be added to HARVESTABLE on the strength of this licence alone.
     "korea_wamis": _s(
         key="korea_wamis", label="Korea WAMIS", region="South Korea",
         description="Water level, discharge, quality and dam storage by basin",
-        agency="WAMIS (K-water / Ministry of Environment)", country="KOR",
+        agency="Han River Flood Control Office, Ministry of Climate, Energy and Environment", country="KOR",
         homepage="http://www.wamis.go.kr/",
         variables=("water_level", "discharge", "water_quality", "reservoir_storage"),
         output_model="WaterQualitySample",

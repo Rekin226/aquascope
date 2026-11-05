@@ -120,6 +120,7 @@ def test_korea_wamis_records_the_hrfco_open_api_terms():
     and data.go.kr lists the same WAMIS dataset as 이용허락범위 제한 없음 (no restriction on use).
     """
     meta = SOURCES["korea_wamis"]
+    assert meta.agency == "Han River Flood Control Office, Ministry of Climate, Energy and Environment"
     assert meta.license != "unknown"
     assert meta.license == "HRFCO Open API Terms (free use with attribution)"
     assert meta.redistributable is True

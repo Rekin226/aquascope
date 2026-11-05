@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   PLACE_CREDIT, WATER_TAGS, isWater, normalizePlace, photonReverseUrl, photonSearchUrl, placeScore, placesFirst,
-  pointLabel, rankPlaces,
+  pointLabel, rankPlaces, riverLabel, riverName,
 } from "../src/place-search-core.js";
 
 // Real Photon answers (2026-10-12), trimmed: see the fixture's _note.
 const P = JSON.parse(readFileSync(new URL("./fixtures/photon-2026-10-12.json", import.meta.url), "utf8"));
+// The #637 cases: a pond nearer than the Rhine, a lake with no river near, and a fountain at Basel.
+const R = JSON.parse(readFileSync(new URL("./fixtures/photon-637-river-card.json", import.meta.url), "utf8"));
 
 test("search URLs: anything, or water only", () => {
   const any = new URL(photonSearchUrl(" Jamuna "));
@@ -100,6 +102,44 @@ test("a name with a digit (a postcode, a road number) is not a name", () => {
 
 test("the credit is the package's", () => {
   assert.equal(PLACE_CREDIT, "Places: Photon by komoot, data © OpenStreetMap contributors (ODbL)");
+});
+
+test("a pond nearer the point names the place; the river behind it names the reach (#637)", () => {
+  const water = R.rhine_galgenbergsee_water;
+  // The place card keeps the nearest named water's name...
+  assert.deepEqual(pointLabel(water, []),
+    { name: "Galgenbergsee", detail: "Baden-Württemberg, Germany", water: true });
+  // ...and the river is read separately, for the River card and Route it's title.
+  assert.deepEqual(riverLabel(water),
+    { name: "Rhine", detail: "Baden-Württemberg, Germany", water: true, river: true });
+  assert.equal(riverName({ ...pointLabel(water, []), river: riverLabel(water) }), "Rhine");
+  assert.equal(riverName(pointLabel(water, [])), "", "a label without a river names no reach");
+});
+
+test("a lake with no river near it is not a river (#637)", () => {
+  const lake = R.bodensee_water;
+  assert.equal(riverLabel(lake), null);
+  // The nearest water is still the place's name; a lake is not relabelled a river.
+  assert.deepEqual(pointLabel(lake, []),
+    { name: "Lake Constance", detail: "Baden-Württemberg, Germany", water: true });
+  assert.equal(riverName({ ...pointLabel(lake, []), river: riverLabel(lake) }), "");
+});
+
+test("a river alone still names both the place and the reach (#637)", () => {
+  assert.deepEqual(pointLabel(R.rhine_alone_water, []),
+    { name: "Rhine", detail: "Baden-Württemberg, Germany", water: true });
+  assert.equal(riverLabel(R.rhine_alone_water).name, "Rhine");
+});
+
+test("a fountain is never a river, though it can name the place (#637)", () => {
+  const label = pointLabel([], R.basel_fountain_any);
+  assert.deepEqual(label, { name: "Near Fischmarktbrunnen", detail: "Basel-Stadt, Switzerland", water: false });
+  assert.equal(riverLabel(R.basel_fountain_any), null, "an amenity=fountain is not a waterway");
+  assert.equal(riverName({ ...label, river: riverLabel(R.basel_fountain_any) }), "");
+  // A canal or a stream is riverish too, a pond or a fountain is not.
+  assert.equal(riverLabel([{ properties: { osm_key: "waterway", osm_value: "stream", name: "Bächle" } }]).name, "Bächle");
+  assert.equal(riverLabel([{ properties: { osm_key: "natural", osm_value: "water", name: "Weiher" } }]), null);
+  assert.equal(riverName(null), "");
 });
 
 test("Rhine goes above gauges that only contain the word; a gauge on the river keeps the gauges first", () => {

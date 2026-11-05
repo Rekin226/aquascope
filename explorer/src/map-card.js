@@ -25,6 +25,7 @@ import { takeOfferedReach, traceRiver } from "./river.js?v=__BUILD__";
 import { shapeSvg } from "./shapes.js?v=__BUILD__";
 import { forecastPoints, gaugePlume } from "./fews.js?v=__BUILD__";
 import { plumeAlt, plumeKey, plumeSvg } from "./fews-core.js?v=__BUILD__";
+import { riverName } from "./place-search-core.js?v=__BUILD__";
 import {
   cardNumber, dayMonth, forecastPeak, lastDays, latestValue, placeCard, prettyUnit, snapshotSentence, sparkPaths,
 } from "./map-card-core.js?v=__BUILD__";
@@ -555,6 +556,12 @@ function pointName(m) {
   return l && l.lat === m.lat && l.lon === m.lon ? l : null;
 }
 
+// The river at the point, for a reach's card and Route it's title (#637): a lake, a fountain or a town near it
+// is not the river, so the reach's own "River reach N" is said instead.
+function pointRiver(m) {
+  return riverName(pointName(m));
+}
+
 function pointModel(p) {
   const id = `point:${p.lat},${p.lon}`;
   const named = pointName(p);
@@ -625,11 +632,12 @@ function onSnap(m, snap) {
     return;
   }
   const order = snap.strahler_order ? `, stream order ${snap.strahler_order}` : "";
-  const named = pointName(m);
+  const named = pointRiver(m);
   m.reachId = snap.river_id;
   m.order = order;
+  m.routeTarget = { river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon };
   updateCard(m.id, {
-    what: "River", title: named ? named.name : `River reach ${snap.river_id}`,
+    what: "River", title: named || `River reach ${snap.river_id}`,
     sub: named ? `River reach ${snap.river_id} · ${coords(m.lat, m.lon)}${order}` : `${coords(m.lat, m.lon)}${order}`,
     lngLat: Number.isFinite(snap.snap_lat) ? [snap.snap_lon, snap.snap_lat] : m.spec.lngLat,
     status: { pending: "Reading the 15-day forecast…" },
@@ -638,10 +646,10 @@ function onSnap(m, snap) {
     // A reach taken from the offer above gets its Trace button back.
     buttons: [traceButton("pt", { ready: Boolean(m.reach) }),
       ...(m.spec.buttons || []).filter((b) => !["trace", "reach", "whatif", "route", "floodit", "replay"].includes(b.id)),
-      routeButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, name: named ? named.name : "" }),
+      routeButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, name: named }),
       whatIfButton({ kind: "reach", river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon }),
       floodItButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, order: snap.strahler_order }),
-      replayButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, name: named ? named.name : "" })],
+      replayButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, name: named })],
   });
   void loadForecast(m, snap);
 }
@@ -749,6 +757,17 @@ export function initMapCard() {
       if (t !== "pt" || !model || model.kind !== "point" || d.lat !== model.lat || d.lon !== model.lon || !d.label) return;
       const sub = model.reachId ? `River reach ${model.reachId} · ${coords(model.lat, model.lon)}${model.order || ""}`
         : coords(model.lat, model.lon);
+      // A card that has snapped to a river takes the river's name only (#637): a lake, a fountain or a town near
+      // the point does not rename the reach, which goes on saying "River reach N" when no river is in reach.
+      if (model.reachId) {
+        const river = riverName(d.label);
+        if (!river) return;
+        const target = model.routeTarget;
+        const buttons = target ? (model.spec.buttons || []).map((b) => (b.id === "route" ? routeButton({ ...target, name: river })
+          : b.id === "replay" ? replayButton({ ...target, name: river }) : b)) : null;
+        updateCard(model.id, buttons ? { title: river, sub, buttons } : { title: river, sub });
+        return;
+      }
       updateCard(model.id, { title: d.label.name, sub });
     });
     root.addEventListener("reachchange", (e) => {

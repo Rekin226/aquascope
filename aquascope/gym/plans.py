@@ -304,14 +304,17 @@ def _checked_recon(raw: Any, source: Path) -> dict[str, Any]:
     return recon
 
 
-def recon_for(ref: Reference, plans_dir: str | Path | None = None) -> dict[str, Any]:
+def recon_for(ref: Reference, plans_dir: str | Path | None = None, *, narrow: bool = True) -> dict[str, Any]:
     """The saved reconnaissance of the case's site, as the Studio's Scout would hold it for this playbook.
 
     The file holds ``assess_site(lat, lon)`` with the full sufficiency table;
     the Scout asks for the playbook's problem kind, which narrows the table
-    to that problem's methods, so the same narrowing is applied here. A
-    deep copy, so a caller may edit it. A file whose shape cannot be read
-    raises ``ValueError`` (see :func:`_checked_recon`).
+    to that problem's methods, so the same narrowing is applied here. Pass
+    ``narrow=False`` for the table as captured, every method in it: validation
+    reads it that way so a method outside the playbook's problem is still
+    checked against the site (#700). A deep copy, so a caller may edit it. A
+    file whose shape cannot be read raises ``ValueError`` (see
+    :func:`_checked_recon`).
     """
     from aquascope import playbooks as pbk
     from aquascope.methods import METHODS
@@ -322,7 +325,7 @@ def recon_for(ref: Reference, plans_dir: str | Path | None = None) -> dict[str, 
         problem = pbk.load(ref.playbook).problem
     except pbk.PlaybookError:
         problem = None
-    if problem:
+    if problem and narrow:
         recon["sufficiency"] = [r for r in recon.get("sufficiency") or []
                                 if r.get("method") in METHODS and problem in METHODS[r["method"]].problems]
     return recon
@@ -354,8 +357,10 @@ def validate_reference(ref: Reference, plans_dir: str | Path | None = None) -> l
     check with the path the catalogue lists for it on that tool (a gate the
     catalogue does not list for the tool is accepted with its own path);
     no required step uses a forbidden tool or method, or a method the saved
-    reconnaissance calls not defensible at the site; a decline names its
-    kind; a solvable case has at least one required analysis step.
+    reconnaissance calls not defensible at the site (read from the full table,
+    not the playbook's problem only, so a method that serves another problem
+    is checked too, #700); a decline names its kind; a solvable case has at
+    least one required analysis step.
     """
     from aquascope import playbooks as pbk
     from aquascope.gates import CHECKS
@@ -398,7 +403,7 @@ def validate_reference(ref: Reference, plans_dir: str | Path | None = None) -> l
     if ref.site.get("lat") is None or ref.site.get("lon") is None:
         errors.append("site needs lat and lon")
     try:
-        recon = recon_for(ref, plans_dir)
+        recon = recon_for(ref, plans_dir, narrow=False)
     except (OSError, ValueError) as exc:
         errors.append(f"recon {ref.recon_name!r}: {type(exc).__name__}: {exc}")
         recon = {}

@@ -26,6 +26,7 @@ import { shapeSvg } from "./shapes.js?v=__BUILD__";
 import { forecastPoints, gaugePlume } from "./fews.js?v=__BUILD__";
 import { plumeAlt, plumeKey, plumeSvg } from "./fews-core.js?v=__BUILD__";
 import { riverName } from "./place-search-core.js?v=__BUILD__";
+import { lookupWaterway } from "./waterway-name.js?v=__BUILD__";
 import {
   cardNumber, dayMonth, forecastPeak, lastDays, latestValue, placeCard, prettyUnit, snapshotSentence, sparkPaths,
 } from "./map-card-core.js?v=__BUILD__";
@@ -559,7 +560,7 @@ function pointName(m) {
 // The river at the point, for a reach's card and Route it's title (#637): a lake, a fountain or a town near it
 // is not the river, so the reach's own "River reach N" is said instead.
 function pointRiver(m) {
-  return riverName(pointName(m));
+  return m.waterwayName || riverName(pointName(m));
 }
 
 function pointModel(p) {
@@ -598,6 +599,9 @@ function nearestGauge(lat, lon) {
 
 function onSnap(m, snap) {
   if (model !== m) return;
+  m.waterwayName = null;
+  const waterwayRun = (m.waterwayRun || 0) + 1;
+  m.waterwayRun = waterwayRun;
   if (!snap || snap.error) {
     updateCard(m.id, { status: { text: "The river network did not answer; Details has the climate and the catchment.", muted: true },
       spark: null, figure: null });
@@ -636,6 +640,19 @@ function onSnap(m, snap) {
   m.reachId = snap.river_id;
   m.order = order;
   m.routeTarget = { river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon };
+  // A slow lookup never holds up the card. Ignore replies for an older selection or reach.
+  if (Number.isFinite(snap.snap_lat) && Number.isFinite(snap.snap_lon)) {
+    const reachId = snap.river_id;
+    void lookupWaterway(snap.snap_lat, snap.snap_lon).then((name) => {
+      if (!name || model !== m || m.reachId !== reachId || m.waterwayRun !== waterwayRun) return;
+      m.waterwayName = name;
+      const target = m.routeTarget;
+      const buttons = target ? (m.spec.buttons || []).map((b) => (b.id === "route" ? routeButton({ ...target, name })
+        : b.id === "replay" ? replayButton({ ...target, name }) : b)) : null;
+      const sub = `River reach ${reachId} · ${coords(m.lat, m.lon)}${m.order || ""}`;
+      updateCard(m.id, buttons ? { title: name, sub, buttons } : { title: name, sub });
+    });
+  }
   updateCard(m.id, {
     what: "River", title: named || `River reach ${snap.river_id}`,
     sub: named ? `River reach ${snap.river_id} · ${coords(m.lat, m.lon)}${order}` : `${coords(m.lat, m.lon)}${order}`,
@@ -760,7 +777,7 @@ export function initMapCard() {
       // A card that has snapped to a river takes the river's name only (#637): a lake, a fountain or a town near
       // the point does not rename the reach, which goes on saying "River reach N" when no river is in reach.
       if (model.reachId) {
-        const river = riverName(d.label);
+        const river = pointRiver(model);
         if (!river) return;
         const target = model.routeTarget;
         const buttons = target ? (model.spec.buttons || []).map((b) => (b.id === "route" ? routeButton({ ...target, name: river })

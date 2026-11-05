@@ -39,7 +39,8 @@ came without a name (a click, a `#p=` link) is titled with the nearest named
 water within 5 km, else the nearest town, and the line under the title says the
 name comes from OpenStreetMap. The card of the reach it snaps to, and Route it's
 title, take the river from that same answer and never a lake, a pond or a fountain
-beside the point (#637): with no river within 5 km they say "River reach N".
+beside the point (#637): when no river is among the nearest named waters, they
+say "River reach N".
 
 Stations already mirrored in the [Archive](archive.md) load from it (one small
 file) instead of from the agency, so they are faster and do not add load

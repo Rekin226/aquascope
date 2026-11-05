@@ -119,7 +119,7 @@ test("a pond nearer the point names the place; the river behind it names the rea
 test("a lake with no river near it is not a river (#637)", () => {
   const lake = R.bodensee_water;
   assert.equal(riverLabel(lake), null);
-  // The nearest water is still the place's name — a lake is not relabelled a river.
+  // The nearest water is still the place's name; a lake is not relabelled a river.
   assert.deepEqual(pointLabel(lake, []),
     { name: "Lake Constance", detail: "Baden-Württemberg, Germany", water: true });
   assert.equal(riverName({ ...pointLabel(lake, []), river: riverLabel(lake) }), "");

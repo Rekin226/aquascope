@@ -42,7 +42,8 @@ Terms (``danepubliczne.imgw.pl/regulations``): re-use is open to everyone under
 Poland's open data act and EU regulation 2023/138 on high-value datasets, on
 condition that products state „Źródłem pochodzenia danych jest Instytut
 Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy" and, where the
-data were processed, „Dane IMGW-PIB zostały przetworzone". Both sit in the
+data were processed, „Dane Instytutu Meteorologii i Gospodarki Wodnej –
+Państwowego Instytutu Badawczego zostały przetworzone". Both sit in the
 registry attribution. Commercial use of basic-network data beyond the
 high-value datasets needs an agreement with IMGW-PIB (§ 3 of the terms).
 

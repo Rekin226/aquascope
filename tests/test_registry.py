@@ -98,6 +98,19 @@ def test_taiwan_wra_level_attribution_includes_ogdl_exhibit_notice():
     assert "https://data.gov.tw/license" in attribution
 
 
+def test_poland_imgw_attribution_keeps_both_imgw_notices_verbatim():
+    """#473: the terms require both notices word for word, source and processing side by side (§ 5 ust. 3 and 4)."""
+    attribution = SOURCES["poland_imgw"].attribution
+    assert (
+        "Źródłem pochodzenia danych jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy"
+        in attribution
+    )
+    assert (
+        "Dane Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego zostały przetworzone"
+        in attribution
+    )
+
+
 def test_helper_lists():
     assert set(station_sources()) == {k for k, m in SOURCES.items() if m.supports_station_lookup}
     assert set(station_sources("discharge")) <= set(station_sources())

@@ -19,8 +19,8 @@ Pyodide. Nothing to install, no server, no account.
 
 - Station catalog: [`Rekin226/aquascope-gauges`](https://huggingface.co/datasets/Rekin226/aquascope-gauges)
   (GeoParquet, harvested weekly), read in place with DuckDB-WASM. The catalog
-  holds **75,878 stations** and the observation mirror holds daily records for
-  **5,788 of them** (2026-10-26 harvest).
+  holds **75,892 stations** and the observation mirror holds daily records for
+  **6,231 of them** (2026-11-02 harvest).
 - Sources with a catalog today (11): USGS, the Environment Agency (England), Hub'Eau
   (France), PEGELONLINE (Germany), Ireland OPW, Taiwan CWA, the Australian Bureau of
   Meteorology, Brazil ANA, Greece Hydroscope, Greece OpenHi and Poland IMGW.

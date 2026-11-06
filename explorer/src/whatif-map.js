@@ -24,7 +24,7 @@ import { clearCatchment } from "./basins.js?v=__BUILD__";
 import { QUICK_PRIORITY, call, callLight } from "./worker-client.js?v=__BUILD__";
 import {
   CLASSES, MEASURES, NEUTRAL, basinRows, beforeSet, classOf, heldWords, lineColorExpr, lineFilterExpr, logLabel,
-  notReadLine, outletLines, paintedIds, pct, reachCard, resultBounds, scenarioWords, sliderValues,
+  notReadLine, outletLines, paintedIds, pct, reachCard, restValues, resultBounds, scenarioWords, sliderValues,
 } from "./whatif-core.js?v=__BUILD__";
 
 const L = {
@@ -426,7 +426,16 @@ async function readLine(text) {
       // The rules read part of the line: those values go on the sliders and the line says what was left, so no
       // clause is dropped in silence and nothing runs on half a sentence.
       const partial = rules && rules.scenario ? rules.scenario : null;
-      if (partial) { evap = Number(partial.dpet_pct) || null; showSliders(sliderValues(partial)); }
+      if (partial) {
+        evap = Number(partial.dpet_pct) || null;
+        showSliders(sliderValues(partial));
+      } else {
+        // Nothing was read: the sliders go back to what the map shows, so the panel keeps no number the line did
+        // not set (#646). With nothing painted they empty, and the run button has nothing to run.
+        const rest = restValues(shown && shown.result);
+        evap = rest.dpet_pct;
+        showSliders(rest);
+      }
       $("wi-read").hidden = true;
       say(escapeHtml(notReadLine({ rules, tried, hasKey: Boolean(askModelConfig()) })), "warn");
       return;

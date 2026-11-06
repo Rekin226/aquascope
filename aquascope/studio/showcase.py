@@ -38,19 +38,17 @@ from pathlib import Path
 from typing import Any
 
 from aquascope import __version__
+from aquascope.ai_engine.providers import PRICES as _PROVIDER_PRICES
 
 logger = logging.getLogger(__name__)
 
 __all__ = ["CASES", "Case", "PRICES", "already_recorded", "diagnose", "headline", "load_index", "load_meta",
            "record", "synthetic_flows", "usd_for", "write_index"]
 
-#: USD per million tokens (prompt, completion) the ledger's estimate uses, per model; the maintainer's rate
-#: for the run. The estimate is written into every meta.json with the rate, so a reader can recompute it.
-PRICES: dict[str, tuple[float, float]] = {
-    "claude-sonnet-5": (3.0, 15.0),
-    "claude-opus-5": (5.0, 25.0),
-    "claude-haiku-4-5": (1.0, 5.0),
-}
+#: USD per million tokens (prompt, completion) the ledger's estimate uses, per model: the package's one price
+#: table (:data:`aquascope.ai_engine.providers.PRICES`). The estimate is written into every meta.json with the
+#: rate, so a reader can recompute it.
+PRICES: dict[str, tuple[float, float]] = dict(_PROVIDER_PRICES)
 DEFAULT_PRICE = (3.0, 15.0)
 
 #: A recorded workspace above this many bytes has its result lists trimmed (the page holds every recording).
@@ -434,7 +432,7 @@ def record(
     out_dir: str | Path = "explorer/showcase/studies",
     *,
     provider: str | None = "anthropic",
-    model: str | None = "claude-sonnet-5",
+    model: str | None = "claude-sonnet-5-5",
     api_key: str | None = None,
     base_url: str | None = None,
     max_usd: float = 15.0,

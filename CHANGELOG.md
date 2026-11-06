@@ -14,6 +14,11 @@ All notable changes to AquaScope are documented here.
   `supply_reliability` case. A faithful report of that recording states the screening verdict and its numbers, and
   does not read a p = 0.5753 Mann-Kendall result as a trend direction.
 - **中文 quickstart** (#31): `docs/i18n/README.zh.md` translates the README's introduction, install steps, first two examples and CLI snippet, and the README's language line now links it. Code blocks, commands, paths, package names and outputs are unchanged.
+- **Report-quality reference for `nairobi-drought`** (#441): the fifth HydroGym report reference, and the first
+  `drought_status` case. A faithful report of that recording states the short-term SPEI-3 screening result
+  (-1.404 in a 39.9-year ERA5 record, SPI-3 -0.390, all 6- and 12-month indices near normal) and does not read
+  the SPEI/SPI divergence as a rainfall deficit, the reanalysis as a gauge measurement, a non-significant GloFAS
+  trend as a decline, or moderately dry as a severe drought.
 
 ### Changed
 - **Explorer live smoke diagnostics** (#702): retain catalog boot errors, browser console errors, trace entries and failed HTTP requests when a case fails, to help identify where a cold load stopped.

@@ -1,0 +1,111 @@
+# AquaScope Bench report-quality reference (#382); the authoring rules are in _authoring.yaml.
+# Recorded 2026-09-14. No rain gauge sits in the catalogue within a defensible distance of Nairobi, so the
+# three steps read an ERA5 cell (about 9 km) through Open-Meteo: the HydroATLAS sub-basin, 40 years of ERA5
+# climate with modelled GloFAS discharge, and SPI/SPEI at 3, 6 and 12 months on a 39.9-year monthly record.
+# Every gate passed and no step failed, so no failed_step_named assertion applies here. The headline is
+# SPEI-3 = -1.404 (moderately dry) on 2026-08-01, but SPI-3 is -0.390 (near normal) and the 6- and 12-month
+# SPI and SPEI are all near normal, so the recording's own reading is a short-term moisture-balance deficit
+# capped at screening, not a sustained meteorological drought. Three defects in the recording are named here
+# rather than asserted: report.caveats says the PET is Thornthwaite from ERA5 temperature while s3 actually
+# used FAO-56 (`pet_method: fao56`); the same caveats mention an SPI-to-SGI lag for an SGI series this study
+# never computed; and the answer's Notice points at "the list of what this study does not establish" while that
+# list is empty. None of the three is scored (the scorer reads the answer and section text, not the caveats
+# field), and a must_say the recording itself misses would fail its own score, which the test suite requires to
+# be 1.0.
+id: nairobi-drought
+study: nairobi-drought
+title: A short-term SPEI screening, not a sustained meteorological drought
+rationale: >-
+  The one result that decides the question is the three-month SPEI of -1.404 on 2026-08-01, and it is
+  moderately dry only against the 39.9-year ERA5 record on which it was standardised (479 months, 1986-10 to
+  2026-08). The same record gives SPI-3 = -0.390, so the two indices diverge by -1.014: with rainfall near
+  normal, the negative SPEI is carried by the evaporative-demand term of a cell whose ERA5 climate is 672.7
+  mm/yr of precipitation against 1523.7 mm/yr of FAO-56 ET0 (aridity 0.4415, semi-arid), not by a rainfall
+  shortfall. SPEI-6 (0.730), SPI-6 (0.975), SPEI-12 (0.669) and SPI-12 (0.805) are all near normal, so the
+  honest answer is a short-lived moisture-balance deficit at three months and no sustained meteorological
+  drought. Three ways to get this wrong are live in the recording. First, reading the divergence backwards:
+  saying a rainfall deficit drove the dryness, or that SPI-3 confirms the drought, when SPI-3 is the index
+  that does not. Second, treating the reanalysis as a measurement: no gauge is in the catalogue, the brief
+  forbids an at-site method, and the recording caps every drought finding at screening for that reason, so
+  "measured", "observed" or a station record would be a category error. Third, over-reading what is not
+  significant or not attributed: GloFAS is modelled context (mean 4.13 m3/s) whose annual-maximum trend (p =
+  0.8219) and mean-annual trend (p = 0.4877) both show no trend, so a declining-flow claim is unsupported;
+  the ERA5 temperature trend (+0.2431 C/decade, p = 8.9e-05) is real but the study states no cause, so
+  attributing the drought to it overreaches. The screening grade also rests on a baseline choice worth
+  stating: -1.404 is an anomaly against this 39.9-year ERA5 window, not against a fixed 1991-2020 normal,
+  and one moderately dry timescale is not an operational drought declaration while 6 and 12 months are
+  normal. Finally, the sub-basin offered for the "smallholder farms around the city" is 83 % urban with 3 %
+  cropland and 1 % pasture, so the cell's index cannot be read as an impact on those farms.
+tags: [drought_status, spei, reanalysis, screening_grade]
+must_say:
+  - kind: number
+    value: -1.404
+    tol: 0.01
+    label: the SPEI-3 headline on 2026-08-01
+  - kind: number
+    value: -0.390
+    tol: 0.02
+    label: SPI-3 at the same cell and date, near normal
+  - kind: number
+    value: 39.9
+    tol: 0.01
+    unit: years
+    label: the monthly ERA5 record the indices are standardised on
+  - kind: phrase
+    any: ["moderately dry"]
+    label: the McKee class the SPEI-3 falls in
+  - kind: phrase
+    any: ["near normal"]
+    label: the 6- and 12-month verdict
+  - kind: phrase
+    any: ["FAO-56"]
+    label: the PET method the run actually used
+  - kind: phrase
+    section: limitations
+    any: ["rain gauge", "rain-gauge", "not a station"]
+    label: limitations say the indices are not a station record
+  - kind: grade
+    grade: screening
+    label: the answer is graded screening, not established
+must_not_say:
+  # Phrase assertions are case-insensitive plain substrings over the whole report, so each set names the
+  # claim rather than the bare word (the #695 lesson): a faithful sentence may mention rainfall or a gauge,
+  # but a report that reverses the SPEI/SPI divergence, promotes the reanalysis to a measurement, escalates
+  # the class, reads a direction into a non-significant trend or attributes the temperature trend does not.
+  - kind: phrase
+    any: ["was driven by a rainfall deficit", "rainfall deficit is the cause", "the deficit is in rainfall",
+          "rainfall shortfall drove", "precipitation deficit drove", "a rainfall deficit of"]
+    label: no rainfall-deficit reading of a deficit carried by evaporative demand
+  - kind: phrase
+    any: ["SPI-3 confirms the drought", "SPI-3 confirms drought", "SPI confirms the drought",
+          "both SPI and SPEI show drought", "SPI-3 also shows drought", "SPI-3 indicates drought"]
+    label: no claim that SPI corroborates the dry SPEI
+  - kind: phrase
+    any: ["drought is severe", "indicates severe drought", "indicates extreme drought",
+          "severe drought affecting", "extreme drought affecting"]
+    label: no escalation from moderately dry to severe or extreme
+  - kind: phrase
+    any: ["was measured at the gauge", "were measured at the gauge", "the gauge record shows",
+          "gauge observations show the", "station observations show the", "observed rainfall shows the"]
+    label: no claim that a gauge measured the indices
+  - kind: phrase
+    any: ["discharge is declining", "shows a declining discharge", "declining discharge trend",
+          "streamflow is decreasing", "flows are declining"]
+    label: no trend where both GloFAS trends are not significant
+  - kind: phrase
+    any: ["is due to climate change", "is caused by climate change",
+          "climate change is driving the drought", "is driven by global warming",
+          "is the result of anthropogenic warming"]
+    label: no attribution of the temperature trend or the drought
+decision:
+  value: -1.404
+  unit: ""
+  tolerance: 0.01
+  grade: screening
+findings:
+  decision:
+    grade: screening
+    value: -1.404
+    unit: ""
+    tolerance: 0.01
+  data_requests: ["rain-gauge", "soil moisture"]

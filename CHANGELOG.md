@@ -13,6 +13,7 @@ All notable changes to AquaScope are documented here.
 - **Report-quality reference for `potomac-supply`** (#441): the fourth HydroGym report reference, and the first
   `supply_reliability` case. A faithful report of that recording states the screening verdict and its numbers, and
   does not read a p = 0.5753 Mann-Kendall result as a trend direction.
+- **中文 quickstart** (#31): `docs/i18n/README.zh.md` translates the README's introduction, install steps, first two examples and CLI snippet, and the README's language line now links it. Code blocks, commands, paths, package names and outputs are unchanged.
 
 ### Changed
 - **Explorer live smoke diagnostics** (#702): retain catalog boot errors, browser console errors, trace entries and failed HTTP requests when a case fails, to help identify where a cold load stopped.

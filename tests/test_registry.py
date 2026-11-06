@@ -94,6 +94,8 @@ def test_taiwan_wra_level_attribution_includes_ogdl_exhibit_notice():
     """#473: OGDL-Taiwan-1.0 Section 3.2 requires attribution in the form of the Exhibit."""
     attribution = SOURCES["taiwan_wra_level"].attribution
     assert "經濟部水利署" in attribution
+    assert "2017" in attribution
+    assert "即時水位資料" in attribution
     assert "Open Government Data License" in attribution
     assert "https://data.gov.tw/license" in attribution
 

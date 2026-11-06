@@ -25,8 +25,8 @@ facts, written here. The model picks, the code writes (#590, round 3): a model (
 on-device model) decides which findings to pin, in what order, and which of three fixed variants of each to
 show (:func:`review_variants`), as ids held to a JSON Schema of enums (:func:`review_schema`). It writes no word
 of a pin, so it cannot change a value, a count, a bound, a severity or a "not"; a problem is pinned even when it
-is left out, and a finding the modeller's own question names — "is the model stable?", "are there numerical
-instabilities?" — is pinned too (:func:`named_findings`); the review's counts are always the rules' counts. A
+is left out, and a finding the modeller's own question names ("is the model stable?", "are there numerical
+instabilities?") is pinned too (:func:`named_findings`); the review's counts are always the rules' counts. A
 reply outside the enums is refused whole and the rules' wording stands (:func:`apply_words`). The older checks
 (:func:`negation_flip`, the claim lock of :func:`aquascope.map_explain.claim_lock`) stay as a second line of
 defence; the tests hold every variant to them.
@@ -942,7 +942,7 @@ _NAMED_BY_QUESTION: dict[str, re.Pattern[str]] = {
 
 def named_findings(findings: list[dict[str, Any]], question: str = "") -> list[str]:
     """The ids of the findings a question explicitly asks about, in the review's order. A question about
-    stability or instabilities — "is the model stable?", "are there any numerical instabilities in this run?" —
+    stability or instabilities ("is the model stable?", "are there any numerical instabilities in this run?")
     asks about the wet and dry flicker (:data:`_NAMED_BY_QUESTION`); a question naming none of those words names
     nothing, and no finding is added to the pins."""
     words = (question or "").strip()

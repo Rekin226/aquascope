@@ -272,8 +272,15 @@ def parse_scenario(text: str) -> dict[str, Any]:
     norm = re.sub(r"^(?:what if|what happens if|if|suppose|imagine)\s+", "", norm)
     parts = [p.strip() for p in re.split(r"\s*(?:;|,|\band\b|\bwith\b|\bplus\b(?=\s+\D)|&)\s*", norm) if p.strip()]
     found: dict[str, float] = {}
+    unitless_withdrawal = False
     for part in parts:
         kind, value, left = _clause(part)
+        tokens = number_tokens(part)
+        if kind == "demand_cms" and tokens and tokens[0]["share"]:
+            unitless_withdrawal = True
+            out["unknown"].append(part)
+            out["errors"].append(f"{part}: the words give no unit for it")
+            continue
         if kind is None or value is None:
             out["unknown"].append(part)
             if kind is not None and value is None:
@@ -283,10 +290,11 @@ def parse_scenario(text: str) -> dict[str, Any]:
         out["rules"].append(kind)
         if left:
             out["unknown"].append(left)
-    if not found:
+    if unitless_withdrawal or not found:
         return out
     checked, errors = check_scenario(found)
-    out.update(scenario=checked, errors=errors, said=scenario_label(checked))
+    out["errors"].extend(errors)
+    out.update(scenario=checked, said=scenario_label(checked))
     changed = any(checked[k] for k in ("dp_pct", "dt_c", "demand_cms")) or bool(checked["dpet_pct"])
     out["matched"] = changed and not out["unknown"]
     return out
@@ -343,7 +351,7 @@ _SINGULAR_SHARES = r"tenth|eighth|sixth|fifth|quarter|third"
 _PLURAL_SHARES = r"tenths|eighths|sixths|fifths|quarters|thirds|halves"
 _SHARE_NUMS = "|".join(sorted(_SMALL[1:], key=len, reverse=True)) + r"|\d+"
 _SHARE_RE = (
-    r"(?:\b(?:(?:a|one)[\s-](?:" + _SINGULAR_SHARES + r")|an[\s-]eighth|(?:a[\s-])?half)\b"
+    r"(?:\b(?:(?:a|one|1)[\s-](?:" + _SINGULAR_SHARES + r")|an[\s-]eighth|(?:a[\s-])?half)\b"
     r"|\b(?:" + _SHARE_NUMS + r")[\s-](?:" + _PLURAL_SHARES + r")\b)"
 )
 _TOKEN = re.compile(
@@ -374,7 +382,7 @@ def _token_value(token: str) -> tuple[float, bool] | None:
     t = re.sub(r"[\s-]+", " ", str(token or "").strip().lower())
     if re.fullmatch(r"\d+(?:,\d{3})*(?:\.\d+)?", t):
         return float(t.replace(",", "")), False
-    single = re.fullmatch(r"(?:(?:a|an|one) )?(tenth|eighth|sixth|fifth|quarter|third|half)", t)
+    single = re.fullmatch(r"(?:(?:a|an|one|1) )?(tenth|eighth|sixth|fifth|quarter|third|half)", t)
     if single:
         return _SHARES[single.group(1)], True
     compound = re.fullmatch(r"(\w+|\d+)\s+(tenths|eighths|sixths|fifths|quarters|thirds|halves)", t)
@@ -775,7 +783,8 @@ def whatif(
     if text and not any(_num(v) for v in given.values()):
         parsed = parse_scenario(text)
         if not parsed["scenario"]:
-            out["error"] = (f"could not read a scenario from {text!r}; say for example '20% less rain and 2 degrees "
+            out["error"] = (parsed["errors"][0] if parsed["errors"] else
+                            f"could not read a scenario from {text!r}; say for example '20% less rain and 2 degrees "
                             "warmer', or give the numbers")
             return out
         given = parsed["scenario"]

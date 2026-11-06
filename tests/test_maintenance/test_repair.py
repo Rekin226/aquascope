@@ -58,6 +58,20 @@ def test_propose_repair_uses_the_client(monkeypatch):
     assert seen["messages"][0]["role"] == "system" and "aquascope/collectors/x.py" in seen["messages"][1]["content"]
 
 
+def test_oversized_model_request_explains_413_without_calling_git(monkeypatch):
+    ev = repair.Evidence("bom", "failed", "HTTP 404", "aquascope/collectors/bom.py", "x" * 35_000)
+    monkeypatch.setattr(repair, "gather_evidence", lambda *args, **kwargs: ev)
+
+    def oversized(*args, **kwargs):
+        raise RuntimeError("HTTP 413 Request too large for model on tokens per minute (TPM): Limit 8000, Requested 8971")
+
+    monkeypatch.setattr(repair, "propose_repair", oversized)
+    result = repair.repair_source("bom", "failed", "HTTP 404", probe=False)
+    assert result.outcome == "error"
+    assert "HTTP 413" in result.note and "ANTHROPIC_API_KEY" in result.note
+    assert "reduce the collector evidence" in result.note
+    assert result.proposal is None and result.verification is None
+
 def _scratch_repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     (root / "aquascope" / "collectors").mkdir(parents=True)

@@ -150,9 +150,10 @@ json.dumps(_o)
 }
 
 // The review's calls: their arguments travel as one JSON string and come back as one.
-function reviewCall({ id, type, rows, context, findings, reply, by }) {
+function reviewCall({ id, type, rows, context, findings, reply, by, question }) {
   pyodide.globals.set("_rq", JSON.stringify({ type, rows: rows || [], context: context || null, findings: findings || [],
-    reply: reply === undefined ? null : reply, by: by || "model", text: typeof context === "string" ? context : "" }));
+    reply: reply === undefined ? null : reply, by: by || "model", text: typeof context === "string" ? context : "",
+    question: typeof question === "string" ? question : "" }));
   const out = pyodide.runPython(`
 _q = json.loads(_rq)
 if _M is None:
@@ -162,9 +163,9 @@ if _q["type"] == "inside":
 elif _q["type"] == "review":
     _o = _review.review(_M, context=_q["context"])
 elif _q["type"] == "prompt":
-    _o = _review.review_prompt(_q["findings"], _q["text"])
+    _o = _review.review_prompt(_q["findings"], _q["text"], _q["question"])
 else:
-    _o = _review.apply_words(_q["findings"], _q["reply"], by=_q["by"])
+    _o = _review.apply_words(_q["findings"], _q["reply"], by=_q["by"], question=_q["question"])
 json.dumps(_o, default=str)
 `);
   post({ id, result: JSON.parse(out) });

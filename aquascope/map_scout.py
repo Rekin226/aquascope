@@ -362,8 +362,8 @@ TEMPLATES: dict[str, dict[str, str]] = {
     },
     "floods_ahead": {
         "title": "{place}: {rp} flow forecast",
-        "reason": "GEOGLOWS forecast of {issue}: {peak} on {day}, at or above the {rp} flow{rpflow}; the 2-year "
-                  "flow is {q2}. {members} ensemble members reach it.{nearby}",
+        "reason": "GEOGLOWS forecast of {issue}: {peak} on {day}, at or above the {rp} flow{rpflow}. {members} "
+                  "ensemble members reach the 2-year flow of {q2}.{nearby}",
     },
     "floods_past": {
         "title": "{place}: floods in {month}",
@@ -765,7 +765,8 @@ def floods_ahead_findings(features: list[dict[str, Any]], manifest: dict[str, An
                    "nearby": (f" {nearby} more reach{'es' if nearby != 1 else ''} within {group_km:g} km "
                               f"{'do' if nearby != 1 else 'does'} too." if nearby else "")},
             facts=[{"label": "Forecast peak", "value": sig(float(peak), 3), "unit": "m³/s"},
-                   *([{"label": f"{rp}-year flow", "value": sig(float(q), 3), "unit": "m³/s"}] if q else []),
+                   *([{"label": f"{rp}-year flow", "value": sig(float(q), 3), "unit": "m³/s"}]
+                     if q and rp != 2 else []),
                    {"label": "2-year flow", "value": sig(float(q2 or 0), 3), "unit": "m³/s"},
                    {"label": "Peak day", "value": h.get("day") or "unknown"},
                    {"label": f"Members of {MEMBERS} reaching the 2-year flow",

@@ -14,8 +14,24 @@ export const CASES = [
 export async function recordToExport(page, baseURL, entry, { output, phase = "cold" } = {}) {
   const started = performance.now();
   const errors = [];
+  // Keep diagnostics bounded and omit URL query strings, which may contain tokens.
+  const network = [];
+  const consoleErrors = [];
+  const cleanURL = raw => {
+    try { const url = new URL(raw); return `${url.origin}${url.pathname}`; }
+    catch { return "<invalid URL>"; }
+  };
+  const add = (items, value) => { if (items.length < 30) items.push(value); };
   const onError = e => errors.push(String(e.message));
+  const onConsole = msg => { if (msg.type() === "error") add(consoleErrors, msg.text().slice(0, 500)); };
+  const onRequestFailed = req => add(network, { url: cleanURL(req.url()), error: String(req.failure()?.errorText || "unknown").slice(0, 200) });
+  const onResponse = response => {
+    if (response.status() >= 400) add(network, { url: cleanURL(response.url()), status: response.status() });
+  };
   page.on("pageerror", onError);
+  page.on("console", onConsole);
+  page.on("requestfailed", onRequestFailed);
+  page.on("response", onResponse);
   const result = { case: entry.id, phase, status: "failed", timings_ms: {} };
   try {
     const stationURL = `${baseURL.replace(/\/$/, "")}/#s=${entry.source}/${entry.station}&tab=overview`;
@@ -62,7 +78,16 @@ export async function recordToExport(page, baseURL, entry, { output, phase = "co
     result.error = String(error.message);
     result.visible_status = await page.locator("#status").textContent().catch(() => null);
     result.page_errors = errors;
-  } finally { page.off("pageerror", onError); }
+    result.boot_error = await page.locator("#boot-error").textContent({ timeout: 2000 }).catch(() => null);
+    result.trace = await page.evaluate(() => (globalThis.__aq?.log || []).slice(-30)).catch(() => null);
+    result.console_errors = consoleErrors;
+    result.network_errors = network;
+  } finally {
+    page.off("pageerror", onError);
+    page.off("console", onConsole);
+    page.off("requestfailed", onRequestFailed);
+    page.off("response", onResponse);
+  }
   return result;
 }
 

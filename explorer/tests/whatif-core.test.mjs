@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 
 import {
   BEFORE, CLASSES, NEUTRAL, basinRows, beforeSet, classOf, colorOf, lineColorExpr, lineFilterExpr, logLabel, outletLines,
-  paintedIds, pct, rangeWords, reachCard, resultBounds, scenarioWords, sigWords, sliderValues, heldWords, notReadLine,
+  paintedIds, pct, rangeWords, reachCard, restValues, resultBounds, scenarioWords, sigWords, sliderValues, heldWords,
+  notReadLine,
 } from "../src/whatif-core.js";
 import { slotOf } from "../src/map-actions-core.js";
 
@@ -97,6 +98,18 @@ test("the sliders take a scenario in their words and within their ends", () => {
   assert.equal(scenarioWords({ dp_pct: -20, dt_c: 2, demand_cms: 0 }), "20% less rain, 2 °C warmer");
   assert.equal(scenarioWords({}), "no change");
   assert.deepEqual(sliderValues({ dp_pct: -80, dt_c: 9, demand_cms: 3 }), { dp_pct: -50, dt_c: 6, demand_cms: 3 });
+});
+
+test("a line that reads nothing puts the sliders back to what the map shows", () => {
+  // The panel must not keep the last line's numbers when the words it was given read nothing (#646).
+  assert.deepEqual(restValues(RESULT), { dp_pct: -20, dt_c: 2, demand_cms: 0, dpet_pct: null });
+  assert.deepEqual(restValues({ scenario: { dp_pct: -20, dt_c: 2, dpet_pct: 10, demand_cms: 0.4 } }),
+    { dp_pct: -20, dt_c: 2, demand_cms: 0.4, dpet_pct: 10 });
+  // Held at the sliders' ends like any scenario, and empty when no run is painted.
+  assert.deepEqual(restValues({ scenario: { dp_pct: -80, dt_c: 9 } }),
+    { dp_pct: -50, dt_c: 6, demand_cms: 0, dpet_pct: null });
+  assert.deepEqual(restValues(null), { dp_pct: 0, dt_c: 0, demand_cms: 0, dpet_pct: null });
+  assert.deepEqual(restValues({}), { dp_pct: 0, dt_c: 0, demand_cms: 0, dpet_pct: null });
 });
 
 test("a what-if run has its own slot in the action log", () => {

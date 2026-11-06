@@ -33,7 +33,7 @@ No installation; core Explorer workflows need no API key.
 
 [![Support on Ko-fi](https://img.shields.io/badge/Support%20AquaScope-Ko--fi-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/getaquascope) if AquaScope helps your research.
 
-🌐 Read this in: [Français](docs/i18n/README.fr.md)
+🌐 Read this in: [中文](docs/i18n/README.zh.md) · [Français](docs/i18n/README.fr.md)
 
 </div>
 

@@ -200,11 +200,24 @@ def test_floods_ahead_groups_a_river_and_never_claims_a_flow_it_lacks():
     big, creek = out[0], out[1]
     assert big["slots"]["nearby"] == " 1 more reach within 200 km does too."
     assert big["reason"] == ("GEOGLOWS forecast of Fri 9 Oct: 2,840 m³/s on Wed 14 Oct, at or above the 25-year "
-                             "flow of 2,500 m³/s; the 2-year flow is 1,050 m³/s. All 51 ensemble members reach it. "
+                             "flow of 2,500 m³/s. All 51 ensemble members reach the 2-year flow of 1,050 m³/s. "
                              "1 more reach within 200 km does too.")
-    assert creek["slots"]["rpflow"] == "" and "100-year flow; the 2-year flow is 24.7 m³/s" in creek["reason"]
-    assert "36 of 51 ensemble members" in creek["reason"]
+    assert creek["slots"]["rpflow"] == "" and "100-year flow." in creek["reason"]
+    assert "36 of 51 ensemble members reach the 2-year flow of 24.7 m³/s" in creek["reason"]
     assert not any(f["label"] == "100-year flow" for f in creek["facts"])
+
+
+def test_a_two_year_forecast_lists_the_2_year_flow_once_and_names_it_for_the_members():
+    # #646: the facts listed "2-year flow" twice when the forecast's own class was the 2-year flow, and "All 51
+    # ensemble members reach it" could be read as the class flow. The count is always of the 2-year flow.
+    f = ms.floods_ahead_findings([_reach(4, 39.1, -96.9, 2, 300, 290, share=1.0)],
+                                 {"issue_date": "2026-10-09"})[0]
+    labels = [x["label"] for x in f["facts"]]
+    assert labels.count("2-year flow") == 1 and len(labels) == 5
+    assert "Reaches nearby also passing" in labels
+    assert f["reason"].endswith("at or above the 2-year flow. All 51 ensemble members reach the 2-year flow of "
+                                "290 m³/s.")
+    assert "reach it" not in f["reason"]
 
 
 # ── floods past ──────────────────────────────────────────────────────────────

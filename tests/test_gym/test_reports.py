@@ -171,15 +171,16 @@ def test_findings_scored_against_a_reference():
     assert out["asked_when_reference_asks"] == 1.0
 
 
-# ── the four references load and score ──
+# ── the five references load and score ──
 
 
-def test_the_four_references_load_and_validate():
+def test_the_five_references_load_and_validate():
     assert {r.id for r in REFS} == {
         "kingston-flood",
         "cambridge-groundwater",
         "toulouse-irrigation",
         "potomac-supply",
+        "nairobi-drought",
     }
     for ref in REFS:
         assert ref.study and (ref.must_say or ref.must_not_say)
@@ -251,6 +252,25 @@ def test_potomac_supply_does_not_misfire_on_faithful_phrases_and_still_catches_c
         out = gr.score_report(w, reference=ref)
         assert out["reference"]["must_not_say"]["violated"], claim
         assert out["reference"]["score"] < 1.0, claim
+
+
+def test_nairobi_drought_states_the_short_term_spei_screening_and_scores_clean():
+    """The 2026-09-14 recording has no rain gauge in the catalogue and reads an ERA5 cell: SPEI-3 is -1.404
+    (moderately dry) while SPI-3 is -0.390 (near normal), and the 6- and 12-month SPI and SPEI are all near
+    normal, so the answer is a short-term moisture-balance screening result, not a sustained meteorological
+    drought. Both GloFAS trends are insignificant (p = 0.8219 and 0.4877), so the reference forbids a
+    declining-flow claim; it also forbids reading the SPEI/SPI divergence as a rainfall deficit, escalating
+    moderately dry to severe, or presenting the reanalysis as a gauge measurement. The findings decision and
+    the two data requests it asks for are pinned too."""
+    ref = BY_ID["nairobi-drought"]
+    with (gr.SHOWCASE_DIR / ref.study / "workspace.json").open(encoding="utf-8") as fh:
+        ws = json.load(fh)
+    out = gr.score_report(ws, reference=ref)
+    assert out["reference"]["must_say"]["failed"] == [], out["reference"]
+    assert out["reference"]["must_not_say"]["violated"] == []
+    assert out["reference"]["score"] == 1.0
+    assert out["findings"]["decision_agreement"] == 1.0
+    assert out["findings"]["asked_when_reference_asks"] == 1.0
 
 
 # ── the CLI ──

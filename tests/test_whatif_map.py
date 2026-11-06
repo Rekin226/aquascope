@@ -498,6 +498,31 @@ def test_compound_fractional_shares_and_quantities():
     assert model_s["scenario"]["dp_pct"] == pytest.approx(-75.0)
 
 
+@pytest.mark.parametrize("phrase, expected", [("1 third", -100 / 3), ("1-third", -100 / 3), ("1 quarter", -25)])
+def test_digit_one_singular_share_on_both_paths(phrase, expected):
+    line = f"{phrase} less rain"
+    rules = wm.parse_scenario(line)
+    model = wm.parse_scenario_reply(_reply(("less_rain", phrase, "fraction")), line)
+    assert rules["matched"] and not rules["errors"]
+    assert rules["scenario"]["dp_pct"] == pytest.approx(expected, abs=0.001)
+    assert not model["errors"]
+    assert model["scenario"]["dp_pct"] == pytest.approx(expected, abs=0.001)
+
+
+def test_unitless_withdrawal_share_is_refused_even_with_another_valid_clause():
+    for line in ("take half the river", "take half the river and 10% less rain"):
+        result = wm.parse_scenario(line)
+        assert not result["matched"]
+        assert any("the words give no unit for it" in e for e in result["errors"])
+        assert result["scenario"] is None
+        run = wm.whatif(river_id=1, text=line)
+        assert not run["ok"] and "the words give no unit for it" in run["error"]
+
+    valid = wm.parse_scenario("take half a cubic metre per second")
+    assert valid["matched"] and not valid["errors"]
+    assert valid["scenario"]["demand_cms"] == pytest.approx(0.5)
+
+
 def test_keyless_fractional_hyphen_and_digit_forms():
     """Hyphenated words and digit numerators ('2 thirds', '2-thirds') parse keyless to fractional shares."""
     for text, expected in [

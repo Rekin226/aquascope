@@ -56,7 +56,7 @@ Most of that arc shipped between 18 and 20 August 2026 and is live in the Explor
 - [x] JOSS paper drafted (`paper.md` + `paper.bib`)
 - [x] PyPI release (sdist + wheel + GitHub Actions publish workflow)
 - [x] Shared source registry with licence and station-catalog metadata; `find_stations()` and `aquascope stations` over six catalogs (#187)
-- [x] The Archive, Phase 0 + 1 + 2: a 75,878-station GeoParquet catalog with per-station daily observations mirrored for 5,788 of them (discharge, water level, rainfall, groundwater level) and one Parquet bundle per variable and source on Hugging Face, weekly harvest with collector-health issues (#188)
+- [x] The Archive, Phase 0 + 1 + 2: a 75,892-station GeoParquet catalog with per-station daily observations mirrored for 6,231 of them (discharge, water level, rainfall, groundwater level) and one Parquet bundle per variable and source on Hugging Face, weekly harvest with collector-health issues (#188)
 - [x] The Explorer: static MapLibre + DuckDB-WASM + Pyodide page with click-any-gauge analysis and click-anywhere climate cards (#189)
 - [x] MCP server (`aquascope mcp`), the Analyst (`aquascope ask`) and `aquascope ingest` (#113)
 - [x] GeoLibre plugin: AquaScope Gauges (`integrations/geolibre`)

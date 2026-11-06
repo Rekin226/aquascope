@@ -1370,11 +1370,12 @@ json.dumps(_out, default=str)
 // ── Review my model results (#564): what lies outside the dropped file, for aquascope.mesh_review (the checks
 // themselves run in mesh-worker.js beside the file). op "floods" reads the Sentinel-1 radar and news flood events
 // around the mesh from the Archive's context mirror (a light worker can); "gauges" reads each gauge's record over
-// the run and "llm" asks the reader's own model with their key (the main worker only).
-async function meshReviewOp({ id, op, bbox, gauges, start, end, findings, context, provider, model, api_key, base_url }) {
+// the run and "llm" asks the reader's own model with their key (the main worker only). "question" is what the
+// reader asked, verbatim, so a question about stability pins the flicker (mesh_review.named_findings).
+async function meshReviewOp({ id, op, bbox, gauges, start, end, findings, context, question, provider, model, api_key, base_url }) {
   self.__aqReview = JSON.stringify({
     op: String(op || ""), bbox: bbox || null, gauges: gauges || [], start: start || null, end: end || null,
-    findings: findings || [], context: String(context || ""),
+    findings: findings || [], context: String(context || ""), question: String(question || ""),
     llm: { provider: provider || null, model: model || null, api_key: api_key || null, base_url: base_url || null },
   });
   const code = `
@@ -1388,7 +1389,7 @@ try:
     elif _a["op"] == "gauges":
         _out = {"gauges": _mr.gauge_series(_a["gauges"], _a["start"], _a["end"])}
     elif _a["op"] == "llm":
-        _out = _mr.model_words(_a["findings"], context=_a["context"], **_a["llm"])
+        _out = _mr.model_words(_a["findings"], context=_a["context"], question=_a["question"], **_a["llm"])
     else:
         _out = {"error": "unknown op"}
 except (ValueError, RuntimeError) as exc:

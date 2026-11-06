@@ -718,6 +718,25 @@ def test_set_time_is_offered_only_when_the_words_ask_for_a_date():
     assert out["actions"] == [] and out["errors"] == ["action 1: a date the words do not ask for"]
 
 
+@pytest.mark.parametrize("text", [
+    "show the flood in may", "how were the rivers a week ago", "show the rivers 3 days ago",
+    "go back two months", "show me now", "jump to the latest forecast",
+])
+def test_date_cues_allow_schema_and_grounded_model_action(text):
+    types = mc.reply_schema(text)["properties"]["actions"]["items"]["properties"]["type"]["enum"]
+    assert "set_time" in types
+    out = mc.parse_model_reply({"actions": [{"type": "set_time", "date": "2024-01-01"}]}, TODAY, text=text)
+    assert {"type": "set_time", "date": "2024-01-01"} in out["actions"]
+
+
+def test_modal_may_does_not_allow_set_time():
+    text = "it may rain more"
+    types = mc.reply_schema(text)["properties"]["actions"]["items"]["properties"]["type"]["enum"]
+    assert "set_time" not in types
+    out = mc.parse_model_reply({"actions": [{"type": "set_time", "date": "2024-01-01"}]}, TODAY, text=text)
+    assert out["actions"] == []
+
+
 def test_a_pin_is_titled_by_the_package_not_the_model():
     reply = {"actions": [{"type": "add_pin", "place": "Basel", "title": "Severe flooding expected",
                           "text": "The Rhine is 3 m above normal.", "facts": [{"label": "level", "value": 3}]}]}

@@ -15,8 +15,8 @@ Parquet bundle per variable and source** for whole-source reads. See
 The catalog and the mirror are two different numbers, and this page keeps them
 apart: the **catalog** is the worldwide index of what the agencies publish, and
 the **mirror** is the subset the harvest has actually reached with a licence
-that allows redistribution. On the 2026-10-26 harvest the catalog held
-**75,878 stations** and the mirror held daily observations for **5,788 of
+that allows redistribution. On the 2026-11-02 harvest the catalog held
+**75,892 stations** and the mirror held daily observations for **6,231 of
 them**.
 
 ## What is in it
@@ -71,16 +71,16 @@ without ever hammering an agency. What is mirrored:
 | `poland_imgw` | discharge, water_level | IMGW-PIB daily archive (hydrological-year zips, one per month to 2022 and one per year after; the current year is published once it ends). The archive host sends no CORS headers, so this mirror is what the Explorer serves (#391) |
 | `greece_openhi` | discharge, water_level, precipitation | 15-minute telemetry folded to daily means, rainfall to daily totals. The browser cannot call OpenHi directly (its API allows cross-origin requests from localhost only), so this mirror is what the Explorer serves (#408) |
 
-How far the mirror has reached, per variable, on the same 2026-10-26 harvest. A
+How far the mirror has reached, per variable, on the same 2026-11-02 harvest. A
 station that measures two things appears once in each row, so the rows add up
-to more than the 5,788 stations above:
+to more than the 6,231 stations above:
 
 | variable | mirrored stations | where the files are |
 | --- | --- | --- |
-| `discharge` | 4,070 | `obs/discharge/<source>/` |
-| `water_level` | 1,088 | `obs/water_level/<source>/` |
-| `precipitation` | 591 | `obs/precipitation/<source>/` |
-| `groundwater_level` | 521 | `obs/groundwater_level/<source>/` |
+| `discharge` | 4,330 | `obs/discharge/<source>/` |
+| `water_level` | 1,158 | `obs/water_level/<source>/` |
+| `precipitation` | 642 | `obs/precipitation/<source>/` |
+| `groundwater_level` | 594 | `obs/groundwater_level/<source>/` |
 
 Read one station:
 

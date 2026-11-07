@@ -1,8 +1,8 @@
-
 """Regenerate repository archive statistics from a published harvest."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from collections import defaultdict
@@ -21,12 +21,19 @@ def archive_counts(archive_dir: str | Path) -> dict[str, Any]:
 
     if not health_path.is_file():
         raise FileNotFoundError(f"Missing harvest health file: {health_path}")
+
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Missing observation manifest: {manifest_path}")
 
     health = json.loads(health_path.read_text(encoding="utf-8"))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest = _migrate_manifest(manifest)
+
+    if "n_stations" not in health:
+        raise ValueError("Harvest health.json is missing n_stations")
+
+    if "run_at" not in health:
+        raise ValueError("Harvest health.json is missing run_at")
 
     mirrored: set[tuple[str, str]] = set()
     by_variable: dict[str, set[tuple[str, str]]] = defaultdict(set)
@@ -43,6 +50,7 @@ def archive_counts(archive_dir: str | Path) -> dict[str, Any]:
                 continue
 
             station_key = (source, station_id)
+
             mirrored.add(station_key)
             by_variable[variable].add(station_key)
 
@@ -69,7 +77,7 @@ def _variable_table(counts: dict[str, Any]) -> str:
         "| --- | ---: | --- |",
     ]
 
-    for variable, count in counts["by_variable"].items():
+    for variable, count in sorted(counts["by_variable"].items()):
         rows.append(
             f"| `{variable}` | {_format_count(count)} "
             f"| `obs/{variable}/<source>/` |"
@@ -126,20 +134,6 @@ def _update_summary_text(
         filename,
         flags=re.MULTILINE,
     )
-
-
-def _update_summary_file(
-    repo_root: Path,
-    relative_path: str,
-    counts: dict[str, Any],
-) -> None:
-    """Update the archive summary in one documentation file."""
-    path = repo_root / relative_path
-    text = path.read_text(encoding="utf-8")
-    updated = _update_summary_text(text, counts, relative_path)
-
-    if updated != text:
-        path.write_text(updated, encoding="utf-8")
 
 
 def _update_roadmap_text(
@@ -226,14 +220,16 @@ def _update_archive_page_text(
         flags=re.MULTILINE,
     )
 
+
 def _update_explorer_text(
     text: str,
     counts: dict[str, Any],
 ) -> str:
-    """Update the station catalog statistics in the Explorer Space README."""
+    """Update station catalog statistics in the Explorer README."""
     pattern = (
-        r"(^- Station catalog: .*\n"
-        r"  \(GeoParquet, harvested weekly\), read in place with DuckDB-WASM\. The catalog\n"
+        r"(^- Station catalog: [^\n]*\n"
+        r"  \(GeoParquet, harvested weekly\), read in place with DuckDB-WASM\. "
+        r"The catalog\n"
         r"  holds \*\*)"
         r"[\d,]+"
         r"( stations\*\* and the observation mirror holds daily records for\n"
@@ -241,7 +237,7 @@ def _update_explorer_text(
         r"[\d,]+"
         r"( of them\*\* \()"
         r"\d{4}-\d{2}-\d{2}"
-        r"( harvest\.\))"
+        r"( harvest\)\.)"
     )
 
     replacement = (
@@ -258,3 +254,91 @@ def _update_explorer_text(
         "explorer/SPACE_README.md",
         flags=re.MULTILINE,
     )
+
+
+def update_archive_docs(
+    repo_root: str | Path,
+    archive_dir: str | Path,
+) -> list[str]:
+    """Update all five archive-statistics documentation files.
+
+    All files are read and transformed before any documentation is written.
+    This prevents a missing section in one file from leaving the others updated.
+    """
+    root = Path(repo_root)
+    archive = Path(archive_dir)
+
+    if not archive.is_absolute():
+        archive = root / archive
+
+    counts = archive_counts(archive)
+
+    targets = {
+        "README.md": lambda text: _update_summary_text(
+            text, counts, "README.md"
+        ),
+        "docs/index.md": lambda text: _update_summary_text(
+            text, counts, "docs/index.md"
+        ),
+        "ROADMAP.md": lambda text: _update_roadmap_text(text, counts),
+        "docs/archive.md": lambda text: _update_archive_page_text(
+            text, counts
+        ),
+        "explorer/SPACE_README.md": lambda text: _update_explorer_text(
+            text, counts
+        ),
+    }
+
+    updated_files: dict[Path, str] = {}
+
+    # Validate and transform every target before writing anything.
+    for relative_path, updater in targets.items():
+        path = root / relative_path
+
+        if not path.is_file():
+            raise FileNotFoundError(f"Missing documentation file: {path}")
+
+        original = path.read_text(encoding="utf-8")
+        updated = updater(original)
+
+        if updated != original:
+            updated_files[path] = updated
+
+    # Only write after all five transformations have succeeded.
+    for path, updated in updated_files.items():
+        path.write_text(updated, encoding="utf-8")
+
+    return [str(path.relative_to(root)) for path in updated_files]
+
+
+def main() -> None:
+    """Command-line entry point."""
+    parser = argparse.ArgumentParser(
+        description="Update archive statistics in repository documentation."
+    )
+
+    parser.add_argument(
+        "--archive",
+        required=True,
+        help="Path to the published harvest directory.",
+    )
+
+    args = parser.parse_args()
+
+    repo_root = Path.cwd()
+
+    changed_files = update_archive_docs(
+        repo_root=repo_root,
+        archive_dir=args.archive,
+    )
+
+    if changed_files:
+        print("Updated archive documentation:")
+        for filename in changed_files:
+            print(f"  {filename}")
+    else:
+        print("Archive documentation is already up to date.")
+
+
+if __name__ == "__main__":
+    main()

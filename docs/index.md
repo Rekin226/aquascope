@@ -15,7 +15,7 @@ AquaScope unifies **37 global water-data sources** behind one Python schema. On 
 The daily benchmark inputs are synthetic; flood benchmarks also use observed USGS annual peaks.
 See [validation scope](validation_scope.md) for comparators and limitations.
 
-The [Archive](archive.md) publishes the collectors' output as one open dataset: a catalog of **75,878 stations**, with mirrored daily observations for **5,788 of them** (2026-10-26 harvest).
+The [Archive](archive.md) publishes the collectors' output as one open dataset: a catalog of **75,892 stations**, with mirrored daily observations for **6,231 of them** (2026-11-02 harvest).
 
 ---
 

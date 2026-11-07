@@ -1,6 +1,6 @@
 {
- "generated": "2026-09-21T11:04:23+00:00",
- "aquascope_version": "0.18.0",
+ "generated": "2026-10-26T11:38:19+00:00",
+ "aquascope_version": "0.27.0",
  "note": "Recorded answers: the prose was written once by the model named in each entry. The tools can be re-run live in the page, with no key.",
  "examples": [
   {
@@ -9,14 +9,17 @@
    "shows": "Finding a gauge, fitting a flood frequency curve, and quoting the confidence interval.",
    "tools": [
     "assess_site",
+    "assess_site",
+    "assess_site",
+    "flood_frequency",
     "flood_frequency"
    ],
-   "steps": 3,
+   "steps": 6,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T10:48:51+00:00",
-   "checks_passed": 5,
-   "checks_total": 6
+   "recorded": "2026-10-26T11:14:56+00:00",
+   "checks_passed": 7,
+   "checks_total": 7
   },
   {
    "id": "seine-loire-lowflow",
@@ -24,15 +27,16 @@
    "shows": "Two records in one answer, with the flow-duration curve behind each.",
    "tools": [
     "find_stations",
-    "find_stations",
     "assess_site",
+    "assess_site",
+    "find_stations",
     "low_flow_context",
     "low_flow_context"
    ],
-   "steps": 6,
+   "steps": 7,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T10:52:20+00:00",
+   "recorded": "2026-10-26T11:19:57+00:00",
    "checks_passed": 5,
    "checks_total": 5
   },
@@ -43,15 +47,14 @@
    "tools": [
     "find_stations",
     "assess_site",
-    "assess_site",
-    "analyze_station"
+    "change_points"
    ],
-   "steps": 5,
+   "steps": 4,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T10:55:19+00:00",
-   "checks_passed": 6,
-   "checks_total": 6
+   "recorded": "2026-10-26T11:23:26+00:00",
+   "checks_passed": 5,
+   "checks_total": 5
   },
   {
    "id": "taipei-london-climate",
@@ -59,13 +62,19 @@
    "shows": "Two points with no gauge: ERA5 rainfall, FAO-56 ET0 and the aridity index.",
    "tools": [
     "anywhere",
-    "anywhere"
+    "anywhere",
+    "anywhere",
+    "anywhere",
+    "run_python",
+    "anywhere",
+    "describe_catchment",
+    "describe_catchment"
    ],
-   "steps": 3,
+   "steps": 8,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T10:57:15+00:00",
-   "checks_passed": 4,
+   "recorded": "2026-10-26T11:28:00+00:00",
+   "checks_passed": 3,
    "checks_total": 4
   },
   {
@@ -73,13 +82,20 @@
    "question": "Which UK boreholes near Cambridge have the longest groundwater records?",
    "shows": "Searching the catalog by place and variable rather than by name.",
    "tools": [
-    "assess_site"
+    "assess_site",
+    "find_stations",
+    "assess_site",
+    "find_stations",
+    "assess_site",
+    "run_python",
+    "find_stations",
+    "run_python"
    ],
-   "steps": 2,
+   "steps": 8,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T10:58:13+00:00",
-   "checks_passed": 4,
+   "recorded": "2026-10-26T11:30:03+00:00",
+   "checks_passed": 3,
    "checks_total": 4
   },
   {
@@ -88,13 +104,19 @@
    "shows": "Prediction in ungauged basins: similar catchments, transferred signatures, and the skill of that transfer.",
    "tools": [
     "assess_site",
-    "regionalize_signatures"
+    "regionalize_signatures",
+    "regionalize_signatures",
+    "regionalize_signatures",
+    "regionalize_signatures",
+    "run_python",
+    "regionalize_signatures",
+    "run_python"
    ],
-   "steps": 3,
+   "steps": 8,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T10:59:35+00:00",
-   "checks_passed": 4,
+   "recorded": "2026-10-26T11:32:46+00:00",
+   "checks_passed": 3,
    "checks_total": 4
   },
   {
@@ -103,13 +125,14 @@
    "shows": "BasinATLAS attributes for anywhere on land.",
    "tools": [
     "assess_site",
+    "assess_site",
     "describe_catchment"
    ],
-   "steps": 3,
+   "steps": 4,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T11:01:24+00:00",
-   "checks_passed": 3,
+   "recorded": "2026-10-26T11:34:36+00:00",
+   "checks_passed": 4,
    "checks_total": 4
   },
   {
@@ -119,17 +142,17 @@
    "tools": [
     "find_stations",
     "assess_site",
-    "flood_frequency",
+    "assess_site",
+    "assess_site",
     "similar_basins",
     "flood_frequency",
-    "run_python",
-    "flood_frequency",
-    "run_python"
+    "similar_basins",
+    "flood_frequency"
    ],
    "steps": 8,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T11:04:23+00:00",
+   "recorded": "2026-10-26T11:38:19+00:00",
    "checks_passed": 3,
    "checks_total": 4
   }

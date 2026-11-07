@@ -197,6 +197,13 @@ export function sliderValues(sc, demandMax = null) {
   };
 }
 
+/** The values the sliders take when a line reads nothing: the painted run's own, or none at all (#646). */
+export function restValues(result, demandMax = null) {
+  const sc = (result && result.scenario) || null;
+  if (!sc) return { ...sliderValues(null, demandMax), dpet_pct: null };
+  return { ...sliderValues(sc, demandMax), dpet_pct: Number(sc.dpet_pct) || null };
+}
+
 /** The result's three flows at the outlet as short lines: "Mean flow −38% (−39 to −37%)". */
 export function outletLines(result) {
   const o = (result && result.outlet) || {};

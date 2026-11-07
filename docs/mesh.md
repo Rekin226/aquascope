@@ -173,7 +173,10 @@ enums, the finding ids and the variant ids (`review_schema`, passed to Chrome as
 cells", "the deepest water is 17.1 m" without "in this part of the mesh", or "check if this depth
 is expected" cannot reach a pin. A problem is pinned even when the model leaves it out; the
 other findings it leaves out are said in the line ("2 findings not pinned"), and the legend's
-list of checks keeps every one. The review's counts are always the rules' counts. A reply
+list of checks keeps every one. So is a finding the question names: "is the model stable?",
+"are there any numerical instabilities in this run?" and "is there flicker?" pin the wet and dry
+flicker findings too (#646), since they are what was asked about (`named_findings`, and the
+words reach the prompt as well). The review's counts are always the rules' counts. A reply
 outside the schema is refused whole (`aquascope.map_pick.pick`), the line says so in one short
 sentence, and every finding is pinned in the rules' order and wording. The older wording checks
 (`negation_flip`, Explain's `claim_lock`) stay as a second line of defence: the tests hold every

@@ -267,7 +267,8 @@ SOURCES: dict[str, SourceMeta] = {
         license="IMGW-PIB-open-data", redistributable=True,
         attribution=(
             "Źródłem pochodzenia danych jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy; "
-            "dane IMGW-PIB zostały przetworzone (source: IMGW-PIB, data processed)"
+            "Dane Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego zostały "
+            "przetworzone (source: IMGW-PIB, data processed)"
         ),
         browser_reachable=False,  # the live API allows CORS, the archive zips do not; the Explorer serves the mirror
     ),

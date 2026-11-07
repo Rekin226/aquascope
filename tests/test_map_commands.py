@@ -667,7 +667,11 @@ def test_layers_the_words_ask_for_are_kept_and_others_refused():
     assert out["actions"] == [{"type": "set_layer", "layer": "status", "on": True}]
     danube = RECORDED["map-new-danube"]
     out = mc.parse_model_reply(danube["replies"][0], "2026-10-26", text=danube["request"])
-    assert {a["type"] for a in out["actions"]} >= {"set_layer", "focus_status"} and not out["errors"]
+    # #646: "compared with normal" is a comparison, not a request for the rivers that are normal, and the words
+    # name no date; the layer switch the words do ask for stays.
+    assert {a["type"] for a in out["actions"]} == {"fly_to", "set_layer"}
+    assert sum("a status filter the words do not ask for" in e for e in out["errors"]) == 1
+    assert sum("a date the words do not ask for" in e for e in out["errors"]) == 1
     for text, layer in (("show floods ahead in Bangladesh", "floods_ahead"), ("turn on groundwater", "groundwater"),
                         ("what did the Indus look like during the big Pakistan floods?", "floods_past")):
         kept = mc.parse_model_reply({"actions": [{"type": "set_layer", "layer": layer, "on": True}]}, TODAY,
@@ -686,6 +690,51 @@ def test_the_device_schema_for_a_request_holds_only_its_places_and_layers():
     assert mc.reply_schema("zoom to Kingston upon Thames")["properties"]["actions"]["items"]["properties"][
         "place"]["enum"][0] == "Kingston upon Thames"
     assert mc.action_schema() == mc.model_prompt(today=TODAY)["schema"]   # the key path's schema is unchanged
+
+
+def test_modflow_is_not_offered_as_a_place_and_a_comparison_is_not_a_status_filter():
+    # #646: "MODFLOW" is offered as a place; "compared with normal" gives focus_status ["normal"].
+    item = mc.reply_schema("what does MODFLOW say about the water table?")["properties"]["actions"]["items"]
+    assert "place" not in item["properties"]
+    out = mc.parse_command("can you show me how the Danube is doing compared with normal", today=TODAY)
+    assert not any(a["type"] == "focus_status" for a in out["actions"])
+    kept = mc.parse_command("which rivers are normal", today=TODAY)
+    assert {"type": "focus_status", "classes": ["normal"]} in kept["actions"]
+    refused = mc.parse_model_reply({"actions": [{"type": "focus_status", "classes": ["normal"]}]}, TODAY,
+                                   text="can you show me how the Danube is doing compared with normal")
+    assert refused["actions"] == []
+    assert refused["errors"] == ["action 1: a status filter the words do not ask for"]
+
+
+def test_set_time_is_offered_only_when_the_words_ask_for_a_date():
+    # #646: set_time passed when the words ask for no date.
+    def types(text):
+        return mc.reply_schema(text)["properties"]["actions"]["items"]["properties"]["type"]["enum"]
+
+    assert "set_time" not in types("show me how the Danube is doing")
+    assert "set_time" in types("show the Danube yesterday")
+    out = mc.parse_model_reply({"actions": [{"type": "set_time", "date": "2024-01-01"}]}, TODAY,
+                               text="show me how the Danube is doing")
+    assert out["actions"] == [] and out["errors"] == ["action 1: a date the words do not ask for"]
+
+
+@pytest.mark.parametrize("text", [
+    "show the flood in may", "how were the rivers a week ago", "show the rivers 3 days ago",
+    "go back two months", "show me now", "jump to the latest forecast",
+])
+def test_date_cues_allow_schema_and_grounded_model_action(text):
+    types = mc.reply_schema(text)["properties"]["actions"]["items"]["properties"]["type"]["enum"]
+    assert "set_time" in types
+    out = mc.parse_model_reply({"actions": [{"type": "set_time", "date": "2024-01-01"}]}, TODAY, text=text)
+    assert {"type": "set_time", "date": "2024-01-01"} in out["actions"]
+
+
+def test_modal_may_does_not_allow_set_time():
+    text = "it may rain more"
+    types = mc.reply_schema(text)["properties"]["actions"]["items"]["properties"]["type"]["enum"]
+    assert "set_time" not in types
+    out = mc.parse_model_reply({"actions": [{"type": "set_time", "date": "2024-01-01"}]}, TODAY, text=text)
+    assert out["actions"] == []
 
 
 def test_a_pin_is_titled_by_the_package_not_the_model():

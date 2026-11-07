@@ -29,6 +29,9 @@ All notable changes to AquaScope are documented here.
 - **The Archive's counts follow the latest harvest** (#443): `README.md`, `docs/index.md`, `ROADMAP.md`, `docs/archive.md` and `explorer/SPACE_README.md` now state the 2026-11-02 harvest: **75,892 catalogued stations** and **6,231 with mirrored daily observations** (discharge 4,330, water level 1,158, precipitation 642, groundwater level 594) — instead of the 2026-10-26 figures. The dataset card is generated from `obs/manifest.json` (`_mirrored_station_count`) and picks both numbers up on the next harvest.
 
 ### Fixed
+- **Ask the map's thin picks** (#646): `MODFLOW` is no longer offered as a place, `compared with normal` no longer
+  reads as a request to highlight the rivers that are normal, and `set_time` is offered and accepted only when the
+  words name a date.
 - **What-if singular digit shares and unitless withdrawals** (#710): read `1 third` as a fraction and refuse a withdrawal expressed only as a share of the river, instead of treating it as a fixed flow.
 - **Scout forecast pins name the 2-year flow for the ensemble line** (#646): a forecast at the 2-year class no longer lists "2-year flow" twice in its facts (the duplicate pushed "Reaches nearby also passing" past the Explorer's five-fact limit), and the rules' wording says "N of 51 ensemble members reach the 2-year flow of X m³/s" instead of "reach it" after a different class flow, so the count can no longer be read as the class flow.
 - **Catalogue search keeps the named river first when "near" sits between the river and the place** (#646): "Thames near Kingston" returned ten US "... near Kingston" gauges ahead of the Thames at Kingston record, because `near` is part of USGS station names and counted as a name hit. `near` is now a connective in a multi-word query, like `at` and `in`.

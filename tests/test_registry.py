@@ -90,6 +90,16 @@ def test_metadata_is_complete(key):
         assert meta.api_key_signup_url, f"{key}: requires_api_key needs a signup URL"
 
 
+def test_taiwan_wra_level_attribution_includes_ogdl_exhibit_notice():
+    """#473: OGDL-Taiwan-1.0 Section 3.2 requires attribution in the form of the Exhibit."""
+    attribution = SOURCES["taiwan_wra_level"].attribution
+    assert "經濟部水利署" in attribution
+    assert "2017" in attribution
+    assert "即時水位資料" in attribution
+    assert "Open Government Data License" in attribution
+    assert "https://data.gov.tw/license" in attribution
+
+
 def test_poland_imgw_attribution_keeps_both_imgw_notices_verbatim():
     """#473: the terms require both notices word for word, source and processing side by side (§ 5 ust. 3 and 4)."""
     attribution = SOURCES["poland_imgw"].attribution
@@ -123,6 +133,23 @@ def test_copernicus_points_at_the_early_warning_data_store():
     assert meta.homepage == "https://ewds.climate.copernicus.eu/"
     assert meta.api_key_signup_url == "https://ewds.climate.copernicus.eu/how-to-api"
     assert meta.license == "CEMS-FLOODS-licence"
+
+
+def test_korea_wamis_records_the_hrfco_open_api_terms():
+    """korea_wamis is mirrored under the operating agency's terms, so both the id and the credit must stay.
+
+    The licence comes from the Han River Flood Control Office (HRFCO), which runs WAMIS: article 10 of its
+    Open API terms permits free re-use "저작자 및 출처 표시 조건으로" (with the author and the source named),
+    and data.go.kr lists the same WAMIS dataset as 이용허락범위 제한 없음 (no restriction on use).
+    """
+    meta = SOURCES["korea_wamis"]
+    assert meta.agency == "Han River Flood Control Office, Ministry of Climate, Energy and Environment"
+    assert meta.license != "unknown"
+    assert meta.license == "HRFCO Open API Terms (free use with attribution)"
+    assert meta.redistributable is True
+    assert "한강홍수통제소" in meta.attribution, "the operating agency must be named"
+    assert "기후에너지환경부" in meta.attribution
+    assert "wamis.go.kr" in meta.attribution, "the source site must be named"
 
 
 def test_station_variables_validated():

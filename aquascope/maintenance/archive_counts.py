@@ -308,7 +308,10 @@ def update_archive_docs(
     for path, updated in updated_files.items():
         path.write_text(updated, encoding="utf-8")
 
-    return [str(path.relative_to(root)) for path in updated_files]
+    return [
+        str(path.relative_to(root)).replace("\\", "/")
+        for path in updated_files
+    ]
 
 
 def main() -> None:

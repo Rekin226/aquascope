@@ -228,7 +228,9 @@ class TaiwanWRAWaterLevelCollector(BaseCollector):
 
 class TaiwanWRAReservoirCollector(BaseCollector):
     """
-    Collect daily reservoir operation data from WRA.
+    Collect daily reservoir operation data (水庫每日營運狀況) from WRA.
+    Released under Open Government Data License 1.0 (OGDL-Taiwan-1.0;
+    https://data.gov.tw/license).
     """
 
     name = "taiwan_wra_reservoir"

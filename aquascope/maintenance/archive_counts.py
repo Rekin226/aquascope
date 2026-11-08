@@ -57,10 +57,7 @@ def archive_counts(archive_dir: str | Path) -> dict[str, Any]:
     return {
         "catalogued": int(health["n_stations"]),
         "mirrored": len(mirrored),
-        "by_variable": {
-            variable: len(stations)
-            for variable, stations in sorted(by_variable.items())
-        },
+        "by_variable": {variable: len(stations) for variable, stations in sorted(by_variable.items())},
         "harvest_date": health["run_at"][:10],
     }
 
@@ -70,20 +67,74 @@ def _format_count(value: int) -> str:
     return f"{value:,}"
 
 
-def _variable_table(counts: dict[str, Any]) -> str:
-    """Build the per-variable mirrored-station table."""
-    rows = [
-        "| variable | mirrored stations | where the files are |",
-        "| --- | ---: | --- |",
-    ]
+def _variable_table(
+    counts: dict[str, Any],
+    existing_table: str,
+) -> str:
+    """Update variable counts while preserving existing table formatting."""
+    lines = existing_table.splitlines()
 
-    for variable, count in sorted(counts["by_variable"].items()):
-        rows.append(
-            f"| `{variable}` | {_format_count(count)} "
-            f"| `obs/{variable}/<source>/` |"
+    if len(lines) < 2:
+        raise ValueError("Archive variable table is incomplete")
+
+    expected_header = "| variable | mirrored stations | where the files are |"
+
+    if lines[0] != expected_header:
+        raise ValueError("Unexpected archive variable table header")
+
+    header = lines[0]
+    separator = lines[1]
+    by_variable = counts["by_variable"]
+
+    existing_rows: dict[str, str] = {}
+    existing_order: list[str] = []
+
+    for row in lines[2:]:
+        match = re.match(r"^\| `([^`]+)` \|", row)
+
+        if match is None:
+            raise ValueError(f"Unexpected row in archive variable table: {row}")
+
+        variable = match.group(1)
+
+        if variable in existing_rows:
+            raise ValueError(f"Duplicate variable in archive table: {variable}")
+
+        existing_rows[variable] = row
+        existing_order.append(variable)
+
+    updated_rows: list[str] = []
+
+    # Update existing variables while preserving their original order.
+    for variable in existing_order:
+        if variable not in by_variable:
+            continue
+
+        row = existing_rows[variable]
+        updated_row, replacements = re.subn(
+            r"(?<=\| )[0-9,]+(?= \|)",
+            _format_count(by_variable[variable]),
+            row,
+            count=1,
         )
 
-    return "\n".join(rows)
+        if replacements != 1:
+            raise ValueError(f"Could not update mirrored count for {variable}")
+
+        updated_rows.append(updated_row)
+
+    # Append newly observed variables in deterministic order.
+    new_variables = sorted(set(by_variable) - set(existing_rows))
+
+    for variable in new_variables:
+        updated_rows.append(f"| `{variable}` | {_format_count(by_variable[variable])} | `obs/{variable}/<source>/` |")
+
+    result = "\n".join([header, separator, *updated_rows])
+
+    if existing_table.endswith("\n"):
+        result += "\n"
+
+    return result
 
 
 def _sub_once(
@@ -94,12 +145,15 @@ def _sub_once(
     flags: int = 0,
 ) -> str:
     """Replace exactly one matching documentation section."""
-    updated, count = re.subn(pattern, replacement, text, flags=flags)
+    updated, count = re.subn(
+        pattern,
+        replacement,
+        text,
+        flags=flags,
+    )
 
     if count != 1:
-        raise ValueError(
-            f"Expected exactly one matching section in {filename}; found {count}"
-        )
+        raise ValueError(f"Expected exactly one matching section in {filename}; found {count}")
 
     return updated
 
@@ -140,7 +194,7 @@ def _update_roadmap_text(
     text: str,
     counts: dict[str, Any],
 ) -> str:
-    """Update archive counts and harvest date in the roadmap entry."""
+    """Update archive counts without changing the roadmap sentence."""
     pattern = (
         r"(^- \[x\] The Archive, Phase 0 \+ 1 \+ 2: a )"
         r"[\d,]+"
@@ -148,13 +202,12 @@ def _update_roadmap_text(
         r"mirrored for )"
         r"[\d,]+"
         r"( of them)"
-        r"(?: \(\d{4}-\d{2}-\d{2} harvest\))?"
     )
 
     replacement = (
         rf"\g<1>{_format_count(counts['catalogued'])}"
         rf"\g<2>{_format_count(counts['mirrored'])}"
-        rf"\g<3> ({counts['harvest_date']} harvest)"
+        rf"\g<3>"
     )
 
     return _sub_once(
@@ -170,7 +223,7 @@ def _update_archive_page_text(
     text: str,
     counts: dict[str, Any],
 ) -> str:
-    """Update archive-page summary and per-variable statistics."""
+    """Update archive-page statistics while preserving table formatting."""
     summary_pattern = (
         r"(that allows redistribution\. On the )"
         r"\d{4}-\d{2}-\d{2}"
@@ -196,29 +249,58 @@ def _update_archive_page_text(
         flags=re.MULTILINE,
     )
 
-    table_pattern = (
-        r"(^How far the mirror has reached, per variable, on the same )"
+    intro_pattern = (
+        r"(How far the mirror has reached, per variable, on the same )"
         r"\d{4}-\d{2}-\d{2}"
-        r" harvest\.[\s\S]*?\n\n"
-        r"\| variable \| mirrored stations \| where the files are \|\n"
-        r"\|[^\n]*\|\n"
-        r"(?:\|[^\n]*\|\n)*"
+        r"( harvest\.[\s\S]*?more than the )"
+        r"[\d,]+"
+        r"( stations above:\n\n)"
     )
 
-    table_replacement = (
-        rf"\g<1>{counts['harvest_date']} harvest. A\n"
-        "station that measures two things appears once in each row, so the rows add up\n"
-        f"to more than the {_format_count(counts['mirrored'])} stations above:\n\n"
-        f"{_variable_table(counts)}\n"
+    intro_replacement = (
+        rf"\g<1>{counts['harvest_date']}"
+        rf"\g<2>{_format_count(counts['mirrored'])}"
+        rf"\g<3>"
     )
 
-    return _sub_once(
-        table_pattern,
-        table_replacement,
+    updated = _sub_once(
+        intro_pattern,
+        intro_replacement,
         updated,
-        "docs/archive.md variable table",
+        "docs/archive.md variable introduction",
         flags=re.MULTILINE,
     )
+
+    table_pattern = (
+        r"(^\| variable \| mirrored stations \| where the files are \|\n)"
+        r"(^\|[^\n]*\|\n)"
+        r"((?:^\|[^\n]*\|\n)*)"
+    )
+
+    match = re.search(
+        table_pattern,
+        updated,
+        flags=re.MULTILINE,
+    )
+
+    if match is None:
+        raise ValueError("Could not find the existing archive variable table")
+
+    existing_table = match.group(0)
+    updated_table = _variable_table(counts, existing_table)
+
+    updated, replacements = re.subn(
+        table_pattern,
+        lambda _: updated_table,
+        updated,
+        count=1,
+        flags=re.MULTILINE,
+    )
+
+    if replacements != 1:
+        raise ValueError("Could not update archive variable table")
+
+    return updated
 
 
 def _update_explorer_text(
@@ -275,17 +357,26 @@ def update_archive_docs(
 
     targets = {
         "README.md": lambda text: _update_summary_text(
-            text, counts, "README.md"
+            text,
+            counts,
+            "README.md",
         ),
         "docs/index.md": lambda text: _update_summary_text(
-            text, counts, "docs/index.md"
+            text,
+            counts,
+            "docs/index.md",
         ),
-        "ROADMAP.md": lambda text: _update_roadmap_text(text, counts),
+        "ROADMAP.md": lambda text: _update_roadmap_text(
+            text,
+            counts,
+        ),
         "docs/archive.md": lambda text: _update_archive_page_text(
-            text, counts
+            text,
+            counts,
         ),
         "explorer/SPACE_README.md": lambda text: _update_explorer_text(
-            text, counts
+            text,
+            counts,
         ),
     }
 
@@ -308,17 +399,12 @@ def update_archive_docs(
     for path, updated in updated_files.items():
         path.write_text(updated, encoding="utf-8")
 
-    return [
-        str(path.relative_to(root)).replace("\\", "/")
-        for path in updated_files
-    ]
+    return [str(path.relative_to(root)).replace("\\", "/") for path in updated_files]
 
 
 def main() -> None:
     """Command-line entry point."""
-    parser = argparse.ArgumentParser(
-        description="Update archive statistics in repository documentation."
-    )
+    parser = argparse.ArgumentParser(description=("Update archive statistics in repository documentation."))
 
     parser.add_argument(
         "--archive",
@@ -337,6 +423,7 @@ def main() -> None:
 
     if changed_files:
         print("Updated archive documentation:")
+
         for filename in changed_files:
             print(f"  {filename}")
     else:

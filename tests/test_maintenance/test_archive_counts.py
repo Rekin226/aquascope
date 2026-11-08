@@ -49,12 +49,8 @@ def _fixture_repo(tmp_path: Path) -> tuple[Path, Path]:
         },
     }
 
-    (archive / "health.json").write_text(
-        json.dumps(health), encoding="utf-8"
-    )
-    (archive / "obs" / "manifest.json").write_text(
-        json.dumps(manifest), encoding="utf-8"
-    )
+    (archive / "health.json").write_text(json.dumps(health), encoding="utf-8")
+    (archive / "obs" / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
     summary = (
         "The [Archive](docs/archive.md) publishes that output as one open "
@@ -143,16 +139,18 @@ def test_update_archive_docs_updates_all_five_files(tmp_path: Path):
 
     for relative_path in changed:
         content = (root / relative_path).read_text(encoding="utf-8")
-        assert "2026-11-09" in content
+
+        if relative_path == "ROADMAP.md":
+            assert "2026-11-09" not in content
+        else:
+            assert "2026-11-09" in content
 
     assert "3 stations" in (root / "README.md").read_text(encoding="utf-8")
     assert "2 of them" in (root / "README.md").read_text(encoding="utf-8")
     assert "3-station" in (root / "ROADMAP.md").read_text(encoding="utf-8")
     assert "2 of them" in (root / "ROADMAP.md").read_text(encoding="utf-8")
 
-    archive_page = (root / "docs" / "archive.md").read_text(
-        encoding="utf-8"
-    )
+    archive_page = (root / "docs" / "archive.md").read_text(encoding="utf-8")
     assert "| `discharge` | 1 |" in archive_page
     assert "| `water_level` | 2 |" in archive_page
 
@@ -181,3 +179,38 @@ def test_update_archive_docs_does_not_partially_write_on_invalid_section(
         update_archive_docs(root, archive)
 
     assert readme.read_text(encoding="utf-8") == original_readme
+
+
+def test_update_archive_docs_tracks_new_and_removed_variables(
+    tmp_path: Path,
+):
+    root, archive = _fixture_repo(tmp_path)
+
+    manifest_path = archive / "obs" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    manifest["sources"].pop("usgs/water_level")
+    manifest["sources"]["usgs/precipitation"] = {
+        "source": "usgs",
+        "variable": "precipitation",
+        "stations": {
+            "C": {"n": 5},
+        },
+    }
+
+    manifest_path.write_text(
+        json.dumps(manifest),
+        encoding="utf-8",
+    )
+
+    update_archive_docs(root, archive)
+
+    archive_page = (root / "docs" / "archive.md").read_text(encoding="utf-8")
+
+    discharge_row = "| `discharge` | 1 | `obs/discharge/<source>/` |"
+    precipitation_row = "| `precipitation` | 1 | `obs/precipitation/<source>/` |"
+
+    assert discharge_row in archive_page
+    assert precipitation_row in archive_page
+    assert "`water_level`" not in archive_page
+    assert archive_page.index(discharge_row) < archive_page.index(precipitation_row)

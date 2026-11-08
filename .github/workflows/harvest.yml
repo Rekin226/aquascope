@@ -35,10 +35,7 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+# Write permissions are limited to the harvest job.
 
 concurrency:
   group: harvest
@@ -48,6 +45,10 @@ jobs:
   harvest:
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_DATASET: Rekin226/aquascope-gauges
@@ -303,6 +304,7 @@ jobs:
           OPEN_PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
 
           if [ -n "$OPEN_PR" ]; then
+            gh pr edit "$OPEN_PR" --add-label no-changelog
             echo "Updated existing archive-count PR #$OPEN_PR"
           else
             cat > /tmp/archive-counts-pr.md <<'EOF'
@@ -314,6 +316,9 @@ jobs:
 
           Generated automatically from a successfully published scheduled harvest.
 
+          When REPAIR_TOKEN is not configured, GitHub Actions checks may only run
+          after this PR is closed and reopened. This is a GitHub token limitation.
+
           Closes no issue automatically; this PR is intended for review before merging.
           EOF
 
@@ -321,6 +326,7 @@ jobs:
               --base main \
               --head "$BRANCH" \
               --title "Docs: refresh archive counts" \
+              --label no-changelog \
               --body-file /tmp/archive-counts-pr.md
           fi
 

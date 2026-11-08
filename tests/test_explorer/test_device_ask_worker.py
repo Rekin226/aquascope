@@ -24,17 +24,19 @@ WORKER = ROOT / "explorer" / "worker.js"
 
 def _block(fn: str) -> str:
     text = WORKER.read_text(encoding="utf-8")
-    m = re.search(r"async function " + fn + r"\(.*?const code = `(.*?)`;", text, re.S)
+    m = re.search(r"async function " + fn + r"\(.*?const code = \(k\) => `(.*?)`;", text, re.S)
     assert m, f"{fn}'s Python block is missing from worker.js"
-    return m.group(1)
+    # runPy hands the code its call key as a Python string literal
+    return m.group(1).replace("${k}", '"k"')
 
 
-def _runner(monkeypatch, fn: str, var: str):
+def _runner(monkeypatch, fn: str):
     code = _block(fn)
 
     def call(payload: dict):
         fake = types.ModuleType("js")
-        setattr(fake, var, json.dumps(payload))
+        args = json.dumps(payload)
+        fake.__aqCall = lambda key, name: args if (key, name) == ("k", "args") else None
         monkeypatch.setitem(sys.modules, "js", fake)
         ns: dict = {}
         lines = code.strip().splitlines()
@@ -46,7 +48,7 @@ def _runner(monkeypatch, fn: str, var: str):
 
 @pytest.fixture
 def device(monkeypatch):
-    return _runner(monkeypatch, "deviceAsk", "__aqDev")
+    return _runner(monkeypatch, "deviceAsk")
 
 
 WORDS = ("What is the 100-year flood at this gauge?\n\nContext: The user is looking at the gauge POTOMAC (source "
@@ -102,7 +104,7 @@ def test_the_lock_op_refuses_the_recorded_trend_with_no_test(device):
 
 
 def test_the_map_reply_op_hands_the_words_to_the_check(monkeypatch):
-    run = _runner(monkeypatch, "mapCommand", "__aqMap")
+    run = _runner(monkeypatch, "mapCommand")
     reply = json.dumps({"actions": [{"type": "fly_to", "bbox": [15, 20, 30, 40]}]})
     out = run({"op": "reply", "reply": reply, "text": "where is it driest in Africa right now? zoom there",
                "today": "2026-10-25", "context": "", "actions": [], "llm": {}})
@@ -125,7 +127,7 @@ def test_the_page_sends_what_the_worker_reads():
 
 
 def test_the_map_prompt_op_gives_the_requests_own_schema(monkeypatch):
-    run = _runner(monkeypatch, "mapCommand", "__aqMap")
+    run = _runner(monkeypatch, "mapCommand")
     out = run({"op": "prompt", "text": "can you show me how the Danube is doing compared with normal",
                "today": "2026-10-26", "context": "", "reply": None, "actions": [], "llm": {}})
     item = out["schema"]["properties"]["actions"]["items"]["properties"]

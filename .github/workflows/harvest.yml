@@ -35,9 +35,7 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: read
-  issues: write
+# Write permissions are limited to the harvest job.
 
 concurrency:
   group: harvest
@@ -47,6 +45,10 @@ jobs:
   harvest:
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_DATASET: Rekin226/aquascope-gauges
@@ -266,9 +268,66 @@ jobs:
           retention-days: 30
 
       - name: Fail only if every source failed
+        id: harvest_check
         run: |
           if [ "${{ steps.harvest.outputs.exit }}" != "0" ]; then
             echo "harvest exited ${{ steps.harvest.outputs.exit }} (all sources failed or publish failed)"; exit 1
+          fi
+
+      - name: Refresh archive documentation counts
+        if: github.event_name == 'schedule' && steps.publish.outcome == 'success' && steps.harvest_check.outcome == 'success'
+        run: python -m aquascope.maintenance.archive_counts --archive archive
+
+      - name: Open or update archive-count documentation PR
+        if: github.event_name == 'schedule' && steps.publish.outcome == 'success' && steps.harvest_check.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.REPAIR_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          git add README.md docs/index.md ROADMAP.md docs/archive.md explorer/SPACE_README.md
+
+          if git diff --cached --quiet; then
+            echo "Archive documentation counts are already up to date."
+            exit 0
+          fi
+
+          BRANCH="archive/counts"
+          git switch -C "$BRANCH"
+          git commit -m "docs: refresh archive counts" \
+            -m "Regenerate archive statistics from the successful scheduled harvest (#724)."
+          git push --force origin "$BRANCH"
+
+          OPEN_PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+
+          if [ -n "$OPEN_PR" ]; then
+            gh pr edit "$OPEN_PR" --add-label no-changelog
+            echo "Updated existing archive-count PR #$OPEN_PR"
+          else
+            cat > /tmp/archive-counts-pr.md <<'EOF'
+          ## Summary
+
+          - Refresh archive catalogued and mirrored station counts.
+          - Update the latest harvest date.
+          - Regenerate per-variable mirrored station counts.
+
+          Generated automatically from a successfully published scheduled harvest.
+
+          When REPAIR_TOKEN is not configured, GitHub Actions checks may only run
+          after this PR is closed and reopened. This is a GitHub token limitation.
+
+          Closes no issue automatically; this PR is intended for review before merging.
+          EOF
+
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "Docs: refresh archive counts" \
+              --label no-changelog \
+              --body-file /tmp/archive-counts-pr.md
           fi
 
       # Job health (#593): health/jobs/harvest.json and health/jobs/index.json, written only under health/jobs/, and

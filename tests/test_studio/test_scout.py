@@ -163,7 +163,7 @@ def test_the_flood_playbook_caveat_follows_the_events_the_scout_found(monkeypatc
     assert inv.recon["context"]["flood_history"] == {"events": 2, "latest": "2020-01-01", "radius_km": 25.0}
     with_events = pbk.caveats_for(pb, pbk.evaluation_context(pb, inv.recon, intake))
     assert any(flagged in c for c in with_events)
-    # the reconnaissance alone (what HydroGym scores against) never carries it
+    # the reconnaissance alone (what AquaScope Bench scores against) never carries it
     without = pbk.caveats_for(pb, pbk.evaluation_context(pb, RICH, intake))
     assert not any(flagged in c for c in without)
 
@@ -199,7 +199,7 @@ def test_a_supply_question_reads_the_dams_upstream_as_context(monkeypatch):
     assert inv.recon["context"]["upstream_dams"]["degree_of_regulation_pct"] == 3.8
     assert inv.recon["context"]["upstream_dams"]["largest"] == ["Spitallamm", "Raterichsboden"]
     assert any(n.startswith("Dams upstream: Regulated upstream") for n in inv.notes)
-    # the reconnaissance the caller passed in (what HydroGym scores against) is left alone
+    # the reconnaissance the caller passed in (what AquaScope Bench scores against) is left alone
     assert "upstream_dams" not in (RICH.get("context") or {})
 
 

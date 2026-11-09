@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # Sampled water quality at the Malad River gauge and an irrigation use: the CCME index against FAO 29 and the
 # irrigation suitability indices (SAR, sodium percentage, RSC), as the water_quality irrigation branch.
 id: wq_irrigation_snake_plain

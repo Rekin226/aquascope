@@ -10,54 +10,39 @@
 //
 // Neither does native tool calling reliably at this size, so the loop here is
 // deliberately smaller than the Python one: the model picks one tool at a time
-// from a short list by replying with JSON, we run it in the worker, and after a
-// few steps it writes the answer. That is honest about what a 4B model can do,
-// and the UI says "on your device, reduced tool set" rather than pretending it
-// is the same Analyst.
+// from a short list by replying with JSON, we run it in the worker, and then it
+// picks the facts of its answer by key. It never writes a sentence the reader
+// sees: AquaScope writes each one from the tool results (#590, round 3). The UI
+// says "on your device, reduced tool set" rather than pretending it is the same
+// Analyst.
 
-import { escapeHtml } from "./core.js?v=__BUILD__";
+import {
+  askLoop, createSession, deviceAnswerHtml, samplingNote, samplingOptions, sessionPool,
+} from "./ask-local-core.js?v=__BUILD__";
 
+// No example arguments: check3 found the model copying the example id "abc" into a real call. Which ids and
+// places a call may take is in each step's message and schema, built from the question.
 export const LOCAL_TOOLS = [
-  {
-    name: "find_stations",
-    description: "Search the world gauge catalog. query for a name, near=[lat, lon] for the nearest, variable to filter.",
-    example: '{"tool": "find_stations", "arguments": {"query": "Kingston", "limit": 5}}',
-  },
-  {
-    name: "analyze_station",
-    description: "Fetch and analyse one station: record, flood frequency, flow duration, trend.",
-    example: '{"tool": "analyze_station", "arguments": {"source": "uk_ea", "station_id": "abc"}}',
-  },
-  {
-    name: "anywhere",
-    description: "Climate and modelled discharge at a point with no gauge (lat, lon).",
-    example: '{"tool": "anywhere", "arguments": {"lat": 25.05, "lon": 121.55}}',
-  },
-  {
-    name: "describe_catchment",
-    description: "The catchment of a point: area, climate, land cover, population.",
-    example: '{"tool": "describe_catchment", "arguments": {"lat": 47.0, "lon": -68.6}}',
-  },
+  { name: "find_stations", description: "Search the world gauge catalog: query (words from the question) or near [lat, lon]; limit up to 10." },
+  { name: "analyze_station", description: "One gauge's record, flow duration, flood frequency and trend: source and station_id." },
+  { name: "anywhere", description: "Climate and modelled discharge at a point with no gauge: lat, lon." },
+  { name: "describe_catchment", description: "The catchment of a point: area, climate, land cover, population: lat, lon." },
 ];
 
-const SYSTEM = `You are AquaScope's assistant, running on the reader's own machine.
-Answer only from tool results. You have these tools:
-${LOCAL_TOOLS.map((t) => `- ${t.name}: ${t.description}\n  example: ${t.example}`).join("\n")}
+const SYSTEM = `You are AquaScope's assistant, running on the reader's own machine. You do not write the answer: you
+choose. AquaScope writes every sentence the reader sees from the tool results.
+Tools:
+${LOCAL_TOOLS.map((t) => `- ${t.name}: ${t.description}`).join("\n")}
 
-Reply with ONE JSON object and nothing else, either
+Each message gives the question, the tools you may call now with the gauge ids and points they may take, and the
+facts you may answer with, each by its key. Reply with ONE JSON object and nothing else, either
   {"tool": "<name>", "arguments": {...}}
-to call a tool, or
-  {"answer": "<two or three sentences, with units and the station name>"}
-when you have enough. Never invent numbers: every figure must appear in a tool result.`;
-
-const JSON_SCHEMA = {
-  type: "object",
-  properties: {
-    tool: { type: "string", enum: LOCAL_TOOLS.map((t) => t.name) },
-    arguments: { type: "object" },
-    answer: { type: "string" },
-  },
-};
+to run a tool, or
+  {"answer": ["<fact key>", ...]}
+with the keys of the facts that answer the question, in the order to show them. Use only the keys, ids and points
+the message lists. Do not call a tool again with the same arguments: its result is already in the facts.
+For a list of gauges pick the search's gauges; for a trend pick the trend fact; for a flood pick the return level
+asked for.`;
 
 let engine = null;      // { kind: "prompt-api" | "webllm", generate(messages) }
 
@@ -95,8 +80,17 @@ export async function loadLocalModel(onProgress = () => {}) {
     onProgress(willDownload
       ? "Downloading Chrome's built-in model (once)…"
       : "Starting Chrome's built-in model…");
-    const session = await globalThis.LanguageModel.create({
+    // One base session holds the model warm and is never prompted; every step of every question gets a clone
+    // of it (the system prompt and nothing else), prompts it once and destroys it, so no question can see
+    // another's tool results (#590: a later answer quoted an earlier question's Q10 and record start), and no
+    // session takes a second prompt (which failed with "kErrorUnknown" in 11 of 13 trials on the device). A
+    // clone that fails falls back to a new session.
+    const LM = globalThis.LanguageModel;
+    const sampling = await samplingOptions(LM, 0.2);
+    const fresh = () => createSession(LM, { initialPrompts: [{ role: "system", content: SYSTEM }], ...sampling });
+    const base = await createSession(LM, {
       initialPrompts: [{ role: "system", content: SYSTEM }],
+      ...sampling,
       monitor(m) {
         m.addEventListener("downloadprogress", (e) => {
           if (!willDownload) return;
@@ -108,8 +102,18 @@ export async function loadLocalModel(onProgress = () => {}) {
     engine = {
       kind: "prompt-api",
       label: "Chrome built-in (Gemini Nano)",
-      async generate(prompt) {
-        return session.prompt(prompt, { responseConstraint: JSON_SCHEMA });
+      sampling: samplingNote(base),
+      async open() {
+        let session = null;
+        try { session = typeof base.clone === "function" ? await base.clone() : null; } catch { session = null; }
+        if (!session) session = await fresh();
+        return {
+          // The step's schema: enums built by the package from this question's words and results. The signal is
+          // the step's time limit and the Stop button (askLoop), as generateJsonLocally's timeout is for the map.
+          generate: (prompt, schema, signal) => session.prompt(prompt, {
+            ...(schema ? { responseConstraint: schema } : {}), ...(signal ? { signal } : {}) }),
+          close() { try { session.destroy(); } catch { /* fine */ } },
+        };
       },
     };
     return engine;
@@ -134,13 +138,21 @@ export async function loadLocalModel(onProgress = () => {}) {
     kind: "webllm",
     label: pick.model_id,
     mlc,
-    async generate(prompt) {
-      const res = await mlc.chat.completions.create({
-        messages: [{ role: "system", content: SYSTEM }, { role: "user", content: prompt }],
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-      });
-      return res.choices[0].message.content || "";
+    sampling: "temperature 0.2",
+    // WebLLM keeps no conversation: each call is the system prompt and this one prompt.
+    async open() {
+      return {
+        async generate(prompt, schema, signal) {
+          if (signal) signal.addEventListener("abort", () => { try { mlc.interruptGenerate(); } catch { /* fine */ } }, { once: true });
+          const res = await mlc.chat.completions.create({
+            messages: [{ role: "system", content: SYSTEM }, { role: "user", content: prompt }],
+            temperature: 0.2,
+            response_format: schema ? { type: "json_object", schema: JSON.stringify(schema) } : { type: "json_object" },
+          });
+          return res.choices[0].message.content || "";
+        },
+        close() {},
+      };
     },
   };
   return engine;
@@ -177,17 +189,6 @@ export async function localModelReady() {
   return READY.ok;
 }
 
-// Chrome wants temperature and topK together; the defaults come from params().
-async function promptOptions(temperature) {
-  try {
-    const p = await globalThis.LanguageModel.params();
-    if (!p || !Number.isFinite(p.defaultTopK)) return {};
-    return { temperature: Math.min(temperature, p.maxTemperature || temperature), topK: p.defaultTopK };
-  } catch {
-    return {};
-  }
-}
-
 function withTimeout(promise, ms, controller) {
   let timer;
   const clock = new Promise((_, reject) => {
@@ -202,20 +203,24 @@ function withTimeout(promise, ms, controller) {
 /**
  * One reply from the on-device model as text: `system` and `prompt`, a JSON
  * `schema` the reply is constrained to where the runtime allows, `temperature`
- * where it allows, and `timeoutMs` after which the caller gets an error and
- * falls back. Chrome's model gets a session of its own for this one call (Ask's
- * session, with its tool prompt, is not touched); WebLLM is used only when Ask
- * has already loaded it. Check `localModelReady()` first.
+ * where the runtime takes one (see samplingOptions: a web page in Chrome 155 cannot set it), and `timeoutMs` after which the caller gets an error and
+ * falls back. Chrome's model gets a session of its own for this one call, cloned
+ * from a warm base session kept per system prompt (sessionPool; Ask's session,
+ * with its tool prompt, is not touched); WebLLM is used only when Ask has already
+ * loaded it. Check `localModelReady()` first.
  */
+let pool = null;
+
 export async function generateJsonLocally({ system, prompt, schema = null, temperature = 0.1, timeoutMs = 25000,
                                             onProgress = () => {} } = {}) {
   const controller = new AbortController();
   if (promptApiAvailable()) {
     onProgress("Reading your words on your device...");
-    const session = await globalThis.LanguageModel.create({
-      initialPrompts: [{ role: "system", content: system }],
-      ...(await promptOptions(temperature)),
-    });
+    // Sampling as this Chrome accepts it (samplingOptions): topK and temperature in an extension, the
+    // samplingMode word where the origin trial allows it, else Chrome's own.
+    const LM = globalThis.LanguageModel;
+    if (!pool) pool = sessionPool(LM);
+    const session = await pool.open(system, await samplingOptions(LM, temperature));
     try {
       const opts = { signal: controller.signal };
       if (schema) opts.responseConstraint = schema;
@@ -237,56 +242,21 @@ export async function generateJsonLocally({ system, prompt, schema = null, tempe
 
 // ── the reduced loop ────────────────────────────────────────────────────────
 
-function parseReply(text) {
-  const raw = String(text || "").trim();
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start < 0 || end <= start) return { answer: raw };
-  try {
-    return JSON.parse(raw.slice(start, end + 1));
-  } catch {
-    return { answer: raw };
-  }
-}
-
 /**
- * Ask the local model, running tools through `callTool` (the worker).
- * Returns { answer, toolCalls } and reports each step through onEvent.
+ * Ask the local model. `plan`, `callTool` and `render` are the package's steps in the worker
+ * (aquascope.ai_engine.device_ask: step_schema, check_call then the tool, render_answer): the model picks, the
+ * package checks and writes. One fresh conversation per step, each prompt ended by the time limit (STEP_MS,
+ * 25 s) or by `signal` (the Stop button).
+ * Returns { answer, toolCalls, results, lock, model } and reports each step through onEvent.
  */
-export async function askLocally(question, { callTool, onEvent = () => {}, maxSteps = 3, context = "" } = {}) {
+export async function askLocally(question, { plan, callTool, render, onEvent = () => {}, context = "", signal = null,
+                                            stepMs } = {}) {
   const eng = await loadLocalModel(onEvent);
-  const toolCalls = [];
-  let prompt = context ? `${question}\n\nContext: ${context}` : question;
-  for (let step = 1; step <= maxSteps; step++) {
-    // A small model takes twenty seconds or so over a couple of tool calls.
-    // Without a running commentary that is indistinguishable from a hang.
-    onEvent(`Thinking… (step ${step} of ${maxSteps})`);
-    const reply = parseReply(await eng.generate(prompt));
-    if (reply.answer || !reply.tool) {
-      return { answer: reply.answer || "The local model did not produce an answer.", toolCalls, model: eng.label };
-    }
-    onEvent(`tool ${reply.tool}(${JSON.stringify(reply.arguments || {}).slice(0, 120)})`);
-    let payload;
-    try {
-      onEvent(`Running ${reply.tool}…`);
-      payload = await callTool(reply.tool, reply.arguments || {});
-    } catch (err) {
-      payload = { error: err.message };
-    }
-    toolCalls.push({ name: reply.tool, arguments: reply.arguments || {}, ok: !(payload && payload.error) });
-    const trimmed = JSON.stringify(payload).slice(0, 3000);
-    prompt = `${question}\n\nResult of ${reply.tool}: ${trimmed}\n\n` +
-      "Now reply with either another tool call or the final answer, as one JSON object.";
-  }
-  return {
-    answer: "The local model used its steps without reaching an answer. A larger model (bring your own key) will do better on this question.",
-    toolCalls,
-    model: eng.label,
-  };
+  const out = await askLoop(question, { open: () => eng.open(), plan, callTool, render, onEvent, context, signal,
+    ...(stepMs ? { stepMs } : {}) });
+  return { ...out, model: eng.label, sampling: eng.sampling };
 }
 
 export function localAnswerHtml(result) {
-  return `<div class="showcase-note">Answered on your device by ${escapeHtml(result.model || "a local model")}, ` +
-    `with a reduced tool set and no key. Small models are weaker at multi-step work: for a hard question, ` +
-    `bring a key above.</div><p>${escapeHtml(result.answer)}</p>`;
+  return deviceAnswerHtml(result);
 }

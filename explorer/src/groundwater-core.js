@@ -259,12 +259,14 @@ export function wellCard(res, w) {
 
 /** Which dropped files are which: { hds, grid, sidecars, other }. A head file is told by its extension. */
 export function sortModelFiles(files) {
-  const out = { hds: null, grid: null, sidecars: [], other: [] };
+  const out = { hds: null, grid: null, sidecars: [], wel: null, cbc: null, other: [] };
   for (const f of files || []) {
     const name = String(f.name || "").toLowerCase();
     if (/\.(hds|hed|bhd|head|ddn)$/.test(name)) out.hds = out.hds || f;
     else if (/\.(disv?\.grb|grb|disv?)$/.test(name)) out.grid = out.grid || f;
     else if (/\.(nam|tdis)$/.test(name)) out.sidecars.push(f);
+    else if (/\.wel6?$/.test(name)) out.wel = out.wel || f;   // the wells, for the views (#624)
+    else if (/\.(cbc|bud|cbb)$/.test(name)) out.cbc = out.cbc || f;   // the cell-by-cell budget (#626)
     else out.other.push(f);
   }
   return out;
@@ -272,7 +274,9 @@ export function sortModelFiles(files) {
 
 /** Whether a drop holds MODFLOW files (a head file, a grid, a name file). The map has one drop zone for model
  * results: these go to the MODFLOW reader here, everything else to the mesh viewer (mesh-view.js, #555). */
-export const MODFLOW_FILE = /\.(hds|hed|bhd|head|ddn|disv?\.grb|grb|disv?|nam|tdis)$/i;
+export const MODFLOW_FILE = /\.(hds|hed|bhd|head|ddn|disv?\.grb|grb|disv?|nam|tdis|wel6?|cbc|bud|cbb)$/i;
+/** The extensions the file picker offers for MODFLOW (Tools, Open model results). */
+export const MODFLOW_ACCEPT = ".hds,.hed,.bhd,.head,.ddn,.dis,.disv,.grb,.nam,.tdis,.wel,.cbc,.bud,.cbb";
 export const isModflowDrop = (files) => [...(files || [])].some((f) => MODFLOW_FILE.test(String((f && f.name) || "")));
 
 /** The georeference form's fields, read and checked: { origin, rotation, crs, cell_size, start_date } or an error. */
@@ -364,4 +368,38 @@ export function timeLabel(model, t) {
   if (model.dates && model.dates[t]) return model.dates[t];
   const v = model.times[t];
   return `t = ${Number.isInteger(v) ? v : Number(v).toPrecision(4)} ${model.time_units || "days"}`;
+}
+
+// ── a model with no georeference: placed approximately, never blocked ──────────────────────────────────
+
+/** The label a model placed at the map's centre carries on its legend row and card. */
+export const APPROX_LABEL = "approximate placement";
+
+/** Whether the model on the map was placed approximately (its files did not say where it is). */
+export const isApproximate = (meta) => Boolean(meta && meta.grid && meta.grid.approximate);
+
+/** The one-click choice, read and checked: { approximate_at: [lon, lat], cell_size? } or an error. A model with no
+ * grid file needs its cell size even to be drawn approximately (the head file gives only rows and columns). */
+export function readApproxChoice(centre, v = {}, { needCell = false } = {}) {
+  const lon = Array.isArray(centre) ? Number(centre[0]) : NaN, lat = Array.isArray(centre) ? Number(centre[1]) : NaN;
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return { error: "The map has no centre yet." };
+  // the reader takes latitudes within 85 degrees, like the map itself; a globe turned to a pole still places the model
+  const out = { approximate_at: [Math.round(lon * 1e6) / 1e6, Math.max(-84, Math.min(84, Math.round(lat * 1e6) / 1e6))] };
+  const raw = String(v.cell ?? "").trim();
+  if (raw) {
+    const cell = Number(raw);
+    if (!(cell > 0)) return { error: "The cell size is a positive length." };
+    out.cell_size = cell;
+  } else if (needCell) {
+    return { error: "Without a grid file the cell size is needed, in the model's length unit." };
+  }
+  return out;
+}
+
+/** What the approximate choice says about the model's size: in its own length unit, or read as metres. */
+export function approxWords(out) {
+  const u = String((out && out.length_units) || "").toLowerCase();
+  const unit = ["meters", "metres", "m"].includes(u) ? "metres" : ["feet", "ft"].includes(u) ? "feet"
+    : ["centimeters", "cm"].includes(u) ? "centimetres" : "";
+  return unit ? `North up, at its true size in ${unit}.` : "North up, at its true size, reading its lengths as metres (its files do not name a unit).";
 }

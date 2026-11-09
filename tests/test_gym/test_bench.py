@@ -1,4 +1,4 @@
-"""HydroGym Phase 1 bench (#175): the tree scores 100 percent on its own keys, a scripted team run is scored
+"""AquaScope Bench Phase 1 bench (#175): the tree scores 100 percent on its own keys, a scripted team run is scored
 with its tokens, the ask loop is read off its tool calls, timeouts become rows, and the leaderboard renders."""
 
 from __future__ import annotations

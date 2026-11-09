@@ -1,0 +1,114 @@
+/* Flood it (#658): the small panel docked at the side of the map (it shares the What if panel's frame,
+   whatif.css), the flow picker, and on a phone a short sheet. The flood itself is drawn by src/floodsim-map.js. */
+
+.floodit { width: 292px; padding: 10px 12px 10px; max-height: calc(100% - 130px); overflow: auto; }
+.floodit .wi-title { font-size: .9rem; }
+.fi-flows { display: grid; grid-template-columns: repeat(5, 1fr) 1.9fr; gap: 3px; margin-top: .5rem; }
+.fi-chip {
+  font: inherit; font-size: .74rem; line-height: 1.1; padding: .28rem .1rem .22rem; border: 1px solid var(--line);
+  border-radius: var(--radius-xs); background: var(--surface-solid); color: var(--ink); cursor: pointer;
+  display: grid; justify-items: center; gap: 1px; font-variant-numeric: tabular-nums;
+}
+.fi-chip small { font-size: .62rem; color: var(--muted); }
+.fi-chip em { font-style: normal; font-size: .62rem; color: var(--muted); }
+.fi-chip.fi-wide { font-size: .7rem; align-content: center; }
+.fi-chip:hover { background: var(--bg-soft); }
+.fi-chip.on { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, var(--surface-solid)); }
+.fi-chip.on em, .fi-chip.on small { color: var(--ink-2); }
+.fi-more { display: flex; gap: .35rem; margin-top: .35rem; align-items: center; }
+.fi-more select, .fi-num input {
+  font: inherit; font-size: .74rem; padding: .22rem .35rem; border: 1px solid var(--line); border-radius: var(--radius-xs);
+  background: var(--bg); color: var(--ink); min-width: 0;
+}
+.fi-more select { flex: 1.2; }
+.fi-num { display: flex; flex: 1; gap: 3px; }
+.fi-num input { width: 100%; font-variant-numeric: tabular-nums; }
+.fi-flow { margin: .45rem 0 0; font-size: .74rem; line-height: 1.4; color: var(--ink-2); }
+.fi-flow.muted { color: var(--muted); }
+.fi-result { margin-top: .4rem; padding-top: .4rem; border-top: 1px solid var(--line-soft); }
+.fi-head { margin: 0; font-size: .8rem; line-height: 1.4; }
+.fi-head b { font-variant-numeric: tabular-nums; }
+.fi-wall { margin: .3rem 0 0; font-size: .72rem; line-height: 1.4; color: var(--warn-ink, #8a5a00); }
+.fi-views { margin: .35rem 0 0; }
+.fi-views .fd-go.on { border-color: var(--blue); }
+.fi-how { margin-top: .35rem; font-size: .72rem; color: var(--ink-2); }
+.fi-how summary { cursor: pointer; color: var(--muted); }
+.fi-how p { margin: .3rem 0 0; line-height: 1.4; }
+.fi-credit { margin: .4rem 0 0; font-size: .66rem; color: var(--muted); line-height: 1.35; }
+.floodit .wi-status .spinner { flex: none; }
+
+/* while the run is open in the flood views: a strip at the top right, so the views' own panels have the map */
+.floodit.mini { top: 64px; bottom: auto; }
+.floodit.mini .fi-more, .floodit.mini .fi-flow, .floodit.mini .fi-how { display: none; }
+
+/* a phone: a bottom sheet, folded to the answer after a run so the flood above shows */
+@media (max-width: 640px) {
+  /* a bottom sheet above the hint and the time bar (as the sketchpad's), so the run's clock stays in view; the
+     camera keeps the flood above the sheet (floodsim-map.js padding()) */
+  .floodit { width: auto; top: auto; bottom: 150px; max-height: 40vh; }
+  .floodit.done { max-height: 34vh; }
+  .floodit.done .fi-more, .floodit.done .fi-flow, .floodit.done .fi-credit, .floodit.done .wi-kicker { display: none; }
+  .floodit.done .fi-how { display: none; }
+  .fi-flows { grid-template-columns: repeat(5, 1fr) 1.7fr; }
+  .floodit.mini { top: auto; bottom: 8px; max-height: 22vh; }
+}
+
+/* Levees and breaches (#663): the tools, the drawn lines' list, the crest control and before and after */
+.fi-sketch { margin-top: .45rem; padding-top: .4rem; border-top: 1px solid var(--line-soft); }
+.fi-sk-tools { margin: 0; }
+.fi-sk-list { list-style: none; margin: .3rem 0 0; padding: 0; font-size: .74rem; }
+.fi-sk-item { display: flex; align-items: center; gap: .4rem; padding: 2px 4px; border-radius: var(--radius-xs); }
+.fi-sk-item.on { background: color-mix(in srgb, #d87400 12%, transparent); }
+.fi-sk-item span { flex: 1; font-variant-numeric: tabular-nums; }
+.fi-sk-mark { flex: none; width: 16px; height: 0; border-top: 4px solid #9a5a00; border-radius: 2px; }
+.fi-sk-mark.breach { border-top: 4px dashed #d1242f; }
+.fi-sk-note { margin: .3rem 0 0; font-size: .7rem; color: var(--warn-ink, #8a5a00); }
+.fi-sk-run { margin: .4rem 0 0; }
+.fi-sk-run .btn { width: 100%; }
+.fi-crest { margin-top: .35rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: var(--bg); }
+.fi-prof { display: block; width: 100%; height: 84px; }
+.fi-prof .g { fill: #b08a5c; fill-opacity: .55; stroke: #7a5a33; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.fi-prof .now { fill: none; stroke: #9a5a00; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.fi-prof .w { fill: none; stroke: #2f7fd1; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.fi-prof .c { fill: none; stroke: #d87400; stroke-width: 2.5; stroke-dasharray: 6 3; vector-effect: non-scaling-stroke; }
+.fi-prof-ax { display: flex; justify-content: space-between; margin: 1px 0 0; font-size: .62rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fi-crest-words { margin: .3rem 0 0; font-size: .72rem; line-height: 1.4; color: var(--ink-2); }
+.fi-crest-words b { font-variant-numeric: tabular-nums; color: var(--ink); }
+.fi-crest-form { display: flex; align-items: center; gap: .35rem; margin-top: .3rem; font-size: .74rem; }
+.fi-crest-form input[type="range"] { flex: 1; min-width: 0; accent-color: #d87400; }
+.fi-crest-form input[type="number"] {
+  width: 4.6rem; font: inherit; font-size: .74rem; padding: .18rem .3rem; border: 1px solid var(--line);
+  border-radius: var(--radius-xs); background: var(--surface-solid); color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.fi-crest-row { display: flex; align-items: baseline; gap: .6rem; margin: .25rem 0 0; font-size: .72rem; }
+.fi-crest-row small { margin-left: auto; color: var(--muted); font-size: .62rem; }
+.fi-expo { margin-top: .4rem; }
+.fi-expo-t { width: 100%; border-collapse: collapse; font-size: .74rem; font-variant-numeric: tabular-nums; margin-top: .25rem; }
+.fi-expo-t caption { text-align: left; font-size: .68rem; color: var(--muted); padding-bottom: 2px; }
+.fi-expo-t th, .fi-expo-t td { padding: 2px 4px; text-align: right; border-bottom: 1px solid var(--line-soft); }
+.fi-expo-t th[scope="row"] { text-align: left; font-weight: 500; }
+.fi-expo-t th small { color: var(--muted); font-weight: 400; }
+.fi-expo-t td.down { color: #1a7f37; font-weight: 600; }
+.fi-expo-t td.up { color: #cf222e; font-weight: 600; }
+.fi-expo-key { display: flex; flex-wrap: wrap; gap: .3rem .8rem; margin: .3rem 0 0; font-size: .7rem; color: var(--ink-2); }
+.fi-expo-key i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; border-radius: 2px; vertical-align: -1px; }
+.fi-expo-key .kd { background: #1a7f37; }
+.fi-expo-key .nf { background: #cf222e; }
+
+/* the drawing tool's buttons and the handles on a selected line's points */
+.fsk-bar { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); display: flex; gap: .4rem; }
+.fsk-bar .btn:disabled { opacity: .45; cursor: default; }
+.fsk-handle {
+  width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid #d87400; cursor: grab;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .35); touch-action: none;
+}
+.fsk-handle.fsk-breach { border-color: #d1242f; }
+
+@media (max-width: 640px) {
+  .fsk-bar { top: 112px; }
+  .floodit.drawing { display: none; }   /* the whole map to draw on; the sheet comes back with the crest control */
+  .floodit.done .fi-sketch .fi-crest-row small { display: none; }
+  .fi-prof { height: 64px; }
+  /* setting a crest on a phone: the control has the sheet, the flows and the views step aside */
+  .floodit.crest .fi-flows, .floodit.crest .fi-views, .floodit.crest .fi-head { display: none; }
+}

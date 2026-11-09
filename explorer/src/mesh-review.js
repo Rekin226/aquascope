@@ -8,8 +8,10 @@
 // Archive's context mirror (a light worker), each gauge's record over the run (the main worker). The findings
 // drop as numbered pins, coloured by severity, each with its reason, its numbers and its source, and flag the
 // cells they are about. Every pin goes in the action log: undo one and its flags go with it. With the on-device
-// model, or a key in Ask, a model may reorder and reword the findings, held to the numbers by the claim lock
-// (aquascope.map_explain.claim_lock); without one, the package's templates say it.
+// model, or a key in Ask, the model picks and the code writes (#590): it chooses which findings to pin, in what
+// order, and one of three fixed variants of each, as ids held to a JSON Schema of enums
+// (aquascope.mesh_review.review_schema, Chrome's responseConstraint). Every word is the package's, a problem is
+// always pinned and the counts are the rules'. A reply outside the schema is refused whole and said in one line.
 
 import { $, actions, escapeHtml, state } from "./core.js?v=__BUILD__";
 import { map } from "./map.js?v=__BUILD__";
@@ -19,7 +21,11 @@ import { generateJsonLocally, localModelReady, localReaderLabel } from "./local-
 import { call, callLight } from "./worker-client.js?v=__BUILD__";
 import { announce } from "./a11y.js?v=__BUILD__";
 import { currentMesh, meshAsk, meshFlagsBefore, onMeshCleared, refreshMeshLegend, setReviewSection } from "./mesh-view.js?v=__BUILD__";
-import { SEVERITY, checkRows, flaggedCells, gaugesInBox, reviewLine, reviewPin, reviewWho, runSpan } from "./mesh-review-core.js?v=__BUILD__";
+import { modflowShown } from "./groundwater-view.js?v=__BUILD__";
+import {
+  SEVERITY, checkRows, flaggedCells, gaugesInBox, reviewLine, reviewPin, reviewTarget, reviewWho, runSpan,
+} from "./mesh-review-core.js?v=__BUILD__";
+import { askedFailed, refusedNote } from "./scout-core.js?v=__BUILD__";
 
 const FLAGS = "mesh-flags";
 const FLAGS_LINE = "mesh-flags-line";
@@ -59,29 +65,34 @@ async function gatherContext(meta) {
   return { floods: f && !f.error ? f : { radar: { rows: null, error: f && f.error }, news: { events: null, error: f && f.error } }, gauges: g };
 }
 
-// ── a model orders and words (numbers stay the code's) ─────────────────────
+// ── a model picks the pins, their order and a variant of each (the words stay the package's) ──
 
-async function wordWithModel(findings) {
+const DEVICE_WAIT_MS = 45000;
+
+async function wordWithModel(findings, question = "") {
+  let asked = null;
   if (await localModelReady()) {
+    const name = localReaderLabel() || "the on-device model";
     try {
-      const p = await meshAsk("prompt", { findings, context: currentContext() });
-      say('<span class="spinner" aria-hidden="true"></span>Wording the review on your device…');
-      const reply = await generateJsonLocally({ system: p.system, prompt: p.prompt, schema: p.schema, timeoutMs: 45000 });
-      const out = await meshAsk("words", { findings, reply, by: "device" });
-      return { ...out, by: "device", model: localReaderLabel() || "the on-device model" };
+      const p = await meshAsk("prompt", { findings, context: currentContext(), question });
+      say('<span class="spinner" aria-hidden="true"></span>Picking the pins on your device…');
+      const reply = await generateJsonLocally({ system: p.system, prompt: p.prompt, schema: p.schema, timeoutMs: DEVICE_WAIT_MS });
+      const out = await meshAsk("words", { findings, reply, by: "device", question });
+      return { ...out, by: "device", model: name };
     } catch (err) {
-      console.warn("review: on-device wording", err && err.message);
+      console.warn("review: on-device pick", err && err.message);
+      asked = { findings: null, by: "device", model: name, refused: [askedFailed(err, DEVICE_WAIT_MS)] };
     }
   }
   const cfg = askModelConfig();
   if (cfg) {
     say(`<span class="spinner" aria-hidden="true"></span>Asking ${escapeHtml(cfg.label)} to order and word the review…`);
-    const out = await call("mesh_review", { op: "llm", findings, context: currentContext(), provider: cfg.provider,
-      model: cfg.model, api_key: cfg.api_key, base_url: cfg.base_url });
+    const out = await call("mesh_review", { op: "llm", findings, context: currentContext(), question,
+      provider: cfg.provider, model: cfg.model, api_key: cfg.api_key, base_url: cfg.base_url });
     if (out && out.error) throw new Error(out.error);
     return { ...out, by: "key" };
   }
-  return null;
+  return asked;
 }
 
 // ── the flags on the cells ──────────────────────────────────────────────────
@@ -150,11 +161,32 @@ function clearLast() {
   lastPins = [];
 }
 
-export async function reviewModel({ say: sayOut = null } = {}) {
+function viewBox() {
+  if (!state.mapOk || !map) return null;
+  try {
+    const b = map.getBounds();
+    return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Review the model result on screen. With `anywhere` (the mesh's own legend row, which names its mesh, and the
+ * WebMCP tool) the loaded mesh is reviewed wherever the map is. From Ask the map, the model on screen decides
+ * (#590): a MODFLOW model there, or a mesh off screen, is said in the line rather than an older mesh reviewed out
+ * of sight. `question` is what the reader asked, verbatim: a question about stability or instabilities names the
+ * wet and dry flicker, which is then pinned whatever the model chose (aquascope.mesh_review.named_findings).
+ */
+export async function reviewModel({ say: sayOut = null, anywhere = false, question = "" } = {}) {
   const m = currentMesh();
   const tell = sayOut || say;
-  if (!m) {
-    tell("No model result on the map to review. Drop a HEC-RAS plan or a UGRID NetCDF file on the map first.", "warn");
+  const target = reviewTarget({
+    mesh: m ? { name: m.meta.name, bbox: m.meta.bbox, openedAt: m.openedAt, visible: m.visible } : null,
+    modflow: anywhere ? null : modflowShown(), view: anywhere ? null : viewBox(),
+  });
+  if (!m || !target.review) {
+    tell(escapeHtml(target.line), "warn");
     return null;
   }
   const my = ++running;
@@ -167,17 +199,22 @@ export async function reviewModel({ say: sayOut = null } = {}) {
     const res = await meshAsk("review", { context });
     if (my !== running || !currentMesh() || currentMesh().meta.name !== meta.name) return null;
     let findings = res.findings || [];
-    let by = "rules", model = "", refused = [];
+    let by = "rules", model = "", refused = [], leftOut = 0, asked = "";
     const modelReady = Boolean(askModelConfig()) || await localModelReady();
     if (modelReady && findings.length) {
       try {
-        const worded = await wordWithModel(findings);
+        const worded = await wordWithModel(findings, question);
         if (my !== running) return null;
-        if (worded && worded.findings && worded.findings.length) {
+        if (worded && worded.findings && worded.findings.length && worded.ordered !== false) {
           findings = worded.findings;
           by = worded.by;
           model = worded.model || "";
           refused = worded.refused || [];
+          leftOut = (worded.left_out || []).length;
+        } else if (worded) {
+          // Asked, and its reply refused whole or not given: the rules' pins, and the line says the model was asked.
+          refused = worded.refused || [];
+          asked = worded.model || (worded.by === "key" ? "your model" : "the on-device model");
         }
       } catch (err) {
         refused = [`the model could not be asked (${err.message}); the rules' wording is kept`];
@@ -194,14 +231,15 @@ export async function reviewModel({ say: sayOut = null } = {}) {
         console.warn("review pin", err && err.message);
       }
     }
-    const [who, how] = reviewWho(by, model);
+    const [who, how] = reviewWho(by, model, asked);
     last = { name: meta.name, res, who, how, refused };
     drawFlags();
     refreshMeshLegend();
     const n = lastPins.length;
-    const notes = refused.length ? [`${refused.length} wording${refused.length === 1 ? "" : "s"} refused by the claim lock, rules kept`] : [];
+    // The count and the first refusal's reason (#590), as Scout's line gives them.
+    const notes = refused.length ? [/^it was asked/.test(refused[0]) ? refused[0] : refusedNote(refused)] : [];
     tell(`<b class="ma-who">Review</b><span class="ma-how">${escapeHtml(who)}, ${escapeHtml(how)}</span>` +
-      `<span>${escapeHtml(reviewLine(res, n))}</span>` +
+      `<span>${escapeHtml(reviewLine(res, n, meta.name, { picked: by !== "rules", leftOut }))}</span>` +
       (notes.length ? `<span class="ma-note">${escapeHtml(notes.join("; "))}</span>` : ""), res.counts && res.counts.problem ? "warn" : "ok");
     if (n) setLogOpen(false);
     announce(`Review dropped ${n} pins: ${res.summary}`);

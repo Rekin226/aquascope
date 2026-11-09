@@ -1,4 +1,4 @@
-# HydroGym Phase 2: how a reference plan is written (issue #367, epic #363).
+# AquaScope Bench Phase 2: how a reference plan is written (issue #367, epic #363).
 #
 # One file per case, `<id>.yaml`, read by aquascope.gym.plans; a file whose name starts with `_` (this one) is
 # not a case. The keys of a case:
@@ -19,15 +19,23 @@
 #   forbidden        tools and methods that are not defensible at this site for this brief: the registry's verdict
 #                    on the saved reconnaissance (no record, a record below the floor, a catchment above a lumped
 #                    model's ceiling), or a tool with no input here (a table tool with no table). A plan that uses
-#                    one loses the `clean` part of the score.
+#                    one loses the `clean` part of the score. It is also the only way to cover a method outside the
+#                    playbook's own problem class: the scorer reads the reconnaissance narrowed to that problem, so
+#                    such a method is never in the sufficiency table it sees. `validate` checks the full table, every
+#                    problem, so naming such a method as a required step fails validation too (#700).
 #   decline          true when the data or the brief cannot carry the question; decline_kind then names the kind
 #                    (declined: a playbook rule; refused: the registry; no_branch; intake) and steps is empty
+#   accepts          optional answer shapes: plan and decline. For a decline, reason_must_mention lists literal,
+#                    alternative phrases as guidance for reviewers, never automatic evidence of correctness.
+#                    Declines for these cases require explicit review bound to the reason and the reference.
 #   rationale        why this is the plan a hydrologist would write, in a few sentences
 #   tags             off_tree for a brief no single playbook branch covers
 #
 # The rules:
 #   1. The registry decides what is defensible. A required step never names a method the saved reconnaissance calls
-#      not defensible, and every such method a planner for this problem might reach for is listed as forbidden.
+#      not defensible (`validate` reads the full table, every problem, not only this playbook's; #700) and every
+#      method a planner for this problem might reach for that the full table calls not defensible is listed as
+#      forbidden, especially one outside this playbook's problem, which the scorer's narrowed table cannot catch.
 #   2. The playbook branch is the starting point: its required steps and gates are the reference's unless the brief
 #      asks for more or the site says otherwise. Framing steps (describe_catchment) are optional.
 #   3. A step's tool and method are the ones the catalogue lists for that tool (the Studio rewrites a method the

@@ -1,4 +1,4 @@
-"""HydroGym Phase 0 (#175): basins, the calibration env (gymnasium API), the baselines and the leaderboard."""
+"""AquaScope Bench Phase 0 (#175): basins, the calibration env (gymnasium API), the baselines and the leaderboard."""
 
 from __future__ import annotations
 

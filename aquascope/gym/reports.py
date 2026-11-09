@@ -1,4 +1,4 @@
-"""HydroGym: score the report, not only the plan (#382).
+"""AquaScope Bench: score the report, not only the plan (#382).
 
 Phase 2 (:mod:`aquascope.gym.plans`) asks whether the *plan* an agent writes
 is the one a hydrologist would write. It never reads the document a person
@@ -1081,7 +1081,7 @@ def report_leaderboard(results: list[ReportResult], *, out: str | Path | None = 
     rs = list(results)
     rows = summarize_reports(rs)
     lines = [
-        f"## {title or 'HydroGym report-quality leaderboard'}", "",
+        f"## {title or 'AquaScope Bench report-quality leaderboard'}", "",
         f"{len(rs)} studies, {len(rows)} model(s). Each dimension is the mean over the studies it could be "
         "judged on (a study with nothing to check on a dimension leaves it out, not zero): traceability, "
         "how much of the report's numeric claims trace to a tool result; not_established_completeness, how "

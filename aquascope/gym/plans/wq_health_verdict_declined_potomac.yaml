@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # A health verdict over every hazard, sampled or not, is beyond any index over sampled parameters: declined.
 id: wq_health_verdict_declined_potomac
 playbook: water_quality

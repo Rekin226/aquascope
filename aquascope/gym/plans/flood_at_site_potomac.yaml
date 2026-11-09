@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # A 96-year daily record at the point: the at-site fit stands, with the trend pre-test and the spread between two
 # distributions quoted, as the flood_risk playbook's at_site branch has it.
 id: flood_at_site_potomac

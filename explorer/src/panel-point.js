@@ -16,6 +16,8 @@ import { resetNow, startNow } from "./now.js?v=__BUILD__";
 import { loadPointContext, resetPointContext } from "./context.js?v=__BUILD__";
 import { groupStationSites } from "./sites.js?v=__BUILD__";
 import { canonicalUrl, writeUrl } from "./url.js?v=__BUILD__";
+import { namePoint } from "./place-name.js?v=__BUILD__";
+import { PLACE_CREDIT } from "./place-search-core.js?v=__BUILD__";
 
 let pointRun = 0;
 const root = () => $("panel-point");
@@ -81,20 +83,49 @@ export function renderNearestStations(lat, lon, my = pointRun) {
   }
 }
 
-export async function selectPoint(lat, lon, { tab = null, push = true, fly = false } = {}) {
+// What the point is called (#591): the name it was found by in the search, or the nearest named water or
+// town from the gazetteer. The title says it, the line under it says where the name came from, and the map
+// card is told ("pointname" on the panel).
+function showPlaceName(lat, lon, label) {
+  const here = state.point && state.point.lat === lat && state.point.lon === lon;
+  if (!here) return;
+  state.pointLabel = label ? { lat, lon, ...label } : null;
+  const line = $("pt-place");
+  if (label) {
+    $("pt-title").textContent = label.name;
+    const whence = `${label.from === "search" ? "name" : label.water ? "the nearest named water" : "the nearest place"}` +
+      " from OpenStreetMap (ODbL), via Photon";
+    if (line) {
+      line.textContent = [label.detail, whence].filter(Boolean).join(" · ");
+      line.title = PLACE_CREDIT;
+      line.hidden = false;
+    }
+  } else if (line) {
+    line.hidden = true;
+    line.textContent = "";
+  }
+  root().dispatchEvent(new CustomEvent("pointname", { detail: { lat, lon, label: label || null } }));
+}
+
+export async function selectPoint(lat, lon, { tab = null, push = true, fly = false, label = null } = {}) {
   lat = Math.round(lat * 1e4) / 1e4;
   lon = Math.round(lon * 1e4) / 1e4;
   const my = ++pointRun;
   state.selected = null;
   state.result = null;
   state.point = { lat, lon };
+  state.pointLabel = null;
   highlightStation(null);
   setPointMarker(lat, lon);
-  if (fly) flyToPoint(lat, lon);
 
   showSurface("panel-point", { reveal: Boolean(tab) });   // map first (#548): the card answers a click
+  // After the panel: opening it sets the map's padding, and setting the padding mid-flight stops a flight
+  // (a river picked in the search opens the panel on its River tab, #591).
+  if (fly) flyToPoint(lat, lon);
   $("pt-title").textContent = `${lat.toFixed(3)}°, ${lon.toFixed(3)}°`;
   $("pt-coords").textContent = `lat ${lat}, lon ${lon}`;
+  showPlaceName(lat, lon, label);
+  if (!label) void namePoint(lat, lon).then((found) => { if (my === pointRun && found) showPlaceName(lat, lon, found); });
   for (const id of ["pt-climate-card", "pt-glofas-card", "pt-notes-card", "pt-assess-card"]) hideCard($(id));
   renderMethodList("pt-methods", []);
   $("pt-attribution").textContent = "";
@@ -117,6 +148,13 @@ export async function selectPoint(lat, lon, { tab = null, push = true, fly = fal
   // The river first: the catchment card waits on the snap, so a click on a hillside is not described as
   // the whole river basin below it (#516).
   const snap = startRiver("pt", lat, lon);
+  // A link or a search that asked for the River tab waits for the snap; say so, so the Overview it shows
+  // meanwhile is not taken for the answer (#591).
+  if (root().__wantTab === "river") {
+    const head = $("pt-snap");
+    head.textContent = "Finding the river here; the River tab opens as soon as it is found.";
+    head.hidden = false;
+  }
   startNow("pt", { lat, lon, snap });
   requestCatchment({ point: { lat, lon }, target: "pt" });
   requestBasin(lat, lon, "pt", { snap });

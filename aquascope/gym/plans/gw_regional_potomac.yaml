@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # No well in the catalog within 50 km (the USGS list carries none): what can be said is regional, the ERA5
 # water balance for the cell, labelled as such; the well methods are not defensible.
 id: gw_regional_potomac
@@ -19,6 +19,10 @@ site:
   years: 96.5
   recon: potomac_little_falls
 expected_branch: regional
+accepts:
+  - kind: plan
+  - kind: decline
+    reason_must_mention: ["no groundwater level record", "no monitored well"]
 steps:
   - tool: anywhere
     gates:

@@ -1,4 +1,4 @@
-# HydroGym report-quality reference (#382); the authoring rules are in _authoring.yaml.
+# AquaScope Bench report-quality reference (#382); the authoring rules are in _authoring.yaml.
 # Recorded 2026-09-15 on the engineer-in-the-middle crew (#411). The Garonne's 116-year record now carries a
 # significant decreasing trend (Mann-Kendall p < 0.001 on the annual means, and on the annual maxima); the
 # reliability figures are historical averages and the report must say the trend makes them optimistic, not

@@ -93,10 +93,20 @@ async function byRules(text) {
 
 async function byDevice(text) {
   if (!(await localModelReady())) return null;
-  const prompt = await callLight("map_command", { op: "prompt", context: context(), today: todayIso() }, { priority: 3 });
-  const reply = await generateJsonLocally({ system: prompt.system, prompt: text, schema: prompt.schema, timeoutMs: 25000,
+  // The system prompt is the same for every request (the context goes with the words), so the warm session
+  // local-model.js keeps for it is cloned rather than a new one created each time (#590 recheck). The schema is
+  // this request's (#590 round 3): a place the model names is a run of the words, the layers it may switch are
+  // those the words ask for, and it writes no title, note or label; the package writes those.
+  const prompt = await callLight("map_command", { op: "prompt", context: "", today: todayIso(), text },
+    { priority: 3 });
+  const ctx = context();
+  const reply = await generateJsonLocally({ system: prompt.system, schema: prompt.schema, timeoutMs: 25000,
+    prompt: ctx ? `${text}\n\nWhat the reader is looking at: ${ctx}` : text,
     onProgress: (m) => say(`<span class="spinner" aria-hidden="true"></span>${escapeHtml(m)}`) });
-  const checked = await callLight("map_command", { op: "reply", reply, today: todayIso() }, { priority: 3 });
+  // The words go with the reply, without the context: a box or point the model made up, that the words do not
+  // hold, is replaced by the place or region they name, or refused; a place they do not name (the prompt's
+  // example river, the selected gauge) is refused (#590).
+  const checked = await callLight("map_command", { op: "reply", reply, text, today: todayIso() }, { priority: 3 });
   return { ...checked, model: localReaderLabel() || "the on-device model" };
 }
 
@@ -130,6 +140,30 @@ async function resolve(actionsIn) {
   return res;
 }
 
+// The review and the notes on the view are controls, not actions; true when one ran (or said why it could not).
+// `words` is the reader's own question: the review keeps it, so a question about stability pins the flicker.
+async function runControl(control, my, words = "") {
+  if (control === "explain") {
+    // "What am I seeing?" (#562): notes pinned on the map, not actions.
+    await explainView({ say });
+    if (my === run) $("ma-input").value = "";
+    return true;
+  }
+  if (control === "review") {
+    // "Review my model" (#564): the checks on the model result on the map drop their pins, as the legend's
+    // "Review these results" does. With no model on the map, say how to put one there.
+    if (actions.reviewModel && actions.hasModel && actions.hasModel()) {
+      await actions.reviewModel({ say, question: words });
+      if (my === run) $("ma-input").value = "";
+    } else {
+      say("No model result on the map to review. Drop a HEC-RAS plan (*.p01.hdf) or a UGRID NetCDF file on the " +
+        "map, or use Tools, Open model results.", "warn");
+    }
+    return true;
+  }
+  return false;
+}
+
 async function runCommand(text) {
   const my = ++run;
   const words = String(text || "").trim();
@@ -139,24 +173,7 @@ async function runCommand(text) {
   try {
     let res = await byRules(words);
     if (my !== run) return;
-    if (res && res.control === "explain") {
-      // "What am I seeing?" (#562): notes pinned on the map, not actions.
-      await explainView({ say });
-      if (my === run) $("ma-input").value = "";
-      return;
-    }
-    if (res && res.control === "review") {
-      // "Review my model" (#564): the checks on the model result on the map drop their pins, as the legend's
-      // "Review these results" does. With no model on the map, say how to put one there.
-      if (actions.reviewModel && actions.hasModel && actions.hasModel()) {
-        await actions.reviewModel({ say });
-        if (my === run) $("ma-input").value = "";
-      } else {
-        say("No model result on the map to review. Drop a HEC-RAS plan (*.p01.hdf) or a UGRID NetCDF file on the " +
-          "map, or use Tools, Open model results.", "warn");
-      }
-      return;
-    }
+    if (await runControl(res && res.control, my, words)) return;
     if (res && res.control) {
       const n = res.control === "undo_all" ? undoAll() : (undoLast() ? 1 : 0);
       say(n ? (res.control === "undo_all" ? "Every map action undone." : "Undone.") : "Nothing to undo.", "ok");
@@ -169,15 +186,23 @@ async function runCommand(text) {
     if (!resolved || !resolved.actions.length) {
       const device = await byDevice(words).catch((err) => ({ error: err.message }));
       if (my !== run) return;
+      // A model may answer with the review or the notes on the view rather than actions (#590).
+      if (device && await runControl(device.control, my, words)) return;
       if (device && device.actions && device.actions.length) {
         res = device; by = "device"; who = [device.model, "on this device"];
       } else {
         const key = await byKey(words).catch((err) => ({ error: err.message }));
         if (my !== run) return;
+        if (key && await runControl(key.control, my, words)) return;
         if (key && key.actions && key.actions.length) { res = key; by = "key"; who = [key.model, "your key"]; }
         else {
-          const why = (resolved && resolved.notes && resolved.notes[0]) || (key && key.error) || (device && device.error) || "";
-          const how = askModelConfig() ? "" : " With Chrome's built-in model, or a key in Ask ✨, free-form requests work too.";
+          // What the checks refused from the device's reply is the reason given ("a box the model made up ...").
+          const refusedByCheck = device && Array.isArray(device.errors) && device.errors[0]
+            ? device.errors[0].replace(/^action \d+: /, "") : "";
+          const why = (resolved && resolved.notes && resolved.notes[0]) || refusedByCheck || (key && key.error) ||
+            (device && device.error) || "";
+          const askedDevice = Boolean(device && device.model);
+          const how = askModelConfig() || askedDevice ? "" : " With Chrome's built-in model, or a key in Ask ✨, free-form requests work too.";
           say(`Not understood${why ? ` (${escapeHtml(why)})` : ""}. Try one of these.${escapeHtml(how)}`, "warn");
           showTries(true);
           return;

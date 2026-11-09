@@ -787,7 +787,7 @@ async function readOnDevice(text) {
       system: briefPrompt(), prompt: text, schema: briefSchema(), temperature: 0.1, timeoutMs: BRIEF_TIMEOUT_MS,
       onProgress: (m) => note(m),
     });
-    return parseBriefReply(reply);
+    return parseBriefReply(reply, text);   // a return period or timescale must be in the sentence (#590)
   } catch (err) {
     console.info("on-device brief unavailable:", err && err.message);
     return null;

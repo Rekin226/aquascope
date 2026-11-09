@@ -160,6 +160,7 @@
    "infer_site_ids",
    "load_observations",
    "publish_folder",
+   "refresh_dataset_card",
    "write_dataset_card"
   ],
   "aquascope.archive.basins": [

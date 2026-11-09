@@ -1,0 +1,202 @@
+{
+ "about": "Gemini Nano in Chrome 155 through the Prompt API, 2026-10-26, the third on-device check for #590 (docs/assessments/ai-on-the-map.md). The Ask panel's and Ask the map's raw replies, in order, as the model wrote them; 'shown' is what the live page (build 15e7d48) showed.",
+ "records": [
+  {
+   "role": "ask",
+   "tag": "ask-summary-1",
+   "request": "Summarise the record at this gauge: period, mean, trend, and the flood frequency",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}"
+   ],
+   "shown": "The local model used its steps without reaching an answer."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-summary-2",
+   "request": "Summarise the record at this gauge: period, mean, trend, and the flood frequency",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\n  \"answer\": \"The station USGS-01646500, located on the POTOMAC RIVER NEAR WASH, DC LITTLE FALLS PUMP STA, has a mean discharge of 320.7738 m3/s over the period from 1930-03-01 to 2026-10-24. The record shows no significant trend in the annual mean or annual maxima. The Q95 value is 35.7 m3/s, exceeded 95% of the time. The flood frequency analysis shows return levels for 2, 5, 10, 25, 50, and 100 years with GEV (GEV fitted by L-moments) and LP3 (Log-Pearson III) methods. The 100-year return level using the GEV method is 11247.39 m3/s and for LP3 is 10795.57 m3/s.\"\n}"
+   ],
+   "shown": "Refused: the id 100-year is in no result for this question."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-summary-3",
+   "request": "Summarise the record at this gauge: period, mean, trend, and the flood frequency",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"answer\": \"The USGS station USGS-01646500, located near Washington, DC (Little Falls Pump Sta), has a mean discharge of 320.7738 m3/s over the period 1930-03-01 to 2026-10-24. The record shows a GEV fitted by L-moments, where the q95 is 35.7 m3/s. There is no significant trend in the annual mean discharge (p = 0.953) or annual maxima (p = 0.960). The flood frequency analysis indicates the following return levels: 2-year (gev: 2837.86, lp3: 2850.66), 5-year (gev: 4420.08, lp3: 4520.46), 10-year (gev: 5693.05, lp3: 5805.92), 25-year (gev: 7613.84, lp3: 7635.82), 50-year (gev: 9304.97, lp3: 9150.06), and 100-year (gev: 11247.39, lp3: 10795.57).\"}"
+   ],
+   "shown": "Refused: the id 100-year is in no result for this question."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-100yr-1",
+   "request": "What is the 100-year flood at this gauge?",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"answer\": \"The 100-year flood at USGS-01646500 is 10795.57 m3/s using the GEV method, which is 100 years. The LP3 method gives 10795.57 m3/s as well. The recorded maximum discharge is 12100 m3/s in 1936.\"}"
+   ],
+   "shown": "Refused: 10795.6 is the LP3 100-year flood, and the answer does not say LP3 (the page's figure is the GEV, 1.125e+04 m3/s)."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-100yr-2",
+   "request": "What is the 100-year flood at this gauge?",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}"
+   ],
+   "shown": "The local model used its steps without reaching an answer."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-trend-1",
+   "request": "Is the Potomac at Little Falls getting drier? Use the annual-mean trend.",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"answer\": \"The annual mean discharge at USGS-01646500, Potomac River near Wash, DC Little Falls Pump Sta, shows no significant trend. The annual mean discharge is -0.0365 m3/s per year. For the annual maxima, the trend is also not significant, with a change of -0.0543 m3/s per year.\"}"
+   ],
+   "shown": "Refused: -0.0365 is not the daily mean of POTOMAC RIVER NEAR WASH, DC LITTLE FALLS PUMP STA USGS-01646500 (320.8 m3/s)."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-trend-2",
+   "request": "Is the Potomac at Little Falls getting drier? Use the annual-mean trend.",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"answer\": \"The USGS gauge USGS-01646500 at Little Falls, Potomac River, shows no significant trend in the annual mean discharge. The annual mean discharge has a Sen's slope of -0.0365 m3/s per year, but the p-value is 0.9528, indicating that the trend is not statistically significant. For annual maxima, the Sen's slope is -0.0543 m3/s per year with a p-value of 0.9602, which also indicates no significant trend.\"}"
+   ],
+   "shown": "Refused: -0.0365 is not the daily mean of POTOMAC RIVER NEAR WASH, DC LITTLE FALLS PUMP STA USGS-01646500 (320.8 m3/s)."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-kingston",
+   "request": "Find the five gauges nearest to Kingston upon Thames",
+   "replies": [
+    "{\"tool\": \"find_stations\", \"arguments\": {\"query\": \"Kingston\", \"limit\": 5}}",
+    "{\"tool\": \"find_stations\", \"arguments\": {\"query\": \"Kingston\", \"limit\": 5}}",
+    "{\"tool\": \"describe_catchment\", \"arguments\": {\"lat\": 51.4155, \"lon\": -0.3076}}"
+   ],
+   "shown": "The local model used its steps without reaching an answer. No tool results shown."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-anywhere",
+   "request": "What is the climate and modelled discharge at 25.05, 121.55?",
+   "replies": [
+    "{\"tool\": \"anywhere\", \"arguments\": {\"lat\": 25.05, \"lon\": 121.55}}",
+    "{\"answer\": \"The climate at 25.05, 121.55 has an average annual precipitation of 1733.4111 mm, an ET0 of 1168.2433 mm/year, and an average temperature of 22.7201 °C. The modelled discharge has an average of 5.6336 m3/s over the period 2006-10-18 to 2026-10-18. The method used to calculate flow durations is GEV, and the method used to calculate return levels is LP3. The trend annual mean is no significant trend with a Mann-Kendall p = 0.184, and significant trend in annual maxima with a p = 0.0689.\"}"
+   ],
+   "shown": "Passed the lock and shown as the answer. The tool result says trend_annual_max significant: false, 'no significant trend in the annual maxima (Mann-Kendall p = 0.0689; ...)'."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-compare",
+   "request": "Compare the mean flow of the Potomac (USGS-01646500) with the Thames at Kingston",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"uk_ea\", \"station_id\": \"abc\"}}",
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"uk_ea\", \"station_id\": \"abc\"}}"
+   ],
+   "shown": "The local model used its steps without reaching an answer. ('abc' is the example id in the system prompt.)"
+  },
+  {
+   "role": "ask",
+   "tag": "ask-50yr",
+   "request": "And what is its 50-year flood?",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}"
+   ],
+   "shown": "The local model used its steps without reaching an answer."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-new-q95",
+   "request": "What is the Q95 low flow at this gauge, and its median flow?",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"answer\": \"The Q95 low flow at USGS-01646500 is 35.7 m3/s, and the median flow is 185 m3/s. The station is POTOMAC RIVER NEAR WASH, DC LITTLE FALLS PUMP STA.\"}"
+   ],
+   "shown": "Passed and shown."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-new-report",
+   "request": "Give me a two-sentence summary of this gauge for a report.",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"answer\": \"The USGS gauge USGS-01646500 on the Potomac River near Washington, DC, Little Falls Pump Station has annual mean discharge of 320.8 m3/s over the period from 1930-03-01 to 2026-10-24.  The gauge has a record maximum discharge of 12100 m3/s in 1936, with a significant trend of no significant trend for both annual mean discharge and annual maxima discharge.\"}"
+   ],
+   "shown": "Passed and shown."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-trend-max",
+   "request": "Have the annual floods at this gauge become bigger over the record?",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"source\": \"usgs\", \"station_id\": \"USGS-01646500\"}}",
+    "{\"answer\": \"The annual floods at this gauge have not become bigger over the record. The trend analysis shows no significant trend in either the annual mean or the annual maxima. The Mann-Kendall p-value for the annual mean is 0.953, and the Sen's slope is -0.0365 m3/s per year. The Mann-Kendall p-value for the annual maxima is 0.96, and the Sen's slope is -0.0543 m3/s per year. The gauge is USGS-01646500, which is the POTOMAC RIVER NEAR WASH, DC LITTLE FALLS PUMP STA.\"}"
+   ],
+   "shown": "Refused: 0.953 is not the daily mean of POTOMAC RIVER NEAR WASH, DC LITTLE FALLS PUMP STA USGS-01646500 (320.8 m3/s)."
+  },
+  {
+   "role": "ask-map",
+   "tag": "map-driest-africa",
+   "request": "where is it driest in Africa right now? zoom there (map at 5, 20, zoom 2.2)",
+   "replies": [
+    "{\"actions\": [{\"type\": \"fly_to\", \"place\": \"Africa\"}, {\"type\": \"set_time\", \"date\": \"2026-09-15\", \"step\": \"month\"}, {\"type\": \"fly_to\", \"bbox\": [-20, 0, 5, 30]}, {\"type\": \"highlight_river\", \"place\": \"Africa\", \"direction\": \"both\"}]}"
+   ],
+   "shown": "Chrome's built-in model, on this device, 3 actions on the map; refused the model's own box, replaced by the extent of Africa; Africa has no position to start the river from. The prompt's context did not name the off-screen gauge."
+  },
+  {
+   "role": "ask-map",
+   "tag": "map-plain-words",
+   "request": "tell me in plain words what this map is showing me (Africa, zoom about 1)",
+   "replies": [
+    "{\"notes\": [{\"facts\": [\"f7\", \"f8\"], \"title\": \"Large Area Much Below Normal\", \"text\": \"A large area of {f7} of the mapped land is much below normal, covering a size of {f8} when {f7.when}. The pin indicates this significant area.\"}, {\"facts\": [\"f1\", \"f2\"], \"title\": \"Land Below/Above Normal\", \"text\": \"{f1} of the mapped land is below normal, while {f2} of the mapped land is above normal when {f1.when}. The pin indicates the area of land below normal.\"}, {\"facts\": [\"f10\", \"f11\"], \"title\": \"Largest Area Below Normal\", \"text\": \"The largest area of land below normal is {f10} of the mapped land, with a size of {f11} when {f10.when}.  The pin shows this region.\"}, {\"facts\": [\"f13\", \"f14\", \"f15\"], \"title\": \"Significant Flood Forecasts\", \"text\": \"The forecast flow class is 25-year flow when {f13.when}, with a peak (ensemble mean) of {f14} on Sun 25 Oct when {f14.when}. Peak against the 2-year flow is 2.5 times when {f15.\"}, {\"facts\": [\"f16\", \"f17\", \"f18\"], \"title\": \"Significant Flood Forecasts (2)\", \"text\": \"The forecast flow class is 10-year flow when {f16.when}, with a peak (ensemble mean) of {f17} on Sun 25 Oct when {f17.when}. Peak against the 2-year flow is 2.8 times when {f18}.\"}]}"
+   ],
+   "shown": "Routed to Explain. 4 notes on the map; 1 refused (note 2: none of its facts has a place). Pin 3 shows 'Peak against the 2-year flow is 2.5 times when {f15.'; pin 4 ends 'is 2.8 times when 2.8 times.'"
+  },
+  {
+   "role": "review",
+   "tag": "review-new-instabilities",
+   "request": "are there any numerical instabilities in this run?",
+   "replies": [
+    "{\"actions\": [{\"type\": \"fly_to\", \"place\": \"36.81, -76.32\"}, {\"type\": \"set_time\", \"date\": \"2026-09-15\", \"step\": \"month\"}, {\"type\": \"set_layer\", \"layer\": \"status\", \"on\": true}, {\"type\": \"set_layer\", \"layer\": \"floods_past\", \"on\": true}, {\"type\": \"set_layer\", \"layer\": \"floods_ahead\", \"on\": false}]}"
+   ],
+   "shown": "Not routed to the review. Chrome's built-in model, 4 actions on the map; refused 36.81, -76.32, a place the words do not name."
+  },
+  {
+   "role": "ask-map",
+   "tag": "map-new-interesting",
+   "request": "show me something interesting (world, zoom 1.5)",
+   "replies": [
+    "{\"actions\": []}"
+   ],
+   "shown": "Not understood. Try one of these."
+  },
+  {
+   "role": "ask-map",
+   "tag": "map-new-rivers-low-spain",
+   "request": "which rivers in Spain are running low this month?",
+   "replies": [],
+   "shown": "Rules, no model, 1 action on the map (map date to 2026-10-15); no place called 'Spain are running low' was found. The device was not asked."
+  },
+  {
+   "role": "ask-map",
+   "tag": "map-new-danube",
+   "request": "can you show me how the Danube is doing compared with normal",
+   "replies": [
+    "{\"actions\": [{\"type\": \"fly_to\", \"place\": \"Danube\"}, {\"type\": \"set_layer\", \"layer\": \"status\", \"on\": true}, {\"type\": \"focus_status\", \"classes\": [\"normal\"]}, {\"type\": \"set_time\", \"date\": \"2026-10-15\", \"step\": \"month\"}]}"
+   ],
+   "shown": "Chrome's built-in model, on this device, 4 actions on the map. focus_status keeps only the 'normal' class."
+  }
+ ]
+}

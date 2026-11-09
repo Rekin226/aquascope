@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # The Environment Agency catalog carries no sampled water quality here and the archive none until Phase 3: the
 # playbook declines; nothing can be indexed.
 id: wq_no_samples_declined_tetbury

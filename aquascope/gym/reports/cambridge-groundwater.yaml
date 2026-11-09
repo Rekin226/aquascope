@@ -1,4 +1,4 @@
-# HydroGym report-quality reference (#382); the authoring rules are in _authoring.yaml.
+# AquaScope Bench report-quality reference (#382); the authoring rules are in _authoring.yaml.
 # Recorded 2026-09-15 on the engineer-in-the-middle crew (#411). The brief asks whether Chalk levels near
 # Cambridge declined over the last ten years relative to the full record. The full record at Haggis Farm rises
 # significantly (Sen's slope +0.1659 mAOD/yr, Mann-Kendall p < 0.001, 48.7 years); the last-ten-year window

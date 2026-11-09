@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # A rain gauge with 35 years at the point and ERA5 temperature reachable: SPI and SPEI with their divergence, and
 # the well and the river within reach add the propagation and the low-flow context.
 id: drought_gauge_tetbury

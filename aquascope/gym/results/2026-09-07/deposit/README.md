@@ -1,17 +1,18 @@
-# HydroGym Phase 2 reference plans: expert plans for hydrology agents at real sites (25 cases)
+# AquaScope Bench Phase 2 reference plans: expert plans for hydrology agents at real sites (25 cases)
 
 `cases.jsonl` holds 25 reference plans for the plan-quality benchmark of
 hydrology agents, written by hand on 2026-09-07 with
 [aquascope](https://github.com/Rekin226/aquascope) 0.15 (branch `ws/bench`,
-HydroGym Phase 2 of [issue #367](https://github.com/Rekin226/aquascope/issues/367),
+AquaScope Bench Phase 2 of [issue #367](https://github.com/Rekin226/aquascope/issues/367),
 epic [#363](https://github.com/Rekin226/aquascope/issues/363)). The benchmark
-is documented at <https://rekin226.github.io/aquascope/hydrogym/>; this file
-describes what is in the deposit so it can be used without the package.
+is documented at <https://rekin226.github.io/aquascope/hydrogym/> (AquaScope Bench
+was called HydroGym until October 2026, #440); this file describes what is in the
+deposit so it can be used without the package.
 
 ## What a case is
 
 A case is a brief at a real place, and the plan a hydrologist would write for
-it given the data that exists there. Phase 1 of HydroGym asked whether an
+it given the data that exists there. Phase 1 of AquaScope Bench asked whether an
 agent lands on the branch a method-selection playbook selects; Phase 2 asks
 whether the plan itself, the ordered steps with their tools, methods and
 gates, is the expert's. Each case carries the client's brief in plain words,

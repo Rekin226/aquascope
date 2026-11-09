@@ -26,11 +26,17 @@ const isOurLayer = (id) => OUR_LAYERS.includes(id) || id.startsWith("ov-") || id
 
 // WebGL is what the map actually needs; test it directly instead of blaming it
 // for every slow style load (the old code said "WebGL is off" after a 12 s
-// timeout, which was often just a slow network).
+// timeout, which was often just a slow network). Only asked once the map has
+// failed (#591): the test made a throwaway second WebGL context at every start,
+// and the map's own constructor already throws when there is no WebGL. The
+// test's context is let go at once.
 export function webglAvailable() {
   try {
     const c = document.createElement("canvas");
-    return Boolean(c.getContext("webgl2") || c.getContext("webgl") || c.getContext("experimental-webgl"));
+    const gl = c.getContext("webgl2") || c.getContext("webgl") || c.getContext("experimental-webgl");
+    const lose = gl && gl.getExtension("WEBGL_lose_context");
+    if (lose) lose.loseContext();
+    return Boolean(gl);
   } catch {
     return false;
   }
@@ -51,6 +57,18 @@ export const DEFAULT_CENTER = [-38, 28];
 // padding, and once it knows about it "centre" means the middle of what you can
 // actually see: the globe is not framed half under the inspector, and flying to
 // a gauge does not land it beneath the panel either.
+// Where a card sits once it has slid in. The panel opens with a 0.2 s slide (a CSS transform), and
+// getBoundingClientRect reports the transformed box, so measured as it opens the panel was still off the map
+// and the padding stayed 0 until some later resize set it; that late setPadding stopped a flight already under
+// way (a river picked in the search, #591). The offsets ignore transforms.
+function restingRect(el) {
+  const parent = el.offsetParent;
+  if (!parent) return el.getBoundingClientRect();
+  const p = parent.getBoundingClientRect();
+  const left = p.left + parent.clientLeft + el.offsetLeft, top = p.top + parent.clientTop + el.offsetTop;
+  return { left, top, width: el.offsetWidth, height: el.offsetHeight, right: left + el.offsetWidth, bottom: top + el.offsetHeight };
+}
+
 export function panelPadding() {
   const pad = { top: 0, right: 0, bottom: 0, left: 0 };
   if (!map) return pad;
@@ -61,7 +79,7 @@ export function panelPadding() {
   for (const el of cards) {
     if (!el || el.hidden || el.offsetParent === null) continue;
     if (el.id === "panel" && document.body.classList.contains("panel-collapsed")) continue;
-    const r = el.getBoundingClientRect();
+    const r = restingRect(el);
     if (!r.width || !r.height) continue;
     // A card narrower than the map is a side panel; a full-width one is the
     // bottom sheet the narrow layout uses.
@@ -161,7 +179,7 @@ export function styleFor(basemapId, date) {
 }
 
 export function initMap(initialView, { basemap = "light", date = null, globe = false } = {}) {
-  if (!webglAvailable()) {
+  if (typeof globalThis.WebGLRenderingContext === "undefined") {
     trace("map: no webgl");
     return Promise.resolve({ ok: false, reason: "webgl" });
   }
@@ -177,7 +195,9 @@ export function initMap(initialView, { basemap = "light", date = null, globe = f
   } catch (err) {
     console.warn("map unavailable:", err && err.message);
     map = null;
-    return Promise.resolve({ ok: false, reason: "init" });
+    const webgl = webglAvailable();
+    if (!webgl) trace("map: no webgl");
+    return Promise.resolve({ ok: false, reason: webgl ? "init" : "webgl" });
   }
   appliedBasemap = basemap;
   // Coverage is global and sparse, so the world view is a globe: it drops

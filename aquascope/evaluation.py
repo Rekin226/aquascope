@@ -7,7 +7,7 @@ nothing else; no model is called and nothing is fetched.
 
 - :func:`scorecard`: one study, scored. Outcome (status, grade, headline), run health (steps and
   gates passed, failed and skipped, fallbacks, replans), the Critic's checks, report quality on the
-  six axes of :mod:`aquascope.gym.reports`, plan accuracy against a HydroGym reference case when
+  six axes of :mod:`aquascope.gym.reports`, plan accuracy against an AquaScope Bench reference case when
   one is named, and cost (time, tokens, USD, by role).
 - :func:`trace`: one study as a timeline. The coordinator's phases with their durations, each step
   with its tool, time and gates, the model calls per role, and every event.
@@ -200,7 +200,7 @@ def scorecard(ws: dict[str, Any], meta: dict[str, Any] | None = None, *, study_d
               plan_case: str | None = None, report_reference: Any = None) -> dict[str, Any]:
     """One study, scored with no model: outcome, run health, Critic, report quality, plan accuracy, cost.
 
-    ``plan_case`` names a HydroGym Phase 2 reference case (``aquascope gym plans list``); the study's plan
+    ``plan_case`` names an AquaScope Bench Phase 2 reference case (``aquascope gym plans list``); the study's plan
     is then scored against it. ``report_reference`` is a report reference; by default the one whose
     ``study`` matches ``study_dir``'s name is used when the package has one.
     """

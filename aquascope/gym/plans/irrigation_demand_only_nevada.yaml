@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # No gauge within reach: the demand is computed and the supply is not checked, said plainly, as the
 # irrigation_feasibility demand_only branch has it.
 id: irrigation_demand_only_nevada

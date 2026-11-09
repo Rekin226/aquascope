@@ -1,0 +1,105 @@
+/* Groundwater views (#625, #626): the 3D controls on the "Your MODFLOW heads" legend row, the dock that holds the
+   cross-section and the water budget, the hydrograph on a cell's card, and the section's A and A' marks. */
+.gwl-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: .5rem 0 0; }
+.gwl-ctl .gw-segs { margin: 0; }
+.gwl-btn {
+  font: inherit; font-size: .7rem; padding: .18rem .55rem; border: 1px solid var(--line); border-radius: 6px;
+  background: none; color: var(--ink-2); cursor: pointer;
+}
+.gwl-btn:hover { background: var(--bg-soft); }
+.gwl-btn.on { background: var(--bg-sunken); color: var(--ink); font-weight: 600; }
+.gwl-3dctl { display: flex; align-items: center; gap: .45rem; margin: .4rem 0 0; font-size: .66rem; color: var(--muted); }
+.gwl-3dctl .gw-segs { margin: 0; }
+.gwl-3dctl .gw-seg { padding: .12rem .4rem; font-size: .66rem; font-variant-numeric: tabular-nums; }
+
+.gwl-dock {
+  position: absolute; left: var(--gap); bottom: 120px; z-index: 7; width: min(860px, calc(100% - 380px));
+  min-width: 460px; max-height: calc(100% - 180px); overflow: auto;
+  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-2);
+  padding: .5rem .7rem .55rem; color: var(--ink); font-size: .74rem;
+}
+.gwl-dock[hidden] { display: none; }
+.gwl-head { display: flex; align-items: center; gap: .6rem; margin: 0 0 .25rem; }
+.gwl-head h2 { font-size: .82rem; margin: 0; font-weight: 650; }
+.gwl-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.gwl-tabs { display: flex; gap: .25rem; margin-left: auto; }
+.gwl-tab {
+  font: inherit; font-size: .68rem; border: 1px solid var(--line); border-radius: 6px; background: none;
+  color: var(--ink-2); padding: .12rem .5rem; cursor: pointer;
+}
+.gwl-tab.on { background: var(--bg-sunken); color: var(--ink); font-weight: 600; }
+.gwl-x { font: inherit; font-size: 1.1rem; line-height: 1; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 .2rem; }
+.gwl-tabs:empty + .gwl-x, .gwl-head h2 + .gwl-x { margin-left: auto; }
+.gwl-hint { margin: .3rem 0; line-height: 1.4; }
+.gwl-acts { margin: .3rem 0 .1rem; display: flex; gap: .4rem; }
+.gwl-err { color: var(--err-ink); margin: .3rem 0; }
+.gwl-plot { position: relative; }
+.gwl-svg { display: block; overflow: visible; }
+.gwl-read {
+  position: absolute; top: 18px; z-index: 2; pointer-events: none; max-width: 230px;
+  background: var(--surface-solid); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow-2);
+  padding: .3rem .45rem; font-size: .66rem; line-height: 1.45; font-variant-numeric: tabular-nums;
+}
+.gwl-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .9rem; margin: .2rem 0 0; color: var(--ink-2); font-size: .68rem; }
+.gwl-foot .gwl-depth { margin: 0 0 0 auto; }
+.gwl-foot .gw-link { margin-left: .2rem; }
+.gwl-keys { display: inline-flex; flex-wrap: wrap; gap: .2rem .7rem; }
+.gwl-key { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
+.gwl-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.gwl-key i.gwl-k-wt { height: 0; border-top: 2.4px solid #1d6fb8; border-radius: 0; width: 14px; }
+.gwl-key i.gwl-k-sat { background: #c6dcf0; box-shadow: inset 0 0 0 1px rgba(29, 111, 184, .3); }
+.gwl-key i.gwl-k-none { background: repeating-linear-gradient(135deg, #9aa3ab 0 1px, #eef0f2 1px 4px); }
+.gwl-key i.gwl-k-dash { height: 0; width: 14px; border-top: 1.6px dashed; border-radius: 0; }
+.gwl-note { margin: .25rem 0 0; font-size: .64rem; line-height: 1.4; }
+.gwl-budget { display: flex; gap: .9rem; align-items: flex-start; }
+.gwl-budget .gwl-plot { flex: 1 1 auto; min-width: 0; }
+.gwl-table { flex: 0 0 250px; font-variant-numeric: tabular-nums; }
+.gwl-when { margin: 0 0 .2rem; font-weight: 600; }
+.gwl-table table { width: 100%; border-collapse: collapse; font-size: .68rem; }
+.gwl-table th, .gwl-table td { padding: .12rem .2rem; text-align: right; border-bottom: 1px solid var(--line-soft); }
+.gwl-table th:first-child { text-align: left; font-weight: 500; white-space: nowrap; }
+.gwl-table thead th { color: var(--muted); font-weight: 500; }
+.gwl-table tfoot th, .gwl-table tfoot td { font-weight: 650; border-bottom: 0; }
+.gwl-table th i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: .35rem; vertical-align: -1px; }
+
+/* the SVG's own marks */
+.gwl-svg text { font-family: inherit; }
+.gwl-tick { font-size: 9.5px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.gwl-unit { font-size: 9.5px; fill: var(--muted); }
+.gwl-side { font-size: 9px; fill: var(--muted); }
+.gwl-ab { font-size: 11px; font-weight: 700; fill: var(--ink); }
+.gwl-grid { stroke: var(--line); stroke-width: 1; }
+.gwl-zero { stroke: var(--ink-2); stroke-width: 1; }
+.gwl-bend { stroke: var(--muted); stroke-dasharray: 2 3; stroke-width: .8; }
+.gwl-band { stroke: none; }
+.gwl-edge { fill: none; stroke: #8a7350; stroke-width: 1.1; }
+.gwl-ground { fill: none; stroke: #6b5531; stroke-width: 1.5; }
+.gwl-hatch-bg { fill: #eef0f2; }
+.gwl-hatch-ln { stroke: #9aa3ab; stroke-width: 1.2; }
+.gwl-sat { stroke: none; }
+.gwl-lname { font-size: 10px; fill: #3d4a57; font-weight: 600; }
+.gwl-wt { fill: none; stroke: #1d6fb8; stroke-width: 2.4; stroke-linejoin: round; }
+.gwl-sym { fill: none; stroke: #1d6fb8; stroke-width: 1.4; }
+.gwl-head { fill: none; stroke-width: 1.6; stroke-dasharray: 5 3; stroke-linejoin: round; }
+.gwl-end { font-size: 10px; }
+.gwl-end.b { font-weight: 700; }
+.gwl-cursor { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 2; }
+.gwl-col { fill: var(--bg-sunken); stroke: var(--ink-2); stroke-width: 1; }
+.gwl-now { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 3 2; }
+.gwl-hline { fill: none; stroke-width: 1.8; stroke-linejoin: round; }
+.mc-chart-key .gwl-key { margin-right: .55rem; font-size: .66rem; }
+
+/* on the map: the section's ends and the hover's place along it */
+.gwl-mark {
+  font: 700 12px/1 system-ui, sans-serif; color: #fff; background: #0b2440; border-radius: 5px; padding: 3px 5px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+}
+.gwl-dot { width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2.5px solid #1d6fb8; box-shadow: 0 1px 3px rgba(0, 0, 0, .4); }
+
+@media (max-width: 900px) {
+  /* over the Ask, Explain and Scout buttons (z 8) while it is open: they sit on its numbers otherwise */
+  .gwl-dock { width: calc(100% - 2 * var(--gap)); min-width: 0; bottom: 110px; z-index: 9; }
+  .gwl-budget { flex-direction: column; }
+  .gwl-table { flex: 1 1 auto; width: 100%; }
+}

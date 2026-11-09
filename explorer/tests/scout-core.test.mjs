@@ -3,7 +3,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  GLOBE_RADIUS_KM, KIND_LABELS, PIN_GAP_PX, SCOUT_MAX, keepVisible, scoutLine, scoutMonth, scoutPin, scoutView, scoutWho,
+  GLOBE_RADIUS_KM, KIND_LABELS, PIN_GAP_PX, SCOUT_MAX, askedFailed, keepVisible, refusedNote, scoutLine, scoutMonth, scoutPin, scoutView,
+  scoutWho, wordingLine,
 } from "../src/scout-core.js";
 import { checkPin } from "../src/map-actions-core.js";
 
@@ -56,7 +57,7 @@ test("a finding becomes a numbered pin with its reason and where it came from", 
 test("who found them, and the line", () => {
   assert.deepEqual(scoutWho("rules"), ["Rules", "no model"]);
   assert.equal(scoutWho("device", "Gemini Nano")[0], "Gemini Nano");
-  assert.match(scoutWho("key", "m via p")[1], /numbers by code/);
+  assert.match(scoutWho("key", "m via p")[1], /words by code/);
   assert.equal(scoutLine({ mode: "daily" }, 10), "10 pins, most worth a look first, from today's scout file");
   assert.equal(scoutLine({ mode: "live" }, 1), "1 pin, most worth a look first, scanned now");
   assert.match(scoutLine({ notes: ["no Floods ahead issue could be read"] }, 0), /^Nothing stands out in this view \(no Floods/);
@@ -79,4 +80,46 @@ test("pins under a bar are left out and the rest renumbered, a model's extras ke
   assert.equal(withModel.candidates.length, 12);
   // A check that throws keeps the finding (better a pin under a bar than none).
   assert.equal(keepVisible(res, () => { throw new Error("no map"); }, 10, 0).picks[0].id, "f0");
+});
+
+test("the line names who ordered the pins and gives a refusal's reason (#590)", () => {
+  const rules = (id) => ({ id, by: "rules" });
+  const device = (id) => ({ id, by: "device" });
+  // A reply outside the schema (Europe, 2026-10-25: a mangled id "2026-09-1") is refused whole, said in one line.
+  let line = wordingLine({ by: "device", model: "Chrome's built-in model", picks: [rules("a"), rules("b"), rules("c")],
+    refused: ["the model's reply was refused: reply.pins[0].id '2026-09-1' is not one of a, b, c"] });
+  assert.equal(line.who, "Rules");
+  assert.equal(line.how, "Chrome's built-in model asked, its choice not used");
+  assert.deepEqual(line.notes, ["the model's reply was refused: reply.pins[0].id '2026-09-1' is not one of a, b, c; rules kept"]);
+  // An id that is no pin here (the off-screen gauge of the recheck) is said, not lost.
+  line = wordingLine({ by: "device", model: "Chrome's built-in model", picks: [rules("a")], unknown: ["USGS-01646500"] });
+  assert.deepEqual(line.notes, ["the model wrote about USGS-01646500, not a pin in this view; rules kept"]);
+  // Two of three picked on the device; the third follows in the rules' order.
+  line = wordingLine({ by: "device", model: "Gemini Nano", picks: [device("a"), device("b"), rules("c")] });
+  assert.equal(line.who, "Gemini Nano");
+  assert.equal(line.how, "2 of 3 ordered on this device; words by code");
+  assert.deepEqual(line.notes, []);
+  // A pick whose variant the finding cannot take keeps the rules' wording, and says so.
+  line = wordingLine({ by: "device", model: "Gemini Nano", picks: [device("a")],
+    refused: ["status:much_below:2026-09:1: variant c cannot be written for it, the rules' wording is kept"] });
+  assert.deepEqual(line.notes, ["1 pick not used, rules kept: variant c cannot be written for it, the rules' wording is kept"]);
+  // All picked; no model.
+  assert.equal(wordingLine({ by: "key", model: "m via p", picks: [{ by: "key" }] }).how, "ordered with your key; words by code");
+  assert.deepEqual(wordingLine({ picks: [rules("a")] }), { who: "Rules", how: "no model", notes: [] });
+  line = wordingLine({ failed: "the model could not be asked (no key); the rules' wording is kept", picks: [rules("a")] });
+  assert.equal(line.how, "the model could not be asked");
+  assert.equal(refusedNote([]), "");
+});
+
+test("after a timeout the line says the model was asked and timed out (#590)", () => {
+  // Europe, 2026-10-26: the device ran to the 40 s timeout and the line said "Rules, no model".
+  const abort = Object.assign(new Error("signal is aborted without reason"), { name: "AbortError" });
+  const failed = askedFailed(abort, 40000);
+  assert.equal(failed, "it was asked and timed out after 40 s; the rules' order and wording are kept");
+  assert.equal(askedFailed(new Error("the on-device model took more than 40 s"), 40000), failed);
+  assert.match(askedFailed(new Error("kErrorUnknown")), /asked and gave no answer \(kErrorUnknown\)/);
+  const line = wordingLine({ by: "device", model: "Chrome's built-in model", picks: [{ id: "a", by: "rules" }], failed });
+  assert.equal(line.who, "Rules");
+  assert.equal(line.how, "Chrome's built-in model asked, no answer");
+  assert.deepEqual(line.notes, [failed]);
 });

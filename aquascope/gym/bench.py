@@ -1,4 +1,4 @@
-"""HydroGym Phase 1: play an agent on the tasks and score it against the playbooks' own keys (#175).
+"""AquaScope Bench Phase 1: play an agent on the tasks and score it against the playbooks' own keys (#175).
 
 Three agents, in order of how much they know about the scaffold:
 
@@ -652,7 +652,7 @@ def leaderboard(results: Iterable[Result], *, out: str | Path | None = None, tit
     rs = list(results)
     rows = summarize(rs)
     n_tasks = len({r.task_id for r in rs})
-    lines = [f"## {title or 'HydroGym leaderboard'}", "",
+    lines = [f"## {title or 'AquaScope Bench leaderboard'}", "",
              f"{n_tasks} tasks, {len(rs)} runs, {len(rows)} agent-model pairs. "
              "Accuracy is the share of solvable tasks on which the agent picked the expected playbook branch "
              "(a keyless decline counts as wrong); declined is the share of unsolvable tasks the agent refused; "

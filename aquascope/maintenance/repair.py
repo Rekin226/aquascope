@@ -308,7 +308,9 @@ def apply_and_verify(proposal: Proposal, evidence: Evidence, *, repo_root: str |
         return v
     v.files = files
     patch_path = root / ".repair.patch"
-    patch_path.write_text(proposal.diff, encoding="utf-8")
+    # Preserve LF in unified diffs on Windows; Path.write_text translates newlines.
+    patch_text = proposal.diff.replace("\r\n", "\n").replace("\r", "\n")
+    patch_path.write_bytes(patch_text.encode("utf-8"))
     try:
         if not _run(["git", "apply", "--check", str(patch_path)], root, 60, v.log):
             return v

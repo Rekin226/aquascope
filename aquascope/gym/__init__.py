@@ -1,4 +1,7 @@
-"""HydroGym: a gym-style evaluation environment for hydrologic agents, on real basins from the Archive (#175).
+"""AquaScope Bench: a gym-style evaluation environment for hydrologic agents, on real basins from the Archive (#175).
+
+Called HydroGym until October 2026 and renamed for a name clash (#440); only the name changed, the module
+stays ``aquascope.gym`` and the CLI verb ``aquascope gym``.
 
 Phase 0: :class:`CalibrationEnv` wraps GR4J calibration on one basin as an
 episode (action = X1..X4, reward = NSE / KGE / log-NSE on the calibration

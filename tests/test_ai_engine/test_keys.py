@@ -23,7 +23,8 @@ def test_a_saved_key_is_private_and_the_shell_wins(tmp_path, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "from-the-shell")
     path = keys.save_key("groq", " gsk_saved ")
     keys.save_key("anthropic", "sk-ant-saved")
-    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+    if os.name != "nt":  # Windows does not implement POSIX 0o600 file modes.
+        assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
     assert keys.load_saved_keys() == ["groq"]
     assert os.environ["GROQ_API_KEY"] == "gsk_saved" and os.environ["ANTHROPIC_API_KEY"] == "from-the-shell"
 

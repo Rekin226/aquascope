@@ -22,9 +22,10 @@ WORKER = ROOT / "explorer" / "worker.js"
 
 def _code() -> str:
     text = WORKER.read_text(encoding="utf-8")
-    m = re.search(r"async function placeContext\(.*?const code = `(.*?)`;", text, re.S)
+    m = re.search(r"async function placeContext\(.*?const code = \(k\) => `(.*?)`;", text, re.S)
     assert m, "placeContext's Python block is missing from worker.js"
-    return m.group(1)
+    # runPy hands the code its call key as a Python string literal
+    return m.group(1).replace("${k}", '"k"')
 
 
 @pytest.fixture
@@ -33,7 +34,8 @@ def run(monkeypatch):
 
     def call(payload: dict):
         fake = types.ModuleType("js")
-        fake.__aqContext = json.dumps({"op": "point", "name": "", "lat": None, "lon": None, "bbox": None, **payload})
+        args = json.dumps({"op": "point", "name": "", "lat": None, "lon": None, "bbox": None, **payload})
+        fake.__aqCall = lambda key, name: args if (key, name) == ("k", "args") else None
         monkeypatch.setitem(sys.modules, "js", fake)
         ns: dict = {}
         lines = code.strip().splitlines()

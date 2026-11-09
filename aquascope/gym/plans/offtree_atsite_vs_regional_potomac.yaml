@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # Off-tree: the brief asks for two estimates and their agreement. The at_site branch gives one; the comparison
 # needs the donor transfer as required steps, not as a fallback.
 id: offtree_atsite_vs_regional_potomac

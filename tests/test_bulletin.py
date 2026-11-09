@@ -379,7 +379,7 @@ def test_a_smoke_build_is_marked_and_never_published(archive, tmp_path, monkeypa
     calls = []
 
     def fake_publish(folder, repo_id, **kw):
-        calls.append(sorted(str(p.relative_to(folder)) for p in folder.rglob("*") if p.is_file()))
+        calls.append(sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()))
         calls.append(kw)
         return "https://huggingface.co/commit/x"
 

@@ -109,7 +109,7 @@ def test_publish_uploads_only_the_feeds_folder(monkeypatch, tmp_path):
     seen = {}
 
     def fake_publish(folder, repo_id, token=None, commit_message=None, allow_patterns=None):
-        seen["files"] = sorted(str(p.relative_to(folder)) for p in Path(folder).rglob("*") if p.is_file())
+        seen["files"] = sorted(p.relative_to(folder).as_posix() for p in Path(folder).rglob("*") if p.is_file())
         seen["message"] = commit_message
         seen["patterns"] = allow_patterns
         return "https://hf.co/commit/2"

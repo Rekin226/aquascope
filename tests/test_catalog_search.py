@@ -31,6 +31,7 @@ def test_fold_text_strips_accents_and_case():
 
 def test_query_tokens_drop_connectives_only_when_words_remain():
     assert query_tokens("Thames at Kingston") == ["thames", "kingston"]
+    assert query_tokens("Thames near Kingston") == ["thames", "kingston"]
     assert query_tokens("River") == ["river"]
     assert query_tokens("  ") == []
 
@@ -54,6 +55,21 @@ def test_single_word_keeps_the_old_name_or_id_substring_behaviour():
     assert [r["station_id"] for r in search_stations(ROWS, query="01646500")] == ["USGS-01646500"]
     # one word does not search the river field, as before
     assert search_stations(ROWS, query="thames") == []
+
+
+def test_a_us_near_name_does_not_outrank_the_named_thames_record():
+    """"Thames near Kingston" used to return ten US "... near Kingston" gauges first (#646).
+
+    USGS builds station names as "Cedar River near Kingston", so "near" matched in the name and gave
+    those rows two name hits against the Thames at Kingston record's one; dropping the connective leaves
+    Thames+Kingston, which only the real record matches twice.
+    """
+    rows = ROWS + [
+        _row("usgs", "USGS-04264331", "Cedar River near Kingston, NY", 41.92, -74.0, river="Cedar River"),
+    ]
+    hits = search_stations(rows, query="Thames near Kingston")
+    assert [r["station_id"] for r in hits][:1] == ["8496ce69"]
+    assert [r["station_id"] for r in hits][:3] == ["8496ce69", "hull-1", "USGS-04264331"]
 
 
 def test_accents_do_not_matter():

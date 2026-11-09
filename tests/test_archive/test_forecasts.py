@@ -150,7 +150,7 @@ def test_run_stops_reading_records_at_half_the_time_budget(monkeypatch, tmp_path
     monkeypatch.setattr(fa, "read_published_json", lambda path, repo_id=fa.DEFAULT_REPO: {})
     monkeypatch.setattr(fa, "read_published_rows", lambda path, repo_id=fa.DEFAULT_REPO: [])
     monkeypatch.setattr(fa, "gauge_record", lambda *a, **k: pytest.fail("no record past the budget"))
-    info = fa.run(tmp_path, manifest=MANIFEST, catalog=[], today=TODAY, workers=1, time_budget_s=0)
+    info = fa.run(tmp_path, manifest=MANIFEST, catalog=[], today=TODAY, workers=1, time_budget_s=-1)
     assert info["dropped"] == {"time budget (records)": 3} and info["status_gauges"] == 0
 
 
@@ -163,7 +163,7 @@ def test_publish_uploads_only_the_forecasts_folder(monkeypatch, tmp_path):
     seen = {}
 
     def fake_publish(folder, repo_id, token=None, commit_message=None):
-        seen["files"] = sorted(str(p.relative_to(folder)) for p in Path(folder).rglob("*") if p.is_file())
+        seen["files"] = sorted(p.relative_to(folder).as_posix() for p in Path(folder).rglob("*") if p.is_file())
         seen["message"] = commit_message
         return "https://hf.co/commit/1"
 

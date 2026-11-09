@@ -106,7 +106,10 @@ export function startRiver(t, lat, lon, { gauge = false, area = null } = {}) {
     return snap;
   }).catch((err) => {
     if (my === r.run) {
-      setTab(panel(t), "river", { enabled: false, reason: `Could not read the river network (${err.message}).` });
+      const why = `Could not read the river network (${err.message}).`;
+      setTab(panel(t), "river", { enabled: false, reason: why });
+      // A link with tab=river said under the title that the River tab was on its way (#591): say it is not.
+      if (head && !head.hidden) head.textContent = why;
       tellSnap(t, { error: err.message, lat, lon });
     }
     return null;

@@ -11,12 +11,15 @@ engine behind that, shared by the page, ``aquascope layers explain`` and the MCP
   place and source, and an id (``f1``, ``f2``...).
 * :func:`template_notes` turns the facts into notes with fixed wording. It needs no model and no key, and it
   is what the page shows when no model is at hand.
-* :func:`notes_prompt`, :func:`check_model_notes` and :func:`model_notes` are the model path. A model (the
-  reader's own key, or the on-device model in the browser) only chooses and orders facts and writes the
-  connecting words. It writes numbers as placeholders (``{f3}``), which code fills in from the facts, and a
-  note whose words carry any number (in digits or in words) that is not in the facts it cites, or a sign or
-  a digit set against a placeholder ("-{f3}", "{f3}0"), is refused (the claim lock, shared with
-  :mod:`aquascope.map_scout` and :mod:`aquascope.mesh_review`).
+* :func:`notes_prompt`, :func:`check_model_notes` and :func:`model_notes` are the model path (the reader's own
+  key, or the on-device model in the browser). The model picks, the code writes (#590, round 3): it decides
+  which of the package's notes to show, in which order, and which of each note's fixed variants (``a``, ``b``,
+  ``c``) reads best, as ids from a JSON Schema of enums (:func:`notes_schema`). It cannot write any value,
+  date, place, comparison ("larger", "another") or claim: every sentence is written here from the facts, a
+  share of the whole view as "N% of the mapped land in view is ..." and the largest single area as that
+  area's share. A reply outside the enums is refused whole (:func:`aquascope.map_pick.pick`) and the fixed
+  wording stands. The older pattern checks (:func:`claim_lock`, :func:`class_claims`, :func:`share_claims`)
+  stay as a second line of defence over the package's own wording, and for :mod:`aquascope.mesh_review`.
 
 :func:`explain_view` gathers the published layers itself (the world river status file, the Floods ahead
 issue, the Floods past grid and today's gauge status) for the CLI and the MCP tool; the page hands
@@ -37,11 +40,12 @@ from datetime import date
 from typing import Any
 
 from aquascope.map_layers import STATUS_ATTRIBUTION, STATUS_CLASSES, STATUS_LICENCE
+from aquascope.map_pick import VARIANTS, pick
 
 __all__ = [
     "LAYERS", "MAX_NOTES", "MIN_NOTES", "check_model_notes", "claim_lock", "explain", "explain_view", "model_notes",
-    "name_notes", "notes_prompt", "place_name", "placeholder_touches", "status_sample", "template_notes",
-    "view_facts",
+    "name_notes", "note_choices", "notes_prompt", "notes_schema", "place_name", "placeholder_touches",
+    "status_sample", "template_notes", "view_facts",
 ]
 
 #: The layers a view can be explained from, by the ids aquascope.map_commands.LAYERS uses (gauges are the
@@ -489,7 +493,7 @@ def _floods_past_facts(floods: dict[str, Any], bbox: list[float],
         return []
     facts = []
     for k, (kind, label, unit) in enumerate((("news", "Flood events in the news", "events"),
-                                             ("radar", "Radar flood detections", "detections"))):
+                                             ("radar", "Sentinel-1 radar flood detections", "detections"))):
         total = sum(v[k] for v in acc.values())
         if not total:
             continue
@@ -780,15 +784,25 @@ def _first(facts: list[dict[str, Any]], kind: str, **match: Any) -> dict[str, An
 
 
 def _candidates(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Every note the template can write: ``{prio, slot, facts, title, text}``, lower ``prio`` first. Notes
-    that share a ``slot`` are alternatives (the next reach when the first one sits on another note's spot)."""
+    """Every note the package can write: ``{prio, slot, title, variants, facts, text}``, lower ``prio`` first.
+    ``variants`` maps each of :data:`aquascope.map_pick.VARIANTS` to ``(cited facts, text)``, all written here
+    from the facts; ``facts`` and ``text`` are variant ``a``, the rules' own wording. Every variant of a note
+    cites the same fact first, so it is pinned at the same place. Notes that share a ``slot`` are alternatives
+    (the next reach when the first one sits on another note's spot)."""
     out: list[dict[str, Any]] = []
 
-    def add(prio: float, slot: str, cited: list[dict[str, Any] | None], title: str, text: str) -> None:
-        out.append({"prio": prio, "slot": slot, "facts": [f for f in cited if f], "title": title, "text": text})
+    def add(prio: float, slot: str, title: str, variants: dict[str, tuple[list[dict[str, Any] | None], str]]) -> None:
+        clean = {v: ([f for f in cited if f], re.sub(r"\s+", " ", text).strip()) for v, (cited, text) in
+                 variants.items()}
+        for v in VARIANTS:            # every note offers every variant id; a missing one says what "a" says
+            clean.setdefault(v, clean["a"])
+        out.append({"prio": prio, "slot": slot, "title": title, "variants": clean, "facts": clean["a"][0],
+                    "text": clean["a"][1]})
 
     # The world river status: what the colour means where it covers most, much above or below normal weighing
-    # more, the side that covers more first.
+    # more, the side that covers more first. A share of the whole view is said as one ("58% of the mapped land
+    # in view is below or much below normal"); the largest single area as that area's share ("the largest area
+    # much below normal in view covers 14% of the mapped land in view"), never as the share of all land (#590).
     areas = [f for f in facts if f["kind"] == "status_area"]
     weight = {"much_above": 1.5, "much_below": 1.5, "above": 1.0, "below": 1.0}
     areas.sort(key=lambda f: -f["value"] * weight[f["class"]])
@@ -796,13 +810,30 @@ def _candidates(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     first_side = sides[0] if sides else "above"
     for a, side in zip(areas, sides):
         k = a["class"]
+        label = _CLASS_LABEL[k]
         bound = _first(facts, "status_class", **{"class": k})
+        size = _first(facts, "status_size", **{"class": k})
+        share = _first(facts, "status_share", side=side)
         month = a["when"].split(" ")[0]
-        text = (f"{a['colour_words'].capitalize()}: flow {bound['shown']} for {month}, "
-                f"on {a['shown']} of the mapped land in view.")
-        add(1 if side == first_side else 1.5, f"status_{side}",
-            [a, bound, _first(facts, "status_size", **{"class": k}), _first(facts, "status_share", side=side)],
-            _CLASS_LABEL[k].capitalize(), text)
+        both = f"{side} or much {side} normal"
+        whole = f"In all, {share['shown']} of the mapped land in view is {both}." if share else ""
+        largest = f"The largest area {label} in view covers {a['shown']} of the mapped land in view"
+        # The other class on the same side (much below beside below): the comparison is the code's, from values.
+        twin = next((f for f in areas if f is not a and f["class"] != k and
+                     ("above" if f["class"] in ("above", "much_above") else "below") == side), None)
+        if twin:
+            more = "about as much as" if twin["shown"] == a["shown"] else (
+                "more than" if a["value"] > twin["value"] else "less than")
+            third = (f"{largest}, {more} the largest area {_CLASS_LABEL[twin['class']]} ({twin['shown']} of the "
+                     "mapped land in view).", [a, twin, share])
+        else:
+            third = (f"{whole} {largest}.", [a, share])
+        add(1 if side == first_side else 1.5, f"status_{side}", label.capitalize(), {
+            "a": ([a, bound, size, share],
+                  f"{a['colour_words'].capitalize()}: flow {bound['shown']} for {month}. {largest}."),
+            "b": ([a, size, share], f"{largest} ({size['shown']}). {whole}" if size else f"{largest}. {whole}"),
+            "c": (third[1], third[0]),
+        })
     # Floods ahead: the reach forecast to pass the highest return-period flow (the next ones as alternatives).
     count = _first(facts, "fa_count")
     for c in [f for f in facts if f["kind"] == "fa_class"]:
@@ -817,9 +848,15 @@ def _candidates(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         many = count and count["value"] > 1
         if many:
             shown = count["shown"]
-            text += f" {shown[:1].upper()}{shown[1:]} reaches in view pass theirs."   # "At least 45 reaches"
-        add(2 + 0.1 * rank, "floods_ahead", [c, peak, ratio, count if many else None],
-            f"{c['shown'].capitalize()} ahead", text)
+            text += (f" {shown[:1].upper()}{shown[1:]} reaches in view are at their 2-year flow or more "
+                     f"{count['when']}.")
+        at = f"At its {c['shown']} {c['when']}."
+        add(2 + 0.1 * rank, "floods_ahead", f"{c['shown'].capitalize()} ahead", {
+            "a": ([c, peak, ratio, count if many else None], text),
+            "b": ([c, peak], f"{at} Forecast peak {peak['shown']} {peak['when']}." if peak else at),
+            "c": ([c, ratio], f"Forecast at its {c['shown']} {c['when']}, with a peak {ratio['shown']} its 2-year "
+                              "flow." if ratio else at),
+        })
     # Gauges: the one furthest from normal on each side, the side with more gauges far from normal first; one
     # far out ranks before the forecast's reach.
     counts = {side: (_first(facts, "gauge_count", side=side) or {}).get("value", 0) for side in ("above", "below")}
@@ -831,23 +868,36 @@ def _candidates(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         years, flow = _first(facts, "gauge_years", side=side), _first(facts, "gauge_flow", side=side)
         count = _first(facts, "gauge_count", side=side)
-        text = f"{_CLASS_LABEL[pct['class']].capitalize()} {pct['when']}: {pct['shown']}".rstrip()
+        label = _CLASS_LABEL[pct["class"]]
+        text = f"{label.capitalize()} {pct['when']}: {pct['shown']}".rstrip()
         text += f" of {years['shown']}." if years else " for the date."
         many = count and count["value"] > 1
-        if many:
-            text += f" {count['shown']} gauges in view are {_CLASS_LABEL['much_' + side]}."
+        others = f" {count['shown']} gauges in view are {_CLASS_LABEL['much_' + side]}." if many else ""
+        head = f"{flow['shown']} {pct['when']}".strip() if flow else (pct["when"][:1].upper() + pct["when"][1:])
+        of_years = f" in {years['shown']} of record" if years else ""
         name = pct["place"].get("name") or "A gauge"
-        add(prio - (1.5 if abs(pct["value"] - 50) >= 45 else 0), f"gauge_{side}",
-            [pct, flow, years, count if many else None], name[:48], text)
+        add(prio - (1.5 if abs(pct["value"] - 50) >= 45 else 0), f"gauge_{side}", name[:48], {
+            "a": ([pct, flow, years, count if many else None], text + others),
+            "b": ([pct, flow, years], f"{head}: the {pct['shown']} for the date{of_years}." if head else
+                  f"The {pct['shown']} for the date{of_years}."),
+            "c": ([pct, count if many else None],
+                  f"{label.capitalize()} {pct['when']}, at the {pct['shown']} for the date.{others}"),
+        })
     # Floods past: where most were reported, and where radar saw the most water.
     for kind, prio, title in (("news", 4.0, "Flood reports"), ("radar", 7.0, "Water seen by radar")):
         total = _first(facts, f"fp_{kind}_total")
+        what = "flood events in the news" if kind == "news" else "Sentinel-1 flood detections"
         for cell in [f for f in facts if f["kind"] == f"fp_{kind}_cell"]:
-            what = "flood events in the news" if kind == "news" else "Sentinel-1 flood detections"
-            text = f"{cell['shown']} {what} in this half-degree cell, {cell['when']}"
             more = total and total["value"] > cell["value"]
+            text = f"{cell['shown']} {what} in this half-degree cell, {cell['when']}"
             text += f"; {total['shown']} in view." if more else "."
-            add(prio + 0.1 * cell["rank"], f"floods_past_{kind}", [cell, total if more else None], title, text)
+            alone = f"In this half-degree cell, {cell['when']}: {cell['shown']} {what}."
+            add(prio + 0.1 * cell["rank"], f"floods_past_{kind}", title, {
+                "a": ([cell, total if more else None], text),
+                "b": ([cell], alone),
+                "c": ([cell, total], f"{total['shown']} {what} in view, {cell['when']}; {cell['shown']} of them in "
+                                     "this half-degree cell.") if more else ([cell], alone),
+            })
     out.sort(key=lambda c: c["prio"])
     return out
 
@@ -956,7 +1006,7 @@ def explain(view: dict[str, Any], *, status: dict[str, Any] | None = None, warni
     return res
 
 
-# ── the model path, claim-locked ────────────────────────────────────────────
+# ── the model path: the model picks, the code writes ────────────────────────
 
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 _PLACEHOLDER = re.compile(r"\{(f\d+)(?:\.(when|place))?\}")
@@ -973,8 +1023,10 @@ def _numbers(text: str) -> set[str]:
     text = text or ""
     out = {m.replace(",", "") for m in _NUMBER.findall(text)}
     out |= {m.lower() for m in _NUMBER_WORDS.findall(text)}
-    # Any other character that stands for a number: a fraction (½), a Roman numeral (Ⅻ), a superscript.
-    out |= {c for c in text if not "0" <= c <= "9" and unicodedata.numeric(c, None) is not None}
+    # Any other character that stands for a number: a fraction (½), a Roman numeral (Ⅻ), a superscript. A
+    # superscript two or three after a letter is a unit's (km², m³/s), not a number of its own.
+    out |= {c for i, c in enumerate(text) if not "0" <= c <= "9" and unicodedata.numeric(c, None) is not None
+            and not (c in "\u00b2\u00b3" and i and text[i - 1].isalpha())}
     return out
 
 
@@ -1026,128 +1078,245 @@ def _part(fact: dict[str, Any], part: str | None) -> str:
     return str(fact["shown"])
 
 
+def _norm_value(text: str) -> str:
+    """A value as compared for a repeat: spaces, case and superscript digits (km² and km2) set aside."""
+    t = str(text or "").lower().replace("²", "2").replace("³", "3")
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _drop_lead(before: str, value: str) -> str:
+    """``before`` without the words ``value`` opens with, when it ends with them ("peaks on " before "on Sat 7
+    Nov" is "peaks ")."""
+    lead = re.match(r"\s*((?:[^\W\d_]+\s+)*)", value + " ").group(1).split()
+    for k in range(len(lead), 0, -1):
+        tail = re.search(r"(?:^|(?<=\s))" + r"\s+".join(map(re.escape, lead[:k])) + r"\s*$", before, re.IGNORECASE)
+        if tail:
+            return before[:tail.start()]
+    return before
+
+
+def drop_repeats(words: str, pattern: re.Pattern[str], value_of: Any) -> str:
+    """``words`` without what a model wrote again after a placeholder that already says it: a bracket holding
+    the value ("{f3} ({f3})", "{f3} (54%)", "{f6} (4.6 times)") and the unit the value ends with ("{f4} km²"
+    where ``f4`` reads "6,000,000 km²"). ``value_of(match)`` is what the placeholder puts in. Explain, Scout and
+    mesh review fill through this, so a value is never written twice."""
+    words = words or ""
+    out: list[str] = []
+    pos = 0
+    for m in pattern.finditer(words):
+        if m.start() < pos:
+            continue
+        try:
+            value = str(value_of(m) or "")
+        except (KeyError, IndexError):
+            value = ""
+        # The words the value opens with, written again just before it: "on {f9.when}" where the date reads
+        # "on Sat 7 Nov" would say "on on".
+        out.append(_drop_lead(words[pos:m.start()], value) + m.group(0))
+        pos = m.end()
+        if not value:
+            continue
+        nv = _norm_value(value)
+        b = re.match(r"\s*\(([^()]*)\)", words[pos:])
+        if b:
+            try:
+                inner = _norm_value(pattern.sub(lambda x: str(value_of(x) or ""), b.group(1)))
+            except (KeyError, IndexError):
+                inner = ""
+            if inner and inner in nv:
+                pos += b.end()
+        # The unit: what the value says after its last digit ("km²", "m³/s", "%", "times").
+        unit = re.search(r"\d([^\d]*)$", value)
+        tail = unit.group(1).strip(" -") if unit else ""
+        if tail and not re.search(r"\d", tail):
+            rest = words[pos:]
+            lead = re.match(r"\s*", rest).end()
+            if _norm_value(rest[lead:lead + len(tail)]) == _norm_value(tail) and \
+                    not re.match(r"\w", rest[lead + len(tail):lead + len(tail) + 1]):
+                pos += lead + len(tail)
+    out.append(words[pos:])
+    return "".join(out)
+
+
 def _fill(words: str, facts: dict[str, dict[str, Any]]) -> str:
     def one(m: re.Match[str]) -> str:
         return _part(facts[m.group(1)], m.group(2))
 
-    out = re.sub(r"\s+", " ", _PLACEHOLDER.sub(one, words or "")).strip()
+    words = drop_repeats(words or "", _PLACEHOLDER, lambda m: _part(facts[m.group(1)], m.group(2)))
+    out = re.sub(r"\s+", " ", _PLACEHOLDER.sub(one, words)).strip()
     # A value that opens a sentence ("at least 45") starts it with a capital.
     return re.sub(r"(^|[.!?] )([a-z])", lambda m: m.group(1) + m.group(2).upper(), out)
 
 
-def notes_schema() -> dict[str, Any]:
-    """The JSON Schema a model's notes are held to."""
+# Words of the prompt a model may copy into a note ("This is located at a point on the map."): the sentence that
+# holds them says nothing about the river, so it goes.
+_ECHO = re.compile(r"\b(?:a point on the map|un-?named|has no name yet|placeholders?|pin: (?:yes|no))\b|"
+                   r"\(write \{", re.IGNORECASE)
+
+
+def _drop_echo(text: str) -> str:
+    sentences = re.split(r"(?<=[.!?])\s+", text or "")
+    return " ".join(x for x in sentences if x and not _ECHO.search(x)).strip()
+
+
+# A claim about how far from normal: "much below normal", "significantly above average", "notably low".
+_STRONG = re.compile(
+    r"\b(?:much|significantly|far|well|substantially|considerably|severely|extremely|exceptionally|strongly|"
+    r"greatly|very|way|notably)\s+(below|above|under|over|lower than|higher than)\s+(?:the\s+)?"
+    r"(?:normal|average|usual)\b|\bnotably\s+(low|high)\b", re.IGNORECASE)
+_MILD = re.compile(r"\b(below|above|under|over|lower than|higher than)\s+(?:the\s+)?(?:normal|average|usual)\b",
+                   re.IGNORECASE)
+# Code's own words for a share of both classes on one side: not a claim of the stronger class alone.
+_BOTH = re.compile(r"\b(below|above) or much (?:below|above)(?: normal)?\b", re.IGNORECASE)
+
+
+def _side(word: str) -> str:
+    return "below" if word.lower() in ("below", "under", "lower than", "low") else "above"
+
+
+def _fact_sides(f: dict[str, Any]) -> tuple[str | None, bool]:
+    """The side of normal a fact is on and whether it says the stronger class: ``(side, strong)``."""
+    cls = f.get("class")
+    if cls in ("much_below", "below", "much_above", "above"):
+        return ("below" if cls.endswith("below") else "above"), cls.startswith("much_")
+    side = f.get("side")
+    if side in ("below", "above"):
+        # A gauge count is of gauges much above or much below normal; a status share is of both classes.
+        return side, f.get("kind") == "gauge_count"
+    return None, False
+
+
+def class_claims(words: str, cited: list[dict[str, Any]]) -> str | None:
+    """Why ``words`` claim more than their facts about how far from normal, or None. Each number may be in the
+    facts and the note still wrong: "96% of the land is significantly below normal" when the 96% is of land
+    below or much below normal. A claim of the stronger class ("much below") needs a fact of that class, and a
+    side of normal needs a fact on that side, when the facts cited are on one."""
+    sides = [_fact_sides(f) for f in cited]
+    if not any(s for s, _ in sides):
+        return None
+    bare = _BOTH.sub(" ", _PLACEHOLDER.sub(" ", words or ""))
+    for m in _STRONG.finditer(bare):
+        side = _side(m.group(1) or m.group(2))
+        if not any(s == side and strong for s, strong in sides):
+            held = [f["label"].lower() for f in cited if _fact_sides(f)[0] == side]
+            return (f"says {m.group(0).strip()!r}, its facts say {held[0]!r}" if held
+                    else f"says {m.group(0).strip()!r}, which none of its facts says")
+    for m in _MILD.finditer(bare):
+        side = _side(m.group(1))
+        if not any(s == side for s, _ in sides):
+            return f"says {m.group(0).strip()!r}, its facts are on the other side of normal"
+    return None
+
+
+#: The facts that are a share of the mapped land in view, not a flow: "21%" of the land, never "21% above normal".
+SHARE_KINDS = ("status_share", "status_area")
+# What a share is of, written right after its placeholder: "{f4} of the mapped land", "{f1} of the view".
+_SHARE_OF = re.compile(r"\s*(?:\)\s*)?of\s+(?:(?:the|this|all|its)\s+)?(?:[^\W\d_]+\s+){0,2}?"
+                       r"(?:land|lands|area|areas|view|map|region|basins?)\b", re.IGNORECASE)
+
+
+def share_claims(words: str, facts: dict[str, dict[str, Any]]) -> str | None:
+    """Why ``words`` write a share of the mapped land as something else, or None. A share fact ("21%", of the
+    mapped land in view) must be written as a share: ``{f4} of the mapped land``. Written bare it reads as a
+    flow ("the river is mapped at {f4} above normal", "flow at least {f1} below normal"), a claim no fact holds,
+    with every number in the facts."""
+    for m in _PLACEHOLDER.finditer(words or ""):
+        f = facts.get(m.group(1))
+        if m.group(2) or not f or f.get("kind") not in SHARE_KINDS:
+            continue
+        if not _SHARE_OF.match(words[m.end():]):
+            return f"writes {f['shown']} without 'of the mapped land': it is a share of the land in view, not a flow"
+    return None
+
+
+#: The most notes a model is offered to choose from (the rules' order, the most important first).
+MAX_CHOICES = 10
+
+
+def note_choices(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The notes a model may choose among: the package's own (:func:`_candidates`) that can be pinned, the most
+    important first, each with an id (``n1``, ``n2``...) and its variants written out. The same facts give the
+    same ids, so the page can ask with one call and check the reply with another."""
+    cands = [c for c in _candidates(facts) if _anchor(c["facts"]) and _anchor(c["facts"]).get("pinnable", True)]
+    return [{**c, "id": f"n{i}"} for i, c in enumerate(cands[:MAX_CHOICES], 1)]
+
+
+def notes_schema(ids: list[str] | None = None) -> dict[str, Any]:
+    """The JSON Schema a model's reply is held to: up to :data:`MAX_NOTES` picks, each a note id from ``ids``
+    and a variant id (:data:`aquascope.map_pick.VARIANTS`). Nothing in it is free text."""
+    note = {"type": "string", "enum": list(ids)} if ids else {"type": "string"}
     return {
         "type": "object", "required": ["notes"], "additionalProperties": False,
         "properties": {"notes": {"type": "array", "minItems": 1, "maxItems": MAX_NOTES, "items": {
-            "type": "object", "required": ["facts", "title", "text"], "additionalProperties": False,
-            "properties": {
-                "facts": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "string"}},
-                "title": {"type": "string", "maxLength": 60},
-                "text": {"type": "string", "maxLength": 240},
-            }}}},
+            "type": "object", "required": ["note", "variant"], "additionalProperties": False,
+            "properties": {"note": note, "variant": {"type": "string", "enum": list(VARIANTS)}}}}},
     }
 
 
 def notes_prompt(facts: list[dict[str, Any]], context: str = "") -> dict[str, Any]:
-    """The system prompt and reply schema for a model that writes the notes. The facts go in as a list with
-    their values, so the model can tell which matter; it writes each value as the fact's placeholder, which
-    code fills in."""
+    """The system prompt, the user message and the reply schema for a model that chooses the notes.
+
+    The model decides which of the package's notes to show, in which order, and which of each note's fixed
+    variants reads best. It writes nothing: every number, date, place, comparison and claim on the page is in
+    the package's wording, written from the facts (#590, round 3)."""
+    choices = note_choices(facts)
     lines = []
-    for f in facts:
-        name = (f.get("place") or {}).get("name")
-        where = f"{name} (write {{{f['id']}.place}})" if name else \
-            ("a point on the map" if f.get("place") else "the whole view")
-        when = f" when {f['when']} (write {{{f['id']}.when}})" if f.get("when") else ""
-        lines.append(f"{f['id']}: {f['label']} is {f['shown']} (write {{{f['id']}}}){when}; "
-                     f"layer {f['layer']}; where: {where}")
+    for c in choices:
+        layer = c["facts"][0]["layer"]
+        lines.append(f"{c['id']} ({layer}, \"{c['title']}\"):")
+        lines += [f"  {v}: {c['variants'][v][1]}" for v in VARIANTS]
     system = "\n".join([
-        "You write short notes pinned on a world map of rivers, explaining what the reader sees.",
-        "Here are facts taken from the map by code, each with the placeholder that stands for its value.",
+        "You choose short notes to pin on a world map of rivers, explaining what the reader sees.",
+        "Code wrote every note below from the map's data, each in three variants. You only choose; you never "
+        "write a word of a note.",
         "",
         *lines,
         "",
-        f"Choose the {MIN_NOTES} to {MAX_NOTES} facts most worth noting, group facts about the same place into "
-        "one note, and order the notes by importance.",
-        "For each note: 'facts' lists the fact ids it uses (the first one with a place decides where the pin "
-        "goes), 'title' is at most six words, 'text' is one or two short plain sentences.",
-        "Write every number, date and place name as its placeholder, exactly: {f3}, {f3.when}, {f3.place} "
-        "(only the ones listed above; a place without one has no name yet, so do not name it). "
-        "Never write a number yourself, in digits or in words (twelve, half, twice): a note with a number "
-        "its facts do not hold is thrown away.",
-        "Say only what the facts say. Do not guess causes, impacts or forecasts beyond them. "
-        "Colours: much below normal is dark brown, below normal tan, above normal light teal, "
-        "much above normal dark teal.",
-        'Reply with ONE JSON object and nothing else: {"notes": [{"facts": ["f1"], "title": "...", "text": "..."}]}',
+        f"Choose the {MIN_NOTES} to {MAX_NOTES} notes most worth the reader's attention, the most important first, "
+        "and for each the variant that reads best. Notes on the same layer and place seldom both earn a place.",
+        'Reply with ONE JSON object and nothing else: {"notes": [{"note": "n1", "variant": "a"}]}',
     ])
     if context:
         system += f"\n\nWhat the reader is looking at: {context}"
-    return {"system": system, "schema": notes_schema()}
+    return {"system": system, "prompt": "Choose the notes.", "schema": notes_schema([c["id"] for c in choices])}
+
+
+def _refused_whole(errors: list[str]) -> str:
+    more = f" (and {len(errors) - 1} more)" if len(errors) > 1 else ""
+    return f"the model's reply was refused: {errors[0]}{more}"
 
 
 def check_model_notes(reply: Any, facts: list[dict[str, Any]], bbox: list[float] | None = None) -> dict[str, Any]:
-    """A model's reply (text or parsed JSON) read into notes, each checked: known fact ids, at least one with a
-    place, placeholders that exist, and the claim lock (no number that is not in its facts). Numbers are put in
-    by code. When fewer than three notes pass, template notes on other facts top them up (marked
-    ``"by": "rules"``). Returns ``{"notes", "refused"}``; ``refused`` says why each dropped note was dropped."""
-    data = reply
-    if isinstance(reply, str):
-        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", reply.strip())
-        start = raw.find("{")
-        try:
-            data, _ = json.JSONDecoder().raw_decode(raw[start:]) if start >= 0 else (None, 0)
-        except ValueError:
-            data = None
-    items = data.get("notes") if isinstance(data, dict) else None
-    if not isinstance(items, list):
-        return {"notes": [], "refused": ["the model did not reply with notes"]}
-    by_id = _by_id(facts)
+    """A model's reply (text or parsed JSON) read into notes. The reply is held to :func:`notes_schema` first
+    (:func:`aquascope.map_pick.pick`): a note id or a variant id that is not offered, or any other field, refuses
+    it whole. Each pick is then the package's note in the chosen variant, pinned at its place (or another spot
+    inside its area, when another note sits there). When fewer than three notes are picked, the package's notes
+    on other facts top them up (marked ``"by": "rules"``). Returns ``{"notes", "refused"}``; ``refused`` says why
+    a reply or a pick was not used."""
+    choices = note_choices(facts)
+    data, errors = pick(reply, notes_schema([c["id"] for c in choices]))
+    if errors:
+        return {"notes": [], "refused": [_refused_whole(errors)]}
+    by_id = {c["id"]: c for c in choices}
     bbox = _check_bbox(bbox) if bbox else [-180.0, -85.0, 180.0, 85.0]
     notes: list[dict[str, Any]] = []
     refused: list[str] = []
-    for i, item in enumerate(items[:MAX_NOTES], 1):
-        if not isinstance(item, dict):
-            refused.append(f"note {i}: not an object")
+    for i, item in enumerate(data["notes"], 1):
+        c, variant = by_id[item["note"]], item["variant"]
+        if any(n["note"] == c["id"] for n in notes if "note" in n):
+            refused.append(f"note {i}: {c['id']} chosen twice")
             continue
-        ids = [str(x) for x in item.get("facts") or [] if str(x) in by_id]
-        title = re.sub(r"\s+", " ", str(item.get("title") or "")).strip()[:60]
-        text = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()[:240]
-        cited = [by_id[x] for x in dict.fromkeys(ids)]
-        if not cited or not title:
-            refused.append(f"note {i}: no known fact or no title")
-            continue
-        if not any(f.get("place") for f in cited):
-            refused.append(f"note {i}: none of its facts has a place")
-            continue
-        unknown = [m.group(1) for m in _PLACEHOLDER.finditer(title + " " + text) if m.group(1) not in by_id]
-        if unknown:
-            refused.append(f"note {i}: cites {', '.join(unknown)}, which is not a fact")
-            continue
-        # {f3.when} or {f3.place} of a fact with no date or no name would leave a hole in the words.
-        empty = [m.group(0) for m in _PLACEHOLDER.finditer(title + " " + text)
-                 if m.group(2) and not _part(by_id[m.group(1)], m.group(2))]
-        if empty:
-            refused.append(f"note {i}: {', '.join(empty)} has nothing to put in")
-            continue
-        # Placeholders the note uses count as cited too: their numbers are put in by code.
-        used = [by_id[m.group(1)] for m in _PLACEHOLDER.finditer(title + " " + text)]
-        for f in used:
-            if f not in cited:
-                cited.append(f)
-        touch = placeholder_touches(title + " " + text)
-        if touch:
-            refused.append(f"note {i}: a sign or a digit against a placeholder ({', '.join(touch)})")
-            continue
-        stray = claim_lock(title + " " + text, cited)
-        if stray:
-            refused.append(f"note {i}: a number not in its facts ({', '.join(stray)})")
+        cited, text = c["variants"][variant]
+        # The second line of defence: code's own wording holds no number its facts do not, and no hole.
+        if claim_lock(text, cited) or re.search(r"[{}]", text):
+            refused.append(f"note {i}: {c['id']} {variant} did not pass the package's own check")
             continue
         spot = next((p for p in _spots(_anchor(cited)) if _spaced(notes, p["lat"], p["lon"], bbox, 0.06)), None)
         if spot is None:
-            refused.append(f"note {i}: on the same spot as another note")
+            refused.append(f"note {i}: {c['id']} sits on the same spot as another note")
             continue
-        notes.append(_note(cited, _fill(title, by_id), _fill(text, by_id), spot))
-    # Fewer than three notes survived: the fixed wording tops them up, from facts the model did not use.
+        notes.append({**_note(cited, c["title"], text, spot), "note": c["id"], "variant": variant})
+    # Fewer than three notes: the fixed wording tops them up, from facts the model did not use.
     if notes and len(notes) < MIN_NOTES:
         used = {i for n in notes for i in n["fact_ids"]}
         for t in template_notes(facts, bbox):
@@ -1162,9 +1331,10 @@ def check_model_notes(reply: Any, facts: list[dict[str, Any]], bbox: list[float]
 def model_notes(facts: list[dict[str, Any]], *, provider: str | None = None, model: str | None = None,
                 api_key: str | None = None, base_url: str | None = None, context: str = "",
                 bbox: list[float] | None = None, client: Any = None) -> dict[str, Any]:
-    """Ask the reader's own model (their key, through the provider registry) to choose, order and word the
-    notes, then check them (:func:`check_model_notes`). Returns its dict plus ``model``. No key of ours is
-    ever used: with no key and no client it raises, and the caller keeps the template notes."""
+    """Ask the reader's own model (their key, through the provider registry) to choose and order the package's
+    notes and a variant of each, then check its reply (:func:`check_model_notes`). Returns its dict plus
+    ``model``. No key of ours is ever used: with no key and no client it raises, and the caller keeps the
+    template notes."""
     from aquascope.ai_engine.analyst import resolve_llm
     from aquascope.ai_engine.llm_transport import make_client
 
@@ -1174,8 +1344,8 @@ def model_notes(facts: list[dict[str, Any]], *, provider: str | None = None, mod
         model, provider = cfg["model"], cfg["provider"]
     prompt = notes_prompt(facts, context)
     resp = client.chat.completions.create(
-        model=model, temperature=0, max_tokens=900,
-        messages=[{"role": "system", "content": prompt["system"]}, {"role": "user", "content": "Write the notes."}],
+        model=model, temperature=0, max_tokens=300,
+        messages=[{"role": "system", "content": prompt["system"]}, {"role": "user", "content": prompt["prompt"]}],
     )
     out = check_model_notes(resp.choices[0].message.content or "", facts, bbox)
     out["model"] = f"{model} via {provider}"
@@ -1241,10 +1411,10 @@ def _gather_gauges(bbox: list[float]) -> list[dict[str, Any]]:
 def explain_view(bbox: list[float], day: str | None = None, layers: list[str] | None = None, *,
                  name_places: bool = True, llm: dict[str, Any] | None = None) -> dict[str, Any]:
     """Explain one view of the Explorer's map from the published layers: the facts, then three to five notes
-    (fixed wording, or with ``llm`` = ``{provider, model, api_key, base_url}`` the reader's own model,
-    claim-locked, falling back to the fixed wording). ``day`` is the map date (default: today); ``layers``
-    are among :data:`LAYERS` (default: all four). Reads the month's status file, the Floods ahead issue,
-    the Floods past grid and the gauges' status snapshot, as the page does."""
+    (fixed wording, or with ``llm`` = ``{provider, model, api_key, base_url}`` the reader's own model, which
+    chooses among the package's notes and their variants, falling back to the fixed wording). ``day`` is the map
+    date (default: today); ``layers`` are among :data:`LAYERS` (default: all four). Reads the month's status
+    file, the Floods ahead issue, the Floods past grid and the gauges' status snapshot, as the page does."""
     bbox = _check_bbox(bbox)
     day = day or date.today().isoformat()
     on = [x for x in (layers or LAYERS) if x in LAYERS]

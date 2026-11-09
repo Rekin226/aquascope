@@ -1,0 +1,99 @@
+name: Archive to Zenodo
+
+# Deposits a snapshot of the Archive (the Hugging Face dataset Rekin226/aquascope-gauges) on Zenodo, so the data
+# has its own DOI (#444). Manual only, run by the maintainer about once a quarter:
+#   1. sandbox (the default): a draft on sandbox.zenodo.org with the ZENODO_SANDBOX_TOKEN secret, to check;
+#   2. production, publish off (the default): a draft on zenodo.org with the ZENODO_TOKEN secret; check it on
+#      Zenodo and press Publish there (or rerun with publish on);
+#   3. later snapshots: concept_id = the concept record number of the first deposit, for a new version.
+# Builds the bundle with python -m aquascope.archive.zenodo (catalogue, signatures, health, dataset card, obs/ as
+# one tar per variable and source, SOURCES.md, MANIFEST.json); derived folders are not deposited.
+# Reads the dataset anonymously and writes nothing to Hugging Face. See docs/archive.md#citing-the-archive.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sandbox:
+        description: "Use sandbox.zenodo.org (secret ZENODO_SANDBOX_TOKEN); off = zenodo.org (secret ZENODO_TOKEN)"
+        type: boolean
+        default: true
+      publish:
+        description: "Publish the deposit; off leaves a draft to check and publish on Zenodo"
+        type: boolean
+        default: false
+      concept_id:
+        description: "Concept record of the first deposit, for a new version (empty for the first deposit)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash  # with -eo pipefail, so a failed command before | tee fails the step
+
+concurrency:
+  group: archive-zenodo
+  cancel-in-progress: false
+
+jobs:
+  deposit:
+    name: Build and deposit the snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      SANDBOX: ${{ inputs.sandbox }}
+      PUBLISH: ${{ inputs.publish }}
+      CONCEPT_ID: ${{ inputs.concept_id }}
+    steps:
+      - name: Fail when the token secret is missing
+        env:
+          SANDBOX_TOKEN: ${{ secrets.ZENODO_SANDBOX_TOKEN }}
+          PRODUCTION_TOKEN: ${{ secrets.ZENODO_TOKEN }}
+        run: |
+          if [ "$SANDBOX" = "true" ]; then name=ZENODO_SANDBOX_TOKEN; token="$SANDBOX_TOKEN"; else name=ZENODO_TOKEN; token="$PRODUCTION_TOKEN"; fi
+          if [ -z "$token" ]; then
+            echo "::error::The repository secret $name is not set. Add it under Settings > Secrets and variables > Actions (a Zenodo personal access token with the deposit:write and deposit:actions scopes, made on $([ "$SANDBOX" = "true" ] && echo sandbox.zenodo.org || echo zenodo.org)), then dispatch again."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install aquascope with the archive extra
+        run: python -m pip install -q ".[archive]"
+
+      - name: Build the bundle from the dataset's current commit
+        run: python -m aquascope.archive.zenodo build --out deposit --download-dir archive --dry-run | tee build.txt
+
+      - name: Summary of the bundle
+        run: |
+          {
+            echo "### Archive snapshot for Zenodo"
+            echo
+            echo '```'
+            sed -n '/^{/q;p' build.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Deposit
+        env:
+          SANDBOX_TOKEN: ${{ secrets.ZENODO_SANDBOX_TOKEN }}
+          PRODUCTION_TOKEN: ${{ secrets.ZENODO_TOKEN }}
+        run: |
+          args=(--bundle deposit)
+          if [ "$SANDBOX" = "true" ]; then args+=(--sandbox); export ZENODO_TOKEN="$SANDBOX_TOKEN"; else export ZENODO_TOKEN="$PRODUCTION_TOKEN"; fi
+          if [ "$PUBLISH" = "true" ]; then args+=(--publish); fi
+          if [ -n "$CONCEPT_ID" ]; then args+=(--concept-id "$CONCEPT_ID"); fi
+          python -m aquascope.archive.zenodo deposit "${args[@]}" | tee deposit.txt
+          {
+            echo
+            echo "### Deposit"
+            echo
+            cat deposit.txt
+          } >> "$GITHUB_STEP_SUMMARY"

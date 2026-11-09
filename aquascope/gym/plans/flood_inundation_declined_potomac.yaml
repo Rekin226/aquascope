@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # Inundation extent needs a hydraulic model over terrain, which aquascope does not run: the playbook declines.
 id: flood_inundation_declined_potomac
 playbook: flood_risk

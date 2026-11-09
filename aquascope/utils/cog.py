@@ -595,6 +595,39 @@ class COG:
         v = block[r, c, 0 if img.planar == 2 else band]
         return v.item()
 
+    def read_window(self, col0: int, row0: int, col1: int, row1: int, *, band: int = 0,
+                    level: int = 0) -> np.ndarray:
+        """Pixels ``col0..col1`` and ``row0..row1`` (inclusive, clipped to the image) as a float array of rows,
+        nodata as NaN and the scale and offset applied. The blocks are fetched in one request where they lie
+        close together."""
+        img = self.image(level)
+        col0, col1 = max(0, int(col0)), min(img.width - 1, int(col1))
+        row0, row1 = max(0, int(row0)), min(img.height - 1, int(row1))
+        if col1 < col0 or row1 < row0:
+            return np.zeros((0, 0))
+        out = np.full((row1 - row0 + 1, col1 - col0 + 1), np.nan)
+        bw = int(img.tile_width or img.width) if img.tiled else img.width
+        bh = int(img.tile_height or img.rows_per_strip) if img.tiled else img.rows_per_strip
+        corners = [(c, r) for r in range(row0 - row0 % bh, row1 + 1, bh) for c in range(col0 - col0 % bw, col1 + 1, bw)]
+        self.prefetch(corners, band=band, level=level)
+        for r in range(row0 - row0 % bh, row1 + 1, bh):
+            for c in range(col0 - col0 % bw, col1 + 1, bw):
+                block = self._block(level, self.block_index(c, r, band=band, level=level))
+                if block.size == 0:
+                    continue
+                vals = block[:, :, 0 if img.planar == 2 else band].astype("f8")
+                r_lo, r_hi = max(row0, r), min(row1, r + vals.shape[0] - 1)
+                c_lo, c_hi = max(col0, c), min(col1, c + vals.shape[1] - 1)
+                if r_hi < r_lo or c_hi < c_lo:
+                    continue
+                out[r_lo - row0:r_hi - row0 + 1, c_lo - col0:c_hi - col0 + 1] = \
+                    vals[r_lo - r:r_hi - r + 1, c_lo - c:c_hi - c + 1]
+        if self.nodata is not None and not math.isnan(self.nodata):
+            out[out == self.nodata] = np.nan
+        if self.scale != 1.0 or self.offset != 0.0:
+            out = out * self.scale + self.offset
+        return out
+
     def value_at(self, x: float, y: float, *, band: int = 0, level: int = 0) -> float | None:
         """The scaled value at (x, y) in the raster's CRS; None outside the raster or on nodata."""
         ij = self.index(x, y, level)

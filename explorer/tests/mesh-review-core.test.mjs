@@ -3,7 +3,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  CHECK_LABELS, MAX_FLAG_CELLS, SEVERITY, checkRows, flaggedCells, gaugesInBox, reviewLine, reviewPin, reviewWho, runSpan,
+  CHECK_LABELS, MAX_FLAG_CELLS, SEVERITY, checkRows, flaggedCells, gaugesInBox, reviewLine, reviewPin, reviewTarget, reviewWho,
+  runSpan,
 } from "../src/mesh-review-core.js";
 import { ActionLog, checkPin } from "../src/map-actions-core.js";
 
@@ -55,7 +56,10 @@ test("the severities, the checks and the words", () => {
   assert.equal(Object.keys(CHECK_LABELS).length, 9);
   assert.deepEqual(reviewWho("rules"), ["Rules", "checks by code, no model"]);
   assert.equal(reviewWho("key", "claude via anthropic")[0], "claude via anthropic");
-  assert.match(reviewWho("device")[1], /numbers by code/);
+  assert.match(reviewWho("device")[1], /picked on this device; checks and words by code/);
+  // Asked, and its reply refused or timed out: said, not "no model" (#590).
+  assert.deepEqual(reviewWho("rules", "", "Chrome's built-in model"),
+    ["Rules", "Chrome's built-in model asked, its choice not used; checks and words by code"]);
   assert.equal(reviewLine({ summary: "Nothing flagged; 5 of 9 checks ran." }, 3),
     "Nothing flagged; 5 of 9 checks ran. 3 pins, most severe first.");
   assert.equal(reviewLine({ summary: "Nothing flagged." }, 0), "Nothing flagged. No pin to drop.");
@@ -81,4 +85,34 @@ test("the gauges handed to the review are the catalogue's inside the mesh's box,
 test("the run's days for the gauge records", () => {
   assert.deepEqual(runSpan(["1999-01-01T12:00:00", "1999-01-04T12:00:00"]), { start: "1999-01-01", end: "1999-01-04" });
   assert.equal(runSpan([]), null);
+});
+
+// ── which model the review is about (#590) ──────────────────────────────────
+
+const PORTSMOUTH = { name: "Portsmouth.p01.hdf", bbox: [-76.4, 36.8, -76.2, 36.9], openedAt: 1, visible: true };
+const FREYBERG = { name: "freyberg.hds", bbox: [-98.1, 30.0, -97.9, 30.2], openedAt: 2, visible: true };
+const TEXAS = [-99, 29, -97, 31];
+const VIRGINIA = [-77, 36, -76, 37];
+
+test("the review is of the model on screen, and names it", () => {
+  // The MODFLOW sample on screen in Texas, an older HEC-RAS mesh off screen in Virginia: not reviewed out of sight.
+  const t = reviewTarget({ mesh: PORTSMOUTH, modflow: FREYBERG, view: TEXAS });
+  assert.equal(t.review, false);
+  assert.match(t.line, /^freyberg\.hds \(MODFLOW heads\) is the model on screen/);
+  assert.match(t.line, /Portsmouth\.p01\.hdf is loaded but not in view/);
+  assert.deepEqual(reviewTarget({ mesh: PORTSMOUTH, modflow: FREYBERG, view: VIRGINIA }), { review: true, name: "Portsmouth.p01.hdf" });
+  // Both in view: the one shown last.
+  const both = [-100, 25, -70, 40];
+  assert.equal(reviewTarget({ mesh: PORTSMOUTH, modflow: FREYBERG, view: both }).review, false);
+  assert.equal(reviewTarget({ mesh: { ...PORTSMOUTH, openedAt: 3 }, modflow: FREYBERG, view: both }).review, true);
+  // A mesh alone but out of view is said; with no view (the legend row) it is reviewed.
+  assert.match(reviewTarget({ mesh: PORTSMOUTH, view: TEXAS }).line, /not in view/);
+  assert.equal(reviewTarget({ mesh: PORTSMOUTH }).review, true);
+  assert.match(reviewTarget({}).line, /^No model result on the map/);
+  // The final line names the file.
+  assert.equal(reviewLine({ summary: "1 problem." }, 2, "Portsmouth.p01.hdf"), "Portsmouth.p01.hdf: 1 problem. 2 pins, most severe first.");
+  // A model picked the pins (#590, round 3): its order, and how many it left out; the counts stay the rules'.
+  assert.equal(reviewLine({ summary: "3 things worth a look; 9 of 9 checks ran." }, 6, "Flood_model.p01.hdf", { picked: true, leftOut: 2 }),
+    "Flood_model.p01.hdf: 3 things worth a look; 9 of 9 checks ran. 6 pins, in the model's order. 2 findings not pinned "
+    + "(the model left them out; the checks list has every one).");
 });

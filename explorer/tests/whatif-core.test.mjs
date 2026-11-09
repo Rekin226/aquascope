@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 
 import {
   BEFORE, CLASSES, NEUTRAL, basinRows, beforeSet, classOf, colorOf, lineColorExpr, lineFilterExpr, logLabel, outletLines,
-  paintedIds, pct, rangeWords, reachCard, resultBounds, scenarioWords, sliderValues,
+  paintedIds, pct, rangeWords, reachCard, restValues, resultBounds, scenarioWords, sigWords, sliderValues, heldWords,
+  notReadLine,
 } from "../src/whatif-core.js";
 import { slotOf } from "../src/map-actions-core.js";
 
@@ -99,6 +100,68 @@ test("the sliders take a scenario in their words and within their ends", () => {
   assert.deepEqual(sliderValues({ dp_pct: -80, dt_c: 9, demand_cms: 3 }), { dp_pct: -50, dt_c: 6, demand_cms: 3 });
 });
 
+test("a line that reads nothing puts the sliders back to what the map shows", () => {
+  // The panel must not keep the last line's numbers when the words it was given read nothing (#646).
+  assert.deepEqual(restValues(RESULT), { dp_pct: -20, dt_c: 2, demand_cms: 0, dpet_pct: null });
+  assert.deepEqual(restValues({ scenario: { dp_pct: -20, dt_c: 2, dpet_pct: 10, demand_cms: 0.4 } }),
+    { dp_pct: -20, dt_c: 2, demand_cms: 0.4, dpet_pct: 10 });
+  // Held at the sliders' ends like any scenario, and empty when no run is painted.
+  assert.deepEqual(restValues({ scenario: { dp_pct: -80, dt_c: 9 } }),
+    { dp_pct: -50, dt_c: 6, demand_cms: 0, dpet_pct: null });
+  assert.deepEqual(restValues(null), { dp_pct: 0, dt_c: 0, demand_cms: 0, dpet_pct: null });
+  assert.deepEqual(restValues({}), { dp_pct: 0, dt_c: 0, demand_cms: 0, dpet_pct: null });
+});
+
 test("a what-if run has its own slot in the action log", () => {
   assert.equal(slotOf({ type: "what_if" }), "whatif");
+});
+
+// ── on the device (#590): refusals said, nothing dropped ────────────────────
+
+test("an evaporation change goes with the scenario and is said", () => {
+  assert.equal(scenarioWords({ dp_pct: -20, dpet_pct: 10 }), "20% less rain, 10% more evaporation");
+  assert.equal(scenarioWords({ demand_cms: 0.3 }), "0.3 m³/s taken");
+  // A value past a slider's end is held there, and the line says so.
+  const v = sliderValues({ dp_pct: -60, dt_c: 2 });
+  assert.equal(heldWords({ dp_pct: -60, dt_c: 2 }, v), "rain held at the slider's end (−50%)");
+  assert.equal(heldWords({ dp_pct: -20 }, sliderValues({ dp_pct: -20 })), "");
+});
+
+test("a refused device reading is said, and Chrome's model is not suggested after it was used", () => {
+  // Gemini Nano read "300 litres per second" as 0.3 m³/s before the lock read litres per second.
+  const line = notReadLine({
+    rules: { scenario: null, unknown: ["the town pumps 300 litres per second out of the river"] },
+    tried: [{ who: "Chrome's built-in model", device: true, errors: ["refused demand_cms 0.3: that number is not in the words"] }],
+  });
+  assert.match(line, /^Not read\. Chrome's built-in model: refused demand_cms 0\.3: that number is not in the words\./);
+  assert.doesNotMatch(line, /With Chrome's built-in model/);
+  assert.match(line, /A key in Ask ✨ can try freer wording/);
+  // No model tried: the hint names both ways; with a key, no hint.
+  assert.match(notReadLine({ rules: { scenario: null } }), /With Chrome's built-in model, or a key in Ask ✨/);
+  assert.doesNotMatch(notReadLine({ rules: { scenario: null }, hasKey: true }), /Ask ✨/);
+});
+
+test("a part the rules could not read is named, not dropped", () => {
+  const line = notReadLine({ rules: { scenario: { dp_pct: -25, dt_c: 1.5 }, said: "25% less rain, 1.5 °C warmer", unknown: ["drought"] },
+    tried: [], hasKey: true });
+  assert.equal(line, "The rules read “25% less rain, 1.5 °C warmer” but not “drought”: set on the sliders, not run.");
+});
+
+// ── on the device, round 2 (#590) ──────────────────────────────────────────
+
+test("a small value keeps its figures, as the package writes it", () => {
+  // "the factory takes twenty litres a second": 0.02 m³/s, shown as "0 m³/s taken" before.
+  assert.equal(scenarioWords({ demand_cms: 0.02 }), "0.02 m³/s taken");
+  assert.equal(scenarioWords({ dp_pct: -100 / 3, dt_c: 1.25 }), "33.3% less rain, 1.25 °C warmer");
+  assert.equal(scenarioWords({ dp_pct: 20, demand_cms: 1234.5 }), "20% more rain, 1235 m³/s taken");
+  assert.equal(sigWords(0), "0");
+  assert.equal(sigWords(0.001), "0.001");
+});
+
+test("a season the words name is said not to be applied", () => {
+  const v = sliderValues({ dt_c: 3 });
+  assert.equal(heldWords({ dt_c: 3 }, v, ["summers"]), "“summers” not applied: the change runs over the whole year");
+  assert.equal(heldWords({ dt_c: 3 }, v, []), "");
+  assert.equal(heldWords({ dp_pct: -60 }, sliderValues({ dp_pct: -60 }), ["in July"]),
+    "rain held at the slider's end (−50%); “in July” not applied: the change runs over the whole year");
 });

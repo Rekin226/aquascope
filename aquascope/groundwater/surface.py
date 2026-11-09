@@ -1047,6 +1047,23 @@ def _place(local_x: np.ndarray, local_y: np.ndarray, origin: tuple[float, float]
     return lon, lat
 
 
+#: The Earth's mean radius (IUGG), for placing a model without a georeference near a point.
+EARTH_RADIUS_M = 6_371_008.8
+
+
+def _place_near(local_x: np.ndarray, local_y: np.ndarray, centre: tuple[float, float], scale_m: float,
+                middle: tuple[float, float]) -> tuple[np.ndarray, np.ndarray]:
+    """An approximate placement: the model's middle at ``centre`` (lon, lat), north up, lengths true to the model
+    (``scale_m`` metres per model unit), on a local equirectangular plane. Good for looking at a model, not for
+    overlaying it on anything: only its size and shape are the model's own."""
+    lon0, lat0 = float(centre[0]), float(centre[1])
+    x = (np.asarray(local_x, float) - middle[0]) * scale_m
+    y = (np.asarray(local_y, float) - middle[1]) * scale_m
+    lat = lat0 + np.degrees(y / EARTH_RADIUS_M)
+    lon = lon0 + np.degrees(x / (EARTH_RADIUS_M * max(math.cos(math.radians(lat0)), 0.01)))
+    return lon, lat
+
+
 def _crs_unit_m(crs: str) -> float | None:
     if _crs_is_lonlat(crs):
         return None
@@ -1093,6 +1110,7 @@ def read_modflow_heads(
     time_units: str | None = None,
     sidecars: Any = None,
     max_cells: int = MAX_CELLS,
+    approximate_at: Any = None,
 ) -> dict[str, Any]:
     """Your MODFLOW heads on the map: read a binary head file and place its cells in lon/lat.
 
@@ -1102,6 +1120,9 @@ def read_modflow_heads(
     the grid file says; a grid with no CRS needs one. ``start_date`` (YYYY-MM-DD) turns model times (in
     ``time_units``, default the grid's or days) into dates. ``sidecars``: other files of the model that say where or
     when it is (a ``.nam`` with FloPy's georeference comment, a MODFLOW 6 ``.tdis``), as bytes or paths.
+    ``approximate_at`` [lon, lat]: for a model whose files do not say where it is, draw it there instead, its middle
+    on that point, north up, at its true size in its own length unit (metres when the files do not name one). Its
+    place and orientation are then not the model's, and the result says so (``grid.approximate``).
 
     Returns a dict: the grid (type, sizes, how it was placed), ``times``, ``dates``, ``layers``, ``kstpkper``, the
     value ``range``, per-layer statistics at the last time, notes, and two arrays for drawing: ``rings`` (every cell's
@@ -1150,20 +1171,38 @@ def read_modflow_heads(
     the_crs = _normal_crs(crs) or _normal_crs(g.get("crs"))
     if crs is not None:
         placed_by = "you"
-    if the_crs is None or xo is None or yo is None:
+    approx = approximate_at is not None
+    if approx:
+        try:
+            centre = (float(approximate_at[0]), float(approximate_at[1]))
+        except (TypeError, ValueError, IndexError) as exc:
+            raise ValueError("approximate_at is a point: [lon, lat]") from exc
+        if not (-180 <= centre[0] <= 180 and -85 <= centre[1] <= 85):
+            raise ValueError("approximate_at must be a lon, lat on the map (latitude within 85 degrees)")
+        placed_by = "approximation, at the map's centre"
+        rot = 0.0
+        the_crs = None
+    elif the_crs is None or xo is None or yo is None:
         return {"kind": "modflow_heads", "error": "This grid does not say where it is on the Earth. Give the "
                 "lower-left corner (origin), the rotation and the CRS (an EPSG code).",
                 "needs": [k for k, missing in (("origin", xo is None or yo is None), ("crs", the_crs is None)) if missing],
                 "grid_from": g["from"], "nrow": h["nrow"], "ncol": h["ncol"], "layers": h["layers"],
                 "n_times": len(h["times"]), "xorigin": g.get("xorigin"), "yorigin": g.get("yorigin"),
-                "angrot": g.get("angrot")}
-    if xo == 0 and yo == 0 and origin is None:
+                "angrot": g.get("angrot"), "length_units": g.get("length_units")}
+    if xo == 0 and yo == 0 and origin is None and not approx:
         notes.append("The grid file puts the model at 0, 0 in its CRS, which is rarely where a model is: "
                      "check the origin.")
     units = (length_units or g.get("length_units") or "").lower() or None
-    crs_m = _crs_unit_m(the_crs)
+    crs_m = None if approx else _crs_unit_m(the_crs)
     scale = 1.0
-    if units in LENGTH_UNITS_M and crs_m:
+    if approx:
+        scale = LENGTH_UNITS_M.get(units or "", 1.0)
+        notes.append("Placed approximately: the model's files do not say where it is, so its middle is put at the "
+                     "centre of the map, north up. Its size and shape are the model's"
+                     f"{f' (in {units})' if units in LENGTH_UNITS_M else ''}; its place and orientation are not.")
+        if units not in LENGTH_UNITS_M:
+            notes.append("The grid does not name its length unit; read as metres.")
+    elif units in LENGTH_UNITS_M and crs_m:
         scale = LENGTH_UNITS_M[units] / crs_m
         if abs(scale - 1) > 1e-9:
             notes.append(f"Model lengths in {units} scaled to the CRS's units.")
@@ -1185,7 +1224,10 @@ def read_modflow_heads(
         xe = np.concatenate([[0.0], np.cumsum(delr)])
         ye = float(np.sum(delc)) - np.concatenate([[0.0], np.cumsum(delc)])
         gx, gy = np.meshgrid(xe, ye)
-        lon, lat = _place(gx.ravel(), gy.ravel(), (xo, yo), rot, scale, the_crs)
+        if approx:
+            lon, lat = _place_near(gx.ravel(), gy.ravel(), centre, scale, (float(xe[-1]) / 2, float(ye[0]) / 2))
+        else:
+            lon, lat = _place(gx.ravel(), gy.ravel(), (xo, yo), rot, scale, the_crs)
         lon, lat = lon.reshape(nrow + 1, ncol + 1), lat.reshape(nrow + 1, ncol + 1)
         ii, jj = np.meshgrid(np.arange(nrow), np.arange(ncol), indexing="ij")
         ii, jj = ii.ravel(), jj.ravel()
@@ -1197,7 +1239,11 @@ def read_modflow_heads(
         if ncell > max_cells:
             raise ValueError(f"{ncell:,} cells per layer is more than the map can draw (up to {max_cells:,})")
         v = np.asarray(g["vertices"], float)
-        lon, lat = _place(v[:, 0], v[:, 1], (xo, yo), rot, scale, the_crs)
+        if approx:
+            middle = ((float(v[:, 0].min()) + float(v[:, 0].max())) / 2, (float(v[:, 1].min()) + float(v[:, 1].max())) / 2)
+            lon, lat = _place_near(v[:, 0], v[:, 1], centre, scale, middle)
+        else:
+            lon, lat = _place(v[:, 0], v[:, 1], (xo, yo), rot, scale, the_crs)
         cv = np.asarray(g["cell_vertices"], np.int64)
         rings = np.stack([lon[cv], lat[cv]], axis=-1)
         offsets = np.asarray(g["cell_offsets"], np.int64)
@@ -1241,15 +1287,16 @@ def read_modflow_heads(
     return {
         "kind": "modflow_heads", "text": h["text"], "precision": h["precision"],
         "grid": {"type": g["type"], "from": g["from"], "nlay": g.get("nlay"), **shape, "cells": ncell,
-                 "crs": the_crs, "origin": [xo, yo], "rotation": rot, "length_units": units,
-                 "placed_by": placed_by, "block": block},
+                 "crs": the_crs, "origin": None if approx else [xo, yo], "rotation": rot, "length_units": units,
+                 "placed_by": placed_by, "block": block, "approximate": approx},
         "layers": h["layers"], "times": h["times"], "kstpkper": h["kstpkper"], "dates": dates,
         "time_units": time_units, "range": rng, "last_time_stats": stats,
         "bbox": [round(float(lon_all.min()), 6), round(float(lat_all.min()), 6), round(float(lon_all.max()), 6),
                  round(float(lat_all.max()), 6)],
         "notes": notes,
         "summary": (f"{h['text']} from {len(h['times'])} time step(s) on {len(h['layers'])} layer(s), "
-                    f"{ncell:,} cells per layer, placed by {placed_by} ({the_crs})."),
+                    f"{ncell:,} cells per layer, "
+                    f"{'placed approximately at the map centre' if approx else f'placed by {placed_by} ({the_crs})'}."),
         "rings": rings, "ring_offsets": offsets, "heads": heads,
     }
 

@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # Attributing a decline to pumping needs abstraction records the playbook does not have: it declines and offers
 # the trend instead.
 id: gw_cause_declined_tetbury

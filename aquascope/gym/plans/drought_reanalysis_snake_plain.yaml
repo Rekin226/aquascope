@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # The USGS catalog lists no rain gauge, so the indices come from the ERA5 cell; the century-long discharge gauge
 # at the point gives the low-flow context; no well, so no groundwater index.
 id: drought_reanalysis_snake_plain

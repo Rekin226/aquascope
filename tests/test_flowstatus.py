@@ -179,7 +179,7 @@ def test_publish_climatology_uploads_only_its_folder(tmp_path, monkeypatch):
     seen = {}
 
     def fake(folder, repo_id, **kw):
-        seen["files"] = sorted(str(p.relative_to(folder)) for p in Path(folder).rglob("*") if p.is_file())
+        seen["files"] = sorted(p.relative_to(folder).as_posix() for p in Path(folder).rglob("*") if p.is_file())
         seen.update(kw)
         return "https://huggingface.co/commit/2"
 
@@ -247,7 +247,7 @@ def test_publish_uploads_the_day_and_not_the_climatology(tmp_path, monkeypatch):
     seen = {}
 
     def fake(folder, repo_id, **kw):
-        seen["files"] = sorted(str(p.relative_to(folder)) for p in Path(folder).rglob("*") if p.is_file())
+        seen["files"] = sorted(p.relative_to(folder).as_posix() for p in Path(folder).rglob("*") if p.is_file())
         seen.update(kw)
         return "https://huggingface.co/commit/3"
 

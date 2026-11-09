@@ -33,7 +33,7 @@ No installation; core Explorer workflows need no API key.
 
 [![Support on Ko-fi](https://img.shields.io/badge/Support%20AquaScope-Ko--fi-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/getaquascope) if AquaScope helps your research.
 
-🌐 Read this in: [Français](docs/i18n/README.fr.md)
+🌐 Read this in: [中文](docs/i18n/README.zh.md) · [Français](docs/i18n/README.fr.md)
 
 </div>
 
@@ -42,6 +42,8 @@ No installation; core Explorer workflows need no API key.
 AquaScope unifies **37 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top — from **flood-frequency methods** to **FAO-56 crop water requirements** — wrapped in an AI engine that scores **27 research methodologies** against your dataset and auto-executes **26 analysis pipelines**. Regression checks include the CAMELS benchmark with 3,200+ tests across the project.
 The daily benchmark inputs are synthetic; flood benchmarks also use observed USGS annual peaks.
 See [validation scope](docs/validation_scope.md) for comparators and limitations.
+
+The [Archive](docs/archive.md) publishes that output as one open dataset: a catalog of **75,892 stations**, with mirrored daily observations for **6,231 of them** (2026-11-02 harvest).
 
 ---
 
@@ -98,7 +100,25 @@ downstream, and it can be coloured by today's flow against its normal. Floods pa
 floods were reported in the news or seen by radar, month by month. **Ask the map** moves the
 view, switches layers and sets the date from plain words. **Explain this view** and **Scout**
 pin short notes and findings on the globe, every number taken from the data. Each action is
-logged and can be undone, and all of it works without a key.
+logged and can be undone, and all of it works without a key. With Chrome's built-in model or
+your own key, the model only picks which facts and actions to use; the code writes every number
+([assessment](docs/assessments/ai-on-the-map.md)).
+
+**Your own model results on the map:** drop a HEC-RAS 2D or UGRID result and see smooth depth,
+depth contours, 3D, hazard and arrival-time lenses, a cross-section and hydrograph you draw,
+and the buildings, roads and people under the water. Drop a MODFLOW run and see head contours,
+flow arrows, drawdown, capture zones, the layers in 3D, cross-sections and the water budget.
+Samples are one click away, and the files never leave your browser
+([mesh](docs/mesh.md), [MODFLOW](docs/modflow.md)).
+
+**A map that computes:** click a river and **Route it** sends a flood wave down GEOGLOWS's own
+network, **Flood it** floods the valley at a design flow in your browser (draw a levee or a
+breach and run again), and **Replay** plays a past flood as a story: the rain, the gauge
+against the model, what the forecast said, the wave and the flood. The sketchpad draws a storm,
+a reservoir, a pumping well or a land-use change on the map and recomputes as you drag, and
+**Paint the globe** answers one question at every gauge in view. Each model is checked against
+a published example or reference data ([Flood it](docs/floodsim.md), [replay](docs/replay.md),
+[sketchpad](docs/sketchpad.md), [paint](docs/paint.md)).
 
 **Study** guides you from a question through a plan you approve to a report and export
 bundle: Word, Excel, figures, notebook, findings and study YAML. Core studies run without
@@ -152,7 +172,7 @@ virtual environment first: `python3 -m venv .venv && source .venv/bin/activate`.
 
 ## ✨ What you can do
 
-- 🌊 **Pull water data** from USGS, NOAA NWPS, Colorado DWR/CDSS, US Water Quality Portal, England's Environment Agency, France Hub'Eau, Germany PEGELONLINE, Ireland OPW, Greece Hydroscope and OpenHi.net, Poland IMGW-PIB, EU WFD, Taiwan MOENV/WRA/CWA/Civil IoT/DataGov, Japan MLIT, Korea WAMIS, India WRIS, South Africa DWS, Australia BOM, Brazil ANA Hidroweb, CAMELS-CL and CAMELS-BR, GRDC, GEMStat, Copernicus ERA5, OpenMeteo, FAO AQUASTAT, FAO WaPOR and UN SDG 6 — **one unified Python API**.
+- 🌊 **Pull water data** from USGS, NOAA NWPS, Colorado DWR/CDSS, US Water Quality Portal, England's Environment Agency, France Hub'Eau, Germany PEGELONLINE, Ireland OPW, Greece Hydroscope and OpenHi.net, Poland IMGW-PIB, EU WFD, Taiwan MOENV/WRA/CWA/Civil IoT/DataGov, Japan MLIT, Korea WAMIS, India WRIS, South Africa DWS, Australia BOM, Brazil ANA Hidroweb, CAMELS-CL and CAMELS-BR, GRDC, GEMStat, Copernicus GloFAS, OpenMeteo, FAO AQUASTAT, FAO WaPOR and UN SDG 6 — **one unified Python API**.
 - 🏞️ **Treat rivers as objects**: snap any point to its GEOGLOWS v2 river reach (about 6.8 million worldwide), read that reach's simulated daily flow since 1940 with return periods, flow-duration curve and monthly regime (labelled modelled), and trace it downstream to the sea with the gauges and dams it passes and the countries it crosses, and see whether dams upstream regulate it (Global Dam Watch), or list every reach that drains to it and the reaches to its outlet. `aquascope river snap|record|area|trace|dams|upstream|downstream`, the MCP tools, the Explorer's River tab, and the Studio's ungauged studies all use the same functions.
 - 🪜 **Grade the global models at a gauge**: GEOGLOWS v2, GloFAS, NWM v3 (US) and Google's Flood Hub reanalysis set against the gauge's own record, with KGE and its parts, bias, the error at the 2-, 10- and 100-year flows, a grade from A to D and one sentence on where they disagree. `aquascope evidence skill`, the MCP tool `model_skill`, the Explorer's Evidence tab and "Best model skill" map colouring, and a monthly CI table in the Archive; the Studio uses it to say which model to lean on near an ungauged site ([how the grades work](docs/evidence.md)).
 - 🔭 **Now and next**: where a gauge's flow sits today against normal for the date (the USGS and WMO HydroSOS classes, at least 10 years behind it), and the next 15 days from GEOGLOWS and GloFAS with return-period thresholds, corrected to the gauge's record by flow-duration quantile mapping with the hindcast skill of that correction. A daily workflow archives the forecasts as issued, so real forecast skill builds up, and another classes the whole global forecast against each reach's return periods every day: the reaches expected to reach their 2-year flow in 15 days (`aquascope warnings`, the MCP tool `flood_warnings`, the Explorer's Floods ahead layer). `aquascope now`, the MCP tools, the Explorer's Now tab and its "Today vs normal" map colouring use the same functions.
@@ -375,7 +395,7 @@ Switch to MCMC with `degree>1` for polynomial models, or pass `prior_precision` 
 
 ## 💻 CLI
 
-AquaScope ships a 49-command CLI (`agri`, `basins`, `caravan`, `eval`, `evidence`, `groundwater`, `gym`, `layers`, `playbooks` and `river` carry subcommands) for the most common workflows:
+AquaScope ships a 55-command CLI (`agri`, `basins`, `caravan`, `eval`, `evidence`, `groundwater`, `gym`, `layers`, `playbooks`, `river` and `route` carry subcommands) for the most common workflows:
 
 ```bash
 # Find stations, then collect data
@@ -397,7 +417,7 @@ aquascope assess 51.415 -0.308 --problem flood_risk   # what can be answered her
 aquascope context 51.86 5.95                      # flood history, surface water, flood depth, dams, rain gauge, ET and soil at a place
 aquascope caravan export --source uk_ea --out caravan_gb   # a Caravan-format large-sample dataset from the archive
 aquascope export --to hec-ssp --station usgs/01134500   # inputs for HEC-HMS/RAS/SSP, SWMM, MODFLOW 6, Delft-FEWS or Raven
-aquascope gym run --basin uk_ea/013054a3-670e-49ee-afda-e0865a449197   # HydroGym: calibrate GR4J on a real basin as a gym episode
+aquascope gym run --basin uk_ea/013054a3-670e-49ee-afda-e0865a449197   # AquaScope Bench: calibrate GR4J on a real basin as a gym episode
 aquascope layers frames precip --start 2024-05-01 --end 2024-05-20   # a time-lapse of a dated map layer: dates and tile URLs
 aquascope map "trace the Nile to the sea" --resolve   # plain words to the Explorer's map actions (keyless rules)
 aquascope mesh my_run.p01.hdf                     # a HEC-RAS 2D or UGRID mesh result: cells, times, largest depth and speed
@@ -428,6 +448,12 @@ aquascope studio kingston/ --exclude-years 2014 --sign checked="A. Name"  # the 
 aquascope eval score kingston/                       # how the crew did: gates, Critic, report quality, time, cost
 aquascope eval stats studies/ --by model             # many studies at once: grades, gate failures, cost per study
 aquascope area-study --bbox=-0.9,51.2,0.3,51.8       # a flood study over every gauge in a box: Q100, flood trends, a regional curve
+aquascope paint --bbox=-8,49.8,2,59                    # paint every Archive gauge in a box with its flood trend, plus field significance
+aquascope replay --at 51.95 -2.2 --month 2024-11       # a past flood as a story: rain, gauge vs model, forecast, wave, flood
+aquascope route flood 230301988 --peak 2000             # a flood wave down GEOGLOWS's river network
+aquascope flood 230567275 --flow 954 --levee ring.geojson --crest 15.1   # a screening flood of the valley, with a drawn levee
+aquascope well --at 4.88 45.76 --rate 1000 --days 90   # Theis drawdown round a pumping well
+aquascope landuse --polygon '[[4.955,45.70],[4.97,45.70],[4.97,45.708],[4.955,45.708]]' --use residential_1_8 --rain 100
 
 # Interactive Streamlit dashboard — multipage workspace with 37 live sources,
 # smart auto-insights, and fully interactive Plotly charts
@@ -446,7 +472,7 @@ Run `aquascope --help` for the full command list.
 37 data collectors spanning five regions (highlights below, full list in the [docs](docs/data_sources.md)):
 
 - 🌎 **Americas** — USGS (streamflow + WQ), NOAA NWPS (US streamflow), Colorado DWR/CDSS, Water Quality Portal (400+ agencies), CAMELS-CL (Chile), CAMELS-BR and ANA Hidroweb (Brazil)
-- 🌍 **Europe** — EU Water Framework Directive, Copernicus ERA5, France Hub'Eau, Germany PEGELONLINE, England's Environment Agency, Ireland OPW, Greece Hydroscope (national archive) and OpenHi.net (live telemetry), Poland IMGW-PIB (daily archive from 1951 and the live network)
+- 🌍 **Europe** — EU Water Framework Directive, Copernicus GloFAS, France Hub'Eau, Germany PEGELONLINE, England's Environment Agency, Ireland OPW, Greece Hydroscope (national archive) and OpenHi.net (live telemetry), Poland IMGW-PIB (daily archive from 1951 and the live network)
 - 🌍 **Africa** — South Africa DWS (verified discharge and water level)
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / CWA / Civil IoT / DataGov, Japan MLIT, Korea WAMIS, India WRIS, Australia BOM
 - 🌐 **Global** — GEMStat (170 countries), UN SDG 6, OpenMeteo, FAO AQUASTAT, FAO WaPOR, GRDC (river discharge)
@@ -476,11 +502,11 @@ Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/d
 | [FAQ](docs/faq.md) · [Troubleshooting](docs/troubleshooting.md) | Common questions and fixes |
 | [Use cases](docs/use_cases.md) | Real-world applications and case studies |
 | [Advanced studies](docs/advanced_studies.md) | Is the flood changing, climate change to 2050, "what if" the rain drops: what runs and what the numbers cannot say |
-| [HydroGym](docs/gym.md) | A gym-style calibration environment over real basins, with baselines and a leaderboard |
+| [AquaScope Bench: calibration environment](docs/gym.md) | A gym-style calibration environment over real basins, with baselines and a leaderboard |
 | [Evaluating studies](docs/evaluation.md) | `aquascope eval`: a study's scorecard and trace, and stats across many runs, read from the bundles |
 | [Stability](docs/stability.md) | What 1.0 promises: the public API, the CLI and MCP surface, what counts as breaking, deprecations, what "experimental" means |
 | [Archive layout](docs/archive-layout.md) | The Archive as a contract: every prefix, its files, columns, units, cadence, licence and the workflow that writes it |
-| [HydroGym benchmark](docs/hydrogym.md) | Hydrology agents scored on real sites: task outcomes, plan quality against expert plans, and the report the user receives |
+| [AquaScope Bench](docs/hydrogym.md) | Hydrology agents scored on real sites: task outcomes, plan quality against expert plans, and the report the user receives |
 | [Integration guides](docs/integration_guides/) | xarray, QGIS, R interoperability |
 | [Contributing](CONTRIBUTING.md) | How to add a data source, methodology, or test |
 
@@ -543,7 +569,7 @@ Thanks to these wonderful people who make AquaScope possible ([emoji key](CONTRI
       <td align="center" valign="top" width="20%"><a href="https://github.com/navaneethsankar07"><img src="https://github.com/navaneethsankar07.png?s=100" width="100px;" alt="Navaneeth Sankar"/><br /><sub><b>Navaneeth Sankar</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=navaneethsankar07" title="Documentation">📖</a> <a href="https://github.com/Rekin226/aquascope/commits?author=navaneethsankar07" title="Tests">⚠️</a></td>
     </tr>
     <tr>
-      <td align="center" valign="top" width="20%"><a href="https://github.com/taran-dev4u"><img src="https://avatars.githubusercontent.com/u/78680216?v=4?s=100" width="100px;" alt="Taran"/><br /><sub><b>Taran</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=taran-dev4u" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=taran-dev4u" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/taran-dev4u"><img src="https://avatars.githubusercontent.com/u/78680216?v=4?s=100" width="100px;" alt="Taran"/><br /><sub><b>Taran</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=taran-dev4u" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=taran-dev4u" title="Tests">⚠️</a> <a href="#research-taran-dev4u" title="Research">🔬</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/aobaruwa"><img src="https://avatars.githubusercontent.com/u/28014016?v=4?s=100" width="100px;" alt="Ahmed Baruwa"/><br /><sub><b>Ahmed Baruwa</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=aobaruwa" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=aobaruwa" title="Tests">⚠️</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/AB1775"><img src="https://avatars.githubusercontent.com/u/66264218?v=4?s=100" width="100px;" alt="Anthony"/><br /><sub><b>Anthony</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=AB1775" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=AB1775" title="Tests">⚠️</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/JamesBoardman27"><img src="https://avatars.githubusercontent.com/u/77696811?v=4?s=100" width="100px;" alt="James Boardman"/><br /><sub><b>James Boardman</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=JamesBoardman27" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=JamesBoardman27" title="Tests">⚠️</a> <a href="https://github.com/Rekin226/aquascope/commits?author=JamesBoardman27" title="Documentation">📖</a> <a href="https://github.com/Rekin226/aquascope/issues?q=author%3AJamesBoardman27" title="Bug reports">🐛</a> <a href="#infra-JamesBoardman27" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a> <a href="#ideas-JamesBoardman27" title="Ideas, Planning, & Feedback">🤔</a></td>
@@ -554,7 +580,7 @@ Thanks to these wonderful people who make AquaScope possible ([emoji key](CONTRI
       <td align="center" valign="top" width="20%"><a href="https://github.com/Osheun"><img src="https://avatars.githubusercontent.com/u/138526540?v=4?s=100" width="100px;" alt="Osheun"/><br /><sub><b>Osheun</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Osheun" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Osheun" title="Tests">⚠️</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Osheun" title="Documentation">📖</a></td>
       <td align="center" valign="top" width="20%"><a href="https://dipakchaudhari.me"><img src="https://avatars.githubusercontent.com/u/111210939?v=4?s=100" width="100px;" alt="Dipak Chaudhari"/><br /><sub><b>Dipak Chaudhari</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=dchaudhari7177" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=dchaudhari7177" title="Tests">⚠️</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/Sanchar127"><img src="https://avatars.githubusercontent.com/u/143952019?v=4?s=100" width="100px;" alt="Sanchar127"/><br /><sub><b>Sanchar127</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Sanchar127" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Sanchar127" title="Tests">⚠️</a></td>
-      <td align="center" valign="top" width="20%"><a href="http://harikp.com"><img src="https://avatars.githubusercontent.com/u/64578610?v=4?s=100" width="100px;" alt="hari"/><br /><sub><b>hari</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Mr-Neutr0n" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Mr-Neutr0n" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="20%"><a href="http://harikp.com"><img src="https://avatars.githubusercontent.com/u/64578610?v=4?s=100" width="100px;" alt="hari"/><br /><sub><b>hari</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Mr-Neutr0n" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Mr-Neutr0n" title="Tests">⚠️</a> <a href="#research-Mr-Neutr0n" title="Research">🔬</a></td>
     </tr>
     <tr>
       <td align="center" valign="top" width="20%"><a href="https://github.com/leatke"><img src="https://avatars.githubusercontent.com/u/147705788?v=4?s=100" width="100px;" alt="leatke"/><br /><sub><b>leatke</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=leatke" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=leatke" title="Documentation">📖</a> <a href="#research-leatke" title="Research">🔬</a></td>
@@ -571,9 +597,10 @@ Thanks to these wonderful people who make AquaScope possible ([emoji key](CONTRI
       <td align="center" valign="top" width="20%"><a href="https://bharani-kudala.me/"><img src="https://avatars.githubusercontent.com/u/121555407?v=4?s=100" width="100px;" alt="Kudala Bharani Kumar Reddy"/><br /><sub><b>Kudala Bharani Kumar Reddy</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=kudala-bharani" title="Tests">⚠️</a> <a href="https://github.com/Rekin226/aquascope/commits?author=kudala-bharani" title="Documentation">📖</a></td>
     </tr>
     <tr>
-      <td align="center" valign="top" width="20%"><a href="https://github.com/Berserker-GM"><img src="https://avatars.githubusercontent.com/u/229895835?v=4?s=100" width="100px;" alt="Berserker-GM"/><br /><sub><b>Berserker-GM</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Berserker-GM" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Berserker-GM" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/Berserker-GM"><img src="https://avatars.githubusercontent.com/u/229895835?v=4?s=100" width="100px;" alt="Berserker-GM"/><br /><sub><b>Berserker-GM</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Berserker-GM" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Berserker-GM" title="Tests">⚠️</a> <a href="#research-Berserker-GM" title="Research">🔬</a></td>
       <td align="center" valign="top" width="20%"><a href="https://galabavamsi.github.io/portfolio/"><img src="https://avatars.githubusercontent.com/u/51828882?v=4?s=100" width="100px;" alt="GALABA VAMSI"/><br /><sub><b>GALABA VAMSI</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Galabavamsi" title="Code">💻</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/didemkastan"><img src="https://avatars.githubusercontent.com/u/273810938?v=4?s=100" width="100px;" alt="Didem KAŞTAN"/><br /><sub><b>Didem KAŞTAN</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=didemkastan" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=didemkastan" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/Duo-ee"><img src="https://avatars.githubusercontent.com/u/113885053?v=4?s=100" width="100px;" alt="Duo"/><br /><sub><b>Duo</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Duo-ee" title="Documentation">📖</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Duo-ee" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Duo-ee" title="Tests">⚠️</a> <a href="https://github.com/Rekin226/aquascope/pulls?q=is%3Apr+reviewed-by%3ADuo-ee" title="Reviewed Pull Requests">👀</a></td>
     </tr>
   </tbody>
 </table>
@@ -595,8 +622,8 @@ If you use AquaScope in your research, please cite:
   author  = {Ouédraogo, Abdoul Rachid},
   year    = {2026},
   url     = {https://github.com/Rekin226/aquascope},
-  version = {0.27.0},
-  doi     = {10.5281/zenodo.23301359},
+  version = {1.1.0},
+  doi     = {10.5281/zenodo.23718093},
   license = {MIT}
 }
 ```
@@ -604,7 +631,7 @@ If you use AquaScope in your research, please cite:
 Machine-readable metadata lives in [CITATION.cff](CITATION.cff); GitHub's "Cite this
 repository" button renders it in APA and BibTeX. Every tagged release is archived on
 Zenodo; `10.5281/zenodo.21903143` is the concept DOI that always resolves to the latest
-version (v0.27.0 is [10.5281/zenodo.23301359](https://doi.org/10.5281/zenodo.23301359)).
+version (v1.1.0 is [10.5281/zenodo.23718093](https://doi.org/10.5281/zenodo.23718093)).
 
 ## 📄 License
 

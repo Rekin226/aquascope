@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # No gauge within 50 km: the estimate is regional, from donors chosen by catchment similarity, with GloFAS as the
 # cross-check. Every station tool is forbidden because there is no station.
 id: flood_regional_nevada

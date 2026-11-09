@@ -1,6 +1,8 @@
 // What if, on the map (#565). From the map card, "What if…" opens a small panel on the map: two sliders and a
 // demand (keyless), and one line read into those values by the keyless rules, the on-device model or the
-// reader's own key (the model only fills the parameters; aquascope.whatif_map checks them against the words).
+// reader's own key. A model only parses (#590): per clause a change kind, the number as the words write it, a
+// unit and a season, all enums (aquascope.whatif_map.scenario_schema, Chrome's responseConstraint); the package
+// takes each number from the words, converts its unit and sets the sign.
 // Run calibrates GR4J for the basin in the worker (aquascope.whatif_map.whatif, the same function as
 // `aquascope whatif` and the MCP tool) and the answer is painted on the rivers: the basin in its change, the
 // river below it to the next major confluences fading as other rivers join, a label with the change where it
@@ -19,10 +21,10 @@ import { generateJsonLocally, localModelReady, localReaderLabel } from "./local-
 import { STREAMS_PMTILES } from "./river-core.js?v=__BUILD__";
 import { clearRiverNetwork } from "./river-map.js?v=__BUILD__";
 import { clearCatchment } from "./basins.js?v=__BUILD__";
-import { call, callLight } from "./worker-client.js?v=__BUILD__";
+import { QUICK_PRIORITY, call, callLight } from "./worker-client.js?v=__BUILD__";
 import {
-  CLASSES, MEASURES, NEUTRAL, basinRows, beforeSet, classOf, lineColorExpr, lineFilterExpr, logLabel, outletLines,
-  paintedIds, pct, reachCard, resultBounds, scenarioWords, sliderValues,
+  CLASSES, MEASURES, NEUTRAL, basinRows, beforeSet, classOf, heldWords, lineColorExpr, lineFilterExpr, logLabel,
+  notReadLine, outletLines, paintedIds, pct, reachCard, restValues, resultBounds, scenarioWords, sliderValues,
 } from "./whatif-core.js?v=__BUILD__";
 
 const L = {
@@ -40,6 +42,8 @@ let swipeOn = false;
 let split = 0.5;        // the swipe line, as a share of the map's width
 let where = new Map();  // river id -> longitude of its drawn line (for the swipe)
 let hooked = false;
+let evap = null;        // an evaporation change read from the line (%): no slider of its own, so kept here
+let basin = null;       // { key, ok, error, area_km2 }: whether the target's basin is within the size a run takes
 
 const panel = () => $("whatif");
 const targetKey = (t) => (t ? `${t.kind}:${t.river_id}:${t.source || ""}:${t.station_id || ""}` : "");
@@ -243,6 +247,7 @@ function sliders() {
   return {
     dp_pct: Number($("wi-rain").value) || 0,
     dt_c: Number($("wi-warm").value) || 0,
+    dpet_pct: Number.isFinite(evap) && evap ? evap : null,
     demand_cms: Math.max(0, Number($("wi-demand").value) || 0),
   };
 }
@@ -258,7 +263,8 @@ function syncOutputs() {
   const v = sliders();
   $("wi-rain-out").textContent = pct(v.dp_pct);
   $("wi-warm-out").textContent = `${v.dt_c > 0 ? "+" : v.dt_c < 0 ? "−" : ""}${Math.abs(v.dt_c)} °C`;
-  $("wi-run").disabled = Boolean(running) || !target || (!v.dp_pct && !v.dt_c && !v.demand_cms);
+  const tooLarge = Boolean(basin && target && basin.key === targetKey(target) && !basin.ok);
+  $("wi-run").disabled = Boolean(running) || !target || tooLarge || (!v.dp_pct && !v.dt_c && !v.demand_cms && !v.dpet_pct);
   $("wi-run").textContent = running ? "Running…" : "Run";
   $("wi-scn").textContent = scenarioWords(v);
 }
@@ -272,7 +278,7 @@ function say(html, kind = "") {
 
 export function openWhatIf(t) {
   if (!t || t.river_id === null || t.river_id === undefined) return;
-  if (targetKey(t) !== targetKey(target)) say("");
+  if (targetKey(t) !== targetKey(target)) { say(""); evap = null; $("wi-read").hidden = true; }
   target = { ...t, river_id: Number(t.river_id) };
   const p = panel();
   p.hidden = false;
@@ -285,6 +291,25 @@ export function openWhatIf(t) {
   syncOutputs();
   renderResult();
   $("wi-text").focus({ preventScroll: true });
+  void checkBasin(target);
+}
+
+// A reach whose basin is over the size a run takes (aquascope.whatif_map.MAX_BASIN_KM2, the Rhine at Cologne)
+// says so as the panel opens, instead of failing on Run after the words are read (#590).
+async function checkBasin(t) {
+  const key = targetKey(t);
+  if (basin && basin.key === key) { if (!basin.ok) say(escapeHtml(basin.error), "warn"); syncOutputs(); return; }
+  try {
+    // The main worker: the routing tables need pandas, and it keeps them for the run that follows.
+    const res = await call("whatif", { op: "basin", args: { river_id: t.river_id, lat: t.lat, lon: t.lon } });
+    if (!res || typeof res.ok !== "boolean") return;   // the tables did not answer: Run says why, as before
+    basin = { key, ok: Boolean(res.ok), error: res.error || "", area_km2: res.area_km2 };
+  } catch {
+    return;
+  }
+  if (targetKey(target) !== key) return;
+  if (!basin.ok) say(escapeHtml(basin.error), "warn");
+  syncOutputs();
 }
 
 function closePanel() {
@@ -317,6 +342,7 @@ function renderResult() {
 async function run({ by = "sliders", command = "" } = {}) {
   if (!target || running) return;
   const t = target;
+  if (basin && basin.key === targetKey(t) && !basin.ok) { say(escapeHtml(basin.error), "warn"); return; }
   const v = sliders();
   const my = ++running;
   syncOutputs();
@@ -332,6 +358,7 @@ async function run({ by = "sliders", command = "" } = {}) {
   try {
     const args = {
       river_id: t.river_id, lat: t.lat, lon: t.lon, dp_pct: v.dp_pct, dt_c: v.dt_c, demand_cms: v.demand_cms,
+      ...(v.dpet_pct ? { dpet_pct: v.dpet_pct } : {}),
       ...(t.kind === "gauge" ? { source: t.source, station_id: t.station_id } : {}),
       ...(reuse ? { params: reuse } : {}),
     };
@@ -367,18 +394,24 @@ async function readLine(text) {
   if (!words) return;
   say(`<span class="spinner" aria-hidden="true"></span>Reading…`);
   try {
-    let read = await callLight("whatif_words", { op: "parse", text: words }, { priority: 3 });
+    // One call: the rules' reading and, when they leave words unread, the prompt for the device's model.
+    const rules = await callLight("whatif_words", { op: "read", text: words, context: currentContext() }, { priority: QUICK_PRIORITY });
+    let read = rules && rules.matched ? rules : null;
     let who = "rules", by = "rules";
-    if (!read || !read.matched) {
-      read = null;
-      if (await localModelReady()) {
-        const prompt = await callLight("whatif_words", { op: "prompt", context: currentContext() }, { priority: 3 });
-        const reply = await generateJsonLocally({ system: prompt.system, prompt: words, schema: prompt.schema, timeoutMs: 25000 })
-          .catch(() => null);
-        if (reply) {
-          const checked = await callLight("whatif_words", { op: "reply", reply, text: words }, { priority: 3 });
-          if (checked && checked.scenario) { read = checked; who = localReaderLabel() || "the on-device model"; by = "device"; }
+    const tried = [];   // each model asked whose reading was refused, and why
+    if (!read) {
+      if (rules && rules.prompt && await localModelReady()) {
+        const name = localReaderLabel() || "the on-device model";
+        say(`<span class="spinner" aria-hidden="true"></span>Asking ${escapeHtml(name)}…`);
+        let reply = null, failed = "";
+        try {
+          reply = await generateJsonLocally({ system: rules.prompt.system, prompt: words, schema: rules.prompt.schema, timeoutMs: 25000 });
+        } catch (err) {
+          failed = err && err.message ? err.message : "no reply";
         }
+        const checked = reply ? await callLight("whatif_words", { op: "reply", reply, text: words }, { priority: QUICK_PRIORITY }) : null;
+        if (checked && checked.scenario) { read = checked; who = name; by = "device"; }
+        else tried.push({ who: name, device: true, errors: failed ? [failed] : ((checked && checked.errors) || ["no reading"]) });
       }
       const cfg = !read && askModelConfig();
       if (cfg) {
@@ -386,16 +419,34 @@ async function readLine(text) {
         const res = await call("whatif", { op: "llm", text: words, context: currentContext(), provider: cfg.provider,
           model: cfg.model, api_key: cfg.api_key, base_url: cfg.base_url });
         if (res && res.scenario) { read = res; who = res.model || cfg.label; by = "key"; }
+        else tried.push({ who: cfg.label, errors: (res && (res.errors && res.errors.length ? res.errors : [res.error])) || ["no reading"] });
       }
     }
     if (!read || !read.scenario) {
-      const how = askModelConfig() ? "" : " With Chrome's built-in model, or a key in Ask ✨, freer wording works too.";
-      say(`Not read. Try “20% less rain and 2 degrees warmer”, or the sliders.${escapeHtml(how)}`, "warn");
+      // The rules read part of the line: those values go on the sliders and the line says what was left, so no
+      // clause is dropped in silence and nothing runs on half a sentence.
+      const partial = rules && rules.scenario ? rules.scenario : null;
+      if (partial) {
+        evap = Number(partial.dpet_pct) || null;
+        showSliders(sliderValues(partial));
+      } else {
+        // Nothing was read: the sliders go back to what the map shows, so the panel keeps no number the line did
+        // not set (#646). With nothing painted they empty, and the run button has nothing to run.
+        const rest = restValues(shown && shown.result);
+        evap = rest.dpet_pct;
+        showSliders(rest);
+      }
+      $("wi-read").hidden = true;
+      say(escapeHtml(notReadLine({ rules, tried, hasKey: Boolean(askModelConfig()) })), "warn");
       return;
     }
-    const v = sliderValues(read.scenario);
+    evap = Number(read.scenario.dpet_pct) || null;
+    const v = { ...sliderValues(read.scenario), dpet_pct: evap };
     showSliders(v);
-    const refused = (read.errors || []).length ? ` (${read.errors.join("; ")})` : "";
+    const notes = [...(read.errors || [])];
+    const held = heldWords(read.scenario, v, read.season || (rules && rules.season) || []);
+    if (held) notes.push(held);
+    const refused = notes.length ? ` (${notes.join("; ")})` : "";
     $("wi-read").textContent = `Read by ${who}: ${scenarioWords(v)}${refused}`;
     $("wi-text").blur();
     $("wi-text").scrollLeft = 0;

@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # An 8.5-year record (1977 to 1985) at the point and no longer gauge within 50 km: the at-site fit is below the
 # registry's ten-year floor, so the record is summarised and the estimate is regional, from donors.
 id: flood_short_record_fish_creek

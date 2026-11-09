@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # A bare point with a 22-year gauge 10 km away: the gauge's flow-duration curve is the primary estimate and the
 # regionalised signatures for the point itself are set beside it, as the ungauged_flow at_gauge branch has it.
 id: ungauged_at_gauge_oregon

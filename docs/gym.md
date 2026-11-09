@@ -1,6 +1,6 @@
-# HydroGym: an evaluation environment for hydrologic agents
+# AquaScope Bench, Phase 0: a calibration environment for hydrologic agents
 
-`aquascope.gym` is Phase 0 of [#175](https://github.com/Rekin226/aquascope/issues/175):
+`aquascope.gym.CalibrationEnv` is Phase 0 of [AquaScope Bench](hydrogym.md) ([#175](https://github.com/Rekin226/aquascope/issues/175)):
 a gym-style environment where an agent gets a real (or synthetic) basin's
 data, a simulator (GR4J) and a verifiable reward (NSE, KGE or log-NSE on a
 calibration period, with the validation metrics reported next to it). The
@@ -91,6 +91,6 @@ One model (GR4J), one task type (calibration), CPU-bound (about 0.03 s per
 simulation-year-decade: 12 years take 30 ms, 40 years 100 ms). Phase 1
 (#175) is the benchmark of hydrology *agents* on real sites, generated from
 the playbooks with unsolvable tasks, a held-out split, cost accounting and a
-leaderboard: see [hydrogym.md](hydrogym.md) (`aquascope gym tasks | bench |
+leaderboard: see [AquaScope Bench](hydrogym.md) (`aquascope gym tasks | bench |
 leaderboard`). Calibration tasks across regions and data-gap QA tasks remain
 open.

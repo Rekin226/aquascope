@@ -420,9 +420,13 @@ def test_webmcp_tools_are_described_and_schema_d() -> None:
 
 
 def test_place_search_uses_a_geocoder_whose_terms_allow_autocomplete() -> None:
-    """Photon allows autocomplete; OSM's Nominatim forbids it, so it must not be called."""
-    src = (EXPLORER / "src" / "search.js").read_text(encoding="utf-8")
+    """Photon allows autocomplete; OSM's Nominatim forbids it, so it must not be called.
+
+    The URLs live in place-search-core.js since #591; search.js and place-name.js fetch them."""
+    src = "\n".join((EXPLORER / "src" / name).read_text(encoding="utf-8")
+                    for name in ("search.js", "place-search-core.js", "place-name.js"))
     assert "photon.komoot.io" in src
+    assert "place-search-core.js" in (EXPLORER / "src" / "search.js").read_text(encoding="utf-8")
     called = re.findall(r'https?://[^\s"\')]+', src)
     assert not [u for u in called if "nominatim" in u.lower()], "Nominatim forbids autocomplete"
 
@@ -721,6 +725,37 @@ def test_the_worker_studio_message_keeps_the_contract() -> None:
     client = (EXPLORER / "src" / "worker-client.js").read_text(encoding="utf-8")
     assert "onStudioProgress" in client and "onStudioArtifact" in client
     assert 'm.type === "studio_progress"' in client and 'm.type === "studio_artifact"' in client
+
+
+def test_no_worker_call_reads_a_global_another_call_can_clear() -> None:
+    """Two calls of one type in flight must not share their arguments through a JS global.
+
+    runPythonAsync yields before it runs (it loads the packages the code imports), so a global set by one call
+    and nulled in its finally was overwritten by the next call and cleared before the first read it: "the JSON
+    object must be str, bytes or bytearray, not JsNull" when several gauges were selected quickly. Every global
+    the Python reads through `from js import` is set once at the worker's top level and never cleared; what
+    differs per call travels by key (runPy) or as a literal in the code. The behaviour itself is exercised by
+    explorer/tests/worker-calls.test.mjs.
+    """
+    worker = (EXPLORER / "worker.js").read_text(encoding="utf-8")
+    code = re.sub(r"^\s*//[^\n]*$", "", worker, flags=re.M)
+    assigned = re.findall(r"^([ \t]*)self\.(__aq\w+)\s*=\s*([^;\n]*)", code, re.M)
+    names = [name for _, name, _ in assigned]
+    for indent, name, value in assigned:
+        assert not indent, f"self.{name} is set inside a function, so a second call can overwrite it"
+        assert value.strip() not in ("null", "undefined"), f"self.{name} is cleared"
+        assert names.count(name) == 1, f"self.{name} is set more than once"
+    imported = {n.strip() for group in re.findall(r"from js import ([\w, ]+)", code) for n in group.split(",")}
+    assert imported, "the worker's Python reads nothing from JS: this check has gone stale"
+    assert imported <= set(names), f"read from JS but not a module-level global: {sorted(imported - set(names))}"
+    # pyodide.globals.set before runPythonAsync races the same way (a Python global, not a JS one): only init's
+    # build facts, set once before any call runs, travel that way
+    set_globals = set(re.findall(r"pyodide\.globals\.set\(\s*[\"'](\w+)[\"']", code))
+    assert set_globals <= {"_aq_build_revision", "_aq_lite"}, (
+        f"call arguments set as Python globals: {sorted(set_globals - {'_aq_build_revision', '_aq_lite'})}")
+    # the slots of a call are dropped however it ends
+    run_py = code[code.index("async function runPy("):]
+    assert "finally" in run_py[:run_py.index("\n}\n")] and "calls.delete(key)" in run_py[:run_py.index("\n}\n")]
 
 
 def test_the_study_surface_writes_with_plain_hyphens() -> None:

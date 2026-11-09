@@ -300,7 +300,7 @@ def test_publish_uploads_only_the_waterbalance_folder(tmp_path, monkeypatch):
     seen = {}
 
     def fake(folder, repo_id, **kw):
-        seen["files"] = sorted(str(p.relative_to(folder)) for p in Path(folder).rglob("*") if p.is_file())
+        seen["files"] = sorted(p.relative_to(folder).as_posix() for p in Path(folder).rglob("*") if p.is_file())
         seen.update(kw)
         return "https://huggingface.co/commit/1"
 

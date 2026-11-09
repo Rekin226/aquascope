@@ -29,6 +29,9 @@ export function onWorkerRestart(fn) { restartListeners.add(fn); return () => res
 // Study this area: the engine's progress events ({phase, done, total, site}) with the call's id.
 const areaListeners = new Set();
 export function onAreaProgress(fn) { areaListeners.add(fn); return () => areaListeners.delete(fn); }
+// Replay an event (#659): the package's progress lines while it assembles a flood.
+const replayListeners = new Set();
+export function onReplayProgress(fn) { replayListeners.add(fn); return () => replayListeners.delete(fn); }
 
 export function ensureWorker() {
   if (worker) return worker;
@@ -41,6 +44,7 @@ export function ensureWorker() {
     if (m.type === "studio_progress") { for (const fn of studioListeners) fn(m.event, m.id); return; }
     if (m.type === "studio_artifact") { for (const fn of artifactListeners) fn(m.artifact, m.id); return; }
     if (m.type === "area_progress") { for (const fn of areaListeners) fn(m.event, m.id); return; }
+    if (m.type === "replay_progress") { for (const fn of replayListeners) fn(m.text, m.id); return; }
     if (m.type === "ready") {
       state.workerReady = true;
       bootDone();
@@ -214,11 +218,22 @@ export function warmLightPool() {
   for (let i = 0; i < n; i++) startLight();
 }
 
+// A call at this priority is the reader waiting on a few milliseconds of Python that reads no network (reading a
+// line, checking a model's words). When every light worker is busy reading the network, it goes to the main
+// worker if that one is idle, rather than waiting behind a slow read: a single light worker on a slow forecast
+// host held What if's line for about 20 s before the on-device model was asked (#590).
+export const QUICK_PRIORITY = 4;
+
+const lightFree = () => pool.slots.some((s) => s.ready && !s.job);
+
 // Like callCancelable, on a light worker. cancel() drops a call still waiting for a worker (one already
 // running finishes and is forgotten), so a place the reader has left does not hold up the next one.
 export function callLightCancelable(type, payload = {}, { priority = 0 } = {}) {
   if (pool.broken || typeof Worker === "undefined") return callCancelable(type, payload);
   warmLightPool();
+  if (priority >= QUICK_PRIORITY && !lightFree() && state.workerReady && state.pending.size === 0) {
+    return callCancelable(type, payload);
+  }
   const id = ++state.reqId;
   let job;
   const promise = new Promise((resolve, reject) => {

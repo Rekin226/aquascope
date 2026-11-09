@@ -114,9 +114,9 @@ compute. A model-written plan must pass a validator that checks every step again
 catalogue and the registry; a sentence whose numbers are in no result is dropped; and on
 the map a "claim lock" makes the model write each number as a placeholder that code
 fills in, refusing wording with any other number or with a sign or digit attached to a
-placeholder. HydroGym, a benchmark shipped with the package, scores agents against 25
-reference plans written by a hydrologist at seven real sites, including cases where the
-right answer is to decline.
+placeholder. AquaScope Bench (named HydroGym in earlier releases), a benchmark shipped
+with the package, scores agents against 25 reference plans written by a hydrologist at
+seven real sites, including cases where the right answer is to decline.
 
 ![The Explorer over the Ganges and Brahmaputra basins (map date 15 September 2026). Four notes
 from "Explain this view", written by rules with no model, each give a number read
@@ -149,9 +149,9 @@ The test suite (about 4,300 tests, Python 3.10 to 3.12) and the CAMELS-based reg
 harness [@Addor2017] check the software, not every scientific use. The harness uses
 synthetic daily series calibrated toward ten CAMELS catchments and observed USGS annual
 peaks; the Bulletin 17C [@England2018] routines match a published example on a plain
-record but not yet one with low outliers. HydroGym's references are one hydrologist's,
-and its name collides with an unrelated reinforcement-learning platform, so a rename is
-planned before its DOI. Agency interfaces change, some block browser requests, and the
+record but not yet one with low outliers. AquaScope Bench's references are one
+hydrologist's, at seven sites in three countries, and its task suite has no DOI yet.
+Agency interfaces change, some block browser requests, and the
 weekly harvest has failed silently before; the Archive has no DOI of its own yet. Global
 model outputs are simulations and are labelled so; the 15-day flood outlook on the map
 is not an official warning. The public API is not frozen until 1.0.
@@ -173,6 +173,7 @@ and every count was read from the repository or the published Archive.
 We thank the contributors listed in the repository, the maintainers of the scientific
 Python ecosystem, and the agencies and projects whose open data make AquaScope possible,
 among them USGS, the UK Environment Agency, Hub'Eau, PEGELONLINE, Taiwan's MOENV and
-WRA, ECMWF, GEOGloWS and the FAO.
+WRA, ECMWF, GEOGloWS and the FAO. Development and evaluation used API credits from
+Anthropic's AI for Science program; the project received no other specific funding.
 
 # References

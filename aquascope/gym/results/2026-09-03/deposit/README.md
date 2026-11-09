@@ -1,4 +1,4 @@
-# HydroGym Phase 1 tasks: a playbook-keyed benchmark of hydrology agents on real sites
+# AquaScope Bench Phase 1 tasks: a playbook-keyed benchmark of hydrology agents on real sites
 
 `tasks.jsonl` holds 60 benchmark tasks for hydrology agents, generated
 on 2026-09-03 by
@@ -8,11 +8,12 @@ aquascope gym tasks --n 60 --seed 2026 --out tasks.jsonl
 ```
 
 with [aquascope](https://github.com/Rekin226/aquascope) 0.13 (branch
-`feat/solve`, HydroGym Phase 1 of
+`feat/solve`, AquaScope Bench Phase 1 of
 [issue #175](https://github.com/Rekin226/aquascope/issues/175)). The
 benchmark is documented at
-<https://rekin226.github.io/aquascope/hydrogym/>; this file describes what is
-in the deposit so it can be used without the package.
+<https://rekin226.github.io/aquascope/hydrogym/> (AquaScope Bench was called
+HydroGym until October 2026, #440); this file describes what is in the deposit
+so it can be used without the package.
 
 ## What a task is
 
@@ -170,6 +171,6 @@ file is the snapshot the 2026-09-03 leaderboard was scored on.
 
 ## Citation
 
-Ouédraogo, A. R. (2026). HydroGym Phase 1 tasks: a playbook-keyed benchmark
+Ouédraogo, A. R. (2026). AquaScope Bench Phase 1 tasks: a playbook-keyed benchmark
 of hydrology agents on real sites (60 tasks, seed 2026) [Data set]. Zenodo.
 The software: AquaScope, concept DOI 10.5281/zenodo.21903143.

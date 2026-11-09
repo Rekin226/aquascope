@@ -80,7 +80,7 @@ export const LAYER_DEFAULTS = {
 
 export const state = {
   stations: [], byKey: new Map(), hidden: new Set(),
-  selected: null, result: null, point: null,
+  selected: null, result: null, point: null, pointLabel: null,
   panelOpen: false,   // map first (#548): the panel opens from the map card's Details or a tab= link
   period: null,   // the station's analysis period (#270): null = full record, else the last N years
   workerReady: false, booting: true, pending: new Map(), reqId: 0,

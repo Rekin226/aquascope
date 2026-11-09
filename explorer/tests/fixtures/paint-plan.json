@@ -1,0 +1,264 @@
+{
+ "about": "Paint the globe (#657): one case for aquascope.paint.plan and paint-core.js planGauges, which must agree.",
+ "stations": [
+  {
+   "source": "usgs",
+   "station_id": "USGS-A",
+   "site_id": "USGS-A",
+   "name": "A",
+   "lat": 40.0,
+   "lon": -75.0,
+   "variables": [
+    "discharge"
+   ]
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-B",
+   "site_id": "X",
+   "name": "B",
+   "lat": 40.5,
+   "lon": -75.5,
+   "variables": [
+    "discharge",
+    "water_level"
+   ]
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-C",
+   "site_id": "X",
+   "name": "C",
+   "lat": 40.5,
+   "lon": -75.5,
+   "variables": [
+    "discharge"
+   ]
+  },
+  {
+   "source": "uk_ea",
+   "station_id": "D",
+   "name": "D",
+   "lat": 41.0,
+   "lon": -74.0,
+   "variables": [
+    "discharge"
+   ]
+  },
+  {
+   "source": "hubeau_hydrometrie",
+   "station_id": "E",
+   "name": "E",
+   "lat": 41.5,
+   "lon": -74.5,
+   "variables": [
+    "discharge"
+   ]
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-F",
+   "name": "F outside",
+   "lat": 10.0,
+   "lon": 10.0,
+   "variables": [
+    "discharge"
+   ]
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-G",
+   "name": "G level only",
+   "lat": 40.2,
+   "lon": -75.2,
+   "variables": [
+    "water_level"
+   ]
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-H",
+   "name": "H",
+   "lat": 40.3,
+   "lon": -75.3,
+   "variables": [
+    "discharge"
+   ]
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-I",
+   "name": "I",
+   "lat": 40.4,
+   "lon": -75.4,
+   "variables": [
+    "discharge"
+   ]
+  },
+  {
+   "source": "poland_imgw",
+   "station_id": "J",
+   "name": "J says nothing",
+   "lat": 40.6,
+   "lon": -75.6,
+   "variables": []
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-K2",
+   "site_id": "Y",
+   "name": "K2",
+   "lat": 40.7,
+   "lon": -75.7,
+   "variables": [
+    "discharge"
+   ]
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-K1",
+   "site_id": "Y",
+   "name": "K1",
+   "lat": 40.7,
+   "lon": -75.7,
+   "variables": [
+    "discharge"
+   ]
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-L",
+   "name": "L no coords",
+   "lat": null,
+   "lon": null,
+   "variables": [
+    "discharge"
+   ]
+  }
+ ],
+ "signatures": [
+  {
+   "source": "usgs",
+   "station_id": "USGS-A",
+   "record_years": 50.25
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-B",
+   "record_years": 30.0
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-C",
+   "record_years": 40.0
+  },
+  {
+   "source": "hubeau_hydrometrie",
+   "station_id": "E",
+   "record_years": 10.4
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-F",
+   "record_years": 99.0
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-H",
+   "record_years": 25.0
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-I",
+   "record_years": 22.123456
+  },
+  {
+   "source": "poland_imgw",
+   "station_id": "J",
+   "record_years": 60.0
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-K1",
+   "record_years": 21.0
+  },
+  {
+   "source": "usgs",
+   "station_id": "USGS-K2",
+   "record_years": 21.0
+  }
+ ],
+ "params": {
+  "bbox": [
+   -80.0,
+   35.0,
+   -70.0,
+   45.0
+  ],
+  "min_years": 20,
+  "max_gauges": 3
+ },
+ "expected": {
+  "read": [
+   "poland_imgw/J",
+   "usgs/USGS-A",
+   "usgs/USGS-C"
+  ],
+  "rows": [
+   {
+    "key": "poland_imgw/J",
+    "status": "queued",
+    "record_years": 60.0,
+    "note": ""
+   },
+   {
+    "key": "usgs/USGS-A",
+    "status": "queued",
+    "record_years": 50.25,
+    "note": ""
+   },
+   {
+    "key": "usgs/USGS-C",
+    "status": "queued",
+    "record_years": 40.0,
+    "note": ""
+   },
+   {
+    "key": "usgs/USGS-H",
+    "status": "over_cap",
+    "record_years": 25.0,
+    "note": "past the cap of 3 gauges a view; zoom in"
+   },
+   {
+    "key": "usgs/USGS-I",
+    "status": "over_cap",
+    "record_years": 22.12,
+    "note": "past the cap of 3 gauges a view; zoom in"
+   },
+   {
+    "key": "usgs/USGS-K1",
+    "status": "over_cap",
+    "record_years": 21.0,
+    "note": "past the cap of 3 gauges a view; zoom in"
+   },
+   {
+    "key": "hubeau_hydrometrie/E",
+    "status": "too_short",
+    "record_years": 10.4,
+    "note": "10.4 years in the Archive; the question needs 20"
+   },
+   {
+    "key": "uk_ea/D",
+    "status": "no_archive",
+    "record_years": null,
+    "note": "not in the AquaScope Archive"
+   }
+  ],
+  "counts": {
+   "queued": 3,
+   "too_short": 1,
+   "no_archive": 1,
+   "over_cap": 3
+  }
+ }
+}

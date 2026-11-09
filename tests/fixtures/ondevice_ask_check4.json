@@ -1,0 +1,158 @@
+{
+ "about": "Gemini Nano in Chrome 155 through the Prompt API, 2026-10-26, the fourth on-device check for #590 (docs/assessments/ai-on-the-map.md), live build 337cacf. The Ask panel's raw replies, in order, as the model wrote them; 'errors' are prompts that ended in an error instead of a reply; 'shown' is what the page showed.",
+ "records": [
+  {
+   "role": "ask",
+   "tag": "ask-summary-1",
+   "request": "Summarise the record at this gauge: period, mean, trend, and the flood frequency",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"station_id\": \"USGS-01646500\"}}",
+    "{\"answer\": [\"USGS-01646500.record\", \"USGS-01646500.mean\", \"USGS-01646500.trend.mean\", \"USGS-01646500.trend.max\"]}"
+   ],
+   "shown": "Answered: record 1930-03-01 to 2026-10-25 (96.7 years); mean of the daily values 321 m3/s; no significant trend in the annual mean (p = 0.953; Sen's slope -0.0365 m3/s per year) and in the annual maxima (p = 0.96; -0.0543). No flood frequency fact picked."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-100yr-1",
+   "request": "What is the 100-year flood at this gauge?",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"station_id\": \"USGS-01646500\", \"source\": \"usgs\"}}",
+    "{\"answer\": [\"USGS-01646500.gev.100\"]}"
+   ],
+   "shown": "Answered: The 100-year flood ... is 11,247 m3/s (GEV fitted by L-moments to 97 annual maxima)."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-50yr",
+   "request": "And what is its 50-year flood?",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"station_id\": \"USGS-01646500\", \"source\": \"usgs\"}}",
+    "{\"answer\": [\"USGS-01646500.gev.50\"]}"
+   ],
+   "shown": "Answered: The 50-year flood ... is 9,305 m3/s (GEV ...)."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-trend-1",
+   "request": "Is the Potomac at Little Falls getting drier? Use the annual-mean trend.",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"station_id\": \"USGS-01646500\", \"source\": \"usgs\"}}",
+    "{\"answer\": [\"USGS-01646500.trend.mean\"]}"
+   ],
+   "shown": "Answered: no significant trend in the annual mean (Mann-Kendall p = 0.953; Sen's slope -0.0365 m3/s per year)."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-trend-max",
+   "request": "Have the annual floods at this gauge become bigger over the record?",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"station_id\": \"USGS-01646500\", \"source\": \"usgs\"}}",
+    "{\"answer\": [\"USGS-01646500.gev.2\",\"USGS-01646500.lp3.2\",\"USGS-01646500.gev.5\",\"USGS-01646500.lp3.5\",\"USGS-01646500.gev.10\",\"USGS-01646500.lp3.10\",\"USGS-01646500.gev.25\",\"USGS-01646500.lp3.25\",\"USGS-01646500.gev.50\",\"USGS-01646500.lp3.50\"]}"
+   ],
+   "shown": "Answered with the wrong facts: ten return levels (2- to 50-year, GEV and LP3), not the annual-maxima trend. Every sentence true as written."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-q95",
+   "request": "What is the Q95 low flow at this gauge, and its median flow?",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"station_id\": \"USGS-01646500\", \"source\": \"usgs\"}}",
+    "{\"answer\": [\"USGS-01646500.median\", \"USGS-01646500.fdc.q95\"]}"
+   ],
+   "shown": "Answered: median of the daily values 185 m3/s; Q95 35.7 m3/s (flow-duration curve)."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-report",
+   "request": "Give me a two-sentence summary of this gauge for a report.",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"station_id\": \"USGS-01646500\", \"source\": \"usgs\"}}",
+    "{\"answer\": [\"USGS-01646500.record\", \"USGS-01646500.mean\", \"USGS-01646500.median\", \"USGS-01646500.min\", \"USGS-01646500.max\", \"USGS-01646500.fdc.q95\", \"USGS-01646500.fdc.q50\", \"USGS-01646500.fdc.q10\", \"USGS-01646500.gev.2\", \"USGS-01646500.lp3.2\"]}"
+   ],
+   "shown": "Answered: ten sentences (record, mean, median, lowest, highest, Q95, Q50, Q10, 2-year GEV and LP3), the most picks allowed. Not two sentences; median 185 and Q50 186 both shown."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-kingston",
+   "request": "Find the five gauges nearest to Kingston upon Thames",
+   "replies": [
+    "{\"tool\": \"find_stations\", \"arguments\": {\"query\": \"Kingston upon Thames\", \"near\": [51.0, -0.3], \"limit__\": 5}}",
+    "{\"tool\": \"find_stations\", \"arguments\": {\"query\": \"Kingston upon Thames\", \"limit\": 5, \"near\": [51.47, 0.50]}}",
+    "{\"tool\": \"find_stations\", \"arguments\": {\"query\": \"Kingston upon Thames\", \"near\": [51.0, 0.0], \"limit__\": 5}}",
+    "{\"tool\": \"find_stations\", \"arguments\": {\"query\": \"Kingston upon Thames\", \"near\": [51.28, 0.48], \"limittypicode\": 5}}"
+   ],
+   "shown": "No answer: 'nothing in the question to look up: name the gauge (its id) or the place (lat, lon)'. No tool ran. Each call was refused for a search point the model made up; the schema allows free numbers for near/lat/lon and extra keys (limit__, limittypicode)."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-anywhere",
+   "request": "What is the climate and modelled discharge at 25.05, 121.55?",
+   "replies": [
+    "{\"tool\": \"anywhere\", \"arguments\": {\"lat\": 25.05, \"lon\": 121.55}}",
+    "{\"tool\": \"anywhere\", \"arguments\": {\"lat\": 25.05, \"lon\": 121.55}}",
+    "{\"answer\": [\"climate@25.05,121.55.rain\", \"climate@25.05,121.55.et0\", \"climate@25.05,121.55.temp\", \"climate@25.05,121.55.wettest\", \"climate@25.05,121.55.aridity\", \"glofas@25.05,121.55.record\", \"glofas@25.05,121.55.mean\", \"glofas@25.05,121.55.median\", \"glofas@25.05,121.55.min\", \"glofas@25.05,121.55.max\"]}"
+   ],
+   "shown": "Answered: rainfall 1,733 mm a year, ET0 1,168 mm a year, 22.7 C, wettest day 157 mm, aridity 1.48 (humid), GloFAS cell 2006-10-19 to 2026-10-19, mean 5.63, median 2.18, lowest 1.35 m3/s, highest. The repeat call was not run. No trend picked (check3 escape 1 cannot recur)."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-compare",
+   "request": "Compare the mean flow of the Potomac (USGS-01646500) with the Thames at Kingston",
+   "replies": [
+    "{\"tool\": \"find_stations\", \"arguments\": {\"query\": \"Thames at Kingston\", \"limit\": 10}}",
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"station_id\": \"USGS-01646500\"}}",
+    "{\"tool\": \"find_stations\", \"arguments\": {\"query\": \"Thames at Kingston\", \"limit\": 10}}",
+    "{\"answer\": [\"USGS-01646500.mean\", \"USGS-01646500.median\", \"USGS-01646500.fdc.q50\"]}"
+   ],
+   "shown": "Answered one side only: the Potomac's mean 321, median 185, Q50 186 m3/s. The search found Kingston (E02102A among ten ids) but the model never analysed it; the repeat search was not run."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-summary-2",
+   "request": "Summarise the record at this gauge: period, mean, trend, and the flood frequency",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"station_id\": \"USGS-01646500\"}}",
+    "{\"answer\": [\"USGS-01646500.record\", \"USGS-01646500.mean\", \"USGS-01646500.trend.mean\", \"USGS-01646500.trend.max\", \"say.daily\", \"say.floods\", \"say.trend\"]}"
+   ],
+   "shown": "Refused by the second-line lock: 'its trend wording does not match the test (no significant trend in the annual mean ...)'. The picks were right; the package's own say.trend sentence ('a p-value below 0.05 is called significant') trips _trend_check. The page then lists six facts."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-100yr-2",
+   "request": "What is the 100-year flood at this gauge?",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"station_id\": \"USGS-01646500\"}}",
+    "{\"tool\": \"anywhere\", \"arguments\": {\"lat\": 38.95, \"lon\": -77.128}}",
+    "{\"answer\": [\"USGS-01646500.gev.100\", \"glofas@38.95,-77.128.gev.100\"]}"
+   ],
+   "shown": "Answered: 11,247 m3/s (GEV, gauge), plus 'The 100-year flood at the GloFAS cell at 38.95, -77.128 (modelled) is 87.1 m3/s (GEV fitted by L-moments to 20 annual maxima)'. Labelled right, but an unasked modelled figure 129 times smaller."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-new-gev-vs-lp3",
+   "request": "Which is larger at this gauge, the GEV or the LP3 100-year flood?",
+   "replies": [
+    "{\"tool\": \"analyze_station\", \"arguments\": {\"station_id\": \"USGS-01646500\"}}",
+    "{\"answer\": [\"USGS-01646500.gev.2\", \"USGS-01646500.lp3.2\"]}"
+   ],
+   "shown": "Answered the wrong return period: the 2-year flood by GEV (2,838) and LP3 (2,851 m3/s). Sentences true; the question not answered."
+  },
+  {
+   "role": "ask",
+   "tag": "ask-new-list-thames",
+   "request": "List the gauges on the Thames near Kingston and their mean flows",
+   "replies": [
+    "{\"tool\": \"find_stations\", \"arguments\": {\"query\": \"Thames near Kingston\", \"limit\": 10}}",
+    "{\"tool\": \"find_stations\", \"arguments\": {\"query\": \"Thames near Kingston\", \"limit\": 10}}",
+    "{\"answer\": [\"search.count\"]}"
+   ],
+   "shown": "Step 1 ran 176 s and ended in QuotaExceededError (output limit); the page said 'Thinking... (step 1 of 5)' with no Stop. Then: search run, repeat not run, answer ['search.count'] refused by the second-line lock ('the question asks for 2 gauges and the answer names 1 of those the search found'); the page lists the ten gauges the search found, all US rivers near a Kingston (Etowah GA, Grand WI, Silver Creek KY, Sevier UT, ...), none on the Thames. Header still says 'Answered on your device'.",
+   "errors": [
+    {
+     "ms": 176198,
+     "error": "QuotaExceededError: The response exceeded output limits and was truncated."
+    }
+   ]
+  }
+ ]
+}

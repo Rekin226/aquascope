@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # Forty-six years of daily discharge at the point: the reliability is read off the record with the flow-duration
 # curve and the low-flow statistics beside it, as the supply_reliability gauged branch has it.
 id: supply_gauged_vegre

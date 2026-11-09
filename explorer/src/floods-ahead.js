@@ -18,6 +18,7 @@ import { initFews, openReachCard, setFewsVisible } from "./fews.js?v=__BUILD__";
 import { refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
 import { map } from "./map.js?v=__BUILD__";
 import { STREAMS_PMTILES } from "./river-core.js?v=__BUILD__";
+import { pacer } from "./motion.js?v=__BUILD__";
 import {
   FLOODS_CREDIT, FLOOD_CLASSES, FORECAST_DAYS, NONE, addDays, dayIndex, totalsFor, gaugesFor, idsByClass,
   issueLine, legendLine, lineColorExpr, lineFilterExpr, pointsFor, shortDay,
@@ -234,12 +235,11 @@ function pulse() {
   cancelAnimationFrame(pulseFrame);
   if (map && map.getLayer(L.pulse)) map.setPaintProperty(L.pulse, "circle-stroke-opacity", 0);
   if (still() || !visible || !gaugeCoords.length) return;
-  let last = 0;
+  const pace = pacer(15);   // about 15 frames a second is plenty for a breath; fewer on a slow device (#591)
   let idle = false;
   const tick = (now) => {
     pulseFrame = requestAnimationFrame(tick);
-    if (document.hidden || now - last < 66) return;       // about 15 frames a second is plenty for a breath
-    last = now;
+    if (!pace.due(now)) return;
     if (!map.getLayer(L.pulse)) return;
     const box = map.getBounds();
     const inView = map.getZoom() >= RING_ZOOM && gaugeCoords.some((c) => box.contains(c));

@@ -1,0 +1,74 @@
+name: Mirror sample models
+
+# The sample model results the Explorer's "Try a sample model" opens (#591), in the Archive dataset under samples/:
+#   hec-ras/Flood_model.p01_BC12_S6_R6.hdf   one HEC-RAS 2D plan result from HydroShare resource
+#                                            32aac3af553c4e1fbb997ec58d9de9b6 (Zandsalimi, GNN4CF, CC BY 4.0),
+#                                            copied byte for byte because HydroShare's storage sends no CORS header
+#   hec-ras/manifest.json                    source, licence, attribution and SHA-256
+# FloPy's Freyberg example is not mirrored: the page fetches it from raw.githubusercontent.com, which allows it.
+#
+# Manual and one-off: run again only if the sample changes. The build refuses a file whose SHA-256 is not the one
+# recorded in aquascope/archive/samples.py. Uses the same HF_TOKEN secret as the harvest, and writes only under
+# samples/. A smoke run builds and checks the file but never publishes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      smoke:
+        description: "Smoke run: download, check and summarise, never publish"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-samples
+  cancel-in-progress: false
+
+env:
+  HF_DATASET: Rekin226/aquascope-gauges
+
+jobs:
+  mirror:
+    name: Build, check and publish the samples
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install aquascope with the archive extra
+        run: python -m pip install -q ".[archive]"
+
+      - name: Download and check the samples
+        run: python -m aquascope.archive.samples build --out build
+
+      - name: Summary
+        run: |
+          {
+            echo "### Sample models"
+            echo
+            python -c "import json, glob; [print(f'- {m[\"id\"]}: {f[\"path\"]}, {f[\"bytes\"]:,} bytes, SHA-256 {f[\"sha256\"][:12]}..., {m[\"source\"][\"licence\"]}') for p in sorted(glob.glob('build/samples/*/manifest.json')) for m in [json.load(open(p))] for f in m['files']]"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish to Hugging Face
+        if: env.HF_TOKEN != '' && !inputs.smoke
+        run: python -m aquascope.archive.samples publish --out build --repo "$HF_DATASET"
+
+      - name: Say why a smoke run was not published
+        if: inputs.smoke
+        run: echo "::notice::A smoke run builds and checks the samples but does not publish."
+
+      - name: Warn when HF_TOKEN is missing
+        if: env.HF_TOKEN == '' && !inputs.smoke
+        run: |
+          echo "::error::HF_TOKEN is not set, so nothing was published. Set the repository secret HF_TOKEN to a \
+          Hugging Face token with write access to $HF_DATASET."
+          exit 1

@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # No gauge within reach and ten donors: the regional branch of ungauged_flow, with the catchment description
 # required because the transfer runs on its attributes.
 id: ungauged_regional_nevada

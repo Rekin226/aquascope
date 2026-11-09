@@ -1,0 +1,295 @@
+{
+ "about": "The map roles' raw replies from the third on-device check of #590 (2026-10-26, Chrome 155, Gemini Nano through the Prompt API, live Explorer build 15e7d48), copied from the check's log: each is the model's text as it came back. tests/test_map_pick.py replays them through the round-3 path.",
+ "records": [
+  {
+   "role": "review",
+   "tag": "map-plausible",
+   "request": "does this simulation look plausible to you?",
+   "replies": [
+    "{\"order\": [\"r3\", \"r1\", \"r2\", \"r4\", \"r5\", \"r6\", \"r7\", \"r8\"], \"notes\": [{\"id\": \"r3\", \"title\": \"Very shallow water\", \"reason\": \"Numerous cells consistently show water depth below a specified threshold, potentially indicating terrain or model issues.\"}, {\"id\": \"r1\", \"title\": \"Wet and dry flicker\", \"reason\": \"Multiple cells exhibit rapid transitions between wet and dry states, possibly indicative of model instability or shallow, flat areas.\"}, {\"id\": \"r2\", \"title\": \"Wet and dry flicker\", \"reason\": \"Another cell exhibiting rapid transitions between wet and dry states, reinforcing a potential model instability or shallow area observation.\"}, {\"id\": \"r4\", \"title\": \"Deepest water\", \"reason\": \"Reported deepest water level needs verification to ensure it isn't an unexpected feature.\"}, {\"id\": \"r5\", \"title\": \"Deepest water\", \"reason\": \"Reported deepest water level needs verification to ensure it isn't an unexpected feature.\"}, {\"id\": \"r6\", \"title\": \"Deepest water\", \"reason\": \"Reported deepest water level needs verification to ensure it isn't an unexpected feature.\"}, {\"id\": \"r7\", \"title\": \"Deepest water\", \"reason\": \"Reported deepest water level needs verification to ensure it isn't an unexpected feature.\"}, {\"id\": \"r8\", \"title\": \"Deepest water\", \"reason\": \"Reported deepest water level needs verification to ensure it isn't an unexpected feature.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Review. Chrome's built-in model, worded on this device; checks and numbers by code. Flood_model.p01_BC12_S6_R6.hdf: 3 things worth a look; 9 of 9 checks ran. 8 pins, most severe first. 8 device wordings, 0 refused."
+  },
+  {
+   "role": "review",
+   "tag": "map-depths-realistic",
+   "request": "are the depths in my flood model realistic?",
+   "replies": [
+    "{\"order\": [\"r3\", \"r1\", \"r2\", \"r4\", \"r5\", \"r6\", \"r7\", \"r8\"], \"notes\": [{\"id\": \"r3\", \"title\": \"Very shallow water\", \"reason\": \"Significant area with water depth below 0.03 m. Could indicate a grid issue or terrain problem.\"}, {\"id\": \"r1\", \"title\": \"Wet and dry flicker\", \"reason\": \"Multiple cells exhibiting rapid wet/dry cycles. May indicate a time step issue or shallow area.\"}, {\"id\": \"r2\", \"title\": \"Wet and dry flicker\", \"reason\": \"Another cell exhibiting rapid wet/dry cycles. May indicate a time step issue or shallow area.\"}, {\"id\": \"r4\", \"title\": \"Deepest water\", \"reason\": \"Deepest water found at 17.1 m, needs validation to ensure it represents expected terrain.\"}, {\"id\": \"r5\", \"title\": \"Deepest water\", \"reason\": \"Deepest water found at 16.5 m, needs validation to ensure it represents expected terrain.\"}, {\"id\": \"r6\", \"title\": \"Deepest water\", \"reason\": \"Deepest water found at 16.4 m, needs validation to ensure it represents expected terrain.\"}, {\"id\": \"r7\", \"title\": \"Deepest water\", \"reason\": \"Deepest water found at 9.82 m, needs validation to ensure it represents expected terrain.\"}, {\"id\": \"r8\", \"title\": \"Deepest water\", \"reason\": \"Deepest water found at 8.97 m, needs validation to ensure it represents expected terrain.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Review. Chrome's built-in model, worded on this device; checks and numbers by code. Flood_model.p01_BC12_S6_R6.hdf: 3 things worth a look; 9 of 9 checks ran. 8 pins, most severe first. 8 device wordings, 0 refused."
+  },
+  {
+   "role": "review",
+   "tag": "review-anything-wrong",
+   "request": "is anything wrong with my flood model?",
+   "replies": [
+    "{\"order\": [\"r3\", \"r1\", \"r2\", \"r4\", \"r5\", \"r6\", \"r7\", \"r8\"], \"notes\": [{\"id\": \"r3\", \"title\": \"Very shallow water\", \"reason\": \"Multiple cells have very shallow water, potentially indicating terrain or grid tolerance issues.\"}, {\"id\": \"r1\", \"title\": \"Wet and dry flicker\", \"reason\": \"Flickering wetting/drying patterns suggest a time step that might be too long or a shallow area.\"}, {\"id\": \"r2\", \"title\": \"Wet and dry flicker\", \"reason\": \"Another cell exhibiting a wetting/drying flicker pattern.\"}, {\"id\": \"r4\", \"title\": \"Deepest water\", \"reason\": \"The deepest water is 17.1 m; investigate if it isn't a expected channel or pit.\"}, {\"id\": \"r5\", \"title\": \"Deepest water\", \"reason\": \"The deepest water is 16.5 m; investigate if it isn't a expected channel or pit.\"}, {\"id\": \"r6\", \"title\": \"Deepest water\", \"reason\": \"The deepest water is 16.4 m; investigate if it isn't a expected channel or pit.\"}, {\"id\": \"r7\", \"title\": \"Deepest water\", \"reason\": \"The deepest water is 9.82 m; investigate if it isn't a expected channel or pit.\"}, {\"id\": \"r8\", \"title\": \"Deepest water\", \"reason\": \"The deepest water is 8.97 m; investigate if it isn't a expected channel or pit.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Review. Chrome's built-in model, worded on this device; checks and numbers by code. Flood_model.p01_BC12_S6_R6.hdf: 3 things worth a look; 9 of 9 checks ran. 8 pins, most severe first. 8 device wordings, 0 refused."
+  },
+  {
+   "role": "review",
+   "tag": "review-check-my-model",
+   "request": "check my model",
+   "replies": [
+    "{\"order\": [\"r3\", \"r1\", \"r2\", \"r4\", \"r5\", \"r6\", \"r7\", \"r8\"], \"notes\": [{\"id\": \"r3\", \"title\": \"Very shallow water\", \"reason\": \"8 cells have water depth under 0.03 m. This could be due to various factors like rain or terrain, which needs investigation.\"}, {\"id\": \"r1\", \"title\": \"Wet and dry flicker\", \"reason\": \"Two cells show frequent wet/dry transitions. This might indicate a timestep that is too long or a shallow, flat area.\"}, {\"id\": \"r2\", \"title\": \"Wet and dry flicker\", \"reason\": \"Another cell shows frequent wet/dry transitions. It's worth checking timestep or local terrain.\"}, {\"id\": \"r4\", \"title\": \"Deepest water\", \"reason\": \"Deepest water is 17.1 m. Check if this depth is expected for the area.\"}, {\"id\": \"r5\", \"title\": \"Deepest water\", \"reason\": \"Deepest water is 16.5 m. Check if this depth is expected for the area.\"}, {\"id\": \"r6\", \"title\": \"Deepest water\", \"reason\": \"Deepest water is 16.4 m. Check if this depth is expected for the area.\"}, {\"id\": \"r7\", \"title\": \"Deepest water\", \"reason\": \"Deepest water is 9.82 m. Check if this depth is expected for the area.\"}, {\"id\": \"r8\", \"title\": \"Deepest water\", \"reason\": \"Deepest water is 8.97 m. Check if this depth is expected for the area.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Review. Chrome's built-in model, worded on this device; checks and numbers by code. Flood_model.p01_BC12_S6_R6.hdf: 3 things worth a look; 9 of 9 checks ran. 8 pins, most severe first. 6 wordings refused by the claim lock, rules kept: a number not in its facts (two) (and 5 more). The 5 'Check if this depth is expected' wordings were refused (the rules say worth a look if it is NOT expected)."
+  },
+  {
+   "role": "review",
+   "tag": "review-new-instabilities",
+   "request": "are there any numerical instabilities in this run?",
+   "replies": [
+    "{\"actions\": [{\"type\": \"fly_to\", \"place\": \"36.81, -76.32\"}, {\"type\": \"set_time\", \"date\": \"2026-09-15\", \"step\": \"month\"}, {\"type\": \"set_layer\", \"layer\": \"status\", \"on\": true}, {\"type\": \"set_layer\", \"layer\": \"floods_past\", \"on\": true}, {\"type\": \"set_layer\", \"layer\": \"floods_ahead\", \"on\": false}]}"
+   ],
+   "errors": [],
+   "shown": "Not routed to the review. Chrome's built-in model, 4 actions on the map; refused 36.81, -76.32, a place the words do not name."
+  },
+  {
+   "role": "review",
+   "tag": "review-new-legend-run",
+   "request": "(legend) Review these results",
+   "replies": [
+    "{\"order\": [\"r3\", \"r1\", \"r2\", \"r4\", \"r5\", \"r6\", \"r7\", \"r8\"], \"notes\": [{\"id\": \"r3\", \"title\": \"Very shallow water\", \"reason\": \"Several cells have water depths approaching a film, which could indicate terrain or grid issues.\"}, {\"id\": \"r1\", \"title\": \"Wet and dry flicker\", \"reason\": \"Flickering wet/dry conditions in multiple cells may suggest timestep issues or shallow, flat terrain.\"}, {\"id\": \"r2\", \"title\": \"Wet and dry flicker\", \"reason\": \"Another cell exhibiting wet/dry flickering, corroborating potential timestep or terrain issues.\"}, {\"id\": \"r4\", \"title\": \"Deepest water\", \"reason\": \"Deepest water is substantial; investigate if not expected due to potential channel or pit.\"}, {\"id\": \"r5\", \"title\": \"Deepest water\", \"reason\": \"Deepest water is substantial; investigate if not expected due to potential channel or pit.\"}, {\"id\": \"r6\", \"title\": \"Deepest water\", \"reason\": \"Deepest water is substantial; investigate if not expected due to potential channel or pit.\"}, {\"id\": \"r7\", \"title\": \"Deepest water\", \"reason\": \"Deepest water is substantial; investigate if not expected due to potential channel or pit.\"}, {\"id\": \"r8\", \"title\": \"Deepest water\", \"reason\": \"Deepest water is substantial; investigate if not expected due to potential channel or pit.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Review. Chrome's built-in model, worded on this device; checks and numbers by code. Flood_model.p01_BC12_S6_R6.hdf: 3 things worth a look; 9 of 9 checks ran. 8 pins, most severe first. 8 device wordings, 0 refused."
+  },
+  {
+   "role": "explain",
+   "tag": "explain-bangladesh-0-floods-past-on",
+   "request": "Explain this view: Bangladesh, zoom 4 (Floods past still on from an earlier Ask the map action)",
+   "replies": [
+    "{\"notes\": [{\"facts\": [\"f1\"], \"title\": \"Significant Flood Events\", \"text\": \"{f1} flood events were reported between {f1.when}. This represents a considerable number of incidents across the mapped area.\"}, {\"facts\": [\"f2\"], \"title\": \"Moderate Flood Events\", \"text\": \"{f2} flood events occurred during {f2.when} in this half-degree cell.\"}, {\"facts\": [\"f3\", \"f4\", \"f5\"], \"title\": \"Multiple Flood Events\", \"text\": \"This half-degree cell experienced {f3}, {f4}, and {f5} flood events during {f3.when}. \"}]}"
+   ],
+   "errors": [],
+   "shown": "2 notes on the map; 1 refused (note 1: none of its facts has a place). Not counted in the table."
+  },
+  {
+   "role": "explain",
+   "tag": "explain-bangladesh-1",
+   "request": "Explain this view: Bangladesh, zoom 4",
+   "replies": [
+    "{\"notes\": [{\"facts\": [\"f10\", \"f11\"], \"title\": \"Significant Below Normal Areas\", \"text\": \"A large area ({f10} of the mapped land) is below normal. Another significant area ({f11} of the mapped land) is also below normal.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Shown: 'A large area (22% of the mapped land) is below normal. Another significant area (340,000 km² of the mapped land) is also below normal.' f11 is the size of the same area (Its size: 340,000 km²). Plus 1 rules note."
+  },
+  {
+   "role": "explain",
+   "tag": "explain-bangladesh-2",
+   "request": "Explain this view: Bangladesh, zoom 4",
+   "replies": [
+    "{\"notes\": [{\"facts\": [\"f1\", \"f10\", \"f11\"], \"title\": \"Significant Area Below Normal\", \"text\": \"22% of the mapped land is below normal, covering 340,000 km².  A large area of 340,000 km² is below normal.\"}, {\"facts\": [\"f2\", \"f7\"], \"title\": \"Significant Area Above Normal\", \"text\": \"25% of mapped land is above normal, and 9% is much above normal. The largest area above normal is 140,000 km².\"}, {\"facts\": [\"f12\"], \"title\": \"2-Year Flow or More\", \"text\": \"Reaches in view at their 2-year flow or more are at least 34 in the 15 days from {f12.when}\"}]}"
+   ],
+   "errors": [],
+   "shown": "2 notes on the map; 2 refused: note 2: a number not in its facts (140000); note 3: none of its facts has a place. Facts: below or much below 22%, largest area below normal 22%, its size 340,000 km²."
+  },
+  {
+   "role": "explain",
+   "tag": "explain-europe",
+   "request": "Explain this view: Europe, zoom 4",
+   "replies": [
+    "{\"notes\": [{\"facts\": [\"f4\", \"f5\"], \"title\": \"Large Area Much Below Normal\", \"text\": \"A large area, {f4} of the mapped land, is much below normal. Its size is {f5} km².\"}]}"
+   ],
+   "errors": [],
+   "shown": "Shown: 'A large area, 71% of the mapped land, is much below normal. Its size is 670,000 km².' (no repeated km²). Plus 1 rules note."
+  },
+  {
+   "role": "explain",
+   "tag": "explain-australia",
+   "request": "Explain this view: Australia, zoom 4",
+   "replies": [
+    "{\"notes\": [{\"facts\": [\"f2\"], \"title\": \"Land Much Above Normal\", \"text\": \"A significant portion of the mapped land is currently much above normal. 68% of the mapped land is in this condition when {f2.when}.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Rules; Chrome's built-in model's wording was refused (note 1: none of its facts has a place). f2 is 'above or much above normal 68%'."
+  },
+  {
+   "role": "explain",
+   "tag": "explain-africa",
+   "request": "Explain this view: Africa, zoom 3",
+   "replies": [
+    "{\"notes\": [{\"facts\": [\"f7\", \"f8\"], \"title\": \"Significant Below Normal Flow\", \"text\": \"A large area ({f7}) of land is currently much below normal, sized at {f8}. This represents 66% of the mapped land in view.\"}, {\"facts\": [\"f4\"], \"title\": \"Large Area Above Normal\", \"text\": \"A substantial area ({f4}) of land is significantly above normal, accounting for 2% of the mapped land. Its size is 210,000 km².\"}, {\"facts\": [\"f10\", \"f11\"], \"title\": \"Below Normal Flow Notable Area\", \"text\": \"Another prominent area ({f10}) experiences below normal flow, covering 3% of the mapped land and measuring 280,000 km².\"}, {\"facts\": [\"f12\", \"f13\", \"f14\", \"f15\"], \"title\": \"Flood Forecast Details\", \"text\": \"The forecast reaches 2-year flow or more within 15 days of 25 Oct. The forecast flow class is 10-year flow, with a forecast peak of 962 m³/s on Sun 25 Oct, 2.8 times against the 2-year flow.\"}, {\"facts\": [\"f16\", \"f17\", \"f18\"], \"title\": \"Flood Forecast Details (Continued)\", \"text\": \"The forecast flow class is 2-year flow, with a forecast peak of 4,810 m³/s on Thu 29 Oct, 1.3 times against the 2-year flow.\"}]}"
+   ],
+   "errors": [],
+   "shown": "3 notes on the map; 2 refused: note 2: a number not in its facts (210000); note 3: writes 3% without 'of the mapped land': it is a share of the land in view, not a flow."
+  },
+  {
+   "role": "explain",
+   "tag": "explain-new-south-america",
+   "request": "Explain this view: South America, zoom 3",
+   "replies": [
+    "{\"notes\": [{\"facts\": [\"f4\", \"f5\"], \"title\": \"Large Area Much Below Normal\", \"text\": \"{f4} of the mapped land is much below normal, covering a size of {f5} when {f4.when}. The pin marks the location of this area.\"}, {\"facts\": [\"f7\", \"f8\"], \"title\": \"Significant Area Below Normal\", \"text\": \"{f7} of the mapped land is below normal, covering a size of {f8} when {f7.when}. The pin marks the location of this area.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Shown: '14% of the mapped land is much below normal, covering a size of 900,000 km² when September 2026.' and '17% of the mapped land is below normal, covering a size of 1,100,000 km² ...'. f4 and f7 are the largest single areas; a second run of the same view gave 58% of the land below or much below normal."
+  },
+  {
+   "role": "explain",
+   "tag": "explain-new-south-america-2",
+   "request": "Explain this view: South America, zoom 3.05 (second run, system prompt recorded)",
+   "replies": [
+    "{\"notes\": [{\"facts\": [\"f1\", \"f4\", \"f5\"], \"title\": \"Significant Land Below Normal\", \"text\": \"{f1} of the mapped land is below normal, and {f4} of the mapped land is much below normal. The size of the area much below normal is {f5} km² when {f1.when}.\"}, {\"facts\": [\"f7\", \"f8\"], \"title\": \"Land Below Normal\", \"text\": \"{f7} of the mapped land is below normal, and {f8} of the mapped land is below normal when {f7.when}. The size of the area below normal is {f8} km² when {f8.when}.\"}, {\"facts\": [\"f2\"], \"title\": \"Land Above Normal\", \"text\": \"Only {f2} of the mapped land is above normal when {f2.when}.\"}, {\"facts\": [\"f3\", \"f6\"], \"title\": \"Percentile Definitions\", \"text\": \"Below normal is within the 10th-25th percentile, and much below normal is below the 10th percentile when {f3.when}. \"}]}"
+   ],
+   "errors": [],
+   "shown": "Facts: f1 below or much below 58%; f4 largest area much below 14% (870,000 km²); f7 largest area below 15% (980,000 km²). Shown: '58% of the mapped land is below normal, and 14% of the mapped land is much below normal ...' and '15% of the mapped land is below normal, and 980,000 km² of the mapped land is below normal ...'. 2 refused (no place)."
+  },
+  {
+   "role": "explain",
+   "tag": "explain-new-us-midwest",
+   "request": "Explain this view: US Midwest, zoom 5",
+   "replies": [
+    "{\"notes\": [{\"facts\": [\"f4\", \"f5\"], \"title\": \"Much Below Normal Area\", \"text\": \"An area of {f4} of the mapped land is much below normal, covering {f5} when September 2026.\"}, {\"facts\": [\"f7\", \"f8\"], \"title\": \"Below Normal Areas\", \"text\": \"A smaller area of {f7} of the mapped land is below normal, covering {f8} when September 2026.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Shown: 'An area of 11% ... 76,000 km²' and 'A smaller area of 23% of the mapped land is below normal, covering 160,000 km²'. 23% is the larger of the two."
+  },
+  {
+   "role": "scout",
+   "tag": "scout-europe-1",
+   "request": "Scout: Europe, zoom 4",
+   "replies": [],
+   "errors": [
+    "AbortError: signal is aborted without reason"
+   ],
+   "shown": "Scout. Rules, no model. 3 pins. (The device was asked and timed out at 40 s.) The prompt did not name the off-screen gauge."
+  },
+  {
+   "role": "scout",
+   "tag": "scout-europe-2",
+   "request": "Scout: Europe, zoom 4",
+   "replies": [
+    "{\"order\": [\"status:much_below:2026-09-1\", \"floods_past:2026-01-275-407\", \"models_disagree:poland_imgw/149190160\"], \"notes\": [{\"id\": \"status:much_below:2026-09-1\", \"title\": \"Czechia rivers below normal\", \"reason\": \"Rivers in Central Bohemian Region, Czechia exhibited conditions of being much below normal moisture levels in September 2026, based on model projections.\"}, {\"id\": \"floods_past:2026-01-275-407\", \"title\": \"Romania: January flood events\", \"reason\": \"Multiple flood events were reported in Maramureș, Romania, starting in January 2026.\"}, {\"id\": \"models_disagree:poland_imgw/149190160\", \"title\": \"Poland: Model discrepancies at Rudze\", \"reason\": \"Models for Rudze in Lesser Poland Voivodeship, Poland, demonstrate significant disagreement with the observed flow, prompting closer examination of gauge measurements.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Scout. Chrome's built-in model, 2 of 3 worded on this device; 1 wording refused: leaves out what the finding says (models miss this river)."
+  },
+  {
+   "role": "scout",
+   "tag": "scout-europe-3",
+   "request": "Scout: Europe, zoom 4",
+   "replies": [
+    "{\"order\": [\"status:much_below:2026-09-1\", \"floods_past:2026-01-275-407\", \"models_disagree:poland_imgw/149190160\"], \"notes\": [{\"id\": \"status:much_below:2026-09-1\", \"title\": \"Czechia: Rivers significantly below normal\", \"reason\": \"Rivers across a large area of Central Bohemian Region were much below normal flow in September, according to the modelled monthly flow.\"}, {\"id\": \"floods_past:2026-01-275-407\", \"title\": \"Romania: Significant flooding in January\", \"reason\": \"Multiple flood events reported in Maramureș, Romania, started in January.\"}, {\"id\": \"models_disagree:poland_imgw/149190160\", \"title\": \"Poland: Models struggle to predict Rudze river\", \"reason\": \"Models have difficulty accurately predicting flow for the Rudze river in Lesser Poland Voivodeship, with poor performance compared to the gauge.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Scout. 2 of 3 worded on this device; 1 refused: leaves out what the finding says (models miss this river)."
+  },
+  {
+   "role": "scout",
+   "tag": "scout-south-america",
+   "request": "Scout: South America, zoom 3",
+   "replies": [
+    "{\"order\": [\"status:much_below:2026-09:9\"], \"notes\": [{\"id\": \"status:much_below:2026-09:9\", \"title\": \"Much Below Normal Rivers - Piauí, Brazil\", \"reason\": \"Rivers across {area} were much below normal in {month} {place}. This indicates a significant hydrological event needing attention.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Scout. Chrome's built-in model, worded on this device. 1 pin."
+  },
+  {
+   "role": "scout",
+   "tag": "scout-us",
+   "request": "Scout: US, zoom 4",
+   "replies": [
+    "{\"order\": [\"status:much_below:2026-09:2\", \"status:much_below:2026-09:4\", \"floods_past:2026-01:252:191\"], \"notes\": [{\"id\": \"status:much_below:2026-09:2\", \"title\": \"Illinois: Rivers Much Below Normal\", \"reason\": \"Rivers across {area} were much below normal in {month} due to modelled monthly flow under the 10th percentile for the month.\"}, {\"id\": \"status:much_below:2026-09:4\", \"title\": \"North Carolina: Rivers Much Below Normal\", \"reason\": \"Rivers across {area} were much below normal in {month} due to modelled monthly flow under the 10th percentile for the month.\"}, {\"id\": \"floods_past:2026-01:252:191\", \"title\": \"Tennessee: Flooding in January\", \"reason\": \"News reports indicate {events} flood events occurred in {place} during {month} of {year}\"}]}"
+   ],
+   "errors": [],
+   "shown": "Scout. Rules, Chrome's built-in model asked, its wording not used. 3 refused: a number or a ranking word outside the slots (and 2 more)."
+  },
+  {
+   "role": "scout",
+   "tag": "scout-south-asia",
+   "request": "Scout: South Asia, zoom 4",
+   "replies": [
+    "{\"order\": [\"floods_past:2026-01:220:519\", \"floods_past:2026-01:227:515\"], \"notes\": [{\"id\": \"floods_past:2026-01:220:519\", \"title\": \"Maharashtra floods January 2026\", \"reason\": \"News reports indicate substantial flood events occurred in Maharashtra, India during January 2026.\"}, {\"id\": \"floods_past:2026-01:227:515\", \"title\": \"Madhya Pradesh floods January 2026\", \"reason\": \"Madhya Pradesh, India experienced multiple flood events in January 2026, as reported in the news.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Scout. Chrome's built-in model, worded on this device. 2 pins."
+  },
+  {
+   "role": "scout",
+   "tag": "scout-new-africa",
+   "request": "Scout: Africa, zoom 3",
+   "replies": [
+    "{\"order\": [\"floods_ahead:2026-10-25:110888926\", \"floods_ahead:2026-10-25:130709339\", \"status:much_below:2026-09:1\"], \"notes\": [{\"id\": \"floods_ahead:2026-10-25:110888926\", \"title\": \"East Africa: Significant Flood Risk\", \"reason\": \"GEOGLOWS forecasts a flow of 4,570 m³/s on Oct 26th in East Africa, exceeding the 10-year flow of 4,220 m³/s. A substantial number of ensemble members predict this condition.\"}, {\"id\": \"floods_ahead:2026-10-25:130709339\", \"title\": \"Congo-Brazzaville: Flood Threat\", \"reason\": \"GEOGLOWS forecasts a flow of 454 m³/s on Oct 25th in Cuvette-Ouest Department, Congo-Brazzaville, exceeding the 25-year flow of 453 m³/s. Many ensemble members predict this.\"}, {\"id\": \"status:much_below:2026-09:1\", \"title\": \"Africa: Rivers Significantly Below Normal\", \"reason\": \"Rivers across a vast area of Africa exhibited flows under the 10th percentile in September 2026, indicating considerably reduced water levels.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Scout. Rules, Chrome's built-in model asked, its wording not used. 3 refused: a number or a ranking word outside the slots (and 2 more). Rules: all 51 ensemble members reach it."
+  },
+  {
+   "role": "scout",
+   "tag": "scout-new-australia",
+   "request": "Scout: Australia, zoom 4",
+   "replies": [
+    "{\"order\": [\"floods_ahead:2026-10-25:541453388\", \"status:much_above:2026-09:1\", \"floods_past:2026-01:133:661\", \"floods_past:2026-01:134:639\"], \"notes\": [{\"id\": \"floods_ahead:2026-10-25:541453388\", \"title\": \"Severe Flooding Forecast in Northern Territory\", \"reason\": \"GEOGLOWS forecasts a flow of 6.86 m³/s on Fri 30 Oct, above the 2-year flow of 5.75 m³/s, with a substantial chance of exceeding it.\"}, {\"id\": \"status:much_above:2026-09:1\", \"title\": \"Northern Territory Rivers Much Above Normal\", \"reason\": \"Rivers across 460,000 km² of Northern Territory were much above normal in September 2026, according to monthly flow analysis.\"}, {\"id\": \"floods_past:2026-01:133:661\", \"title\": \"Early January Floods in Queensland\", \"reason\": \"News reports of flood events originated in Queensland during January 2026.\"}, {\"id\": \"floods_past:2026-01:134:639\", \"title\": \"Queensland Flooding News in January\", \"reason\": \"News reports of flood events originated in Queensland during January 2026.\"}]}"
+   ],
+   "errors": [],
+   "shown": "Scout. Chrome's built-in model, worded on this device. 4 pins, 0 refused. Rules for pin 1: 'Northern Territory, Australia: 2-year flow forecast ... 13 of 51 ensemble members reach it.'"
+  },
+  {
+   "role": "whatif",
+   "tag": "whatif-twenty-litres",
+   "request": "what if the factory takes twenty litres a second",
+   "replies": [
+    "{\"dp_pct\": null, \"dt_c\": null, \"dpet_pct\": null, \"demand_cms\": 0.02}"
+   ],
+   "errors": [],
+   "shown": "Read by Chrome's built-in model: 0.02 m³/s taken. Status '0.02 m³/s taken: painted on the rivers in 94 s.' Map log 'What if 0.02 m³/s taken at river reach 230428063'. (Cold GR4J calibration.)"
+  },
+  {
+   "role": "whatif",
+   "tag": "whatif-summers-three",
+   "request": "summers get much hotter, maybe three degrees",
+   "replies": [
+    "{\"dp_pct\": null, \"dt_c\": 3.0, \"dpet_pct\": null, \"demand_cms\": null}"
+   ],
+   "errors": [],
+   "shown": "Read by Chrome's built-in model: 3 °C warmer (“summers” not applied: the change runs over the whole year)."
+  },
+  {
+   "role": "whatif",
+   "tag": "whatif-much-wetter",
+   "request": "a much wetter future",
+   "replies": [
+    "{\"dp_pct\": 10.0, \"dt_c\": null, \"dpet_pct\": null, \"demand_cms\": null}"
+   ],
+   "errors": [],
+   "shown": "Not read. Chrome's built-in model: refused dp_pct 10: that number is not in the words."
+  },
+  {
+   "role": "whatif",
+   "tag": "whatif-new-winters-rain",
+   "request": "what if winters get two degrees warmer and there is 15 percent less rain",
+   "replies": [
+    "{\"dp_pct\": -15.0, \"dt_c\": 2.0, \"dpet_pct\": null, \"demand_cms\": null}"
+   ],
+   "errors": [],
+   "shown": "Read by Chrome's built-in model: 15% less rain, 2 °C warmer (“winters” not applied: the change runs over the whole year)."
+  },
+  {
+   "role": "whatif",
+   "tag": "whatif-new-brewery",
+   "request": "a brewery upstream draws 7.5 l/s and the climate warms by one and a half degrees",
+   "replies": [
+    "{\"dp_pct\": null, \"dt_c\": 1.5, \"dpet_pct\": null, \"demand_cms\": 7.5}"
+   ],
+   "errors": [],
+   "shown": "Read by Chrome's built-in model: 7.5 m³/s taken (refused dt_c 1.5: that number is not in the words). Ran: mean flow -33 % (-35 to -33 %), low flow (Q95) -100 %, 10-year flood -5 %."
+  },
+  {
+   "role": "whatif",
+   "tag": "whatif-300-litres",
+   "request": "what if the town pumps 300 litres per second out of the river",
+   "replies": [
+    "{\"dp_pct\": null, \"dt_c\": null, \"dpet_pct\": null, \"demand_cms\": 0.3}"
+   ],
+   "errors": [],
+   "shown": "Read by Chrome's built-in model: 0.3 m³/s taken."
+  }
+ ]
+}

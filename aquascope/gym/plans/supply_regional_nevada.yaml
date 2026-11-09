@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # No gauge within reach: the supply is regionalised from donors, the reliability read off the transferred Q95,
 # median and Q05 as a band; the catchment area is required to turn mm/d into m3/s.
 id: supply_regional_nevada

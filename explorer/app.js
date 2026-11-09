@@ -31,8 +31,12 @@ import { initBulletin } from "./src/bulletin.js?v=__BUILD__";
 import { initFloodsAhead } from "./src/floods-ahead.js?v=__BUILD__";  // Floods ahead (#546), on by default
 import { initFlowStatus } from "./src/flowstatus-layer.js?v=__BUILD__";  // Flow vs normal on the rivers (#559)
 import { initFloodDepth } from "./src/flood-depth.js?v=__BUILD__";  // flood depth where floods are forecast (#554)
+import { initFloodSection } from "./src/flood-section.js?v=__BUILD__";  // a section and a hydrograph (#621)
+import { initFloodExposure } from "./src/flood-exposure.js?v=__BUILD__";  // what gets flooded (#622)
 import { initMeshView } from "./src/mesh-view.js?v=__BUILD__";  // your model results on the globe (#555)
+import { initModelSamples } from "./src/model-samples.js?v=__BUILD__";  // Open model results: your files or a sample (#591)
 import { initMeshReview } from "./src/mesh-review.js?v=__BUILD__";  // review my model results (#564)
+import { initMeshViews } from "./src/mesh-views.js?v=__BUILD__";  // smooth depth, 3D and the flood lenses (#619, #620)
 import { initSearch } from "./src/search.js?v=__BUILD__";
 import { initShell, initTabs, selectTab, setStatusEl, showSurface } from "./src/shell.js?v=__BUILD__";
 import { initStationPanel, reanalyze, selectStation, setPeriod } from "./src/panel-station.js?v=__BUILD__";
@@ -53,6 +57,15 @@ import { initMapActions } from "./src/map-actions.js?v=__BUILD__";  // the AI's 
 import { initMapCommand } from "./src/map-command.js?v=__BUILD__";  // Ask the map (#561)
 import { initScout } from "./src/scout.js?v=__BUILD__";  // Scout (#563): pins on what stands out
 import { initWhatIf } from "./src/whatif-map.js?v=__BUILD__";  // What if, on the map (#565)
+import { initRoute } from "./src/route-map.js?v=__BUILD__";  // Route it (#656)
+import { initWell } from "./src/well-map.js?v=__BUILD__";  // Drop a well (#660)
+import { initLanduse } from "./src/landuse-map.js?v=__BUILD__";  // Change land use (#661)
+import { initPaint } from "./src/paint.js?v=__BUILD__";  // Paint the globe (#657)
+import { initSketchMenu } from "./src/sketch-menu.js?v=__BUILD__";  // the sketchpad's tools (#664)
+import { initStorm } from "./src/storm-map.js?v=__BUILD__";  // Draw a storm (#670)
+import { initReservoir } from "./src/reservoir-map.js?v=__BUILD__";  // Draw a reservoir (#662)
+import { initFloodIt } from "./src/floodsim-map.js?v=__BUILD__";  // Flood it, a screening flood on the GPU (#658)
+import { initReplay } from "./src/replay.js?v=__BUILD__";  // Replay an event, a past flood as a story (#659)
 
 import { initMetrics } from "./src/metrics-ui.js?v=__BUILD__";
 
@@ -197,13 +210,26 @@ function bringMapOnline(url) {
   initFloodsAhead();
   initFlowStatus();
   initFloodDepth();
+  initFloodSection();   // the model tools on the mesh row (#621, #622)
+  initFloodExposure();
   initFloodsPast();
   initGroundwater();
   initWaterBalance();
+  initModelSamples();
   initMeshView();
   initMeshReview();
+  initMeshViews();
   initMapActions();   // after every layer it can switch (#561)
   initWhatIf();       // its slot in the action log (#565)
+  initRoute();        // its slot in the action log (#656)
+  initPaint();        // Paint this view, and its slot in the action log (#657)
+  initSketchMenu();   // the sketchpad's menu (#664); each tool adds itself
+  initStorm();        // Draw a storm (#670), after Route it: its wave is drawn there
+  initReservoir();    // Draw a reservoir (#662), after Route it and the storm
+  initFloodIt();      // Flood it on the reach card, and its slot in the action log (#658)
+  initReplay();       // Replay on the reach card and in Floods past, a #rp= link, its slot in the log (#659)
+  initWell();         // Drop a well in the sketchpad menu, and its slot in the action log (#660)
+  initLanduse();      // Change land use in the sketchpad menu, and its slot in the action log (#661)
   // A selection made while the map was still dark has nothing on the map yet.
   if (state.selected) {
     highlightStation(`${state.selected.source}/${state.selected.station_id}`);

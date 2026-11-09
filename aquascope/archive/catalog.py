@@ -121,9 +121,11 @@ def _rows_from_geojson(dest: Path) -> list[dict[str, Any]]:
 
 
 # Connectives that carry no signal in a multi-word query ("Thames at Kingston", "Rhône à Anthon").
+# "near" is here because USGS station names are built as "Cedar River near Cedar Rapids": left in, it
+# matches ten US gauges called "... near Kingston" and outranks the Thames at Kingston record (#646).
 _STOP_TOKENS = frozenset({
-    "a", "an", "am", "at", "in", "on", "of", "the", "de", "du", "des", "la", "le", "les", "der", "die", "das",
-    "river", "riviere", "fluss", "rio",
+    "a", "an", "am", "at", "in", "near", "on", "of", "the", "de", "du", "des", "la", "le", "les", "der", "die",
+    "das", "river", "riviere", "fluss", "rio",
 })
 
 

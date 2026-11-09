@@ -13,9 +13,13 @@ engine behind the Explorer's "What if…" on the map card, the MCP tool ``whatif
   down the river to the next few major confluences by area weighting (:data:`SIMPLIFICATION` says what that
   assumes).
 * :func:`parse_scenario` is the keyless reading of one line ("20% less rain and 2 degrees warmer"), and
-  :func:`scenario_prompt`, :func:`parse_scenario_reply` and :func:`model_scenario` the model path. A model only
-  fills the four parameters; every number on the map comes from the code here, and a number the model gives that
-  is not in the reader's words is refused (the claim lock).
+  :func:`scenario_prompt`, :func:`parse_scenario_reply` and :func:`model_scenario` the model path. The model
+  parses, the code reads (#590, round 3): for each clause the model names a change kind (:data:`CHANGES`), the
+  number as the words write it (an enum of the words' own number tokens, :func:`number_tokens`), a unit
+  (:data:`UNITS`) and a part of the year (:data:`SEASONS`), all enums of :func:`scenario_schema`. It writes no
+  value: code takes the number from the words, checks the unit against the one the words give, converts it
+  ("draws 7.5 l/s" runs as 0.0075 m³/s), sets the sign and holds it to :data:`LIMITS`. Every number on the map
+  comes from the code here.
 
 Everything is plain Python over numpy, scipy and pandas, so the Explorer's Pyodide worker runs it unchanged.
 Model output throughout: GEOGLOWS v2 is CC BY 4.0, the river network TDX-Hydro (CC BY-SA 4.0), ERA5 through
@@ -30,8 +34,9 @@ import re
 from typing import Any
 
 __all__ = [
-    "CONFLUENCES", "FLOOD_RP", "LIMITS", "MEMBERS", "SIMPLIFICATION", "check_scenario", "downstream_shares",
-    "model_scenario", "parse_scenario", "parse_scenario_reply", "scenario_label", "scenario_prompt", "whatif",
+    "CHANGES", "CONFLUENCES", "FLOOD_RP", "LIMITS", "MEMBERS", "SEASONS", "SIMPLIFICATION", "UNITS", "check_scenario",
+    "downstream_shares", "model_scenario", "number_tokens", "parse_scenario", "parse_scenario_reply",
+    "scenario_label", "scenario_prompt", "scenario_schema", "whatif",
 ]
 
 #: The bounds a scenario is held to: rain and evaporation change in %, warming in degrees C, demand in m3/s.
@@ -104,12 +109,23 @@ def check_scenario(sc: Any) -> tuple[dict[str, Any], list[str]]:
         if v < lo or v > hi:
             errors.append(f"{key} {v:g} is outside {lo:g} to {hi:g}; held at the limit")
             v = min(hi, max(lo, v))
-        out[key] = round(v, 3)
+        # A demand keeps its small values: 7.5 l/s is 0.0075 m³/s, not 0.007 (#590).
+        out[key] = round(v, 6) if key == "demand_cms" else round(v, 3)
     return out, errors
 
 
 def _g(v: float) -> str:
-    return f"{abs(v):.1f}".rstrip("0").rstrip(".") if abs(v) % 1 else f"{abs(v):.0f}"
+    """``|v|`` to three significant figures, whole numbers from 100: a value that is not nought never reads
+    as "0" (0.02 m³/s taken, #590). The Explorer's ``whatif-core.js`` writes it the same way."""
+    from decimal import ROUND_HALF_UP, Decimal
+
+    a = abs(float(v))
+    if not a:
+        return "0"
+    places = max(0, 2 - math.floor(math.log10(a)))
+    # Half up on the float's exact value, as JavaScript's toFixed rounds (1234.5 is 1235 on both faces).
+    out = str(Decimal(a).quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP))
+    return out.rstrip("0").rstrip(".") if "." in out else out
 
 
 def scenario_label(sc: dict[str, Any]) -> str:
@@ -128,8 +144,6 @@ def scenario_label(sc: dict[str, Any]) -> str:
     return ", ".join(bits) or "no change"
 
 
-_FRACTIONS = {"a tenth": 10.0, "one tenth": 10.0, "a fifth": 20.0, "one fifth": 20.0, "a quarter": 25.0,
-              "one quarter": 25.0, "a third": 100.0 / 3, "one third": 100.0 / 3, "half": 50.0}
 _NEG = r"\b(?:less|fewer|lower|drier|dryer|down|minus|decrease[sd]?|reduc(?:e|ed|tion)|cut|drop|falls?|cooler|colder|" \
        r"cooling)\b"
 _POS = r"\b(?:more|higher|wetter|up|plus|increase[sd]?|rise[sn]?|warmer|hotter|warming|heating)\b"
@@ -140,11 +154,44 @@ _KINDS = (
     ("demand_cms", r"\b(?:demand|abstract\w*|withdraw\w*|irrigat\w*|pump\w*|tak(?:e|en|ing)|extract\w*|divert\w*|"
                    r"draw\w*|use[sd]?)\b|m3/s|cumecs|\bl/s\b"),
 )
-_NUMBER = re.compile(r"(?P<sign>[+-])?\s*(?P<n>\d+(?:\.\d+)?)")
+# A number, not the digit of a unit or a name ("m3/s", "et0").
+_NUMBER = re.compile(r"(?<![a-z\d.])(?P<sign>[+-])?\s*(?P<n>\d+(?:\.\d+)?)")
 _FILLER = frozenset("""what if a an the of in on by with and than to for at this basin river catchment here there
     it is be was were would if please scenario per cent percent c degree degrees celsius m3 s cumecs l year years
     every each all over across more less climate future scenario world catchments flows flow gets get got becomes
     become turns goes go rains rained""".split())
+
+
+# Numbers in words, two to twenty and the tens: "three degrees" is 3 degrees. "One" counts only before a unit
+# ("one degree"): elsewhere it is mostly a pronoun ("a hotter one"), and "one fifth" is read as a share.
+_WORD_NUMBERS = {w: i for i, w in enumerate(
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+    "seventeen eighteen nineteen twenty".split()) if w != "one"}
+_WORD_NUMBERS.update({"thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
+                      "ninety": 90, "hundred": 100, "a hundred": 100, "one hundred": 100,
+                      "one": 1})
+_WORD_NUMBER = re.compile(
+    r"\b(?:" + "|".join(sorted(map(re.escape, (w for w in _WORD_NUMBERS if w != "one")), key=len, reverse=True))
+    + r"|one(?=\s*(?:degrees?\b|°|%|m3/s|l/s)))\b"
+    r"(?![\s-]+(?:tenths?|eighths?|sixths?|fifths?|quarters?|thirds?|halves)\b)"
+)
+# Litres (or liters) per second, however written, is l/s; cubic metres per second is m3/s.
+_PER_SECOND = re.compile(r"\b(?:litres?|liters?|l)\s*(?:per|a|/)\s*(?:second|sec|s)\b|\blps\b")
+_CUMECS = re.compile(r"\bcubic\s+met(?:re|er)s?\s*(?:per|a|/)\s*(?:second|sec|s)\b")
+
+
+# A part of the year: the model runs a change over the whole year, so a line that names one says so (#590).
+_SEASON = re.compile(
+    r"\b(?:summers?|winters?|autumns?|springtime|monsoons?|(?:dry|wet|rainy|growing|melt|snowmelt)\s+seasons?|"
+    r"seasons?|seasonal(?:ly)?|january|february|march|april|june|july|august|september|october|november|december|"
+    r"(?:in|during|each|every|this|next|over)\s+(?:the\s+)?(?:spring|fall|may))\b", re.IGNORECASE)
+
+
+def season_words(text: str) -> list[str]:
+    """The words of ``text`` that name a part of the year ("summers", "in July", "the dry season"). A scenario is
+    run over the whole year, so the line under the box says these were not applied rather than widening them in
+    silence (#590: "summers get much hotter, maybe three degrees" ran as a year-round warming)."""
+    return list(dict.fromkeys(re.sub(r"\s+", " ", m.group(0)).strip() for m in _SEASON.finditer(str(text or ""))))
 
 
 def _normalise(text: str) -> str:
@@ -152,6 +199,13 @@ def _normalise(text: str) -> str:
     for a, b in (("−", "-"), ("–", "-"), ("m³/s", " m3/s"), ("m^3/s", " m3/s"), ("º", "°"), ("℃", "°c"),
                  ("percent", "%"), ("per cent", "%")):
         t = t.replace(a, b)
+    t = _CUMECS.sub(" m3/s", t)
+    t = _PER_SECOND.sub(" l/s", t)
+    # "one and a half degrees" is 1.5 degrees (#590): the half goes with its number before either is read.
+    t = re.sub(r"\b(" + _WORD_RE + r")\b", lambda m: _g(_word_value(m.group(1))) if m.group(1).endswith(
+        "and a half") else m.group(1), t)
+    t = re.sub(r"\b(\d+(?:\.\d+)?) and a half\b", lambda m: _g(float(m.group(1)) + 0.5), t)
+    t = _WORD_NUMBER.sub(lambda m: str(_WORD_NUMBERS[re.sub(r"\s+", " ", m.group(0))]), t)
     return re.sub(r"\s+", " ", t).strip(" .!?")
 
 
@@ -165,32 +219,38 @@ def _clause(raw: str) -> tuple[str | None, float | None, str]:
     if kind is None:
         return None, None, raw
     value = None
-    for words, v in _FRACTIONS.items():
-        if re.search(rf"\b{words}\b", raw):
-            value = v
-            break
+    converted = False
+    tokens = number_tokens(raw)
+    tok = tokens[0] if tokens else None
+    if tok and (tok["share"] or (tok["unit"] in UNITS and UNITS[tok["unit"]][0] == _UNIT_OF_KEY.get(kind))):
+        unit = tok["unit"]
+        dimension, factor = UNITS[unit]
+        value = tok["value"] * factor
+        converted = True
     sign_given = False
-    if value is None:
-        m = _NUMBER.search(raw)
-        if m:
+    m = _NUMBER.search(raw)
+    if m:
+        if value is None:
             value = float(m.group("n"))
-            if m.group("sign"):
-                sign_given = True
-                value = -value if m.group("sign") == "-" else value
+        if m.group("sign"):
+            sign_given = True
+            value = -value if m.group("sign") == "-" else value
     if value is None:
         return kind, None, raw
-    if kind == "demand_cms" and re.search(r"\bl/s\b", raw):
+    if kind == "demand_cms" and not converted and re.search(r"\bl/s\b", raw):
         value /= 1000.0
     if not sign_given and kind != "demand_cms":
         if re.search(_NEG, raw):
             value = -abs(value)
         elif not re.search(_POS, raw) and kind != "dt_c":
             return kind, None, raw   # "20% rain": more or less?
-    left = re.sub(r"[+-]?\d+(?:\.\d+)?|%|°c?|m3/s|l/s|" + _NEG + "|" + _POS, " ", raw)
+    left = raw
+    if tok:
+        left = left.replace(tok["token"], " ").replace(tok["token"].replace("-", " "), " ")
+    left = re.sub(_SHARE_RE, " ", left)
+    left = re.sub(r"[+-]?\d+(?:\.\d+)?|%|°c?|m3/s|l/s|" + _NEG + "|" + _POS, " ", left)
     for _k, pattern in _KINDS:
         left = re.sub(pattern, " ", left)
-    for words in _FRACTIONS:
-        left = left.replace(words, " ")
     unknown = [w for w in re.findall(r"[a-z]+", left) if w not in _FILLER]
     return kind, value, " ".join(unknown)
 
@@ -199,133 +259,333 @@ def parse_scenario(text: str) -> dict[str, Any]:
     """Read one line ("20% less rain and 2 degrees warmer", "take 5 m3/s for irrigation") into a scenario,
     with no model and no network.
 
-    Returns ``{"text", "matched", "scenario", "said", "rules", "unknown", "errors"}``: ``matched`` only when every
-    clause was read and at least one parameter changed; ``said`` is :func:`scenario_label` of the result.
+    Returns ``{"text", "matched", "scenario", "said", "rules", "unknown", "errors", "season"}``: ``matched`` only
+    when every clause was read and at least one parameter changed; ``said`` is :func:`scenario_label` of the
+    result; ``season`` the words that name a part of the year (:func:`season_words`), which the run does not
+    apply.
     """
     norm = _normalise(text)
     out: dict[str, Any] = {"text": str(text or "").strip(), "matched": False, "scenario": None, "said": "",
-                           "rules": [], "unknown": [], "errors": []}
+                           "rules": [], "unknown": [], "errors": [], "season": season_words(text)}
     if not norm:
         return out
     norm = re.sub(r"^(?:what if|what happens if|if|suppose|imagine)\s+", "", norm)
     parts = [p.strip() for p in re.split(r"\s*(?:;|,|\band\b|\bwith\b|\bplus\b(?=\s+\D)|&)\s*", norm) if p.strip()]
     found: dict[str, float] = {}
+    unitless_withdrawal = False
     for part in parts:
         kind, value, left = _clause(part)
+        tokens = number_tokens(part)
+        if kind == "demand_cms" and tokens and tokens[0]["share"]:
+            unitless_withdrawal = True
+            out["unknown"].append(part)
+            out["errors"].append(f"{part}: the words give no unit for it")
+            continue
         if kind is None or value is None:
             out["unknown"].append(part)
+            if kind is not None and value is None:
+                out["errors"].append(f"{part}: the words give no number for it")
             continue
         found[kind] = value
         out["rules"].append(kind)
         if left:
             out["unknown"].append(left)
-    if not found:
+    if unitless_withdrawal or not found:
         return out
     checked, errors = check_scenario(found)
-    out.update(scenario=checked, errors=errors, said=scenario_label(checked))
+    out["errors"].extend(errors)
+    out.update(scenario=checked, said=scenario_label(checked))
     changed = any(checked[k] for k in ("dp_pct", "dt_c", "demand_cms")) or bool(checked["dpet_pct"])
     out["matched"] = changed and not out["unknown"]
     return out
 
 
-def scenario_schema() -> dict[str, Any]:
-    """The JSON a model's reply is held to: the four parameters, each a number or null."""
-    num = {"type": ["number", "null"]}
-    return {"type": "object", "additionalProperties": False,
-            "properties": {"dp_pct": {**num, "description": "rain change in percent (-20 is 20% less rain)"},
-                           "dt_c": {**num, "description": "warming in degrees C (2 is 2 degrees warmer)"},
-                           "dpet_pct": {**num, "description": "evaporation change in percent, only if asked"},
-                           "demand_cms": {**num, "description": "a demand taken from the river, m3/s"}},
-            "required": ["dp_pct", "dt_c", "dpet_pct", "demand_cms"]}
+# ── the model path: the model parses, the code reads the numbers and converts (#590, round 3) ─────────
+
+#: What a model may say a clause changes, and the parameter and sign each sets.
+CHANGES: dict[str, tuple[str, int]] = {
+    "less_rain": ("dp_pct", -1), "more_rain": ("dp_pct", 1), "warmer": ("dt_c", 1), "cooler": ("dt_c", -1),
+    "less_evaporation": ("dpet_pct", -1), "more_evaporation": ("dpet_pct", 1), "take_water": ("demand_cms", 1),
+}
+#: The units a model may name, and what each converts to (code converts; a model never does): a change in rain or
+#: evaporation in percent, a warming in degrees C, a demand in m3/s.
+UNITS: dict[str, tuple[str, float]] = {
+    "percent": ("pct", 1.0), "fraction": ("pct", 100.0),
+    "degC": ("deg", 1.0), "K": ("deg", 1.0), "degF": ("deg", 5.0 / 9.0),
+    "m3/s": ("flow", 1.0), "l/s": ("flow", 1e-3), "m3/day": ("flow", 1.0 / 86400.0),
+    "ML/day": ("flow", 1000.0 / 86400.0), "mm": ("depth", 1.0), "none": ("", 1.0),
+}
+_UNIT_OF_KEY = {"dp_pct": "pct", "dpet_pct": "pct", "dt_c": "deg", "demand_cms": "flow"}
+#: The parts of the year a model may name; the run is over the whole year, so any but "year" is said, not applied.
+SEASONS = ("year", "winter", "spring", "summer", "autumn", "wet season", "dry season", "some months")
+
+# What follows a number in the words, as the unit it is in. Degrees with no letter are degrees C.
+_UNIT_AFTER: tuple[tuple[str, str], ...] = (
+    ("percent", r"%|per ?cent\b|pct\b"),
+    ("degF", r"°\s*f\b|deg(?:rees?)?\s*f(?:ahrenheit)?\b|fahrenheit\b"),
+    ("K", r"kelvins?\b|k\b"),
+    ("degC", r"°\s*c?|deg(?:rees?)?(?:\s*(?:c|celsius|centigrade)\b)?|celsius\b|centigrade\b|c\b"),
+    ("m3/s", r"m3/s\b|m3 ?s-1\b|cumecs\b|cubic met(?:re|er)s?\s*(?:per|a|/)\s*(?:second|sec|s)\b"),
+    ("l/s", r"l/s\b|lps\b|lit(?:re|er)s?\s*(?:per|a|an|/|each)\s*(?:second|sec|s)\b"),
+    ("m3/day", r"m3/d(?:ay)?\b|cubic met(?:re|er)s?\s*(?:per|a|/)\s*day\b"),
+    ("ML/day", r"ml/d(?:ay)?\b|megalit(?:re|er)s?\s*(?:per|a|/)\s*day\b"),
+    ("mm", r"mm\b|millimet(?:re|er)s?\b"),
+)
+_SMALL = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+          "seventeen eighteen nineteen").split()
+_TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
+         "ninety": 90}
+_DENOMINATORS: dict[str, int] = {
+    "half": 2, "halves": 2,
+    "third": 3, "thirds": 3,
+    "quarter": 4, "quarters": 4,
+    "fifth": 5, "fifths": 5,
+    "sixth": 6, "sixths": 6,
+    "eighth": 8, "eighths": 8,
+    "tenth": 10, "tenths": 10,
+}
+_SHARES: dict[str, float] = {k: 1.0 / v for k, v in _DENOMINATORS.items()}
+_WORD_RE = (r"(?:(?:a|one)\s+hundred|hundred|(?:" + "|".join(_TENS) + r")(?:[\s-](?:" + "|".join(_SMALL[1:10])
+            + r"))?|" + "|".join(sorted(_SMALL, key=len, reverse=True)) + r")(?:\s+and\s+a\s+half)?")
+_SINGULAR_SHARES = r"tenth|eighth|sixth|fifth|quarter|third"
+_PLURAL_SHARES = r"tenths|eighths|sixths|fifths|quarters|thirds|halves"
+_SHARE_NUMS = "|".join(sorted(_SMALL[1:], key=len, reverse=True)) + r"|\d+"
+_SHARE_RE = (
+    r"(?:\b(?:(?:a|one|1)[\s-](?:" + _SINGULAR_SHARES + r")|an[\s-]eighth|(?:a[\s-])?half)\b"
+    r"|\b(?:" + _SHARE_NUMS + r")[\s-](?:" + _PLURAL_SHARES + r")\b)"
+)
+_TOKEN = re.compile(
+    r"(?P<share>" + _SHARE_RE + r")"
+    r"|(?P<digits>(?<![\w.])\d+(?:,\d{3})*(?:\.\d+)?(?![\d]))"
+    r"|(?P<word>\b" + _WORD_RE + r"\b)")
 
 
-def scenario_prompt(context: str = "") -> dict[str, Any]:
-    """The system prompt and schema for a model that reads a what-if line into the four parameters."""
-    shots = []
-    for ex in ("20% less rain and 2 degrees warmer", "take 5 m3/s for irrigation", "a wetter climate, rain up 10%"):
-        sc = parse_scenario(ex)["scenario"] or {}
-        shots.append(f"Line: {ex}\nReply: {json.dumps({k: (sc.get(k) or None) for k in LIMITS})}")
+def _word_value(words: str) -> float | None:
+    """A number in words as a value: "three" 3, "twenty-five" 25, "one and a half" 1.5, "a hundred" 100."""
+    w = re.sub(r"[\s-]+", " ", str(words or "").lower()).strip()
+    half = w.endswith(" and a half")
+    w = w[: -len(" and a half")] if half else w
+    if w in ("a hundred", "one hundred", "hundred"):
+        v = 100.0
+    elif w in _SMALL:
+        v = float(_SMALL.index(w))
+    else:
+        parts = w.split(" ")
+        if parts[0] not in _TENS:
+            return None
+        v = float(_TENS[parts[0]]) + (float(_SMALL.index(parts[1])) if len(parts) > 1 and parts[1] in _SMALL else 0)
+    return v + (0.5 if half else 0.0)
+
+
+def _token_value(token: str) -> tuple[float, bool] | None:
+    """A number token's value and whether it is a share ("a fifth" is 0.2 of something), or None."""
+    t = re.sub(r"[\s-]+", " ", str(token or "").strip().lower())
+    if re.fullmatch(r"\d+(?:,\d{3})*(?:\.\d+)?", t):
+        return float(t.replace(",", "")), False
+    single = re.fullmatch(r"(?:(?:a|an|one|1) )?(tenth|eighth|sixth|fifth|quarter|third|half)", t)
+    if single:
+        return _SHARES[single.group(1)], True
+    compound = re.fullmatch(r"(\w+|\d+)\s+(tenths|eighths|sixths|fifths|quarters|thirds|halves)", t)
+    if compound:
+        num_str, den_str = compound.group(1), compound.group(2)
+        if num_str.isdigit():
+            num = float(num_str)
+        elif num_str in _SMALL:
+            num = float(_SMALL.index(num_str))
+        else:
+            num = _word_value(num_str)
+        if num is not None and den_str in _DENOMINATORS:
+            return num / _DENOMINATORS[den_str], True
+    v = _word_value(t)
+    return (v, False) if v is not None else None
+
+
+def _lower(text: str) -> str:
+    t = str(text or "").lower()
+    for a, b in (("−", "-"), ("–", "-"), ("m³/s", "m3/s"), ("m^3/s", "m3/s"), ("m³/d", "m3/d"), ("º", "°"),
+                 ("℃", "°c"), ("℉", "°f")):
+        t = t.replace(a, b)
+    return t
+
+
+def number_tokens(text: str) -> list[dict[str, Any]]:
+    """The numbers in the reader's words, as written, with the unit the words give each (what follows it):
+    ``[{"token", "value", "share", "unit"}]``. "7.5 l/s" is ``7.5`` in ``l/s``, "one and a half degrees" ``1.5``
+    in ``degC``, "a fifth" the share ``0.2`` (unit ``fraction``). ``unit`` is None when the words give none."""
+    low = _lower(text)
+    out = []
+    for m in _TOKEN.finditer(low):
+        token = re.sub(r"\s+", " ", m.group(0)).strip()
+        got = _token_value(token)
+        if got is None:
+            continue
+        value, share = got
+        unit = "fraction" if share else None
+        rest = low[m.end():m.end() + 40]
+        rest = re.sub(r"^\s*(?:more|less|fewer|of|extra|higher|lower|warmer|cooler)?\s*", "", rest) \
+            if not re.match(r"\s*(?:%|°)", rest) else rest
+        # "half a litre" is a quantity, while "half the rain" is a share.
+        # Strip an article only when testing for an explicitly named unit.
+        if share:
+            rest = re.sub(r"^(?:a|an)\s+", "", rest)
+        for name, pattern in _UNIT_AFTER:
+            if re.match(r"\s*(?:" + pattern + ")", rest):
+                unit, share = name, False
+                break
+        out.append({"token": token, "value": value, "share": share, "unit": unit})
+    return out
+
+
+def scenario_schema(text: str = "") -> dict[str, Any]:
+    """The JSON Schema a model's reading is held to: up to four clauses, each a change kind (:data:`CHANGES`),
+    the number as written in the reader's words (an enum of ``text``'s own number tokens, or "none"), a unit
+    (:data:`UNITS`) and a part of the year (:data:`SEASONS`). Nothing in it is free text."""
+    from aquascope.map_pick import choice
+
+    # Offer a digit alias only if the matcher can read it back as the same value. _g is for display and
+    # can lose precision (a third becomes 0.333); conversion must use the original token's value.
+    tokens = []
+    for t in number_tokens(text):
+        tokens.append(t["token"])
+        if not t["share"]:
+            alias = _g(t["value"])
+            parsed = _token_value(alias)
+            if parsed and math.isclose(t["value"], parsed[0], rel_tol=1e-9):
+                tokens.append(alias)
+    number = choice([*tokens, "none"]) if text else {"type": "string", "maxLength": 40}
+    return {"type": "object", "required": ["clauses"], "additionalProperties": False, "properties": {
+        "clauses": {"type": "array", "maxItems": 4, "items": {
+            "type": "object", "required": ["change", "number", "unit", "season"], "additionalProperties": False,
+            "properties": {"change": choice(CHANGES), "number": number, "unit": choice(UNITS),
+                           "season": choice(SEASONS)}}}}}
+
+
+def scenario_prompt(context: str = "", text: str = "") -> dict[str, Any]:
+    """The system prompt and schema for a model that parses a what-if line (``text``, when given, sets the
+    number enum to the line's own number tokens). The model parses; the code reads each number from the words,
+    converts its unit and checks its direction (:func:`parse_scenario_reply`)."""
+    shots = (
+        ("20% less rain and 2 degrees warmer",
+         [("less_rain", "20", "percent", "year"), ("warmer", "2", "degC", "year")]),
+        ("take 300 litres per second for irrigation", [("take_water", "300", "l/s", "year")]),
+        ("summers a fifth drier", [("less_rain", "a fifth", "fraction", "summer")]),
+    )
     lines = [
-        "You read a 'what if' line about a river basin into four numbers for a rainfall-runoff model.",
-        'Reply with ONE JSON object and nothing else: {"dp_pct", "dt_c", "dpet_pct", "demand_cms"}.',
-        "dp_pct: the change in rain in percent (negative for less rain). dt_c: the warming in degrees C (negative "
-        "for cooler). dpet_pct: the change in evaporation in percent, only when the line names evaporation. "
-        "demand_cms: water taken from the river in m3/s (litres per second divided by 1000).",
-        "Use null for anything the line does not say. Never invent a number: every number must come from the "
-        "line's own words. If the line is not a what-if about water, reply with four nulls.",
+        "You parse a 'what if' line about a river basin into clauses for a rainfall-runoff model. You do not "
+        "work anything out: code reads each number from the line and converts its unit.",
+        'Reply with ONE JSON object and nothing else: {"clauses": [{"change", "number", "unit", "season"}]}.',
+        f"change: one of {', '.join(CHANGES)}. number: the number exactly as the line writes it (\"7.5\", "
+        "\"twenty\", \"one and a half\", \"a fifth\"), or \"none\" when the line gives none. unit: the unit the line "
+        f"gives that number in, one of {', '.join(UNITS)} (\"a fifth\" is a fraction). season: the part of the "
+        f"year the line names, one of {', '.join(SEASONS)} (\"year\" when it names none).",
+        "One clause per change the line asks for. If the line is not a what-if about water, reply with no clauses.",
         "",
-        *shots,
     ]
+    for line, clauses in shots:
+        reply = {"clauses": [dict(zip(("change", "number", "unit", "season"), c)) for c in clauses]}
+        lines.append(f"Line: {line}\nReply: {json.dumps(reply)}")
+    if text:
+        toks = [t["token"] for t in number_tokens(text)]
+        lines += ["", "The numbers in this line: " + (", ".join(f'"{t}"' for t in toks) if toks else "none") + "."]
     system = "\n".join(lines)
     if context:
         system += f"\n\nWhere the reader is: {context}"
-    return {"system": system, "schema": scenario_schema()}
+    return {"system": system, "schema": scenario_schema(text)}
 
 
-def _numbers_in(text: str) -> list[float]:
-    norm = _normalise(text)
-    vals = [float(m.group("n")) for m in _NUMBER.finditer(norm)]
-    vals += [v for w, v in _FRACTIONS.items() if re.search(rf"\b{w}\b", norm)]
-    if re.search(r"\bl/s\b", norm):
-        vals += [v / 1000.0 for v in vals]
-    return vals
+def _season_said(season: str, words: list[str]) -> bool:
+    stems = {"wet season": ("wet", "rainy", "monsoon"), "dry season": ("dry",), "some months": (
+        "january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+        "november", "december", "month", "season")}.get(season, (season.split(" ")[0][:5],))
+    return any(any(s in w.lower() for s in stems) for w in words)
 
 
 def parse_scenario_reply(reply: Any, text: str = "") -> dict[str, Any]:
-    """A model's reply (text or parsed JSON) as a checked scenario: ``{"scenario", "errors", "said"}``.
+    """A model's parse of the reader's ``text`` (its reply, text or parsed JSON) as a checked scenario:
+    ``{"scenario", "errors", "said", "season", "read"}``.
 
-    The claim lock: with the reader's ``text``, a non-zero number the model gives that is not in those words
-    is refused and listed in ``errors``, and so is one the words say only once but the model uses twice, one
-    whose direction contradicts what the keyless rules read in the same words ("20% more rain" is never -20),
-    and one outside :data:`LIMITS` (held at a limit it would be a number nobody said). The model fills
-    parameters, it does not choose them.
+    The reply is held to :func:`scenario_schema` first: a change, number, unit or season outside its enums (a
+    number that is not one of the words' own number tokens) refuses the reply whole. Then each clause, read by
+    code: its number must be a number token of the words, used no more often than the words say it, in the unit
+    the words give it (the model's unit must agree: "draws 7.5 l/s" is 0.0075 m³/s, never 7.5); code converts
+    the unit (percent or a share for rain and evaporation, degrees C, K or F for warming, m3/s, l/s, m3/day or
+    ML/day for a demand), sets the sign from the change, refuses a direction the keyless rules read the other
+    way round ("20% more rain" is never -20) and holds the value to :data:`LIMITS`. A refused clause is said in
+    ``errors`` and left out. ``season`` is the words that name a part of the year (:func:`season_words`): the run
+    is over the whole year, so the line says those were not applied. ``read`` says each clause as code read it.
     """
-    data = reply
-    if isinstance(reply, str):
-        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", reply.strip())
-        start = raw.find("{")
-        if start < 0:
-            return {"scenario": None, "errors": ["the model did not reply with JSON"], "said": ""}
-        try:
-            data, _ = json.JSONDecoder().raw_decode(raw[start:])
-        except ValueError:
-            return {"scenario": None, "errors": ["the model's JSON could not be read"], "said": ""}
-    if not isinstance(data, dict):
-        return {"scenario": None, "errors": ["the model's reply is not an object"], "said": ""}
-    errors: list[str] = []
-    if text:
-        said_numbers = _numbers_in(text)
-        rules = (parse_scenario(text).get("scenario") or {})
-        for key, (lo, hi) in LIMITS.items():
-            v = _num(data.get(key))
-            if not v:
-                continue
-            hit = next((n for n in said_numbers if math.isclose(abs(v), n, rel_tol=1e-3, abs_tol=1e-6)), None)
-            ruled = _num(rules.get(key))
-            why = None
-            if hit is None:
-                why = "that number is not in the words" + (
-                    "" if not any(math.isclose(abs(v), n, rel_tol=1e-3, abs_tol=1e-6) for n in _numbers_in(text))
-                    else " as often as it is used")
-            elif ruled and (ruled > 0) != (v > 0):
-                why = f"the words say {scenario_label({key: ruled})}"
-            elif v < lo or v > hi:
-                why = f"outside {lo:g} to {hi:g}"
-            if why:
-                errors.append(f"refused {key} {v:g}: {why}")
-                data = {**data, key: None}
-            else:
-                said_numbers.remove(hit)
-    sc, more = check_scenario(data)
-    errors += more
-    if not any(sc[k] for k in ("dp_pct", "dt_c", "demand_cms")) and not sc["dpet_pct"]:
-        return {"scenario": None, "errors": errors or ["no change was read from the line"], "said": ""}
-    return {"scenario": sc, "errors": errors, "said": scenario_label(sc)}
+    from aquascope.map_pick import pick
+
+    if not str(text or "").strip():
+        return {"scenario": None, "errors": ["no words to read"], "said": "", "season": [], "read": []}
+    data, errors = pick(reply, scenario_schema(text))
+    if errors:
+        more = f" (and {len(errors) - 1} more)" if len(errors) > 1 else ""
+        return {"scenario": None, "errors": [f"the reply was refused: {errors[0]}{more}"], "said": "",
+                "season": season_words(text), "read": []}
+    tokens = number_tokens(text)
+    left = list(range(len(tokens)))
+    rules = parse_scenario(text).get("scenario") or {}
+    found: dict[str, float] = {}
+    errs: list[str] = []
+    read: list[str] = []
+    seasons = season_words(text)
+    for c in data["clauses"]:
+        key, sign = CHANGES[c["change"]]
+        words = c["change"].replace("_", " ")
+        if c["number"] == "none":
+            errs.append(f"{words}: the words give no number for it")
+            continue
+        want = _token_value(c["number"])
+        hit = next((i for i in left if tokens[i]["token"] == c["number"]), None)
+        if hit is None and want:
+            hit = next((i for i in left if math.isclose(tokens[i]["value"], want[0], rel_tol=1e-9)), None)
+        if hit is None:
+            errs.append(f"{words} {c['number']}: that number is not in the words as often as it is used")
+            continue
+        tok = tokens[hit]
+        said_unit, given = tok["unit"], c["unit"]
+        same = given == said_unit or (said_unit == "degC" and given == "K")
+        if said_unit is None:
+            errs.append(f"{words} {tok['token']}: the words give no unit for it")
+            continue
+        if not same:
+            errs.append(f"{words} {tok['token']}: the words say {said_unit}, not {given}")
+            continue
+        dim, factor = UNITS[given]
+        if dim != _UNIT_OF_KEY[key]:
+            why = ("a change in mm cannot be run: the model takes rain as a percent" if dim == "depth"
+                   else f"{given} is not a unit for {words}")
+            errs.append(f"{words} {tok['token']} {given}: {why}")
+            continue
+        if key in found:
+            errs.append(f"{words}: said twice")
+            continue
+        value = sign * abs(tok["value"]) * factor
+        ruled = _num(rules.get(key))
+        if ruled and (ruled > 0) != (value > 0):
+            errs.append(f"{words} {tok['token']}: the words say {scenario_label({key: ruled})}")
+            continue
+        lo, hi = LIMITS[key]
+        if not lo <= value <= hi:
+            errs.append(f"{words} {tok['token']}: {_g(value)} is outside {lo:g} to {hi:g}")
+            continue
+        if c["season"] != "year" and not _season_said(c["season"], seasons):
+            errs.append(f"{words}: the words name no {c['season']}, so none is said")
+        left.remove(hit)
+        found[key] = round(value, 6)
+        read.append(f"{tok['token']} {given}" if given not in ("fraction", "none") else tok["token"])
+    if not found:
+        return {"scenario": None, "errors": errs or ["no change was read from the line"], "said": "",
+                "season": seasons, "read": read}
+    sc, more = check_scenario(found)
+    return {"scenario": sc, "errors": errs + more, "said": scenario_label(sc), "season": seasons, "read": read}
 
 
 def model_scenario(text: str, *, provider: str | None = None, model: str | None = None, api_key: str | None = None,
                    base_url: str | None = None, context: str = "", client: Any = None) -> dict[str, Any]:
-    """Ask the reader's own model to read the line, and check its reply. Raises with no key and no client."""
+    """Ask the reader's own model to parse the line, and read its reply (:func:`parse_scenario_reply`). Raises
+    with no key and no client."""
     from aquascope.ai_engine.analyst import resolve_llm
     from aquascope.ai_engine.llm_transport import make_client
 
@@ -333,9 +593,9 @@ def model_scenario(text: str, *, provider: str | None = None, model: str | None 
         cfg = resolve_llm(provider, model, api_key, base_url)
         client = make_client(cfg["api_key"], cfg["base_url"], provider=cfg["provider"])
         model, provider = cfg["model"], cfg["provider"]
-    prompt = scenario_prompt(context)
+    prompt = scenario_prompt(context, text)
     resp = client.chat.completions.create(
-        model=model, temperature=0, max_tokens=200,
+        model=model, temperature=0, max_tokens=300,
         messages=[{"role": "system", "content": prompt["system"]}, {"role": "user", "content": str(text)}],
     )
     out = parse_scenario_reply(resp.choices[0].message.content or "", text)
@@ -344,6 +604,31 @@ def model_scenario(text: str, *, provider: str | None = None, model: str | None 
 
 
 # ── the basin and the way down ───────────────────────────────────────────────
+
+
+def _too_large(basin_km2: float) -> str | None:
+    """Why a basin of ``basin_km2`` is too large for :func:`whatif`, or None (:data:`MAX_BASIN_KM2`)."""
+    if not basin_km2 > MAX_BASIN_KM2:
+        return None
+    return (f"{basin_km2:,.0f} km2 drain to this reach: one ERA5 cell at the centre cannot stand for the weather of "
+            f"a basin that size (the limit here is {MAX_BASIN_KM2:,.0f} km2). Pick a reach on a tributary or further "
+            "upstream.")
+
+
+def _basin_check(river_id: int | str, lat: float | None = None, lon: float | None = None) -> dict[str, Any]:
+    """The area that drains to a reach and whether :func:`whatif` can run there, before any calibration:
+    ``{"river_id", "area_km2", "max_km2", "ok", "error"}``. The Explorer asks this when "What if..." opens, so a
+    reach over the limit says why at once instead of failing on Run (#590). It reads the same routing tables."""
+    from aquascope import rivers
+
+    rid = rivers._river_id(river_id)
+    net = rivers._network_for(rid, lat, lon)
+    i = net.index(rid)
+    if i is None:
+        raise LookupError(f"reach {rid} is not in its routing tables")
+    km2 = round(_drainage_m2(net, i) / 1e6, 2)
+    why = _too_large(km2)
+    return {"river_id": rid, "area_km2": km2, "max_km2": MAX_BASIN_KM2, "ok": why is None, "error": why}
 
 
 def _drainage_m2(net: Any, i: int) -> float:
@@ -498,7 +783,8 @@ def whatif(
     if text and not any(_num(v) for v in given.values()):
         parsed = parse_scenario(text)
         if not parsed["scenario"]:
-            out["error"] = (f"could not read a scenario from {text!r}; say for example '20% less rain and 2 degrees "
+            out["error"] = (parsed["errors"][0] if parsed["errors"] else
+                            f"could not read a scenario from {text!r}; say for example '20% less rain and 2 degrees "
                             "warmer', or give the numbers")
             return out
         given = parsed["scenario"]
@@ -538,10 +824,9 @@ def whatif(
                     "lon": _round(snap["snap_lon"] if snap else lon, 5)}
     if snap:
         out["snap"] = {k: snap.get(k) for k in ("distance_m", "strahler_order", "choice", "message")}
-    if basin_km2 > MAX_BASIN_KM2:
-        out["error"] = (f"{basin_km2:,.0f} km2 drain to this reach: one ERA5 cell at the centre cannot stand for the "
-                        f"weather of a basin that size (the limit here is {MAX_BASIN_KM2:,.0f} km2). Pick a reach on "
-                        "a tributary or further upstream.")
+    too_large = _too_large(basin_km2)
+    if too_large:
+        out["error"] = too_large
         out["basin"] = {"area_km2": basin_km2}
         return out
     if centre is None:

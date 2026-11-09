@@ -125,13 +125,33 @@ benchmark:
 
 - **Python:** `aquascope.rivers`, `river_path`, `nownext`, `evidence`, `watch`, `bulletin`, `context`,
   `flood_depth`, `flowstatus`, `waterbalance`, `whatif_map`, `mesh_review`, the `map_*` modules
-  (`map_commands`, `map_explain`, `map_layers`, `map_scout`, `map_time`), `io.mesh`, `io.swmm`,
-  `io.engineering`, `groundwater.surface`, `hydrology.b17c_check`, and `aquascope.gym` (to be renamed, #440).
+  (`map_commands`, `map_explain`, `map_layers`, `map_pick`, `map_scout`, `map_time`), `io.mesh`, `io.swmm`,
+  `io.engineering`, `groundwater.surface`, `hydrology.b17c_check`, and `aquascope.gym` (AquaScope Bench, #440).
 - **CLI:** `layers`, `map`, `whatif`, `mesh`, `swmm`, `bulletin`, `warnings`, `waterbalance`, `flowstatus`,
   `now`, `watch`, `river`, `evidence`, `context`, `modflow`, `export`, `gym`, and the `surface` flags of
   `groundwater`.
 - **MCP:** the 36 tools those modules expose (`snap_to_river`, `reach_record`, `flow_forecast`, `map_command`,
   `mesh_review`, `water_balance`, ...; the full list is `aquascope.experimental.MCP_TOOLS`).
+- **Added since 0.27.0:** `aquascope.mesh_views` (smooth depth, contours and flood lenses, #619, #620), its MCP
+  tool `mesh_lenses` and `aquascope mesh lenses`; `aquascope.groundwater.views` (contours, flow and capture zones, #623,
+  #624); `aquascope.groundwater.layers` and `aquascope.groundwater.budget` (MODFLOW layers, sections and the water budget, #625, #626), with
+  their flags of `aquascope modflow` and arguments of `modflow_heads`.
+- **Added in 1.1:** `aquascope.routing` (a flood wave down GEOGLOWS's river network, #656), `aquascope route` and
+  the MCP tools `route_flood` and `route_storm`.
+- **Added since 1.0.0:** `aquascope.paint` (Paint the globe, #657), `aquascope paint` and the MCP tool `paint_map`.
+- **Added in 1.1:** `aquascope.floodsim` (Flood it, a screening flood of a river's valley from a reach, #658),
+  `aquascope flood` and the MCP tool `flood_reach`; levees and breaches on its grid (#663: `apply_levee`,
+  `apply_breach`, `edit_grid`, `compare_exposure`), `aquascope flood --levee/--crest/--breach/--invert` and the same
+  arguments of `flood_reach`.
+- **Added in 1.1:** `aquascope.sketch` (the sketchpad, #664): `aquascope.sketch.drawdown` (drop a well, Theis with
+  superposition, #660), `aquascope well` and the MCP tool `drop_well`; `aquascope.sketch.landuse` (change land use,
+  the SCS curve number of TR-55, #661), `aquascope landuse` and the MCP tool `change_landuse`.
+- **Added in 1.1:** `aquascope.replay` (replay an event: a past flood as a story on the map, #659), `aquascope replay`
+  and the MCP tools `replay_candidates` and `replay_event`; `aquascope.routing.route` takes a real hydrograph
+  (`inflow_cms`).
+- **Added in 1.1:** `aquascope.sketch` (the sketchpad, #664): `aquascope.sketch.reservoir` (draw a reservoir,
+  level-pool routing, #662), `aquascope route reservoir` and the MCP tool `route_reservoir`; `aquascope.routing`'s
+  `route`, `route_storm` and `route_network` take `through` (a reach's outflow through a function).
 
 Experimental means:
 

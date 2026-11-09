@@ -40,10 +40,10 @@ aquascope eval score fish-river/ --case flood_at_site_potomac
   a failure.
 - **critic**: the Critic's checks, its open issues, and how many points the report
   lists as not established.
-- **report**: the six report-quality axes of the [HydroGym benchmark](hydrogym.md),
+- **report**: the six report-quality axes of the [AquaScope Bench](hydrogym.md),
   scored deterministically. When the package has a report reference for the study
   (by directory name, as for the recorded showcase), its score is added.
-- **plan** (with `--case`): the plan scored against a HydroGym reference case
+- **plan** (with `--case`): the plan scored against an AquaScope Bench reference case
   (`aquascope gym plans list`), with what it missed or added.
 - **cost**: wall time, the slowest phase and step, and model calls, tokens and USD.
 

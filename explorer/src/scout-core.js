@@ -99,11 +99,63 @@ export function scoutPin(f, { mode = "live", made = "" } = {}) {
   };
 }
 
-/** Who found and worded the pins, for the line under the bar: [who, how]. */
+/** Who found and ordered the pins, for the line under the bar: [who, how]. The words are always the package's. */
 export function scoutWho(by, model = "") {
-  if (by === "device") return [model || "On-device model", "worded on this device; numbers by code"];
-  if (by === "key") return [model || "Your model", "worded with your key; numbers by code"];
+  if (by === "device") return [model || "On-device model", "ordered on this device; words by code"];
+  if (by === "key") return [model || "Your model", "ordered with your key; words by code"];
   return ["Rules", "no model"];
+}
+
+/**
+ * Why a model that was asked gave nothing (#590): a timeout says it timed out, and after how long. `err` is what
+ * generateJsonLocally threw (its own timeout, or the Prompt API's AbortError when the timeout aborts it first).
+ */
+export function askedFailed(err, waitMs = 40000) {
+  const msg = String((err && err.message) || err || "");
+  if ((err && err.name === "AbortError") || /abort|took more than|timed? ?out/i.test(msg)) {
+    return `it was asked and timed out after ${Math.round(waitMs / 1000)} s; the rules' order and wording are kept`;
+  }
+  return `it was asked and gave no answer (${msg || "no reply"}); the rules' order and wording are kept`;
+}
+
+/**
+ * One short note on refused picks (#590): the whole reply, or how many, and the first one's reason. `refused` is the package's
+ * list ("<id>: <why>"); an id may hold a colon ("models_disagree:x/1") but never a colon and a space.
+ */
+export function refusedNote(refused = []) {
+  if (!refused || !refused.length) return "";
+  const first = String(refused[0]);
+  // The whole reply refused by the package's schema check (#590, round 3): one line, the rules stand.
+  if (refused.length === 1 && /^the model's reply was refused/.test(first)) return `${first}; rules kept`;
+  const why = first.includes(": ") ? first.slice(first.indexOf(": ") + 2) : first;
+  const more = refused.length > 1 ? ` (and ${refused.length - 1} more)` : "";
+  return `${refused.length} pick${refused.length === 1 ? "" : "s"} not used, rules kept: ${why}${more}`;
+}
+
+/**
+ * Who ordered the pins, and the note under the line (#590): a model that was asked but whose choice is on no
+ * pin is not said to have ordered them. `by` and `model` are what the model path returned, `picks` the pins
+ * (each with its own `by`), `refused` and `unknown` aquascope.map_scout.apply_wording's, `failed` why the
+ * model could not be asked. Returns { who, how, notes }.
+ */
+export function wordingLine({ by = "rules", model = "", picks = [], refused = [], unknown = [], failed = "" } = {}) {
+  const asked = by === "rules" ? "" : (model || (by === "device" ? "the on-device model" : "your model"));
+  const used = asked ? picks.filter((f) => f.by === by).length : 0;
+  const notes = [];
+  if (failed) notes.push(failed);
+  const r = refusedNote(refused);
+  if (r) notes.push(r);
+  if (!asked) return { who: "Rules", how: failed ? "the model could not be asked" : "no model", notes };
+  if (!used) {
+    if (!refused.length && !failed) {
+      notes.push(unknown.length
+        ? `the model wrote about ${unknown.join(", ")}, not a pin in this view; rules kept`
+        : "the model picked none of these pins; rules kept");
+    }
+    return { who: "Rules", how: failed ? `${asked} asked, no answer` : `${asked} asked, its choice not used`, notes };
+  }
+  const [who, how] = scoutWho(by, model);
+  return { who, how: used < picks.length ? `${used} of ${picks.length} ${how}` : how, notes };
 }
 
 /** The line itself: how many pins, and from what. */

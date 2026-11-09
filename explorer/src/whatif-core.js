@@ -113,14 +113,68 @@ export function beforeSet(ids, where, split) {
   return out;
 }
 
+/**
+ * |v| to three significant figures, whole numbers from 100, as aquascope.whatif_map._g writes it: a value that
+ * is not nought never reads as "0" (0.02 m³/s taken, #590), and 33.333 reads 33.3.
+ */
+export function sigWords(v) {
+  const a = Math.abs(Number(v));
+  if (!Number.isFinite(a) || !a) return "0";
+  const places = Math.max(0, 2 - Math.floor(Math.log10(a)));
+  return String(Number(a.toFixed(Math.min(places, 20))));
+}
+
 /** The scenario from the sliders, in the words the package uses (aquascope.whatif_map.scenario_label). */
-export function scenarioWords({ dp_pct: dp = 0, dt_c: dt = 0, demand_cms: dm = 0 } = {}) {
-  const g = (v) => String(Number(Math.abs(Number(v)).toFixed(1)));
+export function scenarioWords({ dp_pct: dp = 0, dt_c: dt = 0, dpet_pct: de = null, demand_cms: dm = 0 } = {}) {
+  const g = sigWords;
   const bits = [];
   if (Number(dp)) bits.push(`${g(dp)}% ${Number(dp) < 0 ? "less" : "more"} rain`);
   if (Number(dt)) bits.push(`${g(dt)} °C ${Number(dt) < 0 ? "cooler" : "warmer"}`);
+  if (Number(de)) bits.push(`${g(de)}% ${Number(de) < 0 ? "less" : "more"} evaporation`);
   if (Number(dm)) bits.push(`${g(dm)} m³/s taken`);
   return bits.join(", ") || "no change";
+}
+
+/**
+ * What a read line could not carry into the run, in a few words (#590: nothing is dropped in silence): an
+ * evaporation change has no slider but goes with the run (so it is said), and a value past a slider's end is
+ * held there. `read` is the scenario as read, `v` the values the panel will run, `season` the words that name a
+ * part of the year, which the run does not apply. Returns "" when all is carried.
+ */
+export function heldWords(read, v, season = []) {
+  const out = [];
+  for (const [key, what] of [["dp_pct", "rain"], ["dt_c", "warming"]]) {
+    const want = Number(read && read[key]) || 0;
+    if (want && want !== Number(v[key])) out.push(`${what} held at the slider's end (${key === "dp_pct" ? pct(v[key]) : `${v[key]} °C`})`);
+  }
+  // The run changes the whole year: a part of the year the words name (aquascope.whatif_map.season_words) is
+  // said to be left out, not widened in silence (#590).
+  const parts = (season || []).filter(Boolean);
+  if (parts.length) out.push(`“${parts.join("”, “")}” not applied: the change runs over the whole year`);
+  return out.join("; ");
+}
+
+/**
+ * The line under the box when the words were not read into a run: what the rules read and what they could not,
+ * each model that was asked and why its reading was refused, and a hint that names only a way not yet tried.
+ * `rules` is aquascope.whatif_map.parse_scenario's answer, `tried` a list of { who, errors, device }.
+ */
+export function notReadLine({ rules = null, tried = [], hasKey = false } = {}) {
+  const bits = [];
+  const unknown = (rules && rules.unknown) || [];
+  if (rules && rules.scenario && rules.said) {
+    bits.push(`The rules read “${rules.said}” but not “${unknown.join("”, “")}”: set on the sliders, not run.`);
+  } else {
+    bits.push("Not read.");
+  }
+  for (const t of tried) {
+    const why = (t.errors || []).filter(Boolean);
+    bits.push(`${t.who}: ${why.length ? why.join("; ") : "no reading"}.`);
+  }
+  if (!(rules && rules.scenario)) bits.push("Try “20% less rain and 2 degrees warmer”, or the sliders.");
+  const device = tried.some((t) => t.device);
+  if (!hasKey) bits.push(device ? "A key in Ask ✨ can try freer wording." : "With Chrome's built-in model, or a key in Ask ✨, freer wording works too.");
+  return bits.join(" ");
 }
 
 /** A demand slider that fits the river: up to about half its mean flow, in round steps. */
@@ -141,6 +195,13 @@ export function sliderValues(sc, demandMax = null) {
     dt_c: clamp(sc && sc.dt_c, SLIDERS.dt_c.min, SLIDERS.dt_c.max),
     demand_cms: clamp(sc && sc.demand_cms, 0, finite(demandMax) ? Number(demandMax) : Infinity),
   };
+}
+
+/** The values the sliders take when a line reads nothing: the painted run's own, or none at all (#646). */
+export function restValues(result, demandMax = null) {
+  const sc = (result && result.scenario) || null;
+  if (!sc) return { ...sliderValues(null, demandMax), dpet_pct: null };
+  return { ...sliderValues(sc, demandMax), dpet_pct: Number(sc.dpet_pct) || null };
 }
 
 /** The result's three flows at the outlet as short lines: "Mean flow −38% (−39 to −37%)". */

@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  APPROX_LABEL, MODFLOW_ACCEPT, approxWords, isApproximate, readApproxChoice,
   CHANGE_ALPHA_MIN, CHANGE_RAMP, HEAD_RAMP, SURFACE_ALPHA, cellsGeoJSON, headWord, isModflowDrop, lengthUnit, surfaceAlpha, changeWord, fmtM, frameOf, gridCellAt, gridCorners, keyLines,
   maskScale, modelOutline, monthOf, paintMask, paintSurface, rampColor, rangeT, readGwParam, readPlaceForm, readingsWindow,
   rowSummary, sortModelFiles, stepForDate, surfaceCard, timeLabel, viewTouches, wellCard, wellsNear,
@@ -145,4 +146,23 @@ test("one drop zone: MODFLOW files go to the heads reader, mesh results do not",
   assert.equal(isModflowDrop([{ name: "Muncie.p04.hdf" }]), false);
   assert.equal(isModflowDrop([{ name: "sandiego_map.nc" }]), false);
   assert.equal(isModflowDrop([]), false);
+});
+
+test("a model with no georeference is placed in one click, approximately, and says so (#591)", () => {
+  assert.deepEqual(readApproxChoice([10.123456789, 50.5]), { approximate_at: [10.123457, 50.5] });
+  assert.deepEqual(readApproxChoice([0, 89.9]).approximate_at, [0, 84]);   // a globe turned to a pole still places it
+  assert.match(readApproxChoice(null).error, /centre/);
+  assert.match(readApproxChoice([0, 0], {}, { needCell: true }).error, /cell size/);
+  assert.deepEqual(readApproxChoice([1, 2], { cell: "250" }, { needCell: true }), { approximate_at: [1, 2], cell_size: 250 });
+  assert.match(readApproxChoice([1, 2], { cell: "-3" }).error, /positive/);
+  assert.equal(isApproximate({ grid: { approximate: true } }), true);
+  assert.equal(isApproximate({ grid: { approximate: false, placed_by: "the model's files" } }), false);
+  assert.equal(isApproximate(null), false);
+  assert.equal(APPROX_LABEL, "approximate placement");
+  assert.match(approxWords({ length_units: "feet" }), /true size in feet/);
+  assert.match(approxWords({ length_units: null }), /as metres/);
+});
+
+test("the file picker offers every MODFLOW file the drop takes", () => {
+  for (const ext of MODFLOW_ACCEPT.split(",")) assert.equal(isModflowDrop([{ name: `model${ext}` }]), true, ext);
 });

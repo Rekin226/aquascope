@@ -1,4 +1,4 @@
-"""HydroGym Phase 2: plan quality, scored against expert reference plans (#367, epic #363).
+"""AquaScope Bench Phase 2: plan quality, scored against expert reference plans (#367, epic #363).
 
 Phase 1 (:mod:`aquascope.gym.tasks`, :mod:`aquascope.gym.bench`) asks whether
 an agent lands on the playbook branch the tree selects. Phase 2 asks a harder
@@ -31,9 +31,9 @@ weighted sum of five parts, the weights in :data:`WEIGHTS`:
 
 A part the reference cannot judge (a reference with no method, or no gate)
 is left out and the other weights are renormalised. A plan with no steps
-scores 0 on every part; a plan that declines a solvable case scores 0. On a
-case whose reference declines, the score is 1 when the candidate declines
-and 0 otherwise, and the coverage parts are not computed. The
+scores 0 on every part. A refusal is scored only after an explicit review when
+the reference permits a refusal; a refusal of a plan-only case scores 0.
+Pending reviews have no score and are excluded from reported means. The
 ``validator_errors_first_try`` field counts the errors the Studio's validator
 raised on the model's first plan (0 for the tree, and for a model plan that
 passed at once); it is reported, not scored.
@@ -41,8 +41,10 @@ passed at once); it is reported, not scored.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import math
 import re
 import time
 from collections.abc import Callable, Iterable
@@ -91,7 +93,7 @@ WEIGHTS: dict[str, float] = {"tools": 0.30, "methods": 0.25, "gates": 0.20, "cle
 FRAMING_TOOLS = frozenset({"describe_catchment", "find_stations", "assess_site"})
 #: The reference-file keys a case may carry (anything else is an error the validator reports).
 _CASE_KEYS = frozenset({"id", "playbook", "title", "brief", "intake", "site", "expected_branch", "steps", "forbidden",
-                        "decline", "decline_kind", "rationale", "tags"})
+                        "decline", "decline_kind", "rationale", "tags", "accepts"})
 _STEP_KEYS = frozenset({"tool", "method", "gates", "optional", "note", "alternatives"})
 
 
@@ -142,6 +144,8 @@ class Reference:
     decline: bool = False
     #: ``declined`` (a playbook rule), ``no_branch``, ``refused`` (the registry), ``intake``.
     decline_kind: str | None = None
+    #: Alternative acceptable answer shapes. Decline reasons are authored as literal phrases.
+    accepts: list[dict[str, Any]] = field(default_factory=list)
     rationale: str | None = None
     tags: list[str] = field(default_factory=list)
     path: str | None = None
@@ -169,7 +173,7 @@ class Reference:
             "steps": [s.to_dict() for s in self.steps],
             "forbidden": {"tools": list(self.forbidden_tools), "methods": list(self.forbidden_methods)},
             "decline": self.decline, "decline_kind": self.decline_kind, "rationale": self.rationale,
-            "tags": list(self.tags),
+            "tags": list(self.tags), "accepts": self.accepts,
         }
         if with_recon:
             d["recon"] = recon_for(self)
@@ -198,6 +202,7 @@ class Reference:
             steps=steps, forbidden_tools=[str(t) for t in (forbidden.get("tools") or [])],
             forbidden_methods=[str(m) for m in (forbidden.get("methods") or [])],
             decline=bool(d.get("decline")), decline_kind=d.get("decline_kind"),
+            accepts=d.get("accepts", []),
             rationale=" ".join(str(d.get("rationale") or "").split()) or None,
             tags=[str(t) for t in (d.get("tags") or [])], path=path,
         )
@@ -255,37 +260,72 @@ def list_references(plans_dir: str | Path | None = None) -> list[dict[str, Any]]
     return out
 
 
-_RECON_CACHE: dict[str, Any] = {}
+_RECON_CACHE: dict[str, Any] = {}  # Cached playbook pairs, not mutable reconnaissance snapshots.
+
+
+def _recon_path(name: str, plans_dir: str | Path | None = None) -> Path:
+    root = (Path(plans_dir) / "recon") if plans_dir else RECON_DIR
+    return root / f"{name}.json"
 
 
 def _load_recon_file(name: str, plans_dir: str | Path | None = None) -> dict[str, Any]:
-    root = (Path(plans_dir) / "recon") if plans_dir else RECON_DIR
-    path = root / f"{name}.json"
-    key = str(path)
-    if key not in _RECON_CACHE:
-        with path.open(encoding="utf-8") as fh:
-            _RECON_CACHE[key] = json.load(fh)
-    return _RECON_CACHE[key]
+    with _recon_path(name, plans_dir).open(encoding="utf-8") as fh:
+        return json.load(fh)
 
 
-def recon_for(ref: Reference, plans_dir: str | Path | None = None) -> dict[str, Any]:
+def _checked_recon(raw: Any, source: Path) -> dict[str, Any]:
+    """The reconnaissance a saved file holds, or ``ValueError`` when its shape cannot be read.
+
+    The file is ``assess_site``'s record, either wrapped as ``{"recon": ...}``
+    or the record itself. A null or list root, a ``recon`` value that is not a
+    mapping, a ``sufficiency`` table that is not a list of mappings, or a
+    ``context`` that is not a mapping would otherwise raise ``AttributeError``
+    out of :func:`recon_for`; the scorers catch this ``ValueError`` instead and
+    keep the refusal pending, since the evidence cannot be checked either way.
+    """
+    if not isinstance(raw, dict):
+        raise ValueError(f"{source}: reconnaissance is {type(raw).__name__}, not a mapping")
+    if "recon" in raw:
+        inner = raw["recon"]
+        if not isinstance(inner, dict):
+            raise ValueError(f"{source}: 'recon' is {type(inner).__name__}, not a mapping")
+        recon = inner
+    else:
+        recon = raw
+    sufficiency = recon.get("sufficiency")
+    if sufficiency is not None and not isinstance(sufficiency, list):
+        raise ValueError(f"{source}: 'sufficiency' is {type(sufficiency).__name__}, not a list")
+    for i, row in enumerate(sufficiency or []):
+        if not isinstance(row, dict):
+            raise ValueError(f"{source}: sufficiency row {i} is {type(row).__name__}, not a mapping")
+    context = recon.get("context")
+    if context is not None and not isinstance(context, dict):
+        raise ValueError(f"{source}: 'context' is {type(context).__name__}, not a mapping")
+    return recon
+
+
+def recon_for(ref: Reference, plans_dir: str | Path | None = None, *, narrow: bool = True) -> dict[str, Any]:
     """The saved reconnaissance of the case's site, as the Studio's Scout would hold it for this playbook.
 
     The file holds ``assess_site(lat, lon)`` with the full sufficiency table;
     the Scout asks for the playbook's problem kind, which narrows the table
-    to that problem's methods, so the same narrowing is applied here. A
-    deep copy, so a caller may edit it.
+    to that problem's methods, so the same narrowing is applied here. Pass
+    ``narrow=False`` for the table as captured, every method in it: validation
+    reads it that way so a method outside the playbook's problem is still
+    checked against the site (#700). A deep copy, so a caller may edit it. A
+    file whose shape cannot be read raises ``ValueError`` (see
+    :func:`_checked_recon`).
     """
     from aquascope import playbooks as pbk
     from aquascope.methods import METHODS
 
     raw = _load_recon_file(ref.recon_name, plans_dir)
-    recon = json.loads(json.dumps(raw.get("recon") if isinstance(raw.get("recon"), dict) else raw))
+    recon = json.loads(json.dumps(_checked_recon(raw, _recon_path(ref.recon_name, plans_dir))))
     try:
         problem = pbk.load(ref.playbook).problem
     except pbk.PlaybookError:
         problem = None
-    if problem:
+    if problem and narrow:
         recon["sufficiency"] = [r for r in recon.get("sufficiency") or []
                                 if r.get("method") in METHODS and problem in METHODS[r["method"]].problems]
     return recon
@@ -317,8 +357,10 @@ def validate_reference(ref: Reference, plans_dir: str | Path | None = None) -> l
     check with the path the catalogue lists for it on that tool (a gate the
     catalogue does not list for the tool is accepted with its own path);
     no required step uses a forbidden tool or method, or a method the saved
-    reconnaissance calls not defensible at the site; a decline names its
-    kind; a solvable case has at least one required analysis step.
+    reconnaissance calls not defensible at the site (read from the full table,
+    not the playbook's problem only, so a method that serves another problem
+    is checked too, #700); a decline names its kind; a solvable case has at
+    least one required analysis step.
     """
     from aquascope import playbooks as pbk
     from aquascope.gates import CHECKS
@@ -326,6 +368,29 @@ def validate_reference(ref: Reference, plans_dir: str | Path | None = None) -> l
     from aquascope.studio import catalogue
 
     errors: list[str] = []
+    if not isinstance(ref.accepts, list):
+        errors.append("accepts must be a list")
+    else:
+        kinds: list[str] = []
+        for alternative in ref.accepts:
+            if not isinstance(alternative, dict) or alternative.get("kind") not in ("plan", "decline"):
+                errors.append("each accepted answer must have kind plan or decline")
+                continue
+            kind = alternative["kind"]
+            kinds.append(kind)
+            unknown = set(alternative) - {"kind", "reason_must_mention"}
+            if unknown:
+                errors.append(f"unknown accepted answer keys: {sorted(unknown)}")
+            reasons = alternative.get("reason_must_mention")
+            if kind == "decline" and (not isinstance(reasons, list) or not reasons or
+                                      any(not isinstance(r, str) or not r.strip() for r in reasons)):
+                errors.append("an accepted decline needs nonempty reason_must_mention phrases")
+            if kind == "plan" and reasons is not None:
+                errors.append("reason_must_mention applies only to declines")
+        if len(kinds) != len(set(kinds)):
+            errors.append("accepted answer kinds must be unique")
+        if ref.accepts and ((ref.decline and "plan" in kinds) or (not ref.decline and "plan" not in kinds)):
+            errors.append("accepted answers must agree with the reference plan shape")
     if not ref.id:
         errors.append("no id")
     try:
@@ -338,7 +403,7 @@ def validate_reference(ref: Reference, plans_dir: str | Path | None = None) -> l
     if ref.site.get("lat") is None or ref.site.get("lon") is None:
         errors.append("site needs lat and lon")
     try:
-        recon = recon_for(ref, plans_dir)
+        recon = recon_for(ref, plans_dir, narrow=False)
     except (OSError, ValueError) as exc:
         errors.append(f"recon {ref.recon_name!r}: {type(exc).__name__}: {exc}")
         recon = {}
@@ -613,7 +678,15 @@ def _gate_matches(ref_path: str | None, got_path: str | None) -> bool:
     return got_path == ref_path or got_path.startswith(ref_path + ".")
 
 
-def score_plan(reference: Reference | dict[str, Any], candidate: Any) -> dict[str, Any]:
+def decline_rubric_version(ref: Reference, plans_dir: str | Path | None = None) -> str:
+    """Bind reviews to the reference and effective saved reconnaissance."""
+    evidence = {"reference": ref.to_dict(), "recon": recon_for(ref, plans_dir)}
+    raw = json.dumps(evidence, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def score_plan(reference: Reference | dict[str, Any], candidate: Any, *, reviews: Any = None,
+               plans_dir: str | Path | None = None) -> dict[str, Any]:
     """Score a candidate plan against a reference; see the module docstring for the formula.
 
     ``reference`` is a :class:`Reference` or its dict; ``candidate`` is
@@ -631,6 +704,24 @@ def score_plan(reference: Reference | dict[str, Any], candidate: Any) -> dict[st
         "explain": [],
     }
     explain: list[str] = out["explain"]
+    if cand.declined and (ref.decline or any(isinstance(a, dict) and a.get("kind") == "decline"
+                                              for a in ref.accepts)):
+        from aquascope.gym.review import lookup_decline_review
+
+        if not isinstance(cand.reason, str) or not cand.reason.strip():
+            decision = {"verdict": "invalid", "explanation": "decline has no reason"}
+        else:
+            try:
+                version = decline_rubric_version(ref, plans_dir)
+            except (OSError, ValueError, TypeError) as exc:
+                decision = {"verdict": "pending", "explanation": f"reconnaissance unavailable: {type(exc).__name__}"}
+            else:
+                decision = lookup_decline_review(ref.id, cand.reason, version, reviews)
+        verdict = decision["verdict"]
+        out["decline_correct"] = None if verdict == "pending" else verdict == "valid"
+        out["score"] = None if verdict == "pending" else float(verdict == "valid")
+        explain.append(f"decline review {verdict}: {decision['explanation']}")
+        return out
     if ref.decline:
         out["decline_correct"] = bool(cand.declined)
         if cand.declined:
@@ -725,7 +816,7 @@ class PlanResult:
     provider: str | None
     repeat: int = 0
     tags: list[str] = field(default_factory=list)
-    score: float = 0.0
+    score: float | None = 0.0
     coverage_tools: float | None = None
     coverage_methods: float | None = None
     coverage_gates: float | None = None
@@ -797,14 +888,14 @@ def _now() -> str:
 
 def _result(ref: Reference, agent: str, cfg: _Config, repeat: int, cand: Candidate, detail: dict[str, Any],
             seconds: float) -> PlanResult:
-    scored = score_plan(ref, cand)
+    scored = score_plan(ref, cand, plans_dir=cfg.plans_dir)
     usage = detail.get("usage") or {}
     model = detail.get("model") if detail.get("model") is not None else cfg.model
     provider = detail.get("provider") if detail.get("provider") is not None else cfg.provider
     res = PlanResult(
         case_id=ref.id, playbook=ref.playbook, decline_expected=ref.decline, agent=agent,
         model=model if agent != "tree" else None, provider=provider if agent != "tree" else None, repeat=repeat,
-        tags=list(ref.tags), score=float(scored["score"]),
+        tags=list(ref.tags), score=float(scored["score"]) if scored["score"] is not None else None,
         coverage_tools=scored["coverage_tools"], coverage_methods=scored["coverage_methods"],
         coverage_gates=scored["coverage_gates"], extraneous=scored["extraneous"],
         forbidden_used=int(scored["forbidden_used"]), decline_correct=scored["decline_correct"],
@@ -913,7 +1004,8 @@ def run_plan_bench(
                 logger.warning("case %s failed: %s", ref.id, res.error)
             results.append(res)
             spent += res.cost_usd or 0.0
-            say(f"    score {res.score:.2f}: tools {_pct(res.coverage_tools)}, methods {_pct(res.coverage_methods)}, "
+            say(f"    score {_num(res.score, 2)}: tools {_pct(res.coverage_tools)}, "
+                f"methods {_pct(res.coverage_methods)}, "
                 f"gates {_pct(res.coverage_gates)}, extraneous {_pct(res.extraneous)}, forbidden {res.forbidden_used}, "
                 f"declined {res.declined}" + (f", errors first try {res.validator_errors_first_try}"
                                               if res.validator_errors_first_try else "")
@@ -927,7 +1019,7 @@ def run_plan_bench(
 
 
 def rescore_plans(results: Iterable[PlanResult], references: Iterable[Reference] | None = None,
-                  plans_dir: str | Path | None = None) -> list[PlanResult]:
+                  plans_dir: str | Path | None = None, *, reviews: Any = None) -> list[PlanResult]:
     """Score stored rows again from the plans they carry (the steps, or the decline); the agent is not run again.
 
     For a change in a reference or in the formula after a run: ``score``,
@@ -946,8 +1038,8 @@ def rescore_plans(results: Iterable[PlanResult], references: Iterable[Reference]
         cand = Candidate(steps=[dict(st, gates=list(st.get("gates") or []), fallback=st.get("fallback"))
                                 for st in r.steps], declined=r.declined, reason=r.declined_reason,
                          branch=r.branch, author=r.author)
-        scored = score_plan(ref, cand)
-        r.score = float(scored["score"])
+        scored = score_plan(ref, cand, reviews=reviews, plans_dir=plans_dir)
+        r.score = float(scored["score"]) if scored["score"] is not None else None
         for key in ("coverage_tools", "coverage_methods", "coverage_gates", "extraneous", "decline_correct"):
             setattr(r, key, scored[key])
         r.forbidden_used = int(scored["forbidden_used"])
@@ -987,6 +1079,26 @@ def _mean(values: Iterable[float | None]) -> float | None:
     return round(sum(xs) / len(xs), 3) if xs else None
 
 
+def _score_stats(results: Iterable[PlanResult]) -> dict[str, Any]:
+    """Describe a mean and its possible range while scores await review.
+
+    Errors count as zero, as they do in the leaderboard. Pending scores can
+    range from zero to one; these bounds do not establish matching case sets.
+    """
+    rs = list(results)
+    scores = [0.0 if r.error else r.score for r in rs]
+    judged = [score for score in scores if score is not None]
+    total = len(scores)
+    pending = total - len(judged)
+    return {
+        "mean": _mean(scores),
+        "judged": len(judged),
+        "total": total,
+        "lower": sum(judged) / total if total else None,
+        "upper": (sum(judged) + pending) / total if total else None,
+    }
+
+
 def summarize_plans(results: Iterable[PlanResult]) -> list[dict[str, Any]]:
     """One row per (agent, model): the mean score over all cases and over the solvable ones, the spread across
     repeats, the decline rates, the coverage means, extraneous and forbidden rates, first-try validity, tree
@@ -1001,29 +1113,39 @@ def summarize_plans(results: Iterable[PlanResult]) -> list[dict[str, Any]]:
         off_tree = [r for r in solvable if "off_tree" in (r.tags or [])]
         by_repeat: dict[int, list[float]] = {}
         for r in rs:
-            by_repeat.setdefault(int(r.repeat or 0), []).append(r.score if not r.error else 0.0)
+            if r.error or r.score is not None:
+                by_repeat.setdefault(int(r.repeat or 0), []).append(r.score if not r.error else 0.0)
         run_means = [sum(v) / len(v) for v in by_repeat.values() if v]
-        by_pb: dict[str, list[float]] = {}
+        by_pb: dict[str, list[PlanResult]] = {}
         for r in rs:
-            by_pb.setdefault(r.playbook, []).append(r.score if not r.error else 0.0)
+            by_pb.setdefault(r.playbook, []).append(r)
         cost = [r.cost_usd if r.cost_usd is not None or r.tokens else 0.0 for r in rs]
         rows.append({
             "agent": agent, "model": model or None, "provider": provider or None,
             "n": len(rs), "n_cases": len({r.case_id for r in rs}), "n_solvable": len({r.case_id for r in solvable}),
             "n_decline": len({r.case_id for r in hard}),
-            "repeats": len(by_repeat),
+            "repeats": len({int(r.repeat or 0) for r in rs}),
             "score": _mean([r.score if not r.error else 0.0 for r in rs]),
+            "score_stats": _score_stats(rs),
+            "score_solvable_stats": _score_stats(solvable),
+            "score_off_tree_stats": _score_stats(off_tree),
             "score_solvable": _mean([r.score if not r.error else 0.0 for r in solvable]),
             "score_off_tree": _mean([r.score if not r.error else 0.0 for r in off_tree]),
             "score_min_run": round(min(run_means), 3) if run_means else None,
             "score_max_run": round(max(run_means), 3) if run_means else None,
-            "decline_rate": _mean([bool(r.decline_correct) for r in hard if not r.error]),
-            "false_decline_rate": _mean([r.declined and not r.error for r in solvable]),
+            "decline_rate": _mean([r.decline_correct for r in hard
+                                   if not r.error and r.decline_correct is not None]),
+            "false_decline_rate": _mean([r.declined and r.decline_correct is False for r in solvable
+                                         if not r.error and r.decline_correct is not None]),
+            "review_pending": sum(1 for r in rs if not r.error and r.score is None),
+            "zero_plan_rate": _mean([r.score == 0 for r in rs
+                                     if not r.error and not r.declined and r.score is not None]),
             "coverage_tools": _mean([r.coverage_tools for r in solvable if not r.error]),
             "coverage_methods": _mean([r.coverage_methods for r in solvable if not r.error]),
             "coverage_gates": _mean([r.coverage_gates for r in solvable if not r.error]),
             "extraneous": _mean([r.extraneous for r in solvable if not r.error]),
-            "forbidden_rate": _mean([r.forbidden_used > 0 for r in solvable if not r.error]),
+            "forbidden_rate": _mean([r.forbidden_used > 0 for r in solvable
+                                     if not r.error and not r.declined and r.score is not None]),
             "first_try_valid": _mean([r.first_try_valid for r in rs if not r.error and r.first_try_valid is not None]),
             "fallback_rate": _mean([r.fallback_to_tree for r in rs if not r.error]),
             "tokens_per_case": _mean([r.tokens for r in rs]),
@@ -1032,7 +1154,9 @@ def summarize_plans(results: Iterable[PlanResult]) -> list[dict[str, Any]]:
             "seconds_per_case": _mean([r.seconds for r in rs]),
             "cost_usd": round(sum(c for c in cost if c is not None), 4) if all(c is not None for c in cost) else None,
             "errors": sum(1 for r in rs if r.error),
-            "by_playbook": {k: round(sum(v) / len(v), 3) for k, v in sorted(by_pb.items()) if v},
+            "by_playbook": {k: stats["mean"] for k, v in sorted(by_pb.items())
+                            if (stats := _score_stats(v))["mean"] is not None},
+            "by_playbook_stats": {k: _score_stats(v) for k, v in sorted(by_pb.items())},
         })
     return rows
 
@@ -1043,6 +1167,18 @@ def _pct(x: float | None) -> str:
 
 def _num(x: float | None, digits: int = 0) -> str:
     return "-" if x is None else f"{x:,.{digits}f}"
+
+
+def _score_cell(stats: dict[str, Any]) -> str:
+    if not stats["total"]:
+        return "-"
+    mean = _num(stats["mean"], 2)
+    coverage = f"{stats['judged']}/{stats['total']} judged"
+    if stats["judged"] < stats["total"]:
+        lower = math.floor(stats["lower"] * 100) / 100
+        upper = math.ceil(stats["upper"] * 100) / 100
+        return f"{mean}* [{lower:.2f}–{upper:.2f}] ({coverage})"
+    return f"{mean} ({coverage})"
 
 
 def _label(r: dict[str, Any]) -> str:
@@ -1056,21 +1192,28 @@ def plan_leaderboard(results: Iterable[PlanResult], *, out: str | Path | None = 
     rows = summarize_plans(rs)
     n_cases = len({r.case_id for r in rs})
     lines = [
-        f"## {title or 'HydroGym plan-quality leaderboard'}", "",
-        f"{n_cases} cases, {len(rs)} runs, {len(rows)} agent-model pairs. Score is the mean over every case of the "
+        f"## {title or 'AquaScope Bench plan-quality leaderboard'}", "",
+        f"{n_cases} cases, {len(rs)} runs, {len(rows)} agent-model pairs. Score is the mean of judged cases of the "
         "plan-quality score (weights " + ", ".join(f"{k} {v:g}" for k, v in WEIGHTS.items())
-        + "; a declining case scores 1 for a decline and 0 for a plan; an error scores 0); solvable is the mean over "
+        + "; an error scores 0). Answers awaiting review are excluded from score means and counted separately; "
+        "A * marks a provisional mean: brackets give the possible full-set mean if each pending score "
+        "is between 0 and 1, with judged/total runs shown for each score. Different agents can have "
+        "different case or repeat identities even when the counts match; compare only matching sets. "
+        "Spread can also be provisional when reviews are pending. Solvable is the mean over "
         "the cases the reference does not decline, off-tree over the cases no single playbook branch covers; spread "
         "is the range of the per-run means when a model was played more than once; declined is the share of "
-        "declining cases the agent refused; false declines are solvable cases it refused; tools, methods and gates "
+        "declining cases with a judged correct refusal; false declines are judged incorrect refusals of solvable "
+        "cases; zero plans are non-refusals with score 0, among judged non-refusals (not all wrong plans); "
+        "tools, methods and gates "
         "are the mean coverage of the reference's required tools, methods and gates; extraneous is the mean share "
         "of a plan's steps the reference does not name; forbidden is the share of plans that use a tool or method "
         "not defensible at the site; valid first try is the share of model plans the validator accepted at once; "
         "tree fallback is the share of plans that are the tree's because the model's did not pass.", "",
         "| agent | model | cases (solvable + decline) | score | solvable | off-tree | spread | declined "
-        "| false declines | tools | methods | gates | extraneous | forbidden | valid first try | tree fallback "
+        "| false declines | zero plans | review pending | tools | methods | gates | extraneous | forbidden "
+        "| valid first try | tree fallback "
         "| tokens/case | s/case | cost USD | errors |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows:
         spread = ("-" if r["repeats"] < 2 or r["score_min_run"] is None
@@ -1078,19 +1221,22 @@ def plan_leaderboard(results: Iterable[PlanResult], *, out: str | Path | None = 
         lines.append(
             f"| {r['agent']} | {_label(r)} | {r['n_cases']} ({r['n_solvable']} + {r['n_decline']})"
             + (f" x{r['repeats']}" if r["repeats"] > 1 else "")
-            + f" | {_num(r['score'], 2)} | {_num(r['score_solvable'], 2)} | {_num(r['score_off_tree'], 2)} | {spread} "
-            f"| {_pct(r['decline_rate'])} | {_pct(r['false_decline_rate'])} | {_pct(r['coverage_tools'])} "
+            + f" | {_score_cell(r['score_stats'])} | {_score_cell(r['score_solvable_stats'])} "
+            f"| {_score_cell(r['score_off_tree_stats'])} | {spread} "
+            f"| {_pct(r['decline_rate'])} | {_pct(r['false_decline_rate'])} | {_pct(r['zero_plan_rate'])} "
+            f"| {r['review_pending']} | {_pct(r['coverage_tools'])} "
             f"| {_pct(r['coverage_methods'])} | {_pct(r['coverage_gates'])} | {_pct(r['extraneous'])} "
             f"| {_pct(r['forbidden_rate'])} | {_pct(r['first_try_valid'])} | {_pct(r['fallback_rate'])} "
             f"| {_num(r['tokens_per_case'])} | {_num(r['seconds_per_case'], 1)} | {_num(r['cost_usd'], 3)} "
             f"| {r['errors']} |"
         )
-    playbooks = sorted({p for r in rows for p in r["by_playbook"]})
+    playbooks = sorted({p for r in rows for p in r["by_playbook_stats"]})
     if playbooks:
         lines += ["", "Mean score by playbook:", "", "| agent | model | " + " | ".join(playbooks) + " |",
                   "|---|---|" + "---|" * len(playbooks)]
         for r in rows:
-            cells = [f"{r['by_playbook'][p]:.2f}" if p in r["by_playbook"] else "-" for p in playbooks]
+            cells = [_score_cell(r["by_playbook_stats"][p]) if p in r["by_playbook_stats"] else "-"
+                     for p in playbooks]
             lines.append(f"| {r['agent']} | {_label(r)} | " + " | ".join(cells) + " |")
     lines += ["", PRICES_NOTE, ""]
     text = "\n".join(lines)

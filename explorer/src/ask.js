@@ -19,6 +19,7 @@ import { map } from "./map.js?v=__BUILD__";
 import { visibleLayerSummary } from "./layer-ui.js?v=__BUILD__";
 import { initShowcase } from "./showcase.js?v=__BUILD__";
 import { askLocally, describeLocal, localAnswerHtml, localModelPossible } from "./local-model.js?v=__BUILD__";
+import { deviceAnswerMarkdown, selectedGaugeContext, withCatalogueName } from "./ask-local-core.js?v=__BUILD__";
 
 // Providers come from the package's registry (aquascope/ai_engine/providers.py),
 // written to explorer/providers.json by `python -m aquascope.ai_engine.providers`.
@@ -110,13 +111,27 @@ export function askModelConfig() {
   return { provider, model, api_key: key || "none", base_url, label: `${model} via ${provider}` };
 }
 
+// The map's view as {west, south, east, north}, or null before the map is up.
+function mapView() {
+  if (!state.mapOk || !map) return null;
+  try {
+    const b = map.getBounds();
+    return { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() };
+  } catch {
+    return null;
+  }
+}
+
 // What the user is looking at, in one line the model can act on. Shown in the
-// drawer so it is never a hidden prompt.
-export function currentContext() {
+// drawer so it is never a hidden prompt. A selected gauge that is off screen is
+// left out for the map's roles (they are about the view) and said as "selected
+// earlier and now off screen" for Ask (`offScreen: "say"`), where "this gauge"
+// still means it (#590 recheck).
+export function currentContext({ offScreen = "omit" } = {}) {
   const bits = [];
   if (state.selected) {
-    const r = state.selected;
-    bits.push(`the gauge ${r.name || r.station_id} (source ${r.source}, id ${r.station_id}, ${r.lat.toFixed(3)}, ${r.lon.toFixed(3)})`);
+    const gauge = selectedGaugeContext(state.selected, mapView(), { offScreen });
+    if (gauge) bits.push(gauge);
   } else if (state.point) {
     bits.push(`the point ${state.point.lat}, ${state.point.lon}`);
   }
@@ -132,7 +147,7 @@ export function currentContext() {
 }
 
 function contextLine() {
-  const ctx = currentContext();
+  const ctx = currentContext({ offScreen: "say" });
   const el = $("ask-context-text");
   el.textContent = ctx || "nothing selected yet";
   // The context itself is five lines of generated prose naming the station, the
@@ -273,15 +288,32 @@ async function runLocally(question) {
   $("ask-log").hidden = false;
   $("ask-result").hidden = true;
   $("ask-checks").hidden = true;
+  // Stop ends the question on the facts gathered so far; so does each step's time limit (askLoop).
+  const stop = new AbortController();
+  cancelAsk = () => stop.abort();
+  $("ask-stop").hidden = false;
   askStatus("Starting the model on your device…");
   try {
+    // The model picks, the package writes (#590, round 3; aquascope.ai_engine.device_ask). Each step's reply is
+    // held to a schema of enums the package builds from this question (plan); a tool call is checked and run in
+    // the worker, which hands back the compact result (callTool); the answer is the package's sentences for the
+    // fact keys the model picked (render). Nothing the model writes reaches the page.
+    const ask = (op, extra) => call("device_ask", { op, ...extra });
     const res = await askLocally(question, {
-      callTool: (name, args) => call("tool", { name, arguments: args }),
+      plan: ({ results, words, step, budget, force, notes }) =>
+        ask("plan", { results, words, step, budget, force, notes }),
+      // The catalogue's name and river go with an analysis, so the sentences can name the gauge.
+      callTool: async (reply, results, words) => {
+        const out = await ask("tool", { reply, results, words });
+        return withCatalogueName(out, out && out.arguments, state.byKey);
+      },
+      render: (reply, results, words, why) => ask("render", { reply, results, words, why }),
       onEvent: (m) => (m.startsWith("tool ") ? askLog(m) : askStatus(m)),
       context: ctx,
+      signal: stop.signal,
     });
     askStatus("");
-    state.ask.markdown = `# ${question}\n\n${res.answer}\n`;
+    state.ask.markdown = deviceAnswerMarkdown(question, res);
     $("ask-result").innerHTML = localAnswerHtml(res);
     $("ask-result").hidden = false;
     revealResult();
@@ -292,6 +324,8 @@ async function runLocally(question) {
   } catch (err) {
     askStatus(`The on-device model could not run: ${err.message}`, "error");
   } finally {
+    cancelAsk = null;
+    $("ask-stop").hidden = true;
     state.ask.running = false;
     $("ask-run").disabled = false;
     $("ask-run").textContent = "Ask";

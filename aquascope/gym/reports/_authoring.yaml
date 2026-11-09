@@ -1,4 +1,4 @@
-# HydroGym report-quality references (#382); the scorer is aquascope.gym.reports.
+# AquaScope Bench report-quality references (#382); the scorer is aquascope.gym.reports.
 #
 # One file per case, `<id>.yaml`, read by aquascope.gym.reports; a file whose name starts with `_` (this one) is
 # not a case. Unlike a Phase 2 plan reference (aquascope/gym/plans/_authoring.yaml), which is written before any

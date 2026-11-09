@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # Off-tree: a supply question whose demand is a crop's. The demand must be computed before it can be screened, and
 # the record the abstraction leans on is summarised in its own right.
 id: offtree_supply_crop_vegre

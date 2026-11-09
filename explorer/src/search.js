@@ -7,6 +7,7 @@ import { $, actions, escapeHtml, foldText, sourceStyle, state, stationKey } from
 import { shapeSvg } from "./shapes.js?v=__BUILD__";
 import { groupStationSites } from "./sites.js?v=__BUILD__";
 import { availabilityLabel } from "./availability.js?v=__BUILD__";
+import { photonSearchUrl, placesFirst, rankPlaces } from "./place-search-core.js?v=__BUILD__";
 
 export function searchStations(query, limit = 25) {
   const whole = foldText(query).trim();
@@ -33,24 +34,29 @@ export function searchStations(query, limit = 25) {
 
 // Places, not just gauges. Photon (komoot) is keyless and its terms allow
 // autocomplete, which OSM's own Nominatim does not; picking a place drops the
-// map there and asks the "anywhere" card about it.
-const PHOTON = "https://photon.komoot.io/api/";
+// map there and opens it. A river or a lake is asked for separately and ranked
+// first (place-search-core.js, #591): typing "Jamuna" finds the river, and
+// picking it opens the River tab.
 let placeAbort = null;
 
-async function findPlaces(query, limit = 3) {
+async function photon(url, signal) {
+  const res = await fetch(url, { signal });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.features || [];
+}
+
+async function findPlaces(query, limit = 5) {
   if (placeAbort) placeAbort.abort();
   placeAbort = new AbortController();
+  const { signal } = placeAbort;
   try {
-    const res = await fetch(`${PHOTON}?q=${encodeURIComponent(query)}&limit=${limit}`, { signal: placeAbort.signal });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.features || []).map((f) => ({
-      name: f.properties.name,
-      detail: [f.properties.city, f.properties.state, f.properties.country].filter(Boolean).join(", "),
-      lon: f.geometry.coordinates[0],
-      lat: f.geometry.coordinates[1],
-      kind: f.properties.osm_value || f.properties.type || "place",
-    })).filter((p) => p.name);
+    // Both at once; either may fail alone and the other still answers.
+    const [any, water] = await Promise.all([
+      photon(photonSearchUrl(query, { limit: 6 }), signal).catch((e) => { if (e.name === "AbortError") throw e; return []; }),
+      photon(photonSearchUrl(query, { water: true, limit: 6 }), signal).catch((e) => { if (e.name === "AbortError") throw e; return []; }),
+    ]);
+    return rankPlaces([...any, ...water], query, limit);
   } catch (err) {
     if (err.name !== "AbortError") console.info("place search unavailable:", err.message);
     return [];
@@ -59,7 +65,15 @@ async function findPlaces(query, limit = 3) {
 
 export function initSearch() {
   const input = $("search"), box = $("search-results");
-  let t, hits = [], places = [], active = -1, run = 0, loading = false, error = "";
+  let t, hits = [], places = [], active = -1, run = 0, loading = false, error = "", placesPending = false;
+  let query = "", first = false;   // first: the places go above the gauges (placesFirst, #591)
+
+  // The rows in the order they are shown: [kind, index into hits or places].
+  const rows = () => {
+    const g = hits.map((_, i) => ["gauge", i]);
+    const p = places.map((_, i) => ["place", i]);
+    return first ? [...p, ...g] : [...g, ...p];
+  };
 
   const close = () => {
     clearTimeout(t);
@@ -67,58 +81,74 @@ export function initSearch() {
     box.hidden = true;
     active = -1;
     places = [];
+    placesPending = false;
+    first = false;
     input.setAttribute("aria-expanded", "false");
+  };
+
+  const gaugeRow = (r, at) => {
+    const d = document.createElement("div");
+    const st = sourceStyle(r.source);
+    const filtered = state.hidden.has(r.source) ? ` <span class="muted">(source hidden)</span>` : "";
+    d.className = "hit";
+    d.innerHTML = `${shapeSvg(st.shape, st.color)}<span class="hit-name">${escapeHtml(r.name || r.station_id)}</span>` +
+      `<span class="muted hit-id">${escapeHtml(r.station_id)}${r.record_count > 1 ? ` · ${r.record_count} records at this site` : ""}<br>${escapeHtml(availabilityLabel(r.source))}</span>${filtered}`;
+    d.addEventListener("mousedown", (e) => { e.preventDefault(); pick(at); });
+    return d;
+  };
+
+  const placeRow = (p, at) => {
+    const d = document.createElement("div");
+    d.className = "hit place";
+    if (p.river) d.title = "Opens the River tab: the simulated flow of the river here";
+    d.innerHTML = `<i class="pin"></i><span class="hit-name">${escapeHtml(p.name)}</span>` +
+      `<span class="muted hit-id">${escapeHtml([p.water ? p.kind : "", p.detail].filter(Boolean).join(", ") || p.kind)}</span>`;
+    d.addEventListener("mousedown", (e) => { e.preventDefault(); pick(at); });
+    return d;
   };
 
   const paint = () => {
     box.innerHTML = "";
     if (!hits.length && !places.length) {
-      box.innerHTML = `<div class="hit muted">${escapeHtml(error || (loading ? "Searching gauges..." : "no match"))}</div>`;
-    } else {
-      hits.forEach((r, i) => {
-        const d = document.createElement("div");
-        d.className = `hit${i === active ? " active" : ""}`;
-        d.id = `hit-${i}`;
-        d.setAttribute("role", "option");
-        d.setAttribute("aria-selected", i === active ? "true" : "false");
-        const st = sourceStyle(r.source);
-        const filtered = state.hidden.has(r.source) ? ` <span class="muted">(source hidden)</span>` : "";
-        d.innerHTML = `${shapeSvg(st.shape, st.color)}<span class="hit-name">${escapeHtml(r.name || r.station_id)}</span>` +
-          `<span class="muted hit-id">${escapeHtml(r.station_id)}${r.record_count > 1 ? ` · ${r.record_count} records at this site` : ""}<br>${escapeHtml(availabilityLabel(r.source))}</span>${filtered}`;
-        d.addEventListener("mousedown", (e) => { e.preventDefault(); choose(i); });
-        box.appendChild(d);
-      });
+      const empty = loading ? "Searching gauges..." : placesPending ? "No gauge by that name; looking for places and rivers..." : "no match";
+      box.innerHTML = `<div class="hit muted">${escapeHtml(error || empty)}</div>`;
     }
-    if (places.length) {
-      const head = document.createElement("div");
-      head.className = "hit-head muted";
-      head.textContent = "Places (click for the climate and catchment there)";
-      box.appendChild(head);
-      places.forEach((p, i) => {
-        const d = document.createElement("div");
-        d.className = `hit place${hits.length + i === active ? " active" : ""}`;
-        d.setAttribute("role", "option");
-        d.innerHTML = `<i class="pin"></i><span class="hit-name">${escapeHtml(p.name)}</span>` +
-          `<span class="muted hit-id">${escapeHtml(p.detail || p.kind)}</span>`;
-        d.addEventListener("mousedown", (e) => { e.preventDefault(); choosePlace(i); });
-        box.appendChild(d);
-      });
-    }
+    let section = null;
+    rows().forEach(([kind, i], at) => {
+      if (kind === "place" && section !== "place") {
+        const head = document.createElement("div");
+        head.className = "hit-head muted";
+        head.textContent = "Places and rivers (OpenStreetMap, via Photon)";
+        box.appendChild(head);
+      } else if (kind === "gauge" && section === "place") {
+        const head = document.createElement("div");
+        head.className = "hit-head muted";
+        head.textContent = "Gauges";
+        box.appendChild(head);
+      }
+      section = kind;
+      const d = kind === "gauge" ? gaugeRow(hits[i], at) : placeRow(places[i], at);
+      d.id = `hit-${at}`;
+      d.setAttribute("role", "option");
+      d.setAttribute("aria-selected", at === active ? "true" : "false");
+      if (at === active) d.classList.add("active");
+      box.appendChild(d);
+    });
     box.hidden = false;
     input.setAttribute("aria-expanded", "true");
   };
 
-  const choosePlace = (i) => {
-    const p = places[i];
-    if (!p) return;
+  const choosePlace = (p) => {
     close();
     input.value = "";
-    actions.selectPoint(p.lat, p.lon, { fly: true });
+    // A river lands on the River tab with the panel open; a town on the map with its card (#548). The label
+    // says which of them it is (#637): the River card's title takes `river` only, never a lake's or a town's name.
+    actions.selectPoint(p.lat, p.lon, { fly: true, tab: p.river ? "river" : null,
+      label: { name: p.name, detail: p.detail, water: p.water, from: "search",
+        river: p.river ? { name: p.name, detail: p.detail, water: true, river: true } : null } });
   };
 
-  const choose = (i) => {
-    const r = hits[i];
-    if (!r) return;
+  const chooseGauge = (r) => {
     close();
     input.value = "";
     if (state.hidden.has(r.source)) {          // do not hand back an invisible result
@@ -128,23 +158,38 @@ export function initSearch() {
     actions.selectStation(stationKey(r), { fly: true });
   };
 
+  const pick = (at) => {
+    const row = rows()[at];
+    if (!row) return;
+    if (row[0] === "gauge") { if (hits[row[1]]) chooseGauge(hits[row[1]]); } else if (places[row[1]]) choosePlace(places[row[1]]);
+  };
+
   input.addEventListener("input", () => {
     clearTimeout(t);
     const my = ++run;
     t = setTimeout(async () => {
       if (my !== run) return;
-      const query = input.value;
+      query = input.value;
       if (foldText(query).trim().length < 2) { close(); return; }
       hits = [];
       active = -1;
       loading = true;
       error = "";
       places = [];
+      first = false;
       paint();
       // Place lookup can finish while the Python search engine starts.
-      if (foldText(query).trim().length >= 3) {
+      placesPending = foldText(query).trim().length >= 3;
+      if (placesPending) {
         void findPlaces(query.trim()).then((found) => {
-          if (my === run) { places = found; paint(); }
+          if (my !== run) return;
+          placesPending = false;
+          places = found;
+          // "Rhine" is the river, not a gauge near Rhinelander: a place named as asked goes first when no
+          // gauge carries the word itself.
+          first = placesFirst(query, hits.map((r) => r.name || ""), places[0]);
+          if (places.length && (first || active < 0)) active = first ? 0 : hits.length;
+          paint();
         });
       }
       try {
@@ -162,16 +207,19 @@ export function initSearch() {
   });
 
   input.addEventListener("keydown", (e) => {
-    if (box.hidden && (e.key === "ArrowDown" || e.key === "ArrowUp")) { if (hits.length) paint(); return; }
+    const total = hits.length + places.length;
+    if (box.hidden && (e.key === "ArrowDown" || e.key === "ArrowUp")) { if (total) paint(); return; }
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
-      if (!hits.length) return;
-      active = (active + (e.key === "ArrowDown" ? 1 : -1) + hits.length) % hits.length;
+      if (!total) return;
+      active = (active + (e.key === "ArrowDown" ? 1 : -1) + total) % total;
       paint();
       const el = $(`hit-${active}`);
       if (el) el.scrollIntoView({ block: "nearest" });
     } else if (e.key === "Enter") {
-      if (!box.hidden && active >= 0) { e.preventDefault(); choose(active); }
+      if (box.hidden || active < 0) return;
+      e.preventDefault();
+      pick(active);
     } else if (e.key === "Escape") {
       close();
       input.blur();

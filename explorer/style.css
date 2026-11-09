@@ -500,7 +500,9 @@ body.drawer-open #btn-panel { display: none; }
 .export-select { max-width: 11rem; appearance: auto; }
 /* One action in the open, the rest behind a menu. Five peer buttons above the
    tabs gave no clue which one anybody actually wanted. */
-.more { position: relative; }
+/* Keep the right-aligned menu inside the panel even when actions wrap and
+   More is the first item on a new row. Overflow is clipped by the panel. */
+.more { position: relative; margin-left: auto; }
 .more > summary { list-style: none; cursor: pointer; padding: .38rem .6rem; letter-spacing: .08em; line-height: 1; }
 .more > summary::-webkit-details-marker { display: none; }
 .more[open] > summary { background: var(--bg-soft); }
@@ -795,6 +797,10 @@ body.drawer-open .panel { visibility: hidden; }
   display: block; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .showcase-note { font-size: .75rem; color: var(--muted); border-left: 2px solid var(--line); padding-left: .55rem; margin-bottom: .6rem; line-height: 1.55; }
+/* On-device Ask (#590): the line when the lock refuses the model's wording, the facts shown instead, a note. */
+.ask-refused { background: var(--warn-bg); color: var(--warn-ink); border-radius: 6px; padding: .4rem .6rem; font-size: .85rem; }
+.ask-device-facts { margin: .4rem 0 .6rem 1.1rem; padding: 0; line-height: 1.5; }
+.ask-device-note { font-size: .8rem; color: var(--muted); }
 .ask-log .changed { color: var(--warn-ink); }
 
 /* A segmented control, not three stacked radios each carrying its own sentence.

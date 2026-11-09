@@ -1,4 +1,4 @@
-"""Basins for HydroGym: a synthetic one for offline work, and real gauged basins from the Archive.
+"""Basins for AquaScope Bench: a synthetic one for offline work, and real gauged basins from the Archive.
 
 A :class:`Basin` is one gauged catchment ready for rainfall-runoff work: daily
 precipitation, PET and observed streamflow, all in mm/d, plus the metadata

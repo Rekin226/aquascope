@@ -1,0 +1,633 @@
+{
+ "_note": "Photon (photon.komoot.io) answers recorded 2026-10-12, trimmed to the fields the Explorer reads. Data (c) OpenStreetMap contributors, ODbL.",
+ "jamuna_any": [
+  {
+   "properties": {
+    "osm_type": "R",
+    "osm_key": "boundary",
+    "osm_value": "administrative",
+    "type": "district",
+    "name": "Jamuna",
+    "county": "Anuppur Tehsil",
+    "state": "Madhya Pradesh",
+    "country": "India",
+    "extent": [
+     81.9124215,
+     23.1641854,
+     81.9419225,
+     23.1458644
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     81.9243658,
+     23.155367
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "R",
+    "osm_key": "boundary",
+    "osm_value": "administrative",
+    "type": "district",
+    "name": "Jamuna",
+    "county": "Rampur Baghelan Tahsil",
+    "state": "Madhya Pradesh",
+    "country": "India",
+    "extent": [
+     81.0770173,
+     24.5836758,
+     81.1235543,
+     24.5359702
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     81.1020874,
+     24.5596904
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "R",
+    "osm_key": "boundary",
+    "osm_value": "administrative",
+    "type": "district",
+    "name": "Jamuna",
+    "county": "Amarpatan Tahsil",
+    "state": "Madhya Pradesh",
+    "country": "India",
+    "extent": [
+     81.216273,
+     24.3986082,
+     81.2459151,
+     24.3877098
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     81.2299426,
+     24.3930718
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "N",
+    "osm_key": "place",
+    "osm_value": "village",
+    "type": "city",
+    "name": "Jamuna",
+    "county": "Patuakhali Sadar Subdistrict",
+    "state": "Barishal Division",
+    "country": "Bangladesh"
+   },
+   "geometry": {
+    "coordinates": [
+     90.3703594,
+     22.3996416
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "R",
+    "osm_key": "waterway",
+    "osm_value": "river",
+    "type": "other",
+    "name": "Jamuna River",
+    "state": "Rajshahi Division",
+    "country": "Bangladesh",
+    "extent": [
+     89.5938921,
+     25.1995363,
+     89.8026752,
+     23.7918046
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     89.7193122,
+     24.5025354
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "river",
+    "type": "other",
+    "name": "Jamuna River",
+    "county": "Joypurhat Sadar Upazila",
+    "state": "Rajshahi Division",
+    "country": "Bangladesh",
+    "extent": [
+     88.9151443,
+     25.2391353,
+     89.0210943,
+     25.0214113
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     89.0072679,
+     25.1197902
+    ]
+   }
+  }
+ ],
+ "jamuna_water": [
+  {
+   "properties": {
+    "osm_type": "R",
+    "osm_key": "waterway",
+    "osm_value": "river",
+    "type": "other",
+    "name": "Jamuna River",
+    "state": "Rajshahi Division",
+    "country": "Bangladesh",
+    "extent": [
+     89.5938921,
+     25.1995363,
+     89.8026752,
+     23.7918046
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     89.7193122,
+     24.5025354
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "river",
+    "type": "other",
+    "name": "Jamuna River",
+    "county": "Joypurhat Sadar Upazila",
+    "state": "Rajshahi Division",
+    "country": "Bangladesh",
+    "extent": [
+     88.9151443,
+     25.2391353,
+     89.0210943,
+     25.0214113
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     89.0072679,
+     25.1197902
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "river",
+    "type": "other",
+    "name": "Jamuna River",
+    "city": "Jaleswar",
+    "county": "Gaighata",
+    "state": "West Bengal",
+    "country": "India",
+    "extent": [
+     88.7061376,
+     22.953846,
+     88.7162994,
+     22.9483027
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     88.7110622,
+     22.9503792
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "river",
+    "type": "other",
+    "name": "Jamuna River",
+    "city": "Jaleswar",
+    "county": "Gaighata",
+    "state": "West Bengal",
+    "country": "India",
+    "extent": [
+     88.7162994,
+     22.9538757,
+     88.7345813,
+     22.9305189
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     88.7276714,
+     22.9429102
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "river",
+    "type": "other",
+    "name": "Jamuna River",
+    "city": "Nagarukhra",
+    "county": "Haringhata",
+    "state": "West Bengal",
+    "country": "India",
+    "extent": [
+     88.5806252,
+     22.9755072,
+     88.7061376,
+     22.9330485
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     88.6405795,
+     22.945267
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "river",
+    "type": "other",
+    "name": "Jamuna River",
+    "city": "Howraghat",
+    "county": "Phuloni",
+    "state": "Assam",
+    "country": "India",
+    "extent": [
+     92.9311576,
+     26.1412823,
+     93.0333147,
+     26.1057885
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     92.9789617,
+     26.1273363
+    ]
+   }
+  }
+ ],
+ "rhine_any": [
+  {
+   "properties": {
+    "osm_type": "R",
+    "osm_key": "waterway",
+    "osm_value": "river",
+    "type": "other",
+    "name": "Rhine",
+    "country": "Germany",
+    "extent": [
+     4.0496041,
+     52.5835735,
+     9.6708805,
+     46.6323593
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     7.351989,
+     50.4677626
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "R",
+    "osm_key": "place",
+    "osm_value": "state",
+    "type": "state",
+    "name": "Rhineland-Palatinate",
+    "country": "Germany",
+    "extent": [
+     6.1122591,
+     50.9423049,
+     8.5083135,
+     48.9664472
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     7.310646,
+     49.9531599
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "canal",
+    "type": "other",
+    "name": "Rhine Canal",
+    "city": "Fessenheim",
+    "county": "Haut-Rhin",
+    "state": "Grand Est",
+    "country": "France",
+    "extent": [
+     7.5706432,
+     47.9097,
+     7.5710574,
+     47.9080622
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     7.5708503,
+     47.9088811
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "canal",
+    "type": "other",
+    "name": "Rhine Canal",
+    "city": "Vogelgrun",
+    "county": "Haut-Rhin",
+    "state": "Grand Est",
+    "country": "France",
+    "extent": [
+     7.5791496,
+     48.0186781,
+     7.5816864,
+     48.0169152
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     7.580418,
+     48.0177967
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "canal",
+    "type": "other",
+    "name": "Rhine Canal",
+    "city": "Vogelgrun",
+    "county": "Haut-Rhin",
+    "state": "Grand Est",
+    "country": "France",
+    "extent": [
+     7.5674695,
+     48.0293697,
+     7.5722825,
+     48.0216734
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     7.568945,
+     48.0249947
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "canal",
+    "type": "other",
+    "name": "Rhine Canal",
+    "city": "Vogelgrun",
+    "county": "Haut-Rhin",
+    "state": "Grand Est",
+    "country": "France",
+    "extent": [
+     7.5755352,
+     48.0191513,
+     7.5951293,
+     48.0049259
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     7.5851103,
+     48.011726
+    ]
+   }
+  }
+ ],
+ "rhine_water": [
+  {
+   "properties": {
+    "osm_type": "R",
+    "osm_key": "waterway",
+    "osm_value": "river",
+    "type": "other",
+    "name": "Rhine",
+    "country": "Germany",
+    "extent": [
+     4.0496041,
+     52.5835735,
+     9.6708805,
+     46.6323593
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     7.351989,
+     50.4677626
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "canal",
+    "type": "other",
+    "name": "Rhine",
+    "city": "Dubai",
+    "state": "Dubai",
+    "country": "United Arab Emirates",
+    "extent": [
+     55.1578596,
+     25.2261114,
+     55.1606809,
+     25.2247472
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     55.1592703,
+     25.2254293
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "canal",
+    "type": "other",
+    "name": "Rhine Canal",
+    "city": "Fessenheim",
+    "county": "Haut-Rhin",
+    "state": "Grand Est",
+    "country": "France",
+    "extent": [
+     7.5706432,
+     47.9097,
+     7.5710574,
+     47.9080622
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     7.5708503,
+     47.9088811
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "canal",
+    "type": "other",
+    "name": "Rhine Canal",
+    "city": "Vogelgrun",
+    "county": "Haut-Rhin",
+    "state": "Grand Est",
+    "country": "France",
+    "extent": [
+     7.5791496,
+     48.0186781,
+     7.5816864,
+     48.0169152
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     7.580418,
+     48.0177967
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "canal",
+    "type": "other",
+    "name": "Rhine Canal",
+    "city": "Vogelgrun",
+    "county": "Haut-Rhin",
+    "state": "Grand Est",
+    "country": "France",
+    "extent": [
+     7.5674695,
+     48.0293697,
+     7.5722825,
+     48.0216734
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     7.568945,
+     48.0249947
+    ]
+   }
+  },
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "canal",
+    "type": "other",
+    "name": "Rhine Canal",
+    "city": "Vogelgrun",
+    "county": "Haut-Rhin",
+    "state": "Grand Est",
+    "country": "France",
+    "extent": [
+     7.5755352,
+     48.0191513,
+     7.5951293,
+     48.0049259
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     7.5851103,
+     48.011726
+    ]
+   }
+  }
+ ],
+ "reverse_water_24.35_89.8": [
+  {
+   "properties": {
+    "osm_type": "W",
+    "osm_key": "waterway",
+    "osm_value": "river",
+    "type": "other",
+    "name": "Jamuna River",
+    "city": "Sirajganj",
+    "county": "Sirajganj Sadar Upazila",
+    "state": "Rajshahi Division",
+    "country": "Bangladesh",
+    "extent": [
+     89.7519923,
+     24.4202124,
+     89.784522,
+     24.3115391
+    ]
+   },
+   "geometry": {
+    "coordinates": [
+     89.7696309,
+     24.3667526
+    ]
+   }
+  }
+ ],
+ "reverse_any_24.35_89.8": [
+  {
+   "properties": {
+    "osm_type": "N",
+    "osm_key": "amenity",
+    "osm_value": "school",
+    "type": "house",
+    "name": "Char Singuli Muslim High School",
+    "city": "Elenga",
+    "county": "Kalihati Upazila",
+    "state": "Dhaka Division",
+    "country": "Bangladesh"
+   },
+   "geometry": {
+    "coordinates": [
+     89.809912,
+     24.3724564
+    ]
+   }
+  }
+ ]
+}

@@ -12,13 +12,20 @@ for the sources whose terms allow it, filling up week by week. Phase 2 adds
 Parquet bundle per variable and source** for whole-source reads. See
 [#188](https://github.com/Rekin226/aquascope/issues/188) for the plan.
 
+The catalog and the mirror are two different numbers, and this page keeps them
+apart: the **catalog** is the worldwide index of what the agencies publish, and
+the **mirror** is the subset the harvest has actually reached with a licence
+that allows redistribution. On the 2026-11-02 harvest the catalog held
+**75,892 stations** and the mirror held daily observations for **6,231 of
+them**.
+
 ## What is in it
 
 | file | contents |
 | --- | --- |
 | `stations.parquet` | GeoParquet 1.0 (WKB point geometry, WGS84). One row per station: `source`, `station_id`, `name`, `latitude`, `longitude`, `variables`, `period_start`, `period_end`, `url`, `river`, `country`, `agency`, `license`, `redistributable`, `extra`. |
 | `stations.geojson` | the same rows as GeoJSON, for tools and browsers that don't read parquet |
-| `health.json` | per-source status of the last run: station count, seconds, error message if the endpoint failed |
+| `health.json` | per-source status of the last run: station count, seconds, error message if the endpoint failed, and non-fatal `warnings` for partial results or a large count drop |
 | `health/jobs/<job>.json`, `health/jobs/index.json` | every scheduled job's last run, last success, last failure, counts, data date and expected cadence (see [Job health](#job-health)) |
 | `README.md` | the dataset card, regenerated on every run, with the per-source licence table |
 | `obs/<variable>/<source>/<station_id>.csv.gz` | daily values for one station (`date,value`; discharge m3/s, water and groundwater level m, precipitation mm/day), only for redistributable sources |
@@ -63,6 +70,17 @@ without ever hammering an agency. What is mirrored:
 | `taiwan_cwa` | precipitation | CODIS daily rainfall |
 | `poland_imgw` | discharge, water_level | IMGW-PIB daily archive (hydrological-year zips, one per month to 2022 and one per year after; the current year is published once it ends). The archive host sends no CORS headers, so this mirror is what the Explorer serves (#391) |
 | `greece_openhi` | discharge, water_level, precipitation | 15-minute telemetry folded to daily means, rainfall to daily totals. The browser cannot call OpenHi directly (its API allows cross-origin requests from localhost only), so this mirror is what the Explorer serves (#408) |
+
+How far the mirror has reached, per variable, on the same 2026-11-02 harvest. A
+station that measures two things appears once in each row, so the rows add up
+to more than the 6,231 stations above:
+
+| variable | mirrored stations | where the files are |
+| --- | --- | --- |
+| `discharge` | 4,330 | `obs/discharge/<source>/` |
+| `water_level` | 1,158 | `obs/water_level/<source>/` |
+| `precipitation` | 642 | `obs/precipitation/<source>/` |
+| `groundwater_level` | 594 | `obs/groundwater_level/<source>/` |
 
 Read one station:
 
@@ -304,7 +322,7 @@ evidence table) and keeps what stands out, by fixed rules ([explorer.md](explore
 
 | path | what |
 | --- | --- |
-| `scout/latest.json` | the findings (up to 25 per kind), each with `lat`, `lon`, `title`, `reason`, its headline `value` and `unit`, all its numbers under `facts`, its `source`; today's ten `picks`; the record checks (a named region's share much above or below normal against the same calendar month since 1990, flood cells against the same month since 2000); the inputs, the method and the sources |
+| `scout/latest.json` | the findings (up to 25 per kind), each with `lat`, `lon`, `title`, `reason`, its headline `value` and `unit`, all its numbers under `facts`, its `source`; today's ten `picks`; the `usual` basin flow table (`[[lat, lon, m³/s], ...]`, so a live scan in the browser can leave near-dry areas out); the record checks (a named region's share much above or below normal against the same calendar month since 1990, flood cells against the same month since 2000); the inputs, the method and the sources |
 | `scout/<date>.json` | the same file, kept by the day it was made ([retention](#retention-of-the-daily-files): the last 60 days, then the first of each month) |
 
 Each finding carries the licence of the layer it came from (the river status map and the forecast CC BY 4.0, the
@@ -427,6 +445,15 @@ The scheduled run lives in `.github/workflows/harvest.yml` (Mondays 03:17 UTC,
 or on demand from the Actions tab). It never fails because one agency is down;
 `health.json` and the job summary say which one did.
 
+On a full, unrestricted run, a source's station count falling by at least 25%
+from a previous catalog marked as complete is recorded as a non-fatal warning
+in `health.json` and the job summary. The comparison is skipped for old files
+without a completeness marker, source-selected or capped runs, failed sources,
+and sources with no previous stations. A catalog is marked complete only when
+all expected sources succeed without warnings on an unrestricted run. A warning
+signals a change to investigate, not proof of an outage.
+The scheduled workflow syncs the published catalog before harvesting.
+
 ## Job health
 
 Every scheduled workflow ends with a step that runs whether the job passed or
@@ -450,32 +477,52 @@ row, and **Tools > Data status** lists every job. From a terminal:
 python -m aquascope.archive.health_jobs status
 ```
 
-## Versioned snapshots and citation
+## Citing the Archive
 
-The software DOI and the dataset are separate objects. No archive DOI has been
-registered by this implementation. Until one exists, cite the agencies plus the
-immutable Hugging Face dataset commit, downloaded files and their content hashes.
-Do not cite the software concept DOI as if it identified a data snapshot.
+The Archive gets its own DOI on Zenodo, separate from the software's
+(`10.5281/zenodo.21903143`, which identifies the code, not the data). That DOI
+comes with the first deposit; until then, cite the agencies plus the Hugging Face
+dataset commit you downloaded. Once it exists: cite the dataset DOI for the data,
+with the agencies; cite the software DOI for the code.
 
-The proposed cadence is a **quarterly reviewed archive snapshot**; weekly harvests
-continue as operational updates. Prepare a deposit from a directory downloaded
-at one exact Hugging Face commit:
+**What is deposited.** A snapshot of the dataset at one commit: the catalogue
+(`stations.parquet`, `stations.geojson`), `signatures.parquet`, `health.json`, the
+dataset card, the `obs/` JSON files, and one `.tar` per variable and source with
+its Parquet bundle and per-station CSVs at their Archive paths (extract every tar
+in one folder to rebuild `obs/`). `SOURCES.md` lists every source's licence and
+attribution, and `MANIFEST.json` every file's size and SHA-256 and the snapshot
+date. The description states the catalogued and mirrored station counts as two
+numbers. The derived folders (`basins/`, `forecasts/`, `context/` and the rest)
+are not deposited; the description links to them on Hugging Face. Only
+verified licences are deposited: the catalogue rows of a source whose licence is
+`unknown` in the registry are left out until its reuse terms are verified, and
+`SOURCES.md` and the description name those sources and their row counts.
+
+The Archive has no single licence, so the record's licence is Zenodo's "Other
+(Attribution)" and each source's own licence is listed in the description and
+`SOURCES.md`. The record is a supplement to the software DOI.
+
+**Cadence.** One reviewed snapshot a quarter, each a new version under one concept
+DOI. The weekly harvest keeps updating Hugging Face in between.
+
+**How the maintainer runs it** ([`archive-zenodo.yml`](https://github.com/Rekin226/aquascope/blob/main/.github/workflows/archive-zenodo.yml), manual only):
+
+1. Make a Zenodo personal access token with the `deposit:write` and
+   `deposit:actions` scopes, and add it as the repository secret `ZENODO_TOKEN`.
+   For the sandbox, make a separate token on sandbox.zenodo.org and add it as
+   `ZENODO_SANDBOX_TOKEN`.
+2. Dispatch with **sandbox** on (the default). Check the draft on
+   sandbox.zenodo.org: files, sizes, description, licence, related identifiers.
+3. Dispatch with sandbox off and **publish** off: a draft on zenodo.org. Check it
+   there, then press Publish on Zenodo. Later snapshots: give **concept_id**, the
+   concept record number of the first deposit, to add a new version.
+
+The workflow writes nothing to Hugging Face. To build the bundle locally and see
+its files, sizes and metadata without touching Zenodo:
 
 ```bash
-python -m aquascope.archive.snapshot archive \
-  --revision REPLACE_WITH_40_CHARACTER_HUB_COMMIT \
-  --date 2026-09-23 --out archive-deposit
+python -m aquascope.archive.zenodo build --out deposit --dry-run
 ```
 
-The command packages the GeoParquet catalog, health, manifest and declared
-per-source/variable observation bundles. Its metadata lists file hashes,
-source-specific licences and agency credits, and separates mirrored observations
-from catalog-only sources. It validates paths and refuses unapproved mirrored
-sources. It does not upload, reserve a DOI or claim publication.
-
-Before deposition, verify that the supplied directory actually came from the
-stated commit, inspect its metadata and retain each source's terms. The maintainer
-must create the dataset deposit under their Zenodo account. After publication,
-record the real dataset concept and version DOIs in CITATION.cff, the Explorer
-citation dialog and the dataset card, and test the links. This final registration
-and wiring remains the acceptance gate of [issue 444](https://github.com/Rekin226/aquascope/issues/444).
+After the first deposit, the dataset DOI goes into `CITATION.cff`, the Explorer's
+**Cite this** and the dataset card ([issue 444](https://github.com/Rekin226/aquascope/issues/444)).

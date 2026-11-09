@@ -13,6 +13,7 @@ import {
   riverCasingOpacity, riverCasingWidth, riverOpacityFlow, riverTheme, riverThemeKind, riverWidth, riverWidthFlow,
 } from "./river-core.js?v=__BUILD__";
 import { FS_UNCLASSED_OPACITY, flowColorExpr } from "./flowstatus-core.js?v=__BUILD__";
+import { initMotion, motionStatus, onMotionChange, pacer } from "./motion.js?v=__BUILD__";
 
 let added = false;
 let animation = 0;
@@ -157,6 +158,8 @@ function hookMap() {
     syncVisibility();
   });
   document.addEventListener("visibilitychange", syncFlow);
+  initMotion();
+  onMotionChange(() => refreshLegend("rivers"));
   const mq = globalThis.matchMedia && globalThis.matchMedia("(prefers-reduced-motion: reduce)");
   if (mq && mq.addEventListener) mq.addEventListener("change", () => { setFlowOn(!mq.matches); });
 }
@@ -203,7 +206,7 @@ export function setRiversVisible(on) {
 
 let flowFrame = 0;
 let flowStep = 0;
-let flowLast = 0;
+const flowPace = pacer(FLOW_FPS);
 
 export function setFlowOn(on) {
   state.flowOn = Boolean(on);
@@ -214,7 +217,8 @@ export function setFlowOn(on) {
 }
 
 // Runs only while it can be seen: rivers on, flow on, the tab in front. A steady FLOW_FPS whatever the
-// screen's refresh rate, so a 120 Hz laptop does not draw the map twice as often for the same motion.
+// screen's refresh rate, so a 120 Hz laptop does not draw the map twice as often for the same motion; on a
+// device that cannot draw that fast, slower, and still while nobody uses the page (motion.js, #591).
 function syncFlow() {
   const run = Boolean(state.mapOk && map && map.getLayer("river-flow") && state.riversOn && state.flowOn
     && !document.hidden);
@@ -228,8 +232,8 @@ function syncFlow() {
     flowFrame = requestAnimationFrame(tick);
     // The dash holds still while anything waits for the map to settle (map.js waitingForIdle): the basemap swap,
     // the time bar's play, a GIF frame. Each step is a style change, and the map is never idle while they come.
-    if (now - flowLast < 1000 / FLOW_FPS || waitingForIdle()) return;
-    flowLast = now;
+    if (waitingForIdle()) { flowPace.skip(); return; }
+    if (!flowPace.due(now)) return;
     flowStep = (flowStep + 1) % FLOW_STEPS;
     try { map.setPaintProperty("river-flow", "line-dasharray", flowDash(flowStep)); } catch { /* style swapping */ }
   };
@@ -354,6 +358,7 @@ export function registerRiverRows() {
       "Click one to light what drains to it and its way to the sea.</p>" +
       (extras && extras.body ? extras.body() : "") +
       `<label class="ml-check"><input type="checkbox" data-act="flow" ${state.flowOn ? "checked" : ""}> The water's direction, moving</label>` +
+      (state.flowOn && motionStatus().note ? `<p class="ml-when">${motionStatus().note}</p>` : "") +
       '<p class="ml-src">TDX-Hydro (NGA), CC BY-SA 4.0, shown and not republished.</p>',
     act: (name, el) => {
       if (extras && extras.act && extras.act(name, el)) return;

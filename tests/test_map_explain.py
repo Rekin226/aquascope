@@ -152,7 +152,7 @@ def test_a_cut_issue_gives_its_count_as_a_floor():
     count = by_kind(res, "fa_count")[0]
     assert count["value"] == 2 and count["shown"] == "at least 2"
     notes = me.template_notes(res["facts"], VIEW["bbox"])
-    assert ". At least 2 reaches in view pass theirs." in notes[0]["text"]
+    assert ". At least 2 reaches in view are at their 2-year flow or more on Mon 12 Oct." in notes[0]["text"]
 
 
 def test_outside_the_fifteen_days_the_peak_class_is_shown(status):
@@ -239,7 +239,9 @@ def test_template_notes_are_three_to_five_spaced_and_every_number_traces_to_a_fa
     assert titles[0] == "Much above normal"          # what the strongest colour means comes first
     assert "Valatie Kill near Nassau NY" in titles
     first = notes[0]
-    assert first["text"].startswith("Dark teal: flow above the 90th percentile for September, on ")
+    # The largest area is said as that area's share, never as the share of all land (#590).
+    assert first["text"] == ("Dark teal: flow above the 90th percentile for September. The largest area much above "
+                             "normal in view covers 21% of the mapped land in view.")
 
 
 def test_a_note_moves_inside_a_large_area_when_its_first_spot_is_taken(status):
@@ -345,93 +347,105 @@ def test_wording_around_a_placeholder_is_not_a_sign(words):
     assert me.placeholder_touches(words) == []
 
 
-def test_a_model_note_with_a_sign_against_a_placeholder_is_refused(facts):
-    gauge = by_kind(facts, "gauge_pct", side="above")[0]
-    for text in (f"At -{ph(gauge['id'])} today.", f"At minus {ph(gauge['id'])}.", f"At {ph(gauge['id'])}0 today."):
-        out = me.check_model_notes({"notes": [{"facts": [gauge["id"]], "title": "High", "text": text}]},
-                                   facts["facts"], VIEW["bbox"])
-        assert all(n.get("by") == "rules" for n in out["notes"]), text
-        assert any("a sign or a digit against a placeholder" in r for r in out["refused"]), text
+# ── the model path: the model picks, the code writes (#590, round 3) ─────────
 
 
-def test_model_notes_are_filled_in_by_code_and_held_to_their_facts(facts):
-    fid = {f["kind"] + str(f.get("rank", f.get("side", f.get("class", "")))): f["id"] for f in facts["facts"]}
-    reply = json.dumps({"notes": [
-        {"facts": [fid["fa_class0"], fid["fa_peak0"]], "title": "A big flow coming",
-         "text": f"This reach reaches its {ph(fid['fa_class0'])} {ph(fid['fa_class0'], 'when')}, "
-                 f"peaking at {ph(fid['fa_peak0'])}."},
-        {"facts": [fid["gauge_pctabove"]], "title": "A gauge running high",
-         "text": f"At the {ph(fid['gauge_pctabove'])}, the highest in 120 years."},          # 120 is made up
-        {"facts": ["f999"], "title": "Ghost", "text": "Nothing."},
-        {"facts": [fid["fp_news_total"]], "title": "Many reports", "text": f"{ph(fid['fp_news_total'])} reports."},
-        {"facts": [fid["fp_news_cell0"]], "title": "Reports here",
-         "text": f"{ph(fid['fp_news_cell0'])} reports, {ph(fid['fp_news_total'])} in the whole view."},
-    ]})
-    out = me.check_model_notes(reply, facts["facts"], VIEW["bbox"])
-    titles = [n["title"] for n in out["notes"]]
-    # Two passed; a template note on a fact the model left alone makes the third.
-    assert titles[:2] == ["A big flow coming", "Reports here"] and len(titles) == me.MIN_NOTES
-    assert out["notes"][2]["by"] == "rules" and "by" not in out["notes"][0]
-    first = out["notes"][0]
-    assert first["text"] == "This reach reaches its 10-year flow on Mon 12 Oct, peaking at 2,400 m³/s."
-    assert (first["lat"], first["lon"]) == (15.0, 20.0)
-    # A placeholder of a fact the note did not list still counts as cited, with its source.
-    assert fid["fp_news_total"] in out["notes"][1]["fact_ids"]
-    assert out["notes"][1]["text"] == "48 reports, 59 in the whole view."
-    reasons = " | ".join(out["refused"])
-    assert "a number not in its facts (120)" in reasons
-    assert "no known fact" in reasons and "none of its facts has a place" in reasons
+def _choice(facts, kind, **match):
+    """The note id the package offers for the note anchored on a fact of ``kind``."""
+    fid = by_kind(facts, kind, **match)[0]["id"]
+    return next(c["id"] for c in me.note_choices(facts["facts"]) if c["facts"][0]["id"] == fid)
 
 
-def test_a_placeholder_with_nothing_to_put_in_is_refused(facts):
-    area = by_kind(facts, "status_area")[0]
-    assert not area["place"].get("name")
-    note = {"facts": [area["id"]], "title": "Dry", "text": f"Dry near {ph(area['id'], 'place')}."}
-    out = me.check_model_notes({"notes": [note]}, facts["facts"], VIEW["bbox"])
-    assert any("has nothing to put in" in r for r in out["refused"])
-    # A value that opens a sentence is capitalised.
-    cut = me.view_facts(VIEW, warnings={**WARNINGS, "truncated": True})["facts"]
-    count = next(f for f in cut if f["kind"] == "fa_count")
-    assert me._fill(f"Busy. {ph(count['id'])} reaches.", {count["id"]: count}) == "Busy. At least 2 reaches."
-    assert all("near ." not in n["text"] for n in out["notes"])
-    # Only a place with a name is offered as {fN.place}.
-    p = me.notes_prompt(facts["facts"])["system"]
-    assert ph(area["id"], "place") not in p.split("Write every number")[0]
-
-
-def test_a_reply_that_is_not_notes_is_refused_whole(facts):
-    assert me.check_model_notes("Sorry, I cannot help.", facts["facts"])["notes"] == []
-    assert me.check_model_notes({"actions": []}, facts["facts"])["refused"] == ["the model did not reply with notes"]
-    note = {"facts": ["f1", "f4"], "title": "Wet", "text": "Mostly {f4}."}
-    fenced = "```json\n" + json.dumps({"notes": [note]}) + "\n```"
-    out = me.check_model_notes(fenced, facts["facts"])
-    assert out["notes"][0]["text"].startswith("Mostly ") and out["notes"][0]["title"] == "Wet"
-
-
-def test_the_prompt_lists_each_fact_with_its_placeholder(facts):
+def test_the_schema_holds_only_ids_and_variants(facts):
     p = me.notes_prompt(facts["facts"], context="a map of somewhere")
-    for f in facts["facts"]:
-        assert ph(f["id"]) in p["system"]
-    assert "a map of somewhere" in p["system"] and p["schema"]["required"] == ["notes"]
+    item = p["schema"]["properties"]["notes"]["items"]
+    ids = [c["id"] for c in me.note_choices(facts["facts"])]
+    assert item["properties"]["note"]["enum"] == ids and item["properties"]["variant"]["enum"] == ["a", "b", "c"]
+    assert item["additionalProperties"] is False and p["schema"]["additionalProperties"] is False
+    assert all("enum" in v for v in item["properties"].values())      # no free text anywhere
+    assert 3 <= len(ids) <= me.MAX_CHOICES and ids[0] == "n1"
+    # The prompt shows every variant as the package wrote it, and asks only for a choice.
+    for c in me.note_choices(facts["facts"]):
+        for v in "abc":
+            assert c["variants"][v][1] in p["system"]
+    assert "a map of somewhere" in p["system"] and p["prompt"] == "Choose the notes."
+    assert "never write a word" in p["system"] and "{f" not in p["system"]
+
+
+def test_the_models_picks_are_the_packages_notes(facts):
+    much, gauge = _choice(facts, "status_area", **{"class": "much_above"}), _choice(facts, "gauge_pct", side="above")
+    reach = _choice(facts, "fa_class", rank=0)
+    reply = json.dumps({"notes": [{"note": reach, "variant": "b"}, {"note": much, "variant": "c"},
+                                  {"note": gauge, "variant": "b"}]})
+    out = me.check_model_notes(reply, facts["facts"], VIEW["bbox"])
+    assert out["refused"] == [] and [n["note"] for n in out["notes"]] == [reach, much, gauge]
+    first, second, third = out["notes"]
+    assert first["text"] == "At its 10-year flow on Mon 12 Oct. Forecast peak 2,400 m³/s on Tue 13 Oct."
+    assert (first["lat"], first["lon"]) == (15.0, 20.0) and "by" not in first
+    assert second["text"] == ("In all, 21% of the mapped land in view is above or much above normal. The largest "
+                              "area much above normal in view covers 21% of the mapped land in view.")
+    assert third["text"] == "12 m³/s on 9 Oct: the 97th percentile for the date in 36 years of record."
+    # Every number on every note is in a fact it cites.
+    by_id = me._by_id(facts["facts"])
+    for n in out["notes"]:
+        assert me.claim_lock(n["title"] + " " + n["text"], [by_id[i] for i in n["fact_ids"]]) == []
+
+
+def test_every_variant_of_every_note_passes_the_older_checks(facts):
+    for c in me.note_choices(facts["facts"]):
+        for v, (cited, text) in c["variants"].items():
+            assert me.claim_lock(text, cited) == [], (c["id"], v, text)
+            assert me.class_claims(text, cited) is None, (c["id"], v, text)
+            assert "{" not in text and "  " not in text and " ." not in text, (c["id"], v, text)
+            assert cited[0] is c["facts"][0], (c["id"], v)          # one anchor: the same pin for each variant
+
+
+def test_fewer_than_three_picks_are_topped_up_and_a_pick_twice_is_said(facts):
+    much = _choice(facts, "status_area", **{"class": "much_above"})
+    out = me.check_model_notes({"notes": [{"note": much, "variant": "a"}, {"note": much, "variant": "b"}]},
+                               facts["facts"], VIEW["bbox"])
+    assert out["refused"] == ["note 2: " + much + " chosen twice"]
+    assert len(out["notes"]) == me.MIN_NOTES and [n.get("by") for n in out["notes"]][1:] == ["rules", "rules"]
+
+
+@pytest.mark.parametrize("reply, why", [
+    # The old free-text shape (Gemini Nano's replies of 2026-10-25 and 10-26): refused whole.
+    ({"notes": [{"facts": ["f4"], "title": "Wet", "text": "{f4} of the mapped land is much above normal."}]},
+     "reply.notes[0] has no note"),
+    ({"notes": [{"note": "f4", "variant": "a"}]}, "reply.notes[0].note 'f4' is not one of n1"),
+    ({"notes": [{"note": "n1", "variant": "z"}]}, "reply.notes[0].variant 'z' is not one of a, b, c"),
+    ({"notes": [{"note": "n1", "variant": "a", "text": "Two cells"}]}, "which the schema does not hold"),
+    ({"notes": []}, "reply.notes has fewer than 1 items"),
+    ({"actions": []}, "reply has no notes"),
+    ("Sorry, I cannot help.", "the model did not reply with JSON"),
+])
+def test_a_reply_outside_the_schema_is_refused_whole(facts, reply, why):
+    out = me.check_model_notes(reply, facts["facts"], VIEW["bbox"])
+    assert out["notes"] == [] and len(out["refused"]) == 1
+    assert out["refused"][0].startswith("the model's reply was refused: ") and why in out["refused"][0], out
 
 
 def test_model_notes_go_through_the_readers_client(facts):
     class Fake:
-        def __init__(self):
+        def __init__(self, content):
             self.chat = self
             self.completions = self
             self.sent = None
+            self.content = content
 
         def create(self, **kw):
             self.sent = kw
-            msg = type("M", (), {"content": json.dumps({"notes": [
-                {"facts": ["f4"], "title": "Wet west", "text": "{f4} of the mapped land, in 2099."}]})})
+            msg = type("M", (), {"content": self.content})
             return type("R", (), {"choices": [type("C", (), {"message": msg})]})
 
-    fake = Fake()
+    fake = Fake(json.dumps({"notes": [{"facts": ["f4"], "title": "Wet west", "text": "In 2099."}]}))
     out = me.model_notes(facts["facts"], provider="openai", model="m", client=fake, bbox=VIEW["bbox"])
-    assert out["model"] == "m via openai" and out["notes"] == [] and "2099" in out["refused"][0]
-    assert fake.sent["temperature"] == 0 and "{f4}" in fake.sent["messages"][0]["content"]
+    assert out["model"] == "m via openai" and out["notes"] == [] and "refused" in out["refused"][0]
+    assert fake.sent["temperature"] == 0 and fake.sent["messages"][1]["content"] == "Choose the notes."
+    fake = Fake(json.dumps({"notes": [{"note": "n1", "variant": "a"}, {"note": "n2", "variant": "a"},
+                                      {"note": "n3", "variant": "a"}]}))
+    out = me.model_notes(facts["facts"], provider="openai", model="m", client=fake, bbox=VIEW["bbox"])
+    assert len(out["notes"]) == 3 and out["refused"] == []
 
 
 # ── the faces and the page ──────────────────────────────────────────────────
@@ -496,3 +510,82 @@ def test_the_worker_runs_the_same_functions():
     assert '"map_explain"' in worker.split("LITE_TYPES", 1)[1].split("\n", 1)[0]
     for fn in ("explain", "check_model_notes", "model_notes", "name_notes"):
         assert f"_me.{fn}(" in worker and hasattr(me, fn)
+
+
+# ── the package's own wording (#590): values once, no prompt text, shares as shares ─────────────────────
+
+
+def test_a_value_is_written_once(facts):
+    # Gemini Nano's notes read "54% (54%)", "6,000,000 km² km²" and "1,550 m³/s (1,550 m³/s)". drop_repeats stays
+    # in use for mesh review and Scout's older checks.
+    area, size = by_kind(facts, "status_area", **{"class": "below"})[0], by_kind(facts, "status_size")[1]
+    peak, ratio = by_kind(facts, "fa_peak")[0], by_kind(facts, "fa_ratio")[0]
+    by_id = me._by_id(facts["facts"])
+    a, s, p, r = (ph(f["id"]) for f in (area, size, peak, ratio))
+    assert me._fill(f"{a} ({a}) of the land, {s} (590,000 km²).", by_id) == "4% of the land, 590,000 km²."
+    assert me._fill(f"An area of {s} km².", by_id) == "An area of 590,000 km²."
+    assert me._fill(f"A peak of {p} ({p}) ({r} (3.0 times)).", by_id) == "A peak of 2,400 m³/s (3.0 times)."
+    reach = by_kind(facts, "fa_class")[0]
+    assert me._fill(f"Flow passes it {ph(reach['id'], 'when')}.", by_id) == "Flow passes it on Mon 12 Oct."
+
+
+def test_no_note_holds_a_hole_or_says_a_value_twice(facts):
+    # Check 3 (2026-10-26) saw "when {f15." and "on Sun 25 Oct when on Sun 25 Oct" on device notes: the
+    # package's notes have neither.
+    for c in me.note_choices(facts["facts"]):
+        for _v, (_cited, text) in c["variants"].items():
+            assert "{" not in text and "}" not in text and " when " not in text
+            assert not re.search(r"\b(on \w{3} \d+ \w{3}).*\1", text), text
+            assert not re.search(r"\b(\w+) \1\b", text), text
+
+
+def test_a_share_of_the_view_and_the_largest_area_are_said_as_what_they_are(facts):
+    # Check 3, South America: "14% of the mapped land is much below normal" for the largest area's 14%, and "A
+    # smaller area of 23%" when the other area was 11%. The package says which is which, and compares by value.
+    share = by_kind(facts, "status_share", side="below")[0]
+    for c in me.note_choices(facts["facts"]):
+        for _v, (cited, text) in c["variants"].items():
+            for f in cited:
+                if f["kind"] == "status_area":
+                    assert f"covers {f['shown']} of the mapped land in view" in text, text
+            # "N% of the mapped land in view is ..." is only ever the share of the whole view, in those words.
+            for m in re.finditer(r"(\S+ \S+) of the mapped land in view is (\w+ or much \w+ normal)?", text):
+                side = [f for f in cited if f["kind"] == "status_share"]
+                assert side and m.group(1) == f"all, {side[0]['shown']}" and m.group(2), text
+    said = f"In all, {share['shown']} of the mapped land in view is below or much below normal."
+    assert any(said in t for c in me.note_choices(facts["facts"]) for _, t in c["variants"].values())
+
+
+def test_two_areas_on_one_side_are_compared_by_their_values(status):
+    # Much below beside below on the same side: which is larger is the code's word, from the values.
+    red = np.zeros((int(180 / DEG), int(360 / DEG)), dtype=np.uint8)
+    _box(red, 0, 0, 40, 30, RED["normal"])
+    _box(red, 2, 8, 12, 14, RED["much_below"])      # 10 x 6
+    _box(red, 20, 4, 36, 20, RED["below"])          # 16 x 16, the larger
+    from tests.test_map_layers import _tiff
+
+    res = me.view_facts(VIEW, status={"month": "2026-09", "data": _tiff([red, red, red], tile=64)})
+    much = by_kind(res, "status_area", **{"class": "much_below"})[0]
+    below = by_kind(res, "status_area", **{"class": "below"})[0]
+    assert below["value"] > much["value"]
+    texts = {c["facts"][0]["class"]: c["variants"]["c"][1] for c in me.note_choices(res["facts"])}
+    assert f"covers {much['shown']} of the mapped land in view, less than the largest area below normal" in \
+        texts["much_below"]
+    assert f"covers {below['shown']} of the mapped land in view, more than the largest area much below normal" in \
+        texts["below"]
+
+
+def test_a_units_superscript_is_not_a_number_in_the_reasons(facts):
+    # Nano, Bangladesh: "a number not in its facts (760000, ²)", where the ² was the km² after it.
+    area = by_kind(facts, "status_area", **{"class": "below"})[0]
+    assert me.claim_lock("An area of 760000 km² and 5 m³/s.", [area]) == ["5", "760000"]
+    assert me.claim_lock("Up 10² times.", [area]) == ["10", "²"]       # after a digit it is a power
+
+
+def test_the_older_share_and_class_checks_stay(facts):
+    share_below = by_kind(facts, "status_share", side="below")[0]
+    area = by_kind(facts, "status_area", **{"class": "much_above"})[0]
+    by_id = me._by_id(facts["facts"])
+    assert "not a flow" in me.share_claims(f"The river is mapped at {ph(area['id'])} above normal.", by_id)
+    assert me.share_claims(f"{ph(area['id'])} of the mapped land is much above normal.", by_id) is None
+    assert "significantly below normal" in me.class_claims("significantly below normal", [share_below])

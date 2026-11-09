@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # A borehole with fifty years of levels 4 km from the point: the trend with confidence, the groundwater drought
 # index and a recharge estimate with a stated specific yield, as the groundwater_decline well branch has it.
 id: gw_well_tetbury

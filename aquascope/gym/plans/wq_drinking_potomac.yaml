@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # The Little Falls gauge is the intake of Washington's water supply and carries sampled water quality: the
 # samples, the WHO screen and the CCME index against the drinking guidelines, as the water_quality drinking branch.
 id: wq_drinking_potomac

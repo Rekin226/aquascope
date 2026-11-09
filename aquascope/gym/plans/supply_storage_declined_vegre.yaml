@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # A reservoir needs a storage-yield analysis the run-of-river screening does not do: the playbook declines.
 id: supply_storage_declined_vegre
 playbook: supply_reliability

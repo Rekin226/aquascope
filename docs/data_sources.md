@@ -17,7 +17,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
   Every collector defaults to `unknown` until it has its own mapping.
 
 - **Mapped so far:** USGS (`aquascope.collectors.usgs`) — reference
-  implementation.
+  implementation; Environment Agency (`aquascope.collectors.uk_ea`).
 
 - **Not yet mapped:** every other collector. Each is a good first
   issue against the USGS mapping as the template — see [#374](https://github.com/Rekin226/aquascope/issues/374).
@@ -34,7 +34,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | Source | Raw field(s) | Maps to |
 | :--- | :--- | :--- |
 | USGS (Water Data OGC API v1, keyed or keyless) | `approval_status` ("Approved"/"Provisional"), `qualifier` (a list such as `["ESTIMATED"]` or `["ICE"]`) | `approved` / `provisional`; a qualifier mentioning ice or estimation overrides to `suspect` / `estimated`. Older single-letter codes ("A", "P", "e") still map the same way |
-| Environment Agency (England) | not yet mapped | `unknown` |
+| Environment Agency (England) | `quality` ("Good", "Unchecked", "Estimated", "Suspect", "Missing"), `completeness`, sub-daily counts (`valid`, `invalid`, `missing`) | `quality` maps to `approved` ("Good"), `provisional` ("Unchecked"), `estimated` ("Estimated"), `suspect` ("Suspect"), `unknown` ("Missing"); `completeness` and sub-daily counts are preserved in `quality_raw` |
 | BoM Water Data Online | not yet mapped | `unknown` |
 | Hub'Eau | not yet mapped | `unknown` |
 | Taiwan sources | not yet mapped | `unknown` |
@@ -62,7 +62,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [GEMStat](https://gemstat.org) | `gemstat` | Global | Freshwater quality (170+ countries) | Zenodo | ✅ |
 | [UN SDG 6](https://sdg6data.org) | `sdg6` | Global | SDG 6 indicators (6.1.1 – 6.6.1) | REST | ✅ |
 | [OpenMeteo](https://open-meteo.com) | `openmeteo` | Global | Weather (temp, precip, wind, solar) | REST | ✅ |
-| [Copernicus](https://cds.climate.copernicus.eu) | `copernicus` | Global | ERA5 reanalysis, climate projections | CDS API | ✅ |
+| [Copernicus EWDS](https://ewds.climate.copernicus.eu) | `copernicus` | Global | GloFAS river discharge | EWDS API | ✅ |
 | [FAO AQUASTAT](https://www.fao.org/aquastat) | `aquastat` | Global | Country-level water withdrawal, irrigation | FAOSTAT API | ✅ |
 | [FAO WaPOR](https://www.fao.org/in-action/remote-sensing-for-water-productivity) | `wapor` | Global | Satellite ET, biomass, water productivity | REST | ✅ |
 | [EU WFD](https://www.eea.europa.eu) | `eu_wfd` | Europe | Water Framework Directive status | REST | ✅ |
@@ -86,6 +86,27 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 
 ---
 
+## Quality Metadata Survey
+
+What each agency publishes about the quality of a single observation, and whether AquaScope keeps it ([#438](https://github.com/Rekin226/aquascope/issues/438)). How a collector maps these onto AquaScope's own codes is in [Data Quality Flags](#data-quality-flags). Values are quoted as the agency publishes them; a meaning is given only where the agency documents one. Rows are added a few sources at a time; sources not listed yet have not been surveyed.
+
+| `--source` | Field(s) | Values and what they mean | Where documented | We read it? |
+| :--- | :--- | :--- | :--- | :---: |
+| `usgs` | `approval_status`, `qualifier` | `approval_status`: `Approved` (review completed, approved for publication) or `Provisional` (subject to revision). `qualifier`: qualifiers on the observation, "for instance if a sensor may have been impacted by ice or if values were estimated"; no list of codes is published. Responses carry a list, e.g. `["ESTIMATED"]` or `["ESTIMATED", "ICE"]` | [OGC API daily queryables](https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/queryables?f=json), [provisional data statement](https://waterdata.usgs.gov/provisional-data-statement/) | yes |
+| `uk_ea` | `quality`, `completeness`, `valid` / `invalid` / `missing`, `qcode` | `quality`: `Good`, `Estimated`, `Suspect`, `Unchecked`, `Missing` (listed without definitions; a `Missing` reading has no value). `completeness`: `Complete` / `Incomplete`, "whether the value is based on complete data or not". `valid` / `invalid` / `missing`: the share of the sub-daily points behind an aggregate (e.g. a daily mean) that were valid, invalid or missing (see the note on units below). `qcode`: "other qualifiers for this reading", e.g. `Edited`, `WithinRating`, `NoRating`, `BeyondUpperLimit`, `Dry`, `Snow`, `Trace` (names only, no definitions) | [Hydrology API reference](https://environment.data.gov.uk/hydrology/doc/reference) | partly: not `qcode` |
+| `aquastat` | unknown | Endpoint unavailable: `https://www.fao.org/faostat/api/v1/en/data/AQUASTAT` returns 404 ([#167](https://github.com/Rekin226/aquascope/issues/167)), so the quality metadata could not be verified | not verified | no |
+| `japan_mlit` | unknown | Endpoint unavailable: `http://www1.river.go.jp/cgi-bin/SrchWaterLevel` returns 404 ([#168](https://github.com/Rekin226/aquascope/issues/168)), so the quality metadata could not be verified | not verified | no |
+| `taiwan_civil_iot` | unknown | Endpoint unavailable: with TLS verification on, the certificate served for `sta.ci.taiwan.gov.tw` fails hostname verification ([#176](https://github.com/Rekin226/aquascope/issues/176) also reports timeouts), so the quality metadata could not be verified | not verified | no |
+
+Notes, checked on 2026-10-22:
+
+- **USGS.** The queryables schema types `qualifier` as a string with the example `Ice`, but responses return a list of upper-case codes. The example response on the [API documentation page](https://api.waterdata.usgs.gov/docs/ogcapi/) spells the field `approvals_status` and shows a list (`["Approved"]`); responses use `approval_status` with a single string. The collector also accepts older single-letter codes (`A`, `P`, `e`) as a fallback; none appeared in the responses checked.
+- **UK EA counts.** The reference calls `valid`, `invalid` and `missing` a "percentage", but they come back as strings that sum to `10000` in every reading checked (`10000/0/0`, `8021/0/1979`, `3646/0/6354`). That looks like hundredths of a percent; the Environment Agency does not say so. On the 15-minute measure checked, readings carried `quality` (and `qcode` when set) but no counts or `completeness`.
+- **UK EA `Incomplete` with `0/0/0`.** Many `Good` + `Incomplete` days come back with all three counts `0`: there is no sub-daily record behind them (older digitised data), so this is not a partial day ([#485](https://github.com/Rekin226/aquascope/pull/485)).
+- **UK EA `qcode`.** The reference lists the values under the name `qflag` in its prose but `qcode` in its property table. Responses use `qcode` (`Edited` on a 15-minute flow reading in 2024). `Checked` and `Rejected` do not occur in the published or observed vocabulary.
+
+---
+
 ## API Keys — what you need before collecting
 
 | Source | Key required? | How to get one |
@@ -98,7 +119,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | GEMStat | No | Open access via Zenodo |
 | UN SDG 6 | No | Open access |
 | OpenMeteo | No | Open access |
-| Copernicus CDS | **Yes** | [Register](https://cds.climate.copernicus.eu/user/register) — free |
+| Copernicus EWDS | **Yes** | [Register](https://ewds.climate.copernicus.eu/how-to-api) — free |
 | FAO AQUASTAT / WaPOR | No | Open access |
 | EU WFD | No | Open access |
 | Hub'Eau | No | Open access |
@@ -166,9 +187,9 @@ error page as valid hydrological data. Caching is therefore disabled by
 default for this collector. A successful live collection still depends on the
 DWS/Kisters backend being healthy.
 
-DWS reuse terms have not yet been verified, so the registry marks this source
-as non-redistributable. AquaScope can collect it directly, but the open archive
-must not mirror the observations until the terms are established.
+DWS terms are verified from the NIWIS disclaimer: data may be used for academic,
+research or personal purposes and must not be resold; the source stays
+non-redistributable, so the open archive must not mirror the observations.
 
 ## PEGELONLINE (Germany)
 

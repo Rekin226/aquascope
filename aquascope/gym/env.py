@@ -1,4 +1,4 @@
-"""HydroGym: a gym-style calibration environment over real (or synthetic) basins.
+"""AquaScope Bench: a gym-style calibration environment over real (or synthetic) basins.
 
 An episode is one basin. The agent proposes a GR4J parameter vector
 (X1..X4), the environment runs the model over the basin's whole record and
@@ -206,7 +206,7 @@ class CalibrationEnv(_Base):
 
     def render(self) -> str | None:
         b = self.basin
-        lines = [f"HydroGym CalibrationEnv: {b.name} ({b.id}), {b.n_years} yr, objective {self.objective}, "
+        lines = [f"AquaScope Bench CalibrationEnv: {b.name} ({b.id}), {b.n_years} yr, objective {self.objective}, "
                  f"step {self.step_count}/{self.max_steps}"]
         if self.best:
             p = self.best["params"]

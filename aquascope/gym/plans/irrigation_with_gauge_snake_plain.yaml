@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # ERA5 reference evapotranspiration for the point and a 110-year gauge at it: the crop's seasonal demand, then the
 # run-of-river screening of the peak-month demand over the season, as the irrigation_feasibility with_gauge branch.
 id: irrigation_with_gauge_snake_plain

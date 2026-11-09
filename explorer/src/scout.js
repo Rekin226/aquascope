@@ -4,8 +4,9 @@
 // aquascope.map_scout finds them in a light worker: from the daily scout file (scout/latest.json, written by the
 // flood-warnings workflow, with record checks against 1990 on) when the view is half the globe at the newest
 // month, otherwise by a live scan of the view at the map's month. With the on-device model ready, or a key in
-// Ask, a model reorders the findings and rewords them; its words are held to the numbers the package
-// formatted (the claim lock in map_scout.apply_wording), and a refused wording keeps the rules' one. Keyless,
+// Ask, the model picks and the code writes (#590): it orders the findings and picks one of the package's fixed
+// variants for each, as ids held to a JSON Schema of enums (map_scout.wording_schema, Chrome's
+// responseConstraint); a reply outside it is refused whole and the rules' order and wording stay. Keyless,
 // the rules' templates say it. The pins go in the action log, so each one, or all, can be undone.
 
 import { CONFIG } from "../config.js?v=__BUILD__";
@@ -17,7 +18,9 @@ import { generateJsonLocally, localModelReady, localReaderLabel } from "./local-
 import { duck } from "./catalog.js?v=__BUILD__";
 import { ensureNowStatus } from "./now-map.js?v=__BUILD__";
 import { skillUrl } from "./evidence-core.js?v=__BUILD__";
-import { SCOUT_EXTRA, SCOUT_MAX, keepVisible, scoutLine, scoutMonth, scoutPin, scoutView, scoutWho } from "./scout-core.js?v=__BUILD__";
+import {
+  SCOUT_EXTRA, SCOUT_MAX, askedFailed, keepVisible, scoutLine, scoutMonth, scoutPin, scoutView, wordingLine,
+} from "./scout-core.js?v=__BUILD__";
 import { call, callLight } from "./worker-client.js?v=__BUILD__";
 import { announce } from "./a11y.js?v=__BUILD__";
 
@@ -208,19 +211,25 @@ async function renamePins(my, res, pinOf) {
   if (res.page_ms) res.page_ms.names = Math.round(performance.now() - t);
 }
 
-// ── a model orders and words them (numbers stay the code's) ─────────────────
+// ── a model picks the order and a variant of each (the words stay the package's) ──
+
+const DEVICE_WAIT_MS = 40000;
 
 async function wordWithModel(res) {
   const findings = res.candidates || res.picks;
+  let asked = null;
   if (await localModelReady()) {
+    const name = localReaderLabel() || "the on-device model";
     try {
       const p = await callLight("scout", { op: "prompt", findings, context: currentContext() }, { priority: 2 });
-      say(`<span class="spinner" aria-hidden="true"></span>Wording the pins on your device…`);
-      const reply = await generateJsonLocally({ system: p.system, prompt: p.prompt, schema: p.schema, timeoutMs: 40000 });
+      say(`<span class="spinner" aria-hidden="true"></span>Ordering the pins on your device…`);
+      const reply = await generateJsonLocally({ system: p.system, prompt: p.prompt, schema: p.schema, timeoutMs: DEVICE_WAIT_MS });
       const out = await callLight("scout", { op: "words", findings, reply, by: "device" }, { priority: 2 });
-      return { ...out, by: "device", model: localReaderLabel() || "the on-device model" };
+      return { ...out, by: "device", model: name };
     } catch (err) {
-      console.warn("scout: on-device wording", err && err.message);
+      console.warn("scout: on-device pick", err && err.message);
+      // The device was asked and gave nothing (a timeout, an error): said on the line, not "no model" (#590).
+      asked = { findings: null, by: "device", model: name, failed: askedFailed(err, DEVICE_WAIT_MS) };
     }
   }
   const cfg = askModelConfig();
@@ -232,7 +241,7 @@ async function wordWithModel(res) {
     if (out && out.error) throw new Error(out.error);
     return { ...out, by: "key" };
   }
-  return null;
+  return asked;
 }
 
 // ── the button ──────────────────────────────────────────────────────────────
@@ -283,7 +292,7 @@ export async function runScout() {
     res.page_ms = { rows: Math.round(t1 - t0), scan: Math.round(performance.now() - t1), names: null };
     lastResult = res;
     let picks = res.picks || [];
-    let by = "rules", model = "", refused = [];
+    let by = "rules", model = "", refused = [], unknown = [], failed = "";
     if (modelReady && picks.length) {
       // A model words them with their place names, so it waits for the gazetteer.
       await namePlaces(res);
@@ -297,9 +306,14 @@ export async function runScout() {
           by = worded.by;
           model = worded.model || "";
           refused = worded.refused || [];
+          unknown = worded.unknown || [];
+        } else if (worded && worded.failed) {
+          by = worded.by;
+          model = worded.model || "";
+          failed = worded.failed;
         }
       } catch (err) {
-        refused = [`the model could not be asked (${err.message}); the rules' wording is kept`];
+        failed = `the model could not be asked (${err.message}); the rules' wording is kept`;
       }
     }
     clearLast();
@@ -317,9 +331,11 @@ export async function runScout() {
       }
     }
     if (by === "rules") void renamePins(my, { ...res, picks }, pinOf);
-    const [who, how] = scoutWho(by, model);
+    // Who worded the pins: a model whose wording is on no pin is named as asked, not as the one that worded them.
+    const line = wordingLine({ by, model, picks, refused, unknown, failed });
+    const [who, how] = [line.who, line.how];
     const n = lastPins.length;
-    const notes = [...(res.notes || []), ...(refused.length ? [`${refused.length} wording${refused.length === 1 ? "" : "s"} refused by the claim lock, rules kept`] : [])];
+    const notes = [...(res.notes || []), ...line.notes];
     // One line: who, how many. Each pin's card carries its own reason and source.
     say(n
       ? `<b class="ma-who">Scout</b><span class="ma-how">${escapeHtml(who)}, ${escapeHtml(how)}</span>` +

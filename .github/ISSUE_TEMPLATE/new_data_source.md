@@ -24,6 +24,21 @@ What kind of water data does it provide? (water quality, hydrology, reservoir, g
 ## API Documentation Link
 
 
+## Licence and Terms
+Please provide as much information as possible about the data source's licence and terms. For further information, see [Step 0 of the adding-a-data-source guide](https://rekin226.github.io/aquascope/guides/adding_data_source/#step-0-verify-the-source-terms).
+
+**Terms or licence URL:**
+A link to the publisher's terms or licence page, if available.
+
+**Licence name or identifier:**
+The name of the licence, or a standard identifier (e.g., CC-BY-4.0, ODbL, MIT, OGL3 etc.), if known.
+
+**Required attribution statement**
+If a data source requires an attribution statement for use, provide the statement here, if known/required.
+
+**Date checked:**
+The date you checked the terms/licence, since terms can change over time.
+
 ## Authentication Required?
 - [ ] No (fully open)
 - [ ] Yes — free API key

@@ -1,4 +1,4 @@
-"""HydroGym Phase 1 tasks (#175): the tree's verdict on three fixture sites is the key, probes make unsolvable
+"""AquaScope Bench Phase 1 tasks (#175): the tree's verdict on three fixture sites is the key, probes make unsolvable
 tasks, sites split deterministically, and the suite round-trips through JSONL."""
 
 from __future__ import annotations

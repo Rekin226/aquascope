@@ -25,6 +25,7 @@ import { takeOfferedReach, traceRiver } from "./river.js?v=__BUILD__";
 import { shapeSvg } from "./shapes.js?v=__BUILD__";
 import { forecastPoints, gaugePlume } from "./fews.js?v=__BUILD__";
 import { plumeAlt, plumeKey, plumeSvg } from "./fews-core.js?v=__BUILD__";
+import { riverName } from "./place-search-core.js?v=__BUILD__";
 import {
   cardNumber, dayMonth, forecastPeak, lastDays, latestValue, placeCard, prettyUnit, snapshotSentence, sparkPaths,
 } from "./map-card-core.js?v=__BUILD__";
@@ -410,6 +411,33 @@ function whatIfButton(t) {
   };
 }
 
+// Route it (#656): a flood wave from this reach down the river, drawn on the lines and played on the time bar.
+function routeButton(t) {
+  return {
+    id: "route", label: "Route a flood", hidden: !actions.openRoute || !t,
+    title: "Send a flood or a release down the river from here: when it reaches each town and gauge, and how big",
+    onClick: () => { if (t && actions.openRoute) actions.openRoute(t); },
+  };
+}
+
+// Flood it (#658): a screening flood of this reach's 100-year flow on the visitor's GPU, drawn on the map.
+function floodItButton(t) {
+  return {
+    id: "floodit", label: "Flood it", hidden: !actions.openFloodIt || !t,
+    title: "A screening flood of the valley at this reach's 100-year flow, every river in view fed, run on your GPU",
+    onClick: () => { if (t && actions.openFloodIt) actions.openFloodIt(t); },
+  };
+}
+
+// Replay an event (#659): a past flood at this reach, around a date, as a story on the map.
+function replayButton(t) {
+  return {
+    id: "replay", label: "Replay", hidden: !actions.openReplay || !t,
+    title: "Replay a past flood here as a story: the rain, the gauge against the model, the forecast, the wave and the flood",
+    onClick: () => { if (t && actions.openReplay) actions.openReplay(t); },
+  };
+}
+
 const studyButton = () => ({
   id: "study", label: "Study", title: "A complete study at this place, planned with you, with a report",
   onClick: () => actions.openStudy({ fresh: true }),
@@ -522,13 +550,26 @@ async function statusFromRecord(m) {
 
 // ── the selection's card: a place, or the river it sits on ──────────────────
 
+// The point's name when it has one (#591): from the search, or the gazetteer's nearest water or town.
+function pointName(m) {
+  const l = state.pointLabel;
+  return l && l.lat === m.lat && l.lon === m.lon ? l : null;
+}
+
+// The river at the point, for a reach's card and Route it's title (#637): a lake, a fountain or a town near it
+// is not the river, so the reach's own "River reach N" is said instead.
+function pointRiver(m) {
+  return riverName(pointName(m));
+}
+
 function pointModel(p) {
   const id = `point:${p.lat},${p.lon}`;
+  const named = pointName(p);
   return {
     id, kind: "point", lat: p.lat, lon: p.lon, filled: false,
     spec: {
       id, lngLat: [p.lon, p.lat], lift: 40,
-      what: "Place", title: coords(p.lat, p.lon), sub: "",
+      what: "Place", title: named ? named.name : coords(p.lat, p.lon), sub: named ? coords(p.lat, p.lon) : "",
       status: { pending: "Finding the river here…" },
       spark: { pending: true, label: "next 15 days, modelled" },
       figure: { pending: true },
@@ -591,16 +632,24 @@ function onSnap(m, snap) {
     return;
   }
   const order = snap.strahler_order ? `, stream order ${snap.strahler_order}` : "";
+  const named = pointRiver(m);
+  m.reachId = snap.river_id;
+  m.order = order;
+  m.routeTarget = { river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon };
   updateCard(m.id, {
-    what: "River", title: `River reach ${snap.river_id}`, sub: `${coords(m.lat, m.lon)}${order}`,
+    what: "River", title: named || `River reach ${snap.river_id}`,
+    sub: named ? `River reach ${snap.river_id} · ${coords(m.lat, m.lon)}${order}` : `${coords(m.lat, m.lon)}${order}`,
     lngLat: Number.isFinite(snap.snap_lat) ? [snap.snap_lon, snap.snap_lat] : m.spec.lngLat,
     status: { pending: "Reading the 15-day forecast…" },
     credit: GEOGLOWS_SHORT,
     details: () => openDetails("panel-point", "now"),
     // A reach taken from the offer above gets its Trace button back.
     buttons: [traceButton("pt", { ready: Boolean(m.reach) }),
-      ...(m.spec.buttons || []).filter((b) => b.id !== "trace" && b.id !== "reach" && b.id !== "whatif"),
-      whatIfButton({ kind: "reach", river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon })],
+      ...(m.spec.buttons || []).filter((b) => !["trace", "reach", "whatif", "route", "floodit", "replay"].includes(b.id)),
+      routeButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, name: named }),
+      whatIfButton({ kind: "reach", river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon }),
+      floodItButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, order: snap.strahler_order }),
+      replayButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, name: named })],
   });
   void loadForecast(m, snap);
 }
@@ -703,6 +752,24 @@ export function initMapCard() {
       model.snap = snap || { error: true };
       if (model.filled) onSnap(model, model.snap);
     });
+    root.addEventListener("pointname", (e) => {
+      const d = e.detail || {};
+      if (t !== "pt" || !model || model.kind !== "point" || d.lat !== model.lat || d.lon !== model.lon || !d.label) return;
+      const sub = model.reachId ? `River reach ${model.reachId} · ${coords(model.lat, model.lon)}${model.order || ""}`
+        : coords(model.lat, model.lon);
+      // A card that has snapped to a river takes the river's name only (#637): a lake, a fountain or a town near
+      // the point does not rename the reach, which goes on saying "River reach N" when no river is in reach.
+      if (model.reachId) {
+        const river = riverName(d.label);
+        if (!river) return;
+        const target = model.routeTarget;
+        const buttons = target ? (model.spec.buttons || []).map((b) => (b.id === "route" ? routeButton({ ...target, name: river })
+          : b.id === "replay" ? replayButton({ ...target, name: river }) : b)) : null;
+        updateCard(model.id, buttons ? { title: river, sub, buttons } : { title: river, sub });
+        return;
+      }
+      updateCard(model.id, { title: d.label.name, sub });
+    });
     root.addEventListener("reachchange", (e) => {
       if (!model || (t === "st") !== (model.kind === "gauge")) return;
       const reach = e.detail;
@@ -714,8 +781,10 @@ export function initMapCard() {
         const g = state.selected;
         const btn = whatIfButton({ kind: "gauge", river_id: reach.river_id, lat: g.lat, lon: g.lon, source: g.source,
           station_id: g.station_id, name: g.name || g.station_id });
-        const others = (model.spec.buttons || []).filter((b) => b.id !== "whatif");
-        updateCard(model.id, { buttons: [...others, btn] });
+        const others = (model.spec.buttons || []).filter((b) => !["whatif", "route", "replay"].includes(b.id));
+        const rt = routeButton({ river_id: reach.river_id, lat: reach.lat, lon: reach.lon, name: g.name || g.station_id });
+        const rp = replayButton({ river_id: reach.river_id, lat: g.lat, lon: g.lon, name: g.name || g.station_id });
+        updateCard(model.id, { buttons: [...others, rt, btn, rp] });
       }
     });
   }

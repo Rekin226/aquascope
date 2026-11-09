@@ -20,6 +20,12 @@ jobs:
         with:
           node-version: 24
       - run: node --test explorer/tests/*.test.mjs
+      - name: Install the offline Explorer layout check
+        run: |
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Check station menu pointer interactions (no live services)
+        run: node --test explorer/tests/browser/*.test.mjs
 
   lint:
     runs-on: ubuntu-latest
@@ -29,6 +35,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      # Linux runners have no GPU; avoid downloading the CUDA wheel bundle.
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -e ".[dev,all]"
       - run: ruff check aquascope/ tests/
       - name: Type check (informational — does not fail build)
@@ -36,16 +44,24 @@ jobs:
         continue-on-error: true
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
+        os: [ubuntu-latest]
+        include:
+          - python-version: "3.12"
+            os: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+      # Preinstall CPU-only torch so the all extra does not pull CUDA wheels.
+      - if: matrix.os == 'ubuntu-latest'
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -e ".[dev,all]"
       # -n auto splits the suite across the runner's cores. The suite is
       # CPU-bound and was pinned to one core, which is why this step took
@@ -53,7 +69,7 @@ jobs:
       # unchanged, so nothing here depends on test ordering.
       - run: pytest -n auto --cov=aquascope --cov-report=term-missing --cov-report=xml
       - name: Upload coverage artifact
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report

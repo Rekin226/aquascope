@@ -29,7 +29,7 @@
   padding: 0 2px; margin: -2px -4px 0 0;
 }
 .ms-hint { margin: .35rem 0 0; color: var(--muted); font-size: .7rem; }
-.ms-row { margin-top: .45rem; }
+.ms-row { margin-top: .45rem; display: flex; gap: .4rem; flex-wrap: wrap; }
 .ms-crs { display: flex; align-items: center; gap: .4rem; margin-top: .5rem; flex-wrap: wrap; }
 .ms-crs label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 650; }
 .ms-crs input {
@@ -90,3 +90,31 @@
 .mv-review li.ok .mr-mark { color: #2f7d4f; }
 .mv-review .mr-key { display: flex; flex-wrap: wrap; gap: .2rem .7rem; margin: .3rem 0 0; color: var(--ink-2); font-size: .68rem; }
 .mv-review .mr-key i { display: inline-block; width: .65rem; height: .65rem; border-radius: 2px; margin-right: .25rem; vertical-align: -1px; }
+
+/* Tools, Open model results (#591): your files, or a sample model (model-samples.js) */
+.ms-chooser p { margin: 0 0 .6rem; }
+.ms-h { font-size: .85rem; margin: 1rem 0 .4rem; }
+.ms-samples { list-style: none; margin: 0 0 .6rem; padding: 0; display: grid; gap: .7rem; }
+.ms-sample { border: 1px solid var(--line); border-radius: 8px; padding: .55rem .65rem; }
+.ms-sample .btn { white-space: normal; text-align: left; }
+.ms-sample p { margin: .3rem 0 0; font-size: .78rem; }
+.ms-sample .ms-note { font-size: .72rem; }
+.ms-sample .ms-credit { font-size: .7rem; }
+
+/* The flood views (#619, #620, mesh-views.js): the lens chooser, the hazard key. */
+.mv-lenses { display: flex; flex-wrap: wrap; gap: .25rem; margin: .5rem 0 0; }
+.mv-lens {
+  font: inherit; font-size: .7rem; line-height: 1.2; padding: .22rem .5rem; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--ink-2);
+}
+.mv-lens:hover { border-color: var(--blue); color: var(--ink); }
+.mv-lens.on { background: var(--blue-soft); border-color: var(--blue); color: var(--blue-dark); font-weight: 600; }
+.mv-lens:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.ml-body .mv-hazard { list-style: none; margin: .2rem 0 0; padding: 0; display: grid; gap: .18rem; font-size: .7rem; }
+.mv-hazard li { display: grid; grid-template-columns: .8rem 1.6rem 1fr auto; align-items: center; gap: .35rem; }
+.mv-hazard i { width: .8rem; height: .8rem; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); }
+.mv-hazard b { font-weight: 650; color: var(--ink); font-variant-numeric: tabular-nums; }
+.mv-hazard span { color: var(--ink-2); line-height: 1.25; }
+.mv-hazard em { font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ml-body .mv-prep { margin: .45rem 0 0; }
+.mv-opts.mv-vopts { flex-wrap: wrap; gap: .3rem .8rem; }

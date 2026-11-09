@@ -174,8 +174,9 @@ def _build_well_metadata(rows: list[dict]) -> dict[str, dict]:
 
 class TaiwanWRAWaterLevelCollector(BaseCollector):
     """
-    Collect real-time water-level readings from WRA river stations.
-    Updated every 10 minutes at source.
+    Collect real-time water-level readings (即時水位資料) from WRA river stations.
+    Updated every 10 minutes at source. Released under Open Government
+    Data License 1.0 (OGDL-Taiwan-1.0; https://data.gov.tw/license).
     """
 
     name = "taiwan_wra_water_level"
@@ -227,7 +228,9 @@ class TaiwanWRAWaterLevelCollector(BaseCollector):
 
 class TaiwanWRAReservoirCollector(BaseCollector):
     """
-    Collect daily reservoir operation data from WRA.
+    Collect daily reservoir operation data (水庫每日營運狀況) from WRA.
+    Released under Open Government Data License 1.0 (OGDL-Taiwan-1.0;
+    https://data.gov.tw/license).
     """
 
     name = "taiwan_wra_reservoir"

@@ -1,4 +1,4 @@
-"""HydroGym Phase 1: a verifiable benchmark of hydrology agents on real sites, generated from the playbooks (#175).
+"""AquaScope Bench Phase 1: a verifiable benchmark of hydrology agents on real sites, made from the playbooks (#175).
 
 A task is a problem at a place: a playbook, a site (a catalog gauge or a bare
 point), the intake, and a snapshot of the reconnaissance (``assess_site``)

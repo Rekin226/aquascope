@@ -3,7 +3,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  ActionLog, BY_LABEL, LAYER_CONTROLS, NOTE_SIDES, agoWords, checkPin, inkOn, noteBody, noteRect, placeNotes, slotOf,
+  ActionLog, BY_LABEL, LAYER_CONTROLS, NOTE_SIDES, agoWords, checkPin, explainWho, inkOn, noteBody, noteRect, placeNotes,
+  slotOf,
 } from "../src/map-actions-core.js";
 import { focusPalette, statusPalette } from "../src/status-core.js";
 
@@ -159,4 +160,12 @@ test("note cards go on the side that keeps them off each other and off the map's
   const legend = { x: 510, y: 200, w: 300, h: 200 };
   assert.notEqual(placeNotes([{ x: 500, y: 300 }], [size], frame, [legend])[0], "right");
   assert.deepEqual(NOTE_SIDES, ["right", "left", "top", "bottom"]);
+});
+
+test("when the model's notes are refused, the line says so, not 'no model' (#590)", () => {
+  assert.deepEqual(explainWho({ model: "Chrome's built-in model", notes: [], refused: ["the model's reply was refused: reply.notes[0].note 'f4' is not one of n1, n2"] }),
+    ["Rules", "Chrome's built-in model's choice was refused"]);
+  assert.deepEqual(explainWho({ model: "Chrome's built-in model", error: "the on-device model took more than 30 s" }),
+    ["Rules", "Chrome's built-in model did not answer (the on-device model took more than 30 s)"]);
+  assert.deepEqual(explainWho({ model: "claude via anthropic", notes: [] }), ["Rules", "claude via anthropic chose no note"]);
 });

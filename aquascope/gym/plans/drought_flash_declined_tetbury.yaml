@@ -1,4 +1,4 @@
-# HydroGym Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
 # A flash drought is a matter of weeks and needs a sub-monthly soil-moisture or evaporative-demand index the
 # playbook does not compute: it declines.
 id: drought_flash_declined_tetbury

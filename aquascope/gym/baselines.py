@@ -1,4 +1,4 @@
-"""Reference agents for HydroGym and a small leaderboard helper.
+"""Reference agents for AquaScope Bench and a small leaderboard helper.
 
 Three baselines every new agent should beat, ordered by how much of the
 simulator they use outside the environment:

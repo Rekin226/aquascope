@@ -6,9 +6,9 @@
   box-shadow: inset 0 0 0 1px rgba(11, 36, 64, .35);
   border-radius: 1px;
 }
-.gw-segs { display: flex; gap: 0; margin: 0 0 .45rem; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; width: max-content; }
+.gw-segs { display: flex; gap: 0; margin: 0 0 .45rem; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; width: max-content; max-width: 100%; }
 .gw-seg {
-  font: inherit; font-size: .7rem; border: 0; background: none; padding: .18rem .55rem; color: var(--ink-2); cursor: pointer;
+  font: inherit; font-size: .7rem; border: 0; background: none; padding: .18rem .55rem; color: var(--ink-2); cursor: pointer; min-width: 0;
 }
 .gw-seg + .gw-seg { border-left: 1px solid var(--line); }
 .gw-seg.on { background: var(--bg-sunken); color: var(--ink); font-weight: 600; }
@@ -44,3 +44,15 @@
 .gw-form-err { color: var(--err-ink); }
 .gw-form-row { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
 @media (max-width: 520px) { .gw-grid { grid-template-columns: 1fr; } }
+
+/* A model whose files do not say where it is (#591): one click places it approximately; the exact form is second. */
+.gw-place > p { margin: 0 0 .6rem; }
+.gw-approx { padding: .6rem .7rem; border: 1px solid var(--line); border-radius: 8px; margin: 0 0 .7rem; }
+.gw-approx .gw-form-row .btn { white-space: normal; text-align: left; }
+.gw-approx p { margin: .45rem 0 0; font-size: .78rem; }
+.gw-exact { margin: 0 0 .6rem; }
+.gw-exact summary { cursor: pointer; font-size: .82rem; margin: 0 0 .5rem; }
+.ml-body .gw-approx-tag {
+  margin: .35rem 0 0; padding: .3rem .45rem; border-radius: 6px; line-height: 1.35;
+  background: var(--warn-bg); color: var(--warn-ink); font-size: .7rem;
+}

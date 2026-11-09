@@ -453,7 +453,7 @@ def test_neighbours_and_cell_lookup(mesh_of):
     assert [g["station_id"] for g in inside] == ["1"] and inside[0]["cell"] == 5
 
 
-# ── the claim lock: a model orders and words, code holds the numbers ────────
+# ── the model path: the model picks, the code writes (#590, round 3) ─────────
 
 
 def _review_with_problems(mesh_of):
@@ -463,25 +463,59 @@ def _review_with_problems(mesh_of):
     return R.review(m, context=clean_context(m))
 
 
-def test_a_models_words_are_held_to_the_facts(mesh_of):
+def test_a_model_picks_the_pins_their_order_and_a_variant_and_the_package_writes_them(mesh_of):
     res = _review_with_problems(mesh_of)
     neg, vol = found(res, "negative")[0], found(res, "mass_balance")[0]
-    f1, f2 = neg["facts"][0]["id"], neg["facts"][1]["id"]
-    v1 = vol["facts"][0]["id"]
-    reply = json.dumps({"order": [vol["id"], neg["id"]], "notes": [
-        {"id": neg["id"], "title": "Water below the bed", "reason": f"Depth falls to {{{f1}}} m in {{{f2}}} cell."},
-        {"id": vol["id"], "title": "Volume error of 12%", "reason": f"The run loses {{{v1}}} of its water."},
-    ]})
+    deep = found(res, "deepest")[0]
+    reply = json.dumps({"pins": [{"id": deep["id"], "variant": "c"}, {"id": vol["id"], "variant": "b"}]})
     out = R.apply_words(res["findings"], reply, by="device")
-    first, second = out["findings"][:2]
-    assert out["ordered"] and first["id"] == vol["id"] and second["id"] == neg["id"]
-    assert second["title"] == "Water below the bed" and second["by"] == "device"
-    assert second["reason"] == "Depth falls to -0.5 m in 1 cell."
-    # A number of the model's own ("12") is refused; the rules wording stays.
-    assert first["title"] == vol["rules_title"] and first["by"] == "rules"
-    assert any(r.startswith(vol["id"]) and "12" in r for r in out["refused"])
-    # Values, places, severities and cells never move.
-    assert second["value"] == neg["value"] and second["cells"] == neg["cells"] and second["severity"] == "problem"
+    ids = [f["id"] for f in out["findings"]]
+    # Its order; the problem it left out is pinned all the same, after its picks.
+    assert ids == [deep["id"], vol["id"], neg["id"]] and out["ordered"] and out["refused"] == []
+    first, second, third = out["findings"]
+    assert first["by"] == "device" and first["variant"] == "c"
+    assert first["title"] == deep["rules_title"]
+    assert first["reason"] == deep["rules_reason"].split(". Worth")[0] + "."      # the first sentence, the package's
+    assert second["title"] == "Volume balance" and second["reason"] == vol["rules_reason"]
+    assert third["by"] == "rules" and third["title"] == neg["rules_title"] and third["severity"] == "problem"
+    # The findings it left out (not problems) are listed, not pinned; values, places and cells never move.
+    assert set(out["left_out"]) == {f["id"] for f in res["findings"]} - set(ids)
+    assert first["value"] == deep["value"] and first["cells"] == deep["cells"]
+    # The counts are the rules' counts: the review's own, untouched.
+    assert res["summary"].startswith("1 problem")
+
+
+def test_every_variant_is_the_packages_words_held_to_its_facts(mesh_of):
+    from aquascope.map_explain import _numbers
+
+    res = _review_with_problems(mesh_of)
+    for f in res["findings"]:
+        rules = f"{f['rules_title']} {f['rules_reason']}"
+        for v, (title, reason) in R.review_variants(f).items():
+            assert title and reason, (f["id"], v)
+            # The second line of defence holds every variant: no number the rules' words do not say, no "not"
+            # dropped.
+            assert _numbers(f"{title} {reason}") <= _numbers(rules), (f["id"], v, reason)
+            assert R.negation_flip(f"{f['rules_title']}. {f['rules_reason']}", reason) is None, (f["id"], v)
+
+
+@pytest.mark.parametrize("reply, why", [
+    # The old free-text reply shape: refused whole, nothing of it shown.
+    ({"order": ["r1"], "notes": [{"id": "r1", "title": "Worst cell", "reason": "Depth falls to {f1} m."}]},
+     "reply has no pins"),
+    ({"pins": [{"id": "r99", "variant": "a"}]}, "reply.pins[0].id 'r99' is not one of"),
+    ({"pins": [{"id": "r1", "variant": "d"}]}, "reply.pins[0].variant 'd' is not one of a, b, c"),
+    ({"pins": [{"id": "r1", "variant": "a", "reason": "Two cells flicker."}]}, "which the schema does not hold"),
+    ({"pins": []}, "fewer than 1 items"),
+    ("not json", "the model did not reply with JSON"),
+])
+def test_a_reply_outside_the_schema_is_refused_whole(mesh_of, reply, why):
+    res = _review_with_problems(mesh_of)
+    out = R.apply_words(res["findings"], reply, by="device")
+    assert len(out["refused"]) == 1 and why in out["refused"][0], out["refused"]
+    assert [f["id"] for f in out["findings"]] == [f["id"] for f in res["findings"]]
+    assert all(f["by"] == "rules" and f["title"] == f["rules_title"] for f in out["findings"])
+    assert not out["ordered"]
 
 
 @pytest.mark.parametrize("title, reason, why", [
@@ -496,24 +530,113 @@ def test_a_models_words_are_held_to_the_facts(mesh_of):
     ("Below the bed", "Depth falls to {F1}.5 m.", "sign or a digit"),
     ("Below the bed", "Depth falls to \u2212{F1} m.", "sign or a digit"),
 ])
-def test_the_claim_lock_refuses(mesh_of, title, reason, why):
+def test_the_older_lock_still_refuses(mesh_of, title, reason, why):
+    # The free-text lock is no longer on the model path; it stays as a second line of defence.
     res = _review_with_problems(mesh_of)
     neg = found(res, "negative")[0]
     reason = reason.replace("F1", neg["facts"][0]["id"])
-    out = R.apply_words(res["findings"], {"order": [], "notes": [{"id": neg["id"], "title": title, "reason": reason}]})
-    kept = next(f for f in out["findings"] if f["id"] == neg["id"])
-    assert kept["title"] == neg["rules_title"] and kept["by"] == "rules"
-    assert out["refused"] and why in out["refused"][0]
-    assert not out["ordered"] and [f["id"] for f in out["findings"]] == [f["id"] for f in res["findings"]]
+    got, err = R._locked(neg, title, reason)
+    assert got is None and why in err
 
 
-def test_the_prompt_names_placeholders_not_numbers_to_type(mesh_of):
+@pytest.mark.parametrize("reason", [
+    # Gemini Nano on the HEC-RAS Portsmouth run, 2026-10-25 and 2026-10-26, on the deepest-water pins. The rules
+    # say "Worth a look if it is not a channel or a pit you expect."
+    "Deepest water is {F1} at {F1.when}; investigate if it's an expected feature.",
+    "Deepest water of {F1}: check if expected (e.g. channel or pit).",
+])
+def test_the_older_lock_still_catches_a_dropped_not(mesh_of, reason):
+    m = mesh_of()
+    res = R.review(m, context=clean_context(m))
+    deep = found(res, "deepest")[0]
+    got, err = R._locked(deep, "Deepest water", reason.replace("F1", deep["facts"][0]["id"]))
+    assert got is None and err == "drops the 'not' of the rules wording ('if it is not a channel or a pit you expect')"
+
+
+def test_a_negated_statement_said_without_its_not_is_refused():
+    rules = "Gauge Kingston: no record for the run. It has no observations during the run."
+    assert R.negation_flip(rules, "The gauge has a record for the run.") == "no record for the run"
+    assert R.negation_flip(rules, "No record at this gauge covers the run.") is None
+    assert R.negation_flip(rules, "The gauge has records outside the run period.") is None   # other words
+    film = "This cell never gets deeper than 0.02 m, under 0.03 m."
+    assert R.negation_flip(film, "This cell gets deeper than {f1}.") == "never gets deeper than 0.02 m"
+    assert R.negation_flip(film, "A thin film, at most {f1} deep.") is None
+
+
+def test_the_prompt_offers_ids_and_variants_and_no_free_text(mesh_of):
     res = _review_with_problems(mesh_of)
-    p = R.review_prompt(res["findings"])
-    items = json.loads(p["prompt"])["findings"]
-    assert items[0]["facts"][0]["placeholder"].startswith("{f")
-    assert "Never write a number yourself" in p["system"]
-    assert R.apply_words(res["findings"], "not json")["refused"] == ["the model did not reply with JSON"]
+    p = R.review_prompt(res["findings"], context="Portsmouth")
+    ids = [f["id"] for f in res["findings"]]
+    item = p["schema"]["properties"]["pins"]["items"]
+    assert item["properties"]["id"]["enum"] == ids and item["properties"]["variant"]["enum"] == ["a", "b", "c"]
+    assert item["additionalProperties"] is False and set(item["required"]) == {"id", "variant"}
+    # No string field the model could fill with words of its own.
+    assert all("enum" in v for v in item["properties"].values())
+    for f in res["findings"]:
+        assert f"{f['id']} ({f['severity']}" in p["system"] and f["rules_reason"] in p["system"]
+    assert "never write a word of a pin" in p["system"] and "Portsmouth" in p["system"]
+
+
+@pytest.mark.parametrize("question", [
+    # The two questions of eight in which the model dropped both flicker findings (ai-on-the-map.md, round four),
+    # and the words a reader uses instead.
+    "are there any numerical instabilities in this run?",
+    "is the model stable?",
+    "does the depth flicker at the edge?",
+    "any wet and dry problems?",
+    "the water surface oscillates - is that a problem?",
+])
+def test_the_question_names_the_flicker(question):
+    findings = [{"id": "r1", "check": "deepest"}, {"id": "r2", "check": "flicker"}]
+    assert R.named_findings(findings, question) == ["r2"]
+    # The ids follow the review's order, not the words' order.
+    assert R.named_findings([{"id": "r1", "check": "flicker"}, {"id": "r2", "check": "deepest"}], question) == ["r1"]
+
+
+@pytest.mark.parametrize("question", [
+    "review my model results", "is anything wrong with my flood model?", "does this simulation look plausible?",
+    "are the depths in my flood model realistic?", "check my model", "is the volume balance right?", "",
+])
+def test_a_question_that_names_nothing_pins_nothing_extra(question):
+    assert R.named_findings([{"id": "r1", "check": "flicker"}, {"id": "r2", "check": "mass_balance"}],
+                            question) == []
+
+
+def _review_with_flicker(mesh_of):
+    d = clean_depths()
+    d[:, cell(0, WET_COLS)] = [0, 0.3, 0, 0.3, 0, 0.3, 0, 0.3]   # beside the flood: wet, dry, wet...
+    m = mesh_of(d)
+    return R.review(m, context=clean_context(m))
+
+
+def test_a_question_about_stability_pins_the_flicker_the_model_left_out(mesh_of):
+    res = _review_with_flicker(mesh_of)
+    flick = found(res, "flicker")[0]
+    deep = found(res, "deepest")[0]
+    reply = json.dumps({"pins": [{"id": deep["id"], "variant": "a"}]})
+    # Its order first, then the finding the question names, in the package's wording, not in the left-out list.
+    out = R.apply_words(res["findings"], reply, by="device", question="is the model stable?")
+    ids = [f["id"] for f in out["findings"]]
+    assert ids[:2] == [deep["id"], flick["id"]] and flick["id"] not in out["left_out"]
+    pinned = {f["id"]: f for f in out["findings"]}
+    assert pinned[flick["id"]]["by"] == "rules" and pinned[flick["id"]]["title"] == flick["rules_title"]
+    # The same reply with no question leaves the warning out, as before.
+    plain = R.apply_words(res["findings"], reply, by="device")
+    assert flick["id"] not in [f["id"] for f in plain["findings"]] and flick["id"] in plain["left_out"]
+
+
+def test_the_prompt_keeps_the_question_verbatim_and_says_what_it_names(mesh_of):
+    res = _review_with_flicker(mesh_of)
+    flick = found(res, "flicker")[0]
+    q = "are there any numerical instabilities in this run?"
+    p = R.review_prompt(res["findings"], context="Portsmouth", question=q)
+    assert f"The modeller asks: {q}" in p["system"]
+    assert f"The findings that answer it are always pinned: {flick['id']}." in p["system"]
+    assert "Portsmouth" in p["system"]
+    # A question that names nothing still reaches the prompt, and promises no extra pin.
+    plain = R.review_prompt(res["findings"], question="review my model results")
+    assert "The modeller asks: review my model results" in plain["system"]
+    assert "always pinned:" not in plain["system"]
 
 
 class _Client:
@@ -521,8 +644,10 @@ class _Client:
         self.text = text
         self.chat = self
         self.completions = self
+        self.sent = None
 
     def create(self, **kw):
+        self.sent = kw
         msg = type("M", (), {"content": self.text})
         return type("R", (), {"choices": [type("C", (), {"message": msg})]})
 
@@ -530,10 +655,22 @@ class _Client:
 def test_model_words_with_a_client(mesh_of):
     res = _review_with_problems(mesh_of)
     neg = found(res, "negative")[0]
-    reply = json.dumps({"order": [neg["id"]], "notes": [{"id": neg["id"], "title": "Below the bed",
-                                                          "reason": "The water surface dips under the bed here."}]})
-    out = R.model_words(res["findings"], client=_Client(reply), model="m", provider="p")
-    assert out["findings"][0]["title"] == "Below the bed" and out["model"] == "m via p"
+    client = _Client(json.dumps({"pins": [{"id": neg["id"], "variant": "b"}]}))
+    out = R.model_words(res["findings"], client=client, model="m", provider="p")
+    assert out["findings"][0]["title"] == "Negative depths" and out["model"] == "m via p"
+    assert out["findings"][0]["reason"] == neg["rules_reason"]
+    assert client.sent["messages"][1]["content"] == "Choose the pins."
+
+
+def test_model_words_keeps_the_question_and_pins_what_it_names(mesh_of):
+    res = _review_with_flicker(mesh_of)
+    flick = found(res, "flicker")[0]
+    deep = found(res, "deepest")[0]
+    client = _Client(json.dumps({"pins": [{"id": deep["id"], "variant": "b"}]}))
+    out = R.model_words(res["findings"], client=client, model="m", provider="p", question="is the model stable?")
+    assert "is the model stable?" in client.sent["messages"][0]["content"]
+    assert flick["id"] in [f["id"] for f in out["findings"]]
+    assert flick["id"] not in out["left_out"]
 
 
 # ── the faces: file, CLI and MCP ────────────────────────────────────────────
@@ -592,15 +729,35 @@ def test_explorer_check_labels_and_worker_ops_match():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1] / "explorer"
-    js = (root / "src" / "mesh-review-core.js").read_text()
+    js = (root / "src" / "mesh-review-core.js").read_text(encoding="utf-8")
     block = re.search(r"export const CHECK_LABELS = \{(.*?)\};", js, re.S).group(1)
     assert dict(re.findall(r'(\w+): "([^"]+)"', block)) == R.CHECKS
     sev = re.search(r"export const SEVERITY = \{(.*?)\n\};", js, re.S).group(1)
     assert re.findall(r"^  (\w+):", sev, re.M) == list(R.SEVERITIES)
-    mesh_worker = (root / "src" / "mesh-worker.js").read_text()
+    mesh_worker = (root / "src" / "mesh-worker.js").read_text(encoding="utf-8")
     for call in ("gauges_inside", "_review.review(", "review_prompt", "apply_words"):
         assert call in mesh_worker
-    worker = (root / "worker.js").read_text()
+    worker = (root / "worker.js").read_text(encoding="utf-8")
     assert '"mesh_review"' in re.search(r"const LITE_TYPES = new Set\(\[([^\]]*)\]\)", worker).group(1)
     for call in ("gather_floods", "gauge_series", "model_words"):
         assert f"_mr.{call}(" in worker
+
+
+def test_a_count_is_said_under_its_own_threshold(mesh_of):
+    # On the device the review read "8 cells ... (< 0.0269 m)": both numbers are facts, but the 8 cells are those
+    # under 0.03 m and 0.0269 m is one cell's largest depth (#590). Now the words are the package's; the older
+    # lock still catches the wrong bound.
+    d = clean_depths()
+    for r in (1, 2, 3):
+        d[3, cell(r, WET_COLS)] = 0.02
+    m = mesh_of(d)
+    res = R.review(m, context=clean_context(m))
+    film = found(res, "tiny")[0]
+    ids = {x["label"]: x["id"] for x in film["facts"]}
+    largest, count, limit = ids["Largest depth"], ids["Cells wetted only by a film"], ids["A film is shallower than"]
+    assert next(x for x in film["facts"] if x["id"] == limit)["shown"] == "0.03"
+    got, err = R._locked(film, "Only a film", f"{{{count}}} cells are wetted only by a film (< {{{largest}}} m).")
+    assert got is None and "the count is of those under 0.03" in err
+    for _v, (title, reason) in R.review_variants(film).items():
+        assert "3 cells in all are like it" in reason or reason.startswith("This cell never gets deeper")
+        assert "under 0.03" in reason

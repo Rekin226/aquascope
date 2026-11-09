@@ -2,46 +2,38 @@
  "id": "seine-loire-lowflow",
  "question": "Compare the low flows (Q95) of the Seine at Paris and the Loire at Blois.",
  "shows": "Two records in one answer, with the flow-duration curve behind each.",
- "answer": "**Low‑flow (Q95) comparison**\n\n| River / Gauge | Station (source / ID) | Record period | Length (years) | Q95 (m³ s⁻¹) |\n|---------------|----------------------|--------------|----------------|--------------|\n| Seine – Paris (Austerlitz) | hubeau_hydrometrie / F700000102 | 1990‑01‑01 → 2026‑03‑16 | ≈ 36 yr | 93 m³ s⁻¹ |\n| Loire – Blois | hubeau_hydrometrie / K447001001 | 1900‑01‑01 → 2026‑09‑17* | ≈ 127 yr | 60 m³ s⁻¹ |\n\n\\*The catalog lists the station from 1863‑01‑01, but the Hub’Eau record supplied starts on 1900‑01‑01.\n\n**Interpretation (data‑only)**  \n- The Seine at Paris has a higher 95 % low‑flow discharge (93 m³ s⁻¹) than the Loire at Blois (60 m³ s⁻¹).  \n- Both values come from flow‑duration‑curve analysis of daily mean discharge (Hub’Eau, licence etalab‑2.0).  \n- The Loire gauge benefits from a much longer record (≈ 127 yr) than the Seine gauge (≈ 36 yr), which generally improves confidence in its low‑flow estimate.  \n\n**Additional low‑flow metric (optional)**  \n- 7‑day‑mean low flow (7Q10) is 77 m³ s⁻¹ for the Seine and 40 m³ s⁻¹ for the Loire, showing the same relative ordering.  \n\nAll numbers are directly taken from the low‑flow context outputs for the two stations. No other site information is introduced.",
- "markdown": "# Compare the low flows (Q95) of the Seine at Paris and the Loire at Blois.\n\n**Low‑flow (Q95) comparison**\n\n| River / Gauge | Station (source / ID) | Record period | Length (years) | Q95 (m³ s⁻¹) |\n|---------------|----------------------|--------------|----------------|--------------|\n| Seine – Paris (Austerlitz) | hubeau_hydrometrie / F700000102 | 1990‑01‑01 → 2026‑03‑16 | ≈ 36 yr | 93 m³ s⁻¹ |\n| Loire – Blois | hubeau_hydrometrie / K447001001 | 1900‑01‑01 → 2026‑09‑17* | ≈ 127 yr | 60 m³ s⁻¹ |\n\n\\*The catalog lists the station from 1863‑01‑01, but the Hub’Eau record supplied starts on 1900‑01‑01.\n\n**Interpretation (data‑only)**  \n- The Seine at Paris has a higher 95 % low‑flow discharge (93 m³ s⁻¹) than the Loire at Blois (60 m³ s⁻¹).  \n- Both values come from flow‑duration‑curve analysis of daily mean discharge (Hub’Eau, licence etalab‑2.0).  \n- The Loire gauge benefits from a much longer record (≈ 127 yr) than the Seine gauge (≈ 36 yr), which generally improves confidence in its low‑flow estimate.  \n\n**Additional low‑flow metric (optional)**  \n- 7‑day‑mean low flow (7Q10) is 77 m³ s⁻¹ for the Seine and 40 m³ s⁻¹ for the Loire, showing the same relative ordering.  \n\nAll numbers are directly taken from the low‑flow context outputs for the two stations. No other site information is introduced.\n\n## Methods and citations\n\n1. **Flow-duration curve.** Empirical exceedance probabilities of daily flow (Weibull plotting positions); Q95 and Q10 read from the curve. _Vogel, R. M., & Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage., 120(4), 485-504._\n2. **Baseflow index (Lyne-Hollick filter).** Recursive digital filter (alpha 0.925, three passes); the index is the baseflow volume over the total. _Lyne, V., & Hollick, M. (1979). Stochastic time-variable rainfall-runoff modelling. Inst. Eng. Aust. Natl. Conf. Publ. 79/10, 89-93._\n3. **Low-flow frequency (7Q10).** Annual minima of the 7-day mean flow ranked by the Weibull plotting position; the 10-year value read from the curve. _Smakhtin, V. U. (2001). Low flow hydrology: a review. J. Hydrol. 240, 147-186._\n\n---\nProduced by aquascope 0.18.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-09-21 10:52 UTC. Tools called: find_stations, find_stations, assess_site, low_flow_context, low_flow_context. Numbers come from the tool results; the model wrote the prose.",
+ "answer": "**Low‑flow (Q95) comparison**\n\n| River (gauge) | Station (source / id) | Record length | Q95 (m³ s⁻¹) | How Q95 was derived |\n|---------------|----------------------|--------------|-------------|----------------------|\n| Seine at Paris (Austerlitz) | hubeau_hydrometrie / F700000102 | ≈ 36 yr (1990‑01‑01 to 2026‑03‑16) | **93 m³ s⁻¹** | Read from the flow‑duration curve (Weibull plotting positions) of the daily discharge record (method “Flow‑duration curve”). |\n| Loire at Blois | hubeau_hydrometrie / K447001001 | ≈ 127 yr (1900‑01‑01 to 2026‑09‑17) | **60 m³ s⁻¹** | Same method (flow‑duration curve) applied to the daily discharge record. |\n\n**Interpretation**\n\n- The Seine’s Q95 (93 m³ s⁻¹) is about **55 % higher** than the Loire’s Q95 (60 m³ s⁻¹).  \n- Both values come from measured daily discharge series processed by Hub’Eau, using the same statistical approach, so they are directly comparable.  \n- The Loire gauge has a much longer record (≈ 127 yr) than the Seine gauge (≈ 36 yr), giving its Q95 a higher degree of temporal confidence.  \n\n**Caveats**\n\n- Q95 values are **empirical** (no extrapolation) and reflect conditions during the recorded periods.  \n- No adjustments for regulation, abstraction or recent climate trends have been applied; the numbers are purely observational.  \n\n*All numbers are taken from the low‑flow context output for each station (unit = m³ s⁻¹, 95 % exceedance probability).*",
+ "markdown": "# Compare the low flows (Q95) of the Seine at Paris and the Loire at Blois.\n\n**Low‑flow (Q95) comparison**\n\n| River (gauge) | Station (source / id) | Record length | Q95 (m³ s⁻¹) | How Q95 was derived |\n|---------------|----------------------|--------------|-------------|----------------------|\n| Seine at Paris (Austerlitz) | hubeau_hydrometrie / F700000102 | ≈ 36 yr (1990‑01‑01 to 2026‑03‑16) | **93 m³ s⁻¹** | Read from the flow‑duration curve (Weibull plotting positions) of the daily discharge record (method “Flow‑duration curve”). |\n| Loire at Blois | hubeau_hydrometrie / K447001001 | ≈ 127 yr (1900‑01‑01 to 2026‑09‑17) | **60 m³ s⁻¹** | Same method (flow‑duration curve) applied to the daily discharge record. |\n\n**Interpretation**\n\n- The Seine’s Q95 (93 m³ s⁻¹) is about **55 % higher** than the Loire’s Q95 (60 m³ s⁻¹).  \n- Both values come from measured daily discharge series processed by Hub’Eau, using the same statistical approach, so they are directly comparable.  \n- The Loire gauge has a much longer record (≈ 127 yr) than the Seine gauge (≈ 36 yr), giving its Q95 a higher degree of temporal confidence.  \n\n**Caveats**\n\n- Q95 values are **empirical** (no extrapolation) and reflect conditions during the recorded periods.  \n- No adjustments for regulation, abstraction or recent climate trends have been applied; the numbers are purely observational.  \n\n*All numbers are taken from the low‑flow context output for each station (unit = m³ s⁻¹, 95 % exceedance probability).*\n\n## Methods and citations\n\n1. **Flow-duration curve.** Empirical exceedance probabilities of daily flow (Weibull plotting positions); Q95 and Q10 read from the curve. _Vogel, R. M., & Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage., 120(4), 485-504._\n2. **Baseflow index (Lyne-Hollick filter).** Recursive digital filter (alpha 0.925, three passes); the index is the baseflow volume over the total. _Lyne, V., & Hollick, M. (1979). Stochastic time-variable rainfall-runoff modelling. Inst. Eng. Aust. Natl. Conf. Publ. 79/10, 89-93._\n3. **Low-flow frequency (7Q10).** Annual minima of the 7-day mean flow ranked by the Weibull plotting position; the 10-year value read from the curve. _Smakhtin, V. U. (2001). Low flow hydrology: a review. J. Hydrol. 240, 147-186._\n\n---\nProduced by aquascope 1.1.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-11-09 14:07 UTC. Tools called: assess_site, assess_site, assess_site, low_flow_context, low_flow_context. Numbers come from the tool results; the model wrote the prose.",
  "tool_calls": [
   {
-   "name": "find_stations",
+   "name": "assess_site",
    "arguments": {
-    "limit": 5,
-    "near": [
-     48.8566,
-     2.3522
-    ],
-    "query": "Seine",
-    "variable": "discharge"
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "problem": "low_flow"
    },
-   "ok": true,
-   "summary": "{\"n_catalog\": 67912, \"n_returned\": 5, \"limit\": 5, \"stations\": [{\"source\": \"hubeau_hydrometrie\", \"station_id\": \"F700000102\", \"name\": \"La Seine à Paris - Austerli"
-  },
-  {
-   "name": "find_stations",
-   "arguments": {
-    "limit": 5,
-    "near": [
-     47.5861,
-     1.3333
-    ],
-    "query": "Loire",
-    "variable": "discharge"
-   },
-   "ok": true,
-   "summary": "{\"n_catalog\": 67912, \"n_returned\": 5, \"limit\": 5, \"stations\": [{\"source\": \"hubeau_hydrometrie\", \"station_id\": \"K447001001\", \"name\": \"La Loire à Blois\", \"latitud"
+   "ok": false,
+   "summary": "{\"error\": \"unknown problem 'low_flow'; one of ['catchment_response', 'climate_change', 'drought', 'flood_change', 'flood_risk', 'groundwater_decline', 'irrigati"
   },
   {
    "name": "assess_site",
    "arguments": {
-    "lat": 48.84468962,
-    "lon": 2.365510635,
-    "problem": "low_flow"
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "problem": "drought"
    },
-   "ok": false,
-   "summary": "{\"error\": \"unknown problem 'low_flow'; one of ['climate_change', 'drought', 'flood_risk', 'groundwater_decline', 'irrigation', 'supply_reliability', 'ungauged_f"
+   "ok": true,
+   "summary": "{\"point\": {\"lat\": 48.8566, \"lon\": 2.3522}, \"stations\": [{\"source\": \"hubeau_hydrometrie\", \"station_id\": \"F700000102\", \"name\": \"La Seine à Paris - Austerlitz - st"
+  },
+  {
+   "name": "assess_site",
+   "arguments": {
+    "lat": 47.589,
+    "lon": 1.332,
+    "problem": "drought"
+   },
+   "ok": true,
+   "summary": "{\"point\": {\"lat\": 47.589, \"lon\": 1.332}, \"stations\": [{\"source\": \"hubeau_hydrometrie\", \"station_id\": \"K447001001\", \"name\": \"La Loire à Blois\", \"distance_km\": 0."
   },
   {
    "name": "low_flow_context",
@@ -107,11 +99,11 @@
    "detail": ""
   }
  ],
- "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"Compare the low flows (Q95) of the Seine at Paris and the Loire at Blois.\"\nquestion: \"Compare the low flows (Q95) of the Seine at Paris and the Loire at Blois.\"\ncreated: \"2026-09-21T10:52:20+00:00\"\naquascope_version: \"0.18.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"find_stations\"\n    arguments:\n      limit: 5\n      near: [48.8566, 2.3522]\n      query: \"Seine\"\n      variable: \"discharge\"\n  - tool: \"find_stations\"\n    arguments:\n      limit: 5\n      near: [47.5861, 1.3333]\n      query: \"Loire\"\n      variable: \"discharge\"\n  - tool: \"low_flow_context\"\n    arguments:\n      source: \"hubeau_hydrometrie\"\n      station_id: \"F700000102\"\n  - tool: \"low_flow_context\"\n    arguments:\n      source: \"hubeau_hydrometrie\"\n      station_id: \"K447001001\"\n",
+ "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"Compare the low flows (Q95) of the Seine at Paris and the Loire at Blois.\"\nquestion: \"Compare the low flows (Q95) of the Seine at Paris and the Loire at Blois.\"\ncreated: \"2026-11-09T14:07:18+00:00\"\naquascope_version: \"1.1.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"assess_site\"\n    arguments:\n      lat: 48.8566\n      lon: 2.3522\n      problem: \"drought\"\n  - tool: \"assess_site\"\n    arguments:\n      lat: 47.589\n      lon: 1.332\n      problem: \"drought\"\n  - tool: \"low_flow_context\"\n    arguments:\n      source: \"hubeau_hydrometrie\"\n      station_id: \"F700000102\"\n  - tool: \"low_flow_context\"\n    arguments:\n      source: \"hubeau_hydrometrie\"\n      station_id: \"K447001001\"\n",
  "steps": 6,
  "model": "openai/gpt-oss-120b",
  "provider": "groq",
- "recorded": "2026-09-21T10:52:20+00:00",
- "aquascope_version": "0.18.0",
+ "recorded": "2026-11-09T14:07:18+00:00",
+ "aquascope_version": "1.1.0",
  "error": null
 }

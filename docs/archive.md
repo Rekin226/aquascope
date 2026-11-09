@@ -15,8 +15,8 @@ Parquet bundle per variable and source** for whole-source reads. See
 The catalog and the mirror are two different numbers, and this page keeps them
 apart: the **catalog** is the worldwide index of what the agencies publish, and
 the **mirror** is the subset the harvest has actually reached with a licence
-that allows redistribution. On the 2026-10-19 harvest the catalog held
-**75,833 stations** and the mirror held daily observations for **5,374 of
+that allows redistribution. On the 2026-11-02 harvest the catalog held
+**75,892 stations** and the mirror held daily observations for **6,231 of
 them**.
 
 ## What is in it
@@ -25,7 +25,7 @@ them**.
 | --- | --- |
 | `stations.parquet` | GeoParquet 1.0 (WKB point geometry, WGS84). One row per station: `source`, `station_id`, `name`, `latitude`, `longitude`, `variables`, `period_start`, `period_end`, `url`, `river`, `country`, `agency`, `license`, `redistributable`, `extra`. |
 | `stations.geojson` | the same rows as GeoJSON, for tools and browsers that don't read parquet |
-| `health.json` | per-source status of the last run: station count, seconds, error message if the endpoint failed |
+| `health.json` | per-source status of the last run: station count, seconds, error message if the endpoint failed, and non-fatal `warnings` for partial results or a large count drop |
 | `health/jobs/<job>.json`, `health/jobs/index.json` | every scheduled job's last run, last success, last failure, counts, data date and expected cadence (see [Job health](#job-health)) |
 | `README.md` | the dataset card, regenerated on every run, with the per-source licence table |
 | `obs/<variable>/<source>/<station_id>.csv.gz` | daily values for one station (`date,value`; discharge m3/s, water and groundwater level m, precipitation mm/day), only for redistributable sources |
@@ -71,16 +71,16 @@ without ever hammering an agency. What is mirrored:
 | `poland_imgw` | discharge, water_level | IMGW-PIB daily archive (hydrological-year zips, one per month to 2022 and one per year after; the current year is published once it ends). The archive host sends no CORS headers, so this mirror is what the Explorer serves (#391) |
 | `greece_openhi` | discharge, water_level, precipitation | 15-minute telemetry folded to daily means, rainfall to daily totals. The browser cannot call OpenHi directly (its API allows cross-origin requests from localhost only), so this mirror is what the Explorer serves (#408) |
 
-How far the mirror has reached, per variable, on the same 2026-10-19 harvest. A
+How far the mirror has reached, per variable, on the same 2026-11-02 harvest. A
 station that measures two things appears once in each row, so the rows add up
-to more than the 5,374 stations above:
+to more than the 6,231 stations above:
 
 | variable | mirrored stations | where the files are |
 | --- | --- | --- |
-| `discharge` | 3,836 | `obs/discharge/<source>/` |
-| `water_level` | 1,020 | `obs/water_level/<source>/` |
-| `precipitation` | 533 | `obs/precipitation/<source>/` |
-| `groundwater_level` | 446 | `obs/groundwater_level/<source>/` |
+| `discharge` | 4,330 | `obs/discharge/<source>/` |
+| `water_level` | 1,158 | `obs/water_level/<source>/` |
+| `precipitation` | 642 | `obs/precipitation/<source>/` |
+| `groundwater_level` | 594 | `obs/groundwater_level/<source>/` |
 
 Read one station:
 
@@ -322,7 +322,7 @@ evidence table) and keeps what stands out, by fixed rules ([explorer.md](explore
 
 | path | what |
 | --- | --- |
-| `scout/latest.json` | the findings (up to 25 per kind), each with `lat`, `lon`, `title`, `reason`, its headline `value` and `unit`, all its numbers under `facts`, its `source`; today's ten `picks`; the record checks (a named region's share much above or below normal against the same calendar month since 1990, flood cells against the same month since 2000); the inputs, the method and the sources |
+| `scout/latest.json` | the findings (up to 25 per kind), each with `lat`, `lon`, `title`, `reason`, its headline `value` and `unit`, all its numbers under `facts`, its `source`; today's ten `picks`; the `usual` basin flow table (`[[lat, lon, m³/s], ...]`, so a live scan in the browser can leave near-dry areas out); the record checks (a named region's share much above or below normal against the same calendar month since 1990, flood cells against the same month since 2000); the inputs, the method and the sources |
 | `scout/<date>.json` | the same file, kept by the day it was made ([retention](#retention-of-the-daily-files): the last 60 days, then the first of each month) |
 
 Each finding carries the licence of the layer it came from (the river status map and the forecast CC BY 4.0, the
@@ -444,6 +444,15 @@ aquascope harvest stations --out archive --publish you/your-dataset   # needs HF
 The scheduled run lives in `.github/workflows/harvest.yml` (Mondays 03:17 UTC,
 or on demand from the Actions tab). It never fails because one agency is down;
 `health.json` and the job summary say which one did.
+
+On a full, unrestricted run, a source's station count falling by at least 25%
+from a previous catalog marked as complete is recorded as a non-fatal warning
+in `health.json` and the job summary. The comparison is skipped for old files
+without a completeness marker, source-selected or capped runs, failed sources,
+and sources with no previous stations. A catalog is marked complete only when
+all expected sources succeed without warnings on an unrestricted run. A warning
+signals a change to investigate, not proof of an outage.
+The scheduled workflow syncs the published catalog before harvesting.
 
 ## Job health
 

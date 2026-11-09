@@ -85,7 +85,7 @@ weekly (Mondays 03:17 UTC), with `aquascope harvest stations`.
 | `name` | string | station name as the agency gives it |
 | `latitude`, `longitude` | double | WGS84 degrees |
 | `variables` | list of string | what the station measures (`discharge`, `water_level`, `groundwater_level`, `precipitation`, ...) |
-| `period_start`, `period_end` | date | the record's span where the agency says it, else empty |
+| `period_start`, `period_end` | date | the record's span where the agency states it; an empty start takes the station's first mirrored observation from `obs/manifest.json`, else stays empty |
 | `url` | string | deep link to the agency's page |
 | `river`, `country`, `agency` | string | where known |
 | `license` | string | the source's licence identifier |
@@ -215,7 +215,7 @@ Written by `flood-warnings.yml`, daily, after the Floods ahead issue (`python -m
 
 | File | What |
 | --- | --- |
-| `scout/latest.json` | `made`, `date`, `method`, `inputs`, `findings`, `picks`, `counts`, `sources`: the world's findings, each of one kind (`status`, `floods_ahead`, `floods_past`, `gauges_today`, `models_disagree`), with its place, numbers, reason and source |
+| `scout/latest.json` | `made`, `date`, `method`, `inputs`, `usual`, `findings`, `picks`, `counts`, `sources`: the world's findings, each of one kind (`status`, `floods_ahead`, `floods_past`, `gauges_today`, `models_disagree`), with its place, numbers, reason and source; `usual` is `[[lat, lon, usual flow in m³/s], ...]` per basin, so a live scan in the browser (no pyarrow) can leave near-dry areas out |
 | `scout/<YYYY-MM-DD>.json` | the same, kept by date (the last 60 days, then the first of each month; see [retention](archive.md#retention-of-the-daily-files)) |
 
 Licence: each finding names its layer, under that layer's licence.

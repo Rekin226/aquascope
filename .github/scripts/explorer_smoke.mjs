@@ -14,8 +14,24 @@ export const CASES = [
 export async function recordToExport(page, baseURL, entry, { output, phase = "cold" } = {}) {
   const started = performance.now();
   const errors = [];
+  // Keep diagnostics bounded and omit URL query strings, which may contain tokens.
+  const network = [];
+  const consoleErrors = [];
+  const cleanURL = raw => {
+    try { const url = new URL(raw); return `${url.origin}${url.pathname}`; }
+    catch { return "<invalid URL>"; }
+  };
+  const add = (items, value) => { if (items.length < 30) items.push(value); };
   const onError = e => errors.push(String(e.message));
+  const onConsole = msg => { if (msg.type() === "error") add(consoleErrors, msg.text().slice(0, 500)); };
+  const onRequestFailed = req => add(network, { url: cleanURL(req.url()), error: String(req.failure()?.errorText || "unknown").slice(0, 200) });
+  const onResponse = response => {
+    if (response.status() >= 400) add(network, { url: cleanURL(response.url()), status: response.status() });
+  };
   page.on("pageerror", onError);
+  page.on("console", onConsole);
+  page.on("requestfailed", onRequestFailed);
+  page.on("response", onResponse);
   const result = { case: entry.id, phase, status: "failed", timings_ms: {} };
   try {
     const stationURL = `${baseURL.replace(/\/$/, "")}/#s=${entry.source}/${entry.station}&tab=overview`;
@@ -62,8 +78,26 @@ export async function recordToExport(page, baseURL, entry, { output, phase = "co
     result.error = String(error.message);
     result.visible_status = await page.locator("#status").textContent().catch(() => null);
     result.page_errors = errors;
-  } finally { page.off("pageerror", onError); }
+    result.boot_error = await page.locator("#boot-error").textContent({ timeout: 2000 }).catch(() => null);
+    result.trace = await page.evaluate(() => (globalThis.__aq?.log || []).slice(-30)).catch(() => null);
+    result.console_errors = consoleErrors;
+    result.network_errors = network;
+  } finally {
+    page.off("pageerror", onError);
+    page.off("console", onConsole);
+    page.off("requestfailed", onRequestFailed);
+    page.off("response", onResponse);
+  }
   return result;
+}
+
+// The live host (a static Hugging Face Space) sometimes answers a cold load's burst of module requests with
+// 429 from the shared runner IP (#726). That says nothing about the Explorer, so a failed run that saw a 429
+// gets one more try in a fresh context after a pause; the throttled attempt stays in the results.
+export const THROTTLE_WAIT_MS = 60000;
+
+export function isThrottled(result) {
+  return result.status === "failed" && (result.network_errors || []).some(e => e.status === 429);
 }
 
 export function percentiles(values) {
@@ -88,15 +122,23 @@ async function main() {
     for (const entry of CASES) for (let i=0; i<repetitions; i++) {
       // Cold = fresh browser context; warm = reload in that same context.
       // This does not flush OS/CDN caches. Each phase starts a new Python worker.
-      const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1280, height: 900 } });
-      const page = await context.newPage();
-      for (const phase of ["cold", "warm"]) {
-        const result = await recordToExport(page, baseURL, entry, { output, phase });
-        results.push({ repetition: i+1, ...result });
-        console.log(JSON.stringify(result));
-        await writeFile(`${output}/results.json`, JSON.stringify({ baseURL, results }, null, 2));
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1280, height: 900 } });
+        const page = await context.newPage();
+        let throttled = false;
+        for (const phase of ["cold", "warm"]) {
+          const result = await recordToExport(page, baseURL, entry, { output, phase });
+          throttled = attempt === 1 && isThrottled(result);
+          if (throttled) result.status = "throttled";
+          results.push({ repetition: i+1, attempt, ...result });
+          console.log(JSON.stringify(result));
+          await writeFile(`${output}/results.json`, JSON.stringify({ baseURL, results }, null, 2));
+          if (throttled) break;
+        }
+        await context.close();
+        if (!throttled) break;
+        await new Promise(resolve => setTimeout(resolve, THROTTLE_WAIT_MS));
       }
-      await context.close();
     }
   } finally { await browser.close(); }
   const timing_summary = CASES.flatMap(entry => ["cold", "warm"].map(phase => ({
@@ -107,6 +149,6 @@ async function main() {
       viewport: { width: 1280, height: 900 }, build },
     protocol: "Fresh browser context vs reload in same context; new Python worker in both; OS and CDN caches uncontrolled.",
     results, timing_summary }, null, 2));
-  if (results.some(r => r.status !== "passed")) process.exitCode = 1;
+  if (results.some(r => r.status !== "passed" && r.status !== "throttled")) process.exitCode = 1;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

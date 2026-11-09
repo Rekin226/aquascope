@@ -63,6 +63,16 @@ export function slotOf(action, id) {
     case "draw_area": return `area:${id}`;
     case "add_pin": return `pin:${id}`;
     case "what_if": return "whatif";   // one what-if painted at a time (#565); a new run replaces it
+    case "route": return "route";      // one flood wave at a time (#656); a new run replaces it
+    case "paint": return "paint";      // one painting at a time (#657); a new one replaces it
+    case "flood_reach": return "floodsim";   // one Flood it run on the map at a time (#658)
+    case "replay": return "replay";          // one replay on the map at a time (#659); a new one replaces it
+    // a levee or a breach on Flood it's grid (#663): each drawn line its own slot, kept across its edits
+    case "draw_levee": case "draw_breach": return `sketch:${action.sketch ?? id}`;
+    case "change_landuse": return "landuse"; // one land-use change on the map at a time (#661)
+    case "drop_well": return "wells";        // the wells on the map, one value (#660); undo puts the last one back
+    case "draw_storm": return "storm";       // the storm's area (#670); its run is a route, one wave at a time
+    case "draw_reservoir": return "reservoir";   // the lake drawn (#662); its run is a route too
     default: return null;
   }
 }

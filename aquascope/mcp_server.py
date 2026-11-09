@@ -349,6 +349,41 @@ def study_area(
         return {"error": str(exc)}
 
 
+def paint_map(
+    bbox: list[float],
+    question: str = "flood_trend",
+    min_years: int = 20,
+    start_year: int | None = None,
+    end_year: int | None = None,
+    max_gauges: int = 100,
+) -> dict[str, Any]:
+    """Paint one question over every gauge the AquaScope Archive mirrors in bbox [west, south, east, north] (#657).
+    question: flood_trend (Mann-Kendall and Sen's slope of the annual maximum daily flow over complete
+    hydrological years, in % of the mean per decade), low_flow_trend (the same for the annual minimum 7-day mean
+    flow) or baseflow_index (Lyne-Hollick, from signatures.parquet). Trend questions add field significance: the
+    Benjamini-Hochberg false discovery rate at twice the global level (Wilks 2016), with the verdict and its
+    caveat. Gauges the Archive does not mirror, too short or past max_gauges (longest records first) are listed
+    with why. Returns the headline, field test, counts, per-gauge rows, licences and a methods paragraph with
+    references. Report the verdict and the coverage; do not claim a regional trend the field test rejects."""
+    from aquascope import paint as _paint
+
+    if not bbox or len(bbox) != 4:
+        return {"error": "give bbox [west, south, east, north]"}
+    params: dict[str, Any] = {"min_years": int(min_years)}
+    if start_year:
+        params["start_year"] = int(start_year)
+    if end_year:
+        params["end_year"] = int(end_year)
+    try:
+        res = _paint.paint(question, bbox=[float(x) for x in bbox], params=params,
+                           max_gauges=max(1, min(int(max_gauges), _paint.MAX_GAUGES)))
+    except ValueError as exc:
+        return {"error": str(exc)}
+    res.pop("geojson", None)
+    res.pop("table", None)
+    return res
+
+
 def snap_to_river(lat: float, lon: float, max_distance_m: float = 1000.0, prefer: str = "main",
                   area_km2: float | None = None) -> dict[str, Any]:
     """Snap a point to its GEOGLOWS v2 river reach (about 6.8 million worldwide): its river_id, Strahler order and
@@ -856,6 +891,206 @@ def whatif_map(river_id: int | None = None, lat: float | None = None, lon: float
                  flood_rp=flood_rp, confluences=confluences, basin_ids=1)
     if isinstance(res.get("basin"), dict):
         res["basin"].pop("ids", None)   # the map lights them; a reader of the answer needs the count
+    return res
+
+
+def route_flood(river_id: int | None = None, lat: float | None = None, lon: float | None = None,
+                peak_cms: float | None = None, return_period: float | None = None, duration_h: float = 24.0,
+                shape: str = "triangle", hours: int | None = None, places: bool = True) -> dict[str, Any]:
+    """Route it (#656): a flood wave entering at a river reach (river_id, or lat/lon to snap), routed down GEOGLOWS v2's
+    own network to the sea with Muskingum and GEOGLOWS's k and x per reach. The water entering is peak_cms (m3/s) or the
+    reach's return_period-year flow (2 to 500 years; Log-Pearson III on GEOGLOWS's annual maxima, as Flood it), shaped
+    as a triangle (peaks at a third of duration_h) or a block (a release, constant for duration_h hours). Returns per
+    reach the added peak, the hour of the peak, the wave's front and the attenuation, and (places) the Archive gauges on
+    the path with the wave where each stands. Muskingum is linear: these are the flows the wave adds to what the river
+    carries. Modelled, numbers from code; checked against GEOGLOWS's own hourly retrospective (the check is in the
+    answer)."""
+    from aquascope.routing import route
+
+    res = route(river_id, lat=lat, lon=lon, peak_cms=peak_cms, return_period=return_period, duration_h=duration_h,
+                shape=shape, hours=hours, along=places, frames=False)
+    if isinstance(res.get("reaches"), list) and len(res["reaches"]) > 60:
+        rows = res["reaches"]
+        step = max(1, len(rows) // 50)
+        res["reaches"] = [r for j, r in enumerate(rows) if j % step == 0 or j == len(rows) - 1]
+        res["reaches_note"] = f"Every {step}th of {len(rows)} reaches; the CLI's --json has them all."
+    res.pop("geometry", None)
+    return res
+
+
+def flood_reach(river_id: int | None = None, lat: float | None = None, lon: float | None = None,
+                return_period: float | None = None, flow_cms: float | None = None, hours: float | None = None,
+                fine: bool = False, out_dir: str | None = None, levee: Any = None, crest: Any = None,
+                breach: Any = None, invert: Any = None) -> dict[str, Any]:
+    """Flood it (#658): a screening flood of a river's valley from a reach (river_id, or lat/lon to snap). The grid
+    follows the river and is cut to its valley on the Terrarium terrain; every GEOGLOWS reach entering or starting
+    in it is burnt in and fed by its own flow at the same return period as the clicked reach's: return_period
+    years (100 when nothing is given) or flow_cms m3/s there (Log-Pearson III on GEOGLOWS's annual maxima since
+    1940). The local-inertial scheme (LISFLOOD-FP's) runs to a near steady state (wet area and volume each change
+    under 1% in an hour) or the hours cap (72). By default on cells twice as large as the Explorer's GPU grid
+    (fine: the GPU grid, slower in numpy). Returns the wet area, the deepest water, the inflows, when it settled,
+    the volume budget and the licences; out_dir writes the largest depth as a GeoTIFF and the run as a UGRID
+    NetCDF. A screening flood, not a design flood: no bathymetry, terrain errors of metres. Numbers from code.
+    levee (#663) is a line (GeoJSON, or a list of [lon, lat]) whose cells are raised to crest, an elevation in m
+    above mean sea level (not a height above the ground); breach is a line whose cells are lowered to invert (or
+    to the natural ground). With either, the run is made with and without them: before, after and the change."""
+    from pathlib import Path
+
+    from aquascope import floodsim
+
+    edits = floodsim.edits_from(levee, crest, breach, invert)
+    out = floodsim.flood_reach(river_id, lat, lon, return_period=return_period, flow_cms=flow_cms, hours=hours,
+                               coarse=not fine, edits=edits, compare=bool(edits))
+    s = out["summary"]
+    if out_dir:
+        folder = Path(out_dir)
+        folder.mkdir(parents=True, exist_ok=True)
+        stem = f"flood-{s['river_id']}"
+        s["files"] = {
+            "depth_geotiff": floodsim.to_geotiff(str(folder / f"{stem}-max-depth.tif"), out["grid"],
+                                                 floodsim.depth_over_terrain(out["grid"], out["run"]["h_max"]))["path"],
+            "ugrid_netcdf": floodsim.to_ugrid(str(folder / f"{stem}.nc"), out["grid"], out["run"])["path"]}
+    return s
+
+
+def replay_candidates(lat: float, lon: float, month: str | None = None, start: str | None = None,
+                      end: str | None = None, radius_km: float = 40.0) -> dict[str, Any]:
+    """Replay an event (#659), step one: the floods Floods past has near a point (lat, lon) in a month (YYYY-MM) or
+    from start to end: its news reports within radius_km grouped into runs of days, the most reported first, each
+    with a rank, its dates, its number of reports and its centre. Pick one by rank for replay_event."""
+    from aquascope.replay import candidates
+
+    return candidates(lat, lon, month=month, start=start, end=end, radius_km=radius_km)
+
+
+def replay_event(river_id: int | None = None, lat: float | None = None, lon: float | None = None,
+                 start: str | None = None, end: str | None = None, month: str | None = None, pick: int = 1,
+                 flood: bool = False, out_dir: str | None = None) -> dict[str, Any]:
+    """Replay an event (#659): a past flood assembled from its data and told as a story. Give river_id (or lat/lon:
+    the largest river within 12 km) and start (and end), or lat/lon and month to take Floods past's flood number pick
+    there (replay_candidates lists them). Returns the story: ordered stops, each with a camera, a date, the layers
+    and a note written by code from the data (IMERG rain over the upstream basin; the gauges against GEOGLOWS's
+    retrospective; what GEOGLOWS's forecast said 1, 3 and 7 days before the peak, from its archive since July 2024;
+    the wave routed downstream with Route it), plus each piece's source, licence and coverage, and the Markdown
+    report. flood runs Flood it at the peak flow and counts what is under it (a few minutes). out_dir writes the
+    record, the story and the report. Numbers from code; a piece the data does not cover says so."""
+    import json as _json
+    from pathlib import Path
+
+    from aquascope import replay
+
+    event = None
+    if month and not start:
+        if lat is None or lon is None:
+            return {"error": "month needs lat and lon (where to look in Floods past)"}
+        c = replay.candidates(lat, lon, month=month)
+        if not c["candidates"]:
+            return {"error": c["note"]}
+        event = c["candidates"][max(1, min(int(pick), len(c["candidates"]))) - 1]
+    rec = replay.event_record(river_id, lat=lat, lon=lon, start=start, end=end, event=event, with_flood=flood)
+    st = replay.story(rec)
+    md = replay.report(rec, st)
+    out: dict[str, Any] = {"story": st, "report": md}
+    if out_dir:
+        folder = Path(out_dir)
+        folder.mkdir(parents=True, exist_ok=True)
+        stem = f"replay-{rec['peak'].get('river_id')}-{rec['peak'].get('date')}"
+        (folder / f"{stem}-record.json").write_text(_json.dumps(rec, default=str))
+        (folder / f"{stem}-story.json").write_text(_json.dumps(st, default=str))
+        (folder / f"{stem}.md").write_text(md)
+        out["files"] = [str(folder / f"{stem}{x}") for x in ("-record.json", "-story.json", ".md")]
+    return out
+
+
+def drop_well(wells: list[dict[str, Any]] | None = None, lon: float | None = None, lat: float | None = None,
+              rate_m3_day: float | None = None, days: float = 30.0, transmissivity: float = 500.0,
+              storativity: float = 1e-4, frames: bool = False) -> dict[str, Any]:
+    """The sketchpad's well (#660): drop pumping wells and read the drawdown cone. One well at lon/lat pumping
+    rate_m3_day (1000 by default), or wells, a list of {lon, lat, rate_m3_day} (up to 10), after days of pumping,
+    in a confined aquifer of transmissivity (m2/day; principal aquifers less than 1 to 100,000, Heath 1983) and
+    storativity (most confined aquifers 1e-5 to 1e-3). Theis (1935) for each well, added by superposition. Returns
+    each well's drawdown at its face (0.15 m radius) with its own share and the others', how far the 5 cm line
+    reaches, and the contour lines in lon/lat at 0.05, 0.1, 0.2, 0.5, 1, 2, 5 m ...; frames adds the cone at a
+    series of times. Checked against Fetter's worked example and USGS PP 708's W(u) table. Numbers from code."""
+    from aquascope.sketch import drawdown as dd
+
+    if not wells:
+        if lon is None or lat is None:
+            return {"error": "give lon and lat for one well, or wells: [{lon, lat, rate_m3_day}]"}
+        wells = [{"lon": lon, "lat": lat, "rate_m3_day": rate_m3_day or dd.DEFAULTS["rate_m3_day"]}]
+    try:
+        res = dd.drawdown_map(wells, days=days, transmissivity=transmissivity, storativity=storativity,
+                              frames=frames, image=False)
+    except ValueError as exc:
+        return {"error": str(exc)}
+    return res
+
+
+def change_landuse(polygon: Any, use: str, rain_mm: float = 100.0, distribution: str = "II",
+                   soil_group: str | None = None, impervious_pct: float | None = None) -> dict[str, Any]:
+    """The sketchpad's land use (#661): a polygon (a ring of [lon, lat], or GeoJSON) becomes use (residential_1_8,
+    residential_1_4, residential_1_2, residential_1_acre, commercial, industrial, paved, newly_graded,
+    open_space_good, row_crops, pasture_good, meadow, woods_good, or impervious with impervious_pct). The SCS curve
+    number method of USDA TR-55: the cover now from ESA WorldCover 2021, the hydrologic soil group from HYSOGs250m
+    (or soil_group, A to D), the curve number, the runoff from rain_mm of 24-hour rain (100 by default; give your
+    design storm) and the area's peak by TR-55's graphical method (distribution I, IA, II or III; Tc from NEH 630's
+    lag equation on the terrain's slope), before and after, the reach it drains to and the added peak for Route it.
+    Checked against TR-55's examples 2-1 to 2-4 and 4-1. Numbers from code; every source and licence in the answer."""
+    from aquascope.sketch import landuse as lu
+
+    try:
+        return lu.landuse_change(polygon, use, rain_mm=rain_mm, distribution=distribution, soil_group=soil_group,
+                                 impervious_pct=impervious_pct)
+    except (ValueError, RuntimeError, OSError) as exc:
+        return {"error": str(exc)}
+
+
+def route_storm(polygon: list[list[float]], rain_mm: float, duration_h: float = 6.0,
+                runoff_coefficient: float = 0.3, hours: int | None = None) -> dict[str, Any]:
+    """Route it (#656): a storm over polygon (a ring of [lon, lat]) of rain_mm over duration_h hours, a plain
+    runoff_coefficient (the share that runs off, no soil model) on every GEOGLOWS v2 reach whose unit catchment's
+    centre is inside, routed down every river below with Muskingum. Returns the biggest added peak, the outlets'
+    waves and the 500 reaches with the biggest peaks. Modelled, numbers from code."""
+    from aquascope.routing import route_storm as _storm
+
+    res = _storm(polygon, rain_mm=rain_mm, duration_h=duration_h, runoff_coefficient=runoff_coefficient,
+                 hours=hours, frames=False)
+    if isinstance(res.get("reaches"), list):
+        res["reaches"] = res["reaches"][:50]
+    return res
+
+
+def route_reservoir(polygon: list[list[float]], crest_m: float = 10.0, top_m: float | None = None,
+                    width_m: float = 30.0, coefficient: float | None = None, return_period: float | None = None,
+                    peak_cms: float | None = None, duration_h: float = 24.0, from_river_id: int | None = None,
+                    storm_polygon: list[list[float]] | None = None, rain_mm: float | None = None,
+                    storm_duration_h: float = 6.0, runoff_coefficient: float = 0.3,
+                    hours: int | None = None) -> dict[str, Any]:
+    """Sketchpad (#662): a reservoir drawn as polygon (a ring of [lon, lat]) across a GEOGLOWS v2 river, a flood
+    routed through it with level-pool (storage-indication) routing and on down the river with Route it. The storage
+    is the Terrarium terrain inside the polygon; the outflow a broad-crested spillway width_m wide with its crest
+    crest_m above the lowest ground (top_m: the top of the dam). The flood: return_period (2 to 500 years, the
+    flow Flood it reads) or peak_cms over
+    duration_h entering at the dam's reach (or from_river_id upstream), or a storm (storm_polygon, rain_mm,
+    storm_duration_h, runoff_coefficient). Returns the reservoir's inflow and outflow hydrographs at the dam, the
+    peak reduction and delay, the highest level and storage, the run without the reservoir for comparison, and
+    the reaches below. Checked against NRCS NEH 630 Chapter 17 Example 17-2 (in the answer). Modelled."""
+    from aquascope.sketch.reservoir import route_reservoir as _run
+
+    storm = None
+    if storm_polygon is not None:
+        storm = {"polygon": storm_polygon, "rain_mm": rain_mm, "duration_h": storm_duration_h,
+                 "runoff_coefficient": runoff_coefficient}
+    res = _run(polygon, crest_m=crest_m, top_m=top_m, width_m=width_m, coefficient=coefficient,
+               return_period=return_period, peak_cms=peak_cms, duration_h=duration_h, from_river_id=from_river_id,
+               storm=storm, hours=hours, frames=False)
+    if isinstance(res.get("reaches"), list) and len(res["reaches"]) > 60:
+        rows = res["reaches"]
+        step = max(1, len(rows) // 50)
+        res["reaches"] = [r for j, r in enumerate(rows) if j % step == 0 or j == len(rows) - 1]
+    res.pop("geometry", None)
+    if isinstance(res.get("reservoir"), dict):
+        res["reservoir"].pop("curve", None)
     return res
 
 
@@ -1649,6 +1884,15 @@ def build_server():
     server.tool()(mesh_review)
     server.tool()(mesh_lenses)
     server.tool()(whatif_map)
+    server.tool()(route_flood)
+    server.tool()(route_storm)
+    server.tool()(route_reservoir)
+    server.tool()(flood_reach)
+    server.tool()(replay_candidates)
+    server.tool()(replay_event)
+    server.tool()(drop_well)
+    server.tool()(change_landuse)
+    server.tool()(paint_map)
     server.tool()(swmm_summary)
     server.tool()(list_analyses)
     server.tool()(analyse_table)

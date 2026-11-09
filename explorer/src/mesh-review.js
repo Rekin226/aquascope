@@ -69,15 +69,15 @@ async function gatherContext(meta) {
 
 const DEVICE_WAIT_MS = 45000;
 
-async function wordWithModel(findings) {
+async function wordWithModel(findings, question = "") {
   let asked = null;
   if (await localModelReady()) {
     const name = localReaderLabel() || "the on-device model";
     try {
-      const p = await meshAsk("prompt", { findings, context: currentContext() });
+      const p = await meshAsk("prompt", { findings, context: currentContext(), question });
       say('<span class="spinner" aria-hidden="true"></span>Picking the pins on your device…');
       const reply = await generateJsonLocally({ system: p.system, prompt: p.prompt, schema: p.schema, timeoutMs: DEVICE_WAIT_MS });
-      const out = await meshAsk("words", { findings, reply, by: "device" });
+      const out = await meshAsk("words", { findings, reply, by: "device", question });
       return { ...out, by: "device", model: name };
     } catch (err) {
       console.warn("review: on-device pick", err && err.message);
@@ -87,8 +87,8 @@ async function wordWithModel(findings) {
   const cfg = askModelConfig();
   if (cfg) {
     say(`<span class="spinner" aria-hidden="true"></span>Asking ${escapeHtml(cfg.label)} to order and word the review…`);
-    const out = await call("mesh_review", { op: "llm", findings, context: currentContext(), provider: cfg.provider,
-      model: cfg.model, api_key: cfg.api_key, base_url: cfg.base_url });
+    const out = await call("mesh_review", { op: "llm", findings, context: currentContext(), question,
+      provider: cfg.provider, model: cfg.model, api_key: cfg.api_key, base_url: cfg.base_url });
     if (out && out.error) throw new Error(out.error);
     return { ...out, by: "key" };
   }
@@ -175,9 +175,10 @@ function viewBox() {
  * Review the model result on screen. With `anywhere` (the mesh's own legend row, which names its mesh, and the
  * WebMCP tool) the loaded mesh is reviewed wherever the map is. From Ask the map, the model on screen decides
  * (#590): a MODFLOW model there, or a mesh off screen, is said in the line rather than an older mesh reviewed out
- * of sight.
+ * of sight. `question` is what the reader asked, verbatim: a question about stability or instabilities names the
+ * wet and dry flicker, which is then pinned whatever the model chose (aquascope.mesh_review.named_findings).
  */
-export async function reviewModel({ say: sayOut = null, anywhere = false } = {}) {
+export async function reviewModel({ say: sayOut = null, anywhere = false, question = "" } = {}) {
   const m = currentMesh();
   const tell = sayOut || say;
   const target = reviewTarget({
@@ -202,7 +203,7 @@ export async function reviewModel({ say: sayOut = null, anywhere = false } = {})
     const modelReady = Boolean(askModelConfig()) || await localModelReady();
     if (modelReady && findings.length) {
       try {
-        const worded = await wordWithModel(findings);
+        const worded = await wordWithModel(findings, question);
         if (my !== running) return null;
         if (worded && worded.findings && worded.findings.length && worded.ordered !== false) {
           findings = worded.findings;

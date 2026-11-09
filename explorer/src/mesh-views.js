@@ -334,6 +334,9 @@ function summary() {
   return { hazard: "hazard H1 to H6", arrival: "arrival time", max_depth: "largest depth", max_speed: "largest speed" }[lens];
 }
 
+/** Choose a lens from another module (Flood it's buttons): false until the lenses are made. */
+export const setMeshLens = (id) => setLens(id);
+
 // ── boot ────────────────────────────────────────────────────────────────────
 
 export function initMeshViews() {

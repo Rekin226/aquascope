@@ -577,6 +577,68 @@ def test_the_prompt_offers_ids_and_variants_and_no_free_text(mesh_of):
     assert "never write a word of a pin" in p["system"] and "Portsmouth" in p["system"]
 
 
+@pytest.mark.parametrize("question", [
+    # The two questions of eight in which the model dropped both flicker findings (ai-on-the-map.md, round four),
+    # and the words a reader uses instead.
+    "are there any numerical instabilities in this run?",
+    "is the model stable?",
+    "does the depth flicker at the edge?",
+    "any wet and dry problems?",
+    "the water surface oscillates - is that a problem?",
+])
+def test_the_question_names_the_flicker(question):
+    findings = [{"id": "r1", "check": "deepest"}, {"id": "r2", "check": "flicker"}]
+    assert R.named_findings(findings, question) == ["r2"]
+    # The ids follow the review's order, not the words' order.
+    assert R.named_findings([{"id": "r1", "check": "flicker"}, {"id": "r2", "check": "deepest"}], question) == ["r1"]
+
+
+@pytest.mark.parametrize("question", [
+    "review my model results", "is anything wrong with my flood model?", "does this simulation look plausible?",
+    "are the depths in my flood model realistic?", "check my model", "is the volume balance right?", "",
+])
+def test_a_question_that_names_nothing_pins_nothing_extra(question):
+    assert R.named_findings([{"id": "r1", "check": "flicker"}, {"id": "r2", "check": "mass_balance"}],
+                            question) == []
+
+
+def _review_with_flicker(mesh_of):
+    d = clean_depths()
+    d[:, cell(0, WET_COLS)] = [0, 0.3, 0, 0.3, 0, 0.3, 0, 0.3]   # beside the flood: wet, dry, wet...
+    m = mesh_of(d)
+    return R.review(m, context=clean_context(m))
+
+
+def test_a_question_about_stability_pins_the_flicker_the_model_left_out(mesh_of):
+    res = _review_with_flicker(mesh_of)
+    flick = found(res, "flicker")[0]
+    deep = found(res, "deepest")[0]
+    reply = json.dumps({"pins": [{"id": deep["id"], "variant": "a"}]})
+    # Its order first, then the finding the question names, in the package's wording, not in the left-out list.
+    out = R.apply_words(res["findings"], reply, by="device", question="is the model stable?")
+    ids = [f["id"] for f in out["findings"]]
+    assert ids[:2] == [deep["id"], flick["id"]] and flick["id"] not in out["left_out"]
+    pinned = {f["id"]: f for f in out["findings"]}
+    assert pinned[flick["id"]]["by"] == "rules" and pinned[flick["id"]]["title"] == flick["rules_title"]
+    # The same reply with no question leaves the warning out, as before.
+    plain = R.apply_words(res["findings"], reply, by="device")
+    assert flick["id"] not in [f["id"] for f in plain["findings"]] and flick["id"] in plain["left_out"]
+
+
+def test_the_prompt_keeps_the_question_verbatim_and_says_what_it_names(mesh_of):
+    res = _review_with_flicker(mesh_of)
+    flick = found(res, "flicker")[0]
+    q = "are there any numerical instabilities in this run?"
+    p = R.review_prompt(res["findings"], context="Portsmouth", question=q)
+    assert f"The modeller asks: {q}" in p["system"]
+    assert f"The findings that answer it are always pinned: {flick['id']}." in p["system"]
+    assert "Portsmouth" in p["system"]
+    # A question that names nothing still reaches the prompt, and promises no extra pin.
+    plain = R.review_prompt(res["findings"], question="review my model results")
+    assert "The modeller asks: review my model results" in plain["system"]
+    assert "always pinned:" not in plain["system"]
+
+
 class _Client:
     def __init__(self, text):
         self.text = text
@@ -598,6 +660,17 @@ def test_model_words_with_a_client(mesh_of):
     assert out["findings"][0]["title"] == "Negative depths" and out["model"] == "m via p"
     assert out["findings"][0]["reason"] == neg["rules_reason"]
     assert client.sent["messages"][1]["content"] == "Choose the pins."
+
+
+def test_model_words_keeps_the_question_and_pins_what_it_names(mesh_of):
+    res = _review_with_flicker(mesh_of)
+    flick = found(res, "flicker")[0]
+    deep = found(res, "deepest")[0]
+    client = _Client(json.dumps({"pins": [{"id": deep["id"], "variant": "b"}]}))
+    out = R.model_words(res["findings"], client=client, model="m", provider="p", question="is the model stable?")
+    assert "is the model stable?" in client.sent["messages"][0]["content"]
+    assert flick["id"] in [f["id"] for f in out["findings"]]
+    assert flick["id"] not in out["left_out"]
 
 
 # ── the faces: file, CLI and MCP ────────────────────────────────────────────

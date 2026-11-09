@@ -111,6 +111,8 @@ export const meshStepNow = () => (mesh ? { view, step } : null);
 
 const meshTools = [];
 /** A button on the model's legend row: { id, label, title, run() }. */
+/** Run a tool another module added (the section, what gets flooded), as its button on the legend row does. */
+export function runMeshTool(id) { const t = meshTools.find((x) => x.id === id); if (!t || !mesh) return false; t.run(); return true; }
 export function addMeshTool(tool) { if (!meshTools.some((t) => t.id === tool.id)) meshTools.push(tool); if (mesh) refreshLegend("mesh"); }
 
 const cellHooks = new Set();

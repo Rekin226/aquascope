@@ -35,6 +35,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      # Linux runners have no GPU; avoid downloading the CUDA wheel bundle.
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -e ".[dev,all]"
       - run: ruff check aquascope/ tests/
       - name: Type check (informational — does not fail build)
@@ -57,6 +59,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+      # Preinstall CPU-only torch so the all extra does not pull CUDA wheels.
+      - if: matrix.os == 'ubuntu-latest'
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -e ".[dev,all]"
       # -n auto splits the suite across the runner's cores. The suite is
       # CPU-bound and was pinned to one core, which is why this step took

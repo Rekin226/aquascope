@@ -1,7 +1,7 @@
 // AI on the map (#561): apply map actions, and the action log with one-click undo.
 //
 // An action is one of aquascope.map_commands' types (fly_to, set_time, set_layer, focus_status, set_basemap,
-// highlight_river, draw_area, add_pin), checked by the package before it gets here and with its place names
+// highlight_river, draw_area, add_pin, route, paint, draw_storm and the rest), checked by the package before it gets here and with its place names
 // already looked up. Whoever wrote it (the keyless rules, the on-device model, the reader's own key, an
 // agent over WebMCP, or Explain and Scout through addPin), it is applied the way the reader's own click
 // would apply it, and listed in the log on the map with an undo for each and one for all.
@@ -52,6 +52,9 @@ function setLayer(id, on) {
   el.checked = Boolean(on);
   el.dispatchEvent(new Event("change", { bubbles: true }));
 }
+
+/** A layer on or off as its control would (Replay an event, #659, turns the rain and Floods past on per stop). */
+export function setMapLayer(id, on) { setLayer(id, on); }
 
 function readView() {
   const c = map.getCenter();
@@ -300,6 +303,12 @@ function removePin(id) {
 
 // ── applying one action ─────────────────────────────────────────────────────
 
+// "From here" (#656): the reach the selection snapped to, else none (the action says to click a river first).
+function hereReach() {
+  const r = actions.selectedReach ? actions.selectedReach() : null;
+  return r && r.river_id !== null && r.river_id !== undefined ? { river_id: r.river_id, lat: r.lat, lon: r.lon } : null;
+}
+
 async function snapRiver(a) {
   const snap = await callLight("river", { op: "snap", args: { lat: a.lat, lon: a.lon, prefer: "main", max_distance_m: 5000 } },
     { priority: 2 });
@@ -395,6 +404,81 @@ export async function applyAction(a, { by = "rules", label = "", command = "" } 
       lightRiver(after);
       break;
     }
+    case "route": {
+      // Route it (#656): route-map.js runs it, draws it and logs it with what it replaced; nothing to log here.
+      if (!actions.routeFlood) throw new Error("routing is not on this page");
+      const reach = a.at === "here" ? hereReach() : await snapRiver(a);
+      if (!reach) throw new Error("select a river first (click one), or name a place");
+      const args = { duration_h: a.duration_h || 24, shape: a.shape || "triangle",
+        ...(a.peak_cms ? { peak_cms: a.peak_cms } : { return_period: a.return_period || 10 }) };
+      if (actions.openRoute) actions.openRoute({ ...reach, name: a.label || a.where || "" });
+      await actions.routeFlood({ ...reach, name: a.label || a.where || "" }, args, { by, command, label });
+      return log.live().slice(-1)[0];
+    }
+    case "flood_reach": {
+      // Flood it (#658): floodsim-map.js runs it (the grid and the flows from aquascope.floodsim in the worker),
+      // draws it and logs it with the run it replaced; nothing to log here.
+      if (!actions.floodReach) throw new Error("Flood it is not on this page");
+      const reach = a.at === "here" ? hereReach() : await snapRiver(a);
+      if (!reach) throw new Error("select a river first (click one), or name a place");
+      await actions.floodReach({ ...reach, name: a.label || a.where || "" }, a, { by, command, label });
+      return log.live().slice(-1)[0];
+    }
+    case "replay": {
+      // Replay an event (#659): the code lists Floods past's floods there that month and replay.js assembles and
+      // plays the one picked (the most reported unless the action says another); it logs it; nothing to log here.
+      if (!actions.startReplay) throw new Error("Replay is not on this page");
+      const at = a.at === "here" ? hereReach() : { lat: a.lat, lon: a.lon };
+      if (!at || at.lat === undefined || at.lat === null) throw new Error("select a river first (click one), or name a place");
+      const res = await call("replay", { op: "candidates", args: { lat: at.lat, lon: at.lon, month: a.month, radius_km: 40 } });
+      const list = (res && res.candidates) || [];
+      if (!list.length) throw new Error((res && res.note) || `no flood in Floods past near there in ${a.month}`);
+      const c = list[Math.min(list.length, a.pick || 1) - 1];
+      const story = await actions.startReplay({ ...(at.river_id ? { river_id: at.river_id } : {}), lat: c.lat, lon: c.lon,
+        start: c.start, end: c.end, reports: c.reports }, { by, label, command });
+      if (!story) throw new Error("the replay could not be assembled");
+      return log.live().slice(-1)[0];
+    }
+    case "draw_levee":
+    case "draw_breach": {
+      // Levees and breaches (#663): floodsim-map.js draws the line (or lets the reader draw it), asks the package for
+      // the crest when the words gave a freeboard, logs the line and floods again; nothing to log here.
+      if (!actions.sketchFlood) throw new Error("Flood it is not on this page");
+      const s = await actions.sketchFlood(a, { by, command, label });
+      if (!s) throw new Error("no line was drawn");
+      return log.live().slice(-1)[0];
+    }
+    case "drop_well": {
+      // Drop a well (#660): well-map.js adds it to the wells on the map, computes the cone (aquascope.sketch.drawdown
+      // in the worker) and logs the wells with what they replaced; nothing to log here.
+      if (!actions.dropWell) throw new Error("Drop a well is not on this page");
+      await actions.dropWell(a, { by, command, label });
+      return log.live().slice(-1)[0];
+    }
+    case "change_landuse": {
+      // Change land use (#661): landuse-map.js takes the area (the one given, the one on the map, or one the reader
+      // draws), computes the change (aquascope.sketch.landuse in the worker) and logs it; nothing to log here.
+      if (!actions.changeLanduse) throw new Error("Change land use is not on this page");
+      const res = await actions.changeLanduse(a, { by, command, label });
+      if (!res) throw new Error("no area was drawn");
+      return log.live().slice(-1)[0];
+    }
+    case "draw_storm": {
+      // Draw a storm (#670): storm-map.js takes the area (the words', the one on the map, or one the reader draws),
+      // logs it, routes the storm and logs the run as a route; nothing to log here.
+      if (!actions.drawStorm) throw new Error("Draw a storm is not on this page");
+      const res = await actions.drawStorm(a, { by, command, label });
+      if (!res) throw new Error("no storm was routed (no area drawn, or no river under it)");
+      return log.live().slice(-1)[0];
+    }
+    case "draw_reservoir": {
+      // Draw a reservoir (#662): reservoir-map.js takes the lake (the words', the one on the map, or one the reader
+      // draws), logs it, routes the flood through it and logs the run as a route; nothing to log here.
+      if (!actions.drawReservoir) throw new Error("Draw a reservoir is not on this page");
+      const res = await actions.drawReservoir(a, { by, command, label });
+      if (!res) throw new Error("no flood was routed through a reservoir (no lake drawn, or no river under it)");
+      return log.live().slice(-1)[0];
+    }
     case "draw_area":
       after = { bbox: a.bbox, label: a.label || a.where || "" };
       drawArea(id, after);
@@ -403,6 +487,22 @@ export async function applyAction(a, { by = "rules", label = "", command = "" } 
       const c = map.getCenter();
       after = checkPin(a.at === "center" ? { ...a, lat: c.lat, lon: c.lng } : a);
       drawPin(id, after);
+      break;
+    }
+    case "paint": {
+      // Paint the globe (#657): paint.js runs it (the numbers come from aquascope.paint in the worker); the box
+      // is framed first so the reader sees what is painted. Its slot writer puts the painting before it back.
+      if (!actions.paintMap) throw new Error("painting is not available on this page");
+      before = slotValue("paint");
+      if (a.bbox) {
+        const [w, s, e, n] = a.bbox;
+        const moved = new Promise((resolve) => { map.once("moveend", resolve); setTimeout(resolve, 2500); });
+        map.fitBounds([[w, s], [e, n]], { padding: cameraPadding(), maxZoom: 9, duration: 700 });
+        await moved;
+      }
+      after = await actions.paintMap({ question: a.question, bbox: a.bbox || null, min_years: a.min_years },
+        { log: false });
+      if (a.label) after = { ...after, label: a.label };
       break;
     }
     default:
@@ -503,7 +603,16 @@ const ICON = {
   highlight_river: '<path d="M4 18c3 0 3-4 6-4s3 4 6 4 2-3 4-3"/><path d="M4 11c3 0 3-4 6-4s3 4 6 4 2-3 4-3"/>',
   draw_area: '<rect x="4.5" y="5.5" width="15" height="13" rx="1" stroke-dasharray="3 2"/>',
   add_pin: '<path d="M12 21s7-7 7-12a7 7 0 0 0-14 0c0 5 7 12 7 12Z"/><circle cx="12" cy="9" r="2.2"/>',
+  paint: '<path d="M19.5 3.5c-3.2 1.2-7.4 5.1-9.6 8.3l1.9 1.9c3.2-2.2 7.1-6.4 8.3-9.6Z"/><path d="M9.4 12.6c-1.9 0-3.3 1.4-3.5 3.3-.2 1.7-.9 2.6-2.4 3.1 3.4 1.4 7.3.3 7.7-3.2.1-1.2-.5-2.3-1.8-3.2Z"/>',
   what_if: '<path d="M4 17c3 0 3-3 6-3s3 3 6 3 2-2 4-2"/><path d="M9 4.5a3 3 0 1 1 3 3.5v1.6"/><path d="M12 11.6h.01"/>',
+  route: '<path d="M3 16c3 0 3-3 6-3s3 3 6 3 3-3 6-3"/><path d="M6 9c1.5-3 3-4 4.5-4S13 7 14 9s2.5 3 4 2"/>',
+  flood_reach: '<path d="M3 15c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2 1 3 1"/><path d="M3 19c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2 1 3 1"/><path d="M12 3v7M9 7l3 3 3-3"/>',
+  draw_levee: '<path d="M3 17h18"/><path d="M5 17l3-6h8l3 6"/><path d="M3 21c2.5 0 2.5-1.5 5-1.5S10.5 21 13 21"/>',
+  change_landuse: '<path d="M3 20h18"/><path d="M5 20v-6l4-3 4 3v6"/><path d="M13 20v-9l4-3 4 3v9"/>',
+  drop_well: '<path d="M12 3v13"/><path d="M9 6h6"/><path d="M3 12c3 0 5 1 7 5h4c2-4 4-5 7-5"/><path d="M3 20h18"/>',
+  draw_storm: '<path d="M7 15a4 4 0 1 1 .9-7.9A5.5 5.5 0 0 1 18.5 9 3 3 0 0 1 18 15Z"/><path d="M8 18l-1 2.5M12 18l-1 2.5M16 18l-1 2.5"/>',
+  draw_reservoir: '<path d="M3 18c2 0 2-1.5 4-1.5s2 1.5 4 1.5 2-1.5 4-1.5 2 1.5 4 1.5"/><path d="M4 13c4-1 6-4 8-8 2 4 4 7 8 8"/><path d="M12 5v8"/>',
+  draw_breach: '<path d="M3 17h7M14 17h7"/><path d="M5 17l3-6h2M14 11h2l3 6"/><path d="M11 13l1 4 1-4"/>',
 };
 
 const icon = (type) => `<svg class="ma-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ` +

@@ -147,8 +147,8 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://www.dws.gov.za/Hydrology/",
         variables=("discharge", "water_level"),
         output_model="StreamflowReading | WaterLevelReading",
-        license="unknown", redistributable=False,
-        attribution="South African Department of Water and Sanitation (reuse terms not yet verified)",
+        license="DWS NIWIS terms (academic, research or personal use)", redistributable=False,
+        attribution="Department of Water and Sanitation, Republic of South Africa (copyright proprietor)",
     ),
     "colorado_cdss": _s(
         key="colorado_cdss",
@@ -267,7 +267,8 @@ SOURCES: dict[str, SourceMeta] = {
         license="IMGW-PIB-open-data", redistributable=True,
         attribution=(
             "Źródłem pochodzenia danych jest Instytut Meteorologii i Gospodarki Wodnej – Państwowy Instytut Badawczy; "
-            "dane IMGW-PIB zostały przetworzone (source: IMGW-PIB, data processed)"
+            "Dane Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego zostały "
+            "przetworzone (source: IMGW-PIB, data processed)"
         ),
         browser_reachable=False,  # the live API allows CORS, the archive zips do not; the Explorer serves the mirror
     ),
@@ -290,7 +291,12 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("water_level",),
         output_model="WaterLevelReading",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Water Resources Agency, Ministry of Economic Affairs (Open Government Data License 1.0)",
+        attribution=(
+            "經濟部水利署 2017 [即時水位資料]；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之 (Water Resources Agency, MOEA; "
+            "Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "taiwan_wra_reservoir": _s(
         key="taiwan_wra_reservoir", label="Taiwan WRA reservoirs", region="Taiwan",
@@ -300,7 +306,12 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("reservoir_storage",),
         output_model="ReservoirStatus",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Water Resources Agency, Ministry of Economic Affairs (Open Government Data License 1.0)",
+        attribution=(
+            "經濟部水利署 2017 [水庫每日營運狀況]；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之 (Water Resources Agency, MOEA; "
+            "Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "taiwan_wra_groundwater": _s(
         key="taiwan_wra_groundwater", label="Taiwan WRA groundwater (annual)", region="Taiwan",
@@ -394,15 +405,22 @@ SOURCES: dict[str, SourceMeta] = {
         license="Public Data License (Version 1.0)", redistributable=True,
         attribution="Ministry of Land, Infrastructure, Transport and Tourism",
     ),
+    # These HRFCO terms cover its own water-level, discharge and rainfall series.
+    # Dam storage and water quality follow their respective owners' terms and must
+    # not be added to HARVESTABLE on the strength of this licence alone.
     "korea_wamis": _s(
         key="korea_wamis", label="Korea WAMIS", region="South Korea",
         description="Water level, discharge, quality and dam storage by basin",
-        agency="WAMIS (K-water / Ministry of Environment)", country="KOR",
+        agency="Han River Flood Control Office, Ministry of Climate, Energy and Environment", country="KOR",
         homepage="http://www.wamis.go.kr/",
         variables=("water_level", "discharge", "water_quality", "reservoir_storage"),
         output_model="WaterQualitySample",
-        license="unknown", redistributable=False,
-        attribution="WAMIS (terms not yet verified)",
+        license="HRFCO Open API Terms (free use with attribution)", redistributable=True,
+        attribution=(
+            "출처: 기후에너지환경부 한강홍수통제소 · 국가수자원관리종합정보시스템(WAMIS), "
+            "https://www.wamis.go.kr/ (source: Han River Flood Control Office, Ministry of Climate, "
+            "Energy and Environment, WAMIS; free re-use under the HRFCO Open API terms, attribution required)"
+        ),
     ),
     "india_wris": _s(
         key="india_wris", label="India WRIS", region="India",
@@ -451,9 +469,9 @@ SOURCES: dict[str, SourceMeta] = {
         attribution="Open-Meteo.com (CC BY 4.0); ERA5 and GloFAS via Copernicus",
     ),
     "copernicus": _s(
-        key="copernicus", label="Copernicus CDS", region="Global",
-        description="ERA5 / GloFAS climate reanalysis (requires free CDS key)",
-        requires_api_key=True, api_key_signup_url="https://cds.climate.copernicus.eu/how-to-api",
+        key="copernicus", label="Copernicus EWDS", region="Global",
+        description="GloFAS river discharge from the Early Warning Data Store (requires free EWDS key)",
+        requires_api_key=True, api_key_signup_url="https://ewds.climate.copernicus.eu/how-to-api",
         agency="ECMWF / Copernicus Emergency Management Service (CEMS)", country="GLOBAL",
         homepage="https://ewds.climate.copernicus.eu/",
         variables=("climate", "discharge"),
@@ -726,12 +744,13 @@ def build_collector(source_key: str, api_key: str | None = None, **ctor_kwargs):
 
 @dataclass
 class StationCatalog:
-    """One source's station lookup result, kept even when it failed."""
+    """One source's station lookup result, including non-fatal warnings."""
 
     source: str
     stations: list[Station] = field(default_factory=list)
     error: str | None = None
     seconds: float = 0.0
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -765,7 +784,8 @@ def station_catalogs(
 
     Returns one :class:`StationCatalog` per source, including the ones that
     failed (``error`` set, ``stations`` empty), so a health report can tell
-    "endpoint failed" from "no stations here".
+    "endpoint failed" from "no stations here". Non-fatal collector warnings
+    are kept separately, so ``ok`` still indicates whether the call failed.
     """
     keys = sources or station_sources(variable)
     unknown = [k for k in keys if k not in SOURCES]
@@ -780,7 +800,12 @@ def station_catalogs(
         try:
             collector = build_collector(key, api_key=api_key)
             found = collector.stations(bbox=bbox, variable=variable, max_items=max_items)
-            return StationCatalog(source=key, stations=list(found), seconds=time.perf_counter() - t0)
+            return StationCatalog(
+                source=key,
+                stations=list(found),
+                seconds=time.perf_counter() - t0,
+                warnings=list(getattr(collector, "station_warnings", ())),
+            )
         except Exception as exc:  # noqa: BLE001 - one bad source must not sink the others
             logger.warning("[%s] station lookup failed: %s", key, exc)
             return StationCatalog(source=key, error=_error_text(exc), seconds=time.perf_counter() - t0)

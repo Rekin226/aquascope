@@ -35,9 +35,7 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: read
-  issues: write
+# Write permissions are limited to the harvest job.
 
 concurrency:
   group: harvest
@@ -47,6 +45,10 @@ jobs:
   harvest:
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_DATASET: Rekin226/aquascope-gauges
@@ -165,13 +167,24 @@ jobs:
         id: publish
         # inputs.publish is a boolean input: compare it as one (a string compare
         # against 'true' is always false and silently skipped the first CI runs).
-        if: env.HF_TOKEN != '' && (github.event_name == 'schedule' || inputs.publish == true)
+        # A capped run (max_items set) is a smoke test and never publishes (#692): its
+        # subset would replace the live catalogue, which is how a 2026-09-16 smoke run
+        # left the Explorer showing 33 pins. forecast-archive.yml guards its publish the
+        # same way. On the schedule path max_items is null, which compares equal to ''
+        # (Actions coerces both to 0), so a scheduled run publishes as before.
+        if: env.HF_TOKEN != '' && inputs.max_items == '' && (github.event_name == 'schedule' || inputs.publish == true)
         run: |
           python - <<'EOF'
           import os
           from aquascope.archive import publish_folder
           print(publish_folder("archive", os.environ["HF_DATASET"], commit_message=f"harvest {os.environ.get('GITHUB_RUN_ID','')}"))
           EOF
+
+      # A skipped publish looks the same as a publish with nothing to do, so a capped run
+      # says why it published nothing, in the log and in the job summary below.
+      - name: Say why a capped run does not publish
+        if: inputs.max_items != ''
+        run: echo "::notice::max_items=${{ inputs.max_items }} is set, so this run harvested a capped catalogue and published nothing. Re-run without max_items to publish."
 
       # A weekly archive that quietly stops publishing looks healthy for months. If the secret is gone on a
       # scheduled run, say so loudly rather than skipping the publish in silence.
@@ -193,9 +206,15 @@ jobs:
 
       - name: Job summary
         if: always()
+        env:
+          CAPPED: ${{ inputs.max_items != '' }}
         run: |
           python - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
-          import json, pathlib
+          import json, os, pathlib
+          if os.environ.get("CAPPED") == "true":
+              print("> **Nothing was published.** `max_items` was set, so this run harvested a capped "
+                    "catalogue; publishing it would replace the live station count with the subset. "
+                    "Re-run without `max_items` to publish.\n")
           p = pathlib.Path("archive/health.json")
           if not p.exists():
               print("## Harvest\n\nno health.json written (harvest crashed before writing)")
@@ -205,7 +224,14 @@ jobs:
           print(f"**{h['n_stations']:,} stations**, {h['n_ok']}/{len(h['sources'])} sources OK\n")
           print("| source | status | stations | seconds |\n| --- | --- | ---: | ---: |")
           for s in h["sources"]:
-              status = "ok" if s["ok"] else f"FAILED: `{s['error']}`"
+              warnings = s.get("warnings") or []
+              if not s["ok"]:
+                  status = f"FAILED: `{s['error']}`"
+              elif warnings:
+                  detail = "; ".join(warnings).replace("|", "\\|").replace("\n", " ")
+                  status = f"WARN: {detail}"
+              else:
+                  status = "ok"
               print(f"| `{s['source']}` | {status} | {s['n_stations']:,} | {s['seconds']} |")
           obs = pathlib.Path("archive/obs/refresh_status.json")
           if obs.exists():
@@ -242,9 +268,66 @@ jobs:
           retention-days: 30
 
       - name: Fail only if every source failed
+        id: harvest_check
         run: |
           if [ "${{ steps.harvest.outputs.exit }}" != "0" ]; then
             echo "harvest exited ${{ steps.harvest.outputs.exit }} (all sources failed or publish failed)"; exit 1
+          fi
+
+      - name: Refresh archive documentation counts
+        if: github.event_name == 'schedule' && steps.publish.outcome == 'success' && steps.harvest_check.outcome == 'success'
+        run: python -m aquascope.maintenance.archive_counts --archive archive
+
+      - name: Open or update archive-count documentation PR
+        if: github.event_name == 'schedule' && steps.publish.outcome == 'success' && steps.harvest_check.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.REPAIR_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          git add README.md docs/index.md ROADMAP.md docs/archive.md explorer/SPACE_README.md
+
+          if git diff --cached --quiet; then
+            echo "Archive documentation counts are already up to date."
+            exit 0
+          fi
+
+          BRANCH="archive/counts"
+          git switch -C "$BRANCH"
+          git commit -m "docs: refresh archive counts" \
+            -m "Regenerate archive statistics from the successful scheduled harvest (#724)."
+          git push --force origin "$BRANCH"
+
+          OPEN_PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+
+          if [ -n "$OPEN_PR" ]; then
+            gh pr edit "$OPEN_PR" --add-label no-changelog
+            echo "Updated existing archive-count PR #$OPEN_PR"
+          else
+            cat > /tmp/archive-counts-pr.md <<'EOF'
+          ## Summary
+
+          - Refresh archive catalogued and mirrored station counts.
+          - Update the latest harvest date.
+          - Regenerate per-variable mirrored station counts.
+
+          Generated automatically from a successfully published scheduled harvest.
+
+          When REPAIR_TOKEN is not configured, GitHub Actions checks may only run
+          after this PR is closed and reopened. This is a GitHub token limitation.
+
+          Closes no issue automatically; this PR is intended for review before merging.
+          EOF
+
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "Docs: refresh archive counts" \
+              --label no-changelog \
+              --body-file /tmp/archive-counts-pr.md
           fi
 
       # Job health (#593): health/jobs/harvest.json and health/jobs/index.json, written only under health/jobs/, and

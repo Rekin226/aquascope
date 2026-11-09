@@ -162,7 +162,11 @@ def test_stations_from_the_live_api(tmp_path):
     ch = stations["149180020"]
     assert (ch.latitude, ch.longitude) == (49.9219, 18.3278) and ch.river == "Odra" and ch.country == "POL"
     assert ch.variables == ("discharge", "water_level")
-    assert ch.period_start == date(1891, 1, 1) and ch.period_end == date(2026, 9, 14)
+    # rok_zalozenia_stacji is the gauge's founding year, not the record's start (#699).
+    assert ch.period_start is None and ch.period_end == date(2026, 9, 14)
+    assert ch.extra["founded_year"] == 1891
+    assert stations["154190080"].extra["founded_year"] == 1975
+    assert stations["151140030"].extra["founded_year"] == 1957
     assert ch.extra["alarm_stage_cm"] == 420 and ch.extra["warning_stage_cm"] == 300
     assert stations["152200030"].variables == ("discharge", "water_level", "water_quality")
     assert stations["154190080"].variables == ("water_level", "water_quality")  # no discharge now
@@ -261,6 +265,14 @@ def test_a_second_collector_reuses_the_parsed_archive(tmp_path, monkeypatch):
 def test_a_recent_year_is_parsed_again_once_its_cache_has_expired(tmp_path, monkeypatch):
     import aquascope.collectors.poland_imgw as imgw
 
+    # Pin today inside hydrological year 2026, so 2025 is still one of the two recent years whose cache
+    # expires. Without this the test broke on 2026-11-01, when hydrological year 2027 began.
+    class _Today(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 1, 15)
+
+    monkeypatch.setattr(imgw, "date", _Today)
     c = _Collector(tmp_path)
     c.collect(variable="discharge", station_ids=["149180020"], start="2024-11-01", end="2025-01-31")
     key = (str(tmp_path), "codz_2025.zip")

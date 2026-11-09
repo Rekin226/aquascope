@@ -144,8 +144,6 @@ def scenario_label(sc: dict[str, Any]) -> str:
     return ", ".join(bits) or "no change"
 
 
-_FRACTIONS = {"a tenth": 10.0, "one tenth": 10.0, "a fifth": 20.0, "one fifth": 20.0, "a quarter": 25.0,
-              "one quarter": 25.0, "a third": 100.0 / 3, "one third": 100.0 / 3, "half": 50.0}
 _NEG = r"\b(?:less|fewer|lower|drier|dryer|down|minus|decrease[sd]?|reduc(?:e|ed|tion)|cut|drop|falls?|cooler|colder|" \
        r"cooling)\b"
 _POS = r"\b(?:more|higher|wetter|up|plus|increase[sd]?|rise[sn]?|warmer|hotter|warming|heating)\b"
@@ -165,16 +163,18 @@ _FILLER = frozenset("""what if a an the of in on by with and than to for at this
 
 
 # Numbers in words, two to twenty and the tens: "three degrees" is 3 degrees. "One" counts only before a unit
-# ("one degree"): elsewhere it is mostly a pronoun ("a hotter one"), and "one fifth" is read by _FRACTIONS.
+# ("one degree"): elsewhere it is mostly a pronoun ("a hotter one"), and "one fifth" is read as a share.
 _WORD_NUMBERS = {w: i for i, w in enumerate(
     "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
     "seventeen eighteen nineteen twenty".split()) if w != "one"}
 _WORD_NUMBERS.update({"thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
                       "ninety": 90, "hundred": 100, "a hundred": 100, "one hundred": 100,
                       "one": 1})
-_WORD_NUMBER = re.compile(r"\b(?:" + "|".join(sorted(map(re.escape, (w for w in _WORD_NUMBERS if w != "one")),
-                                                     key=len, reverse=True))
-                          + r"|one(?=\s*(?:degrees?\b|°|%|m3/s|l/s)))\b(?!\s+(?:tenths?|fifths?|quarters?|thirds?)\b)")
+_WORD_NUMBER = re.compile(
+    r"\b(?:" + "|".join(sorted(map(re.escape, (w for w in _WORD_NUMBERS if w != "one")), key=len, reverse=True))
+    + r"|one(?=\s*(?:degrees?\b|°|%|m3/s|l/s)))\b"
+    r"(?![\s-]+(?:tenths?|eighths?|sixths?|fifths?|quarters?|thirds?|halves)\b)"
+)
 # Litres (or liters) per second, however written, is l/s; cubic metres per second is m3/s.
 _PER_SECOND = re.compile(r"\b(?:litres?|liters?|l)\s*(?:per|a|/)\s*(?:second|sec|s)\b|\blps\b")
 _CUMECS = re.compile(r"\bcubic\s+met(?:re|er)s?\s*(?:per|a|/)\s*(?:second|sec|s)\b")
@@ -219,32 +219,38 @@ def _clause(raw: str) -> tuple[str | None, float | None, str]:
     if kind is None:
         return None, None, raw
     value = None
-    for words, v in _FRACTIONS.items():
-        if re.search(rf"\b{words}\b", raw):
-            value = v
-            break
+    converted = False
+    tokens = number_tokens(raw)
+    tok = tokens[0] if tokens else None
+    if tok and (tok["share"] or (tok["unit"] in UNITS and UNITS[tok["unit"]][0] == _UNIT_OF_KEY.get(kind))):
+        unit = tok["unit"]
+        dimension, factor = UNITS[unit]
+        value = tok["value"] * factor
+        converted = True
     sign_given = False
-    if value is None:
-        m = _NUMBER.search(raw)
-        if m:
+    m = _NUMBER.search(raw)
+    if m:
+        if value is None:
             value = float(m.group("n"))
-            if m.group("sign"):
-                sign_given = True
-                value = -value if m.group("sign") == "-" else value
+        if m.group("sign"):
+            sign_given = True
+            value = -value if m.group("sign") == "-" else value
     if value is None:
         return kind, None, raw
-    if kind == "demand_cms" and re.search(r"\bl/s\b", raw):
+    if kind == "demand_cms" and not converted and re.search(r"\bl/s\b", raw):
         value /= 1000.0
     if not sign_given and kind != "demand_cms":
         if re.search(_NEG, raw):
             value = -abs(value)
         elif not re.search(_POS, raw) and kind != "dt_c":
             return kind, None, raw   # "20% rain": more or less?
-    left = re.sub(r"[+-]?\d+(?:\.\d+)?|%|°c?|m3/s|l/s|" + _NEG + "|" + _POS, " ", raw)
+    left = raw
+    if tok:
+        left = left.replace(tok["token"], " ").replace(tok["token"].replace("-", " "), " ")
+    left = re.sub(_SHARE_RE, " ", left)
+    left = re.sub(r"[+-]?\d+(?:\.\d+)?|%|°c?|m3/s|l/s|" + _NEG + "|" + _POS, " ", left)
     for _k, pattern in _KINDS:
         left = re.sub(pattern, " ", left)
-    for words in _FRACTIONS:
-        left = left.replace(words, " ")
     unknown = [w for w in re.findall(r"[a-z]+", left) if w not in _FILLER]
     return kind, value, " ".join(unknown)
 
@@ -266,19 +272,29 @@ def parse_scenario(text: str) -> dict[str, Any]:
     norm = re.sub(r"^(?:what if|what happens if|if|suppose|imagine)\s+", "", norm)
     parts = [p.strip() for p in re.split(r"\s*(?:;|,|\band\b|\bwith\b|\bplus\b(?=\s+\D)|&)\s*", norm) if p.strip()]
     found: dict[str, float] = {}
+    unitless_withdrawal = False
     for part in parts:
         kind, value, left = _clause(part)
+        tokens = number_tokens(part)
+        if kind == "demand_cms" and tokens and tokens[0]["share"]:
+            unitless_withdrawal = True
+            out["unknown"].append(part)
+            out["errors"].append(f"{part}: the words give no unit for it")
+            continue
         if kind is None or value is None:
             out["unknown"].append(part)
+            if kind is not None and value is None:
+                out["errors"].append(f"{part}: the words give no number for it")
             continue
         found[kind] = value
         out["rules"].append(kind)
         if left:
             out["unknown"].append(left)
-    if not found:
+    if unitless_withdrawal or not found:
         return out
     checked, errors = check_scenario(found)
-    out.update(scenario=checked, errors=errors, said=scenario_label(checked))
+    out["errors"].extend(errors)
+    out.update(scenario=checked, said=scenario_label(checked))
     changed = any(checked[k] for k in ("dp_pct", "dt_c", "demand_cms")) or bool(checked["dpet_pct"])
     out["matched"] = changed and not out["unknown"]
     return out
@@ -319,12 +335,28 @@ _SMALL = ("zero one two three four five six seven eight nine ten eleven twelve t
           "seventeen eighteen nineteen").split()
 _TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
          "ninety": 90}
-_SHARES = {"tenth": 0.1, "fifth": 0.2, "quarter": 0.25, "third": 1 / 3, "half": 0.5}
+_DENOMINATORS: dict[str, int] = {
+    "half": 2, "halves": 2,
+    "third": 3, "thirds": 3,
+    "quarter": 4, "quarters": 4,
+    "fifth": 5, "fifths": 5,
+    "sixth": 6, "sixths": 6,
+    "eighth": 8, "eighths": 8,
+    "tenth": 10, "tenths": 10,
+}
+_SHARES: dict[str, float] = {k: 1.0 / v for k, v in _DENOMINATORS.items()}
 _WORD_RE = (r"(?:(?:a|one)\s+hundred|hundred|(?:" + "|".join(_TENS) + r")(?:[\s-](?:" + "|".join(_SMALL[1:10])
             + r"))?|" + "|".join(sorted(_SMALL, key=len, reverse=True)) + r")(?:\s+and\s+a\s+half)?")
+_SINGULAR_SHARES = r"tenth|eighth|sixth|fifth|quarter|third"
+_PLURAL_SHARES = r"tenths|eighths|sixths|fifths|quarters|thirds|halves"
+_SHARE_NUMS = "|".join(sorted(_SMALL[1:], key=len, reverse=True)) + r"|\d+"
+_SHARE_RE = (
+    r"(?:\b(?:(?:a|one|1)[\s-](?:" + _SINGULAR_SHARES + r")|an[\s-]eighth|(?:a[\s-])?half)\b"
+    r"|\b(?:" + _SHARE_NUMS + r")[\s-](?:" + _PLURAL_SHARES + r")\b)"
+)
 _TOKEN = re.compile(
-    r"(?P<digits>(?<![\w.])\d+(?:,\d{3})*(?:\.\d+)?(?![\d]))"
-    r"|(?P<share>\b(?:a|one)\s+(?:tenth|fifth|quarter|third)\b|\b(?:a\s+)?half\b)"
+    r"(?P<share>" + _SHARE_RE + r")"
+    r"|(?P<digits>(?<![\w.])\d+(?:,\d{3})*(?:\.\d+)?(?![\d]))"
     r"|(?P<word>\b" + _WORD_RE + r"\b)")
 
 
@@ -347,12 +379,23 @@ def _word_value(words: str) -> float | None:
 
 def _token_value(token: str) -> tuple[float, bool] | None:
     """A number token's value and whether it is a share ("a fifth" is 0.2 of something), or None."""
-    t = re.sub(r"\s+", " ", str(token or "").strip().lower())
+    t = re.sub(r"[\s-]+", " ", str(token or "").strip().lower())
     if re.fullmatch(r"\d+(?:,\d{3})*(?:\.\d+)?", t):
         return float(t.replace(",", "")), False
-    share = re.fullmatch(r"(?:(?:a|one) )?(tenth|fifth|quarter|third|half)", t)
-    if share:
-        return _SHARES[share.group(1)], True
+    single = re.fullmatch(r"(?:(?:a|an|one|1) )?(tenth|eighth|sixth|fifth|quarter|third|half)", t)
+    if single:
+        return _SHARES[single.group(1)], True
+    compound = re.fullmatch(r"(\w+|\d+)\s+(tenths|eighths|sixths|fifths|quarters|thirds|halves)", t)
+    if compound:
+        num_str, den_str = compound.group(1), compound.group(2)
+        if num_str.isdigit():
+            num = float(num_str)
+        elif num_str in _SMALL:
+            num = float(_SMALL.index(num_str))
+        else:
+            num = _word_value(num_str)
+        if num is not None and den_str in _DENOMINATORS:
+            return num / _DENOMINATORS[den_str], True
     v = _word_value(t)
     return (v, False) if v is not None else None
 
@@ -378,14 +421,17 @@ def number_tokens(text: str) -> list[dict[str, Any]]:
             continue
         value, share = got
         unit = "fraction" if share else None
-        if not share:
-            rest = low[m.end():m.end() + 40]
-            rest = re.sub(r"^\s*(?:more|less|fewer|of|extra|higher|lower|warmer|cooler)?\s*", "", rest) \
-                if not re.match(r"\s*(?:%|°)", rest) else rest
-            for name, pattern in _UNIT_AFTER:
-                if re.match(r"\s*(?:" + pattern + ")", rest):
-                    unit = name
-                    break
+        rest = low[m.end():m.end() + 40]
+        rest = re.sub(r"^\s*(?:more|less|fewer|of|extra|higher|lower|warmer|cooler)?\s*", "", rest) \
+            if not re.match(r"\s*(?:%|°)", rest) else rest
+        # "half a litre" is a quantity, while "half the rain" is a share.
+        # Strip an article only when testing for an explicitly named unit.
+        if share:
+            rest = re.sub(r"^(?:a|an)\s+", "", rest)
+        for name, pattern in _UNIT_AFTER:
+            if re.match(r"\s*(?:" + pattern + ")", rest):
+                unit, share = name, False
+                break
         out.append({"token": token, "value": value, "share": share, "unit": unit})
     return out
 
@@ -396,9 +442,16 @@ def scenario_schema(text: str = "") -> dict[str, Any]:
     (:data:`UNITS`) and a part of the year (:data:`SEASONS`). Nothing in it is free text."""
     from aquascope.map_pick import choice
 
-    # Each number as the words write it, and the same value in digits ("twenty" and "20"): either is the
-    # reader's own number.
-    tokens = [x for t in number_tokens(text) for x in (t["token"], None if t["share"] else _g(t["value"])) if x]
+    # Offer a digit alias only if the matcher can read it back as the same value. _g is for display and
+    # can lose precision (a third becomes 0.333); conversion must use the original token's value.
+    tokens = []
+    for t in number_tokens(text):
+        tokens.append(t["token"])
+        if not t["share"]:
+            alias = _g(t["value"])
+            parsed = _token_value(alias)
+            if parsed and math.isclose(t["value"], parsed[0], rel_tol=1e-9):
+                tokens.append(alias)
     number = choice([*tokens, "none"]) if text else {"type": "string", "maxLength": 40}
     return {"type": "object", "required": ["clauses"], "additionalProperties": False, "properties": {
         "clauses": {"type": "array", "maxItems": 4, "items": {
@@ -730,7 +783,8 @@ def whatif(
     if text and not any(_num(v) for v in given.values()):
         parsed = parse_scenario(text)
         if not parsed["scenario"]:
-            out["error"] = (f"could not read a scenario from {text!r}; say for example '20% less rain and 2 degrees "
+            out["error"] = (parsed["errors"][0] if parsed["errors"] else
+                            f"could not read a scenario from {text!r}; say for example '20% less rain and 2 degrees "
                             "warmer', or give the numbers")
             return out
         given = parsed["scenario"]

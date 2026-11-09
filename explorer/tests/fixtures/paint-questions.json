@@ -1,0 +1,67 @@
+[
+ {
+  "id": "flood_trend",
+  "label": "Trend in annual floods",
+  "short": "Flood trend",
+  "kind": "trend",
+  "needs": "daily",
+  "unit": "% per decade",
+  "breaks": [
+   -10.0,
+   -5.0,
+   -2.0,
+   2.0,
+   5.0,
+   10.0
+  ],
+  "diverging": true,
+  "describe": "Sen's slope of the annual maximum daily flow, in per cent of its mean per decade, over complete hydrological years; Mann-Kendall p-value.",
+  "year_start": {
+   "north": 10,
+   "south": 4
+  }
+ },
+ {
+  "id": "low_flow_trend",
+  "label": "Trend in low flows",
+  "short": "Low-flow trend",
+  "kind": "trend",
+  "needs": "daily",
+  "unit": "% per decade",
+  "breaks": [
+   -10.0,
+   -5.0,
+   -2.0,
+   2.0,
+   5.0,
+   10.0
+  ],
+  "diverging": true,
+  "describe": "Sen's slope of the annual minimum 7-day mean flow, in per cent of its mean per decade, over complete climate years; Mann-Kendall p-value.",
+  "year_start": {
+   "north": 4,
+   "south": 10
+  }
+ },
+ {
+  "id": "baseflow_index",
+  "label": "Baseflow index",
+  "short": "Baseflow index",
+  "kind": "value",
+  "needs": "signatures",
+  "unit": "",
+  "breaks": [
+   0.2,
+   0.35,
+   0.5,
+   0.65,
+   0.8
+  ],
+  "diverging": false,
+  "describe": "The share of the flow that is baseflow, from the Lyne-Hollick filter (alpha 0.925, three passes) the Archive runs on every mirrored record.",
+  "year_start": {
+   "north": 10,
+   "south": 4
+  }
+ }
+]

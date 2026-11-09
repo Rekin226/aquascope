@@ -116,7 +116,21 @@ const TOOLS = [
       + "center [lat,lon], zoom | zoom_by}, set_time {date YYYY-MM-DD, step day|week|month, range {from,to}, "
       + "playing}, set_layer {layer, on}, focus_status {classes: much_below, below, normal, above, much_above}, "
       + "set_basemap {basemap}, highlight_river {place | lat, lon, direction upstream|downstream|both}, "
-      + "draw_area {bbox | place, label}, add_pin {lat, lon, title, text, facts [{label, value, unit}], source}. "
+      + "draw_area {bbox | place, label}, add_pin {lat, lon, title, text, facts [{label, value, unit}], source}, "
+      + "route {place | lat, lon | at: here, peak_cms | return_period, duration_h, shape triangle|block} (a flood "
+      + "wave down the river, #656). "
+      + "paint {question flood_trend|low_flow_trend|baseflow_index, place | bbox (none: the view), min_years}: "
+      + "every gauge in the box answered by aquascope.paint and painted, with field significance. "
+      + "replay {place | lat, lon | at: here, month YYYY-MM, pick 1-5}: a past flood told as a story on the map "
+      + "(Floods past's flood there that month, assembled by aquascope.replay, #659). "
+      + "draw_storm {rain_mm, duration_h, runoff_coefficient, polygon [[lon,lat],...] | bbox | place | area: drawn}: "
+      + "rain on an area run off and routed down every river below (aquascope.routing.route_storm, #670). "
+      + "drop_well {place | lat, lon | at: center, rate_m3_day, days, transmissivity, storativity}: a pumping well "
+      + "and its drawdown cone, added to the wells on the map (aquascope.sketch.drawdown, Theis, #660). "
+      + "change_landuse {use, area: drawn | polygon [[lon,lat],...], rain_mm, soil_group, impervious_pct}: the area's "
+      + "runoff and peak before and after (aquascope.sketch.landuse, TR-55, #661). "
+      + "draw_reservoir {polygon | area: drawn, crest_m, top_m, width_m, return_period | peak_cms | inflow: wave}: a "
+      + "lake on a river and a flood routed through it, level-pool (aquascope.sketch.reservoir, #662). "
       + "Each is checked before it runs; place names are looked up in the gazetteer.",
     inputSchema: {
       type: "object",

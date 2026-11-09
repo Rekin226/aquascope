@@ -89,7 +89,9 @@
   ],
   "aquascope.ai_engine.llm_transport": [
    "AnthropicChatClient",
+   "LLMConnectionError",
    "LLMHTTPError",
+   "OpenAISDKChatClient",
    "UrllibChatClient",
    "in_pyodide",
    "make_client"

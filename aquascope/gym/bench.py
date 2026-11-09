@@ -40,6 +40,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from aquascope.ai_engine.providers import PRICES as _PRICES
 from aquascope.gym.tasks import Task, read_tasks
 
 logger = logging.getLogger(__name__)
@@ -65,20 +66,12 @@ DEFAULT_TIMEOUT = 900.0
 ASK_CONTEXT_CHARS = 40_000
 ASK_MAX_STEPS = 8
 
-#: USD per million tokens (input, output), Anthropic's list prices as published in mid-2026. Prices change and
-#: other providers are not listed; a model absent here gets no cost estimate rather than a guess. Cache reads and
-#: batch discounts are not modelled.
-PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
-    "claude-opus-5": (5.0, 25.0),
-    "claude-opus-4-8": (5.0, 25.0),
-    "claude-opus-4-7": (5.0, 25.0),
-    "claude-opus-4-6": (5.0, 25.0),
-    "claude-sonnet-5": (2.0, 10.0),
-    "claude-sonnet-4-6": (3.0, 15.0),
-    "claude-haiku-4-5": (1.0, 5.0),
-}
+#: USD per million tokens (input, output) for the Claude models, taken from the package's one price table
+#: (:data:`aquascope.ai_engine.providers.PRICES`). Other providers are not listed; a model absent here gets no
+#: cost estimate rather than a guess. Cache reads and batch discounts are not modelled.
+PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {k: v for k, v in _PRICES.items() if k.startswith("claude-")}
 PRICES_NOTE = ("Cost is estimated from the tokens the provider reported and a small table of list prices "
-               "(aquascope.gym.bench.PRICES_USD_PER_MTOK, mid-2026); prices change, cache and batch discounts are "
+               "(aquascope.gym.bench.PRICES_USD_PER_MTOK, October 2026); prices change, cache and batch discounts are "
                "not modelled, and a model not in the table gets no estimate.")
 
 #: How the ``ask`` agent's refusal is read off its answer. A heuristic: the loop has no decline verdict of its

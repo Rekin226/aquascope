@@ -12,6 +12,10 @@ jobs:
     name: changelog
     runs-on: ubuntu-latest
     steps:
+      # Keep checkout's default ref. On pull_request it is refs/pull/<n>/merge,
+      # the PR merged with the current base, so check_changelog.py sees where each
+      # added CHANGELOG line lands on main. A branch that waited across a release
+      # has its line merged into the released section, which the PR head alone hides.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0

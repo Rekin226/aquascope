@@ -29,7 +29,7 @@ picks anthropic / openai / groq / nvidia / huggingface / mistral / openrouter /
 ollama (defaults from the environment, scanned in that order), `--model`
 overrides the default model, `--max-steps` bounds the tool loop. Works with any
 OpenAI-compatible endpoint that supports tool calling, and with Anthropic's
-Messages API: `--provider anthropic` defaults to `claude-opus-5`, and
+Messages API: `--provider anthropic` defaults to `claude-opus-5-5`, and
 `AQUASCOPE_LLM_EFFORT` (`low` to `max`) sets how hard Claude thinks per step.
 An identity-linked key that can act in several workspaces also needs
 `ANTHROPIC_WORKSPACE_ID` (the `wrkspc_...` id from the console), which is sent
@@ -58,7 +58,7 @@ else that speaks the chat-completions protocol.
 
 | Provider | ID | Environment Variable | Default Model | Free Tier / Trial | Browser (Explorer) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Anthropic** | `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-5` | Paid | Yes |
+| **Anthropic** | `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-5-5` | Paid | Yes |
 | **OpenAI** | `openai` | `OPENAI_API_KEY` | `gpt-4o-mini` | Paid | Yes |
 | **Groq** | `groq` | `GROQ_API_KEY` | `openai/gpt-oss-120b` | Free tier (~1,000 req/day) | Yes |
 | **NVIDIA Build** | `nvidia` | `NVIDIA_API_KEY` | `openai/gpt-oss-120b` | 1,000 trial credits on signup | No (CORS restricted; CLI only) |

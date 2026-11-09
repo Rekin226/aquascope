@@ -82,7 +82,10 @@ ruff-format, mypy) and clears most lint problems before they reach CI.
   main red until the credit lands.
 - **CHANGELOG Guard** (`changelog.yml`): every PR needs a `CHANGELOG.md` entry
   under `## [Unreleased]`, or the `no-changelog` label. The check re-runs when
-  the label changes.
+  the label changes. It reads the PR merged with `main`, so every line the PR
+  adds must land under `## [Unreleased]` there: a branch that waited across a
+  release gets its line merged into the released section and fails until the
+  line is moved back. A release roll may edit the version section it creates.
 - First PRs from a new contributor wait on a maintainer to approve the workflow
   run. "No checks reported" means pending approval, not passing.
 

@@ -114,6 +114,8 @@ JOBS: dict[str, Job] = {j.key: j for j in (
         what="a browser records and exports US, UK and French gauges on the live Explorer (a check, no data)"),
     Job("pyodide-smoke", "Pyodide check", "pyodide-smoke.yml", "weekly (Mondays)", WEEK, WEEK + 2 * DAY,
         what="the wheel installs and runs under Pyodide (a check, no data)"),
+    Job("collector-health", "Collector live sweep", "collector-health.yml", "weekly (Mondays)", WEEK, WEEK + 2 * DAY,
+        what="every collector is asked for a small live slice (a check, no data)"),
 )}
 
 

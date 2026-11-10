@@ -1,6 +1,6 @@
 """Tests for AquaScope QGIS plugin helpers."""
 
-from integrations.qgis.helpers import escape_expression, https_url
+from integrations.qgis.aquascope_gauges.helpers import escape_expression, https_url
 
 
 def test_escape_expression_doubles_apostrophes():

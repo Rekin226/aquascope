@@ -27,18 +27,18 @@ The plugin supports QGIS 3.34 LTR and later.
 
 ### Installation
 
-The plugin is located in `integrations/qgis/`.
+The installable plugin package is located in `integrations/qgis/aquascope_gauges/`.
 
 For manual installation:
 
 1. Locate your active QGIS profile's Python plugins directory.
-2. Copy the `integrations/qgis/` directory into that directory.
-3. Rename the copied directory to `aquascope_gauges` if necessary.
-4. Confirm that `metadata.txt`, `__init__.py`, and `plugin.py` are directly
-   inside the `aquascope_gauges` directory.
-5. Restart QGIS.
-6. Open **Plugins → Manage and Install Plugins**.
-7. Find and enable **AquaScope Gauges**.
+2. Copy the `integrations/qgis/aquascope_gauges/` directory into that
+   directory. Keep its name as `aquascope_gauges`.
+3. Confirm that `metadata.txt`, `__init__.py`, `plugin.py`, and
+   `helpers.py` are directly inside the `aquascope_gauges` directory.
+4. Restart QGIS.
+5. Open **Plugins → Manage and Install Plugins**.
+6. Find and enable **AquaScope Gauges**.
 
 The plugin should then be available from the AquaScope Gauges plugin menu.
 
@@ -64,7 +64,9 @@ virtual file system.
   `stations.geojson` fallback.
 - Parquet access can use HTTP range requests, depending on GDAL and
   server support.
-- GeoJSON fallback may transfer substantially more data than Parquet.
+- As a rough guide, the published Parquet catalog is approximately 5 MB
+  and the GeoJSON catalog approximately 25 MB. Actual transfer can vary
+  with GDAL range requests, caching, and server behavior.
 
 The plugin does not intentionally download and store a separate local
 copy of the complete catalog. Actual network transfer depends on the

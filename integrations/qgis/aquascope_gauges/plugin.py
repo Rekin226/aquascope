@@ -4,6 +4,7 @@ from html import escape
 from urllib.parse import quote
 
 from qgis.core import (
+    Qgis,
     QgsCategorizedSymbolRenderer,
     QgsCoordinateTransform,
     QgsFeatureRequest,
@@ -12,7 +13,6 @@ from qgis.core import (
     QgsRendererCategory,
     QgsVectorLayer,
 )
-from qgis.gui import QgsMessageBar
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
@@ -153,6 +153,37 @@ class AquaScopePlugin:
         layer.setRenderer(renderer)
         layer.setCustomProperty("aquascope/catalog", True)
 
+        layer.setMapTipTemplate(
+            """
+            <div style="font-family: sans-serif; min-width: 220px;">
+                <h3>[% coalesce("name", 'Unnamed station') %]</h3>
+                <b>Station ID:</b> [% coalesce("station_id", '') %]<br>
+                <b>Source:</b> [% coalesce("source", '') %]<br>
+                <b>Agency:</b> [% coalesce("agency", '') %]<br>
+                <b>River:</b> [% coalesce("river", '') %]<br>
+                <b>Country:</b> [% coalesce("country", '') %]<br>
+                <b>Observation period:</b>
+                [% coalesce("period_start", '') %] –
+                [% coalesce("period_end", '') %]<br>
+
+                [% if(
+                    left(lower(trim(coalesce("url", ''))), 8) = 'https://',
+                    '<a href="' || "url" || '">Open agency station page</a><br>',
+                    ''
+                ) %]
+
+                [% if(
+                    coalesce("source", '') != '' AND
+                    coalesce("station_id", '') != '',
+                    '<a href="https://rekin226-aquascope-explorer.static.hf.space/#s=' ||
+                    "source" || '/' || "station_id" ||
+                    '">Open in AquaScope Explorer</a>',
+                    ''
+                ) %]
+            </div>
+            """
+        )
+
     def load_catalog(self):
         """Load the remote catalog, falling back to GeoJSON."""
         project = QgsProject.instance()
@@ -216,7 +247,7 @@ class AquaScopePlugin:
             self.iface.messageBar().pushMessage(
                 "AquaScope",
                 f"Station catalog opened using {source_name}.",
-                level=QgsMessageBar.INFO,
+                level=Qgis.Info,
                 duration=5,
             )
 

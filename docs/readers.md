@@ -57,7 +57,7 @@ Older DuckDB versions: write the URL out instead of `getvariable`.
 ### AquaScope Gauges plugin (QGIS 3.34 LTR+)
 
 This repository includes a searchable QGIS plugin in
-`integrations/qgis/`.
+`integrations/qgis/aquascope_gauges/`.
 
 Features:
 
@@ -69,23 +69,24 @@ Features:
 
 To install manually:
 
-1. Copy `integrations/qgis/` into the active QGIS profile's Python
-   `plugins` directory.
-2. Name the copied directory `aquascope_gauges`.
-3. Restart QGIS.
-4. Open Plugins → Manage and Install Plugins.
-5. Enable AquaScope Gauges.
+1. Copy `integrations/qgis/aquascope_gauges/` into the active QGIS
+   profile's Python `plugins` directory. Keep the directory name
+   `aquascope_gauges`.
+2. Restart QGIS.
+3. Open Plugins → Manage and Install Plugins.
+4. Enable AquaScope Gauges.
 
 The plugin uses GDAL `/vsicurl/` to access the public catalog over HTTPS.
 It attempts Parquet when the GDAL Parquet driver is available and falls
-back to GeoJSON when necessary. GeoJSON may require substantially more
-data transfer than Parquet.
+back to GeoJSON when necessary. As a rough guide, the published
+Parquet catalog is approximately 5 MB and GeoJSON approximately 25 MB;
+actual transfer depends on GDAL range requests, caching, and server behavior.
 
 The plugin does not intentionally create a separate local copy of the
 complete catalog. Actual network transfer depends on GDAL, the data
 format, and server support.
 
-See [`integrations/qgis/README.md`](../integrations/qgis/README.md)
+See [`integrations/qgis/README.md`](https://github.com/Rekin226/aquascope/blob/main/integrations/qgis/README.md)
 for installation, usage, and troubleshooting details.
 
 - **Stations**: Layer → Add Layer → Add Vector Layer → Protocol HTTP(S), URI

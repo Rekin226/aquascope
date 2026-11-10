@@ -423,28 +423,37 @@ class CachedHTTPClient:
 
         raise RuntimeError(self._format_retry_error(url, last_exc)) from last_exc
 
-    def get_bytes(self, url: str, *, start: int | None = None, end: int | None = None) -> bytes:
+    def get_bytes(
+        self,
+        url: str,
+        *,
+        start: int | None = None,
+        end: int | None = None,
+        headers: dict | None = None,
+    ) -> bytes:
         """GET *url* (or the inclusive byte range ``start``-``end`` of it) and return the body as bytes.
 
         For binary files read in place, such as a PMTiles archive: no disk cache (the caller keeps what it
         needs in memory), the same retries. A server that ignores the range and sends the whole file is
-        cut down to the range asked for.
+        cut down to the range asked for. *headers* are sent alongside any ``Range`` header.
         """
-        headers = {"Range": f"bytes={int(start)}-{int(end)}"} if start is not None and end is not None else None
+        req_headers = dict(headers) if headers else {}
+        if start is not None and end is not None:
+            req_headers["Range"] = f"bytes={int(start)}-{int(end)}"
         last_exc: Exception | None = None
         for attempt in range(1, self.retries + 1):
             if self.rate_limiter:
                 self.rate_limiter.wait_if_needed()
             try:
                 if IS_EMSCRIPTEN:
-                    status, body = self._client.get_bytes(url, headers=headers)
+                    status, body = self._client.get_bytes(url, headers=req_headers or None)
                     if status >= 400:
                         raise httpx.TransportError(f"HTTP {status} for {url}")
                 else:
-                    resp = self._client.get(url, headers=headers)
+                    resp = self._client.get(url, headers=req_headers or None)
                     resp.raise_for_status()
                     status, body = resp.status_code, resp.content
-                if headers and status == 200 and start is not None and end is not None:
+                if start is not None and end is not None and status == 200:
                     body = body[int(start): int(end) + 1]
                 return body
             except (httpx.HTTPStatusError, httpx.TransportError) as exc:

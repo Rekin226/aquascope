@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import io
+import zipfile
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -91,10 +93,19 @@ class TestCachedHTTPClientFormatting:
         assert "unknown error" in msg
 
 
+def _make_empty_mlit_export() -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("export.csv", "日時,データ,属性\r\n".encode("cp932"))
+    return buffer.getvalue()
+
+
 class TestJapanMLITCollectorError:
     def test_fetch_raw_raises_collector_error_on_404(self):
         client = MagicMock()
-        client.get_json.side_effect = _make_http_status_runtime_error("http://www1.river.go.jp/cgi-bin/", 404)
+        client.get_bytes.side_effect = _make_http_status_runtime_error(
+            "https://www1.river.go.jp/water-inf-app/api/", 404
+        )
         collector = JapanMLITCollector(client=client)
 
         with pytest.raises(CollectorError) as exc_info:
@@ -106,7 +117,7 @@ class TestJapanMLITCollectorError:
 
     def test_fetch_raw_raises_collector_error_on_network_error(self):
         client = MagicMock()
-        client.get_json.side_effect = httpx.ConnectError("host unreachable")
+        client.get_bytes.side_effect = httpx.ConnectError("host unreachable")
         collector = JapanMLITCollector(client=client)
 
         with pytest.raises(CollectorError) as exc_info:
@@ -117,7 +128,7 @@ class TestJapanMLITCollectorError:
 
     def test_fetch_raw_returns_empty_list_on_empty_data(self):
         client = MagicMock()
-        client.get_json.return_value = []
+        client.get_bytes.return_value = _make_empty_mlit_export()
         collector = JapanMLITCollector(client=client)
         assert collector.fetch_raw(station_id="12345") == []
 

@@ -1,0 +1,60 @@
+# AquaScope Bench report-quality reference (#382); the authoring rules are in _authoring.yaml.
+# Recorded 2026-09-14. An ungauged stream in the Sintra hills (38.80 N, -9.38 W) over a 478.7 km2
+# BasinATLAS catchment, asked whether it can carry a 4 ML/day (0.0463 m3/s) run-of-river municipal
+# offtake. The supply_reliability screen transfers flow from 5 donor gauges (Hub'Eau, France) and
+# reports that the 0.463 m3/s the channel must keep would be exceeded on 83.18 % of days (90 % band
+# 30.05-94.14 %), but its own flow-duration-curve output failed the not-empty gate ("nothing at 'fdc'")
+# and the 10-donor fallback failed its minimum-donor gate, so the answer is graded not established.
+# A faithful report says exactly that; a wrong one quotes the 83.18 % as a licence answer or drops the
+# failed step.
+id: sintra-supply
+study: sintra-supply
+title: An ungauged site answered by donors, with the failed curve kept in the verdict
+rationale: >-
+  The site has no gauge, so the whole result rests on donor transfer: 5 Hub'Eau gauges over a 478.7 km2
+  catchment, and the demand is 4 ML/day against a 0.463 m3/s in-channel requirement. The screen returns
+  83.18 % of days met, but the flow-duration-curve output failed its not-empty gate and the 10-donor
+  fallback failed its minimum-donor gate, which is why the run grades the answer not established. A
+  report that presents 83.18 % as an established reliability, or that hides s3's failure, misstates what
+  the run supports. The band 30.05-94.14 % is quoted because a single donor-transfer number carries it.
+tags: [supply_reliability, ungauged, failed_step, donor_transfer]
+must_say:
+  - kind: number
+    value: 0.463
+    tol: 0.02
+    unit: m3/s
+    label: the in-channel flow the screening rule requires
+  - kind: number
+    value: 83.18
+    tol: 0.02
+    unit: '%'
+    label: share of days the demand is met
+  - kind: number
+    value: 478.7
+    tol: 0.01
+    unit: km2
+    label: the upstream catchment area
+  - kind: number
+    value: 0.0463
+    tol: 0.02
+    unit: m3/s
+    label: the 4 ML/day demand
+  - kind: failed_step_named
+    step: s3
+    section: answer
+    label: the failed flow-duration-curve step is named in the headline answer
+  - kind: phrase
+    any: ["seasonal shortfalls"]
+    label: the screening verdict band
+must_not_say:
+  - kind: phrase
+    any: ["supply is reliable", "is reliably met", "supply is guaranteed", "can reliably supply"]
+    label: no claim that an ungauged donor transfer makes the supply reliable
+  - kind: phrase
+    any: ["licence is granted", "meets the licence", "licence would be granted"]
+    label: a screening rule is not a licence decision
+decision:
+  value: 83.18
+  unit: '%'
+  tolerance: 0.02
+  grade: not_established

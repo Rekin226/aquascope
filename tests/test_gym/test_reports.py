@@ -171,24 +171,25 @@ def test_findings_scored_against_a_reference():
     assert out["asked_when_reference_asks"] == 1.0
 
 
-# ── the five references load and score ──
+# ── the six references load and score ──
 
 
-def test_the_five_references_load_and_validate():
+def test_the_six_references_load_and_validate():
     assert {r.id for r in REFS} == {
         "kingston-flood",
         "cambridge-groundwater",
         "toulouse-irrigation",
         "potomac-supply",
         "nairobi-drought",
+        "sintra-supply",
     }
     for ref in REFS:
         assert ref.study and (ref.must_say or ref.must_not_say)
         assert (gr.SHOWCASE_DIR / ref.study / "workspace.json").exists(), ref.study
 
 
-def test_kingston_and_cambridge_score_perfectly_against_their_recorded_reports():
-    for case_id in ("kingston-flood", "cambridge-groundwater"):
+def test_the_recorded_reports_pass_their_own_references():
+    for case_id in ("kingston-flood", "cambridge-groundwater", "sintra-supply"):
         ref = BY_ID[case_id]
         with (gr.SHOWCASE_DIR / ref.study / "workspace.json").open(encoding="utf-8") as fh:
             ws = json.load(fh)

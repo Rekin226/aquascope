@@ -380,9 +380,17 @@ class _Model:
             if n:
                 entry[key] += int(n)
         try:
-            text = response.choices[0].message.content or ""
+            choice = response.choices[0]
+            text = choice.message.content or ""
+            finish = getattr(choice, "finish_reason", None)
         except (AttributeError, IndexError, TypeError):
-            text = ""
+            text, finish = "", None
+        if finish == "length":
+            # Cut off at max_tokens: half a JSON object or half a paragraph. Using it would put a broken plan
+            # or an unfinished sentence in the study, so the role runs keyless and the timeline says why.
+            self._event(role, step, "model_truncated",
+                        f"the reply hit the output limit after {len(text)} chars; keyless behaviour")
+            return None
         self._event(role, step, "model_call", f"{len(user)} chars in, {len(text)} out")
         return text.strip() or None
 

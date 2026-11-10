@@ -503,11 +503,11 @@ SOURCES: dict[str, SourceMeta] = {
         key="aquastat", label="FAO AQUASTAT", region="Global",
         description="National water resources and agricultural water-use statistics",
         agency="FAO", country="GLOBAL",
-        homepage="https://www.fao.org/aquastat/",
+        homepage="https://data.apps.fao.org/aquastat/",
         variables=("indicator",),
         output_model="AquastatRecord",
         license="CC-BY-4.0", redistributable=True,
-        attribution="FAO AQUASTAT (© FAO, CC BY 4.0)",
+        attribution="FAO AQUASTAT (© FAO, CC BY 4.0; https://data.apps.fao.org/aquastat/)",
     ),
     "wapor": _s(
         key="wapor", label="FAO WaPOR", region="Africa & Near East",

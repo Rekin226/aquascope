@@ -63,7 +63,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [UN SDG 6](https://sdg6data.org) | `sdg6` | Global | SDG 6 indicators (6.1.1 – 6.6.1) | REST | ✅ |
 | [OpenMeteo](https://open-meteo.com) | `openmeteo` | Global | Weather (temp, precip, wind, solar) | REST | ✅ |
 | [Copernicus EWDS](https://ewds.climate.copernicus.eu) | `copernicus` | Global | GloFAS river discharge | EWDS API | ✅ |
-| [FAO AQUASTAT](https://www.fao.org/aquastat) | `aquastat` | Global | Country-level water withdrawal, irrigation | FAOSTAT API | ✅ |
+| [FAO AQUASTAT](https://data.apps.fao.org/aquastat/) | `aquastat` | Global | Country-level water withdrawal, irrigation | BigQuery CSV API | ✅ |
 | [FAO WaPOR](https://www.fao.org/in-action/remote-sensing-for-water-productivity) | `wapor` | Global | Satellite ET, biomass, water productivity | REST | ✅ |
 | [EU WFD](https://www.eea.europa.eu) | `eu_wfd` | Europe | Water Framework Directive status | REST | ✅ |
 | [Hub'Eau](https://hubeau.eaufrance.fr/api/v2/hydrometrie) | `hubeau_hydrometrie` | France | River water level, discharge | REST | ✅ |
@@ -94,7 +94,7 @@ What each agency publishes about the quality of a single observation, and whethe
 | :--- | :--- | :--- | :--- | :---: |
 | `usgs` | `approval_status`, `qualifier` | `approval_status`: `Approved` (review completed, approved for publication) or `Provisional` (subject to revision). `qualifier`: qualifiers on the observation, "for instance if a sensor may have been impacted by ice or if values were estimated"; no list of codes is published. Responses carry a list, e.g. `["ESTIMATED"]` or `["ESTIMATED", "ICE"]` | [OGC API daily queryables](https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/queryables?f=json), [provisional data statement](https://waterdata.usgs.gov/provisional-data-statement/) | yes |
 | `uk_ea` | `quality`, `completeness`, `valid` / `invalid` / `missing`, `qcode` | `quality`: `Good`, `Estimated`, `Suspect`, `Unchecked`, `Missing` (listed without definitions; a `Missing` reading has no value). `completeness`: `Complete` / `Incomplete`, "whether the value is based on complete data or not". `valid` / `invalid` / `missing`: the share of the sub-daily points behind an aggregate (e.g. a daily mean) that were valid, invalid or missing (see the note on units below). `qcode`: "other qualifiers for this reading", e.g. `Edited`, `WithinRating`, `NoRating`, `BeyondUpperLimit`, `Dry`, `Snow`, `Trace` (names only, no definitions) | [Hydrology API reference](https://environment.data.gov.uk/hydrology/doc/reference) | partly: not `qcode` |
-| `aquastat` | unknown | Endpoint unavailable: `https://www.fao.org/faostat/api/v1/en/data/AQUASTAT` returns 404 ([#167](https://github.com/Rekin226/aquascope/issues/167)), so the quality metadata could not be verified | not verified | no |
+| `aquastat` | `Symbol`, `IsAggregate` | `Symbol`: `A` (official), `I` (imputed), `E` (estimate), `X` (export), `W` (WaPOR) — the agency's own note on how a value was produced. `IsAggregate`: whether the row is an aggregate rather than a single country. The retired FAOSTAT endpoint ([#167](https://github.com/Rekin226/aquascope/issues/167)) is replaced by the AQUASTAT portal export, which carries both columns | [AQUASTAT bulk export](https://data.apps.fao.org/aquastat/) | no |
 | `japan_mlit` | unknown | Endpoint unavailable: `http://www1.river.go.jp/cgi-bin/SrchWaterLevel` returns 404 ([#168](https://github.com/Rekin226/aquascope/issues/168)), so the quality metadata could not be verified | not verified | no |
 | `taiwan_civil_iot` | unknown | Endpoint unavailable: with TLS verification on, the certificate served for `sta.ci.taiwan.gov.tw` fails hostname verification ([#176](https://github.com/Rekin226/aquascope/issues/176) also reports timeouts), so the quality metadata could not be verified | not verified | no |
 
@@ -120,7 +120,7 @@ Notes, checked on 2026-10-22:
 | UN SDG 6 | No | Open access |
 | OpenMeteo | No | Open access |
 | Copernicus EWDS | **Yes** | [Register](https://ewds.climate.copernicus.eu/how-to-api) — free |
-| FAO AQUASTAT / WaPOR | No | Open access |
+| FAO AQUASTAT / WaPOR | No | Open access (CC BY 4.0) |
 | EU WFD | No | Open access |
 | Hub'Eau | No | Open access |
 | PEGELONLINE | No | Open access |

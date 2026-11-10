@@ -322,7 +322,8 @@ SOURCES: dict[str, SourceMeta] = {
         output_model="GroundwaterLevel",
         license="OGDL-Taiwan-1.0", redistributable=True,
         attribution=(
-            "經濟部水利署 2017 [地下水水位歷年統計]；"
+            "經濟部水利署 2017 [地下水水位年度統計]；"
+            "經濟部水利署 2017 [地下水水位觀測井井況]；"
             "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
             "使用者於遵守本條款各項規定之前提下，得利用之 (Water Resources Agency, MOEA; "
             "Open Government Data License: https://data.gov.tw/license)"

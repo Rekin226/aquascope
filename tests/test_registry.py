@@ -115,7 +115,8 @@ def test_taiwan_wra_groundwater_attribution_includes_ogdl_exhibit_notice():
     attribution = SOURCES["taiwan_wra_groundwater"].attribution
     assert "經濟部水利署" in attribution
     assert "2017" in attribution
-    assert "地下水水位歷年統計" in attribution
+    assert "地下水水位年度統計" in attribution
+    assert "地下水水位觀測井井況" in attribution
     assert "Open Government Data License" in attribution
     assert "https://data.gov.tw/license" in attribution
 

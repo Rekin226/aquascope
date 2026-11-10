@@ -171,16 +171,21 @@ def test_findings_scored_against_a_reference():
     assert out["asked_when_reference_asks"] == 1.0
 
 
-# ── the five references load and score ──
+# ── the ten references load and score ──
 
 
-def test_the_five_references_load_and_validate():
+def test_the_ten_references_load_and_validate():
     assert {r.id for r in REFS} == {
         "kingston-flood",
         "cambridge-groundwater",
         "toulouse-irrigation",
         "potomac-supply",
         "nairobi-drought",
+        "wagga-flood",
+        "orleans-drought",
+        "taichung-drought",
+        "own-table-flood",
+        "little-falls-water-quality",
     }
     for ref in REFS:
         assert ref.study and (ref.must_say or ref.must_not_say)

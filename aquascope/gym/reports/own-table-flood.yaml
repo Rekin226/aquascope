@@ -1,0 +1,61 @@
+# AquaScope Bench report-quality reference (#441); the authoring rules are in _authoring.yaml.
+# Recorded 2026-09-14. The site (40.2 N, 8.0 W) is called ungauged in the brief, yet the run is handed
+# an attached 30-year daily record (upload:my_flows.csv, 1994-01-01 to 2023-12-31, 10957 values, mean
+# 20.16 m3/s). Two at-site fits on the annual maxima give a 50-year flow of 166.7 m3/s (GEV, interval
+# 112.9-297.8) and 164.7 m3/s (LP3, interval 116.6-266.2), about 1.2 percent apart. The observed
+# maximum, 138.906 m3/s, sits below both, as a 30-year record's own peak should. The answer is graded
+# indicative, not established, because the upstream quality-control step returned nothing and the
+# similar_basins donor check failed its min_donors gate. A wrong report would promote the number to
+# established, or claim a regional cross-check that never ran.
+id: own-table-flood
+study: own-table-flood
+title: A 50-year culvert design from an uploaded record, graded down by a failed quality step
+rationale: >-
+  This case is the one where the site's own record carries the answer: 30 years of daily values, two
+  at-site fits agreeing to 1.2 percent at 166.7 and 164.7 m3/s, and an observed maximum of 138.906
+  m3/s that is consistent with the fits rather than beyond them. The trap is the grade: the
+  quality-control step returned nothing and the donor cross-check failed its gate, so the recording
+  says indicative and a faithful report keeps it there, quotes both central estimates and their
+  intervals, and does not invent the regional confirmation the run could not certify.
+tags: [flood_risk, at_site_record, indicative, gate_failed]
+must_say:
+  - kind: number
+    value: 166.7
+    tol: 0.02
+    unit: m3/s
+    label: the GEV 50-year return level
+  - kind: number
+    value: 164.7
+    tol: 0.02
+    unit: m3/s
+    label: the Log-Pearson III 50-year return level
+  - kind: number
+    value: 138.906
+    tol: 0.01
+    unit: m3/s
+    label: the largest observed daily flow
+  - kind: number
+    value: 20.16
+    tol: 0.01
+    unit: m3/s
+    label: the mean of the uploaded record
+  - kind: number
+    value: 30
+    tol: 0.02
+    unit: years
+    label: the record length
+  - kind: grade
+    grade: indicative
+    label: the grade the answer carries
+must_not_say:
+  - kind: phrase
+    any: ["grade is established", "established grade for", "is an established estimate"]
+    label: a failed quality step keeps this at indicative
+  - kind: phrase
+    any: ["regional cross-check confirms", "donor cross-check confirms", "similar_basins confirms"]
+    label: the donor check failed its gate and certifies nothing
+decision:
+  value: 166.7
+  unit: m3/s
+  tolerance: 0.02
+  grade: indicative

@@ -1,0 +1,65 @@
+# AquaScope Bench report-quality reference (#441); the authoring rules are in _authoring.yaml.
+# Recorded 2026-09-14. The Loire at Orleans (47.9 N, 1.9 E) on Hub'Eau K435001010 carries 62.7 years
+# of daily record: Q95 is 49.13 m3/s, the 7Q10 low-flow threshold is 29.02 m3/s, and the baseflow
+# index is 0.7923. The last 30 days average 27.914 m3/s (99.47th percentile) and the last 90 days
+# 29.637 m3/s, both under 7Q10, so the river is in hydrological drought on its own record. ERA5 gives
+# SPEI-3 -2.458 (extremely dry) and SPEI-12 -1.523, while SPI-12 is only -0.327 (near normal), which
+# is the interesting part: the 12-month rainfall total is close to normal and the deficit is
+# evaporative. The annual mean carries a significant decline (Sen's slope -2.701 m3/s per year,
+# p=0.0007). The recorded answer grades the flow findings established and the SPEI/SPI findings
+# screening, and says no rainfall-to-flow lag could be computed; a wrong report would quote a lag, or
+# read the SPI-12 value as a severe rainfall deficit.
+id: orleans-drought
+study: orleans-drought
+title: A gauged drought call, with the reanalysis signal capped at screening
+rationale: >-
+  The Loire at Orleans is the rare case where the flow evidence is established: 62.7 years at
+  K435001010, Q95 49.13 m3/s, 7Q10 29.02 m3/s, and a 30-day mean of 27.914 m3/s at the 99.47th
+  percentile, below the threshold. The rainfall side is weaker by construction: SPEI-3 -2.458 and
+  SPEI-12 -1.523 come from a 9 km ERA5 cell and are graded screening, and SPI-12 is -0.327, near
+  normal, so the deficit is evaporative rather than a rainfall shortage. The annual mean declines
+  significantly (Sen's slope -2.701 m3/s per year, p=0.0007). A faithful report keeps those grades
+  apart, does not read SPI-12 as a severe rainfall deficit, and does not invent a rainfall-to-flow
+  lag the run never computed.
+tags: [drought, gauged, reanalysis_screening, trend]
+must_say:
+  - kind: number
+    value: 49.13
+    tol: 0.02
+    unit: m3/s
+    label: Q95 at the gauge
+  - kind: number
+    value: 29.02
+    tol: 0.02
+    unit: m3/s
+    label: the 7Q10 low-flow threshold
+  - kind: number
+    value: 0.7923
+    tol: 0.01
+    label: the baseflow index
+  - kind: number
+    value: -2.701
+    tol: 0.02
+    unit: m3/s per year
+    label: Sen's slope of the annual mean
+  - kind: number
+    value: -2.458
+    tol: 0.02
+    label: SPEI-3 on the ERA5 cell
+  - kind: number
+    value: 27.914
+    tol: 0.01
+    unit: m3/s
+    label: the 30-day mean that sits under 7Q10
+  - kind: grade
+    grade: indicative
+    label: the overall answer grade
+must_not_say:
+  - kind: phrase
+    any: ["lag is", "computed lag of", "a lag of"]
+    label: no rainfall-to-flow lag was computed
+  - kind: phrase
+    any: ["spi-12 is severely dry", "spi-12 shows a severe deficit"]
+    label: SPI-12 is near normal, not a severe rainfall deficit
+decision:
+  grade: indicative

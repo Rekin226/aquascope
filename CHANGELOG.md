@@ -22,6 +22,7 @@ All notable changes to AquaScope are documented here.
   trend as a decline, or moderately dry as a severe drought.
 
 ### Changed
+- **`taiwan_wra_groundwater` attribution includes the OGDL-Taiwan-1.0 exhibit notices** (#473): state the Water Resources Agency (經濟部水利署), release year (2017), dataset names (地下水水位年度統計 and 地下水水位觀測井井況), and the mandatory license exhibit notice linking to `https://data.gov.tw/license` per Section 3.2 of the Open Government Data License 1.0, replacing the informal paraphrase.
 - **Current Claude models.** `--provider anthropic` now defaults to `claude-opus-5-5`, and the picker offers `claude-opus-5-5`, `claude-sonnet-5-5` and `claude-haiku-5-5`. The Studio showcase records on `claude-sonnet-5-5` by default.
 - **One price table.** `aquascope.ai_engine.providers.PRICES` lists the current Claude models and the older ids that recorded results ran on. The gym and the Studio showcase now read it instead of keeping their own copies.
 - The CHANGELOG guard checks where a pull request's lines land, not only that it adds one. It reads the pull request merged with `main` (GitHub's merge ref), and fails when a line the pull request adds sits outside `## [Unreleased]` there, naming the section it landed in and asking to merge `main` and move the line. Before, a branch that waited across a release had its line merged into the released section and the guard stayed green, as #485 did under 0.27.0 and #505 under 0.24.0. A release roll may edit the version section it creates, and the `no-changelog` label still skips the check.

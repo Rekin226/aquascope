@@ -37,7 +37,7 @@ from aquascope.agri.eto import (
     slope_vapor_pressure_curve,
 )
 from aquascope.agri.water_balance import SoilProperties, SoilWaterBalance
-from aquascope.collectors.aquastat import AquastatCollector
+from aquascope.collectors.aquastat import AquastatCollector, parse_csv, resolve_area
 from aquascope.collectors.wapor import WaPORCollector
 from aquascope.schemas.agriculture import AquastatRecord, ETReference
 
@@ -588,14 +588,14 @@ class TestAquastatCollector:
         assert collector.normalise([]) == []
 
     def test_normalise_valid_record(self):
-        """Normalise a valid raw record."""
+        """Normalise a valid CSV row from the BigQuery export."""
         collector = AquastatCollector()
         raw = [
             {
-                "Area": "Egypt",
-                "Area Code": "EGY",
+                "Country": "Egypt",
+                "m49": "818",
                 "Year": "2020",
-                "Element": "Total water withdrawal",
+                "Variable": "Total water withdrawal",
                 "Value": "77.5",
                 "Unit": "10^9 m3/year",
             }
@@ -603,6 +603,47 @@ class TestAquastatCollector:
         records = collector.normalise(raw)
         assert len(records) == 1
         assert records[0].country == "Egypt"
+        assert records[0].country_code == "818"
+        assert records[0].year == 2020
+        assert records[0].variable == "Total water withdrawal"
+        assert records[0].value == 77.5
+        assert records[0].unit == "10^9 m3/year"
+
+    def test_normalise_skips_missing_values(self):
+        """Rows without a value (the export's ``-`` placeholder) are dropped."""
+        collector = AquastatCollector()
+        raw = [
+            {"Country": "Egypt", "m49": "818", "Year": "2020", "Variable": "x", "Value": "-", "Unit": "km3"},
+            {"Country": "Egypt", "m49": "818", "Year": "2020", "Variable": "x", "Value": "", "Unit": "km3"},
+        ]
+        assert collector.normalise(raw) == []
+
+    def test_resolve_area_translates_iso3(self):
+        """ISO3 codes become the English area names the endpoint accepts."""
+        assert resolve_area("EGY") == "Egypt"
+        assert resolve_area("ken") == "Kenya"
+
+    def test_resolve_area_defaults_to_world(self):
+        """``all`` and an empty selector both mean every country."""
+        assert resolve_area("all") == "World"
+        assert resolve_area("") == "World"
+
+    def test_resolve_area_rejects_unknown_iso3(self):
+        """An unknown three-letter code raises instead of returning nothing."""
+        with pytest.raises(ValueError, match="Unknown ISO3"):
+            resolve_area("ZZZ")
+
+    def test_resolve_area_passes_names_through(self):
+        """English names and comma separated lists are passed through unchanged."""
+        assert resolve_area("Egypt") == "Egypt"
+        assert resolve_area("Egypt,Kenya") == "Egypt,Kenya"
+
+    def test_parse_csv_skips_blank_rows(self):
+        """The parser drops the trailing blank row and the BOM."""
+        text = "\ufeffCountry,Year,Value\nEgypt,2020,77.5\n,,\n"
+        rows = parse_csv(text)
+        assert len(rows) == 1
+        assert rows[0]["Country"] == "Egypt"
 
 
 class TestWaPORCollector:

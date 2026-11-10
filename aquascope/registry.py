@@ -321,7 +321,13 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("groundwater_level",),
         output_model="GroundwaterLevel",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Water Resources Agency, Ministry of Economic Affairs (Open Government Data License 1.0)",
+        attribution=(
+            "經濟部水利署 2017 [地下水水位年度統計]；"
+            "經濟部水利署 2017 [地下水水位觀測井井況]；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之 (Water Resources Agency, MOEA; "
+            "Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "taiwan_wra_groundwater_daily": _s(
         key="taiwan_wra_groundwater_daily", label="Taiwan WRA groundwater (daily)", region="Taiwan",
@@ -486,8 +492,10 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://gemstat.org/",
         variables=("water_quality",),
         output_model="WaterQualitySample",
-        license="unknown", redistributable=False,
-        attribution="UNEP GEMS/Water Data Centre (terms not yet verified)",
+        license="CC-BY-4.0", redistributable=True,
+        attribution=("Heinle, Lisniak and Saile, UNEP GEMS/Water Global Freshwater Quality Archive "
+                     "(https://doi.org/10.5281/zenodo.13881899); "
+                     "observations provided by national hydrological services"),
     ),
     "sdg6": _s(
         key="sdg6", label="UN SDG 6 indicators", region="Global",
@@ -503,11 +511,11 @@ SOURCES: dict[str, SourceMeta] = {
         key="aquastat", label="FAO AQUASTAT", region="Global",
         description="National water resources and agricultural water-use statistics",
         agency="FAO", country="GLOBAL",
-        homepage="https://www.fao.org/aquastat/",
+        homepage="https://data.apps.fao.org/aquastat/",
         variables=("indicator",),
         output_model="AquastatRecord",
         license="CC-BY-4.0", redistributable=True,
-        attribution="FAO AQUASTAT (© FAO, CC BY 4.0)",
+        attribution="FAO AQUASTAT (© FAO, CC BY 4.0; https://data.apps.fao.org/aquastat/)",
     ),
     "wapor": _s(
         key="wapor", label="FAO WaPOR", region="Africa & Near East",

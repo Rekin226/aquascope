@@ -248,58 +248,25 @@ class TestJapanMLITNormalise:
 
 
 class TestJapanMLITFetchRaw:
-    def test_invalid_parameter_raises(self):
-        with pytest.raises(ValueError, match="Unsupported parameter"):
-            JapanMLITCollector(client=MagicMock()).fetch_raw(station_id="12345", parameter="invalid")
-
-    def test_requires_station_or_prefecture(self):
-        with pytest.raises(ValueError, match="station_id or a prefecture"):
-            JapanMLITCollector(client=MagicMock()).fetch_raw()
-
-    def test_unknown_prefecture_raises(self):
-        with pytest.raises(ValueError, match="Unknown prefecture"):
-            JapanMLITCollector(client=MagicMock()).fetch_raw(prefecture="Atlantis")
-
-    def test_station_id_fetches_the_monthly_export(self):
+    def test_refuses_and_names_the_robots_disallow(self):
         client = MagicMock()
-        client.get_bytes.return_value = make_zip(SAMPLE_CSV)
-        rows = JapanMLITCollector(client=client).fetch_raw(station_id="303031283301030", start_date="2019-08-01")
-        url = client.get_bytes.call_args[0][0]
-        assert url.endswith("value/303031283301030/hv.zip?from=2019-08")
-        assert len(rows) == 3
-
-    def test_export_requests_carry_the_browser_headers(self):
-        client = MagicMock()
-        client.get_bytes.return_value = make_zip(SAMPLE_CSV)
-        JapanMLITCollector(client=client).fetch_raw(station_id="303031283301030", start_date="2019-08-01")
-        headers = client.get_bytes.call_args[1]["headers"]
-        assert headers["Referer"] == "https://www1.river.go.jp/search/obs"
-        assert headers["Sec-Fetch-Mode"] == "cors"
-
-    def test_prefecture_searches_then_reads_stations(self):
-        client = MagicMock()
-        client.get_json.return_value = [SAMPLE_STATION]
-        client.get_bytes.return_value = make_zip(SAMPLE_CSV)
-        rows = JapanMLITCollector(client=client).fetch_raw(prefecture="Tokyo", start_date="2019-08-01")
-        params = client.get_json.call_args[1]["params"]
-        assert params["ken_code"] == "1301"
-        assert params["komoku_code"] == "02"
-        assert len(rows) == 3
-
-    def test_max_stations_caps_the_search(self):
-        client = MagicMock()
-        client.get_json.return_value = [SAMPLE_STATION] * 5
-        client.get_bytes.return_value = make_zip(SAMPLE_CSV)
-        JapanMLITCollector(client=client).fetch_raw(prefecture="Tokyo", start_date="2019-08-01", max_stations=2)
-        assert client.get_bytes.call_count == 2
-
-    def test_connection_error_becomes_collector_error(self):
-        client = MagicMock()
-        client.get_bytes.side_effect = ConnectionError("test error")
         with pytest.raises(CollectorError) as exc_info:
-            JapanMLITCollector(client=client).fetch_raw(station_id="12345", start_date="2019-08-01")
+            JapanMLITCollector(client=client).fetch_raw(prefecture="Tokyo")
+
+        message = str(exc_info.value)
+        assert "robots.txt disallows /water-inf-app/" in message
+        assert "水防災オープンデータ" in message
         assert exc_info.value.source == "japan_mlit"
-        assert isinstance(exc_info.value.cause, ConnectionError)
+        assert "water-inf-app" in exc_info.value.url
+        # The site is never called, not even the station search.
+        client.get_json.assert_not_called()
+        client.get_bytes.assert_not_called()
+
+    def test_refuses_a_station_id_too(self):
+        client = MagicMock()
+        with pytest.raises(CollectorError):
+            JapanMLITCollector(client=client).fetch_raw(station_id="303031283301030")
+        client.get_bytes.assert_not_called()
 
 
 class TestPrefectureCodes:

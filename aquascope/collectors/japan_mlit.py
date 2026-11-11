@@ -320,123 +320,37 @@ class JapanMLITCollector(BaseCollector):
         **kwargs: Any,
     ) -> list[dict]:
         """
-        Fetch raw observation data from the MLIT Water Information System.
+        Refuse to read the MLIT site, and say why.
 
-        Parameters
-        ----------
-        station_id : str | None
-            MLIT observation station code, the 15 digit ``id`` from the station
-            search (e.g. ``"303031283301030"``).
-        prefecture : str | None
-            Prefecture name in English (e.g. ``"Tokyo"``).  Mapped to the four
-            digit code from ``ken.json``; Hokkaido is its own first code.
-        parameter : str
-            One of ``water_level``, ``discharge``, ``water_quality``,
-            ``rainfall``.
-        start_date : str | None
-            First month to read, ISO format (``YYYY-MM-DD`` or ``YYYY-MM``).
-            Defaults to the current month.
-        end_date : str | None
-            Last month to read.  Defaults to *start_date*'s month; the export
-            has no range parameter, so the months are asked for one by one.
-        max_stations : int
-            How many of a prefecture's stations to read, newest first.  The site
-            answers a station search without a prefecture with every station in
-            the country (about 2,400), which is why one of *station_id* or
-            *prefecture* is required.
-        **kwargs
-            Additional keyword arguments forwarded to the HTTP request.
+        The rebuilt Water Information Database serves its data from
+        ``/water-inf-app/``, which its robots.txt disallows for every crawler
+        (``Disallow: /water-inf-app/``, ``Crawl-delay: 3600``). Its FAQ and
+        attention page ask programmatic users to use the 水防災オープンデータ
+        service instead, which is a paid, contract-based feed, and the
+        endpoints only answer when a browser's fetch headers are copied --
+        which is not a signal that we are welcome.
 
-        Returns
-        -------
-        list[dict]
-            Raw observation rows.  An empty export (a station without that
-            observation) returns an empty list, not an error.
+        The parser below (``parse_export``, ``parse_datetime``,
+        ``month_range``) is kept, tested and ready for an allowed endpoint: it
+        reads the same zipped Shift_JIS export, handles the ``24:00`` rollover
+        and the 属性 codes. Only the network calls are gone.
 
         Raises
         ------
-        ValueError
-            If *parameter* is not supported, if neither *station_id* nor
-            *prefecture* is given, or if *end_date* precedes *start_date*.
         CollectorError
-            If a request fails.
+            Always. ``source`` and ``url`` name the site and the disallowed
+            path; the message points at the licensed alternative.
         """
-        if parameter not in _PARAM_EXPORT:
-            raise ValueError(f"Unsupported parameter '{parameter}'. Choose from: {list(_PARAM_EXPORT)}")
-        if not station_id and not prefecture:
-            raise ValueError(
-                "japan_mlit needs a station_id or a prefecture: without either, the "
-                "station search answers with every station in Japan."
-            )
+        raise CollectorError(
+            "Japan MLIT is not read: robots.txt disallows /water-inf-app/ "
+            "(Crawl-delay: 3600) and the site asks programmatic users to use the "
+            "水防災オープンデータ提供サービス (paid, contract-based) instead. "
+            "See https://www1.river.go.jp/robots.txt and "
+            "https://www.river.or.jp/koeki/opendata/index.html.",
+            source=self.name,
+            url=BASE_URL,
+        )
 
-        export_key, komoku_code, unit = _PARAM_EXPORT[parameter]
-        months = month_range(start_date, end_date)
-
-        if station_id:
-            stations: list[dict] = [{"id": station_id}]
-        else:
-            code = PREFECTURE_CODES.get(prefecture or "")
-            if not code:
-                raise ValueError(
-                    f"Unknown prefecture {prefecture!r}. Known names: {sorted(PREFECTURE_CODES)}."
-                )
-            stations = self._find_stations(code, komoku_code)[:max_stations]
-
-        rows: list[dict] = []
-        for station in stations:
-            for month in months:
-                rows.extend(self._fetch_month(station, export_key, month, parameter, unit))
-        return rows
-
-    # ------------------------------------------------------------------ #
-    # helpers
-    # ------------------------------------------------------------------ #
-    def _find_stations(self, ken_code: str, komoku_code: str) -> list[dict]:
-        """Search a prefecture's observation stations for one 項目 code."""
-        url = f"{BASE_URL}comsite.json"
-        try:
-            data = self.client.get_json(
-                url,
-                params={"komoku_code": komoku_code, "ken_code": ken_code},
-                headers=REQUEST_HEADERS,
-            )
-        except Exception as exc:
-            logger.warning("MLIT station search failed for %s: %s", url, exc, exc_info=True)
-            raise CollectorError(
-                f"MLIT station search failed for {url}: {exc}",
-                source=self.name,
-                url=url,
-                cause=exc,
-            ) from exc
-        if not isinstance(data, list):
-            return []
-        return [station for station in data if station.get("id")]
-
-    def _fetch_month(
-        self,
-        station: dict,
-        export_key: str,
-        month: str,
-        parameter: str,
-        unit: str,
-    ) -> list[dict]:
-        """Read one station's export for one month."""
-        url = f"{BASE_URL}value/{station['id']}/{export_key}.zip?from={month}"
-        try:
-            body = self.client.get_bytes(url, headers=REQUEST_HEADERS)
-        except Exception as exc:
-            logger.warning("MLIT export request failed for %s: %s", url, exc, exc_info=True)
-            raise CollectorError(
-                f"MLIT export request failed for {url}: {exc}",
-                source=self.name,
-                url=url,
-                cause=exc,
-            ) from exc
-        return parse_export(body, station=station, parameter=parameter, unit=unit)
-
-    # ------------------------------------------------------------------ #
-    # normalise
-    # ------------------------------------------------------------------ #
     def normalise(self, raw: list[dict]) -> list[WaterQualitySample]:
         """
         Normalise raw MLIT data into ``WaterQualitySample`` records.

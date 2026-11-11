@@ -224,7 +224,12 @@ PROBES: dict[str, Probe] = {
         timeout=300,
         note="needs a Copernicus CDS API key",
     ),
-    "gemstat": Probe(kwargs={"max_records": 5}, note="GEMStat, five records"),
+    "gemstat": Probe(
+        kwargs={"max_records": 5},
+        timeout=600,
+        informational=True,
+        note="a cold runner downloads the ~200 MB Zenodo archive before the first row",
+    ),
     "sdg6": Probe(
         kwargs={"page_size": 5},
         timeout=300,

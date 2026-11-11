@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **Japan MLIT is not read** (#168). The Water Information Database's `robots.txt` disallows `/water-inf-app/` for every crawler (`Crawl-delay: 3600`) and its FAQ asks programmatic users to use the paid 水防災オープンデータ service instead, so `JapanMLITCollector.fetch_raw` raises `CollectorError` naming the disallow rather than calling the site; the registry and the catalogue mark the source as not offered. The ZIP and Shift_JIS parsing (four digit prefecture codes, `24:00` rows, `-9999`, the `属性` codes, `暂定フラグ`) stays tested for the day an allowed endpoint appears.
+
 ## [1.2.0] - 2026-11-11
 
 Gauges in QGIS, a bench that grades the report as well as the plan, and a Claude path that fails loudly
@@ -53,7 +56,6 @@ Thanks to Duo-ee, adenyoung, laishettikarthik-tech and taran-dev4u for their wor
 
 ### Fixed
 - **FAO AQUASTAT reads the portal's export again** (#167): FAO retired the FAOSTAT `AQUASTAT` domain and every request to it answered 404, so the collector now queries the BigQuery-backed endpoint behind the AQUASTAT portal and parses its CSV export instead of JSON. `area` takes English country names, so ISO3 codes are translated locally and an unknown code raises rather than answering with a header-only CSV; the export has no year range syntax, so the years are named one by one. The six variable labels were off by one, so the five codes kept now name what they actually report.
-- **Japan MLIT is not read** (#168). The Water Information Database's `robots.txt` disallows `/water-inf-app/` for every crawler (`Crawl-delay: 3600`) and its FAQ asks programmatic users to use the paid 水防災オープンデータ service instead, so `JapanMLITCollector.fetch_raw` raises `CollectorError` naming the disallow rather than calling the site; the registry and the catalogue mark the source as not offered. The ZIP and Shift_JIS parsing (four digit prefecture codes, `24:00` rows, `-9999`, the `属性` codes, `暂定フラグ`) stays tested for the day an allowed endpoint appears.
 - **Claude in `aquascope ingest` and the repair bot.** An Anthropic key no longer goes to an OpenAI-style `/chat/completions` URL: both now build the client for the provider they resolved.
 - **Timeouts and dropped connections are retried.** They are now retried twice with backoff, instead of failing a role on the first try. A Studio role whose reply never arrived used to fall back to keyless without saying why.
 - **The `openai` SDK's errors reach the Analyst's recovery.** A 413 now shrinks the context and a 429 waits, as they already did over urllib. Its own retries are off, so the waits are not doubled.

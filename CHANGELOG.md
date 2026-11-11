@@ -7,6 +7,17 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-11
+
+Gauges in QGIS, a bench that grades the report as well as the plan, and a Claude path that fails loudly
+instead of quietly. The AquaScope Gauges plugin searches the station catalog from inside QGIS. HydroGym now
+holds a report reference for each of its twelve recorded studies, so a model's write-up is scored against
+what the recording supports. `--provider anthropic` defaults to `claude-opus-5-5`, and a cut-off reply, a
+timeout or a wrong endpoint no longer passes as an answer. Seven sources' licences and attributions were
+checked against their own terms (#473, #207), FAO AQUASTAT reads again, the Archive's documented counts
+refresh after each harvest, and the README has a Chinese quickstart. No stable name was removed or renamed.
+Thanks to Duo-ee, adenyoung, laishettikarthik-tech and taran-dev4u for their work this cycle.
+
 ### Added
 - **A sixth report reference, for the ungauged Sintra supply study** (#441): `aquascope/gym/reports/sintra-supply.yaml` reads the recorded study over a 478.7 km² BasinATLAS catchment with no gauge at the site, where the screen transfers flow from 5 Hub'Eau donors and returns 83.18 % of days meeting a 4 ML/day demand against the 0.463 m³/s the channel must keep. Its own flow-duration-curve output failed the not-empty gate and the 10-donor fallback failed its minimum-donor gate, so the reference requires the answer to stay graded not established and the failed step to be named.
 - **A seventh report reference, for the ungauged Niger mainstem at Bamako** (#441): `aquascope/gym/reports/bamako-ungauged.yaml` reads the recorded study over a 115,012.9 km² BasinATLAS catchment with no gauge within 2,656 km, where 10 donor gauges regionalize a mean of 0.779 mm/d against BasinATLAS's own modelled 1092 m³/s and the Q95 a dry-season intake should be sized against is about 107 m³/s. The GloFAS grid-cell cross-check returns 0.566 m³/s, three orders of magnitude low and evidently sampling the wrong channel, so the reference requires the answer to refuse it as a confirmation and to stay graded screening.
@@ -38,7 +49,7 @@ All notable changes to AquaScope are documented here.
 - **Explorer live smoke diagnostics** (#702): retain catalog boot errors, browser console errors, trace entries and failed HTTP requests when a case fails, to help identify where a cold load stopped.
 - **`poland_imgw` attribution quotes the IMGW-PIB terms verbatim** (#473): the processing notice is now the regulation's own wording, `Dane Instytutu Meteorologii i Gospodarki Wodnej – Państwowego Instytutu Badawczego zostały przetworzone` (§ 5 ust. 4 of the [regulamin](https://danepubliczne.imgw.pl/docs/regulamin_udostepniania_danych.pdf), checked 2026-11-04), instead of the shortened paraphrase; it stays beside the source notice § 5 ust. 3 requires.
 - **`south_africa_dws` license and attribution** (#473): update license to `DWS NIWIS terms (academic, research or personal use)` and attribution to name the Department of Water and Sanitation, Republic of South Africa as copyright proprietor following the disclaimer on [dws.gov.za/niwis2/Disclaimer](https://www.dws.gov.za/niwis2/Disclaimer) (archived at [web.archive.org](http://web.archive.org/web/20250528170949/https://www.dws.gov.za/niwis2/Disclaimer)).
-- **The Archive's counts follow the latest harvest** (#443): `README.md`, `docs/index.md`, `ROADMAP.md`, `docs/archive.md` and `explorer/SPACE_README.md` now state the 2026-11-02 harvest: **75,892 catalogued stations** and **6,231 with mirrored daily observations** (discharge 4,330, water level 1,158, precipitation 642, groundwater level 594) — instead of the 2026-10-26 figures. The dataset card is generated from `obs/manifest.json` (`_mirrored_station_count`) and picks both numbers up on the next harvest.
+- **The Archive's counts follow the latest harvest** (#443): `README.md`, `docs/index.md`, `ROADMAP.md`, `docs/archive.md` and `explorer/SPACE_README.md` now state the 2026-11-02 harvest: **75,892 catalogued stations** and **6,231 with mirrored daily observations** (discharge 4,330, water level 1,158, precipitation 642, groundwater level 594), instead of the 2026-10-26 figures. The dataset card is generated from `obs/manifest.json` (`_mirrored_station_count`) and picks both numbers up on the next harvest.
 
 ### Fixed
 - **FAO AQUASTAT reads the portal's export again** (#167): FAO retired the FAOSTAT `AQUASTAT` domain and every request to it answered 404, so the collector now queries the BigQuery-backed endpoint behind the AQUASTAT portal and parses its CSV export instead of JSON. `area` takes English country names, so ISO3 codes are translated locally and an unknown code raises rather than answering with a header-only CSV; the export has no year range syntax, so the years are named one by one. The six variable labels were off by one, so the five codes kept now name what they actually report.
@@ -66,7 +77,6 @@ All notable changes to AquaScope are documented here.
 - **What-if plural and compound fractional shares** (#691): read compound fractions and plural shares ("two thirds", "three quarters", "two fifths", "a sixth", "an eighth") as single tokens across model and keyless paths, preserving explicit units on quantities and evaluating shares as proportions. Keyless clauses that name a change without a readable number now report an error in `errors` instead of returning an empty list.
 - **What-if fractional quantities** (#646): the model and keyless readings of “half a cubic metre per second”, “a half litre per second” and “half a degree warmer” keep the stated unit instead of treating the quantity as a proportion.
 - **GR4J at large gauges** (#273): the station model asks before using point forcing above 10,000 km², and describes the forcing download separately from the fit.
-
 - **HydroGym refusal reviews:** bind decisions to the saved reconnaissance, score blank refusal reasons as invalid,
   and mark incomplete benchmark means with coverage and possible bounds (#381). A reconnaissance file whose decoded
   shape cannot be read (null or list root, non-mapping `recon`, malformed sufficiency table) now raises a

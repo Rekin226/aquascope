@@ -54,6 +54,41 @@ Older DuckDB versions: write the URL out instead of `getvariable`.
 
 ## QGIS
 
+### AquaScope Gauges plugin (QGIS 3.34 LTR+)
+
+This repository includes a searchable QGIS plugin in
+`integrations/qgis/aquascope_gauges/`.
+
+Features:
+
+- Search the station catalog by name, river, agency, source, or station ID.
+- Optionally filter results to the current map extent.
+- Display up to 100 matching stations.
+- Inspect station metadata and open agency or AquaScope Explorer links.
+- View the catalog as a map layer styled by data source.
+
+To install manually:
+
+1. Copy `integrations/qgis/aquascope_gauges/` into the active QGIS
+   profile's Python `plugins` directory. Keep the directory name
+   `aquascope_gauges`.
+2. Restart QGIS.
+3. Open Plugins → Manage and Install Plugins.
+4. Enable AquaScope Gauges.
+
+The plugin uses GDAL `/vsicurl/` to access the public catalog over HTTPS.
+It attempts Parquet when the GDAL Parquet driver is available and falls
+back to GeoJSON when necessary. As a rough guide, the published
+Parquet catalog is approximately 5 MB and GeoJSON approximately 25 MB;
+actual transfer depends on GDAL range requests, caching, and server behavior.
+
+The plugin does not intentionally create a separate local copy of the
+complete catalog. Actual network transfer depends on GDAL, the data
+format, and server support.
+
+See [`integrations/qgis/README.md`](https://github.com/Rekin226/aquascope/blob/main/integrations/qgis/README.md)
+for installation, usage, and troubleshooting details.
+
 - **Stations**: Layer → Add Layer → Add Vector Layer → Protocol HTTP(S), URI
   `https://huggingface.co/datasets/Rekin226/aquascope-gauges/resolve/main/stations.parquet`
   (QGIS 3.28+ with GDAL's Parquet driver; or use `stations.geojson`). Or drag

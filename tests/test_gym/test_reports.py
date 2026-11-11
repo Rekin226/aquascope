@@ -171,16 +171,18 @@ def test_findings_scored_against_a_reference():
     assert out["asked_when_reference_asks"] == 1.0
 
 
-# ── the ten references load and score ──
+# ── the twelve references load and score ──
 
 
-def test_the_ten_references_load_and_validate():
+def test_the_twelve_references_load_and_validate():
     assert {r.id for r in REFS} == {
         "kingston-flood",
         "cambridge-groundwater",
         "toulouse-irrigation",
         "potomac-supply",
         "nairobi-drought",
+        "sintra-supply",
+        "bamako-ungauged",
         "wagga-flood",
         "orleans-drought",
         "taichung-drought",
@@ -192,8 +194,8 @@ def test_the_ten_references_load_and_validate():
         assert (gr.SHOWCASE_DIR / ref.study / "workspace.json").exists(), ref.study
 
 
-def test_kingston_and_cambridge_score_perfectly_against_their_recorded_reports():
-    for case_id in ("kingston-flood", "cambridge-groundwater"):
+def test_the_recorded_reports_pass_their_own_references():
+    for case_id in ("kingston-flood", "cambridge-groundwater", "sintra-supply"):
         ref = BY_ID[case_id]
         with (gr.SHOWCASE_DIR / ref.study / "workspace.json").open(encoding="utf-8") as fh:
             ws = json.load(fh)
@@ -201,6 +203,20 @@ def test_kingston_and_cambridge_score_perfectly_against_their_recorded_reports()
         assert out["reference"]["score"] == 1.0, out["reference"]
         assert out["reference"]["must_say"]["failed"] == []
         assert out["reference"]["must_not_say"]["violated"] == []
+
+
+def test_bamako_refuses_the_reanalysis_and_stays_screening():
+    """The Niger mainstem at Bamako has no gauge within 2,656 km, so the answer is a donor transfer over
+    115,012.9 km2 graded screening, anchored on BasinATLAS's own 1092 m3/s. The GloFAS pixel reads
+    0.566 m3/s, three orders of magnitude low, and the recorded report refuses it; the reference requires
+    the refusal and forbids presenting it as a confirmation."""
+    ref = BY_ID["bamako-ungauged"]
+    with (gr.SHOWCASE_DIR / ref.study / "workspace.json").open(encoding="utf-8") as fh:
+        ws = json.load(fh)
+    out = gr.score_report(ws, reference=ref)
+    assert out["reference"]["score"] == 1.0, out["reference"]
+    assert out["reference"]["must_say"]["failed"] == []
+    assert out["reference"]["must_not_say"]["violated"] == []
 
 
 def test_toulouse_states_the_significant_decreasing_trend_and_scores_clean():

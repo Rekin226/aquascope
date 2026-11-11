@@ -10,6 +10,9 @@ All notable changes to AquaScope are documented here.
 ### Added
 - **A weekly live sweep of every collector** (#166): `.github/workflows/collector-health.yml` asks each of the 37 sources for the smallest slice of real data it can serve and writes one row per source -- OK, EMPTY, FAIL, TIMEOUT or NEEDS_KEY, with the record count and the seconds it took -- to the run summary. The weekly harvest only proves that a station catalog still answers; a collector whose data path broke can pass that check while returning nothing. The sweep keeps one rolling `collector-health` issue, opened, updated or closed by the script itself, and the run only fails for a source that should have answered: a missing secret and a source that blocks non-local runners are reported but never red.
 
+### Fixed
+- **Cite 1.2.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.2.0's Zenodo DOI (10.5281/zenodo.24125206).
+
 ## [1.2.0] - 2026-11-11
 
 Gauges in QGIS, a bench that grades the report as well as the plan, and a Claude path that fails loudly

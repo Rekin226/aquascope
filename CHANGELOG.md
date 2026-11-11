@@ -8,6 +8,7 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Fixed
+- **The Explorer's recorded answers stay on the river the question names** (#731). The Kingston recording answered a question about the Thames with the Hogsmill, a tributary a kilometre away, and every check passed it. `assess_site` now returns each gauge's river, `verify` gains a `river_matches_the_question` check, the analyst is told to use a gauge on the named river, the recorder refuses to publish a recording that fails it, and the wrong Kingston recording is retired from the Ask panel.
 - **Cite 1.2.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.2.0's Zenodo DOI (10.5281/zenodo.24125206).
 
 ## [1.2.0] - 2026-11-11
@@ -55,7 +56,6 @@ Thanks to Duo-ee, adenyoung, laishettikarthik-tech and taran-dev4u for their wor
 - **The Archive's counts follow the latest harvest** (#443): `README.md`, `docs/index.md`, `ROADMAP.md`, `docs/archive.md` and `explorer/SPACE_README.md` now state the 2026-11-02 harvest: **75,892 catalogued stations** and **6,231 with mirrored daily observations** (discharge 4,330, water level 1,158, precipitation 642, groundwater level 594), instead of the 2026-10-26 figures. The dataset card is generated from `obs/manifest.json` (`_mirrored_station_count`) and picks both numbers up on the next harvest.
 
 ### Fixed
-- **The Explorer's recorded answers stay on the river the question names** (#731). The Kingston recording answered a question about the Thames with the Hogsmill, a tributary a kilometre away, and every check passed it. `assess_site` now returns each gauge's river, `verify` gains a `river_matches_the_question` check, the analyst is told to use a gauge on the named river, the recorder refuses to publish a recording that fails it, and the wrong Kingston recording is retired from the Ask panel.
 - **FAO AQUASTAT reads the portal's export again** (#167): FAO retired the FAOSTAT `AQUASTAT` domain and every request to it answered 404, so the collector now queries the BigQuery-backed endpoint behind the AQUASTAT portal and parses its CSV export instead of JSON. `area` takes English country names, so ISO3 codes are translated locally and an unknown code raises rather than answering with a header-only CSV; the export has no year range syntax, so the years are named one by one. The six variable labels were off by one, so the five codes kept now name what they actually report.
 - **Claude in `aquascope ingest` and the repair bot.** An Anthropic key no longer goes to an OpenAI-style `/chat/completions` URL: both now build the client for the provider they resolved.
 - **Timeouts and dropped connections are retried.** They are now retried twice with backoff, instead of failing a role on the first try. A Studio role whose reply never arrived used to fall back to keyless without saying why.

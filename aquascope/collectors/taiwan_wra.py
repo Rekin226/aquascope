@@ -285,11 +285,14 @@ class TaiwanWRAReservoirCollector(BaseCollector):
 
 
 class TaiwanWRAGroundwaterCollector(BaseCollector):
-    """Collect annual groundwater-level statistics from WRA.
+    """Collect annual groundwater-level statistics (地下水水位年度統計) from WRA.
 
-    Source: WRA annual-groundwater dataset (``GROUNDWATER_ANNUAL_DATASET``),
-    ~992 wells nationwide, one record per well per year (1992-present), with
-    annual average / maximum-daily / minimum-daily water levels.
+    Source: WRA annual groundwater statistics dataset (地下水水位年度統計,
+    ``GROUNDWATER_ANNUAL_DATASET``) and well-status dataset (地下水水位觀測井井況,
+    ``GROUNDWATER_WELL_METADATA_DATASET``), ~992 wells nationwide, one record
+    per well per year (1992-present), with annual average / maximum-daily /
+    minimum-daily water levels. Released under Open Government Data License 1.0
+    (OGDL-Taiwan-1.0; https://data.gov.tw/license).
 
     Parameters
     ----------

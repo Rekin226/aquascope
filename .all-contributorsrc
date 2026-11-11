@@ -57,7 +57,9 @@
       "profile": "https://github.com/laishettikarthik-tech",
       "contributions": [
         "code",
-        "bug"
+        "bug",
+        "doc",
+        "plugin"
       ]
     },
     {
@@ -356,7 +358,8 @@
         "doc",
         "code",
         "test",
-        "review"
+        "review",
+        "research"
       ]
     }
   ],

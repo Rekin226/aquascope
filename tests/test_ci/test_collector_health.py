@@ -78,11 +78,12 @@ def test_a_call_with_records_is_ok(health, monkeypatch) -> None:
     assert not outcome.failing
 
 
-def test_a_call_without_records_is_empty_not_failed(health, monkeypatch) -> None:
+def test_a_call_without_records_counts_as_a_failure(health, monkeypatch) -> None:
+    # A 200 with no rows is the silent `[]` the issue opened with, so it fails.
     _patch(monkeypatch, _FakeCollector([]))
     outcome = health.run_probe("usgs", health.PROBES["usgs"])
     assert outcome.status == health.EMPTY
-    assert not outcome.failing
+    assert outcome.failing
 
 
 def test_a_raise_is_a_failed_row_with_the_cause(health, monkeypatch) -> None:
@@ -144,14 +145,14 @@ def test_the_summary_counts_every_status(health) -> None:
     assert "5 sources" in text
     # taiwan_civil_iot fails too, but only usgs is counted as a real failure.
     assert "2 FAIL" in text and "1 OK" in text and "1 NEEDS_KEY" in text
-    assert "**Failing:** `usgs`" in text
+    assert "**Failing:** `usgs`, `aquastat`" in text
 
 
 def test_the_issue_lists_only_real_failures(health) -> None:
     body = health.issue_body(_outcomes(health), run_url="https://example.test/run/1")
     assert "`usgs`" in body
     assert "`taiwan_civil_iot`" in body  # named as informational, not in the failure table
-    assert "1 of 5 sources failed" in body
+    assert "2 of 5 sources failed" in body
     assert "https://example.test/run/1" in body
 
 

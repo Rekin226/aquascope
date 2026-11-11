@@ -43,7 +43,7 @@ FAIL = "FAIL"
 TIMEOUT = "TIMEOUT"
 NEEDS_KEY = "NEEDS_KEY"
 STATUS_ORDER = (NEEDS_KEY, FAIL, TIMEOUT, EMPTY, OK)
-FAILING = (FAIL, TIMEOUT)
+FAILING = (FAIL, TIMEOUT, EMPTY)
 
 
 @dataclass(frozen=True)
@@ -111,9 +111,15 @@ PROBES: dict[str, Probe] = {
     ),
     # --- Europe --------------------------------------------------------------
     "uk_ea": Probe(
-        # The EA API wants an observed property; without one it refuses the query.
-        kwargs={"station": "L1201", "observed_property": "waterFlow", "days": 1},
-        note="Environment Agency station L1201, river flow",
+        # `station` is the EA's own GUID, not the WISKI id; daily readings over
+        # two months always have rows where a single 15-minute day may not.
+        kwargs={
+            "station": "8496ce69-482c-406a-a2f0-ac418ef8f099",
+            "observed_property": "waterFlow",
+            "collection": "daily",
+            "days": 60,
+        },
+        note="Environment Agency gauge at Kingston, daily river flow",
     ),
     "hubeau_hydrometrie": Probe(
         kwargs={"code_station": "F700000103", "days": 1},
@@ -128,8 +134,9 @@ PROBES: dict[str, Probe] = {
         note="one OPW station",
     ),
     "greece_hydroscope": Probe(
-        kwargs={"max_stations": 1},
-        note="one Hydroscope station",
+        # The first station the search returns may have no readings today.
+        kwargs={"max_stations": 5},
+        note="five Hydroscope stations, discharge",
     ),
     "greece_openhi": Probe(
         kwargs={"max_stations": 1, "latest_only": True},
@@ -176,7 +183,7 @@ PROBES: dict[str, Probe] = {
         kwargs={"prefecture": "Tokyo", "max_stations": 1},
         timeout=300,
         informational=True,
-        note="robots.txt asks for a slow crawl and the host may geo-block",
+        note="refused by its own robots.txt once #737 lands; until then a timeout",
     ),
     "korea_wamis": Probe(
         kwargs={"station_id": "1018680", "parameter": "water_level"},
@@ -196,8 +203,9 @@ PROBES: dict[str, Probe] = {
     ),
     # --- Oceania -------------------------------------------------------------
     "bom": Probe(
-        kwargs={"station_id": "410001", "days": 1},
-        note="BoM station 410001",
+        # The daily series lags the clock, so ask for a week rather than a day.
+        kwargs={"station_id": "410001", "days": 7},
+        note="BoM station 410001, water course discharge",
     ),
     # --- Global --------------------------------------------------------------
     "grdc": Probe(

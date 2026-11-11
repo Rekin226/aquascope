@@ -182,6 +182,7 @@ def test_the_six_references_load_and_validate():
         "potomac-supply",
         "nairobi-drought",
         "sintra-supply",
+        "bamako-ungauged",
     }
     for ref in REFS:
         assert ref.study and (ref.must_say or ref.must_not_say)
@@ -197,6 +198,20 @@ def test_the_recorded_reports_pass_their_own_references():
         assert out["reference"]["score"] == 1.0, out["reference"]
         assert out["reference"]["must_say"]["failed"] == []
         assert out["reference"]["must_not_say"]["violated"] == []
+
+
+def test_bamako_refuses_the_reanalysis_and_stays_screening():
+    """The Niger mainstem at Bamako has no gauge within 2,656 km, so the answer is a donor transfer over
+    115,012.9 km2 graded screening, anchored on BasinATLAS's own 1092 m3/s. The GloFAS pixel reads
+    0.566 m3/s, three orders of magnitude low, and the recorded report refuses it; the reference requires
+    the refusal and forbids presenting it as a confirmation."""
+    ref = BY_ID["bamako-ungauged"]
+    with (gr.SHOWCASE_DIR / ref.study / "workspace.json").open(encoding="utf-8") as fh:
+        ws = json.load(fh)
+    out = gr.score_report(ws, reference=ref)
+    assert out["reference"]["score"] == 1.0, out["reference"]
+    assert out["reference"]["must_say"]["failed"] == []
+    assert out["reference"]["must_not_say"]["violated"] == []
 
 
 def test_toulouse_states_the_significant_decreasing_trend_and_scores_clean():

@@ -1,0 +1,59 @@
+# AquaScope Bench report-quality reference (#382); the authoring rules are in _authoring.yaml.
+# Recorded 2026-09-14. The Niger mainstem at Bamako (12.6 N, -8.0 W) with no usable gauge within
+# 2,656 km, answered by regionalizing 10 donor gauges over a 115,012.9 km2 BasinATLAS catchment
+# (HYBAS 1121916250). The regionalized mean is 0.779 mm/d and BasinATLAS's own modelled discharge
+# for the same catchment is 1092 m3/s, within 5 percent; the companion Q95 is about 107 m3/s. The
+# GloFAS grid-cell cross-check returns 0.566 m3/s, three orders of magnitude low and evidently
+# sampling the wrong channel, so it is refused rather than quoted. A faithful report keeps the
+# answer at screening grade and says the reanalysis is unusable; a wrong one presents the GloFAS
+# number as an independent confirmation.
+id: bamako-ungauged
+study: bamako-ungauged
+title: A mainstem offtake estimated by donor transfer, with the reanalysis cross-check refused
+rationale: >-
+  No gauge within 2,656 km means the whole answer rests on donor transfer: 10 gauges regionalized
+  over a 115,012.9 km2 catchment, with BasinATLAS's modelled 1092 m3/s as the magnitude anchor.
+  The regionalized mean is 0.779 mm/d and the Q95 that a dry-season intake should be sized against
+  is about 107 m3/s. The GloFAS grid-cell cross-check returns 0.566 m3/s, roughly three orders of
+  magnitude low, and the recorded answer says so instead of treating it as a confirmation. A report
+  that quotes the GloFAS number as a check, or that promotes a donor transfer to an established
+  estimate, misstates what the run supports.
+tags: [ungauged, donor_transfer, reanalysis_refused, screening]
+must_say:
+  - kind: number
+    value: 0.779
+    tol: 0.02
+    unit: mm/d
+    label: the regionalized mean flow
+  - kind: phrase
+    any: ["Q95"]
+    label: the low-flow statistic the brief turns on
+  - kind: number
+    value: 34786
+    tol: 0.01
+    label: the donor pool the 10 gauges were drawn from
+  - kind: number
+    value: 115012.9
+    tol: 0.01
+    unit: km2
+    label: the upstream catchment area
+  - kind: number
+    value: 1092
+    tol: 0.02
+    unit: m3/s
+    label: BasinATLAS's modelled discharge for the same catchment
+  - kind: phrase
+    any: ["screening"]
+    label: the grade the answer carries
+must_not_say:
+  - kind: phrase
+    any: ["glofas confirms", "glofas cross-check confirms", "confirms the regionalized"]
+    label: the GloFAS pixel is not a usable confirmation
+  - kind: phrase
+    any: ["grade is established", "an established estimate", "well established"]
+    label: no gauge means no established answer
+decision:
+  value: 0.779
+  unit: mm/d
+  tolerance: 0.02
+  grade: screening

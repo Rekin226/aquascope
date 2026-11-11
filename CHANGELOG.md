@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Changed
+- **`india_wris` licence audit** (#207): keep `license="unknown"` and `redistributable=False` after reading the first-party terms — [NWIC's copyright policy](https://nwic.gov.in/copyrightpolicy) forbids reproducing the site's contents without permission, and the Hydro-Meteorological Data Dissemination Policy, 2018 (§6.1, §6.3) guarantees only free download and acknowledgement — and replace the "terms not yet verified" attribution with India-WRIS and the Ministry of Jal Shakti.
+
 ## [1.2.0] - 2026-11-11
 
 Gauges in QGIS, a bench that grades the report as well as the plan, and a Claude path that fails loudly

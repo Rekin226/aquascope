@@ -1,0 +1,58 @@
+# AquaScope Bench report-quality reference (#441); the authoring rules are in _authoring.yaml.
+# Recorded 2026-09-14. Five years of USGS-01646500 at Little Falls (2021-09-14 to 2026-09-13): 5366
+# samples over three parameters, of which only dissolved oxygen carries a WHO (2022) drinking
+# guideline. DO shows n=1788 tests, min 6.1 / median 10.1 / max 15.8 mg/L, zero below the 5.0 mg/L
+# threshold, so the CCME WQI scores 100 of 100, Excellent, graded established. The trap is what that
+# number means: it rests on one qualifying parameter against CCME's recommended four, and the NSF WQI
+# could not be scored at all (1 of 9 parameters). A wrong report reads the 100 as a verdict on the
+# water, or quotes an NSF score the run never produced.
+id: little-falls-water-quality
+study: little-falls-water-quality
+title: A perfect index on one parameter, which is not a verdict on the water
+rationale: >-
+  The screen returns the strongest-looking number in the whole showcase — CCME WQI 100 of 100,
+  Excellent — and the recording is careful to say what it is not: a statement about dissolved oxygen
+  alone, one qualifying parameter against CCME's recommended four, not a finding that the water is
+  safe. The NSF WQI is null because 1 of 9 parameters was present. A faithful report keeps the index
+  scoped to the sampled parameter and leaves the NSF score unscored; a wrong one promotes the 100 to
+  a drinking-water verdict or invents the missing index.
+tags: [water_quality, index, scope_limit, established]
+must_say:
+  - kind: number
+    value: 100
+    tol: 0.01
+    unit: of 100
+    label: the CCME WQI score
+  - kind: number
+    value: 5366
+    tol: 0.01
+    label: the sample count
+  - kind: number
+    value: 1788
+    tol: 0.01
+    label: the dissolved-oxygen test count
+  - kind: number
+    value: 5.0
+    tol: 0.01
+    unit: mg/L
+    label: the WHO dissolved-oxygen guideline
+  - kind: phrase
+    any: ["excellent"]
+    label: the CCME category
+  - kind: grade
+    grade: established
+    label: the grade the index carries
+must_not_say:
+  # The recording itself says the index is "not a verdict that the water is safe to drink overall", so
+  # a bare "safe to drink" would fire on the faithful negation; name the overclaim instead.
+  - kind: phrase
+    any: ["proves the water is safe", "establishes that the water is safe", "confirms the water is safe"]
+    label: one parameter is not a drinking-water verdict
+  - kind: no_number_near
+    keyword: NSF
+    label: the NSF WQI was never scored
+decision:
+  value: 100
+  unit: of 100
+  tolerance: 0.01
+  grade: established

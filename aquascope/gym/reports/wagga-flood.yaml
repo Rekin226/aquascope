@@ -1,0 +1,72 @@
+# AquaScope Bench report-quality reference (#441); the authoring rules are in _authoring.yaml.
+# Recorded 2026-09-14. The Murrumbidgee at Wagga Wagga (35.1 S, 147.37 E) is ungauged: the nearby BOM
+# stations are groundwater and water-quality records, not streamflow. Two lines of evidence were built
+# and neither reaches design grade. The donor transfer gives a mean annual daily maximum of 7.424 mm/d
+# (band 5.315-10.369) from 10 similarity gauges, but that is a mean annual maximum, not a 100-year
+# quantile. The GloFAS cell gives a GEV 100-year return level of 0.8165 m3/s and an LP3 one of
+# 0.8885 m3/s, agreeing to a ratio of 1.09, but the cell's mean discharge of 0.0313 m3/s is three
+# orders of magnitude below the basin's own modelled 114.97 m3/s, so the series is mis-scaled and
+# agreement between two fits to it proves nothing. The recorded answer says the 100-year flow is not
+# established and carries no band into design; a wrong report would quote either number as a design
+# flood, or read the GEV/LP3 agreement as a confirmation.
+id: wagga-flood
+study: wagga-flood
+title: An ungauged levee design where both lines of evidence fall short of design grade
+rationale: >-
+  The brief asks for a defensible 100-year flow and how far it can be trusted. The site has no
+  streamflow gauge, so the run produced a donor-regionalised mean annual daily maximum of 7.424 mm/d
+  and two GloFAS curve fits (GEV 0.8165 m3/s, LP3 0.8885 m3/s) whose agreement at a ratio of 1.09 is
+  the one thing the recording refuses to read as support, because the same cell's mean discharge of
+  0.0313 m3/s is three orders of magnitude below BasinATLAS's modelled 114.97 m3/s. A faithful report
+  states the not-established finding, keeps the mean-annual-maximum signature apart from a 100-year
+  quantile, and does not present the two agreeing fits as a confirmation. A report that named a design
+  flood, or that treated the GloFAS agreement as validation, would misstate what the run supports.
+tags: [ungauged, flood_risk, donor_mismatch, not_established]
+must_say:
+  - kind: number
+    value: 7.424
+    tol: 0.02
+    unit: mm/d
+    label: the donor-regionalised mean annual daily maximum
+  - kind: number
+    value: 114.97
+    tol: 0.01
+    unit: m3/s
+    label: BasinATLAS's modelled natural discharge for the catchment
+  - kind: number
+    value: 0.8165
+    tol: 0.02
+    unit: m3/s
+    label: the GloFAS GEV 100-year return level
+  - kind: number
+    value: 0.8885
+    tol: 0.02
+    unit: m3/s
+    label: the GloFAS Log-Pearson III 100-year return level
+  - kind: number
+    value: 27041.2
+    tol: 0.01
+    unit: km2
+    label: the upstream catchment area
+  - kind: number
+    value: 34786
+    tol: 0.01
+    label: the gauge pool the 10 donors were drawn from
+  - kind: grade
+    grade: not_established
+    label: the answer carries no established 100-year flow
+must_not_say:
+  # A number in a sentence about the 100-year flow that does not trace to the run's own results is the
+  # fabricated design flood this case invites; the recorded 0.8165 and 0.8885 are in the pool, so they
+  # are not caught.
+  - kind: no_number_near
+    keyword: 100-year
+    label: no invented design flood
+  - kind: phrase
+    any: ["glofas confirms", "confirms the 100-year", "agreement confirms", "two fits confirm"]
+    label: two fits to the same mis-scaled series are not a confirmation
+  - kind: phrase
+    any: ["the 100-year flow is", "design flood of", "design flood capacity of"]
+    label: no design flood is established from this evidence base
+decision:
+  grade: not_established

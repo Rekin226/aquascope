@@ -1,0 +1,62 @@
+# AquaScope Bench report-quality reference (#441); the authoring rules are in _authoring.yaml.
+# Recorded 2026-09-14. Taichung (24.15 N, 120.68 E) at taiwan_cwa 467490: the catalog claims 130.7
+# years of station record but only 10.0 years are actually served, so the 30-year minimum-record gate
+# fails at every step and no historical-worst ranking exists. What survives is short-horizon: 3-month
+# SPI 0.8692 and SPEI 0.7712 for 2026-06-01, both near normal, and a 29.9-year ERA5 fallback whose
+# 12-month SPEI of -0.9586 sits close to the -1.0 threshold. The recorded answer says the city is not
+# currently in meteorological drought, grade indicative, and is explicit that the worst-on-record
+# question is unanswered; a wrong report would rank the spell against a 130.7-year record it does not
+# have, or call the current period a record drought.
+id: taichung-drought
+study: taichung-drought
+title: A short served record that cannot answer the historical-ranking question
+rationale: >-
+  The brief asks whether Taichung is in drought and how the current spell ranks against history. The
+  second half is unanswerable: 10.0 of a claimed 130.7 years were served, so the 30-year gate failed
+  everywhere and no ranking exists. The first half survives at indicative grade — 3-month SPI 0.8692
+  and SPEI 0.7712, near normal — with a 12-month ERA5 SPEI of -0.9586 from a 29.9-year fallback that
+  is close to but not past the -1.0 threshold. A faithful report states the near-normal read and the
+  unanswered ranking; a wrong one manufactures a worst-on-record comparison or treats the full
+  130.7-year archive as if it had been used.
+tags: [drought, short_record, gate_failed, indicative]
+must_say:
+  - kind: number
+    value: 0.8692
+    tol: 0.01
+    label: the 3-month SPI at the station
+  - kind: number
+    value: 0.7712
+    tol: 0.01
+    label: the 3-month SPEI at the station
+  - kind: number
+    value: -0.9586
+    tol: 0.01
+    label: the 12-month SPEI from the ERA5 fallback
+  - kind: number
+    value: 10.0
+    tol: 0.01
+    unit: years
+    label: the served record length
+  - kind: number
+    value: 130.7
+    tol: 0.01
+    unit: years
+    label: the length the catalog claims
+  - kind: phrase
+    any: ["near normal"]
+    label: the drought classification the indices carry
+  - kind: grade
+    grade: indicative
+    label: the answer grade
+must_not_say:
+  # The recording itself says no genuine worst-on-record ranking could be established and names the
+  # 130.7-year archive as what would change that, so the assertion has to name the overclaim, not the
+  # words: a bare "worst on record" also fires inside the faithful negation.
+  - kind: phrase
+    any: ["was ranked as the worst", "is the worst drought", "the worst drought on record", "the driest on record"]
+    label: no historical ranking exists on 10 served years
+  - kind: phrase
+    any: ["drought is confirmed", "confirmed drought"]
+    label: the finding is indicative, not confirmed
+decision:
+  grade: indicative

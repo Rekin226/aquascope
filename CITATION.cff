@@ -13,8 +13,8 @@ authors:
     given-names: Abdoul Rachid
     orcid: "https://orcid.org/0000-0002-4616-4153"
     affiliation: "POUK YAM, Ouagadougou, Burkina Faso"
-version: 1.1.0
-date-released: "2026-10-28"
+version: 1.2.0
+date-released: "2026-11-11"
 doi: 10.5281/zenodo.21903143
 license: MIT
 repository-code: https://github.com/Rekin226/aquascope
@@ -114,8 +114,8 @@ preferred-citation:
     - family-names: Ouédraogo
       given-names: Abdoul Rachid
       orcid: "https://orcid.org/0000-0002-4616-4153"
-  version: 1.1.0
-  date-released: "2026-10-28"
+  version: 1.2.0
+  date-released: "2026-11-11"
   doi: 10.5281/zenodo.23718093
   license: MIT
   repository-code: https://github.com/Rekin226/aquascope

@@ -8,10 +8,10 @@ No installation; core Explorer workflows need no API key.
 [![PyPI version](https://img.shields.io/pypi/v/aquascope.svg?color=blue)](https://pypi.org/project/aquascope/)
 [![Python](https://img.shields.io/pypi/pyversions/aquascope.svg?color=informational)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/Rekin226/aquascope/blob/main/LICENSE)
-[![Tests](https://img.shields.io/badge/tests-3200%2B%20passing-brightgreen.svg)](https://github.com/Rekin226/aquascope/actions)
+[![Tests](https://img.shields.io/badge/tests-5200%2B%20passing-brightgreen.svg)](https://github.com/Rekin226/aquascope/actions)
 [![GitHub stars](https://img.shields.io/github/stars/Rekin226/aquascope?style=social)](https://github.com/Rekin226/aquascope/stargazers)
 
-AquaScope unifies **37 global water-data sources** behind one Python schema. On top of that it layers a full scientific computing stack, from **flood-frequency methods** to **FAO-56 crop water requirements**, wrapped in an AI engine that scores **27 research methodologies** against your dataset and auto-executes **26 analysis pipelines**. Regression checks include the CAMELS benchmark with 3,200+ tests across the project.
+AquaScope unifies **37 global water-data sources** behind one Python schema. On top of that it layers a full scientific computing stack, from **flood-frequency methods** to **FAO-56 crop water requirements**, wrapped in an AI engine that scores **27 research methodologies** against your dataset and auto-executes **26 analysis pipelines**. Regression checks include the CAMELS benchmark with 5,200+ tests across the project.
 The daily benchmark inputs are synthetic; flood benchmarks also use observed USGS annual peaks.
 See [validation scope](validation_scope.md) for comparators and limitations.
 
@@ -86,7 +86,7 @@ pip install "aquascope[all]"       # everything: ML, viz, spatial, dashboard
 
 ## Validation and reproducibility
 
-- **3,200+ tests** across every collector, hydrology method, and pipeline.
+- **5,200+ tests** across every collector, hydrology method, and pipeline.
 - **CAMELS benchmark**: synthetic daily regression fixtures and observed annual peaks for ten catchments, bundled at `data/camels_benchmark/`, run on every CI build.
 - **Every method cited**: equations, decision trees, and DOI references for all 27 methodologies live in the [theory guide](theory.md).
 - **JOSS paper in preparation**: see [`paper.md`](https://github.com/Rekin226/aquascope/blob/main/paper.md) and [`paper.bib`](https://github.com/Rekin226/aquascope/blob/main/paper.bib).
@@ -102,8 +102,8 @@ pip install "aquascope[all]"       # everything: ML, viz, spatial, dashboard
   author  = {AquaScope Contributors},
   year    = {2026},
   url     = {https://github.com/Rekin226/aquascope},
-  version = {1.1.0},
-  doi     = {10.5281/zenodo.23718093},
+  version = {1.2.0},
+  doi     = {10.5281/zenodo.21903143},
   license = {MIT}
 }
 ```

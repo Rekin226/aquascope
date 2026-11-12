@@ -115,6 +115,27 @@ def test_run_python_sees_the_earlier_tool_results():
     assert ran["ok"] is True and ran["result"] == ["describe_methods"]
 
 
+def test_a_different_argument_list_is_not_served_from_the_cache():
+    """#750: the cache keys on the arguments, so another query is a real call."""
+    client = FakeChat([
+        [("find_stations", {"query": "Thames"})],
+        [("find_stations", {"query": "Severn"})],
+        "done",
+    ])
+    seen: list[str] = []
+
+    def find(query):
+        seen.append(query)
+        return {"sites": [query]}
+
+    with patch("aquascope.mcp_server.find_stations", side_effect=find):
+        res = analyst.ask("q", client=client)
+    assert seen == ["Thames", "Severn"] and res.steps == 3
+    tool_messages = [m for m in client.requests[2]["messages"] if m.get("role") == "tool"]
+    second = json.loads(tool_messages[-1]["content"])
+    assert "cached" not in second
+
+
 def test_resolve_llm_env_and_errors(monkeypatch):
     # every provider's variable, not a hand-picked few: an ANTHROPIC_API_KEY in the shell must not answer here
     provider_vars = {cfg["env"] for cfg in analyst.PROVIDERS.values() if cfg["env"]}

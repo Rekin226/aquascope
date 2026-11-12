@@ -169,3 +169,26 @@ def test_observation_url_accepts_https_base_url_with_path():
     assert url == (
         "https://example.com/archive/obs/discharge/usgs/12345.csv.gz"
     )
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("usgs", ("discharge", "water_level")),
+        (
+            "uk_ea",
+            ("discharge", "water_level", "precipitation", "groundwater_level"),
+        ),
+        ("hubeau_hydrometrie", ("discharge",)),
+        ("taiwan_cwa", ("precipitation",)),
+        ("greece_openhi", ("discharge", "water_level", "precipitation")),
+        ("poland_imgw", ("discharge", "water_level")),
+    ],
+)
+def test_available_variables_for_supported_sources(source, expected):
+    assert available_variables(source) == expected
+
+
+@pytest.mark.parametrize("source", ["pegelonline", "ireland_opw", "unknown", ""])
+def test_available_variables_for_unsupported_sources(source):
+    assert available_variables(source) == ()

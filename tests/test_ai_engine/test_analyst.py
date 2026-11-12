@@ -78,6 +78,41 @@ def test_ask_stops_at_max_steps():
     client = FakeChat([[("describe_methods", {})]] * 5)
     res = analyst.ask("q", client=client, max_steps=2)
     assert res.steps == 2 and "ran out of tool-call steps" in res.answer
+    assert res.exhausted is True
+    assert "Repeated calls: describe_methods x2" in res.answer
+
+
+def test_a_repeated_call_is_served_from_the_earlier_result():
+    """#750: running the same call again spends a step and returns the same thing."""
+    client = FakeChat([[("describe_methods", {})], [("describe_methods", {})], "done"])
+    calls = {"n": 0}
+
+    def describe():
+        calls["n"] += 1
+        return {"methods": ["GEV"]}
+
+    with patch("aquascope.mcp_server.describe_methods", side_effect=describe):
+        res = analyst.ask("q", client=client)
+    assert calls["n"] == 1 and res.steps == 3 and not res.exhausted
+    tool_messages = [m for m in client.requests[2]["messages"] if m.get("role") == "tool"]
+    repeated = json.loads(tool_messages[-1]["content"])
+    assert repeated["cached"] is True and repeated["result"] == {"methods": ["GEV"]}
+
+
+def test_run_python_sees_the_earlier_tool_results():
+    """#750: without this the model has to call the tool again to post-process it."""
+    pytest.importorskip("numpy")
+    client = FakeChat([
+        [("describe_methods", {})],
+        [("run_python", {"code": "result = [r['tool'] for r in tool_results]"})],
+        "done",
+    ])
+    with patch("aquascope.mcp_server.describe_methods", return_value={"methods": ["GEV"]}):
+        res = analyst.ask("q", client=client)
+    assert res.tool_calls[1].ok
+    tool_messages = [m for m in client.requests[2]["messages"] if m.get("role") == "tool"]
+    ran = json.loads(tool_messages[-1]["content"])
+    assert ran["ok"] is True and ran["result"] == ["describe_methods"]
 
 
 def test_resolve_llm_env_and_errors(monkeypatch):

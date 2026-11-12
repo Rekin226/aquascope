@@ -12,6 +12,7 @@ All notable changes to AquaScope are documented here.
 
 ### Fixed
 - **The Explorer's recorded answers stay on the river the question names** (#731). The Kingston recording answered a question about the Thames with the Hogsmill, a tributary a kilometre away, and every check passed it. `assess_site` now returns each gauge's river, `verify` gains a `river_matches_the_question` check, the analyst is told to use a gauge on the named river, the recorder refuses to publish a recording that fails it, and the wrong Kingston recording is retired from the Ask panel.
+- **Say why a repair prompt does not fit the model** (#514): `aquascope.maintenance.repair` refuses an oversized evidence prompt before sending it and turns a provider's 413 into the same explanation, so the health issue records the character count and the larger-window option instead of a raw endpoint error.
 - **Cite 1.2.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.2.0's Zenodo DOI (10.5281/zenodo.24125206).
 
 ## [1.2.0] - 2026-11-11

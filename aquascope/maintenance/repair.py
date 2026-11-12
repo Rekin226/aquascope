@@ -57,6 +57,21 @@ Rules:
 """
 
 
+class PromptTooLargeError(RuntimeError):
+    """The evidence cannot reach the configured model, so no request is sent."""
+
+
+def _explain_too_large(chars: int, provider: str | None, model: str, *, status: int | None = None) -> str:
+    """Say why the prompt would not fit, instead of letting the endpoint answer 413."""
+    from aquascope.ai_engine.analyst import context_budget
+
+    budget = context_budget(provider)
+    where = f"the provider answered {status}" if status is not None else "the model was not called"
+    return (f"the repair prompt is {chars:,} characters (~{chars // 4:,} tokens), over the {budget:,}-character "
+            f"limit for {model} ({provider or 'the default provider'}); {where}. Point AQUASCOPE_LLM_* at a "
+            "larger-window model (Anthropic has a 200k-character window), or trim the collector or its tests.")
+
+
 @dataclass
 class Probe:
     url: str
@@ -248,19 +263,33 @@ def _parse_proposal(text: str) -> Proposal:
 
 def propose_repair(evidence: Evidence, *, client: Any = None, model: str | None = None, provider: str | None = None,
                    api_key: str | None = None, base_url: str | None = None) -> Proposal:
-    """One model call over the evidence; returns a parsed :class:`Proposal` (``no_fix`` on any parse trouble)."""
-    from aquascope.ai_engine.analyst import resolve_llm
-    from aquascope.ai_engine.llm_transport import make_client
+    """One model call over the evidence; returns a parsed :class:`Proposal` (``no_fix`` on any parse trouble).
+
+    Raises :class:`PromptTooLargeError` without calling the model when the evidence cannot fit the provider's
+    window, so the health issue says why instead of reporting a bare 413.
+    """
+    from aquascope.ai_engine.analyst import context_budget, resolve_llm
+    from aquascope.ai_engine.llm_transport import LLMHTTPError, make_client
 
     cfg = {"model": model or "unknown"}
     if client is None:
         cfg = resolve_llm(provider, model, api_key, base_url)
         client = make_client(cfg["api_key"], cfg["base_url"], provider=cfg["provider"])
-    response = client.chat.completions.create(
-        model=cfg["model"],
-        messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": evidence.to_prompt()}],
-        temperature=0,
-    )
+    prompt = evidence.to_prompt()
+    chars = len(prompt) + len(SYSTEM_PROMPT)
+    if chars > context_budget(cfg.get("provider")):
+        raise PromptTooLargeError(_explain_too_large(chars, cfg.get("provider"), str(cfg["model"])))
+    try:
+        response = client.chat.completions.create(
+            model=cfg["model"],
+            messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
+            temperature=0,
+        )
+    except LLMHTTPError as exc:
+        if exc.status == 413:
+            raise PromptTooLargeError(
+                _explain_too_large(chars, cfg.get("provider"), str(cfg["model"]), status=413)) from exc
+        raise
     text = response.choices[0].message.content or ""
     prop = _parse_proposal(text)
     prop.model = str(cfg["model"])
@@ -362,6 +391,8 @@ def repair_source(source: str, error: str, diagnosis: str, *, repo_root: str | P
     ev = gather_evidence(source, error, diagnosis, repo_root=repo_root, probe=probe)
     try:
         prop = propose_repair(ev, client=client, model=model, provider=provider)
+    except PromptTooLargeError as exc:
+        return RepairResult(source, ev, None, None, "error", str(exc))
     except Exception as exc:  # noqa: BLE001 - report, do not raise out of a maintenance loop
         return RepairResult(source, ev, None, None, "error", f"model call failed: {type(exc).__name__}: {exc}")
     if not prop.is_patch:
@@ -378,5 +409,5 @@ def repair_source(source: str, error: str, diagnosis: str, *, repo_root: str | P
     return RepairResult(source, ev, prop, ver, "patched" if ver.ok else "rejected", note)
 
 
-__all__ = ["Evidence", "Probe", "Proposal", "RepairResult", "Verification", "apply_and_verify", "gather_evidence",
-           "probe_url", "propose_repair", "repair_source"]
+__all__ = ["Evidence", "Probe", "PromptTooLargeError", "Proposal", "RepairResult", "Verification", "apply_and_verify",
+           "gather_evidence", "probe_url", "propose_repair", "repair_source"]

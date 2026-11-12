@@ -175,3 +175,45 @@ def test_repairable_diagnoses(diag, expected):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     assert mod._repairable(diag) is expected
+
+
+def test_an_oversized_prompt_is_refused_before_the_model():
+    ev = repair.Evidence("x", "err", "diag", "aquascope/collectors/x.py", "x" * 40_000)
+    calls = []
+
+    class Client:
+        class chat:  # noqa: N801 - mimics the SDK shape
+            class completions:  # noqa: N801
+                @staticmethod
+                def create(**kw):
+                    calls.append(kw)
+
+    with pytest.raises(repair.PromptTooLargeError) as excinfo:
+        repair.propose_repair(ev, client=Client(), model="m")
+    assert not calls and "model was not called" in str(excinfo.value)
+
+
+def test_a_413_from_the_endpoint_becomes_an_explanation():
+    from aquascope.ai_engine.llm_transport import LLMHTTPError
+
+    ev = repair.Evidence("x", "err", "diag", "aquascope/collectors/x.py", "print(1)")
+
+    class Client:
+        class chat:  # noqa: N801
+            class completions:  # noqa: N801
+                @staticmethod
+                def create(**kw):
+                    raise LLMHTTPError(413, '{"error": "request too large"}', "https://api.groq.com/openai/v1")
+
+    with pytest.raises(repair.PromptTooLargeError) as excinfo:
+        repair.propose_repair(ev, client=Client(), model="m")
+    assert "413" in str(excinfo.value) and "larger-window" in str(excinfo.value)
+
+
+def test_repair_source_explains_a_prompt_that_does_not_fit(monkeypatch):
+    ev = repair.Evidence("x", "err", "diag", "aquascope/collectors/x.py", "print(1)")
+    monkeypatch.setattr(repair, "gather_evidence", lambda *a, **kw: ev)
+    monkeypatch.setattr(repair, "propose_repair", lambda e, **k: (_ for _ in ()).throw(repair.PromptTooLargeError(
+        "the repair prompt is 40,000 characters, over the 24,000-character limit for m")))
+    r = repair.repair_source("x", "err", "diag")
+    assert r.outcome == "error" and r.note.startswith("the repair prompt is") and "model call failed" not in r.note

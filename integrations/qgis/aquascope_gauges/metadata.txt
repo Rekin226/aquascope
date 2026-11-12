@@ -1,11 +1,11 @@
 [general]
 name=AquaScope Gauges
 qgisMinimumVersion=3.34
-description=Explore the AquaScope station catalog directly from QGIS.
+description=Explore hydrological stations and retrieve daily observations directly from QGIS.
 version=0.1.0
 author=AquaScope contributors
 email=
-about=Search hydrological stations by name, river, or agency; identify stations in the current map extent; and open agency and AquaScope Explorer links. Reads remote catalog data over HTTPS; actual data transfer depends on GDAL and server support.
+about=Search hydrological stations by name, river, or agency; identify stations in the current map extent; inspect station metadata; discover archived observation variables; retrieve daily records; and view observations in a table and time-series plot. Reads remote catalog and observation data over HTTPS.
 category=Vector
 icon=
 experimental=False

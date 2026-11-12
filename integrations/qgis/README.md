@@ -24,6 +24,9 @@ The plugin supports QGIS 3.34 LTR and later.
 - Open the original agency station page when an HTTPS URL is available.
 - Open the selected station in AquaScope Explorer.
 - Display the station catalog on the QGIS map with source-based styling.
+- Discover archived daily observation variables for the selected station.
+- Retrieve daily observations and display them in a table.
+- Plot daily observations in a time-series view.
 
 ### Installation
 
@@ -34,8 +37,9 @@ For manual installation:
 1. Locate your active QGIS profile's Python plugins directory.
 2. Copy the `integrations/qgis/aquascope_gauges/` directory into that
    directory. Keep its name as `aquascope_gauges`.
-3. Confirm that `metadata.txt`, `__init__.py`, `plugin.py`, and
-   `helpers.py` are directly inside the `aquascope_gauges` directory.
+3. Confirm that all six required files are directly inside the
+   `aquascope_gauges` directory: `metadata.txt`, `__init__.py`,
+   `plugin.py`, `helpers.py`, `observations.py`, and `plot.py`.
 4. Restart QGIS.
 5. Open **Plugins → Manage and Install Plugins**.
 6. Find and enable **AquaScope Gauges**.
@@ -49,7 +53,10 @@ The plugin should then be available from the AquaScope Gauges plugin menu.
 3. Optionally enable **Limit results to current map extent**.
 4. Select **Search stations**.
 5. Select a result to view its station details.
-6. Use the agency or AquaScope Explorer links when available.
+6. Choose an available variable under **Observation variable**.
+7. Select **Fetch observations**.
+8. Inspect the records in **Table** or **Time Series**.
+9. Use the agency or AquaScope Explorer links when available.
 
 The plugin displays up to 100 matching results per search.
 
@@ -125,14 +132,48 @@ To use vector tiles for the sub-basins:
 
 This workflow requires QGIS 3.32+.
 
-## Station observation records
+## Daily station observations
 
-A station's daily record is stored at:
+The AquaScope Gauges plugin supports retrieving archived daily observations
+directly from the selected station.
 
-`…/obs/<variable>/<source>/<station_id>.csv.gz`
+### Fetching observations
 
-QGIS users can use **Add Delimited Text Layer** with an appropriate
-HTTP URL when supported by their QGIS/GDAL environment.
+1. Open **Plugins → AquaScope Gauges**.
+2. Search for a station and select it.
+3. Review its metadata in the station details panel.
+4. Choose an available variable from **Observation variable**.
+5. Select **Fetch observations**.
+6. Open the **Table** tab to inspect daily dates and values.
+7. Open the **Time Series** tab to view the plotted observations.
+
+Available variables depend on the station's archive source. The plugin
+only offers variables supported by that source. If no archived variables
+are available, the selector displays an explanatory message.
+
+### Archive format and units
+
+Daily records are stored using this archive path:
+
+`obs/<variable>/<source>/<station_id>.csv.gz`
+
+The compressed CSV contains `date` and `value` columns. The plugin
+retrieves the individual station archive over HTTPS and parses it using
+Python's standard library; it does not require PyArrow or Matplotlib.
+
+Published values use SI units where applicable:
+
+| Variable | Unit |
+| --- | --- |
+| Discharge | m³/s |
+| Water level | m |
+| Groundwater level | m |
+| Precipitation | mm |
+
+Missing archives, invalid responses, and empty records are reported in
+the plugin rather than silently displayed as valid observations.
+
+### Additional station exploration
 
 The AquaScope Explorer provides additional station-level exploration:
 

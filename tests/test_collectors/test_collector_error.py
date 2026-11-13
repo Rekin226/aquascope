@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import io
-import zipfile
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -91,13 +89,6 @@ class TestCachedHTTPClientFormatting:
     def test_format_retry_error_unknown(self):
         msg = self.client._format_retry_error("http://example.com/api", None)
         assert "unknown error" in msg
-
-
-def _make_empty_mlit_export() -> bytes:
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w") as archive:
-        archive.writestr("export.csv", "日時,データ,属性\r\n".encode("cp932"))
-    return buffer.getvalue()
 
 
 class TestJapanMLITCollectorError:

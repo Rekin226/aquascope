@@ -71,6 +71,9 @@ Rules:
 - For a question about a place or a station, call assess_site(lat, lon) first and respect its sufficiency
   table: do not run a method it marks not_defensible, say why, and offer what it marks defensible instead.
 - Find stations with find_stations before analysing; prefer stations with long records for flood questions.
+- When the question names a river, use a gauge on that river. A nearer gauge on another river is not the
+  record it asks about: check the station's river (or find_stations with the river's name), and say so if
+  you had to fall back.
 - Use analyze_station / flood_frequency for numbers; use anywhere(lat, lon) when the user names a place with no gauge.
 - reach_record(lat, lon) gives the river reach at a point and 86 years of SIMULATED daily flow (GEOGLOWS v2):
   use it where no gauge is on the river, and call it modelled whenever you quote it.

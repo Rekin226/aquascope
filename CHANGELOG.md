@@ -7,7 +7,11 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Changed
+- **`india_wris` licence audit** (#207): keep `license="unknown"` and `redistributable=False` after reading the first-party terms — [NWIC's copyright policy](https://nwic.gov.in/copyrightpolicy) forbids reproducing the site's contents without permission, and the Hydro-Meteorological Data Dissemination Policy, 2018 (§6.1, §6.3) guarantees only free download and acknowledgement — and replace the "terms not yet verified" attribution with India-WRIS and the Ministry of Jal Shakti.
+
 ### Fixed
+- **The Explorer's recorded answers stay on the river the question names** (#731). The Kingston recording answered a question about the Thames with the Hogsmill, a tributary a kilometre away, and every check passed it. `assess_site` now returns each gauge's river, `verify` gains a `river_matches_the_question` check, the analyst is told to use a gauge on the named river, the recorder refuses to publish a recording that fails it, and the wrong Kingston recording is retired from the Ask panel.
 - **Japan MLIT is not read** (#168). The Water Information Database's `robots.txt` disallows `/water-inf-app/` for every crawler (`Crawl-delay: 3600`) and its FAQ asks programmatic users to use the paid 水防災オープンデータ service instead, so `JapanMLITCollector.fetch_raw` raises `CollectorError` naming the disallow rather than calling the site; the registry and the catalogue mark the source as not offered. The ZIP and Shift_JIS parsing (four digit prefecture codes, `24:00` rows, `-9999`, the `属性` codes, `暂定フラグ`) stays tested for the day an allowed endpoint appears.
 - **Cite 1.2.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.2.0's Zenodo DOI (10.5281/zenodo.24125206).
 

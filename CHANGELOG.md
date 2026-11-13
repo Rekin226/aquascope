@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Daily observations in AquaScope Gauges** (#749): show station-specific archived variables, date ranges and record counts; fetch daily records into a table and time-series plot, with source attribution and licence details.
+
 ### Fixed
 - **Cite 1.2.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.2.0's Zenodo DOI (10.5281/zenodo.24125206).
 

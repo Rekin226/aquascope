@@ -3,8 +3,10 @@
 import csv
 import gzip
 import io
+import json
 import math
 from datetime import date
+from functools import lru_cache
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import urlopen
@@ -43,9 +45,37 @@ class ObservationError(Exception):
     """Raised when daily observations cannot be retrieved or parsed."""
 
 
+class ObservationNotFoundError(ObservationError):
+    """Raised when a station has no archived daily observations."""
+
+
 def available_variables(source):
     """Return the variables mirrored for a source."""
     return HARVESTABLE.get(str(source or "").strip(), ())
+
+
+def _validated_base_url(base_url):
+    """Validate and normalize the HTTPS archive base URL."""
+    base_url = str(base_url).strip()
+
+    try:
+        parsed = urlsplit(base_url)
+        # Accessing .port also validates malformed port specifications.
+        parsed.port
+    except ValueError as exc:
+        raise ValueError("Invalid archive base URL.") from exc
+
+    if (
+        parsed.scheme.lower() != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("Archive base URL must be a valid HTTPS URL.")
+
+    return base_url.rstrip("/") + "/"
 
 
 def observation_url(source, station_id, variable, base_url=DEFAULT_BASE_URL):
@@ -69,25 +99,7 @@ def observation_url(source, station_id, variable, base_url=DEFAULT_BASE_URL):
     if "\\" in station_id:
         raise ValueError("Station ID must not contain backslashes.")
 
-    base_url = str(base_url).strip()
-    try:
-        parsed_base_url = urlsplit(base_url)
-        # Accessing .port also validates malformed port specifications.
-        parsed_base_url.port
-    except ValueError as exc:
-        raise ValueError("Invalid archive base URL.") from exc
-
-    if (
-        parsed_base_url.scheme.lower() != "https"
-        or not parsed_base_url.hostname
-        or parsed_base_url.username is not None
-        or parsed_base_url.password is not None
-        or parsed_base_url.query
-        or parsed_base_url.fragment
-    ):
-        raise ValueError("Archive base URL must be a valid HTTPS URL.")
-
-    base_url = base_url.rstrip("/") + "/"
+    base_url = _validated_base_url(base_url)
 
     return (
         base_url
@@ -108,9 +120,12 @@ def parse_observations(compressed_data):
             csv_bytes = archive.read(MAX_DOWNLOAD_BYTES + 1)
 
         if len(csv_bytes) > MAX_DOWNLOAD_BYTES:
-            raise ObservationError("Decompressed observation data exceeds the size limit.")
+            raise ObservationError(
+                "Decompressed observation data exceeds the size limit."
+            )
 
         csv_data = csv_bytes.decode("utf-8-sig")
+
     except ObservationError:
         raise
     except (OSError, EOFError, UnicodeDecodeError) as exc:
@@ -178,7 +193,7 @@ def fetch_observations(
 
     except HTTPError as exc:
         if exc.code == 404:
-            raise ObservationError(
+            raise ObservationNotFoundError(
                 "No archived observations found for this station and variable."
             ) from exc
 
@@ -195,3 +210,87 @@ def fetch_observations(
         raise ObservationError("Observation archive exceeds the download limit.")
 
     return parse_observations(compressed_data)
+
+
+@lru_cache(maxsize=1)
+def load_observation_manifest(base_url=DEFAULT_BASE_URL):
+    """Download and cache the observation manifest for this session."""
+    base_url = _validated_base_url(base_url)
+    url = base_url + "obs/manifest.json"
+
+    try:
+        with urlopen(url, timeout=TIMEOUT_SECONDS) as response:
+            data = response.read(MAX_DOWNLOAD_BYTES + 1)
+
+        if len(data) > MAX_DOWNLOAD_BYTES:
+            raise ObservationError("Observation manifest exceeds the size limit.")
+
+        manifest = json.loads(data.decode("utf-8"))
+
+    except ObservationError:
+        raise
+    except (HTTPError, URLError, TimeoutError, OSError, UnicodeDecodeError) as exc:
+        raise ObservationError(
+            "Could not download the observation manifest."
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise ObservationError(
+            "The observation manifest contains invalid JSON."
+        ) from exc
+
+    if not isinstance(manifest, dict) or not isinstance(
+        manifest.get("sources"), dict
+    ):
+        raise ObservationError("The observation manifest has an invalid structure.")
+
+    return manifest
+
+
+def available_station_variables(source, station_id, manifest):
+    """Return archived variable metadata available for one station."""
+    source = str(source or "").strip()
+    station_id = str(station_id or "").strip()
+
+    if not source or not station_id or not isinstance(manifest, dict):
+        return {}
+
+    sources = manifest.get("sources", {})
+    if not isinstance(sources, dict):
+        return {}
+
+    available = {}
+
+    for key, entry in sources.items():
+        if key.partition("/")[0] != source or not isinstance(entry, dict):
+            continue
+
+        stations = entry.get("stations", {})
+        if not isinstance(stations, dict):
+            continue
+
+        station = stations.get(station_id)
+        if not isinstance(station, dict):
+            continue
+
+        try:
+            count = int(station.get("n", 0))
+        except (TypeError, ValueError):
+            continue
+
+        if count <= 0 or station.get("empty") or not station.get("file"):
+            continue
+
+        variable = key.partition("/")[2]
+        if not variable:
+            continue
+
+        available[variable] = {
+            "first": station.get("first", ""),
+            "last": station.get("last", ""),
+            "count": count,
+            "unit": station.get("unit") or entry.get("unit", ""),
+            "attribution": entry.get("attribution", ""),
+            "license": entry.get("license", ""),
+        }
+
+    return available

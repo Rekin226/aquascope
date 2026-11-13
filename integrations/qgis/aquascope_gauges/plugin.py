@@ -36,14 +36,21 @@ from .helpers import escape_expression, https_url
 from .observations import (
     ARCHIVE_UNITS,
     ObservationError,
-    available_variables,
+    ObservationNotFoundError,
+    available_station_variables,
     fetch_observations,
+    load_observation_manifest,
 )
 from .plot import ObservationPlot
 
-BASE_URL = "https://huggingface.co/datasets/Rekin226/aquascope-gauges/resolve/main/"
+BASE_URL = (
+    "https://huggingface.co/datasets/"
+    "Rekin226/aquascope-gauges/resolve/main/"
+)
 
-EXPLORER_URL = "https://rekin226-aquascope-explorer.static.hf.space/"
+EXPLORER_URL = (
+    "https://rekin226-aquascope-explorer.static.hf.space/"
+)
 
 MAX_RESULTS = 100
 
@@ -64,6 +71,7 @@ class AquaScopePlugin:
     def __init__(self, iface):
         self.iface = iface
         self.layer = None
+        self.layer_id = None
         self.dock = None
         self.search_input = None
         self.extent_checkbox = None
@@ -75,6 +83,12 @@ class AquaScopePlugin:
         self.observation_table = None
         self.observation_plot = None
         self.observation_tabs = None
+        self.observation_attribution = None
+
+        self.observation_manifest = None
+        self.observation_manifest_error = None
+        self.selected_observation_metadata = {}
+
         self.features = []
 
     def initGui(self):  # noqa: N802
@@ -99,7 +113,9 @@ class AquaScopePlugin:
         self.search_input.setPlaceholderText(
             "Station name, river, agency, or station ID"
         )
-        self.search_input.returnPressed.connect(self.search_stations)
+        self.search_input.returnPressed.connect(
+            self.search_stations
+        )
         layout.addWidget(self.search_input)
 
         self.extent_checkbox = QCheckBox(
@@ -140,10 +156,14 @@ class AquaScopePlugin:
         self.variable_selector.currentIndexChanged.connect(
             lambda index: self._update_fetch_button()
         )
+        self.variable_selector.currentIndexChanged.connect(
+            lambda index: self._update_observation_attribution()
+        )
 
         self.observation_status = QLabel(
             "Select a station and observation variable."
         )
+        self.observation_status.setTextFormat(Qt.PlainText)
         layout.addWidget(self.observation_status)
 
         self.observation_table = QTableWidget()
@@ -158,11 +178,26 @@ class AquaScopePlugin:
         self.observation_table.horizontalHeader().setStretchLastSection(
             True
         )
+
         self.observation_plot = ObservationPlot()
+
         self.observation_tabs = QTabWidget()
-        self.observation_tabs.addTab(self.observation_table, "Table")
-        self.observation_tabs.addTab(self.observation_plot, "Time Series")
+        self.observation_tabs.addTab(
+            self.observation_table,
+            "Table",
+        )
+        self.observation_tabs.addTab(
+            self.observation_plot,
+            "Time Series",
+        )
         layout.addWidget(self.observation_tabs)
+
+        self.observation_attribution = QLabel(
+            "Station data attribution and license will appear here."
+        )
+        self.observation_attribution.setWordWrap(True)
+        self.observation_attribution.setTextFormat(Qt.PlainText)
+        layout.addWidget(self.observation_attribution)
 
         self.dock.setWidget(widget)
 
@@ -170,6 +205,15 @@ class AquaScopePlugin:
             Qt.RightDockWidgetArea,
             self.dock,
         )
+
+        # Load the observation manifest once per plugin session.
+        try:
+            self.observation_manifest = load_observation_manifest()
+        except ObservationError as exc:
+            self.observation_manifest_error = str(exc)
+            self.observation_status.setText(
+                f"Could not load observation archive index: {exc}"
+            )
 
         self.iface.addPluginToMenu(
             "&AquaScope Gauges",
@@ -191,6 +235,8 @@ class AquaScopePlugin:
         self.iface.removeDockWidget(self.dock)
         self.dock.deleteLater()
         self.dock = None
+        self.layer = None
+        self.layer_id = None
 
     def _style_catalog(self, layer):
         """Apply the categorized styling used by the AquaScope QLR."""
@@ -258,12 +304,16 @@ class AquaScopePlugin:
         """Load the remote catalog, falling back to GeoJSON."""
         project = QgsProject.instance()
 
-        if (
-            self.layer
-            and self.layer.isValid()
-            and project.mapLayer(self.layer.id()) is not None
-        ):
-            return True
+        # Resolve the layer through the project. The stored Python
+        # wrapper may outlive the underlying QGIS C++ layer.
+        if self.layer_id:
+            current_layer = project.mapLayer(self.layer_id)
+            if current_layer is not None and current_layer.isValid():
+                self.layer = current_layer
+                return True
+
+        self.layer = None
+        self.layer_id = None
 
         # Reuse a catalog layer already added by this plugin.
         for existing_layer in project.mapLayers().values():
@@ -275,6 +325,7 @@ class AquaScopePlugin:
                 and existing_layer.isValid()
             ):
                 self.layer = existing_layer
+                self.layer_id = existing_layer.id()
                 return True
 
         parquet_supported = False
@@ -320,6 +371,7 @@ class AquaScopePlugin:
 
             project.addMapLayer(candidate)
             self.layer = candidate
+            self.layer_id = candidate.id()
 
             self.iface.messageBar().pushMessage(
                 "AquaScope",
@@ -346,6 +398,19 @@ class AquaScopePlugin:
         if not self.load_catalog():
             return
 
+        layer = QgsProject.instance().mapLayer(self.layer_id)
+        if layer is None or not layer.isValid():
+            self.layer = None
+            self.layer_id = None
+            self.iface.messageBar().pushMessage(
+                "AquaScope",
+                "The station catalog layer is no longer available. "
+                "Please search again.",
+                level=Qgis.Warning,
+                duration=8,
+            )
+            return
+
         query = self.search_input.text().strip()
         request = QgsFeatureRequest()
 
@@ -361,7 +426,7 @@ class AquaScopePlugin:
             )
 
             available_fields = {
-                field.name() for field in self.layer.fields()
+                field.name() for field in layer.fields()
             }
 
             clauses = []
@@ -381,7 +446,7 @@ class AquaScopePlugin:
 
             transform = QgsCoordinateTransform(
                 canvas.mapSettings().destinationCrs(),
-                self.layer.crs(),
+                layer.crs(),
                 QgsProject.instance(),
             )
 
@@ -399,7 +464,7 @@ class AquaScopePlugin:
 
         request.setLimit(MAX_RESULTS)
 
-        self.features = list(self.layer.getFeatures(request))
+        self.features = list(layer.getFeatures(request))
 
         self.station_list.clear()
         self.details.clear()
@@ -407,14 +472,16 @@ class AquaScopePlugin:
         self.variable_selector.addItem("Select a station first")
         self.variable_selector.setEnabled(False)
 
+        self.selected_observation_metadata = {}
         self.fetch_button.setEnabled(False)
         self.observation_table.setRowCount(0)
         self.observation_plot.clear()
         self.observation_status.setText(
             "Select a station and observation variable."
         )
+        self._update_observation_attribution()
 
-        available_fields = set(self.layer.fields().names())
+        available_fields = set(layer.fields().names())
 
         for feature in self.features:
             name = (
@@ -453,17 +520,22 @@ class AquaScopePlugin:
     def show_station_details(self, row):
         """Display station metadata and discover archived variables."""
         self.variable_selector.clear()
-        self.variable_selector.addItem("Select a station first")
         self.variable_selector.setEnabled(False)
 
         self.fetch_button.setEnabled(False)
         self.observation_table.setRowCount(0)
         self.observation_plot.clear()
+        self.selected_observation_metadata = {}
+
         self.observation_status.setText(
             "Select an observation variable to fetch daily records."
         )
+        self._update_observation_attribution()
 
         if row < 0 or row >= len(self.features):
+            self.variable_selector.addItem(
+                "Select a station first"
+            )
             return
 
         feature = self.features[row]
@@ -484,23 +556,63 @@ class AquaScopePlugin:
         period_start = value("period_start")
         period_end = value("period_end")
 
-        # Discover archived observation variables for this station.
-        self.variable_selector.clear()
-
+        # Only show variables with archived records for this station.
         variables = (
-            available_variables(source)
-            if source and station_id
-            else ()
+            available_station_variables(
+                source,
+                station_id,
+                self.observation_manifest,
+            )
+            if source and station_id and self.observation_manifest
+            else {}
         )
 
         if variables:
-            self.variable_selector.addItem("Select a variable")
-            self.variable_selector.addItems(list(variables))
-            self.variable_selector.setEnabled(True)
-        else:
             self.variable_selector.addItem(
-                "No archived variables available"
+                "Select a variable",
+                None,
             )
+
+            for variable, metadata in sorted(variables.items()):
+                first = metadata.get("first") or "?"
+                last = metadata.get("last") or "?"
+                count = metadata.get("count", 0)
+
+                label = (
+                    f"{variable} · {first} to {last} "
+                    f"· {count:,} records"
+                )
+
+                self.variable_selector.addItem(
+                    label,
+                    variable,
+                )
+
+                self.selected_observation_metadata[variable] = metadata
+
+            self.variable_selector.setEnabled(True)
+
+        else:
+            if self.observation_manifest_error:
+                self.variable_selector.addItem(
+                    "Station availability unavailable",
+                    None,
+                )
+                self.observation_status.setText(
+                    "Station availability could not be checked because "
+                    "the observation archive index failed to load."
+                )
+            else:
+                self.variable_selector.addItem(
+                    "No daily records for this gauge yet",
+                    None,
+                )
+                self.observation_status.setText(
+                    "No daily records for this gauge yet."
+                )
+
+        self._update_observation_attribution()
+        self._update_fetch_button()
 
         station_url = https_url(value("url"))
         explorer_url = ""
@@ -543,6 +655,30 @@ class AquaScopePlugin:
 
         self.details.setHtml("<br>".join(lines))
 
+    def _update_observation_attribution(self):
+        """Display the selected archive source attribution and license."""
+        if self.observation_attribution is None:
+            return
+
+        variable = self.variable_selector.currentData()
+        metadata = self.selected_observation_metadata.get(
+            variable,
+            {},
+        )
+
+        if not metadata:
+            self.observation_attribution.setText(
+                "Station data attribution and license will appear here."
+            )
+            return
+
+        attribution = metadata.get("attribution") or "Not specified"
+        license_name = metadata.get("license") or "Not specified"
+
+        self.observation_attribution.setText(
+            f"Attribution: {attribution} | License: {license_name}"
+        )
+
     def _update_fetch_button(self):
         """Enable fetching only when a station and variable are selected."""
         if self.fetch_button is None:
@@ -550,17 +686,19 @@ class AquaScopePlugin:
 
         has_station = (
             self.station_list is not None
-            and self.station_list.currentRow() >= 0
-            and self.station_list.currentRow() < len(self.features)
+            and 0 <= self.station_list.currentRow() < len(self.features)
         )
 
         has_variable = (
             self.variable_selector is not None
             and self.variable_selector.isEnabled()
             and self.variable_selector.currentIndex() > 0
+            and self.variable_selector.currentData() is not None
         )
 
-        self.fetch_button.setEnabled(has_station and has_variable)
+        self.fetch_button.setEnabled(
+            has_station and has_variable
+        )
 
     def fetch_selected_observations(self):
         """Fetch daily records for the selected station and variable."""
@@ -574,7 +712,10 @@ class AquaScopePlugin:
             )
             return
 
-        if self.variable_selector.currentIndex() <= 0:
+        if (
+            self.variable_selector.currentIndex() <= 0
+            or self.variable_selector.currentData() is None
+        ):
             QMessageBox.warning(
                 self.iface.mainWindow(),
                 "AquaScope Gauges",
@@ -595,7 +736,7 @@ class AquaScopePlugin:
 
         source = str(feature["source"] or "").strip()
         station_id = str(feature["station_id"] or "").strip()
-        variable = self.variable_selector.currentText()
+        variable = self.variable_selector.currentData()
 
         if not source or not station_id:
             QMessageBox.warning(
@@ -619,6 +760,13 @@ class AquaScopePlugin:
                 variable=variable,
             )
 
+        except ObservationNotFoundError:
+            self.observation_status.setText(
+                "No daily records were found for this gauge and variable."
+            )
+            self._update_fetch_button()
+            return
+
         except (ObservationError, ValueError) as exc:
             self.observation_status.setText(
                 f"Could not fetch observations: {exc}"
@@ -631,7 +779,14 @@ class AquaScopePlugin:
             self._update_fetch_button()
             return
 
-        unit = ARCHIVE_UNITS.get(variable, "SI units")
+        metadata = self.selected_observation_metadata.get(
+            variable,
+            {},
+        )
+        unit = (
+            metadata.get("unit")
+            or ARCHIVE_UNITS.get(variable, "SI units")
+        )
 
         self.observation_table.setHorizontalHeaderLabels(
             ["Date", f"Value ({unit})"]
@@ -666,9 +821,13 @@ class AquaScopePlugin:
             )
 
         self.observation_table.resizeColumnsToContents()
+
         self.observation_plot.set_data(
             records,
-            title=f"{variable.replace('_', ' ').title()} - {station_id}",
+            title=(
+                f"{variable.replace('_', ' ').title()} "
+                f"- {station_id}"
+            ),
             unit=unit,
         )
 

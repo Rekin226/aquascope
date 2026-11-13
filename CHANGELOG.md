@@ -19,6 +19,7 @@ All notable changes to AquaScope are documented here.
 - **Analyst step budget**: a tool call identical to an earlier successful one now reuses that result instead of running again, a failed call is retried when the model asks again, `run_python` can read earlier results as `tool_results`, and `AskResult.exhausted` records a run that used every step without answering (#750).
 - **Japan MLIT is not read** (#168). The Water Information Database's `robots.txt` disallows `/water-inf-app/` for every crawler (`Crawl-delay: 3600`) and its FAQ asks programmatic users to use the paid 水防災オープンデータ service instead, so `JapanMLITCollector.fetch_raw` raises `CollectorError` naming the disallow rather than calling the site; the registry and the catalogue mark the source as not offered. The ZIP and Shift_JIS parsing (four digit prefecture codes, `24:00` rows, `-9999`, the `属性` codes, `暂定フラグ`) stays tested for the day an allowed endpoint appears.
 - **Cite 1.2.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.2.0's Zenodo DOI (10.5281/zenodo.24125206).
+- **Taiwan Civil IoT reads again** (#176). The SensorThings water-resource service moved from `sta.ci.taiwan.gov.tw` to `sta.colife.org.tw`; `taiwan_civil_iot` now uses the new endpoint, and TLS verification is back on (`verify=False` removed), since the new host serves a valid certificate.
 
 ## [1.2.0] - 2026-11-11
 

@@ -146,11 +146,14 @@ def test_run_writes_the_snapshot_the_issue_and_the_manifest(monkeypatch, tmp_pat
     assert info["n_gauges"] == 1 and info["status_gauges"] == 2
 
 
-def test_run_stops_reading_records_at_half_the_time_budget(monkeypatch, tmp_path):
+@pytest.mark.parametrize("budget", [0, -1])
+def test_run_stops_reading_records_at_half_the_time_budget(monkeypatch, tmp_path, budget):
+    # A coarse clock may return the same tick for the start and the first read.
+    monkeypatch.setattr(fa.time, "monotonic", lambda: 0.0)
     monkeypatch.setattr(fa, "read_published_json", lambda path, repo_id=fa.DEFAULT_REPO: {})
     monkeypatch.setattr(fa, "read_published_rows", lambda path, repo_id=fa.DEFAULT_REPO: [])
     monkeypatch.setattr(fa, "gauge_record", lambda *a, **k: pytest.fail("no record past the budget"))
-    info = fa.run(tmp_path, manifest=MANIFEST, catalog=[], today=TODAY, workers=1, time_budget_s=-1)
+    info = fa.run(tmp_path, manifest=MANIFEST, catalog=[], today=TODAY, workers=1, time_budget_s=budget)
     assert info["dropped"] == {"time budget (records)": 3} and info["status_gauges"] == 0
 
 

@@ -490,23 +490,23 @@ def test_the_mcp_tool_is_registered():
     from aquascope import mcp_server
 
     assert callable(mcp_server.explain_view)
-    src = (ROOT / "aquascope" / "mcp_server.py").read_text()
+    src = (ROOT / "aquascope" / "mcp_server.py").read_text(encoding="utf-8")
     assert "server.tool()(explain_view)" in src
 
 
 def test_the_note_colours_are_the_pages():
-    now_core = (ROOT / "explorer" / "src" / "now-core.js").read_text()
+    now_core = (ROOT / "explorer" / "src" / "now-core.js").read_text(encoding="utf-8")
     for cid, (hex_, _words) in me.CLASS_COLOURS.items():
         assert re.search(f'id: "{cid}",[^}}]*color: "{hex_}"', now_core), cid
-    floods = (ROOT / "explorer" / "src" / "floods-ahead-core.js").read_text()
+    floods = (ROOT / "explorer" / "src" / "floods-ahead-core.js").read_text(encoding="utf-8")
     for rp, hex_ in me.FLOOD_COLOURS.items():
         assert f'{{ rp: {rp}, label: "{rp}-year", color: "{hex_}" }}' in floods
-    past = (ROOT / "explorer" / "src" / "floods-past-core.js").read_text()
+    past = (ROOT / "explorer" / "src" / "floods-past-core.js").read_text(encoding="utf-8")
     assert f'NEWS_COLOR = "{me.NEWS_COLOUR}"' in past and f'RADAR_COLOR = "{me.RADAR_COLOUR}"' in past
 
 
 def test_the_worker_runs_the_same_functions():
-    worker = (ROOT / "explorer" / "worker.js").read_text()
+    worker = (ROOT / "explorer" / "worker.js").read_text(encoding="utf-8")
     assert '"map_explain"' in worker.split("LITE_TYPES", 1)[1].split("\n", 1)[0]
     for fn in ("explain", "check_model_notes", "model_notes", "name_notes"):
         assert f"_me.{fn}(" in worker and hasattr(me, fn)

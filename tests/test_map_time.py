@@ -246,7 +246,8 @@ def test_the_explorer_carries_the_same_dated_layers_and_ranges():
                       tile: l.tiles[0], periods: l.periods || null }}));
     console.log(JSON.stringify(dated));
     """
-    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    out = subprocess.run(["node", "--input-type=module", "-e", script],
+                         capture_output=True, text=True, encoding="utf-8", check=True)
     js = {row["id"]: row for row in json.loads(out.stdout)}
     py = {lay["id"]: lay for lay in mt.DATED_LAYERS}
     assert set(js) == set(py), "every dated layer on the map is in aquascope.map_time, and only those"
@@ -271,7 +272,8 @@ def test_the_explorer_picks_the_same_grace_image_for_every_day():
     }}
     console.log(JSON.stringify(out));
     """
-    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=True)
+    out = subprocess.run(["node", "--input-type=module", "-e", script],
+                         capture_output=True, text=True, encoding="utf-8", check=True)
     js = json.loads(out.stdout)
     storage = mt._layer("storage")
     differ = [d for d, v in js.items() if v != (lambda img: img.isoformat() if img else None)(mt.image_for(storage, d))]

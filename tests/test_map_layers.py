@@ -161,8 +161,8 @@ def test_the_explorer_decodes_the_same_colours_and_lists_the_same_months():
     console.log(JSON.stringify({{ rgb: m.FILE_RGB, first: m.STATUS_FIRST, bucket: m.STATUS_BUCKET,
       prefix: m.STATUS_PREFIX, url: m.statusUrl("1990-01"), months: m.parseListing({json.dumps(LISTING)}).months }}));
     """
-    out = json.loads(subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True,
-                                    check=True).stdout)
+    out = json.loads(subprocess.run(["node", "--input-type=module", "-e", script],
+                                    capture_output=True, text=True, encoding="utf-8", check=True).stdout)
     assert out["rgb"] == [c["rgb"] for c in ml.STATUS_CLASSES]
     assert out["first"] == ml.STATUS_FIRST and out["bucket"] == ml.GEOGLOWS_BUCKET and out["prefix"] == ml.STATUS_PREFIX
     assert out["url"] == ml.status_url("1990-01")
@@ -328,8 +328,8 @@ def test_the_explorer_makes_the_same_shares_and_the_same_line(tmp_path):
     console.log(JSON.stringify({{ list: m.STATUS_REGIONS, share: m.HEADLINE_SHARE, cover: m.MIN_COVER, regions,
       line: m.statusHeadline("2026-09", regions), calm: m.statusHeadline("2001-07", calm) }}));
     """
-    out = json.loads(subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True,
-                                    check=True).stdout)
+    out = json.loads(subprocess.run(["node", "--input-type=module", "-e", script],
+                                    capture_output=True, text=True, encoding="utf-8", check=True).stdout)
     assert out["list"] == ml.STATUS_REGIONS
     assert out["share"] == ml.HEADLINE_SHARE and out["cover"] == ml.MIN_COVER
     py = ml.region_shares(world)

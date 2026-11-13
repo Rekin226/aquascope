@@ -199,7 +199,7 @@ def gather_evidence(source: str, error: str, diagnosis: str, *, repo_root: str |
                 "homepage": meta.homepage, "license": meta.license, "variables": list(meta.variables)}
     try:
         git_log = subprocess.run(["git", "log", "-5", "--format=%h %ad %s", "--date=short", "--", str(module_path)],
-                                 cwd=root, capture_output=True, text=True, timeout=30).stdout.strip()
+                                 cwd=root, capture_output=True, text=True, encoding="utf-8", timeout=30).stdout.strip()
     except Exception:  # noqa: BLE001
         git_log = ""
     probes: list[Probe] = []

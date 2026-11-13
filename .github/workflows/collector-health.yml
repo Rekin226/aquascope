@@ -68,3 +68,15 @@ jobs:
             --require "sweep=${{ steps.sweep.outcome }}" \
             --started "$JOB_STARTED" --run-url "$RUN_URL" \
             --issue "${{ github.event_name == 'schedule' }}"
+
+      # The sweep exits 1 only for a source that should have answered and did not:
+      # NEEDS_KEY (no secret on this runner) and the probes marked informational
+      # exit 0. Because the step above carries continue-on-error, that 1 was
+      # swallowed and a run with a broken data path stayed green. Re-raise it here,
+      # after the health record is written, the way harvest.yml does for its own
+      # silent failures.
+      - name: Fail when a source that should answer did not
+        if: always() && steps.sweep.outcome == 'failure'
+        run: |
+          echo "::error::A collector that should answer did not; see the summary and the collector-health issue."
+          exit 1

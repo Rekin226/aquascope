@@ -78,8 +78,10 @@ PROBES: dict[str, Probe] = {
         note="AHPS gauge on the Mississippi at St. Louis",
     ),
     "wqp": Probe(
-        kwargs={"state_code": "RI", "max_results": 5},
-        note="Water Quality Portal, Rhode Island",
+        # WQP wants `statecode` as FIPS ("US:44"), not the USPS abbreviation: "RI"
+        # comes back as a 400, which reads as a collector defect but is a bad probe.
+        kwargs={"state_code": "US:44", "max_results": 5},
+        note="Water Quality Portal, Rhode Island (FIPS state code US:44)",
     ),
     "camels_cl": Probe(
         kwargs={"station_ids": ["1001"], "start": "2010-01-01", "end": "2010-01-05"},

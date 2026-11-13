@@ -436,7 +436,7 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("water_level",),
         output_model="WaterLevelReading",
         license="unknown", redistributable=False,
-        attribution="India-WRIS (terms not yet verified)",
+        attribution="India-WRIS, Ministry of Jal Shakti, Government of India",
     ),
     # ── Oceania ─────────────────────────────────────────────────────────
     "bom": _s(

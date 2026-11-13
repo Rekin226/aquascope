@@ -856,7 +856,7 @@ def ask(
                 args = {}
             spec = specs.get(name)
             key = json.dumps([name, args], sort_keys=True, default=str)
-            attempts[name] += 1
+            attempts[key] += 1
             say(f"tool {name}({', '.join(f'{k}={v!r}' for k, v in args.items())})")
             payload: Any
             ok: bool
@@ -903,7 +903,14 @@ def ask(
         # that as a failure, and name the calls that ate the budget: a model
         # repeating one call is the usual reason (#750).
         result.exhausted = True
-        repeated = [(name, count) for name, count in attempts.most_common() if count > 1]
+        # Count repeated *calls*, not repeated tool names: three different
+        # run_python scripts are three calls, not one call three times.
+        repeated_counts: dict[str, int] = {}
+        for call_key, count in attempts.items():
+            if count > 1:
+                tool = json.loads(call_key)[0]
+                repeated_counts[tool] = repeated_counts.get(tool, 0) + count
+        repeated = sorted(repeated_counts.items(), key=lambda item: -item[1])
         tail = ""
         if repeated:
             tail = " Repeated calls: " + ", ".join(f"{name} x{count}" for name, count in repeated[:3]) + "."

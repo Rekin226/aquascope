@@ -82,6 +82,19 @@ def test_ask_stops_at_max_steps():
     assert "Repeated calls: describe_methods x2" in res.answer
 
 
+def test_different_arguments_are_not_reported_as_repeated_calls():
+    """Three lookups of different places are three calls, not one call three times (#750)."""
+    client = FakeChat([
+        [("find_stations", {"query": "Thames"})],
+        [("find_stations", {"query": "Severn"})],
+        [("find_stations", {"query": "Trent"})],
+    ])
+    with patch("aquascope.mcp_server.find_stations", return_value={"stations": []}):
+        res = analyst.ask("q", client=client, max_steps=3)
+    assert res.exhausted is True
+    assert "Repeated calls" not in res.answer
+
+
 def test_a_repeated_call_is_served_from_the_earlier_result():
     """#750: running the same call again spends a step and returns the same thing."""
     client = FakeChat([[("describe_methods", {})], [("describe_methods", {})], "done"])

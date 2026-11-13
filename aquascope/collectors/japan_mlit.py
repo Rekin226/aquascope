@@ -12,8 +12,8 @@ station search, and a ZIP of Shift_JIS CSV for the observations.
 Those endpoints are undocumented and the site asks automated clients to stay
 away: ``robots.txt`` disallows ``/water-inf-app/`` and sets
 ``Crawl-delay: 3600``, and the FAQ points at the paid 水防災オープンデータ
-service for programmatic access.  The collector therefore takes one request per
-hour, caches for a day, and never walks the country by default.
+service for programmatic access.  The collector therefore refuses to read the
+site at all; the parser below is kept for an allowed endpoint.
 """
 
 from __future__ import annotations
@@ -35,22 +35,6 @@ from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www1.river.go.jp/water-inf-app/api/"
-
-#: The SPA sends these with its own fetches; without them every path under
-#: ``/water-inf-app/`` answers 403, including the JSON code tables.
-REQUEST_HEADERS: dict[str, str] = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-    ),
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
-    "Referer": "https://www1.river.go.jp/search/obs",
-    "Sec-Fetch-Site": "same-origin",
-    "Sec-Fetch-Mode": "cors",
-    "Sec-Fetch-Dest": "empty",
-    "Origin": "https://www1.river.go.jp",
-}
 
 # ---------------------------------------------------------------------------
 # Prefecture codes — the four digit codes from ``ken.json``
@@ -289,9 +273,11 @@ class JapanMLITCollector(BaseCollector):
     Results are normalised to ``WaterQualitySample`` records with
     ``source = DataSource.JAPAN_MLIT``.
 
-    The site allows one request an hour (``Crawl-delay: 3600``), so a caller that
-    asks for several stations and several months is paced accordingly; the cache
-    keeps repeated reads of the same month off the network.
+    The collector does not read the rebuilt site: its robots.txt disallows
+    ``/water-inf-app/`` and asks automated clients to use the licensed
+    水防災オープンデータ service instead.  ``fetch_raw`` always raises
+    :class:`CollectorError`; the parser and normaliser remain for an allowed
+    endpoint.
     """
 
     name: str = "japan_mlit"
@@ -316,7 +302,6 @@ class JapanMLITCollector(BaseCollector):
         parameter: str = "water_level",
         start_date: str | None = None,
         end_date: str | None = None,
-        max_stations: int = 10,
         **kwargs: Any,
     ) -> list[dict]:
         """

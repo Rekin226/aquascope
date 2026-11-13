@@ -534,7 +534,7 @@ def _gh(*args: str, dry_run: bool = False) -> str:
     if dry_run:
         print("DRY RUN: gh", " ".join(args))
         return ""
-    out = subprocess.run(["gh", *args], check=True, capture_output=True, text=True)
+    out = subprocess.run(["gh", *args], check=True, capture_output=True, text=True, encoding="utf-8")
     return out.stdout.strip()
 
 

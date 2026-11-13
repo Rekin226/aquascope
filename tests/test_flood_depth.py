@@ -245,8 +245,8 @@ def test_the_explorer_keeps_the_same_tiles_radius_and_ramp():
       radius: [3, 5, 6, 7, 12, null].map(m.reachRadiusKm), map: [2, 5, 10, 25, 50, 100].map(m.depthReturnPeriod),
       colors: [0.01, 0.5, 1, 2, 7, 50].map(m.rampColor) }}));
     """
-    out = json.loads(subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True,
-                                    check=True).stdout)
+    out = json.loads(subprocess.run(["node", "--input-type=module", "-e", script],
+                                    capture_output=True, text=True, encoding="utf-8", check=True).stdout)
     assert out["tiles"] == list(fd.DEPTH_TILES)
     assert out["ramp"] == fd.RAMP
     assert out["base"] == fd.DEPTH_BASE and out["rps"] == list(fd.DEPTH_RETURN_PERIODS) and out["label"] == fd.LABEL

@@ -8,7 +8,7 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Fixed
-- **Analyst step budget**: a tool call identical to an earlier one now reuses that result instead of running again, `run_python` can read earlier results as `tool_results`, and `AskResult.exhausted` records a run that used every step without answering (#750).
+- **Analyst step budget**: a tool call identical to an earlier successful one now reuses that result instead of running again, a failed call is retried when the model asks again, `run_python` can read earlier results as `tool_results`, and `AskResult.exhausted` records a run that used every step without answering (#750).
 - **Cite 1.2.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.2.0's Zenodo DOI (10.5281/zenodo.24125206).
 
 ## [1.2.0] - 2026-11-11

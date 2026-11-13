@@ -785,7 +785,7 @@ def ask(
     _SANDBOX_DATA.clear()
     _SANDBOX_DATA.update(data or {})
     seen: list[dict[str, Any]] = []          # what each tool actually returned, for the checks
-    executed: dict[str, tuple[int, Any, bool]] = {}  # canonical call -> (step, payload, ok)
+    executed: dict[str, tuple[int, Any, bool]] = {}  # successful canonical call -> (step, payload, ok)
     attempts: Counter[str] = Counter()       # tool name -> times the model asked for it
 
     budget = int(context_chars) if context_chars else context_budget(cfg["provider"])
@@ -882,7 +882,11 @@ def ask(
                     except Exception as exc:  # noqa: BLE001 - the model gets to see the failure and try again
                         payload = {"error": f"{type(exc).__name__}: {exc}"}
                         ok = False
-                    executed[key] = (step, payload, ok)
+                    if ok:
+                        # A failure is often transient (a 429, a timeout). Caching
+                        # it would hand the model the same error for a retry with
+                        # the same arguments, so only successes are remembered.
+                        executed[key] = (step, payload, ok)
                 _harvest_provenance(name, args, payload, result)
                 text = json.dumps(payload, ensure_ascii=False, default=str)
             seen.append({"name": name, "arguments": args, "payload": payload, "ok": ok})

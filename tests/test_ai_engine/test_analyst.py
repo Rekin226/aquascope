@@ -115,6 +115,31 @@ def test_run_python_sees_the_earlier_tool_results():
     assert ran["ok"] is True and ran["result"] == ["describe_methods"]
 
 
+def test_a_failed_call_is_retried_instead_of_served_from_the_cache():
+    """#751: caching a transient failure would pin the model to the error forever."""
+    client = FakeChat([
+        [("find_stations", {"query": "Kingston"})],
+        [("find_stations", {"query": "Kingston"})],
+        "done",
+    ])
+    calls = {"n": 0}
+
+    def find(query):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise TimeoutError("timed out")
+        return {"sites": [query]}
+
+    with patch("aquascope.mcp_server.find_stations", side_effect=find):
+        res = analyst.ask("q", client=client)
+    assert calls["n"] == 2 and res.steps == 3
+    assert [c.ok for c in res.tool_calls] == [False, True]
+    assert "timed out" in res.tool_calls[0].summary
+    tool_messages = [m for m in client.requests[2]["messages"] if m.get("role") == "tool"]
+    retried = json.loads(tool_messages[-1]["content"])
+    assert "cached" not in retried and retried == {"sites": ["Kingston"]}
+
+
 def test_a_different_argument_list_is_not_served_from_the_cache():
     """#750: the cache keys on the arguments, so another query is a real call."""
     client = FakeChat([

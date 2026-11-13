@@ -712,6 +712,10 @@ def context_budget(provider: str | None) -> int:
     The default is sized for free tiers that meter tokens per minute. A
     provider with a large window says so in the registry (``context_chars``)
     and gets to keep its tool results whole.
+
+    This is a trimming budget, not the model's context window: do not compare a
+    one-shot prompt with it to decide whether the request can be sent
+    (:func:`aquascope.ai_engine.providers.context_limit` is that answer).
     """
     spec = _REGISTRY.get(provider or "")
     return spec.context_chars if spec is not None and spec.context_chars else MAX_CONTEXT_CHARS

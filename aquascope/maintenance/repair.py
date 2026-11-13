@@ -62,14 +62,27 @@ class PromptTooLargeError(RuntimeError):
 
 
 def _explain_too_large(chars: int, provider: str | None, model: str, *, status: int | None = None) -> str:
-    """Say why the prompt would not fit, instead of letting the endpoint answer 413."""
-    from aquascope.ai_engine.analyst import context_budget
+    """Say why the prompt would not fit, instead of letting the endpoint answer 413.
 
-    budget = context_budget(provider)
-    where = f"the provider answered {status}" if status is not None else "the model was not called"
-    return (f"the repair prompt is {chars:,} characters (~{chars // 4:,} tokens), over the {budget:,}-character "
-            f"limit for {model} ({provider or 'the default provider'}); {where}. Point AQUASCOPE_LLM_* at a "
-            "larger-window model (Anthropic has a 200k-character window), or trim the collector or its tests.")
+    The ceiling is the model's context window
+    (:func:`aquascope.ai_engine.providers.context_limit`), never the Analyst's
+    trimming budget: the latter is 24,000 characters for most providers, which is
+    a fraction of what they actually accept.
+    """
+    from aquascope.ai_engine.providers import context_limit
+
+    limit = context_limit(provider)
+    size = f"the repair prompt is {chars:,} characters (~{chars // 4:,} tokens)"
+    where = f"for {model} ({provider or 'the default provider'})"
+    advice = ("Point AQUASCOPE_LLM_* at a larger-window model (Anthropic's window is 200k tokens), or trim the "
+              "collector or its tests.")
+    if status is None:
+        # Only reached from the pre-check, which runs when the window is known.
+        ceiling = (f"the ~{limit:,}-character context window this module estimates" if limit is not None
+                   else "the known context window")
+        return f"{size}, over {ceiling} {where}; the model was not called. {advice}"
+    return (f"{size}; the endpoint rejected it as too large (HTTP {status}) {where}, so the model's window is "
+            f"smaller than the request. {advice}")
 
 
 @dataclass
@@ -265,19 +278,24 @@ def propose_repair(evidence: Evidence, *, client: Any = None, model: str | None 
                    api_key: str | None = None, base_url: str | None = None) -> Proposal:
     """One model call over the evidence; returns a parsed :class:`Proposal` (``no_fix`` on any parse trouble).
 
-    Raises :class:`PromptTooLargeError` without calling the model when the evidence cannot fit the provider's
-    window, so the health issue says why instead of reporting a bare 413.
+    Raises :class:`PromptTooLargeError` without calling the model only when the provider publishes a context
+    window and the evidence is over it; an unknown window is no reason to refuse, so the endpoint decides and a
+    413 is turned into the same explanation.
     """
-    from aquascope.ai_engine.analyst import context_budget, resolve_llm
+    from aquascope.ai_engine.analyst import resolve_llm
     from aquascope.ai_engine.llm_transport import LLMHTTPError, make_client
+    from aquascope.ai_engine.providers import context_limit
 
-    cfg = {"model": model or "unknown"}
+    # With a client the caller brings the transport; the provider still names the
+    # model, because its window decides whether the prompt is worth sending.
+    cfg: dict[str, Any] = {"provider": provider, "model": model or "unknown"}
     if client is None:
         cfg = resolve_llm(provider, model, api_key, base_url)
         client = make_client(cfg["api_key"], cfg["base_url"], provider=cfg["provider"])
     prompt = evidence.to_prompt()
     chars = len(prompt) + len(SYSTEM_PROMPT)
-    if chars > context_budget(cfg.get("provider")):
+    limit = context_limit(cfg.get("provider"))
+    if limit is not None and chars > limit:
         raise PromptTooLargeError(_explain_too_large(chars, cfg.get("provider"), str(cfg["model"])))
     try:
         response = client.chat.completions.create(

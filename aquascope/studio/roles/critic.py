@@ -37,6 +37,8 @@ CHECK_FIXES: dict[str, str] = {
                               "otherwise; keep the p-value as the test reported it.",
     "units_are_named": "Name the unit of the record next to the numbers.",
     "record_is_named": "Name the station or record the numbers come from.",
+    "river_matches_the_question": "Use a gauge on the river the question names, or say the record is on a "
+                                  "different river.",
     "findings_resolve": "Drop or re-anchor the findings whose basis paths point at no result.",
     "decision_in_answer": "Open the answer with the decision's value, its band and its grade word.",
     "stationarity_matches_the_maxima": "Say what the Mann-Kendall test on the annual maxima found, and treat the "

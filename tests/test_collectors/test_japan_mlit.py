@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import zipfile
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,34 +15,54 @@ from aquascope.collectors.japan_mlit import (
     PREFECTURE_CODES,
     QUALITY_STANDARDS_JAPAN,
     JapanMLITCollector,
+    month_range,
+    parse_datetime,
+    parse_export,
 )
 from aquascope.schemas.water_data import DataSource
 
+SAMPLE_CSV = (
+    "日時,データ,属性,暫定フラグ\r\n"
+    "2019/08/01 01:00,0.06,0,\r\n"
+    "2019/08/01 02:00,-9999,1,\r\n"
+    "2019/08/01 03:00,0.07,0,*\r\n"
+    "2019/08/01 04:00,0.09,3,\r\n"
+    "2019/08/01 24:00,0.10,0,\r\n"
+)
+
+SAMPLE_STATION = {
+    "id": "303031283301030",
+    "name_data": "高砂",
+    "suikei_name_data": "利根川",
+    "wlatitude": 36.133,
+    "wlongitude": 139.717,
+}
+
 SAMPLE_RAW = [
     {
-        "station_code": "305041281005030",
+        "station_id": "305041281005030",
         "station_name": "利根川 栗橋",
-        "parameter": "水位",
+        "parameter": "water_level",
         "value": 3.45,
         "unit": "m",
         "datetime": "2023-07-15T10:00:00",
         "latitude": 36.133,
         "longitude": 139.717,
-        "river_system": "利根川",
+        "river": "利根川",
     },
     {
-        "station_code": "305041281005031",
+        "station_id": "305041281005031",
         "station_name": "石狩川 旭橋",
-        "parameter": "流量",
+        "parameter": "discharge",
         "value": 125.8,
         "unit": "m3/s",
         "datetime": "2023-07-15T12:00:00",
         "latitude": 43.770,
         "longitude": 142.370,
-        "river_system": "石狩川",
+        "river": "石狩川",
     },
     {
-        "station_code": "WQ001",
+        "station_id": "WQ001",
         "station_name": "淀川 枚方",
         "parameter": "pH",
         "value": 7.2,
@@ -48,10 +70,10 @@ SAMPLE_RAW = [
         "datetime": "2023-08-01T09:00:00",
         "latitude": 34.816,
         "longitude": 135.649,
-        "river_system": "淀川",
+        "river": "淀川",
     },
     {
-        "station_code": "WQ002",
+        "station_id": "WQ002",
         "station_name": "信濃川 大手大橋",
         "parameter": "DO",
         "value": 8.5,
@@ -59,28 +81,44 @@ SAMPLE_RAW = [
         "datetime": "2023-08-01T10:00:00",
         "latitude": 37.900,
         "longitude": 139.020,
-        "river_system": "信濃川",
+        "river": "信濃川",
     },
 ]
 
 SAMPLE_RAW_SKIP = [
     {
-        "station_code": "SKIP01",
+        "station_id": "SKIP01",
         "station_name": "test",
-        "parameter": "水位",
+        "parameter": "water_level",
         "value": "ND",
         "unit": "m",
         "datetime": "2023-01-01T00:00:00",
     },
     {
-        "station_code": "SKIP02",
+        "station_id": "SKIP02",
         "station_name": "test",
-        "parameter": "水位",
+        "parameter": "water_level",
         "value": "",
         "unit": "m",
         "datetime": "2023-01-01T00:00:00",
     },
+    {
+        "station_id": "SKIP03",
+        "station_name": "test",
+        "parameter": "water_level",
+        "value": "-9999",
+        "unit": "m",
+        "datetime": "2023-01-01T00:00:00",
+    },
 ]
+
+
+def make_zip(csv_text: str, name: str = "303031283301030_hv.csv") -> bytes:
+    """Build a Shift_JIS export the way the site serves one."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr(name, csv_text.encode("cp932"))
+    return buffer.getvalue()
 
 
 class TestJapanMLITInit:
@@ -90,8 +128,81 @@ class TestJapanMLITInit:
     def test_collector_name(self):
         assert self.collector.name == "japan_mlit"
 
-    def test_base_url(self):
-        assert self.collector.BASE_URL == "http://www1.river.go.jp/cgi-bin/"
+    def test_base_url_is_the_spa_api(self):
+        assert self.collector.BASE_URL == "https://www1.river.go.jp/water-inf-app/api/"
+
+
+class TestParseDatetime:
+    def test_plain_timestamp(self):
+        assert parse_datetime("2019/08/01 01:00").isoformat() == "2019-08-01T01:00:00"
+
+    def test_24_00_rolls_over_to_the_next_day(self):
+        assert parse_datetime("2019/08/31 24:00").isoformat() == "2019-09-01T00:00:00"
+
+    def test_empty_is_none(self):
+        assert parse_datetime("") is None
+        assert parse_datetime("   ") is None
+
+    def test_garbage_is_none(self):
+        assert parse_datetime("not a date") is None
+
+
+class TestMonthRange:
+    def test_single_month(self):
+        assert month_range("2019-08-01", None) == ["2019-08"]
+
+    def test_range_spans_months(self):
+        assert month_range("2019-01-01", "2019-03-31") == ["2019-01", "2019-02", "2019-03"]
+
+    def test_range_crosses_year(self):
+        assert month_range("2019-11", "2020-02") == ["2019-11", "2019-12", "2020-01", "2020-02"]
+
+    def test_reversed_range_raises(self):
+        with pytest.raises(ValueError, match="before"):
+            month_range("2020-01-01", "2019-01-01")
+
+    def test_no_dates_defaults_to_this_month(self):
+        months = month_range(None, None)
+        assert len(months) == 1
+        assert len(months[0]) == 7
+
+
+class TestParseExport:
+    def test_reads_rows_and_skips_missing_values(self):
+        rows = parse_export(make_zip(SAMPLE_CSV), station=SAMPLE_STATION, parameter="water_level", unit="m")
+        values = [row["value"] for row in rows]
+        assert values == [0.06, 0.07, 0.10]
+
+    def test_skips_invalid_attribute_codes(self):
+        rows = parse_export(make_zip(SAMPLE_CSV), station=SAMPLE_STATION, parameter="water_level", unit="m")
+        assert all(row["attribute"] == "0" for row in rows)
+
+    def test_marks_provisional_rows(self):
+        rows = parse_export(make_zip(SAMPLE_CSV), station=SAMPLE_STATION, parameter="water_level", unit="m")
+        provisional = [row["value"] for row in rows if row["provisional"]]
+        assert provisional == [0.07]
+
+    def test_carries_station_metadata(self):
+        rows = parse_export(make_zip(SAMPLE_CSV), station=SAMPLE_STATION, parameter="water_level", unit="m")
+        assert rows[0]["station_id"] == "303031283301030"
+        assert rows[0]["station_name"] == "高砂"
+        assert rows[0]["river"] == "利根川"
+        assert rows[0]["latitude"] == 36.133
+
+    def test_empty_csv_yields_no_rows(self):
+        body = make_zip("日時,データ,属性,暫定フラグ\r\n")
+        rows = parse_export(body, station=SAMPLE_STATION, parameter="water_level", unit="m")
+        assert rows == []
+
+    def test_non_zip_body_yields_no_rows(self):
+        assert parse_export(b"<html>403</html>", station=SAMPLE_STATION, parameter="water_level", unit="m") == []
+
+    def test_zip_without_csv_yields_no_rows(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("凡例.txt", "00:00は前日の24:00とする".encode("cp932"))
+        rows = parse_export(buffer.getvalue(), station=SAMPLE_STATION, parameter="water_level", unit="m")
+        assert rows == []
 
 
 class TestJapanMLITNormalise:
@@ -99,104 +210,86 @@ class TestJapanMLITNormalise:
         self.collector = JapanMLITCollector()
 
     def test_normalise_produces_correct_count(self):
-        records = self.collector.normalise(SAMPLE_RAW)
-        assert len(records) == 4
+        assert len(self.collector.normalise(SAMPLE_RAW)) == 4
 
-    def test_normalise_maps_japanese_to_english(self):
+    def test_normalise_keeps_parameter_names(self):
         records = self.collector.normalise(SAMPLE_RAW)
         assert records[0].parameter == "water_level"
         assert records[1].parameter == "discharge"
-        assert records[0].source.value == "japan_mlit"
 
     def test_normalise_sets_correct_source(self):
-        records = self.collector.normalise(SAMPLE_RAW)
-        for r in records:
-            assert r.source == DataSource.JAPAN_MLIT
+        for record in self.collector.normalise(SAMPLE_RAW):
+            assert record.source == DataSource.JAPAN_MLIT
 
     def test_normalise_parses_location(self):
-        records = self.collector.normalise(SAMPLE_RAW)
-        rec = records[0]
-        assert rec.location is not None
-        assert abs(rec.location.latitude - 36.133) < 0.01
-        assert abs(rec.location.longitude - 139.717) < 0.01
+        record = self.collector.normalise(SAMPLE_RAW)[0]
+        assert record.location is not None
+        assert abs(record.location.latitude - 36.133) < 0.01
+        assert abs(record.location.longitude - 139.717) < 0.01
 
     def test_normalise_maps_river_system(self):
         records = self.collector.normalise(SAMPLE_RAW)
         assert records[0].basin == "Tone"
         assert records[1].basin == "Ishikari"
 
-    def test_normalise_preserves_station_code(self):
-        records = self.collector.normalise(SAMPLE_RAW)
-        assert records[0].station_id == "305041281005030"
+    def test_normalise_preserves_station_id(self):
+        assert self.collector.normalise(SAMPLE_RAW)[0].station_id == "305041281005030"
 
-    def test_normalise_skips_nd_and_empty(self):
-        records = self.collector.normalise(SAMPLE_RAW_SKIP)
-        assert len(records) == 0
+    def test_normalise_skips_nd_empty_and_sentinel(self):
+        assert self.collector.normalise(SAMPLE_RAW_SKIP) == []
 
     def test_normalise_empty_input(self):
-        records = self.collector.normalise([])
-        assert records == []
+        assert self.collector.normalise([]) == []
 
     def test_normalise_keeps_passthrough_params(self):
-        records = self.collector.normalise(SAMPLE_RAW)
-        params = {r.parameter for r in records}
+        params = {record.parameter for record in self.collector.normalise(SAMPLE_RAW)}
         assert "pH" in params
         assert "DO" in params
 
 
 class TestJapanMLITFetchRaw:
-    def setup_method(self):
-        self.collector = JapanMLITCollector()
-
-    def test_fetch_raw_invalid_parameter(self):
-        try:
-            self.collector.fetch_raw(parameter="invalid")
-            assert False, "Should have raised ValueError"
-        except ValueError as exc:
-            assert "Unsupported parameter" in str(exc)
-
-    def test_fetch_raw_handles_connection_error(self):
-        mock_client = MagicMock()
-        mock_client.get_json.side_effect = ConnectionError("test error")
-        collector = JapanMLITCollector(client=mock_client)
+    def test_refuses_and_names_the_robots_disallow(self):
+        client = MagicMock()
         with pytest.raises(CollectorError) as exc_info:
-            collector.fetch_raw(station_id="12345")
+            JapanMLITCollector(client=client).fetch_raw(prefecture="Tokyo")
+
+        message = str(exc_info.value)
+        assert "robots.txt disallows /water-inf-app/" in message
+        assert "水防災オープンデータ" in message
         assert exc_info.value.source == "japan_mlit"
-        assert isinstance(exc_info.value.cause, ConnectionError)
+        assert "water-inf-app" in exc_info.value.url
+        # The site is never called, not even the station search.
+        client.get_json.assert_not_called()
+        client.get_bytes.assert_not_called()
 
-    def test_fetch_raw_builds_station_param(self):
-        mock_client = MagicMock()
-        mock_client.get_json.return_value = []
-        collector = JapanMLITCollector(client=mock_client)
-        collector.fetch_raw(station_id="305041281005030")
-        call_args = mock_client.get_json.call_args
-        assert call_args[1]["params"]["StationID"] == "305041281005030"
-
-    def test_fetch_raw_builds_date_params(self):
-        mock_client = MagicMock()
-        mock_client.get_json.return_value = []
-        collector = JapanMLITCollector(client=mock_client)
-        collector.fetch_raw(start_date="2023-01-01", end_date="2023-12-31")
-        call_args = mock_client.get_json.call_args
-        assert call_args[1]["params"]["StartDate"] == "20230101"
-        assert call_args[1]["params"]["EndDate"] == "20231231"
+    def test_refuses_a_station_id_too(self):
+        client = MagicMock()
+        with pytest.raises(CollectorError):
+            JapanMLITCollector(client=client).fetch_raw(station_id="303031283301030")
+        client.get_bytes.assert_not_called()
 
 
 class TestPrefectureCodes:
     def test_tokyo_code(self):
-        assert PREFECTURE_CODES["Tokyo"] == "13"
+        assert PREFECTURE_CODES["Tokyo"] == "1301"
 
     def test_osaka_code(self):
-        assert PREFECTURE_CODES["Osaka"] == "27"
+        assert PREFECTURE_CODES["Osaka"] == "2701"
 
     def test_hokkaido_code(self):
-        assert PREFECTURE_CODES["Hokkaido"] == "01"
+        assert PREFECTURE_CODES["Hokkaido"] == "0101"
 
     def test_aichi_code(self):
-        assert PREFECTURE_CODES["Aichi"] == "23"
+        assert PREFECTURE_CODES["Aichi"] == "2301"
 
     def test_fukuoka_code(self):
-        assert PREFECTURE_CODES["Fukuoka"] == "40"
+        assert PREFECTURE_CODES["Fukuoka"] == "4001"
+
+    def test_all_codes_are_four_digits(self):
+        assert all(len(code) == 4 and code.isdigit() for code in PREFECTURE_CODES.values())
+
+    def test_covers_all_forty_seven_prefectures(self):
+        assert len(PREFECTURE_CODES) == 47
 
 
 class TestParameterMapJA:
@@ -233,5 +326,5 @@ class TestQualityStandards:
 
     def test_bod_increases_with_worse_grade(self):
         grades = ["AA", "A", "B", "C", "D", "E"]
-        bod_values = [QUALITY_STANDARDS_JAPAN[g]["BOD"] for g in grades]
+        bod_values = [QUALITY_STANDARDS_JAPAN[grade]["BOD"] for grade in grades]
         assert bod_values == sorted(bod_values)

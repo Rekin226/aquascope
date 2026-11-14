@@ -332,7 +332,9 @@ def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, max_gauges: int = DEFAU
 
     def record(g: dict[str, Any]) -> tuple[tuple[str, str], Any, str]:
         # Half the budget at most for reading records, so a slow agency leaves time for the forecasts.
-        if time.monotonic() - started > time_budget_s / 2:
+        # ``>=`` so a zero budget stops before the first read: Windows' monotonic clock can be
+        # too coarse for ``>`` to ever be true when the loop starts within the same tick.
+        if time.monotonic() - started >= time_budget_s / 2:
             return (g["source"], g["station_id"]), None, "time budget"
         try:
             s, note = gauge_record(g["source"], g["station_id"], today=today)

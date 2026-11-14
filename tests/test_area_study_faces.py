@@ -42,7 +42,7 @@ def test_cli_area_study_passes_the_box_and_prints_the_headline(monkeypatch, caps
     assert out.startswith("2 of 3 gauges studied")
     assert "usgs/A: 40.0 yr, Q100 812.5 m3/s, trend up, p = 0.012" in out
     assert "usgs/C: skipped (live-fetch cap)" in out
-    assert out_csv.read_text().startswith("source,station_id")
+    assert out_csv.read_text(encoding="utf-8").startswith("source,station_id")
 
 
 def test_cli_area_study_with_stations_and_json(monkeypatch, capsys):

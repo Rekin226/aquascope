@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import Any
 
 from aquascope.collectors.base import BaseCollector, CollectorError
+from aquascope.collectors.usgs import US_STATE_CODES
 from aquascope.schemas.water_data import (
     DataSource,
     GeoLocation,
@@ -31,6 +32,35 @@ WQP_BASE = "https://www.waterqualitydata.us/wqx3"
 # We use the "narrow" profile for all queries since it captures every field
 # required by ``normalise()``
 WQP_PROFILE = "narrow"
+
+
+def _normalise_wqp_state(code: str) -> str:
+    """Translate an accepted state form into the FIPS code WQP expects.
+
+    WQP only understands ``US:NN``. A postal abbreviation (``"RI"``) or a bare
+    FIPS number (``"44"``) is what callers naturally pass, and it used to be
+    forwarded unchanged, so WQP answered with a bare HTTP 400 that said
+    nothing about the format it wanted.
+
+    Raises:
+        ValueError: When the value is not one of the accepted forms. Raised
+            before any request is sent.
+    """
+    value = code.strip()
+    if ":" in value:
+        prefix, _, digits = value.partition(":")
+        if prefix.strip().upper() == "US" and digits.strip().isdigit():
+            return f"US:{int(digits):02d}"
+    elif value.isdigit():
+        return f"US:{int(value):02d}"
+    else:
+        fips = US_STATE_CODES.get(value.upper())
+        if fips:
+            return f"US:{fips}"
+    raise ValueError(
+        f"Unrecognised WQP state code {code!r}: expected a postal abbreviation such as "
+        f'"RI", a FIPS code such as "44", or the "US:44" form WQP itself uses.'
+    )
 
 
 class WQPCollector(BaseCollector):
@@ -73,7 +103,8 @@ class WQPCollector(BaseCollector):
         Parameters
         ----------
         state_code : str | None
-            e.g. ``"US:06"`` for California.
+            A postal abbreviation (``"RI"``), a FIPS code (``"44"``) or WQP's own
+            ``"US:44"`` form; all three are normalised to ``US:NN``.
         characteristic_name : str | Sequence[str] | None
             e.g. ``"Dissolved oxygen (DO)"``, ``"pH"``; a list asks for several at once.
         site_id : str | Sequence[str] | None
@@ -94,7 +125,7 @@ class WQPCollector(BaseCollector):
             "dataProfile": WQP_PROFILE,
         }
         if state_code:
-            params["statecode"] = state_code
+            params["statecode"] = _normalise_wqp_state(state_code)
         if characteristic_name:
             params["characteristicName"] = (
                 list(characteristic_name) if isinstance(characteristic_name, (list, tuple)) else characteristic_name

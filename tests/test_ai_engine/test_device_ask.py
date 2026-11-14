@@ -369,3 +369,10 @@ def test_wanted_list_reads_the_count() -> None:
     assert wanted_list("the 3 nearest discharge stations to Paris") == 3
     assert wanted_list("Which gauges are on the Rhine?") == 2
     assert wanted_list("What is the 100-year flood at this gauge?") == 0
+
+
+def test_a_flow_written_as_a_singular_cumec_must_be_a_flow() -> None:
+    # "0.82" is the trend's p-value: written as a discharge in either spelling it is not a flow.
+    res = [_result("analyze_station", _potomac_payload())]
+    assert not lock_answer("The gauge's discharge is 0.82 cumec.", res, POTOMAC_WORDS)["ok"]
+    assert not lock_answer("The gauge's discharge is 0.82 cumecs.", res, POTOMAC_WORDS)["ok"]

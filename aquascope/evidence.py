@@ -153,7 +153,7 @@ def _daily(s: Any) -> Any:
 def _is_cms(unit: str) -> bool:
     """True for the spellings of cubic metres per second the collectors use (m3/s, m³/s, cms, ...)."""
     u = str(unit or "").lower().replace(" ", "")
-    return u in {"m3/s", "m³/s", "m^3/s", "m3s-1", "m3.s-1", "cms", "cumecs"}
+    return u in {"m3/s", "m³/s", "m^3/s", "m3s-1", "m3.s-1", "cms", "cumec", "cumecs"}
 
 
 def _label(model: str) -> str:

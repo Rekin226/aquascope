@@ -347,7 +347,12 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("water_level", "precipitation", "discharge"),
         output_model="WaterQualitySample",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Water Resources Agency, Ministry of Economic Affairs (Open Government Data License 1.0)",
+        attribution=(
+            "經濟部水利署 2017 [防災資訊服務網]；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之 (Water Resources Agency, MOEA; "
+            "Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "taiwan_wra_iot": _s(
         key="taiwan_wra_iot", label="Taiwan WRA IoT", region="Taiwan",

@@ -27,6 +27,12 @@ from pathlib import Path
 __all__ = ["PRICES", "PROVIDERS", "Provider", "as_json", "default_model", "env_var", "price_for", "provider_ids",
            "usd_for", "write_json"]
 
+#: Characters per token used to turn a model's published window (tokens) into the
+#: character ceiling a caller can compare a prompt with. Code and prose run close
+#: to four, and under-counting the tokens keeps an early refusal from firing for a
+#: prompt that would actually fit: the endpoint's own 413 stays the final judge.
+CHARS_PER_TOKEN = 4
+
 
 @dataclass(frozen=True)
 class Provider:
@@ -49,7 +55,16 @@ class Provider:
     api: str = "openai"
     #: How much conversation (characters) the Analyst may keep before trimming old
     #: tool results. None means the conservative free-tier default in the loop.
+    #: This is a trimming budget, NOT the model's context window: it is sized for
+    #: what a free tier will accept in one request, and on every provider but
+    #: Anthropic it is far below the window. Use ``context_window`` (and
+    #: :func:`context_limit`) when the question is whether a prompt fits at all.
     context_chars: int | None = None
+    #: The model's real context window, in tokens, when the id above publishes one.
+    #: This is what decides whether a one-shot prompt (a repair, a benchmark run)
+    #: can be sent at all. None means unknown: callers must not guess a number and
+    #: must let the endpoint's 413 be the answer.
+    context_window: int | None = None
 
 
 PROVIDERS: dict[str, Provider] = {
@@ -64,6 +79,7 @@ PROVIDERS: dict[str, Provider] = {
         env="GROQ_API_KEY",
         free="Free tier: about 1,000 requests a day, 8k tokens a minute.",
         signup="https://console.groq.com/keys",
+        context_window=131_072,
     ),
     "anthropic": Provider(
         id="anthropic",
@@ -77,8 +93,10 @@ PROVIDERS: dict[str, Provider] = {
              "several need a workspace id header the page does not ask for.",
         api="anthropic",
         # Roughly 50k tokens: plenty for a tool loop, a fraction of the window,
-        # and old tool results stop being trimmed to 400 characters.
+        # and old tool results stop being trimmed to 400 characters. A trimming
+        # budget, so it is deliberately smaller than the 200k-token window below.
         context_chars=200_000,
+        context_window=200_000,
     ),
     "huggingface": Provider(
         id="huggingface",
@@ -89,6 +107,7 @@ PROVIDERS: dict[str, Provider] = {
         env="HF_TOKEN",
         free="Free accounts get a small monthly credit on Inference Providers.",
         signup="https://huggingface.co/settings/tokens",
+        context_window=131_072,
     ),
     "openai": Provider(
         id="openai",
@@ -98,6 +117,7 @@ PROVIDERS: dict[str, Provider] = {
         models=["gpt-4o-mini", "gpt-4o"],
         env="OPENAI_API_KEY",
         signup="https://platform.openai.com/api-keys",
+        context_window=128_000,
     ),
     "mistral": Provider(
         id="mistral",
@@ -107,6 +127,7 @@ PROVIDERS: dict[str, Provider] = {
         models=["mistral-small-latest", "mistral-large-latest"],
         env="MISTRAL_API_KEY",
         signup="https://console.mistral.ai/api-keys/",
+        context_window=128_000,
     ),
     "openrouter": Provider(
         id="openrouter",
@@ -117,6 +138,7 @@ PROVIDERS: dict[str, Provider] = {
         env="OPENROUTER_API_KEY",
         free="Models whose id ends in `:free` cost nothing, with a small daily cap.",
         signup="https://openrouter.ai/keys",
+        context_window=128_000,
     ),
     "ollama": Provider(
         id="ollama",
@@ -128,6 +150,7 @@ PROVIDERS: dict[str, Provider] = {
         free="Runs on your own machine, so nothing leaves it.",
         browser=False,
         note="Needs `ollama serve` on this machine; a page served over HTTPS cannot reach it.",
+        context_window=32_768,
     ),
     "nvidia": Provider(
         id="nvidia",
@@ -140,6 +163,7 @@ PROVIDERS: dict[str, Provider] = {
         signup="https://build.nvidia.com",
         browser=False,
         note="NVIDIA Build endpoints do not support browser CORS; use from the CLI or behind a proxy.",
+        context_window=131_072,
     ),
 }
 
@@ -187,6 +211,23 @@ def provider_ids(*, browser_only: bool = False) -> list[str]:
     return [p.id for p in PROVIDERS.values() if not browser_only or p.browser]
 
 
+def context_limit(provider: str | None) -> int | None:
+    """The model's context window in characters, or None when it is unknown.
+
+    Deliberately not :func:`aquascope.ai_engine.analyst.context_budget`, which is
+    how much conversation the Analyst *keeps* (a trimming budget sized for what a
+    free tier meters per minute). This is how much the model can *take*: a 34k-
+    character BOM repair fits an OpenAI, Groq or Hugging Face window and was only
+    refused because the trimming budget was 24k characters. None means the window
+    is not known here, so a caller must not guess: send the request and let the
+    endpoint's 413 be the answer.
+    """
+    spec = PROVIDERS.get(provider or "")
+    if spec is None or not spec.context_window:
+        return None
+    return int(spec.context_window * CHARS_PER_TOKEN)
+
+
 def default_model(provider: str) -> str | None:
     p = PROVIDERS.get(provider)
     return p.model if p else None
@@ -211,14 +252,16 @@ def as_json(*, browser_only: bool = True) -> str:
         "id": "custom", "label": "Custom OpenAI-compatible endpoint", "base_url": "", "model": "",
         "models": [], "free": None, "signup": None, "browser": True,
         "note": "Any endpoint that speaks /chat/completions with tool calling.",
-        "api": "openai", "context_chars": None,
+        "api": "openai", "context_chars": None, "context_window": None,
     })
     return json.dumps(out, indent=2) + "\n"
 
 
 def write_json(path: str | Path | None = None) -> Path:
     target = Path(path) if path else Path(__file__).resolve().parents[2] / "explorer" / "providers.json"
-    target.write_text(as_json(), encoding="utf-8")
+    # newline="\n": the committed file is LF everywhere, and Windows' default
+    # translation would rewrite every line and hide the real change.
+    target.write_text(as_json(), encoding="utf-8", newline="\n")
     return target
 
 

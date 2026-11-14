@@ -1,0 +1,82 @@
+name: Collector health sweep
+
+# Every collector is asked for the smallest slice of real data it can serve
+# (#166). The weekly harvest only proves that a source's *station catalog*
+# still answers; a collector whose data path broke can still look healthy
+# there. This job gives that breakage its own row in the job summary.
+#
+# A missing secret (NEEDS_KEY) or a source that blocks non-local runners is
+# reported but never red: only a source that should work and does not fails the
+# job. The script keeps one rolling collector-health issue for the whole sweep,
+# not one per source.
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"  # Mondays 05:23 UTC, two hours after the harvest
+  workflow_dispatch:
+
+concurrency:
+  group: collector-health
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      issues: write
+    env:
+      # Optional: without one, the source reports NEEDS_KEY instead of failing.
+      BRAZIL_ANA_IDENTIFICADOR: ${{ secrets.BRAZIL_ANA_IDENTIFICADOR }}
+      BRAZIL_ANA_SENHA: ${{ secrets.BRAZIL_ANA_SENHA }}
+      TAIWAN_MOENV_API_KEY: ${{ secrets.TAIWAN_MOENV_API_KEY }}
+      COPERNICUS_CDS_API_KEY: ${{ secrets.COPERNICUS_CDS_API_KEY }}
+      USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
+    steps:
+      - name: Note when the job started (its health record's duration)
+        run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install aquascope with every extra
+        run: python -m pip install -q ".[dev,all]"
+
+      # --issue writes the matrix to $GITHUB_STEP_SUMMARY as well, so the run
+      # page explains itself even when the job stays green.
+      - name: Sweep every collector's live fetch
+        id: sweep
+        continue-on-error: true
+        run: |
+          python .github/scripts/collector_health.py --issue \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Job health
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 .github/scripts/job_health.py report collector-health \
+            --status "${{ steps.sweep.outcome == 'success' && 'success' || 'failure' }}" \
+            --require "sweep=${{ steps.sweep.outcome }}" \
+            --started "$JOB_STARTED" --run-url "$RUN_URL" \
+            --issue "${{ github.event_name == 'schedule' }}"
+
+      # The sweep exits 1 only for a source that should have answered and did not:
+      # NEEDS_KEY (no secret on this runner) and the probes marked informational
+      # exit 0. Because the step above carries continue-on-error, that 1 was
+      # swallowed and a run with a broken data path stayed green. Re-raise it here,
+      # after the health record is written, the way harvest.yml does for its own
+      # silent failures.
+      - name: Fail when a source that should answer did not
+        if: always() && steps.sweep.outcome == 'failure'
+        run: |
+          echo "::error::A collector that should answer did not; see the summary and the collector-health issue."
+          exit 1

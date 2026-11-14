@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -104,6 +105,22 @@ class ToolSpec:
 # Data the sandbox tool can see (the record on screen, an uploaded table). The
 # caller fills this in for one ask() and it is cleared afterwards.
 _SANDBOX_DATA: dict[str, Any] = {}
+
+# The name under which earlier tool results reach ``run_python``. Chosen to
+# read naturally in a snippet: ``tool_results[-1]["result"]``.
+_SANDBOX_RESULTS_KEY = "tool_results"
+
+
+def _publish_tool_results(seen: list[dict[str, Any]]) -> None:
+    """Make the results so far visible to the next ``run_python`` call.
+
+    Without this the sandbox only sees the record the caller passed in, so a
+    model that wants to post-process a tool's output has to call the tool
+    again; on a free tier that is the step budget gone (#750).
+    """
+    _SANDBOX_DATA[_SANDBOX_RESULTS_KEY] = [
+        {"tool": s["name"], "arguments": s["arguments"], "result": s["payload"]} for s in seen
+    ]
 
 
 def _run_python_tool(code: str) -> dict[str, Any]:
@@ -553,6 +570,8 @@ class AskResult:
     methods: list[dict[str, str]] = field(default_factory=list)
     data_used: list[dict[str, Any]] = field(default_factory=list)
     steps: int = 0
+    #: True when every step went on tool calls and none produced an answer.
+    exhausted: bool = False
     #: Deterministic checks over the answer and the tool results (verify.py).
     checks: list[dict[str, Any]] = field(default_factory=list)
     verified: bool = True
@@ -712,6 +731,10 @@ def context_budget(provider: str | None) -> int:
     The default is sized for free tiers that meter tokens per minute. A
     provider with a large window says so in the registry (``context_chars``)
     and gets to keep its tool results whole.
+
+    This is a trimming budget, not the model's context window: do not compare a
+    one-shot prompt with it to decide whether the request can be sent
+    (:func:`aquascope.ai_engine.providers.context_limit` is that answer).
     """
     spec = _REGISTRY.get(provider or "")
     return spec.context_chars if spec is not None and spec.context_chars else MAX_CONTEXT_CHARS
@@ -745,6 +768,12 @@ def ask(
     establish, rather than leaving it to the reader to notice.
     ``context_chars`` caps how much conversation is kept (the registry's
     budget for the provider otherwise); a benchmark uses it to bound spend.
+
+    A tool call identical to an earlier one is served from that earlier result
+    rather than run again, and earlier results are visible to ``run_python`` as
+    ``tool_results``. When every step goes on tool calls and none produces an
+    answer, ``AskResult.exhausted`` says so; the prose alone is not a signal a
+    caller can act on (#750).
     """
     cfg = {"provider": provider or "custom", "model": model or "test", "api_key": None, "base_url": base_url}
     if client is None:
@@ -763,6 +792,8 @@ def ask(
     _SANDBOX_DATA.clear()
     _SANDBOX_DATA.update(data or {})
     seen: list[dict[str, Any]] = []          # what each tool actually returned, for the checks
+    executed: dict[str, tuple[int, Any, bool]] = {}  # successful canonical call -> (step, payload, ok)
+    attempts: Counter[str] = Counter()       # tool name -> times the model asked for it
 
     budget = int(context_chars) if context_chars else context_budget(cfg["provider"])
     result_cap = max(MAX_TOOL_RESULT_CHARS, budget // 2)
@@ -828,28 +859,68 @@ def ask(
             except json.JSONDecodeError:
                 args = {}
             spec = specs.get(name)
+            key = json.dumps([name, args], sort_keys=True, default=str)
+            attempts[key] += 1
             say(f"tool {name}({', '.join(f'{k}={v!r}' for k, v in args.items())})")
-            if spec is None:
-                payload: Any = {"error": f"unknown tool {name}"}
-                ok = False
+            payload: Any
+            ok: bool
+            earlier = executed.get(key)
+            if earlier is not None and spec is not None:
+                # The same call, with the same arguments, ran already. Running
+                # it again spends a step and returns what the model has, so
+                # hand the earlier result back and say where it came from.
+                first_step, payload, ok = earlier
+                say(f"tool {name} already ran at step {first_step}; reusing that result")
+                text = json.dumps(
+                    {"cached": True,
+                     "note": f"this exact call already ran at step {first_step}; "
+                             "nothing was recomputed and its result is repeated below",
+                     "result": payload},
+                    ensure_ascii=False, default=str,
+                )
             else:
-                try:
-                    payload = spec.func(**args)
-                    ok = not (isinstance(payload, dict) and payload.get("error"))
-                except Exception as exc:  # noqa: BLE001 - the model gets to see the failure and try again
-                    payload = {"error": f"{type(exc).__name__}: {exc}"}
+                if spec is None:
+                    payload = {"error": f"unknown tool {name}"}
                     ok = False
-            _harvest_provenance(name, args, payload, result)
+                else:
+                    try:
+                        payload = spec.func(**args)
+                        ok = not (isinstance(payload, dict) and payload.get("error"))
+                    except Exception as exc:  # noqa: BLE001 - the model gets to see the failure and try again
+                        payload = {"error": f"{type(exc).__name__}: {exc}"}
+                        ok = False
+                    if ok:
+                        # A failure is often transient (a 429, a timeout). Caching
+                        # it would hand the model the same error for a retry with
+                        # the same arguments, so only successes are remembered.
+                        executed[key] = (step, payload, ok)
+                _harvest_provenance(name, args, payload, result)
+                text = json.dumps(payload, ensure_ascii=False, default=str)
             seen.append({"name": name, "arguments": args, "payload": payload, "ok": ok})
-            text = json.dumps(payload, ensure_ascii=False, default=str)
+            _publish_tool_results(seen)
             summary = text[:160]
             result.tool_calls.append(ToolCallRecord(name=name, arguments=args, ok=ok, summary=summary))
             messages.append({"role": "tool", "tool_call_id": c.id, "name": name,
                              "content": _truncate(text, result_cap)})
     else:
+        # Every step went on tool calls and none produced an answer. Record
+        # that as a failure, and name the calls that ate the budget: a model
+        # repeating one call is the usual reason (#750).
+        result.exhausted = True
+        # Count repeated *calls*, not repeated tool names: three different
+        # run_python scripts are three calls, not one call three times.
+        repeated_counts: dict[str, int] = {}
+        for call_key, count in attempts.items():
+            if count > 1:
+                tool = json.loads(call_key)[0]
+                repeated_counts[tool] = repeated_counts.get(tool, 0) + count
+        repeated = sorted(repeated_counts.items(), key=lambda item: -item[1])
+        tail = ""
+        if repeated:
+            tail = " Repeated calls: " + ", ".join(f"{name} x{count}" for name, count in repeated[:3]) + "."
         result.answer = (result.answer or "").strip() or (
             "I ran out of tool-call steps before finishing. Here is what the tools returned so far; "
-            "ask a narrower question or raise --max-steps."
+            "ask a narrower question or raise --max-steps." + tail
         )
     if not result.answer:
         result.answer = "The model returned no answer."

@@ -5,9 +5,11 @@ import pytest
 
 from aquascope.ai_engine.analyst import resolve_llm
 from aquascope.ai_engine.providers import (
+    CHARS_PER_TOKEN,
     ENV_SCAN_ORDER,
     PROVIDERS,
     as_json,
+    context_limit,
     default_model,
     env_var,
     provider_ids,
@@ -52,6 +54,16 @@ def test_default_model_and_env_var():
     assert env_var("nvidia") == "NVIDIA_API_KEY"
     assert default_model("unknown_provider") is None
     assert env_var("unknown_provider") is None
+
+
+def test_context_limit_is_the_model_window_not_the_trimming_budget():
+    from aquascope.ai_engine.analyst import MAX_CONTEXT_CHARS, context_budget
+
+    assert context_limit("anthropic") == PROVIDERS["anthropic"].context_window * CHARS_PER_TOKEN
+    assert context_limit("anthropic") > context_budget("anthropic")  # the window, not the trimming budget
+    assert context_limit("openai") > 4 * MAX_CONTEXT_CHARS  # a 40k-character prompt is nowhere near it
+    assert context_limit("custom") is None and context_limit(None) is None
+    assert context_limit("no-such-provider") is None
 
 
 def test_as_json_roundtrip():

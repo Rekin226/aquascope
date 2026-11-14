@@ -4,21 +4,6 @@
  "note": "Recorded answers: the prose was written once by the model named in each entry. The tools can be re-run live in the page, with no key.",
  "examples": [
   {
-   "id": "kingston-flood",
-   "question": "What is the 100-year flood of the Thames at Kingston, and how sure can we be?",
-   "shows": "Finding a gauge, fitting a flood frequency curve, and quoting the confidence interval.",
-   "tools": [
-    "assess_site",
-    "flood_frequency"
-   ],
-   "steps": 3,
-   "model": "openai/gpt-oss-120b",
-   "provider": "groq",
-   "recorded": "2026-09-21T10:48:51+00:00",
-   "checks_passed": 5,
-   "checks_total": 6
-  },
-  {
    "id": "seine-loire-lowflow",
    "question": "Compare the low flows (Q95) of the Seine at Paris and the Loire at Blois.",
    "shows": "Two records in one answer, with the flow-duration curve behind each.",

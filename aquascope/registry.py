@@ -403,13 +403,24 @@ SOURCES: dict[str, SourceMeta] = {
     ),
     "japan_mlit": _s(
         key="japan_mlit", label="Japan MLIT", region="Japan",
-        description="Water level, discharge, quality and rainfall by prefecture",
+        description=(
+            "Not offered: the Water Information Database disallows its data "
+            "path for every crawler and asks programmatic users to use the "
+            "paid 水防災オープンデータ service instead"
+        ),
         agency="Ministry of Land, Infrastructure, Transport and Tourism", country="JPN",
-        homepage="http://www1.river.go.jp/",
+        homepage="https://www1.river.go.jp/",
         variables=("water_level", "discharge", "water_quality", "precipitation"),
         output_model="WaterQualitySample",
         license="Public Data License (Version 1.0)", redistributable=True,
-        attribution="Ministry of Land, Infrastructure, Transport and Tourism",
+        attribution=(
+            "Ministry of Land, Infrastructure, Transport and Tourism "
+            "(Public Data License 1.0, https://www1.river.go.jp/)"
+        ),
+        # robots.txt disallows /water-inf-app/ (Crawl-delay: 3600) and the FAQ
+        # points at the paid 水防災オープンデータ service, so neither the
+        # package nor a browser reads the site (#168).
+        browser_reachable=False,
     ),
     # These HRFCO terms cover its own water-level, discharge and rainfall series.
     # Dam storage and water quality follow their respective owners' terms and must
@@ -436,7 +447,7 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("water_level",),
         output_model="WaterLevelReading",
         license="unknown", redistributable=False,
-        attribution="India-WRIS (terms not yet verified)",
+        attribution="India-WRIS, Ministry of Jal Shakti, Government of India",
     ),
     # ── Oceania ─────────────────────────────────────────────────────────
     "bom": _s(

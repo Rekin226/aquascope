@@ -57,6 +57,34 @@ Rules:
 """
 
 
+class PromptTooLargeError(RuntimeError):
+    """The evidence cannot reach the configured model, so no request is sent."""
+
+
+def _explain_too_large(chars: int, provider: str | None, model: str, *, status: int | None = None) -> str:
+    """Say why the prompt would not fit, instead of letting the endpoint answer 413.
+
+    The ceiling is the model's context window
+    (:func:`aquascope.ai_engine.providers.context_limit`), never the Analyst's
+    trimming budget: the latter is 24,000 characters for most providers, which is
+    a fraction of what they actually accept.
+    """
+    from aquascope.ai_engine.providers import context_limit
+
+    limit = context_limit(provider)
+    size = f"the repair prompt is {chars:,} characters (~{chars // 4:,} tokens)"
+    where = f"for {model} ({provider or 'the default provider'})"
+    advice = ("Point AQUASCOPE_LLM_* at a larger-window model (Anthropic's window is 200k tokens), or trim the "
+              "collector or its tests.")
+    if status is None:
+        # Only reached from the pre-check, which runs when the window is known.
+        ceiling = (f"the ~{limit:,}-character context window this module estimates" if limit is not None
+                   else "the known context window")
+        return f"{size}, over {ceiling} {where}; the model was not called. {advice}"
+    return (f"{size}; the endpoint rejected it as too large (HTTP {status}) {where}, so the model's window is "
+            f"smaller than the request. {advice}")
+
+
 @dataclass
 class Probe:
     url: str
@@ -248,19 +276,38 @@ def _parse_proposal(text: str) -> Proposal:
 
 def propose_repair(evidence: Evidence, *, client: Any = None, model: str | None = None, provider: str | None = None,
                    api_key: str | None = None, base_url: str | None = None) -> Proposal:
-    """One model call over the evidence; returns a parsed :class:`Proposal` (``no_fix`` on any parse trouble)."""
-    from aquascope.ai_engine.analyst import resolve_llm
-    from aquascope.ai_engine.llm_transport import make_client
+    """One model call over the evidence; returns a parsed :class:`Proposal` (``no_fix`` on any parse trouble).
 
-    cfg = {"model": model or "unknown"}
+    Raises :class:`PromptTooLargeError` without calling the model only when the provider publishes a context
+    window and the evidence is over it; an unknown window is no reason to refuse, so the endpoint decides and a
+    413 is turned into the same explanation.
+    """
+    from aquascope.ai_engine.analyst import resolve_llm
+    from aquascope.ai_engine.llm_transport import LLMHTTPError, make_client
+    from aquascope.ai_engine.providers import context_limit
+
+    # With a client the caller brings the transport; the provider still names the
+    # model, because its window decides whether the prompt is worth sending.
+    cfg: dict[str, Any] = {"provider": provider, "model": model or "unknown"}
     if client is None:
         cfg = resolve_llm(provider, model, api_key, base_url)
         client = make_client(cfg["api_key"], cfg["base_url"], provider=cfg["provider"])
-    response = client.chat.completions.create(
-        model=cfg["model"],
-        messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": evidence.to_prompt()}],
-        temperature=0,
-    )
+    prompt = evidence.to_prompt()
+    chars = len(prompt) + len(SYSTEM_PROMPT)
+    limit = context_limit(cfg.get("provider"))
+    if limit is not None and chars > limit:
+        raise PromptTooLargeError(_explain_too_large(chars, cfg.get("provider"), str(cfg["model"])))
+    try:
+        response = client.chat.completions.create(
+            model=cfg["model"],
+            messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
+            temperature=0,
+        )
+    except LLMHTTPError as exc:
+        if exc.status == 413:
+            raise PromptTooLargeError(
+                _explain_too_large(chars, cfg.get("provider"), str(cfg["model"]), status=413)) from exc
+        raise
     text = response.choices[0].message.content or ""
     prop = _parse_proposal(text)
     prop.model = str(cfg["model"])
@@ -362,6 +409,8 @@ def repair_source(source: str, error: str, diagnosis: str, *, repo_root: str | P
     ev = gather_evidence(source, error, diagnosis, repo_root=repo_root, probe=probe)
     try:
         prop = propose_repair(ev, client=client, model=model, provider=provider)
+    except PromptTooLargeError as exc:
+        return RepairResult(source, ev, None, None, "error", str(exc))
     except Exception as exc:  # noqa: BLE001 - report, do not raise out of a maintenance loop
         return RepairResult(source, ev, None, None, "error", f"model call failed: {type(exc).__name__}: {exc}")
     if not prop.is_patch:
@@ -378,5 +427,5 @@ def repair_source(source: str, error: str, diagnosis: str, *, repo_root: str | P
     return RepairResult(source, ev, prop, ver, "patched" if ver.ok else "rejected", note)
 
 
-__all__ = ["Evidence", "Probe", "Proposal", "RepairResult", "Verification", "apply_and_verify", "gather_evidence",
-           "probe_url", "propose_repair", "repair_source"]
+__all__ = ["Evidence", "Probe", "PromptTooLargeError", "Proposal", "RepairResult", "Verification", "apply_and_verify",
+           "gather_evidence", "probe_url", "propose_repair", "repair_source"]

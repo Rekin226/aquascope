@@ -109,6 +109,13 @@ SOURCES: dict[str, SourceMeta] = {
         license="US-PD", redistributable=True,
         attribution="NOAA National Water Prediction Service (public domain)",
     ),
+    # WQP aggregates USGS NWIS and EPA WQX records and asks for no verbatim
+    # attribution: USGS-produced data are public domain and credit is only
+    # requested (checked 2026-11-15):
+    # https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    # EPA geospatial data default to public domain, while non-EPA items stay
+    # with their owner, hence the per-organization caveat below:
+    # https://www.epa.gov/web-policies-and-procedures/epa-disclaimers
     "wqp": _s(
         key="wqp", label="Water Quality Portal", region="United States",
         description="EPA/USGS harmonised water-quality samples by state",

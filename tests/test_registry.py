@@ -165,6 +165,39 @@ def test_gemstat_open_archive_licence_and_attribution():
     assert "national hydrological services" in meta.attribution
 
 
+def test_wapor_licence_is_non_commercial_share_alike():
+    """#473: FAO's WaPOR catalogue states CC BY-NC-SA 4.0 in the citation and in the resource constraints.
+
+    The same record also shows a "License" badge that links to CC BY-SA 4.0(checked 2026-11-15), but the
+    dataset's own required citation and ``resourceConstraints`` both name CC BY-NC-SA 4.0, so the stricter
+    reading is recorded and the source is not mirrored.
+    """
+    meta = SOURCES["wapor"]
+    assert meta.license == "CC-BY-NC-SA-4.0"
+    assert meta.redistributable is False
+    assert "CC BY-NC-SA 4.0" in meta.attribution
+    assert "wapor" not in redistributable_sources()
+
+
+def test_eu_wfd_records_the_eea_cc_by_terms():
+    """#473: the EEA publishes its material under CC BY 4.0 and asks to be acknowledged as the source.
+
+    The Agency's Legal notice (https://www.eea.europa.eu/en/legal-notice, modified 2026-07-02, read
+    2026-11-15) states that EEA material "may be re-used without prior permission, free of charge, for
+    commercial or non-commercial purposes, provided that the EEA is always acknowledged as the original
+    source of the material" and that "Such acknowledgment must be included in each copy of the material".
+    The Waterbase record itself says "License CC-BY 4.0 (...) Copyright holder: European Environment
+    Agency (EEA)" with "No limitations to public access", so attribution is required and redistribution
+    is not restricted.
+    """
+    meta = SOURCES["eu_wfd"]
+    assert meta.license == "CC-BY-4.0"
+    assert meta.redistributable is True
+    assert "eu_wfd" in redistributable_sources()
+    assert meta.attribution.startswith("© European Environment Agency (EEA)")
+    assert "Waterbase" in meta.attribution and "CC BY 4.0" in meta.attribution
+
+
 def test_copernicus_points_at_the_early_warning_data_store():
     meta = SOURCES["copernicus"]
     assert meta.label == "Copernicus EWDS"

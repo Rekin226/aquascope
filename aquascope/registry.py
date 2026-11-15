@@ -109,6 +109,13 @@ SOURCES: dict[str, SourceMeta] = {
         license="US-PD", redistributable=True,
         attribution="NOAA National Water Prediction Service (public domain)",
     ),
+    # WQP aggregates USGS NWIS and EPA WQX records and asks for no verbatim
+    # attribution: USGS-produced data are public domain and credit is only
+    # requested (checked 2026-11-15):
+    # https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    # EPA geospatial data default to public domain, while non-EPA items stay
+    # with their owner, hence the per-organization caveat below:
+    # https://www.epa.gov/web-policies-and-procedures/epa-disclaimers
     "wqp": _s(
         key="wqp", label="Water Quality Portal", region="United States",
         description="EPA/USGS harmonised water-quality samples by state",
@@ -279,8 +286,20 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://discodata.eea.europa.eu/",
         variables=("water_quality",),
         output_model="WaterQualitySample",
-        license="EEA-standard-reuse", redistributable=True,
-        attribution="European Environment Agency (EEA), standard re-use policy",
+        # EEA's own terms, read 2026-11-15. The Legal notice
+        # (https://www.eea.europa.eu/en/legal-notice, modified 2026-07-02) publishes EEA material under
+        # CC BY 4.0 and requires the Agency to be acknowledged as the original source: "provided that the
+        # EEA is always acknowledged as the original source of the material ... Such acknowledgment must be
+        # included in each copy of the material". The dataset's own record
+        # (https://sdi.eea.europa.eu/catalogue/datahub/api/records/77976729-1aeb-4b61-a673-83db6c6a2ab2)
+        # says "License CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Copyright holder:
+        # European Environment Agency (EEA)" with "No limitations to public access": re-use is free of
+        # charge for commercial and non-commercial purposes, so the source stays redistributable.
+        license="CC-BY-4.0", redistributable=True,
+        attribution=(
+            "© European Environment Agency (EEA), Waterbase – Water Quality ICM, 2025 (CC BY 4.0); "
+            "compiled by the EEA from the WISE SoE reporting by EEA member and cooperating countries"
+        ),
     ),
     # ── Asia ────────────────────────────────────────────────────────────
     "taiwan_wra_level": _s(
@@ -541,8 +560,11 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("evapotranspiration",),
         supports_bbox=True,
         output_model="WaPORObservation",
-        license="CC-BY-4.0", redistributable=True,
-        attribution="FAO WaPOR (CC BY 4.0)",
+        # FAO's own catalogue record for WaPOR v3 states CC BY-NC-SA 4.0 in the
+        # dataset citation and in resourceConstraints (checked 2026-11-15):
+        # https://data.apps.fao.org/catalog/iso/ab083169-4ef6-4185-b39c-700ba01dcd52
+        license="CC-BY-NC-SA-4.0", redistributable=False,
+        attribution="FAO WaPOR database, License: CC BY-NC-SA 4.0",
     ),
 }
 
@@ -647,10 +669,11 @@ CONTEXT_LAYERS: dict[str, ContextLayerMeta] = {
     "actual_et": ContextLayerMeta(
         key="actual_et", short="FAO WaPOR",
         label="Actual evapotranspiration (FAO WaPOR v3)", provider="FAO",
-        description="Annual actual evapotranspiration and interception (AETI) at 300 m, 2018 onward. The licence "
-                    "is the one recorded for the wapor source; FAO's terms for commercial use are not confirmed",
-        license="CC-BY-4.0",
-        attribution="FAO WaPOR v3, L1 AETI annual",
+        description="Annual actual evapotranspiration and interception (AETI) at 300 m, 2018 onward, from the "
+                    "wapor source; FAO's WaPOR catalogue (read 2026-11-15) states CC BY-NC-SA 4.0, so the "
+                    "non-commercial and share-alike terms apply to this layer too",
+        license="CC-BY-NC-SA-4.0",
+        attribution="FAO WaPOR v3, L1 AETI annual (CC BY-NC-SA 4.0)",
         homepage="https://data.apps.fao.org/wapor/",
         citation="FAO (2024). WaPOR v3. https://www.fao.org/in-action/remote-sensing-for-water-productivity/",
     ),

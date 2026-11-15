@@ -1544,7 +1544,7 @@ def _zoom_phrase(c: _Clause) -> None:
         c.add("zoom", {"type": "fly_to", "zoom_by": sign * size})
 
 
-_FLOW_UNIT = r"(?:m3/s|m³/s|m3 s-1|m3s-1|cumecs|cms|cubic met(?:re|er)s? (?:a|per) second)"
+_FLOW_UNIT = r"(?:m3/s|m³/s|m3 s-1|m3s-1|cumecs?|cms|cubic met(?:re|er)s? (?:a|per) second)"
 
 
 def _route_phrase(c: _Clause) -> None:

@@ -165,6 +165,20 @@ def test_gemstat_open_archive_licence_and_attribution():
     assert "national hydrological services" in meta.attribution
 
 
+def test_wapor_licence_is_non_commercial_share_alike():
+    """#473: FAO's WaPOR catalogue states CC BY-NC-SA 4.0 in the citation and in the resource constraints.
+
+    The same record also shows a "License" badge that links to CC BY-SA 4.0(checked 2026-11-15), but the
+    dataset's own required citation and ``resourceConstraints`` both name CC BY-NC-SA 4.0, so the stricter
+    reading is recorded and the source is not mirrored.
+    """
+    meta = SOURCES["wapor"]
+    assert meta.license == "CC-BY-NC-SA-4.0"
+    assert meta.redistributable is False
+    assert "CC BY-NC-SA 4.0" in meta.attribution
+    assert "wapor" not in redistributable_sources()
+
+
 def test_copernicus_points_at_the_early_warning_data_store():
     meta = SOURCES["copernicus"]
     assert meta.label == "Copernicus EWDS"

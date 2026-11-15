@@ -276,6 +276,26 @@ def test_station_catalogs_keeps_failures_visible():
     assert empty == []
 
 
+def test_colorado_cdss_carries_the_state_disclaimer():
+    """The DWR terms ask downstream sites to reproduce the disclaimer verbatim (#473)."""
+    meta = SOURCES["colorado_cdss"]
+    assert meta.license == "unknown"
+    assert meta.redistributable is False
+    required = (
+        "The data made available here has been modified for use from its original source, "
+        "which is the State of Colorado.",
+        "THE STATE OF COLORADO MAKES NO REPRESENTATIONS OR WARRANTY AS TO THE COMPLETENESS, "
+        "ACCURACY, TIMELINESS, OR CONTENT OF ANY DATA MADE AVAILABLE THROUGH THIS SITE.",
+        "THE STATE OF COLORADO EXPRESSLY DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS OR IMPLIED, "
+        "INCLUDING ANY IMPLIED WARRANTIES OF MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.",
+        "The data is subject to change as modifications and updates are complete.",
+        "It is understood that the information contained in the Web feed is being used at one's "
+        "own risk.",
+    )
+    for sentence in required:
+        assert sentence in meta.attribution
+
+
 def test_a_wrapped_catalog_failure_keeps_its_cause():
     """BOM wraps every failed parameter type in one RuntimeError; the 503 under it must reach the health report
     (#498), or the harvest files the outage as an unclassified code fault."""

@@ -157,6 +157,11 @@ SOURCES: dict[str, SourceMeta] = {
         license="DWS NIWIS terms (academic, research or personal use)", redistributable=False,
         attribution="Department of Water and Sanitation, Republic of South Africa (copyright proprietor)",
     ),
+    # Colorado DWR's portal Terms of Service (https://dwr.state.co.us/Portal/TermsOfUse.htm,
+    # read 2026-11-15) grant no licence and require applications that use the feed to carry the
+    # disclaimer reproduced in ``attribution``. ``license`` stays "unknown" on purpose: with
+    # ``redistributable=False`` that keeps the archive bundle filtering this source out
+    # (see ``aquascope/archive/zenodo.py::unverified``).
     "colorado_cdss": _s(
         key="colorado_cdss",
         label="Colorado DWR/CDSS",
@@ -171,7 +176,18 @@ SOURCES: dict[str, SourceMeta] = {
         output_model="StreamflowReading",
         license="unknown",
         redistributable=False,
-        attribution="Colorado Division of Water Resources",
+        # The portal asks applications to reproduce this block verbatim; keep the casing (#473).
+        attribution=(
+            "Colorado Division of Water Resources (CDSS/HydroBase). "
+            "\"The data made available here has been modified for use from its original source, "
+            "which is the State of Colorado. THE STATE OF COLORADO MAKES NO REPRESENTATIONS OR "
+            "WARRANTY AS TO THE COMPLETENESS, ACCURACY, TIMELINESS, OR CONTENT OF ANY DATA MADE "
+            "AVAILABLE THROUGH THIS SITE. THE STATE OF COLORADO EXPRESSLY DISCLAIMS ALL "
+            "WARRANTIES, WHETHER EXPRESS OR IMPLIED, INCLUDING ANY IMPLIED WARRANTIES OF "
+            "MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE. The data is subject to change "
+            "as modifications and updates are complete. It is understood that the information "
+            "contained in the Web feed is being used at one's own risk.\""
+        ),
     ),
     "brazil_ana": _s(
         key="brazil_ana", label="ANA Hidroweb", region="Brazil",

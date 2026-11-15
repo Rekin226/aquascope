@@ -8,6 +8,7 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Changed
+- **`wqp` licence audit** (#473): keep `license="US-PD"`, `redistributable=True` and the per-organization caveat in the attribution after reading the first-party terms (checked 2026-11-15) — [USGS Copyrights and Credits](https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits) puts USGS-produced data in the U.S. public domain and only *asks* for credit, [EPA disclaimers](https://www.epa.gov/web-policies-and-procedures/epa-disclaimers) put EPA geospatial data in the public domain by default while leaving non-EPA items with their copyright owner, and the [WQP user guide](https://www.waterqualitydata.us/portal_userguide/) recommends a citation format without requiring one, so no verbatim attribution is needed.
 - **`india_wris` licence audit** (#207): keep `license="unknown"` and `redistributable=False` after reading the first-party terms — [NWIC's copyright policy](https://nwic.gov.in/copyrightpolicy) forbids reproducing the site's contents without permission, and the Hydro-Meteorological Data Dissemination Policy, 2018 (§6.1, §6.3) guarantees only free download and acknowledgement — and replace the "terms not yet verified" attribution with India-WRIS and the Ministry of Jal Shakti.
 
 ### Fixed

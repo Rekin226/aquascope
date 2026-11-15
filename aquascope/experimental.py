@@ -108,8 +108,10 @@ CLI: tuple[str, ...] = (
     "whatif",
 )
 
-# Experimental flags on a stable verb: ``aquascope groundwater surface`` (MODFLOW and well surfaces, 0.27.0).
+# Experimental flags on a stable verb: ``aquascope groundwater surface`` (MODFLOW and well surfaces, 0.27.0);
+# ``aquascope assess --archive-hub``, the opt-in read of record quality from the Archive on Hugging Face (#375).
 CLI_FLAGS: dict[str, tuple[str, ...]] = {
+    "assess": ("--archive-hub",),
     "groundwater": ("--bbox", "--compare", "--geojson", "--json", "--mode", "--month"),
 }
 

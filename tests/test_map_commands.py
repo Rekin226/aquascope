@@ -42,6 +42,8 @@ PHRASES = [
     ("replay the flood of September 2024 at Asheville", [
         {"type": "replay", "place": "Asheville", "month": "2024-09"}]),
     ("replay the November 2024 flood here", [{"type": "replay", "at": "here", "month": "2024-11"}]),
+    ("route a flood of 500 cumec from Basel", [
+        {"type": "route", "place": "Basel", "peak_cms": 500.0, "duration_h": 24.0, "shape": "triangle"}]),
     ("route a flood of 500 m3/s from Basel", [
         {"type": "route", "place": "Basel", "peak_cms": 500.0, "duration_h": 24.0, "shape": "triangle"}]),
     ("50 mm of rain over this area in 6 hours", [

@@ -50,6 +50,8 @@ _PARAM_UNITS: dict[str, str] = {
 class TaiwanWRAFhyCollector(BaseCollector):
     """
     Collect real-time hydrological data from the WRA 防災資訊網 (Fhy) API.
+    Released under Open Government Data License 1.0 (OGDL-Taiwan-1.0;
+    https://data.gov.tw/license).
 
     Parameters
     ----------

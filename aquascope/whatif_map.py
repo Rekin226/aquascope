@@ -152,12 +152,12 @@ _KINDS = (
     ("dp_pct", r"\b(?:rain\w*|precip\w*|wetter|drier|dryer|snowfall)\b"),
     ("dt_c", r"(?:\bwarm\w*|\bhot\w*|\bcool\w*|\bcold\w*|\btemperature\w*|\bdegrees?\b|\d\s*(?:°|deg\b|c\b))"),
     ("demand_cms", r"\b(?:demand|abstract\w*|withdraw\w*|irrigat\w*|pump\w*|tak(?:e|en|ing)|extract\w*|divert\w*|"
-                   r"draw\w*|use[sd]?)\b|m3/s|cumecs|\bl/s\b"),
+                   r"draw\w*|use[sd]?)\b|m3/s|cumecs?|\bl/s\b"),
 )
 # A number, not the digit of a unit or a name ("m3/s", "et0").
 _NUMBER = re.compile(r"(?<![a-z\d.])(?P<sign>[+-])?\s*(?P<n>\d+(?:\.\d+)?)")
 _FILLER = frozenset("""what if a an the of in on by with and than to for at this basin river catchment here there
-    it is be was were would if please scenario per cent percent c degree degrees celsius m3 s cumecs l year years
+    it is be was were would if please scenario per cent percent c degree degrees celsius m3 s cumec cumecs l year years
     every each all over across more less climate future scenario world catchments flows flow gets get got becomes
     become turns goes go rains rained""".split())
 
@@ -325,7 +325,7 @@ _UNIT_AFTER: tuple[tuple[str, str], ...] = (
     ("degF", r"°\s*f\b|deg(?:rees?)?\s*f(?:ahrenheit)?\b|fahrenheit\b"),
     ("K", r"kelvins?\b|k\b"),
     ("degC", r"°\s*c?|deg(?:rees?)?(?:\s*(?:c|celsius|centigrade)\b)?|celsius\b|centigrade\b|c\b"),
-    ("m3/s", r"m3/s\b|m3 ?s-1\b|cumecs\b|cubic met(?:re|er)s?\s*(?:per|a|/)\s*(?:second|sec|s)\b"),
+    ("m3/s", r"m3/s\b|m3 ?s-1\b|cumecs?\b|cubic met(?:re|er)s?\s*(?:per|a|/)\s*(?:second|sec|s)\b"),
     ("l/s", r"l/s\b|lps\b|lit(?:re|er)s?\s*(?:per|a|an|/|each)\s*(?:second|sec|s)\b"),
     ("m3/day", r"m3/d(?:ay)?\b|cubic met(?:re|er)s?\s*(?:per|a|/)\s*day\b"),
     ("ML/day", r"ml/d(?:ay)?\b|megalit(?:re|er)s?\s*(?:per|a|/)\s*day\b"),

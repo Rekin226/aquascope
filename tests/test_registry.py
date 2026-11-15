@@ -121,6 +121,16 @@ def test_taiwan_wra_groundwater_attribution_includes_ogdl_exhibit_notice():
     assert "https://data.gov.tw/license" in attribution
 
 
+def test_taiwan_wra_fhy_attribution_includes_ogdl_exhibit_notice():
+    """#473: OGDL-Taiwan-1.0 Section 3.2 requires attribution in the form of the Exhibit."""
+    attribution = SOURCES["taiwan_wra_fhy"].attribution
+    assert "經濟部水利署" in attribution
+    assert "2017" in attribution
+    assert "防災資訊服務網" in attribution
+    assert "Open Government Data License" in attribution
+    assert "https://data.gov.tw/license" in attribution
+
+
 def test_poland_imgw_attribution_keeps_both_imgw_notices_verbatim():
     """#473: the terms require both notices word for word, source and processing side by side (§ 5 ust. 3 and 4)."""
     attribution = SOURCES["poland_imgw"].attribution
@@ -153,6 +163,20 @@ def test_gemstat_open_archive_licence_and_attribution():
     assert "gemstat" in redistributable_sources()
     assert "zenodo.13881899" in meta.attribution
     assert "national hydrological services" in meta.attribution
+
+
+def test_wapor_licence_is_non_commercial_share_alike():
+    """#473: FAO's WaPOR catalogue states CC BY-NC-SA 4.0 in the citation and in the resource constraints.
+
+    The same record also shows a "License" badge that links to CC BY-SA 4.0(checked 2026-11-15), but the
+    dataset's own required citation and ``resourceConstraints`` both name CC BY-NC-SA 4.0, so the stricter
+    reading is recorded and the source is not mirrored.
+    """
+    meta = SOURCES["wapor"]
+    assert meta.license == "CC-BY-NC-SA-4.0"
+    assert meta.redistributable is False
+    assert "CC BY-NC-SA 4.0" in meta.attribution
+    assert "wapor" not in redistributable_sources()
 
 
 def test_copernicus_points_at_the_early_warning_data_store():

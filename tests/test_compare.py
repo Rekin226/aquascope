@@ -150,3 +150,9 @@ def test_compare_stations_fetches_each_and_passes_the_area(monkeypatch) -> None:
     assert out["places"][1]["label"] == "Two"
     assert "browser" in out["places"][2]["error"]
     assert out["places"][0]["key"] == "usgs/1"
+
+
+def test_the_singular_cumec_spelling_is_a_cubic_metre_per_second() -> None:
+    # Hydrologists write "a cumec" as often as "cumecs"; the unit check reads both.
+    assert compare._is_cms("cumec") and compare._is_cms("m3/s") and compare._is_cms("cms")
+    assert not compare._is_cms("ft3/s")

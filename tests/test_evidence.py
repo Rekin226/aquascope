@@ -304,3 +304,9 @@ def test_mcp_tools_are_registered_and_drop_the_series(monkeypatch):
     assert "series" not in out and seen["source"] == "usgs" and seen["years"] == 20
     names = {t.name for t in asyncio.run(m.build_server().list_tools())}
     assert {"model_skill", "model_to_lean_on"} <= names
+
+
+def test_a_record_in_singular_cumecs_is_read_as_cubic_metres_per_second() -> None:
+    # A gauge whose unit is "cumec" is in m3/s: the skill ladder must score it, not drop it.
+    assert evidence._is_cms("cumec") and evidence._is_cms("cumecs")
+    assert not evidence._is_cms("ft3/s")

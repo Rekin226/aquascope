@@ -49,7 +49,7 @@ def _clean(x: Any) -> float | None:
 
 def _is_cms(unit: str) -> bool:
     u = str(unit or "").lower().replace(" ", "")
-    return u in {"m3/s", "m³/s", "m^3/s", "cms", "cumecs"}
+    return u in {"m3/s", "m³/s", "m^3/s", "cms", "cumec", "cumecs"}
 
 
 def _key(item: dict[str, Any], i: int) -> str:

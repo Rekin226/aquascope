@@ -428,7 +428,7 @@ def _trend_check(answer: str, compacts: list[tuple[str, dict[str, Any]]]) -> lis
 # label's value for the gauge the sentence is about, and a number written as a flow must be a flow.
 
 #: A flow written after a number: m3/s and its spellings (NFKC has already turned m³ into m3).
-_FLOW_UNIT = re.compile(r"\s*(?:m3/s(?:ec)?|m3 ?s-1|m\^3/s|cumecs|cubic met(?:re|er)s? (?:per|a) second)", re.I)
+_FLOW_UNIT = re.compile(r"\s*(?:m3/s(?:ec)?|m3 ?s-1|m\^3/s|cumecs?|cubic met(?:re|er)s? (?:per|a) second)", re.I)
 #: Any other unit after a number: rain, temperature, shares, areas, periods. Such a number is not a flow statistic.
 _OTHER_UNIT = re.compile(r"\s*(?:mm\b|°|deg|%|percent|km|kilomet|years?\b|yrs?\b|days?\b|people|inhabitants)",
                          re.I)
@@ -458,7 +458,7 @@ _PERIODS = (
     re.compile(r"\breturn period\b[^.;\n]*?\bis (\d{1,4}) ?(?:years?|yrs?)\b", re.I),
 )
 #: After a number: a rate per year (Sen's slope), not a flow.
-_RATE = re.compile(r"\s*(?:m3/s(?:ec)?|m3 ?s-1|cumecs)?\s*(?:per year|a year|/ ?yr|/ ?year)\b", re.I)
+_RATE = re.compile(r"\s*(?:m3/s(?:ec)?|m3 ?s-1|cumecs?)?\s*(?:per year|a year|/ ?yr|/ ?year)\b", re.I)
 #: Before a label in its clause: the number that follows is a test's, not the label's.
 _TEST_WORDS = re.compile(r"p[- ]?values?|\bp\s*=|\bslope|\btau\b|mann|kendall", re.I)
 _LP3 = re.compile(r"\b(?:lp3|lp-3|lp ?iii|log[- ]?pearson)", re.I)

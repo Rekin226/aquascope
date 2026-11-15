@@ -209,7 +209,7 @@ def new_figure(width: str | float = "full", height: float | None = None, *, nrow
 # ── text ────────────────────────────────────────────────────────────────────
 
 _UNIT_SWAPS: tuple[tuple[re.Pattern[str], str], ...] = tuple((re.compile(p), r) for p, r in (
-    (r"\bm3\s*/\s*s\b|\bm3s-1\b|\bm3 s-1\b|\bm\^3/s\b|\bcumecs\b", "m³/s"),
+    (r"\bm3\s*/\s*s\b|\bm3s-1\b|\bm3 s-1\b|\bm\^3/s\b|\bcumecs?\b", "m³/s"),
     (r"\bft3\s*/\s*s\b|\bcfs\b", "ft³/s"),
     (r"\bkm2\b|\bkm\^2\b|\bsq km\b", "km²"),
     (r"\bm2\b", "m²"),

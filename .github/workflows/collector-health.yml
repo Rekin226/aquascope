@@ -7,8 +7,9 @@ name: Collector health sweep
 #
 # A missing secret (NEEDS_KEY) or a source that blocks non-local runners is
 # reported but never red: only a source that should work and does not fails the
-# job. The script keeps one rolling collector-health issue for the whole sweep,
-# not one per source.
+# job. A scheduled run keeps one rolling collector-health issue for the whole
+# sweep, not one per source; a manual dispatch writes the summary and leaves the
+# issue alone.
 
 on:
   schedule:
@@ -26,13 +27,6 @@ jobs:
     permissions:
       contents: read
       issues: write
-    env:
-      # Optional: without one, the source reports NEEDS_KEY instead of failing.
-      BRAZIL_ANA_IDENTIFICADOR: ${{ secrets.BRAZIL_ANA_IDENTIFICADOR }}
-      BRAZIL_ANA_SENHA: ${{ secrets.BRAZIL_ANA_SENHA }}
-      TAIWAN_MOENV_API_KEY: ${{ secrets.TAIWAN_MOENV_API_KEY }}
-      COPERNICUS_CDS_API_KEY: ${{ secrets.COPERNICUS_CDS_API_KEY }}
-      USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
     steps:
       - name: Note when the job started (its health record's duration)
         run: echo "JOB_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
@@ -48,13 +42,27 @@ jobs:
         run: python -m pip install -q ".[dev,all]"
 
       # --issue writes the matrix to $GITHUB_STEP_SUMMARY as well, so the run
-      # page explains itself even when the job stays green.
+      # page explains itself even when the job stays green. It also starts with
+      # `gh issue list`, which is why this step needs a token of its own: the
+      # Job health step's GH_TOKEN never reached it, so every scheduled run
+      # would have asked for `gh auth login` before probing anything. A manual
+      # dispatch leaves the rolling issue alone (--no-issue), the way
+      # harvest.yml treats its own workflow_dispatch.
       - name: Sweep every collector's live fetch
         id: sweep
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: without one, the source reports NEEDS_KEY instead of failing.
+          BRAZIL_ANA_IDENTIFICADOR: ${{ secrets.BRAZIL_ANA_IDENTIFICADOR }}
+          BRAZIL_ANA_SENHA: ${{ secrets.BRAZIL_ANA_SENHA }}
+          TAIWAN_MOENV_API_KEY: ${{ secrets.TAIWAN_MOENV_API_KEY }}
+          COPERNICUS_CDS_API_KEY: ${{ secrets.COPERNICUS_CDS_API_KEY }}
+          USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
         run: |
-          python .github/scripts/collector_health.py --issue \
-            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          python .github/scripts/collector_health.py \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            ${{ github.event_name == 'schedule' && '--issue' || '--no-issue' }}
 
       - name: Job health
         if: always()

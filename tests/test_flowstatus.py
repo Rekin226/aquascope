@@ -155,7 +155,7 @@ def test_the_climatology_keeps_four_percentiles_a_month_for_the_big_reaches(tmp_
     assert (row["p10"], row["p25"], row["p75"], row["p90"]) == (200.0, 500.0, 1500.0, 1800.0)
     reaches = pq.read_table(root / "reaches.parquet").to_pandas()
     assert set(reaches.columns) == {"river_id", "lat", "lon", "strahler_order"} and len(reaches) == 7
-    m = json.loads((root / "manifest.json").read_text())
+    m = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     assert m["percentiles"] == [10, 25, 75, 90] and m["base_period"] == "1950 to 2019"
     assert m["files"]["months"][0] == "flowstatus/climatology/month-01.parquet" and "CC BY 4.0" in m["licence"]
     assert sum("/daily_monthly/" in u for u in asked) == 2
@@ -225,7 +225,7 @@ def test_daily_classes_every_climatology_reach_and_writes_the_browser_file(tmp_p
     assert (root / "2026-10-11.bin.gz").read_bytes() == (root / "latest.bin.gz").read_bytes()
     table = pq.read_table(root / "latest.parquet").to_pandas()
     assert len(table) == 6 and set(table.columns) == {"river_id", "flow_cms", "class"}
-    m = json.loads((root / "manifest.json").read_text())
+    m = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     assert m["month"] == 10 and m["licence"]["this_file"] == "CC BY 4.0" and m["not"].startswith("Modelled")
     assert [h["issue_date"] for h in m["history"]] == ["2026-10-10", "2026-10-11"]
     assert "1950 to 2019" in m["method"] and m["sizes"]["latest.bin.gz"] == len((root / "latest.bin.gz").read_bytes())
@@ -335,7 +335,7 @@ def test_the_warnings_run_writes_the_first_day_for_flowstatus(tmp_path, monkeypa
     t = pq.read_table(day0).to_pandas().set_index("river_id")["flow_cms"]
     assert len(t) == 7 and 1008 not in t.index           # order 3, not read
     assert t[1001] == 50.0 and t[1003] == 50.0             # day 0 of members only (1003's high-res is left out)
-    info = json.loads(day0.with_suffix(".json").read_text())
+    info = json.loads(day0.with_suffix(".json").read_text(encoding="utf-8"))
     assert info["issue_date"] == "2026-10-09" and info["run"] == "2026100900" and not info["smoke"]
 
 

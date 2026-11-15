@@ -35,6 +35,18 @@ def _no_saved_keys(tmp_path_factory, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_developer_archive(monkeypatch):
+    """No test reads the developer's own Archive mirror or the Archive on Hugging Face.
+
+    ``assess_site`` reads ``AQUASCOPE_ARCHIVE_DIR`` and, opt-in, ``AQUASCOPE_ARCHIVE_HUB`` (#375); set in a
+    maintainer's shell, either would make the suite read real records or reach the network. A test that wants a
+    mirror or the Hub read sets the variable itself.
+    """
+    monkeypatch.delenv("AQUASCOPE_ARCHIVE_DIR", raising=False)
+    monkeypatch.delenv("AQUASCOPE_ARCHIVE_HUB", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _restore_logger_levels():
     """Each test ends with the logger levels it started with.
 

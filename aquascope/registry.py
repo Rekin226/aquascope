@@ -279,8 +279,20 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://discodata.eea.europa.eu/",
         variables=("water_quality",),
         output_model="WaterQualitySample",
-        license="EEA-standard-reuse", redistributable=True,
-        attribution="European Environment Agency (EEA), standard re-use policy",
+        # EEA's own terms, read 2026-11-15. The Legal notice
+        # (https://www.eea.europa.eu/en/legal-notice, modified 2026-07-02) publishes EEA material under
+        # CC BY 4.0 and requires the Agency to be acknowledged as the original source: "provided that the
+        # EEA is always acknowledged as the original source of the material ... Such acknowledgment must be
+        # included in each copy of the material". The dataset's own record
+        # (https://sdi.eea.europa.eu/catalogue/datahub/api/records/77976729-1aeb-4b61-a673-83db6c6a2ab2)
+        # says "License CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Copyright holder:
+        # European Environment Agency (EEA)" with "No limitations to public access": re-use is free of
+        # charge for commercial and non-commercial purposes, so the source stays redistributable.
+        license="CC-BY-4.0", redistributable=True,
+        attribution=(
+            "© European Environment Agency (EEA), Waterbase – Water Quality ICM, 2025 (CC BY 4.0); "
+            "compiled by the EEA from the WISE SoE reporting by EEA member and cooperating countries"
+        ),
     ),
     # ── Asia ────────────────────────────────────────────────────────────
     "taiwan_wra_level": _s(

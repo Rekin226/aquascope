@@ -340,3 +340,19 @@ def test_plain_http_catalog_sources_are_declared_browser_unreachable(built):
 def test_browser_reachable_defaults_on():
     unreachable = sorted(k for k, m in SOURCES.items() if not m.browser_reachable)
     assert unreachable == ["bom", "greece_hydroscope", "greece_openhi", "japan_mlit", "poland_imgw"], unreachable
+
+
+def test_taiwan_wra_iot_records_the_portal_declaration_not_the_ogdl():
+    """The IoT portal states its own 政府網站資料開放宣告, not the OGDL (#473).
+
+    https://iot.wra.gov.tw/information.jsp (read 2026-11-16) grants free,
+    non-exclusive, sub-licensable re-use and asks only that the source be
+    stated ("然使用時，應註明出處"); neither that page nor the API guide names
+    the Open Government Data License, so the registry records the declaration
+    instead of claiming the OGDL.
+    """
+    source = SOURCES["taiwan_wra_iot"]
+    assert source.license == "WRA-Open-Data-Declaration (free re-use with attribution)"
+    assert source.redistributable
+    assert "政府網站資料開放宣告" in source.attribution
+    assert "https://iot.wra.gov.tw/information.jsp" in source.attribution

@@ -262,6 +262,14 @@ SOURCES: dict[str, SourceMeta] = {
         attribution="Hydroscope, the Greek National Databank for Hydrological and Meteorological Information",
         browser_reachable=False,  # plain http, and CORS only for localhost (#408)
     ),
+    # Licence: https://openhi.net/licence/ (page modified 2020-05-13, checked
+    # 2026-11-16) says, verbatim: "The OpenHi.net data are provided under the
+    # Creative Commons Attribution-ShareAlike International 4.0 licence". The
+    # Greek twin (https://openhi.net/licence-el/) says the same. CC BY-SA 4.0
+    # section 3(a)(1) asks for a hyperlink to the material, a link to the
+    # licence, and an indication that the material was modified; the collector
+    # converts units and the Archive folds the 15-minute series to daily values,
+    # so the attribution carries all three.
     "greece_openhi": _s(
         key="greece_openhi", label="Greece OpenHi.net", region="Greece",
         description="Live 15-minute discharge, stage, rainfall, climate and water quality from the ITIA/NTUA network",
@@ -272,7 +280,11 @@ SOURCES: dict[str, SourceMeta] = {
         supports_station_lookup=True,
         output_model="StreamflowReading | WaterLevelReading | ClimateReading | WaterQualitySample",
         license="CC-BY-SA-4.0", redistributable=True,
-        attribution="OpenHi.net, Open Hydrosystem Information Network (ITIA, NTUA), CC BY-SA 4.0",
+        attribution=(
+            "OpenHi.net, Open Hydrosystem Information Network (ITIA, NTUA), https://openhi.net/, "
+            "licensed CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); "
+            "modified by AquaScope (units converted; 15-minute series aggregated to daily in the Archive)"
+        ),
         browser_reachable=False,  # CORS only for localhost; the Explorer serves the archive mirror (#408)
     ),
     "poland_imgw": _s(

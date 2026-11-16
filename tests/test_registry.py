@@ -198,6 +198,28 @@ def test_eu_wfd_records_the_eea_cc_by_terms():
     assert "Waterbase" in meta.attribution and "CC BY 4.0" in meta.attribution
 
 
+def test_greece_openhi_attribution_links_the_cc_by_sa_licence_and_notes_the_changes():
+    """#473: OpenHi.net states CC BY-SA 4.0 and section 3(a)(1) also asks for the licence link.
+
+    The bilingual licence page (https://openhi.net/licence/, page modified 2020-05-13, checked
+    2026-11-16) says "The OpenHi.net data are provided under the Creative Commons
+    Attribution-ShareAlike International 4.0 licence", and its Greek twin
+    (https://openhi.net/licence-el/) says the same. Sharing an adapted copy therefore also needs
+    a link to the licence and an indication of the changes, so the attribution names the network,
+    links both the dataset and the licence, and records that AquaScope converts units and folds
+    the 15-minute series to daily values in the Archive.
+    """
+    meta = SOURCES["greece_openhi"]
+    assert meta.license == "CC-BY-SA-4.0"
+    assert meta.redistributable is True
+    assert "greece_openhi" in redistributable_sources()
+    assert "OpenHi.net" in meta.attribution
+    assert "ITIA" in meta.attribution and "NTUA" in meta.attribution
+    assert "https://openhi.net/" in meta.attribution
+    assert "https://creativecommons.org/licenses/by-sa/4.0/" in meta.attribution
+    assert "modified by AquaScope" in meta.attribution
+
+
 def test_copernicus_points_at_the_early_warning_data_store():
     meta = SOURCES["copernicus"]
     assert meta.label == "Copernicus EWDS"

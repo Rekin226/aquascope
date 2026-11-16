@@ -361,6 +361,15 @@
         "review",
         "research"
       ]
+    },
+    {
+      "login": "Ikaly03",
+      "name": "Francklin03",
+      "avatar_url": "https://avatars.githubusercontent.com/u/342365651?v=4",
+      "profile": "https://github.com/Ikaly03",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs"

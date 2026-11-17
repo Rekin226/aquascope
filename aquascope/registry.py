@@ -419,7 +419,13 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("water_level", "groundwater_level"),
         output_model="WaterLevelReading",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="data.gov.tw, Open Government Data License 1.0",
+        attribution=(
+            "經濟部水利署 (Water Resources Agency, MOEA) 2017 [即時水位資料]；"
+            "經濟部水利署 2023 [即時地下水水位資料]；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之"
+            " (Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "taiwan_civil_iot": _s(
         key="taiwan_civil_iot", label="Taiwan Civil IoT", region="Taiwan",
@@ -429,7 +435,12 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("water_level", "discharge", "precipitation"),
         output_model="WaterQualitySample",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Civil IoT Taiwan, Open Government Data License 1.0",
+        attribution=(
+            "國家災害防救科技中心 (NCDR) Civil IoT 水利感測資料；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之"
+            " (Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "taiwan_cwa": _s(
         key="taiwan_cwa", label="Taiwan CWA climate stations", region="Taiwan",
@@ -440,7 +451,13 @@ SOURCES: dict[str, SourceMeta] = {
         supports_station_lookup=True,
         output_model="ClimateReading",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Central Weather Administration, Open Government Data License 1.0",
+        attribution=(
+            "交通部中央氣象署 CODiS 氣候觀測資料查詢服務"
+            " (政府網站資料開放宣告: https://www.cwa.gov.tw/V8/C/information.html)；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之"
+            " (Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "taiwan_moenv": _s(
         key="taiwan_moenv", label="Taiwan MOENV", region="Taiwan",
@@ -451,7 +468,12 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("water_quality",),
         output_model="WaterQualitySample",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Ministry of Environment, Open Government Data License 1.0",
+        attribution=(
+            "環境部 (Ministry of Environment) 2013 [河川水質監測資料]；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之"
+            " (Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "japan_mlit": _s(
         key="japan_mlit", label="Japan MLIT", region="Japan",

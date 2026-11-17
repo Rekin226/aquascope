@@ -222,7 +222,7 @@ PROBES: dict[str, Probe] = {
     ),
     "copernicus": Probe(
         kwargs={"latitude": 48.2082, "longitude": 16.3738, "year": "2023", "month": "01"},
-        requires=("COPERNICUS_CDS_API_KEY",),
+        requires=("CDSAPI_KEY",),
         timeout=300,
         note="needs a Copernicus CDS API key",
     ),

@@ -204,6 +204,41 @@ def test_a_missing_secret_is_not_a_failure(health, monkeypatch, capsys) -> None:
     assert "NEEDS_KEY" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    ("source", "secret_env"),
+    [
+        (
+            "brazil_ana",
+            {
+                "ANA_HIDROWEB_IDENTIFICADOR": "BRAZIL_ANA_IDENTIFICADOR",
+                "ANA_HIDROWEB_SENHA": "BRAZIL_ANA_SENHA",
+            },
+        ),
+        ("copernicus", {"CDSAPI_KEY": "COPERNICUS_CDS_API_KEY"}),
+    ],
+)
+def test_sweep_passes_configured_credentials_to_the_probe(health, monkeypatch, capsys, source, secret_env) -> None:
+    yaml = pytest.importorskip("yaml", reason="PyYAML arrives with the dev extra")
+    workflow_path = SCRIPT.parents[1] / "workflows" / "collector-health.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    sweep = next(step for step in workflow["jobs"]["sweep"]["steps"] if step.get("id") == "sweep")
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    for env_name, secret_name in secret_env.items():
+        assert sweep["env"].get(env_name) == f"${{{{ secrets.{secret_name} }}}}"
+        monkeypatch.delenv(env_name, raising=False)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(health, "run_probe", lambda *a, **k: pytest.fail("must skip without credentials"))
+        assert health.main(["--source", source, "--no-issue"]) == 0
+        assert "NEEDS_KEY" in capsys.readouterr().out
+
+    for env_name in secret_env:
+        monkeypatch.setenv(env_name, "test-value")
+    _patch(monkeypatch, _FakeCollector([{"a": 1}]))
+    assert health.main(["--source", source, "--no-issue"]) == 0
+    assert f"[{source}] OK 1 records" in capsys.readouterr().out
+
+
 def test_an_informational_failure_is_not_a_failure(health, monkeypatch, capsys) -> None:
     _patch(monkeypatch, _FakeCollector(error=RuntimeError("blocked")))
     code = health.main(["--source", "taiwan_civil_iot", "--no-issue"])

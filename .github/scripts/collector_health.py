@@ -243,9 +243,13 @@ PROBES: dict[str, Probe] = {
         note="AQUASTAT, Egypt total water withdrawal",
     ),
     "wapor": Probe(
-        kwargs={"bbox": (0.0, 0.0, 0.1, 0.1), "start_date": "2020-01-01", "end_date": "2020-01-02"},
+        kwargs={
+            "bbox": (31.23, 30.04, 31.25, 30.06),
+            "start_date": "2025-05-11",
+            "end_date": "2025-05-11",
+        },
         timeout=300,
-        note="WaPOR evapotranspiration, one tiny tile",
+        note="WaPOR reference ET for a small on-land box near Cairo, one dekad",
     ),
 }
 

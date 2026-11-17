@@ -452,7 +452,8 @@ SOURCES: dict[str, SourceMeta] = {
         output_model="ClimateReading",
         license="OGDL-Taiwan-1.0", redistributable=True,
         attribution=(
-            "交通部中央氣象署 (Central Weather Administration) 2016 [氣象觀測站-全測站逐時氣象資料]；"
+            "交通部中央氣象署 CODiS 氣候觀測資料查詢服務"
+            " (政府網站資料開放宣告: https://www.cwa.gov.tw/V8/C/information.html)；"
             "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
             "使用者於遵守本條款各項規定之前提下，得利用之"
             " (Open Government Data License: https://data.gov.tw/license)"

@@ -414,23 +414,24 @@ def test_taiwan_sources_carry_the_ogdl_exhibit_notice(source_id):
             "經濟部水利署 2023 [即時地下水水位資料]",
         ),
         (
-            "taiwan_cwa",
-            "交通部中央氣象署 (Central Weather Administration) 2016"
-            " [氣象觀測站-全測站逐時氣象資料]",
-        ),
-        (
             "taiwan_moenv",
             "環境部 (Ministry of Environment) 2013 [河川水質監測資料]",
         ),
     ],
 )
 def test_taiwan_sources_name_the_dataset_and_release_year(source_id, notice):
-    """The Exhibit line is provider, year, dataset, so each entry names both (#473).
+    """The Exhibit names each data.gov.tw dataset and its release year (#473).
 
     The years come from the `上架日期` column of the data.gov.tw dataset export
     (read 2026-11-16): 25768 即時水位資料 2017-09-12, 161082 即時地下水水位資料
-    2023-02-23, 9176 氣象觀測站-全測站逐時氣象資料 2016-12-01 and 6078
-    河川水質監測資料 2013-05-22. `taiwan_civil_iot` is absent from that export:
-    NCDR publishes through the Civil IoT platform rather than data.gov.tw.
+    2023-02-23 and 6078 河川水質監測資料 2013-05-22.
     """
     assert notice in SOURCES[source_id].attribution
+
+
+def test_taiwan_cwa_cites_codis_and_its_declaration():
+    """The collector uses CODiS, whose footer links to CWA's declaration."""
+    attribution = SOURCES["taiwan_cwa"].attribution
+    assert "交通部中央氣象署 CODiS 氣候觀測資料查詢服務" in attribution
+    assert "https://www.cwa.gov.tw/V8/C/information.html" in attribution
+    assert "氣象觀測站-全測站逐時氣象資料" not in attribution

@@ -127,6 +127,16 @@ class TestSPEI:
         spei = standardized_precipitation_evapotranspiration_index(precip, pet, 1).dropna()
         assert spei.index.min() >= pet.index.min()
 
+    def test_missing_pet_month_invalidates_windows_that_include_it(self):
+        precip, temp = _monthly()
+        missing = pd.Timestamp("2010-03-01")
+        pet = thornthwaite_pet(temp, 51.4).drop(missing)
+
+        spei = standardized_precipitation_evapotranspiration_index(precip, pet, 3)
+
+        expected = precip.index[2:].difference(pd.date_range(missing, periods=3, freq="MS"))
+        pd.testing.assert_index_equal(spei.index, expected)
+
     def test_bad_inputs_raise(self):
         precip, temp = _monthly()
         pet = thornthwaite_pet(temp, 51.4)

@@ -429,3 +429,17 @@ def test_standardized_indices_without_pet_gives_spi_only(climate_frame: pd.DataF
         wb.standardized_indices(p.iloc[:12])
     with pytest.raises(ValueError, match="positive"):
         wb.standardized_indices(p, timescales=(0,))
+
+
+def test_standardized_indices_keeps_monthly_results_when_no_longer_window_is_complete(
+    climate_frame: pd.DataFrame,
+) -> None:
+    precip = climate_frame.set_index("date")["rain_mm"].iloc[::2]
+
+    res = wb.standardized_indices(precip, timescales=(1, 3))
+
+    _strict_json(res)
+    one_month, three_month = res["indices"]
+    assert one_month["spi"]["n"] == len(precip)
+    assert three_month["spi"]["n"] == 0
+    assert three_month["spi"]["current"] is None

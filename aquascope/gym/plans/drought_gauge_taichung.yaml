@@ -1,0 +1,58 @@
+# AquaScope Bench Phase 2 reference plan; the authoring rules are in _authoring.yaml.
+# Station metadata: https://hdps.cwa.gov.tw/static/state.html
+# Historical station locations: https://climate.cwa.gov.tw/data/pdf_1.pdf
+# Earlier served-record check: aquascope/gym/reports/taichung-drought.yaml.
+# SPI reference: WMO-No. 1090, Standardized Precipitation Index User Guide.
+# https://community.wmo.int/site/knowledge-hub/programmes-and-initiatives/agmp-proceedings
+id: drought_gauge_taichung
+playbook: drought_status
+title: What Taichung's rain record can support about the severity of a dry spell
+brief: >-
+  Our Taichung water-supply team is preparing a dry-spell briefing. What would the three- and twelve-month SPI and
+  SPEI show about the rainfall deficit and evaporative demand? Can we compare the spell with past droughts at the
+  Taichung rain gauge? Tell us what period the data cover and what we can still say if the station record is short.
+intake:
+  timescales: [3, 12]
+  drought_concern: water supply
+  flash_drought: false
+site:
+  name: Taichung, Taiwan (CWA precipitation station 467490)
+  lat: 24.15
+  lon: 120.68
+  source: taiwan_cwa
+  station_id: "467490"
+  years: 130.9
+  recon: taichung_cwa
+expected_branch: gauge_indices
+steps:
+  - tool: drought_indices
+    method: spei
+    alternatives:
+      - {tool: drought_indices, method: spei_reanalysis}
+    gates:
+      - {check: min_years, path: years}
+      - {check: not_empty, path: indices}
+      - {check: not_empty, path: current.spei}
+    note: >-
+      Check the returned source, date span and usable monthly coverage for each accumulation window. The playbook's
+      30-year gate applies to the record behind the fitted indices. With the current ten-year CODiS fetch cap, report
+      any gauge-based values as indicative and withhold a local historical ranking. The existing ERA5 fallback can
+      provide a separate cell-scale comparison if its precipitation and temperature are reachable and its own
+      coverage supports it. Identify the source, fit period, PET method and last complete month with any values.
+  - tool: describe_catchment
+    optional: true
+forbidden:
+  tools: [load_table, spei, low_flow_context, drought_propagation, sgi_drought, supply_reliability]
+  methods: [baseflow_separation, flow_duration, low_flow_frequency, groundwater_trend, recharge_wtf, sgi, supply_reliability]
+rationale: >-
+  The catalogue places Taichung station 467490 0.6 km from the point and gives it a nominal precipitation span
+  of 130.9 years. The saved reconnaissance uses that span and assumes daily resolution. Record completeness
+  and ERA5 access still need checking. The Explorer's CODiS path currently requests at most ten years, and the earlier
+  taichung-drought showcase recorded ten years served and a failed 30-year gate. The station's establishment date
+  and changes of location in CWA's metadata are additional reasons to verify the history of any longer series
+  before fitting it. A three-month index distinguishes seasonal anomalies, and a twelve-month index provides
+  longer climate context for the water-supply briefing. SPI uses precipitation and SPEI adds a PET estimate.
+  Reanalysis describes its own grid cell and reference period. The grid and gauge series need separate provenance.
+  A historical rank at the station requires an adequate station series. The reconnaissance has no
+  discharge or groundwater record for this decision, so the plan stops at meteorological drought and leaves
+  river flow, groundwater response and supply reliability unassessed.

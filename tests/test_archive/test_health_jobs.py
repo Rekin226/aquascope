@@ -335,6 +335,18 @@ def test_a_workflow_that_files_job_health_issues_may_write_issues(path):
         assert re.search(r"^\s+issues: write", text, re.M), path.name
 
 
+def test_the_collector_sweep_publishes_health_only_on_schedule_with_a_token():
+    yaml = pytest.importorskip("yaml")
+    workflow = yaml.safe_load((WORKFLOWS / "collector-health.yml").read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["sweep"]["steps"]
+    reporter = next(step for step in steps if "job_health.py report collector-health" in step.get("run", ""))
+
+    assert reporter["env"]["HF_TOKEN"] == "${{ secrets.HF_TOKEN }}"
+    assert reporter["env"]["PUBLISH"] == "${{ secrets.HF_TOKEN != '' && github.event_name == 'schedule' }}"
+    assert reporter["env"]["ISSUE"] == "${{ github.event_name == 'schedule' }}"
+    assert '--publish "$PUBLISH" --issue "$ISSUE"' in reporter["run"]
+
+
 def test_the_harvest_fails_a_scheduled_run_that_published_nothing():
     text = (WORKFLOWS / "harvest.yml").read_text(encoding="utf-8")
     step = text[text.index("Fail when a scheduled run published nothing"):]

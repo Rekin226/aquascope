@@ -2,7 +2,8 @@
 
 Once a day, for the Archive's discharge gauges with a live record (a mirrored series of at least ten years, topped
 up with the agency's newest days, and a GEOGLOWS river reach the gauge snaps to), this stores what the two global
-forecasts said that day, raw and corrected to the gauge (:mod:`aquascope.nownext`), so forecast skill at each lead
+forecasts said that day, raw and corrected to the gauge (:mod:`aquascope.nownext`, GEOGLOWS from its retrospective
+simulation, GloFAS from its reanalysis at the gauge's cell), so forecast skill at each lead
 time can be measured later against what the gauge then recorded. It also writes where each gauge's flow sits today
 against normal, which the Explorer uses to colour the map.
 
@@ -10,7 +11,9 @@ Layout under ``<out>/forecasts/`` (the only folder this job publishes; the catal
 
     manifest.json              what is published: each issue date, its gauges, what was dropped and why
     reaches.parquet            source, station_id, river_id, distance_m, lat, lon, glofas_lat, glofas_lon, snapped_at
-    issued/<YYYY-MM-DD>.parquet  one row per gauge, model and valid day (raw and, for GEOGLOWS, corrected)
+    issued/<YYYY-MM-DD>.parquet  one row per gauge, model and valid day (raw and corrected)
+    glofas_record/<source>/<station_id>.parquet  the GloFAS reanalysis at the gauge's cell (date, q, lat, lon),
+                               read once and kept, which the GloFAS correction is fitted on
     status/latest.parquet      source, station_id, value_date, value, percentile, class, n_years
     status/latest.json         when the snapshot was made and which sources it covers
     status/<YYYY-MM-DD>.parquet  the same snapshot, kept by date
@@ -56,6 +59,14 @@ FRESH_DAYS = 3
 MIN_RECORD_YEARS = 10
 #: Reaches that did not snap are tried again after this many days.
 RESNAP_DAYS = 30
+#: Years of the GloFAS reanalysis at a gauge's cell the GloFAS correction is fitted on, and how often it is read
+#: again. Open-Meteo's free tier counts a request as one call per two weeks of data (10 years is about 261 calls),
+#: so each record is read once, kept under ``glofas_record/``, and a run reads new ones up to a call budget.
+GLOFAS_RECORD_YEARS = 10
+GLOFAS_RECORD_REFRESH_DAYS = 365
+GLOFAS_CALL_BUDGET = 4000
+#: Weighted calls a minute, under the free tier's 600.
+GLOFAS_CALLS_PER_MINUTE = 500
 
 ABOUT = ("Issued forecasts and the daily status snapshot for AquaScope's Archive gauges (#517). Model output: "
          "GEOGLOWS v2 (GEOGloWS ECMWF Streamflow Service, CC BY 4.0) and GloFAS v4 via Open-Meteo (CC BY 4.0). "
@@ -66,9 +77,11 @@ COLUMNS = {
     "init_date": "the day the model run started (GEOGLOWS; GloFAS via Open-Meteo does not say, so empty)",
     "lead_day": "valid_date minus init_date (or issue_date when init_date is empty), in days",
     "mean/median/p25/p75/min/max": "ensemble statistics, m3/s",
-    "high_res": "GEOGLOWS high-resolution run, m3/s", "*_c": "the same, corrected to the gauge (GEOGLOWS only)",
-    "kge_raw/kge_corrected": "the correction's hindcast skill at this gauge",
-    "by": "month or year flow-duration curves",
+    "high_res": "GEOGLOWS high-resolution run, m3/s",
+    "*_c": "the same, corrected to the gauge (GEOGLOWS from its retrospective simulation, GloFAS from its "
+    "reanalysis at the cell; empty when the model's record and the gauge share too few years)",
+    "kge_raw/kge_corrected": "the correction's hindcast skill at this gauge, for the row's model",
+    "by": "month or year flow-duration curves (the row's model)",
     "generated": "when the GEOGLOWS API answered (not when the run started; see init_date)",
     "reach_mean_ratio": "the reach's simulated mean flow over the gauge's, on the days they share (far from 1: "
     "the gauge may be on another river than its snapped reach)",
@@ -236,13 +249,133 @@ def snap_reaches(gauges: list[dict[str, Any]], known: dict[tuple[str, str], dict
     return known
 
 
+# ── the GloFAS record at each gauge's cell ──────────────────────────────────
+
+
+def glofas_record_path(source: str, station_id: str) -> str:
+    """Where a gauge's GloFAS record sits, from the Archive's root."""
+    return f"{FOLDER}/glofas_record/{source}/{str(station_id).replace('/', '_')}.parquet"
+
+
+def openmeteo_calls(days: int) -> float:
+    """What Open-Meteo's free tier counts for ``days`` of one variable at one place (two weeks to a call)."""
+    return max(1.0, float(days) / 14.0)
+
+
+def _record_series(rows: list[dict[str, Any]]) -> Any:
+    import pandas as pd
+
+    s = pd.Series([r.get("q") for r in rows], index=pd.to_datetime([r.get("date") for r in rows]), dtype="float64")
+    return s.dropna().sort_index()
+
+
+def _fetch_glofas(lat: float, lon: float, start: str, end: str) -> Any:
+    from aquascope.evidence import glofas_series
+
+    return glofas_series(lat, lon, start, end)
+
+
+def glofas_records(gauges: list[dict[str, Any]], known: dict[tuple[str, str], dict[str, Any]], root: Path, *,
+                   today: date, repo_id: str = DEFAULT_REPO, years: int = GLOFAS_RECORD_YEARS,
+                   budget_calls: float = GLOFAS_CALL_BUDGET, per_minute: float = GLOFAS_CALLS_PER_MINUTE,
+                   workers: int = 4, reader: Callable[[str], list[dict[str, Any]]] | None = None,
+                   fetcher: Callable[..., Any] | None = None, sleep: Callable[[float], Any] | None = None,
+                   stop: Callable[[], bool] | None = None) -> tuple[dict[tuple[str, str], Any], dict[str, Any]]:
+    """The GloFAS reanalysis at each gauge's cell, the series the GloFAS correction is fitted on.
+
+    A record already published (its reach row's ``glofas_record_at`` is set, less than
+    :data:`GLOFAS_RECORD_REFRESH_DAYS` old, and the cell has not moved) is read from the Archive. Others are read
+    from Open-Meteo, ``years`` back from yesterday, one at a time and paced under ``per_minute`` weighted calls,
+    until ``budget_calls`` is spent or ``stop()`` says the run is short of time; each is written to
+    ``root/glofas_record/`` and its reach row stamped. A gauge without a GloFAS cell yet (it is picked on its first
+    issue) waits for the next run. Returns the series by gauge and what was read, fetched and left for later.
+    """
+    from datetime import timedelta
+
+    reader = reader or (lambda path: read_published_rows(path, repo_id))
+    fetcher = fetcher or _fetch_glofas
+    sleep = sleep or time.sleep
+    stats: dict[str, Any] = {"read": 0, "fetched": 0, "calls": 0.0, "no cell yet": 0, "left for later": 0,
+                             "failed": 0}
+    todo: list[tuple[str, str]] = []
+    cached: list[tuple[str, str]] = []
+    for g in gauges:
+        key = (g["source"], g["station_id"])
+        reach = known.get(key) or {}
+        if reach.get("glofas_lat") is None or reach.get("glofas_lon") is None:
+            stats["no cell yet"] += 1
+            continue
+        at = _d(reach.get("glofas_record_at"))
+        (cached if at and (today - at).days < GLOFAS_RECORD_REFRESH_DAYS else todo).append(key)
+
+    def read(key: tuple[str, str]) -> tuple[tuple[str, str], list[dict[str, Any]]]:
+        try:
+            return key, reader(glofas_record_path(*key))
+        except Exception as exc:  # noqa: BLE001 - read it again from Open-Meteo instead
+            logger.info("GloFAS record unreadable for %s/%s: %s", *key, exc)
+            return key, []
+
+    out: dict[tuple[str, str], Any] = {}
+    for key, rows in _parallel(read, cached, workers):
+        reach = known[key]
+        same_cell = rows and all(abs(float(rows[0].get(c) or 0) - float(reach[f"glofas_{c}"])) < 1e-3
+                                 for c in ("lat", "lon"))
+        s = _record_series(rows) if same_cell else None
+        if s is not None and len(s):
+            out[key] = s
+            stats["read"] += 1
+        else:
+            todo.append(key)
+
+    end = today - timedelta(days=1)
+    start = end - timedelta(days=int(years * 365.25 + 0.5) - 1)
+    cost = openmeteo_calls((end - start).days + 1)
+    for key in todo:
+        if stats["calls"] + cost > budget_calls or (stop is not None and stop()):
+            stats["left for later"] += 1
+            continue
+        reach = known[key]
+        lat, lon = float(reach["glofas_lat"]), float(reach["glofas_lon"])
+        stats["calls"] += cost
+        try:
+            s = _record_series([{"date": d, "q": q} for d, q in fetcher(lat, lon, start.isoformat(),
+                                                                         end.isoformat()).items()])
+        except Exception as exc:  # noqa: BLE001 - one cell failing must not stop the rest
+            logger.info("GloFAS record failed for %s/%s: %s", *key, exc)
+            stats["failed"] += 1
+            s = None
+        finally:
+            if per_minute > 0:
+                sleep(60.0 * cost / per_minute)
+        if s is None or not len(s):
+            continue
+        _write_rows([{"date": d.strftime("%Y-%m-%d"), "q": float(q), "lat": lat, "lon": lon}
+                     for d, q in s.items()], root / glofas_record_path(*key).split("/", 1)[1])
+        known[key] = {**reach, "glofas_record_at": today.isoformat()}
+        out[key] = s
+        stats["fetched"] += 1
+    stats["calls"] = round(stats["calls"], 1)
+    return out, stats
+
+
 # ── one gauge's forecast ────────────────────────────────────────────────────
 
 
-def issue_one(gauge: dict[str, Any], series: Any, reach: dict[str, Any], *, today: date, days: int = 15
-              ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """The rows one gauge adds to today's issue, and its reach row (with the GloFAS cell, picked once)."""
-    from aquascope.nownext import STAT_KEYS, forecast
+def _skill_cols(correction: dict[str, Any]) -> dict[str, Any]:
+    skill = correction.get("skill") or {}
+    return {"by": skill.get("by"), "kge_raw": (skill.get("raw") or {}).get("kge"),
+            "kge_corrected": (skill.get("corrected") or {}).get("kge")}
+
+
+def issue_one(gauge: dict[str, Any], series: Any, reach: dict[str, Any], *, today: date, days: int = 15,
+              glofas_record: Any = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """The rows one gauge adds to today's issue, and its reach row (with the GloFAS cell, picked once).
+
+    GEOGLOWS is corrected to the gauge from its retrospective simulation (:func:`aquascope.nownext.forecast`);
+    GloFAS the same way (:func:`aquascope.nownext.correct_to_gauge`) from ``glofas_record``, its reanalysis at the
+    cell (:func:`glofas_records`). Without one, or with too short an overlap, GloFAS rows carry no ``*_c``.
+    """
+    from aquascope.nownext import STAT_KEYS, correct_to_gauge, forecast
 
     reach = dict(reach)
     if reach.get("glofas_lat") is None:
@@ -258,28 +391,35 @@ def issue_one(gauge: dict[str, Any], series: Any, reach: dict[str, Any], *, toda
         reach["glofas_lon"] = cell["lon"] if ok else reach["lon"]
     fc = forecast(river_id=reach["river_id"], obs=series, glofas_at=(reach["glofas_lat"], reach["glofas_lon"]),
                   days=days)
-    skill = (fc.get("correction") or {}).get("skill") or {}
+    corrections = {"geoglows": fc.get("correction") or {}, "glofas": {}}
+    gl = fc.get("glofas") or {}
+    if glofas_record is not None and len(glofas_record) and gl.get("date") and not gl.get("error"):
+        try:
+            corrections["glofas"] = correct_to_gauge(glofas_record, series, gl)
+        except Exception as exc:  # noqa: BLE001 - the raw rows still stand
+            logger.info("GloFAS correction failed for %s/%s: %s", gauge["source"], gauge["station_id"], exc)
     common = {"issue_date": today.isoformat(), "source": gauge["source"], "station_id": gauge["station_id"],
-              "river_id": int(reach["river_id"]), "by": skill.get("by"),
-              "kge_raw": (skill.get("raw") or {}).get("kge"),
-              "kge_corrected": (skill.get("corrected") or {}).get("kge"),
+              "river_id": int(reach["river_id"]), "by": None, "kge_raw": None, "kge_corrected": None,
               "reach_mean_ratio": (fc.get("reach_check") or {}).get("ratio")}
     gthr = fc.get("gauge_thresholds") or {}
     gq = {float(t): q for t, q in zip(gthr.get("return_periods") or [], gthr.get("q") or [])}
     for t in GAUGE_RETURN_PERIODS:
         common[f"gauge_q{t}"] = gq.get(float(t))
     rows: list[dict[str, Any]] = []
-    corrected = (fc.get("correction") or {}).get("forecast") or {}
     for model in ("geoglows", "glofas"):
         part = fc.get(model) or {}
         init = _d(part.get("initialized"))
+        corrected = corrections[model].get("forecast") or {}
+        if corrected.get("date") != part.get("date"):
+            corrected = {}
         for i, day in enumerate(part.get("date") or []):
-            row = {**common, "model": model, "init_date": init.isoformat() if init else None, "valid_date": day,
+            row = {**common, **_skill_cols(corrections[model]), "model": model,
+                   "init_date": init.isoformat() if init else None, "valid_date": day,
                    "lead_day": (date.fromisoformat(day) - (init or today)).days, "generated": part.get("generated")}
             for k in STAT_KEYS:
                 vals = part.get(k)
                 row[k] = vals[i] if isinstance(vals, list) and i < len(vals) else None
-                cvals = corrected.get(k) if model == "geoglows" else None
+                cvals = corrected.get(k)
                 row[f"{k}_c"] = cvals[i] if isinstance(cvals, list) and i < len(cvals) else None
             rows.append(row)
     return rows, reach
@@ -307,11 +447,12 @@ def _parallel(fn: Callable[[Any], Any], items: list[Any], workers: int) -> list[
 def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, max_gauges: int = DEFAULT_MAX_GAUGES,
         max_items: int | None = None, workers: int = 4, time_budget_s: float = 75 * 60, days: int = 15,
         today: date | None = None, manifest: dict[str, Any] | None = None,
-        catalog: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        catalog: list[dict[str, Any]] | None = None, glofas_calls: float = GLOFAS_CALL_BUDGET) -> dict[str, Any]:
     """Build today's status snapshot and forecast issue under ``<out>/forecasts/`` and return a summary.
 
     ``max_items`` caps the gauges looked at (a smoke run); ``max_gauges`` caps the ones forecast. Gauges past the
-    caps or the time budget are counted under ``dropped`` in the manifest, by reason.
+    caps or the time budget are counted under ``dropped`` in the manifest, by reason. ``glofas_calls`` caps the
+    Open-Meteo calls spent on new GloFAS records (:func:`glofas_records`).
     """
     started = time.monotonic()
     today = today or datetime.now(timezone.utc).date()
@@ -361,6 +502,10 @@ def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, max_gauges: int = DEFAU
     dropped["no river reach"] += len(live) - len(reachable)
     chosen, over = round_robin(reachable, max_gauges)
     dropped["daily cap"] += len(over)
+    grecords, gstats = glofas_records(chosen, known, root, today=today, repo_id=repo_id, budget_calls=glofas_calls,
+                                      workers=workers,
+                                      stop=lambda: time.monotonic() - started >= time_budget_s * 0.6)
+    logger.info("GloFAS records: %s", gstats)
 
     issued: list[dict[str, Any]] = []
     budget_hit = [0]
@@ -371,7 +516,8 @@ def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, max_gauges: int = DEFAU
             budget_hit[0] += 1
             return [], None, "time budget"
         try:
-            rws, reach = issue_one(g, records[key], known[key], today=today, days=days)
+            rws, reach = issue_one(g, records[key], known[key], today=today, days=days,
+                                   glofas_record=grecords.get(key))
             return rws, reach, ""
         except Exception as exc:  # noqa: BLE001 - one gauge failing must not stop the issue
             logger.info("forecast failed for %s/%s: %s", *key, exc)
@@ -386,11 +532,15 @@ def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, max_gauges: int = DEFAU
     n_issued = len({(r["source"], r["station_id"]) for r in issued})
     if issued:
         _write_rows(issued, root / "issued" / f"{today.isoformat()}.parquet")
-    _write_rows(sorted(known.values(), key=lambda r: (r["source"], r["station_id"])), root / "reaches.parquet")
+    _write_rows(sorted(({"glofas_record_at": None, **r} for r in known.values()),
+                       key=lambda r: (r["source"], r["station_id"])), root / "reaches.parquet")
 
     entry = {"date": today.isoformat(), "file": f"{FOLDER}/issued/{today.isoformat()}.parquet" if issued else None,
              "n_gauges": n_issued, "n_rows": len(issued), "sources": sorted({r["source"] for r in issued}),
              "dropped": {k: v for k, v in sorted(dropped.items()) if v},
+             "glofas_corrected": len({(r["source"], r["station_id"]) for r in issued
+                                      if r["model"] == "glofas" and r.get("mean_c") is not None}),
+             "glofas_record": gstats,
              "seconds": round(time.monotonic() - started, 1)}
     published = read_published_json(f"{FOLDER}/manifest.json", repo_id)
     issues = [i for i in published.get("issues") or [] if i.get("date") != entry["date"]] + [entry]
@@ -425,6 +575,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-items", type=int, default=None, help="gauges looked at, for a smoke run")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--time-budget-min", type=float, default=75.0)
+    p.add_argument("--glofas-calls", type=float, default=GLOFAS_CALL_BUDGET,
+                   help="Open-Meteo weighted calls a run may spend on new GloFAS records")
     p = sub.add_parser("publish")
     p.add_argument("--out", required=True)
     p.add_argument("--repo", default=os.environ.get("HF_DATASET", DEFAULT_REPO))
@@ -434,7 +586,7 @@ def main(argv: list[str] | None = None) -> int:
         logging.getLogger(noisy).setLevel(logging.WARNING)
     if a.cmd == "run":
         info = run(a.out, repo_id=a.repo, max_gauges=a.max_gauges, max_items=a.max_items, workers=a.workers,
-                   time_budget_s=a.time_budget_min * 60)
+                   time_budget_s=a.time_budget_min * 60, glofas_calls=a.glofas_calls)
     else:
         info = {"commit": publish(a.out, repo_id=a.repo)}
     print(json.dumps(info, indent=1, default=str))

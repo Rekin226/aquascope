@@ -107,7 +107,9 @@ def test_issue_one_writes_raw_and_corrected_rows_and_picks_the_glofas_cell_once(
     assert [r["lead_day"] for r in geo] == [0, 1] and [r["mean_c"] for r in geo] == [0.5, 1.0]  # from the run's start
     assert {r["init_date"] for r in geo} == {"2026-10-07"} and geo[0]["reach_mean_ratio"] == 0.9
     glo = [r for r in rows if r["model"] == "glofas"]
-    assert glo[0]["mean"] == 3.0 and glo[0]["mean_c"] is None and glo[0]["kge_corrected"] == 0.6
+    # no GloFAS record yet: raw only, and no skill borrowed from GEOGLOWS's correction
+    assert glo[0]["mean"] == 3.0 and glo[0]["mean_c"] is None and glo[0]["kge_corrected"] is None
+    assert geo[0]["kge_corrected"] == 0.6 and geo[0]["by"] == "month"
     assert glo[0]["init_date"] is None and glo[0]["lead_day"] == 0  # Open-Meteo does not say when GloFAS ran
     # the gauge's own flows travel with every row, for the watch digest and the feeds (#521)
     got = (geo[0]["gauge_q2"], geo[0]["gauge_q10"], geo[0]["gauge_q50"], glo[0]["gauge_q100"])
@@ -144,6 +146,112 @@ def test_run_writes_the_snapshot_the_issue_and_the_manifest(monkeypatch, tmp_pat
     assert man["issues"][-1]["dropped"] == {"daily cap": 1, "no fresh value": 1}
     assert man["status"]["file"] == "forecasts/status/latest.parquet" and "CC BY 4.0" in man["about"]
     assert info["n_gauges"] == 1 and info["status_gauges"] == 2
+
+
+def _glofas_forecast(**kw):
+    out = _fake_forecast(**kw)
+    out["glofas"] = {"date": ["2026-10-08", "2026-10-09"], "mean": [30.0, 60.0], "median": [28.0, 55.0],
+                     "p25": [20.0, 40.0], "p75": [40.0, 80.0], "min": [10.0, 20.0], "max": [70.0, 100.0]}
+    return out
+
+
+def _glofas_model(gauge: pd.Series, start: str = "2016-10-07") -> pd.Series:
+    """A GloFAS reanalysis at half the gauge's flow, over its last ten years."""
+    return gauge[start:] / 2.0
+
+
+def test_issue_one_corrects_glofas_to_the_gauge_and_leaves_geoglows_alone(monkeypatch):
+    from aquascope import nownext
+
+    monkeypatch.setattr(nownext, "forecast", _glofas_forecast)
+    reach = {"source": "usgs", "station_id": "1", "river_id": 760021611, "lat": 40.0, "lon": -75.0,
+             "glofas_lat": 40.05, "glofas_lon": -75.0}
+    gauge = _series()
+    plain, _ = fa.issue_one({"source": "usgs", "station_id": "1"}, gauge, reach, today=TODAY)
+    rows, _ = fa.issue_one({"source": "usgs", "station_id": "1"}, gauge, reach, today=TODAY,
+                           glofas_record=_glofas_model(gauge))
+    geo = [r for r in rows if r["model"] == "geoglows"]
+    assert geo == [r for r in plain if r["model"] == "geoglows"]  # GEOGLOWS rows are unchanged
+    glo = [r for r in rows if r["model"] == "glofas"]
+    assert [r["mean"] for r in glo] == [30.0, 60.0]
+    # the model runs at half the gauge, so the same exceedance on the gauge's curve is about twice the flow
+    for r in glo:
+        for k in ("mean", "median", "p25", "p75"):
+            assert r[f"{k}_c"] == pytest.approx(2 * r[k], rel=0.05), k
+        assert r["high_res_c"] is None and r["by"] == "month"
+        assert r["kge_corrected"] > r["kge_raw"]  # the GloFAS correction's own hindcast skill
+    assert all(r["mean_c"] is None for r in plain if r["model"] == "glofas")
+
+
+def test_a_short_glofas_record_leaves_glofas_raw(monkeypatch):
+    from aquascope import nownext
+
+    monkeypatch.setattr(nownext, "forecast", _glofas_forecast)
+    reach = {"source": "usgs", "station_id": "1", "river_id": 1, "lat": 40.0, "lon": -75.0, "glofas_lat": 40.0,
+             "glofas_lon": -75.0}
+    rows, _ = fa.issue_one({"source": "usgs", "station_id": "1"}, _series(), reach, today=TODAY,
+                           glofas_record=_glofas_model(_series(), start="2025-10-01"))
+    glo = [r for r in rows if r["model"] == "glofas"]
+    assert glo and all(r["mean_c"] is None and r["kge_corrected"] is None for r in glo)
+
+
+def test_glofas_records_read_once_then_kept_within_a_call_budget(tmp_path):
+    gauge = _series()
+    cell = {"glofas_lat": 40.05, "glofas_lon": -75.0}
+    known = {("usgs", "kept"): {"source": "usgs", "station_id": "kept", **cell, "glofas_record_at": "2026-09-01"},
+             ("usgs", "moved"): {"source": "usgs", "station_id": "moved", **cell, "glofas_record_at": "2026-09-01"},
+             ("usgs", "new"): {"source": "usgs", "station_id": "new", **cell},
+             ("usgs", "late"): {"source": "usgs", "station_id": "late", **cell},
+             ("usgs", "nocell"): {"source": "usgs", "station_id": "nocell", "glofas_lat": None}}
+    published = {fa.glofas_record_path("usgs", "kept"): [{"date": "2020-01-01", "q": 5.0, "lat": 40.05,
+                                                          "lon": -75.0}],
+                 fa.glofas_record_path("usgs", "moved"): [{"date": "2020-01-01", "q": 5.0, "lat": 41.0,
+                                                           "lon": -75.0}]}
+    fetched, slept = [], []
+
+    def fetcher(lat, lon, start, end):
+        fetched.append((lat, lon, start, end))
+        return _glofas_model(gauge, start)[:end]
+
+    gauges = [{"source": "usgs", "station_id": s} for s in ("kept", "moved", "new", "late", "nocell")]
+    cost = fa.openmeteo_calls(3653)
+    out, stats = fa.glofas_records(gauges, known, tmp_path / "forecasts", today=TODAY, years=10,
+                                   budget_calls=2 * cost, reader=lambda p: published.get(p, []), fetcher=fetcher,
+                                   sleep=slept.append, workers=1)
+    assert len(out[("usgs", "kept")]) == 1 and stats["read"] == 1  # read from the Archive, not Open-Meteo
+    assert {k[1] for k in out} == {"kept", "new", "late"}  # "moved" is fetched again only within the budget
+    assert stats == {"read": 1, "fetched": 2, "calls": round(2 * cost, 1), "no cell yet": 1, "left for later": 1,
+                     "failed": 0}
+    assert fetched[0][2:] == ("2016-10-07", "2026-10-07") and 260 < cost < 262
+    assert slept == [pytest.approx(60 * cost / fa.GLOFAS_CALLS_PER_MINUTE)] * 2
+    written = pq.read_table(tmp_path / fa.glofas_record_path("usgs", "new")).to_pylist()
+    assert len(written) == 3653 and written[0]["lat"] == 40.05
+    assert known[("usgs", "new")]["glofas_record_at"] == "2026-10-08"
+    assert known[("usgs", "moved")]["glofas_record_at"] == "2026-09-01"  # not stamped: left for the next run
+
+
+def test_run_issues_glofas_corrected_once_its_record_is_read(monkeypatch, tmp_path):
+    from aquascope import nownext
+
+    reach = {"source": "uk_ea", "station_id": "b", "river_id": 760021611, "distance_m": 5.0, "lat": 51.5,
+             "lon": 0.1, "glofas_lat": 51.5, "glofas_lon": 0.1, "snapped_at": "2026-10-01"}
+    monkeypatch.setattr(fa, "read_published_json", lambda path, repo_id=fa.DEFAULT_REPO: {})
+    monkeypatch.setattr(fa, "read_published_rows", lambda path, repo_id=fa.DEFAULT_REPO: (
+        [reach] if path.endswith("reaches.parquet") else []))
+    monkeypatch.setattr(fa, "gauge_record", lambda source, sid, today: (_series(), ""))
+    monkeypatch.setattr(fa, "_fetch_glofas", lambda lat, lon, start, end: _glofas_model(_series(), start))
+    monkeypatch.setattr(fa.time, "sleep", lambda s: None)
+    monkeypatch.setattr(nownext, "forecast", _glofas_forecast)
+    manifest = {"sources": {"uk_ea/discharge": MANIFEST["sources"]["uk_ea/discharge"]}}
+    info = fa.run(tmp_path, manifest=manifest, catalog=[], today=TODAY, workers=1)
+    root = tmp_path / "forecasts"
+    issued = pq.read_table(root / "issued" / "2026-10-08.parquet").to_pylist()
+    glo = [r for r in issued if r["model"] == "glofas"]
+    assert glo and all(r["mean_c"] == pytest.approx(2 * r["mean"], rel=0.05) for r in glo)
+    assert info["glofas_corrected"] == 1 and info["glofas_record"]["fetched"] == 1
+    assert (root / "glofas_record" / "uk_ea" / "b.parquet").exists()
+    reaches = pq.read_table(root / "reaches.parquet").to_pylist()
+    assert reaches[0]["glofas_record_at"] == "2026-10-08"
 
 
 @pytest.mark.parametrize("budget", [0, -1])

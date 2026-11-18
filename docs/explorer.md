@@ -37,12 +37,17 @@ whole river before one of its stretches, and picking it opens the point on the
 **River** tab: "Jamuna" lands on the Jamuna River in Bangladesh. A point that
 came without a name (a click, a `#p=` link) is titled with the nearest named
 water within 5 km, else the nearest town, and the line under the title says the
-name comes from OpenStreetMap. For the reach card and Route it, the Explorer also
-looks for a named OpenStreetMap waterway near the snapped reach using Overpass.
-The card credits OpenStreetMap contributors when it uses that name. If the lookup
-fails or finds nothing, the existing Photon river name is used where available;
-otherwise the title stays "River reach N". A lake, pond or fountain does not name
-the reach.
+name comes from OpenStreetMap. For the reach card and Route it, the Explorer can
+also look for named OpenStreetMap waterways near the snapped reach using Overpass.
+The card links to OpenStreetMap attribution when it uses that name. Without a
+waterway result, the card uses a Photon river name when available and shows
+"River reach N" otherwise.
+
+To enable the lookup, set `waterwayOverpassURL` in `explorer/config.js` to an
+HTTPS Overpass interpreter that accepts cross-origin POSTs from your deployment.
+Choose an endpoint that supports the deployment's traffic. This setting is empty
+by default. The card renders while the lookup runs and uses the same fallback if
+the request fails or times out.
 
 Stations already mirrored in the [Archive](archive.md) load from it (one small
 file) instead of from the agency, so they are faster and do not add load

@@ -1,6 +1,5 @@
 // Find a named waterway near a snapped reach. The response includes line geometry so that
 // distance is measured to the way, not to its first node or the middle of its bounding box.
-const API = "https://overpass-api.de/api/interpreter";
 const RADIUS_M = 500;
 const TIMEOUT_MS = 4000;
 const TYPES = new Map([["river", 0], ["canal", 1], ["stream", 2]]);
@@ -34,13 +33,18 @@ export function nearestWaterway(elements, lat, lon) {
   return best?.name || null;
 }
 
-export async function lookupWaterway(lat, lon, { timeout = TIMEOUT_MS, fetcher = fetch } = {}) {
+export async function lookupWaterway(lat, lon, { endpoint, timeout = TIMEOUT_MS, fetcher = fetch } = {}) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  let url;
+  try { url = new URL(endpoint); } catch { return null; }
+  if (url.protocol !== "https:") return null;
   const query = `[out:json][timeout:3];way(around:${RADIUS_M},${lat},${lon})["waterway"~"^(river|canal|stream)$"]["name"];out geom;`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    const response = await fetcher(`${API}?${new URLSearchParams({ data: query })}`, { signal: controller.signal });
+    const response = await fetcher(url, {
+      method: "POST", body: new URLSearchParams({ data: query }), signal: controller.signal,
+    });
     if (!response.ok) return null;
     const data = await response.json();
     return nearestWaterway(data.elements, lat, lon);
@@ -50,7 +54,9 @@ export async function lookupWaterway(lat, lon, { timeout = TIMEOUT_MS, fetcher =
 
 // Reopening the same reach should reuse one lookup, including while it is in flight.
 // Do not retain failures: a later attempt can recover when the service is available.
-export function createWaterwayLookup({ request = lookupWaterway, now = Date.now, ttl = 300000, limit = 100 } = {}) {
+export function createWaterwayLookup({
+  endpoint, request = (lat, lon) => lookupWaterway(lat, lon, { endpoint }), now = Date.now, ttl = 300000, limit = 100,
+} = {}) {
   const cache = new Map();
   return (lat, lon) => {
     const key = `${lat},${lon}`;

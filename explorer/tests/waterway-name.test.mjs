@@ -31,13 +31,27 @@ test("recorded Basel Overpass and Cologne OSM data name the snapped Rhine reache
 });
 
 test("use geometry response and fall back on HTTP failure or abort", async () => {
+  const endpoint = "https://waterways.test/api/interpreter";
   let seen;
-  const fetcher = async (url) => { seen = new URL(url); return { ok: true, json: async () => ({ elements: [way("Rhine", "river", 0)] }) }; };
-  assert.equal(await lookupWaterway(0, 0, { fetcher }), "Rhine");
-  assert.match(seen.searchParams.get("data"), /out geom/);
-  assert.equal(await lookupWaterway(0, 0, { fetcher: async () => ({ ok: false }) }), null);
+  const fetcher = async (url, options) => {
+    seen = { url, ...options };
+    return { ok: true, json: async () => ({ elements: [way("Rhine", "river", 0)] }) };
+  };
+  assert.equal(await lookupWaterway(0, 0, { endpoint, fetcher }), "Rhine");
+  assert.equal(seen.url.href, endpoint);
+  assert.equal(seen.method, "POST");
+  assert.match(seen.body.get("data"), /out geom/);
+  assert.equal(await lookupWaterway(0, 0, { endpoint, fetcher: async () => ({ ok: false }) }), null);
   const hangs = (_url, { signal }) => new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))));
-  assert.equal(await lookupWaterway(0, 0, { timeout: 10, fetcher: hangs }), null);
+  assert.equal(await lookupWaterway(0, 0, { endpoint, timeout: 10, fetcher: hangs }), null);
+});
+
+test("contact no public endpoint without a configured HTTPS URL", async () => {
+  let calls = 0;
+  for (const endpoint of [null, "not a URL", "http://waterways.test/api/interpreter"]) {
+    assert.equal(await lookupWaterway(0, 0, { endpoint, fetcher: () => calls++ }), null);
+  }
+  assert.equal(calls, 0);
 });
 
 test("share in-flight requests, expire names, and retry failed lookups", async () => {

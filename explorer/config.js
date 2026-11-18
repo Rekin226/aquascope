@@ -19,6 +19,8 @@ export const CONFIG = {
   duckdbModule: "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm",
   // Pyodide runtime for the analysis worker.
   pyodideIndexURL: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/",
+  // Optional CORS-enabled HTTPS Overpass endpoint approved for this deployment.
+  waterwayOverpassURL: null,
   // Written by the deploy step next to index.html: {"wheel": "aquascope-X.Y.Z-py3-none-any.whl"}.
   wheelsJson: "./wheels.json",
   // Cap on how far back to ask each agency, in years. null asks for the full

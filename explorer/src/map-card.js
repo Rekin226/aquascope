@@ -27,6 +27,7 @@ import { forecastPoints, gaugePlume } from "./fews.js?v=__BUILD__";
 import { plumeAlt, plumeKey, plumeSvg } from "./fews-core.js?v=__BUILD__";
 import { riverName } from "./place-search-core.js?v=__BUILD__";
 import { createWaterwayLookup } from "./waterway-name.js?v=__BUILD__";
+import { CONFIG } from "../config.js?v=__BUILD__";
 import {
   cardNumber, dayMonth, forecastPeak, lastDays, latestValue, placeCard, prettyUnit, snapshotSentence, sparkPaths,
 } from "./map-card-core.js?v=__BUILD__";
@@ -34,6 +35,7 @@ import {
 const STATUS_VARIABLES = new Set(["discharge", "water_level", "groundwater_level"]);
 const SNAPSHOT_CREDIT = "AquaScope daily status snapshot";
 const GEOGLOWS_SHORT = "GEOGLOWS v2 forecast, CC BY 4.0, modelled";
+const WATERWAY_CREDIT = '© <a data-act="waterway-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>';
 const SHEET_QUERY = "(max-width: 640px)";
 const NEAR_GAUGE_KM = 50;   // past this the nearest gauge says nothing about the place, so the card leaves it out
 const reducedMotion = () => Boolean(globalThis.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -204,7 +206,7 @@ function render() {
       <button type="button" class="mc-close" data-act="close" aria-label="Close the card" title="Close (Esc)">×</button>
     </div>
     <h2 class="mc-title" id="mc-title">${escapeHtml(s.title || "")}</h2>
-    ${s.sub ? `<p class="mc-sub">${escapeHtml(s.sub)}</p>` : ""}
+    ${s.sub ? `<p class="mc-sub">${escapeHtml(s.sub)}${s.waterwayCredit ? ` · ${WATERWAY_CREDIT}` : ""}</p>` : ""}
     ${statusHtml(s.status)}
     ${middle}
     ${s.note ? `<p class="mc-note" role="status">${escapeHtml(s.note)}</p>` : ""}
@@ -562,7 +564,18 @@ function pointName(m) {
 function pointRiver(m) {
   return m.waterwayName || riverName(pointName(m));
 }
-const lookupWaterway = createWaterwayLookup();
+const lookupWaterway = createWaterwayLookup({ endpoint: CONFIG.waterwayOverpassURL });
+
+function reachSubtitle(m) {
+  return `River reach ${m.reachId} · ${coords(m.lat, m.lon)}${m.order}`;
+}
+
+function updateReachName(m, name) {
+  const target = { ...m.routeTarget, name };
+  const buttons = m.spec.buttons.map((b) => b.id === "route" ? routeButton(target)
+    : b.id === "replay" ? replayButton(target) : b);
+  updateCard(m.id, { title: name, sub: reachSubtitle(m), waterwayCredit: Boolean(m.waterwayName), buttons });
+}
 
 function pointModel(p) {
   const id = `point:${p.lat},${p.lon}`;
@@ -600,7 +613,6 @@ function nearestGauge(lat, lon) {
 
 function onSnap(m, snap) {
   if (model !== m) return;
-  m.waterwayName = null;
   const waterwayRun = (m.waterwayRun || 0) + 1;
   m.waterwayRun = waterwayRun;
   if (!snap || snap.error) {
@@ -637,26 +649,26 @@ function onSnap(m, snap) {
     return;
   }
   const order = snap.strahler_order ? `, stream order ${snap.strahler_order}` : "";
+  const previous = m.routeTarget;
+  if (!previous || previous.river_id !== snap.river_id || previous.lat !== snap.snap_lat || previous.lon !== snap.snap_lon) {
+    m.waterwayName = null;
+  }
   const named = pointRiver(m);
   m.reachId = snap.river_id;
   m.order = order;
   m.routeTarget = { river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon };
   // A slow lookup never holds up the card. Ignore replies for an older selection or reach.
-  if (Number.isFinite(snap.snap_lat) && Number.isFinite(snap.snap_lon)) {
-    const reachId = snap.river_id;
+  if (CONFIG.waterwayOverpassURL && !m.waterwayName && Number.isFinite(snap.snap_lat) && Number.isFinite(snap.snap_lon)) {
     void lookupWaterway(snap.snap_lat, snap.snap_lon).then((name) => {
-      if (!name || model !== m || m.reachId !== reachId || m.waterwayRun !== waterwayRun) return;
+      if (!name || model !== m || m.waterwayRun !== waterwayRun) return;
       m.waterwayName = name;
-      const target = m.routeTarget;
-      const buttons = target ? (m.spec.buttons || []).map((b) => (b.id === "route" ? routeButton({ ...target, name })
-        : b.id === "replay" ? replayButton({ ...target, name }) : b)) : null;
-      const sub = `River reach ${reachId} · ${coords(m.lat, m.lon)}${m.order || ""} · © OpenStreetMap contributors`;
-      updateCard(m.id, buttons ? { title: name, sub, buttons } : { title: name, sub });
+      updateReachName(m, name);
     });
   }
   updateCard(m.id, {
     what: "River", title: named || `River reach ${snap.river_id}`,
-    sub: named ? `River reach ${snap.river_id} · ${coords(m.lat, m.lon)}${order}` : `${coords(m.lat, m.lon)}${order}`,
+    sub: named ? reachSubtitle(m) : `${coords(m.lat, m.lon)}${order}`,
+    waterwayCredit: Boolean(m.waterwayName),
     lngLat: Number.isFinite(snap.snap_lat) ? [snap.snap_lon, snap.snap_lat] : m.spec.lngLat,
     status: { pending: "Reading the 15-day forecast…" },
     credit: GEOGLOWS_SHORT,
@@ -773,21 +785,14 @@ export function initMapCard() {
     root.addEventListener("pointname", (e) => {
       const d = e.detail || {};
       if (t !== "pt" || !model || model.kind !== "point" || d.lat !== model.lat || d.lon !== model.lon || !d.label) return;
-      const sub = model.reachId ? `River reach ${model.reachId} · ${coords(model.lat, model.lon)}${model.order || ""}` +
-        (model.waterwayName ? " · © OpenStreetMap contributors" : "")
-        : coords(model.lat, model.lon);
       // A card that has snapped to a river takes the river's name only (#637): a lake, a fountain or a town near
       // the point does not rename the reach, which goes on saying "River reach N" when no river is in reach.
       if (model.reachId) {
-        const river = pointRiver(model);
-        if (!river) return;
-        const target = model.routeTarget;
-        const buttons = target ? (model.spec.buttons || []).map((b) => (b.id === "route" ? routeButton({ ...target, name: river })
-          : b.id === "replay" ? replayButton({ ...target, name: river }) : b)) : null;
-        updateCard(model.id, buttons ? { title: river, sub, buttons } : { title: river, sub });
+        const river = model.waterwayName || riverName(d.label);
+        if (river) updateReachName(model, river);
         return;
       }
-      updateCard(model.id, { title: d.label.name, sub });
+      updateCard(model.id, { title: d.label.name, sub: coords(model.lat, model.lon) });
     });
     root.addEventListener("reachchange", (e) => {
       if (!model || (t === "st") !== (model.kind === "gauge")) return;

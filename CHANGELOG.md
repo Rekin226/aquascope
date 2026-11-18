@@ -32,6 +32,7 @@ All notable changes to AquaScope are documented here.
 - **Cite 1.2.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.2.0's Zenodo DOI (10.5281/zenodo.24125206).
 - **Taiwan Civil IoT reads again** (#176). The SensorThings water-resource service moved from `sta.ci.taiwan.gov.tw` to `sta.colife.org.tw`; `taiwan_civil_iot` now uses the new endpoint, and TLS verification is back on (`verify=False` removed), since the new host serves a valid certificate.
 - **BOM names a dead endpoint instead of an empty answer** (#773): `BOMCollector.fetch_raw` caught every failure of its two KiWIS requests, logged a warning and returned `[]`, so the 2026-11-16 live sweep recorded BOM's `503 Service Unavailable` as `EMPTY` -- "the call succeeded but returned nothing". Both requests now raise `CollectorError` carrying the source, URL and HTTP status, the contract #165 and #463 brought to the other collectors; a genuine "No matches." answer still returns an empty list.
+- **Irrigation tutorial runs on Python 3.10 and 3.11**: fix the irrigation event count display and report effective rainfall and net irrigation after computing the irrigation schedule.
 
 ## [1.2.0] - 2026-11-11
 

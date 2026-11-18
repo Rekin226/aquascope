@@ -131,6 +131,22 @@ def test_taiwan_wra_fhy_attribution_includes_ogdl_exhibit_notice():
     assert "https://data.gov.tw/license" in attribution
 
 
+def test_taiwan_wra_iot_records_the_portal_declaration_not_the_ogdl():
+    """The IoT portal states its own 政府網站資料開放宣告, not the OGDL (#473).
+
+    https://iot.wra.gov.tw/information.jsp (read 2026-11-16) grants free,
+    non-exclusive, sub-licensable re-use and asks only that the source be
+    stated ("然使用時，應註明出處"); neither that page nor the API guide names
+    the Open Government Data License, so the registry records the declaration
+    instead of claiming the OGDL.
+    """
+    source = SOURCES["taiwan_wra_iot"]
+    assert source.license == "WRA-Open-Data-Declaration (free re-use with attribution)"
+    assert source.redistributable
+    assert "政府網站資料開放宣告" in source.attribution
+    assert "https://iot.wra.gov.tw/information.jsp" in source.attribution
+
+
 def test_poland_imgw_attribution_keeps_both_imgw_notices_verbatim():
     """#473: the terms require both notices word for word, source and processing side by side (§ 5 ust. 3 and 4)."""
     attribution = SOURCES["poland_imgw"].attribution
@@ -382,3 +398,56 @@ def test_plain_http_catalog_sources_are_declared_browser_unreachable(built):
 def test_browser_reachable_defaults_on():
     unreachable = sorted(k for k, m in SOURCES.items() if not m.browser_reachable)
     assert unreachable == ["bom", "greece_hydroscope", "greece_openhi", "japan_mlit", "poland_imgw"], unreachable
+
+@pytest.mark.parametrize(
+    "source_id",
+    ["taiwan_datagov", "taiwan_civil_iot", "taiwan_cwa", "taiwan_moenv"],
+)
+def test_taiwan_sources_carry_the_ogdl_exhibit_notice(source_id):
+    """The OGDL asks for the Exhibit notice, not just the licence name (#473).
+
+    The English licence text at https://data.gov.tw/license (read 2026-11-16)
+    says in section 3.2 that a user "must make an explicit notice of statement
+    as attribution requested in the Exhibit", and that failing to comply voids
+    the granted rights ab initio. The Exhibit asks for the provider, the
+    dataset, the sentence below and the licence URL, so every Taiwanese source
+    in the registry carries the sentence and the link.
+    """
+    source = SOURCES[source_id]
+    assert source.license == "OGDL-Taiwan-1.0"
+    assert source.redistributable
+    assert "政府資料開放授權條款 (Open Government Data License)" in source.attribution
+    assert "使用者於遵守本條款各項規定之前提下，得利用之" in source.attribution
+    assert "https://data.gov.tw/license" in source.attribution
+
+
+@pytest.mark.parametrize(
+    ("source_id", "notice"),
+    [
+        (
+            "taiwan_datagov",
+            "經濟部水利署 (Water Resources Agency, MOEA) 2017 [即時水位資料]；"
+            "經濟部水利署 2023 [即時地下水水位資料]",
+        ),
+        (
+            "taiwan_moenv",
+            "環境部 (Ministry of Environment) 2013 [河川水質監測資料]",
+        ),
+    ],
+)
+def test_taiwan_sources_name_the_dataset_and_release_year(source_id, notice):
+    """The Exhibit names each data.gov.tw dataset and its release year (#473).
+
+    The years come from the `上架日期` column of the data.gov.tw dataset export
+    (read 2026-11-16): 25768 即時水位資料 2017-09-12, 161082 即時地下水水位資料
+    2023-02-23 and 6078 河川水質監測資料 2013-05-22.
+    """
+    assert notice in SOURCES[source_id].attribution
+
+
+def test_taiwan_cwa_cites_codis_and_its_declaration():
+    """The collector uses CODiS, whose footer links to CWA's declaration."""
+    attribution = SOURCES["taiwan_cwa"].attribution
+    assert "交通部中央氣象署 CODiS 氣候觀測資料查詢服務" in attribution
+    assert "https://www.cwa.gov.tw/V8/C/information.html" in attribution
+    assert "氣象觀測站-全測站逐時氣象資料" not in attribution

@@ -17,6 +17,7 @@ All notable changes to AquaScope are documented here.
 
 ### Fixed
 - **SPI and SPEI skip windows with missing months**: require consecutive calendar months when accumulating precipitation or climatic water balance. A longer timescale with no complete window is unavailable while shorter timescales can still return results.
+- **Drought events stop at missing months**: groundwater, SPI and SPEI event summaries separate below-threshold runs across omitted months or missing index values.
 - **Taiwan MOENV reads the river water-quality dataset**: use `WQX_P_01` instead of the air-quality station catalog and parse the sampling timestamp, station identifier and name from its documented fields. The live health check requests just one page of two records.
 - **Record the declaration behind the WRA IoT source** (#473): [the IoT portal's 政府網站資料開放宣告](https://iot.wra.gov.tw/information.jsp) (read 2026-11-16) grants free, non-exclusive, sub-licensable re-use provided the source is stated, and neither it nor the API guide names the Open Government Data License, so `taiwan_wra_iot` now records that declaration instead of `OGDL-Taiwan-1.0` and its attribution carries the notice requirement and the page URL.
 - **Say what Colorado DWR's terms require** (#473): the portal's Terms of Service grant no licence and ask applications that use its feed to reproduce the State of Colorado disclaimer, so `colorado_cdss` now carries that disclaimer verbatim in `attribution` while staying `license="unknown"` and non-redistributable.

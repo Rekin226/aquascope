@@ -420,6 +420,18 @@ def test_spei_takes_a_ready_pet_column_or_says_what_it_needs(climate_frame: pd.D
         wb.spei(climate_frame, pet_column="nope")
 
 
+def test_standardized_indices_pairs_month_end_pet_with_month_start_rain(climate_frame: pd.DataFrame) -> None:
+    precip = climate_frame.set_index("date")["rain_mm"]
+    pet = pd.Series(60.0, index=precip.index)
+    expected = wb.standardized_indices(precip, pet, timescales=(3,))
+    pet.index = pet.index + pd.offsets.MonthEnd(0)
+
+    result = wb.standardized_indices(precip, pet, timescales=(3,))
+
+    assert result == expected
+    assert result["indices"][0]["divergence"]["n"] == len(precip) - 2
+
+
 def test_standardized_indices_without_pet_gives_spi_only(climate_frame: pd.DataFrame) -> None:
     p = climate_frame.set_index("date")["rain_mm"]
     res = wb.standardized_indices(p, timescales=(3,))

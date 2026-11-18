@@ -93,6 +93,25 @@ class TestDroughtEvents:
         assert len(events) == 1
         assert events[0].duration == 3
 
+    @pytest.mark.parametrize("explicit_missing_month", [False, True])
+    def test_missing_month_splits_runs(self, explicit_missing_month):
+        dates = pd.DatetimeIndex(
+            ["2023-12-31", "2024-01-31", "2024-03-01", "2024-03-31"],
+            tz="Asia/Taipei",
+        )
+        index = pd.Series([-1.0, -1.5, -2.0, -1.25], index=dates, dtype="Float64")
+        if explicit_missing_month:
+            index[pd.Timestamp("2024-02-29", tz=dates.tz)] = pd.NA
+
+        events = drought_events(index)
+
+        assert [(event.start, event.end, event.duration) for event in events] == [
+            (dates[0], dates[1], 2),
+            (dates[2], dates[3], 2),
+        ]
+        assert [event.severity for event in events] == pytest.approx([-2.5, -3.25])
+        assert [event.peak for event in events] == pytest.approx([-1.5, -2.0])
+
 
 # ── drought propagation (SPI to SGI lag) ─────────────────────────────────────
 

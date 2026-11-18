@@ -11,7 +11,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import httpx
+import pytest
+
+from aquascope.collectors.base import CollectorError
 from aquascope.collectors.bom import (
+    BOM_BASE,
     LEVEL_PARAMETERS,
     PARAMETER_UNITS,
     BOMCollector,
@@ -167,10 +172,41 @@ class TestBOMFetchRaw:
         rows = self.collector.fetch_raw(station_id="999999")
         assert rows == []
 
+    def test_fetch_raw_no_observations_returns_empty(self):
+        empty_values = [{**TS_VALUES_RESPONSE[0], "data": []}]
+        self.mock_client.get_json.side_effect = [TS_LIST_RESPONSE, empty_values]
+        assert self.collector.fetch_raw(station_id="410001") == []
+
     def test_fetch_raw_handles_request_failure(self):
+        # A dead endpoint must not masquerade as "no data": #773.
         self.mock_client.get_json.side_effect = ConnectionError("boom")
-        rows = self.collector.fetch_raw(station_id="410001")
-        assert rows == []
+        with pytest.raises(CollectorError) as raised:
+            self.collector.fetch_raw(station_id="410001")
+        assert raised.value.source == "bom"
+        assert raised.value.url == BOM_BASE
+        assert raised.value.status_code is None
+        assert "getTimeseriesList" in str(raised.value)
+        assert isinstance(raised.value.cause, ConnectionError)
+
+    def test_fetch_raw_failure_keeps_http_status_from_cause_chain(self):
+        # CachedHTTPClient re-raises RuntimeError(...) from the httpx error;
+        # the 503 must survive into CollectorError for the health report.
+        request = httpx.Request("GET", BOM_BASE)
+        response = httpx.Response(503, request=request)
+        status_error = httpx.HTTPStatusError("503 Service Unavailable", request=request, response=response)
+        cause = RuntimeError(f"All 3 attempts failed for {BOM_BASE} (status 503)")
+        cause.__cause__ = status_error
+        self.mock_client.get_json.side_effect = cause
+        with pytest.raises(CollectorError) as raised:
+            self.collector.fetch_raw(station_id="410001")
+        assert raised.value.status_code == 503
+
+    def test_fetch_raw_values_request_failure_raises(self):
+        self.mock_client.get_json.side_effect = [TS_LIST_RESPONSE, ConnectionError("boom")]
+        with pytest.raises(CollectorError) as raised:
+            self.collector.fetch_raw(station_id="410001")
+        assert "getTimeseriesValues" in str(raised.value)
+        assert raised.value.source == "bom"
 
     def test_fetch_raw_passes_explicit_dates(self):
         self.mock_client.get_json.side_effect = [TS_LIST_RESPONSE, TS_VALUES_RESPONSE]

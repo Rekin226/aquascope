@@ -76,6 +76,12 @@ def test_moenv_default_fetches_and_parses_river_water_quality():
     assert (sample.parameter, sample.value, sample.unit) == ("TMP", 33.2, "℃")
 
 
+def test_moenv_collection_follows_full_pages_by_default():
+    client = Mock(get_json=Mock(side_effect=[{"records": SAMPLE_RAW[:2]}, {"records": SAMPLE_RAW[2:]}]))
+    assert TaiwanMOENVCollector(client=client).fetch_raw(limit=2) == SAMPLE_RAW
+    assert [call.kwargs["params"]["offset"] for call in client.get_json.call_args_list] == [0, 2]
+
+
 class TestTaiwanMOENVCollector:
     def setup_method(self):
         self.collector = TaiwanMOENVCollector(api_key="test")

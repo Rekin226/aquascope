@@ -84,12 +84,13 @@ class TaiwanMOENVCollector(BaseCollector):
         self.dataset_id = dataset_id
 
     # ── fetch ────────────────────────────────────────────────────────
-    def fetch_raw(self, limit: int = 1000, offset: int = 0, **kwargs) -> list[dict]:
-        """
-        Page through MOENV open-data endpoint and return raw records.
-        """
+    def fetch_raw(self, limit: int = 1000, offset: int = 0, *, max_pages: int | None = None, **kwargs) -> list[dict]:
+        """Fetch pages of up to ``limit`` records, optionally limiting the number of pages."""
+        if max_pages is not None and max_pages < 1:
+            raise ValueError("MOENV max_pages must be positive")
         all_records: list[dict] = []
-        while True:
+        pages_read = 0
+        while max_pages is None or pages_read < max_pages:
             params: dict[str, Any] = {
                 "limit": limit,
                 "offset": offset,
@@ -99,6 +100,7 @@ class TaiwanMOENVCollector(BaseCollector):
                 params["api_key"] = self.api_key
 
             data = self.client.get_json(self.dataset_id, params=params)
+            pages_read += 1
             records = data.get("records", [])
             if not records:
                 break

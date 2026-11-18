@@ -176,7 +176,7 @@ PROBES: dict[str, Probe] = {
     ),
     "taiwan_cwa": Probe(kwargs={}, note="CWA rainfall stations"),
     "taiwan_moenv": Probe(
-        kwargs={"limit": 2},
+        kwargs={"limit": 2, "max_pages": 1},
         requires=("TAIWAN_MOENV_API_KEY",),
         note="needs a MOENV API key",
     ),

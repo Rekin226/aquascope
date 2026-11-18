@@ -506,6 +506,7 @@ Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/d
 | [AquaScope Bench: calibration environment](docs/gym.md) | A gym-style calibration environment over real basins, with baselines and a leaderboard |
 | [Evaluating studies](docs/evaluation.md) | `aquascope eval`: a study's scorecard and trace, and stats across many runs, read from the bundles |
 | [Stability](docs/stability.md) | What 1.0 promises: the public API, the CLI and MCP surface, what counts as breaking, deprecations, what "experimental" means |
+| [Forecast verification](docs/forecast-verification.md) | Issued forecasts scored against the gauge: median log error, CRPS, hit rate, and why the pair counts matter |
 | [Archive layout](docs/archive-layout.md) | The Archive as a contract: every prefix, its files, columns, units, cadence, licence and the workflow that writes it |
 | [AquaScope Bench](docs/hydrogym.md) | Hydrology agents scored on real sites: task outcomes, plan quality against expert plans, and the report the user receives |
 | [Integration guides](docs/integration_guides/) | xarray, QGIS, R interoperability |

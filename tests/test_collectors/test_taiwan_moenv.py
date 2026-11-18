@@ -1,5 +1,7 @@
 """Tests for Taiwan MOENV collector normalisation."""
 
+from datetime import datetime
+from unittest.mock import Mock
 
 from aquascope.collectors.taiwan_moenv import TaiwanMOENVCollector
 from aquascope.schemas.water_data import DataSource
@@ -49,6 +51,31 @@ SAMPLE_RAW = [
 ]
 
 
+def test_moenv_default_fetches_and_parses_river_water_quality():
+    # Field names and sample values from the official WQX_P_01 catalog preview.
+    # https://data.moenv.gov.tw/dataset/detail/WQX_P_01
+    record = {
+        "siteid": "1685",
+        "sitename": "永安橋",
+        "sampledate": "2026-09-21 12:30:59",
+        "itemname": "氣溫",
+        "itemengabbreviation": "TMP",
+        "itemvalue": "33.2",
+        "itemunit": "℃",
+    }
+    client = Mock(get_json=Mock(return_value={"records": [record]}))
+    collector = TaiwanMOENVCollector(client=client)
+
+    samples = collector.collect(limit=2)
+
+    client.get_json.assert_called_once_with("WQX_P_01", params={"limit": 2, "offset": 0, "format": "json"})
+    [sample] = samples
+    assert sample.station_id == "1685"
+    assert sample.station_name == "永安橋"
+    assert sample.sample_datetime == datetime(2026, 9, 21, 12, 30, 59)
+    assert (sample.parameter, sample.value, sample.unit) == ("TMP", 33.2, "℃")
+
+
 class TestTaiwanMOENVCollector:
     def setup_method(self):
         self.collector = TaiwanMOENVCollector(api_key="test")
@@ -56,6 +83,8 @@ class TestTaiwanMOENVCollector:
     def test_normalise_produces_correct_records(self):
         records = self.collector.normalise(SAMPLE_RAW)
         assert len(records) == 2
+        assert records[0].sample_datetime == datetime(2025, 11, 15, 9, 30)
+        assert records[0].station_id == "新店溪-秀朗橋"
 
     def test_normalise_maps_parameter_names(self):
         records = self.collector.normalise(SAMPLE_RAW)

@@ -16,6 +16,7 @@ All notable changes to AquaScope are documented here.
 - **`india_wris` licence audit** (#207): keep `license="unknown"` and `redistributable=False` after reading the first-party terms — [NWIC's copyright policy](https://nwic.gov.in/copyrightpolicy) forbids reproducing the site's contents without permission, and the Hydro-Meteorological Data Dissemination Policy, 2018 (§6.1, §6.3) guarantees only free download and acknowledgement — and replace the "terms not yet verified" attribution with India-WRIS and the Ministry of Jal Shakti.
 
 ### Fixed
+- **SPI and SPEI skip windows with missing months**: require consecutive calendar months when accumulating precipitation or climatic water balance. A longer timescale with no complete window is unavailable while shorter timescales can still return results.
 - **Taiwan MOENV reads the river water-quality dataset**: use `WQX_P_01` instead of the air-quality station catalog and parse the sampling timestamp, station identifier and name from its documented fields. The live health check requests just one page of two records.
 - **Record the declaration behind the WRA IoT source** (#473): [the IoT portal's 政府網站資料開放宣告](https://iot.wra.gov.tw/information.jsp) (read 2026-11-16) grants free, non-exclusive, sub-licensable re-use provided the source is stated, and neither it nor the API guide names the Open Government Data License, so `taiwan_wra_iot` now records that declaration instead of `OGDL-Taiwan-1.0` and its attribution carries the notice requirement and the page URL.
 - **Say what Colorado DWR's terms require** (#473): the portal's Terms of Service grant no licence and ask applications that use its feed to reproduce the State of Colorado disclaimer, so `colorado_cdss` now carries that disclaimer verbatim in `attribution` while staying `license="unknown"` and non-redistributable.
@@ -33,6 +34,7 @@ All notable changes to AquaScope are documented here.
 - **Cite 1.2.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.2.0's Zenodo DOI (10.5281/zenodo.24125206).
 - **Taiwan Civil IoT reads again** (#176). The SensorThings water-resource service moved from `sta.ci.taiwan.gov.tw` to `sta.colife.org.tw`; `taiwan_civil_iot` now uses the new endpoint, and TLS verification is back on (`verify=False` removed), since the new host serves a valid certificate.
 - **BOM names a dead endpoint instead of an empty answer** (#773): `BOMCollector.fetch_raw` caught every failure of its two KiWIS requests, logged a warning and returned `[]`, so the 2026-11-16 live sweep recorded BOM's `503 Service Unavailable` as `EMPTY` -- "the call succeeded but returned nothing". Both requests now raise `CollectorError` carrying the source, URL and HTTP status, the contract #165 and #463 brought to the other collectors; a genuine "No matches." answer still returns an empty list.
+- **Irrigation tutorial runs on Python 3.10 and 3.11**: fix the irrigation event count display and report effective rainfall and net irrigation after computing the irrigation schedule.
 
 ## [1.2.0] - 2026-11-11
 

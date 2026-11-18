@@ -449,16 +449,21 @@ def precipitation_concentration_index(precip_monthly: pd.Series) -> float:
 
 # ── Standardised indices: SPI and SPEI share one core ───────────────────
 def _accumulate(series: pd.Series, scale: int, what: str) -> pd.Series:
-    """``series`` summed over ``scale`` months, the first ``scale - 1`` months dropped."""
+    """Sum complete windows of ``scale`` consecutive calendar months."""
     if not isinstance(series.index, pd.DatetimeIndex):
         raise ValueError(f"{what} must have a DatetimeIndex.")
     if scale < 1:
         raise ValueError("scale must be >= 1 month.")
     s = series.sort_index().astype(float)
-    acc = s.rolling(scale).sum().dropna()
-    if acc.empty:
+    acc = s.rolling(scale).sum()
+    if not acc.notna().any():
         raise ValueError("Series too short for the requested accumulation scale.")
-    return acc
+    if scale > 1:
+        months = pd.Series(s.index.year * 12 + s.index.month, index=s.index)
+        adjacent = months.diff().eq(1)
+        complete_window = adjacent.rolling(scale - 1).sum().eq(scale - 1)
+        acc = acc.where(complete_window)
+    return acc.dropna()
 
 
 def _standardize(

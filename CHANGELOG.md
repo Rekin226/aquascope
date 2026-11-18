@@ -8,6 +8,7 @@ All notable changes to AquaScope are documented here.
 ## [Unreleased]
 
 ### Added
+- **HydroGym reference plan for Taichung** (#442): check the observed record behind the drought indices and distinguish the station series from an ERA5 cell before comparing a dry spell with history.
 - **A weekly live sweep of every collector** (#166): `.github/workflows/collector-health.yml` asks each of the 37 sources for the smallest slice of real data it can serve and writes one row per source -- OK, EMPTY, FAIL, TIMEOUT or NEEDS_KEY, with the record count and the seconds it took -- to the run summary. The weekly harvest only proves that a station catalog still answers; a collector whose data path broke can pass that check while returning nothing. The sweep keeps one rolling `collector-health` issue, opened, updated or closed by the script itself, and the run only fails for a source that should have answered: a missing secret and a source that blocks non-local runners are reported but never red.
 
 ### Changed
@@ -34,6 +35,7 @@ All notable changes to AquaScope are documented here.
 - **Cite 1.2.0 by its version DOI**: `CITATION.cff`, the README and docs BibTeX, the Explorer's Cite this and the Studio deliverables now name v1.2.0's Zenodo DOI (10.5281/zenodo.24125206).
 - **Taiwan Civil IoT reads again** (#176). The SensorThings water-resource service moved from `sta.ci.taiwan.gov.tw` to `sta.colife.org.tw`; `taiwan_civil_iot` now uses the new endpoint, and TLS verification is back on (`verify=False` removed), since the new host serves a valid certificate.
 - **BOM names a dead endpoint instead of an empty answer** (#773): `BOMCollector.fetch_raw` caught every failure of its two KiWIS requests, logged a warning and returned `[]`, so the 2026-11-16 live sweep recorded BOM's `503 Service Unavailable` as `EMPTY` -- "the call succeeded but returned nothing". Both requests now raise `CollectorError` carrying the source, URL and HTTP status, the contract #165 and #463 brought to the other collectors; a genuine "No matches." answer still returns an empty list.
+- **Irrigation tutorial runs on Python 3.10 and 3.11**: fix the irrigation event count display and report effective rainfall and net irrigation after computing the irrigation schedule.
 
 ## [1.2.0] - 2026-11-11
 

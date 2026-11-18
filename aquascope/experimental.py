@@ -25,6 +25,8 @@ What is here and why (``docs/stability.md`` has the full policy):
   ``aquascope.sketch.landuse`` (the SCS curve number, TR-55), ``aquascope landuse`` and the MCP tool
   ``change_landuse``; a drawn reservoir (#662: ``aquascope.sketch.reservoir``, ``aquascope route reservoir``
   and the MCP tool ``route_reservoir``), new in 1.1.
+* Forecast verification (#785): ``aquascope.archive.verify`` and ``aquascope evidence verify``, new in 1.3. The
+  table's columns may change while the later steps of #785 land.
 * ``aquascope.gym`` and ``aquascope gym``: the benchmark, now called AquaScope Bench (#440). Only the name changed;
   the module path and the CLI verb stay, and the task suite is not frozen before its DOI (#175).
 
@@ -38,6 +40,7 @@ from __future__ import annotations
 
 # Module paths. A package covers its submodules (``aquascope.context`` covers ``aquascope.context.floods_past``).
 MODULES: tuple[str, ...] = (
+    "aquascope.archive.verify",
     "aquascope.bulletin",
     "aquascope.context",
     "aquascope.evidence",

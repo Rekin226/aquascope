@@ -3,7 +3,7 @@ Collector for Taiwan Ministry of Environment (MOENV) water quality data.
 
 Data portal : https://data.moenv.gov.tw
 Datasets    :
-  - River water quality monitoring (dataset id: AQX_P_07)
+  - River water quality monitoring: https://data.moenv.gov.tw/dataset/detail/WQX_P_01
   - Monthly tap water quality sampling
   - Beach / recreational water quality
 
@@ -33,7 +33,7 @@ from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
 logger = logging.getLogger(__name__)
 
 # ── Dataset IDs ──────────────────────────────────────────────────────
-RIVER_WQ_DATASET = "AQX_P_07"
+RIVER_WQ_DATASET = "WQX_P_01"
 TAP_WATER_DATASET = "AQX_P_432"
 
 MOENV_BASE = "https://data.moenv.gov.tw/api/v2"
@@ -48,7 +48,7 @@ class TaiwanMOENVCollector(BaseCollector):
     api_key : str
         Free key obtained at https://data.moenv.gov.tw/en/apikey
     dataset_id : str
-        Dataset identifier (default: river water quality ``AQX_P_07``).
+        Dataset identifier (default: river water quality ``WQX_P_01``).
     """
 
     name = "taiwan_moenv"
@@ -84,12 +84,13 @@ class TaiwanMOENVCollector(BaseCollector):
         self.dataset_id = dataset_id
 
     # ── fetch ────────────────────────────────────────────────────────
-    def fetch_raw(self, limit: int = 1000, offset: int = 0, **kwargs) -> list[dict]:
-        """
-        Page through MOENV open-data endpoint and return raw records.
-        """
+    def fetch_raw(self, limit: int = 1000, offset: int = 0, *, max_pages: int | None = None, **kwargs) -> list[dict]:
+        """Fetch pages of up to ``limit`` records, optionally limiting the number of pages."""
+        if max_pages is not None and max_pages < 1:
+            raise ValueError("MOENV max_pages must be positive")
         all_records: list[dict] = []
-        while True:
+        pages_read = 0
+        while max_pages is None or pages_read < max_pages:
             params: dict[str, Any] = {
                 "limit": limit,
                 "offset": offset,
@@ -99,6 +100,7 @@ class TaiwanMOENVCollector(BaseCollector):
                 params["api_key"] = self.api_key
 
             data = self.client.get_json(self.dataset_id, params=params)
+            pages_read += 1
             records = data.get("records", [])
             if not records:
                 break
@@ -130,16 +132,19 @@ class TaiwanMOENVCollector(BaseCollector):
                         longitude=float(rec["twd97lon"]),
                     )
 
-                sample_dt = datetime.strptime(
-                    f"{rec.get('sampledate', '')} {rec.get('sampletime', '00:00')}",
-                    "%Y-%m-%d %H:%M",
-                )
+                # WQX_P_01 has a complete timestamp in SampleDate. Older
+                # records may provide the date and time in separate fields.
+                sampled_at = str(rec.get("sampledate") or "").strip()
+                if " " in sampled_at or "T" in sampled_at:
+                    sample_dt = datetime.fromisoformat(sampled_at)
+                else:
+                    sample_dt = datetime.strptime(f"{sampled_at} {rec.get('sampletime', '00:00')}", "%Y-%m-%d %H:%M")
 
                 samples.append(
                     WaterQualitySample(
                         source=DataSource.TAIWAN_MOENV,
-                        station_id=rec.get("sitename", "unknown"),
-                        station_name=rec.get("siteengname"),
+                        station_id=str(rec.get("siteid") or rec.get("sitename") or "unknown"),
+                        station_name=rec.get("siteengname") or rec.get("sitename"),
                         location=loc,
                         sample_datetime=sample_dt,
                         parameter=param,

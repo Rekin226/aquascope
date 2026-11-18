@@ -30,7 +30,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from aquascope.collectors.base import BaseCollector
+from aquascope.collectors.base import BaseCollector, CollectorError
 from aquascope.schemas.station import Station, in_bbox
 from aquascope.schemas.water_data import (
     DataSource,
@@ -326,8 +326,14 @@ class BOMCollector(BaseCollector):
         -------
         list[dict]
             Raw observation rows, each merged with station/timeseries
-            metadata. Returns an empty list if no matching time series is
-            found or the upstream API is unreachable.
+            metadata. Returns an empty list when the API answers with no
+            matching time series or no observations for the requested window.
+
+        Raises
+        ------
+        CollectorError
+            When either KiWIS request fails hard (an HTTP error status or a
+            transport failure), carrying the source, URL and last status.
         """
         if not station_id:
             raise ValueError("BOMCollector.fetch_raw requires a station_id.")
@@ -394,9 +400,13 @@ class BOMCollector(BaseCollector):
         }
         try:
             data = self.client.get_json(BOM_BASE, params=params)
-        except Exception:
-            logger.warning("BOM getTimeseriesList request failed for station %s", station_id, exc_info=True)
-            return None
+        except Exception as exc:
+            raise CollectorError(
+                f"BOM getTimeseriesList request failed for station {station_id}",
+                source=self.name,
+                url=BOM_BASE,
+                cause=exc,
+            ) from exc
 
         row = self._first_data_row(data)
         if row is None:
@@ -436,9 +446,13 @@ class BOMCollector(BaseCollector):
 
         try:
             data = self.client.get_json(BOM_BASE, params=params)
-        except Exception:
-            logger.warning("BOM getTimeseriesValues request failed for ts_id %s", ts_id, exc_info=True)
-            return {}, []
+        except Exception as exc:
+            raise CollectorError(
+                f"BOM getTimeseriesValues request failed for ts_id {ts_id}",
+                source=self.name,
+                url=BOM_BASE,
+                cause=exc,
+            ) from exc
 
         series = self._first_series(data)
         if series is None:

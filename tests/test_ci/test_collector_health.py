@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -237,6 +238,20 @@ def test_sweep_passes_configured_credentials_to_the_probe(health, monkeypatch, c
     _patch(monkeypatch, _FakeCollector([{"a": 1}]))
     assert health.main(["--source", source, "--no-issue"]) == 0
     assert f"[{source}] OK 1 records" in capsys.readouterr().out
+
+
+def test_moenv_health_probe_reads_only_one_page(health, monkeypatch) -> None:
+    from aquascope.collectors.taiwan_moenv import TaiwanMOENVCollector
+
+    row = {"siteid": "1685", "sampledate": "2026-09-21 12:30:59", "itemname": "氣溫", "itemvalue": "33.2"}
+    client = Mock(get_json=Mock(side_effect=[{"records": [row, row]}, AssertionError("unexpected second page")]))
+    _patch(monkeypatch, TaiwanMOENVCollector(client=client))
+
+    result = health.run_probe("taiwan_moenv", health.PROBES["taiwan_moenv"])
+
+    assert result.status == health.OK
+    assert result.records == 2
+    client.get_json.assert_called_once()
 
 
 def test_an_informational_failure_is_not_a_failure(health, monkeypatch, capsys) -> None:

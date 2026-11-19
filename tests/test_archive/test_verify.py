@@ -224,6 +224,79 @@ def test_cli_writes_the_table_and_the_summary(tmp_path, monkeypatch, capsys):
     assert doc["min_pairs"] == 2 and doc["inputs"]["issues"]["n"] == 2
     assert doc["pairs"]["geoglows"]["corrected"] > 0 and doc["pairs"]["glofas"]["corrected"] == 0
     assert "headline" in json.loads(capsys.readouterr().out)
+    gauges = pd.read_parquet(out / "verify" / "forecast_skill_gauges.parquet")
+    assert list(gauges.columns) == vf.GAUGE_COLUMNS
+    assert doc["gauges"]["file"] == "verify/forecast_skill_gauges.parquet"
+    assert doc["gauges"]["window_days"] == vf.TRACK_DAYS and doc["gauges"]["leads"] == list(vf.TRACK_LEADS)
+
+
+# ── each gauge's own track record ───────────────────────────────────────────
+
+
+@pytest.mark.parametrize(("factor", "enough", "word"), [
+    (1.0, True, "good"), (2.0, True, "good"), (2.01, True, "fair"), (4.0, True, "fair"), (4.2, True, "poor"),
+    (1.5, False, "unknown"), (None, True, "unknown"), (float("nan"), True, "unknown"), ("x", True, "unknown"),
+])
+def test_trust_words_follow_the_bands(factor, enough, word):
+    assert vf.trust(factor, enough) == word
+
+
+def _gauge_pairs(days: int = 40) -> pd.DataFrame:
+    """Gauge A, 40 days at leads 1 to 3: GEOGLOWS raw 3 times the gauge, corrected 1.5 times; GloFAS raw 10 times.
+    Gauge B only the newest 5 days, GEOGLOWS raw on the gauge."""
+    rows, obs = [], []
+    end = pd.Timestamp("2026-11-17")
+    for k in range(days):
+        valid = (end - pd.Timedelta(days=k)).strftime("%Y-%m-%d")
+        obs.append(("A", valid, 10.0))
+        for lead in (1, 2, 3):
+            issue = (end - pd.Timedelta(days=k + lead)).strftime("%Y-%m-%d")
+            rows.append({**_issued_row("geoglows", "A", issue, valid, lead, 30.0, corrected=15.0), "river_id": 7})
+            rows.append({**_issued_row("glofas", "A", issue, valid, lead, 100.0, corrected=None), "river_id": 7})
+        if k < 5:
+            obs.append(("B", valid, 4.0))
+            rows.append({**_issued_row("geoglows", "B", valid, valid, 1, 4.0, corrected=None), "river_id": 9})
+    return vf.pair(pd.DataFrame(rows), vf.observations(_status("2026-11-18", obs)))
+
+
+def test_by_gauge_scores_each_gauge_over_the_newest_window():
+    t = vf.by_gauge(_gauge_pairs())
+    card = t[(t["lead_min"] == 1) & (t["lead_max"] == 3)].set_index(["station_id", "model", "variant"])
+    a = card.loc[("A", "geoglows", "raw")]
+    assert a["n_pairs"] == 90 and a["first_valid"] == "2026-10-19" and a["last_valid"] == "2026-11-17"
+    assert a["factor"] == pytest.approx(3.0, rel=1e-3) and a["trust"] == "fair" and bool(a["enough_pairs"])
+    assert card.loc[("A", "geoglows", "corrected")]["trust"] == "good"
+    assert card.loc[("A", "glofas", "raw")]["trust"] == "poor"
+    assert ("A", "glofas", "corrected") not in card.index   # never issued corrected: no row, not a zero
+    b = card.loc[("B", "geoglows", "raw")]
+    assert b["n_pairs"] == 5 and not bool(b["enough_pairs"]) and b["trust"] == "unknown"
+    assert b["factor"] == pytest.approx(1.0)                 # the number stays; the word says it is too thin
+    assert set(t["window_days"]) == {vf.TRACK_DAYS}
+    assert int(card.loc[("A", "geoglows", "raw")]["river_id"]) == 7
+
+
+def test_by_gauge_has_every_single_lead_too():
+    t = vf.by_gauge(_gauge_pairs())
+    single = t[(t["station_id"] == "A") & (t["model"] == "geoglows") & (t["variant"] == "raw")
+               & (t["lead_min"] == t["lead_max"])]
+    assert sorted(single["lead_min"]) == [1, 2, 3] and set(single["n_pairs"]) == {30}
+
+
+def test_by_gauge_takes_positions_and_survives_nothing():
+    pos = pd.DataFrame([{"source": "usgs", "station_id": "A", "lat": 45.5, "lon": -122.6}])
+    t = vf.by_gauge(_gauge_pairs(), positions=pos)
+    assert set(t.loc[t["station_id"] == "A", "lat"]) == {45.5}
+    assert t.loc[t["station_id"] == "B", "lat"].isna().all()
+    assert vf.by_gauge(pd.DataFrame()).empty and list(vf.by_gauge(None).columns) == vf.GAUGE_COLUMNS
+
+
+def test_by_gauge_counts_threshold_events():
+    p = _gauge_pairs()
+    p["gauge_q2"] = 20.0                         # GEOGLOWS raw (30) always above, the gauge (10) never: false alarms
+    t = vf.by_gauge(p)
+    a = t[(t["station_id"] == "A") & (t["model"] == "geoglows") & (t["variant"] == "raw") & (t["lead_min"] == 1)
+          & (t["lead_max"] == 3)].iloc[0]
+    assert (a["hits"], a["misses"], a["false_alarms"], a["n_threshold"]) == (0, 0, 90, 90)
 
 
 # ── the daily job: the Hub plus the files just written, a time budget ─────────
@@ -283,7 +356,8 @@ def test_run_writes_a_manifest_beside_the_scores(tmp_path, monkeypatch):
     build, manifest, _ = _hub_and_build(tmp_path, monkeypatch)
     vf.run(build, manifest=manifest, overlay=build, min_pairs=2)
     man = json.loads((build / "verify" / "manifest.json").read_text())
-    assert man["files"] == ["verify/forecast_skill.parquet", "verify/summary.json"]
+    assert man["files"] == [
+        "verify/forecast_skill.parquet", "verify/forecast_skill_gauges.parquet", "verify/summary.json"]
     assert man["complete"] is True and man["unread"] == 0 and man["pairs"] > 0
     assert man["n_rows"] == len(pd.read_parquet(build / "verify" / "forecast_skill.parquet"))
     assert man["issues"]["n"] == 2 and man["pairs_by_model"]["geoglows"]["corrected"] > 0

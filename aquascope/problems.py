@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -96,8 +96,16 @@ def era5_daily(
     return frame, meta
 
 
+def _covered_calendar_months(index: pd.DatetimeIndex) -> np.ndarray:
+    """Keep days in months within the bounds of a non-empty daily record."""
+    days = index.normalize()
+    first = pd.offsets.MonthBegin().rollforward(days.min())
+    last = pd.offsets.MonthEnd().rollback(days.max())
+    return cast(np.ndarray, (days >= first) & (days <= last))
+
+
 def _monthly_total(s: pd.Series, *, min_fraction: float = 0.8) -> pd.Series:
-    """Monthly totals of a gauge's precipitation, months with too few days dropped.
+    """Monthly gauge precipitation, excluding partial edge months and sparse months.
 
     Sub-daily increments are summed to days first; a record already coarser
     than daily (monthly totals from some agencies) is summed as it comes.
@@ -109,6 +117,7 @@ def _monthly_total(s: pd.Series, *, min_fraction: float = 0.8) -> pd.Series:
     if spacing is not None and spacing > pd.Timedelta(days=2):
         return s.resample("MS").sum(min_count=1).dropna()
     daily = s.resample("D").sum(min_count=1)
+    daily = daily.loc[_covered_calendar_months(pd.DatetimeIndex(daily.index))]
     counts = daily.resample("MS").count()
     total = daily.resample("MS").sum(min_count=1)
     enough = counts >= min_fraction * pd.Index(total.index).days_in_month
@@ -202,6 +211,8 @@ def drought_indices(
             return {"error": f"ERA5 climate unavailable: {exc}", **out}
         era5, meta = pd.DataFrame(), {"source": "ERA5 via Open-Meteo", "error": str(exc)}
         out["notes"].append(f"ERA5 climate unavailable ({exc}); SPI only, from the gauge.")
+    if len(era5):
+        era5 = era5.loc[_covered_calendar_months(pd.DatetimeIndex(era5.index))]
     p_era = era5["precipitation_sum"].resample("MS").sum(min_count=_MIN_DAYS_PER_MONTH).dropna() if len(era5) else None
     t_era = era5["temperature_2m_mean"].resample("MS").mean().dropna() if len(era5) else None
     et0_era = (era5["et0_fao_evapotranspiration"].resample("MS").sum(min_count=_MIN_DAYS_PER_MONTH).dropna()

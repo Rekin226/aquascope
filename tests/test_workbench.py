@@ -420,6 +420,18 @@ def test_spei_takes_a_ready_pet_column_or_says_what_it_needs(climate_frame: pd.D
         wb.spei(climate_frame, pet_column="nope")
 
 
+def test_standardized_indices_pairs_month_end_pet_with_month_start_rain(climate_frame: pd.DataFrame) -> None:
+    precip = climate_frame.set_index("date")["rain_mm"]
+    pet = pd.Series(60.0, index=precip.index)
+    expected = wb.standardized_indices(precip, pet, timescales=(3,))
+    pet.index = pet.index + pd.offsets.MonthEnd(0)
+
+    result = wb.standardized_indices(precip, pet, timescales=(3,))
+
+    assert result == expected
+    assert result["indices"][0]["divergence"]["n"] == len(precip) - 2
+
+
 def test_standardized_indices_counts_separate_droughts_across_missing_months() -> None:
     dates = pd.date_range("1996-01-01", "2025-12-01", freq="MS")
     rain = pd.Series(np.random.default_rng(9).uniform(60.0, 90.0, len(dates)), index=dates)

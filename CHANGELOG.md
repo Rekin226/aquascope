@@ -20,6 +20,7 @@ All notable changes to AquaScope are documented here.
 - **`india_wris` licence audit** (#207): keep `license="unknown"` and `redistributable=False` after reading the first-party terms — [NWIC's copyright policy](https://nwic.gov.in/copyrightpolicy) forbids reproducing the site's contents without permission, and the Hydro-Meteorological Data Dissemination Policy, 2018 (§6.1, §6.3) guarantees only free download and acknowledgement — and replace the "terms not yet verified" attribution with India-WRIS and the Ministry of Jal Shakti.
 
 ### Fixed
+- **SPEI matches precipitation and evapotranspiration by calendar month**: month-start and month-end records can be combined, and the result keeps the precipitation dates.
 - **SPI and SPEI skip windows with missing months**: require consecutive calendar months when accumulating precipitation or climatic water balance. A longer timescale with no complete window is unavailable while shorter timescales can still return results.
 - **Drought events stop at missing months**: groundwater, SPI and SPEI event summaries separate below-threshold runs across omitted months or missing index values.
 - **Taiwan MOENV reads the river water-quality dataset**: use `WQX_P_01` instead of the air-quality station catalog and parse the sampling timestamp, station identifier and name from its documented fields. The live health check requests just one page of two records.

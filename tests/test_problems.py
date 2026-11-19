@@ -12,6 +12,8 @@ import pandas as pd
 import pytest
 
 from aquascope import problems as pr
+from aquascope.gates import evaluate
+from aquascope.playbooks import load
 
 DAYS = pd.date_range("1985-01-01", "2026-08-20", freq="D")
 _PHASE = 2 * np.pi * (DAYS.dayofyear / 365.25)
@@ -87,6 +89,27 @@ def test_drought_indices_at_a_rain_gauge_uses_its_record_and_era5_pet():
     row = next(r for r in out["indices"] if r["timescale"] == 12)
     assert row["divergence"]["mean_last_10y"] < 0, "warming: SPEI reads drier than SPI"
     assert row["spi"]["worst"] < -1.5 and row["spei"]["events"] >= 1
+
+
+@pytest.mark.parametrize(
+    ("pet_start", "fits", "passes"),
+    [("2021", False, False), ("2005", True, False), ("1990", True, True)],
+)
+def test_gauge_drought_plan_requires_fitted_spei_with_adequate_pet_coverage(monkeypatch, pet_start, fits, passes):
+    def provided_weather(*args, **kwargs):
+        frame, meta = fake_era5(*args, **kwargs)
+        return frame.loc[pet_start:], meta
+
+    monkeypatch.setattr(pr, "era5_daily", provided_weather)
+    result = pr.drought_indices(24.15, 120.68, source="taiwan_cwa", station_id="467490", timescales=(3, 12))
+    gauge_branch = next(branch for branch in load("drought_status").branches if branch.id == "gauge_indices")
+    verdicts = evaluate(gauge_branch.steps[0].expects, result)
+
+    assert result["years"] >= 30
+    assert all(verdict["passed"] for verdict in verdicts) is passes
+    assert next(verdict for verdict in verdicts if verdict["check"] == "min_samples")["passed"] is fits
+    assert all(n > 0 for n in result["spei_samples"].values()) is fits
+    assert (result["spei_years"] >= 30) is passes
 
 
 @pytest.mark.parametrize("gauge", [False, True], ids=["era5-cell", "taichung-gauge"])

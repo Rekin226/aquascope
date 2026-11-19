@@ -171,7 +171,9 @@ def drought_indices(
     introduced with), ``fao56`` (ERA5 FAO-56 ET0 as Open-Meteo serves it) or
     ``none`` (SPI only). The result carries the block of
     :func:`aquascope.workbench.standardized_indices` plus the record used,
-    the ERA5 temperature trend (the warming SPEI responds to) and the methods.
+    years of paired monthly precipitation and PET, counts of valid SPEI values
+    by timescale, the ERA5 temperature trend (the warming SPEI responds to) and
+    the methods.
     """
     out: dict[str, Any] = {
         "latitude": round(float(lat), 5), "longitude": round(float(lon), 5),
@@ -241,6 +243,12 @@ def drought_indices(
     except ValueError as exc:
         return {"error": str(exc), **out}
     out.update(block)
+    shared_months = precip.dropna().index.intersection(pet_series.dropna().index) if pet_series is not None else []
+    out["spei_years"] = len(shared_months) / 12
+    out["spei_samples"] = {
+        str(row["timescale"]): row["spei"]["n"] if row["spei"] is not None else 0
+        for row in block["indices"]
+    }
     if t_era is not None:
         trend = _temperature_trend(t_era)
         if trend:

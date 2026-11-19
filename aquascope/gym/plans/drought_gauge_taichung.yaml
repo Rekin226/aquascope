@@ -30,9 +30,9 @@ steps:
     alternatives:
       - {tool: drought_indices, method: spei_reanalysis}
     gates:
-      - {check: min_years, path: years}
+      - {check: min_years, path: spei_years}
       - {check: not_empty, path: indices}
-      - {check: not_empty, path: current.spei}
+      - {check: min_samples, path: spei_samples}
     note: >-
       Check the returned source, date span and usable monthly coverage for each accumulation window. The playbook's
       30-year gate applies to the record behind the fitted indices. With the current ten-year CODiS fetch cap, report

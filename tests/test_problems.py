@@ -4,6 +4,7 @@ what each returns, the arithmetic it does, and how it says no."""
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from unittest.mock import patch
 
 import numpy as np
@@ -109,6 +110,34 @@ def test_gauge_drought_plan_requires_fitted_spei_with_adequate_pet_coverage(monk
     assert next(verdict for verdict in verdicts if verdict["check"] == "min_samples")["passed"] is fits
     assert all(n > 0 for n in result["spei_samples"].values()) is fits
     assert (result["spei_years"] >= 30) is passes
+
+
+@pytest.mark.parametrize("gauge", [False, True], ids=["era5-cell", "taichung-gauge"])
+@pytest.mark.parametrize(("last_day", "latest_month"), [("2026-07-26", "2026-06-01"), ("2026-07-31", "2026-07-01")])
+def test_drought_indices_only_reports_months_covered_through_month_end(monkeypatch, gauge, last_day, latest_month):
+    def fetch_through_last_day(*args, **kwargs):
+        fetched = fake_fetch(*args, **kwargs)
+        return {**fetched, "series": fetched["series"].loc[:last_day]}
+
+    today = pd.Timestamp(last_day).date() + timedelta(days=pr.ERA5_LAG_DAYS)
+    monkeypatch.setattr(pr, "_today", lambda: today)
+    monkeypatch.setattr(pr, "fetch_series", fetch_through_last_day)
+    station = {"source": "taiwan_cwa", "station_id": "467490"} if gauge else {}
+
+    out = pr.drought_indices(24.15, 120.68, timescales=(3, 12), pet="fao56", **station)
+
+    assert out["end"] == out["current"]["date"] == latest_month
+    for row in out["indices"]:
+        assert row["spi"]["date"] == row["spei"]["date"] == latest_month
+
+
+def test_gauge_drops_partial_edge_months_only_when_aggregating_daily_data():
+    daily = pd.Series(1.0, index=pd.date_range("2024-01-04", "2024-03-26", freq="D"))
+    monthly = pr._monthly_total(daily)
+    assert monthly.to_dict() == {pd.Timestamp("2024-02-01"): 29.0}
+
+    given_totals = pd.Series([3.0, 4.0, 8.0], index=pd.to_datetime(["2024-01-31", "2024-02-29", "2024-03-31"]))
+    assert pr._monthly_total(given_totals).tolist() == [3.0, 4.0, 8.0]
 
 
 def test_drought_indices_pet_options_and_refusals():

@@ -117,9 +117,14 @@ class CanadaHydatCollector(BaseCollector):
                 properties = row["properties"]
 
                 # Expected, not an error: some stations only measure water level.
-                if properties.get("DISCHARGE") is None:
+                discharge = properties.get("DISCHARGE")
+                if discharge is None:
                     logger.debug("Skipping row: no discharge")
                     continue
+                
+                # The API stores float32, so 4.98 arrives as 4.980000019073486.
+                # Six significant figures removes that noise.
+                discharge_cms = float(f"{float(discharge):.6g}")
 
                 # GeoJSON order is [longitude, latitude]. Location is optional in
                 # the schema, so a missing geometry must not discard a good value.
@@ -128,6 +133,8 @@ class CanadaHydatCollector(BaseCollector):
                 if coordinates:
                     location = GeoLocation(latitude=coordinates[1], longitude=coordinates[0])
 
+                # No symbol means HYDAT did not flag the value. For an archive that
+                # is the published, reviewed record, so it is treated as approved.
                 symbol = properties.get("DISCHARGE_SYMBOL_EN")
                 if symbol is None:
                     quality = Quality.APPROVED
@@ -141,7 +148,7 @@ class CanadaHydatCollector(BaseCollector):
                         station_name=properties.get("STATION_NAME"),
                         location=location,
                         reading_datetime=properties["DATE"],
-                        discharge_cms=properties["DISCHARGE"],
+                        discharge_cms=discharge_cms,
                         source_type="in_situ",
                         quality=quality,
                         quality_raw=symbol,

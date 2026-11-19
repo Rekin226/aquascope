@@ -40,6 +40,7 @@ from aquascope.collectors.uk_ea import UKEACollector
 from aquascope.collectors.usgs import USGSCollector
 from aquascope.collectors.wapor import WaPORCollector
 from aquascope.collectors.wqp import WQPCollector
+from aquascope.collectors.canada_hydat import CanadaHydatCollector
 
 __all__ = [
     "AquastatCollector",
@@ -81,4 +82,5 @@ __all__ = [
     "WQPCollector",
     "IrelandOPWCollector",
     "ColoradoCDSSCollector",
+    "CanadaHydatCollector",
 ]

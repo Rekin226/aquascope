@@ -19,7 +19,13 @@ Every row carries its pair count, gauges and date range, and ``enough_pairs`` is
 published files by code only, no key and no model call. ``docs/forecast-verification.md`` says what the scores
 mean and where they stop.
 
-Writes ``<out>/verify/forecast_skill.parquet`` and ``<out>/verify/summary.json``:
+Each gauge's own track record is scored too (:func:`by_gauge`): the last :data:`TRACK_DAYS` days of valid dates,
+per model, variant and lead window, with a trust word from the factor (:data:`TRUST_BANDS`). That is what the
+river card, Floods ahead, the evidence ladder and the MCP tool ``forecast_skill`` read
+(:mod:`aquascope.forecast_skill`).
+
+Writes ``<out>/verify/forecast_skill.parquet``, ``<out>/verify/forecast_skill_gauges.parquet`` and
+``<out>/verify/summary.json``:
 
     python -m aquascope.archive.verify --out build [--archive DIR] [--days N] [--since D] [--until D]
     aquascope evidence verify --out build --days 14
@@ -47,6 +53,10 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "MIN_PAIRS",
+    "TRACK_DAYS",
+    "TRACK_LEADS",
+    "TRUST_BANDS",
+    "by_gauge",
     "crps_from_quantiles",
     "observations",
     "pair",
@@ -54,6 +64,7 @@ __all__ = [
     "run",
     "score",
     "summary",
+    "trust",
 ]
 
 FOLDER = "verify"
@@ -72,6 +83,26 @@ THRESHOLD = "gauge_q2"
 VARIANTS: dict[str, str] = {"raw": "", "corrected": "_c"}
 KEYS = ["source", "station_id", "valid_date"]
 ALL_MONTHS = "all"
+GAUGE_TABLE = "forecast_skill_gauges.parquet"
+#: A gauge's track record covers the newest this many days of valid dates in the record.
+TRACK_DAYS = 30
+#: The lead window the river card and Floods ahead quote: 1 to 3 days ahead.
+TRACK_LEADS = (1, 3)
+#: The lead windows scored per gauge: the card's window, then every single lead day.
+GAUGE_WINDOWS: tuple[tuple[int, int], ...] = (TRACK_LEADS, *((k, k) for k in range(15)))
+#: The trust word for a track record, from its factor (half the forecasts were within that factor of the gauge).
+#: Round thresholds, AquaScope's choice and not a published standard: within a factor of 2 (half to double the
+#: flow) is good, within 4 fair, anything wider poor. ``unknown`` below :data:`MIN_PAIRS` or with no score.
+TRUST_BANDS: tuple[dict[str, Any], ...] = (
+    {"trust": "good", "max_factor": 2.0, "words": "within a factor of 2 of the gauge"},
+    {"trust": "fair", "max_factor": 4.0, "words": "within a factor of 2 to 4"},
+    {"trust": "poor", "max_factor": None, "words": "off by more than a factor of 4"},
+)
+UNKNOWN = "unknown"
+GAUGE_COLUMNS = ["source", "station_id", "river_id", "lat", "lon", "model", "variant", "lead_min", "lead_max",
+                 "window_days", "n_pairs", "first_valid", "last_valid", "enough_pairs", "median_abs_log10_error",
+                 "factor", "median_log10_error", "crps_log10", "n_threshold", "hits", "misses", "false_alarms",
+                 "trust"]
 
 METHOD = {
     "pairing": "issued rows joined to the gauge's value on the same source, station and valid date, from the "
@@ -83,6 +114,9 @@ METHOD = {
     "hit_rate": "hits / (hits + misses), an event being a flow above the gauge's 2-year flow (gauge_q2)",
     "false_alarm_ratio": "false alarms / (hits + false alarms), same event",
     "month": "month of the valid date, plus 'all' for every month together",
+    "by_gauge": f"each gauge's own scores over the newest {TRACK_DAYS} days of valid dates, per model, variant and "
+                f"lead window ({TRACK_LEADS[0]} to {TRACK_LEADS[1]} days ahead, and each lead day); trust is good "
+                "up to a factor of 2, fair up to 4, poor beyond, unknown below the pair floor",
 }
 
 
@@ -209,6 +243,119 @@ def score(pairs: pd.DataFrame, *, min_pairs: int = MIN_PAIRS) -> pd.DataFrame:
     return out.sort_values(["model", "variant", "month", "lead_day"], kind="stable").reset_index(drop=True)
 
 
+def trust(factor: Any, enough_pairs: Any = True) -> str:
+    """The trust word for a track record: ``good``, ``fair`` or ``poor`` from its factor (:data:`TRUST_BANDS`),
+    ``unknown`` when there are not enough pairs or no factor."""
+    try:
+        f = float(factor)
+    except (TypeError, ValueError):
+        return UNKNOWN
+    if not enough_pairs or not np.isfinite(f) or f < 1:
+        return UNKNOWN
+    for band in TRUST_BANDS:
+        if band["max_factor"] is None or f <= band["max_factor"]:
+            return str(band["trust"])
+    return UNKNOWN  # pragma: no cover - the last band is open
+
+
+def _long_errors(pairs: pd.DataFrame) -> pd.DataFrame:
+    """One row per pair and variant with the errors :func:`by_gauge` aggregates, vectorised so ~900 gauges score
+    in seconds."""
+    parts = []
+    levels = [lv for lv, _ in QUANTILES]
+    thr = pd.to_numeric(pairs[THRESHOLD], errors="coerce").to_numpy(float) if THRESHOLD in pairs \
+        else np.full(len(pairs), np.nan)
+    obs = pairs["observed"].to_numpy(float)
+    for variant, suffix in VARIANTS.items():
+        if POINT + suffix not in pairs:
+            continue
+        point = pd.to_numeric(pairs[POINT + suffix], errors="coerce").to_numpy(float)
+        ok = np.isfinite(point) & (point > 0)
+        if not ok.any():
+            continue
+        err = np.log10(point[ok]) - np.log10(obs[ok])
+        crps = np.full(int(ok.sum()), np.nan)
+        cols = [c + suffix for _, c in QUANTILES]
+        if all(c in pairs for c in cols):
+            qv = pairs.loc[ok, cols].apply(pd.to_numeric, errors="coerce").to_numpy(float)
+            qok = np.isfinite(qv).all(axis=1) & (qv > 0).all(axis=1)
+            if qok.any():
+                crps[qok] = crps_from_quantiles(np.log10(qv[qok]), levels, np.log10(obs[ok][qok]))
+        t = thr[ok]
+        tok = np.isfinite(t) & (t > 0)
+        o_ev, f_ev = tok & (obs[ok] > t), tok & (point[ok] > t)
+        part = pairs.loc[ok, ["source", "station_id", "model", "lead_day", "valid_date"]].copy()
+        part["variant"] = variant
+        part["err"], part["abs_err"], part["crps"] = err, np.abs(err), crps
+        part["in_thr"], part["hit"] = tok.astype(int), (o_ev & f_ev).astype(int)
+        part["miss"], part["fa"] = (o_ev & ~f_ev).astype(int), (~o_ev & f_ev & tok).astype(int)
+        parts.append(part)
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+
+
+def by_gauge(pairs: pd.DataFrame, *, days: int = TRACK_DAYS, windows: Iterable[tuple[int, int]] = GAUGE_WINDOWS,
+             min_pairs: int = MIN_PAIRS, positions: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Each gauge's own track record: one row per gauge, model, variant and lead window (``lead_min`` to
+    ``lead_max`` days ahead), over the newest ``days`` days of valid dates in ``pairs``.
+
+    Columns are :data:`GAUGE_COLUMNS`: the pair count and dates, ``enough_pairs`` (at least ``min_pairs``), the
+    median absolute log10 error and its ``factor``, the signed median, the mean CRPS in log10 flow, the
+    exceedance counts above the gauge's 2-year flow, and the :func:`trust` word. ``river_id`` is the GEOGLOWS
+    reach the gauge was issued on (its newest), so a reach can find its gauge; ``lat``/``lon`` come from
+    ``positions`` (``forecasts/reaches.parquet``) when given.
+    """
+    if pairs is None or pairs.empty:
+        return pd.DataFrame(columns=GAUGE_COLUMNS)
+    df = pairs.copy()
+    day = pd.to_datetime(df["valid_date"], errors="coerce")
+    end = day.max()
+    df = df[day >= end - pd.Timedelta(days=int(days) - 1)]
+    long = _long_errors(df)
+    if long.empty:
+        return pd.DataFrame(columns=GAUGE_COLUMNS)
+    keys = ["source", "station_id", "model", "variant"]
+    frames = []
+    for lo, hi in windows:
+        w = long[(long["lead_day"] >= lo) & (long["lead_day"] <= hi)]
+        if w.empty:
+            continue
+        agg = w.groupby(keys, sort=True).agg(
+            n_pairs=("abs_err", "size"), first_valid=("valid_date", "min"), last_valid=("valid_date", "max"),
+            median_abs_log10_error=("abs_err", "median"), median_log10_error=("err", "median"),
+            crps_log10=("crps", "mean"), n_threshold=("in_thr", "sum"), hits=("hit", "sum"),
+            misses=("miss", "sum"), false_alarms=("fa", "sum")).reset_index()
+        agg["lead_min"], agg["lead_max"] = int(lo), int(hi)
+        frames.append(agg)
+    if not frames:
+        return pd.DataFrame(columns=GAUGE_COLUMNS)
+    out = pd.concat(frames, ignore_index=True)
+    out["window_days"] = int(days)
+    out["enough_pairs"] = out["n_pairs"] >= int(min_pairs)
+    out["median_abs_log10_error"] = out["median_abs_log10_error"].round(4)
+    out["factor"] = (10 ** out["median_abs_log10_error"]).round(3)
+    out["median_log10_error"] = out["median_log10_error"].round(4)
+    out["crps_log10"] = out["crps_log10"].round(4)
+    out["trust"] = [trust(f, e) for f, e in zip(out["factor"], out["enough_pairs"])]
+    if "river_id" in df:
+        rid = (df.assign(_rid=pd.to_numeric(df["river_id"], errors="coerce")).dropna(subset=["_rid"])
+               .sort_values("valid_date", kind="stable").drop_duplicates(["source", "station_id"], keep="last"))
+        out = out.merge(rid[["source", "station_id", "_rid"]].rename(columns={"_rid": "river_id"}),
+                        on=["source", "station_id"], how="left")
+    if positions is not None and len(positions) and {"lat", "lon"} <= set(positions.columns):
+        pos = positions[["source", "station_id", "lat", "lon"]].copy()
+        pos["station_id"] = pos["station_id"].astype(str)
+        out = out.merge(pos.drop_duplicates(["source", "station_id"]), on=["source", "station_id"], how="left")
+    for c in GAUGE_COLUMNS:
+        if c not in out:
+            out[c] = None
+    out["river_id"] = pd.to_numeric(out["river_id"], errors="coerce").astype("Int64")
+    for c in ("n_pairs", "n_threshold", "hits", "misses", "false_alarms"):
+        out[c] = out[c].astype(int)
+    out = out[GAUGE_COLUMNS]
+    return out.sort_values(["source", "station_id", "model", "variant", "lead_min", "lead_max"],
+                           kind="stable").reset_index(drop=True)
+
+
 def _plain(v: Any) -> Any:
     """A JSON-ready scalar: numpy numbers to Python, NaN to None."""
     if isinstance(v, np.generic):
@@ -312,18 +459,45 @@ def read_archive(archive: str | Path | None = None, *, repo_id: str = DEFAULT_RE
     return issued_df, status_df, meta
 
 
+def read_positions(archive: str | Path | None = None, *, repo_id: str = DEFAULT_REPO) -> pd.DataFrame | None:
+    """Each forecast gauge's position (``source``, ``station_id``, ``lat``, ``lon``) from
+    ``forecasts/reaches.parquet``, locally or from the Hub; None when it cannot be read."""
+    try:
+        if archive is not None:
+            path = Path(archive) / "forecasts" / "reaches.parquet"
+            return pd.read_parquet(path) if path.exists() else None
+        from aquascope.archive.forecasts import _get, published_url
+
+        return _read_parquet_bytes(_get(published_url("forecasts/reaches.parquet", repo_id)))
+    except Exception as exc:  # noqa: BLE001 - the positions only let a lat/lon find its gauge
+        logger.info("forecast gauge positions unavailable: %s", exc)
+        return None
+
+
 def run(out: str | Path, *, archive: str | Path | None = None, repo_id: str = DEFAULT_REPO,
         since: date | None = None, until: date | None = None, days: int | None = None,
         min_pairs: int = MIN_PAIRS) -> dict[str, Any]:
-    """Read, pair, score and write ``<out>/verify/forecast_skill.parquet`` and ``summary.json``; returns the
-    summary."""
+    """Read, pair, score and write ``<out>/verify/forecast_skill.parquet``, ``forecast_skill_gauges.parquet``
+    (:func:`by_gauge`) and ``summary.json``; returns the summary."""
     issued, status, meta = read_archive(archive, repo_id=repo_id, since=since, until=until, days=days)
     pairs = pair(issued, observations(status))
     table = score(pairs, min_pairs=min_pairs)
+    gauges = by_gauge(pairs, min_pairs=min_pairs, positions=read_positions(archive, repo_id=repo_id))
     folder = Path(out) / FOLDER
     folder.mkdir(parents=True, exist_ok=True)
     table.to_parquet(folder / TABLE, index=False, compression="zstd")
+    gauges.to_parquet(folder / GAUGE_TABLE, index=False, compression="zstd")
     doc = summary(table, min_pairs=min_pairs, inputs={**meta, "pairs": int(len(pairs))})
+    card = gauges[(gauges["lead_min"] == TRACK_LEADS[0]) & (gauges["lead_max"] == TRACK_LEADS[1])]
+    doc["gauges"] = {
+        "file": f"{FOLDER}/{GAUGE_TABLE}", "window_days": TRACK_DAYS, "leads": list(TRACK_LEADS),
+        "first_valid": _plain(card["first_valid"].min()) if len(card) else None,
+        "last_valid": _plain(card["last_valid"].max()) if len(card) else None,
+        "n_gauges": int(card[["source", "station_id"]].drop_duplicates().shape[0]) if len(card) else 0,
+        "trust_bands": list(TRUST_BANDS),
+        "trust_counts": {f"{m}/{v}": {k: int(n) for k, n in part["trust"].value_counts().items()}
+                         for (m, v), part in card.groupby(["model", "variant"])} if len(card) else {},
+    }
     (folder / SUMMARY).write_text(json.dumps(doc, indent=1, default=str))
     return doc
 

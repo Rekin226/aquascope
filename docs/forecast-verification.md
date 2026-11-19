@@ -12,8 +12,9 @@ aquascope evidence verify --out build --archive ./gauges  # a local copy of the 
 python -m aquascope.archive.verify --out build --since 2026-10-08
 ```
 
-It writes `build/verify/forecast_skill.parquet` (one row per model, variant, lead day and month) and
-`build/verify/summary.json` (pair counts, the 1-day-lead headline, error by lead). Everything is computed from
+It writes `build/verify/forecast_skill.parquet` (one row per model, variant, lead day and month),
+`build/verify/forecast_skill_gauges.parquet` (each gauge's own record, below) and `build/verify/summary.json`
+(pair counts, the 1-day-lead headline, error by lead, the per-gauge window and trust counts). Everything is computed from
 the published files by code: no key, no model call, and the same files give the same numbers.
 
 ## Pairing
@@ -51,6 +52,45 @@ computed on log10 flow, so a brook and a big river weigh the same and a perfect 
 absolute log10 error. Three quantiles make it coarse and blind to the tails beyond the quartiles; compare it
 between models and leads, not with a CRPS computed from full ensembles elsewhere.
 
+## Each gauge's track record
+
+`forecast_skill_gauges.parquet` scores every gauge on its own, over the newest 30 days of valid dates in the
+record: one row per gauge, model, variant and lead window, the window being 1 to 3 days ahead (what the map
+quotes) and each single lead day. It has the same scores as the pooled table (pair count, dates, factor, signed
+median, CRPS, exceedance counts), the GEOGLOWS `river_id` the gauge was issued on, its position from
+`forecasts/reaches.parquet`, and a trust word from the factor:
+
+| Trust | Factor (half the forecasts were within it) |
+| --- | --- |
+| good | 2 or less: half to double the gauge's flow |
+| fair | more than 2, up to 4 |
+| poor | more than 4 |
+| unknown | fewer than 30 pairs in the window, or no score |
+
+The bands are round numbers chosen by AquaScope, not a published standard, and fixed in
+`aquascope.archive.verify.TRUST_BANDS` so a word means the same at every gauge. A gauge is issued on only some
+days (the daily job takes up to 250 gauges in turn), so 30 days usually give it fewer than 90 pairs, and many
+gauges are still `unknown`.
+
+## On the map and in the tools
+
+`aquascope.forecast_skill` reads the published rows back and says them; nothing in it computes a score.
+
+- **The river card.** A gauge's card lists, per model, "within a factor of X (N pairs, dates)" for 1 to 3 days
+  ahead, corrected to the gauge where it was issued so, or "not enough pairs yet". A river reach's card does the
+  same, raw, from the gauges on that reach. Each line carries its trust badge.
+- **Floods ahead.** A flooded reach's card shows the trust badge of the raw GEOGLOWS forecast (what Floods ahead
+  classes) at the best-sampled gauge on the reach, or `unknown` when no gauge on it has been verified.
+- **The legend.** "Forecast track record" in On the map explains the four words and gives every gauge pooled at
+  1 day ahead; its switch hides the lines and badges.
+- **The evidence ladder.** `model_skill` (and the Explorer's Evidence tab) adds `forecasts`: the models and
+  variants ranked by their verified factor at 1 to 3 days, where at least 30 pairs exist, then those without.
+- **MCP.** `forecast_skill(station_id or lat/lon, model, lead_days, variant)` returns the gauge's rows, the
+  ranking, the pooled rows for the same leads and the trust bands.
+
+When `verify/` is not in the Archive, or a gauge has no row, the card, the badge and the legend row show
+nothing.
+
 ## Limits
 
 - **Sample size.** The record starts on 2026-10-08. A month and lead with a few hundred pairs is a few weeks of a
@@ -64,8 +104,8 @@ between models and leads, not with a CRPS computed from full ensembles elsewhere
   explains why raw GEOGLOWS, which forecasts too little water at most gauges, rarely raises an alarm.
 - **The observation is provisional.** It is the agency's newest daily value when the snapshot was made; later
   revisions are not picked up.
-- **Not yet published.** This is the scoring core. A daily `verify/` prefix in the Archive, GloFAS corrected to
-  the gauge, the river card line and the evidence ladder ranking follow in later steps of #785.
+- **A month is short.** A gauge's 30-day window holds a few dozen pairs at best, so its trust word can change from
+  one week to the next. The card always gives the pair count and the dates next to the factor.
 
 ## References
 

@@ -19,6 +19,7 @@ import { duck } from "./catalog.js?v=__BUILD__";
 import { callLight } from "./worker-client.js?v=__BUILD__";
 import { classColor, reachFacts } from "./floods-ahead-core.js?v=__BUILD__";
 import { refreshLegend, registerLegendRow } from "./map-legend.js?v=__BUILD__";
+import { trustForReach } from "./track-record.js?v=__BUILD__";
 import {
   BELOW, FEWS_CLASSES, dayLabel, dayOf, fewsColor, membersShort, obsBefore, plumeHead, plumeLabel, pointsGeoJSON,
   pointsLine, pointsSummary, recordEnd,
@@ -253,6 +254,11 @@ export function openReachCard(f, lngLat, { day: d = -1, manifest = {} } = {}) {
     credit: REACH_CREDIT,
     details: () => actions.selectPoint(lat, lon, { tab: "now" }),
     buttons: gauges,
+  });
+  // The trust badge (#785): how the raw GEOGLOWS forecast verified at the gauge on this reach, or unknown. Nothing
+  // when the Archive's verification is not published.
+  void trustForReach(p.river_id).then((t) => {
+    if (t) handle.update({ trust: { head: t.head, lines: [{ trust: t.trust, text: t.text }] } });
   });
   void (async () => {
     const thresholds = await reachThresholds(p);

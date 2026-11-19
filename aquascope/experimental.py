@@ -25,8 +25,9 @@ What is here and why (``docs/stability.md`` has the full policy):
   ``aquascope.sketch.landuse`` (the SCS curve number, TR-55), ``aquascope landuse`` and the MCP tool
   ``change_landuse``; a drawn reservoir (#662: ``aquascope.sketch.reservoir``, ``aquascope route reservoir``
   and the MCP tool ``route_reservoir``), new in 1.1.
-* Forecast verification (#785): ``aquascope.archive.verify`` and ``aquascope evidence verify``, new in 1.3. The
-  table's columns may change while the later steps of #785 land.
+* Forecast verification (#785): ``aquascope.archive.verify``, ``aquascope evidence verify``,
+  ``aquascope.forecast_skill`` and the MCP tool ``forecast_skill``, new in 1.3. The tables' columns may change
+  while the later steps of #785 land.
 * ``aquascope.gym`` and ``aquascope gym``: the benchmark, now called AquaScope Bench (#440). Only the name changed;
   the module path and the CLI verb stay, and the task suite is not frozen before its DOI (#175).
 
@@ -48,6 +49,7 @@ MODULES: tuple[str, ...] = (
     "aquascope.flood_exposure",
     "aquascope.flood_section",
     "aquascope.floodsim",
+    "aquascope.forecast_skill",
     "aquascope.flowstatus",
     "aquascope.groundwater.budget",
     "aquascope.groundwater.layers",
@@ -134,6 +136,7 @@ MCP_TOOLS: tuple[str, ...] = (
     "flow_status",
     "flow_vs_normal",
     "forecast_plume",
+    "forecast_skill",
     "groundwater_surface",
     "layer_frames",
     "map_command",

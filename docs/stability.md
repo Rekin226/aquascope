@@ -152,6 +152,8 @@ benchmark:
 - **Added in 1.1:** `aquascope.sketch` (the sketchpad, #664): `aquascope.sketch.reservoir` (draw a reservoir,
   level-pool routing, #662), `aquascope route reservoir` and the MCP tool `route_reservoir`; `aquascope.routing`'s
   `route`, `route_storm` and `route_network` take `through` (a reach's outflow through a function).
+- **Added in 1.3:** forecast verification (#785): `aquascope.archive.verify`, `aquascope evidence verify`,
+  `aquascope.forecast_skill` and the MCP tool `forecast_skill`.
 
 Experimental means:
 

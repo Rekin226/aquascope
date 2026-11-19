@@ -432,6 +432,17 @@ def test_standardized_indices_pairs_month_end_pet_with_month_start_rain(climate_
     assert result["indices"][0]["divergence"]["n"] == len(precip) - 2
 
 
+def test_standardized_indices_counts_separate_droughts_across_missing_months() -> None:
+    dates = pd.date_range("1996-01-01", "2025-12-01", freq="MS")
+    rain = pd.Series(np.random.default_rng(9).uniform(60.0, 90.0, len(dates)), index=dates)
+    rain.loc[["2025-01-01", "2025-04-01"]] = 0.1
+    rain = rain.drop(pd.to_datetime(["2025-02-01", "2025-03-01"]))
+
+    result = wb.standardized_indices(rain, timescales=(1,), threshold=-3.0)
+
+    assert result["indices"][0]["spi"]["events"] == 2
+
+
 def test_standardized_indices_without_pet_gives_spi_only(climate_frame: pd.DataFrame) -> None:
     p = climate_frame.set_index("date")["rain_mm"]
     res = wb.standardized_indices(p, timescales=(3,))

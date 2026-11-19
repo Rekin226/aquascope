@@ -2038,7 +2038,8 @@ def _print_skill(res: dict) -> None:
 
 
 def cmd_evidence(args: argparse.Namespace) -> None:
-    """`aquascope evidence skill|near|build|publish`: every global model scored at a gauge (#518)."""
+    """`aquascope evidence skill|near|build|publish|verify`: every global model scored at a gauge (#518), and the
+    issued forecasts scored against the gauge (#785)."""
     if args.evidence_cmd == "skill":
         from aquascope import evidence
 
@@ -2066,6 +2067,15 @@ def cmd_evidence(args: argparse.Namespace) -> None:
             return
         print(f"  {res['sentence']}")
         return
+    if args.evidence_cmd == "verify":
+        from aquascope.archive import verify
+
+        argv = ["--out", args.out, "--repo", args.repo, "--min-pairs", str(args.min_pairs)]
+        for flag, val in (("--archive", args.archive), ("--since", args.since), ("--until", args.until),
+                          ("--days", args.days)):
+            if val is not None:
+                argv += [flag, str(val)]
+        sys.exit(verify.main(argv))
     from aquascope.archive import skill
 
     if args.evidence_cmd == "build":
@@ -5588,6 +5598,14 @@ def main() -> None:
     p_evp = ev_sub.add_parser("publish", help="Upload the skill table to the Archive (skill/ only)")
     p_evp.add_argument("--out", required=True)
     p_evp.add_argument("--repo", default="Rekin226/aquascope-gauges")
+    p_evv = ev_sub.add_parser("verify", help="Score the Archive's issued forecasts against the gauge (#785)")
+    p_evv.add_argument("--out", required=True, help="Writes <out>/verify/forecast_skill.parquet and summary.json")
+    p_evv.add_argument("--archive", default=None, help="A local copy of the dataset (default: the Hub)")
+    p_evv.add_argument("--repo", default="Rekin226/aquascope-gauges")
+    p_evv.add_argument("--since", default=None, help="First issue date, YYYY-MM-DD")
+    p_evv.add_argument("--until", default=None, help="Last issue date, YYYY-MM-DD")
+    p_evv.add_argument("--days", type=int, default=None, help="Only the newest N issues")
+    p_evv.add_argument("--min-pairs", type=int, default=30, help="Below this a score is flagged (default 30)")
 
     p_basins = sub.add_parser("basins", help="Catchments from BasinATLAS (HydroATLAS, CC BY 4.0) in the Archive")
     basins_sub = p_basins.add_subparsers(dest="basins_cmd", required=True)

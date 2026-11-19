@@ -65,6 +65,20 @@ class TestSPI:
         spi = standardized_precipitation_index(precip, scale=1)
         assert np.isfinite(spi.dropna()).all()
 
+    @pytest.mark.parametrize("include_zeros", [False, True])
+    def test_constant_positive_month_leaves_other_months_available(self, include_zeros):
+        precip = _monthly_precip()
+        control = standardized_precipitation_index(precip, scale=1)
+        february = precip.index.month == 2
+        precip.loc[february] = 50.0
+        if include_zeros:
+            precip.loc[precip.index[february][::3]] = 0.0
+
+        spi = standardized_precipitation_index(precip, scale=1)
+
+        assert spi.loc[february].isna().all()
+        pd.testing.assert_series_equal(spi.loc[~february], control.loc[~february])
+
 
 @pytest.mark.parametrize(
     ("value", "expected"),

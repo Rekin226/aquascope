@@ -478,7 +478,7 @@ def _standardize(
 
     ``probabilities(values, min_per_group)`` returns the non-exceedance
     probability of each value under the distribution fitted to that group, or
-    ``None`` when the group is too small to fit (left ``NaN``).
+    ``None`` when the group cannot be fitted (left ``NaN``).
     """
     out = pd.Series(np.nan, index=acc.index, dtype=float, name=name)
     groups = range(1, 13) if per_month else [None]
@@ -489,7 +489,7 @@ def _standardize(
             continue
         cdf = probabilities(vals, min_per_group)
         if cdf is None:
-            logger.debug("%s group %s has too few observations (< %d); left NaN.", name, g, min_per_group)
+            logger.debug("%s group %s could not be fitted; left NaN.", name, g)
             continue
         cdf = np.clip(np.asarray(cdf, dtype=float), 1e-6, 1 - 1e-6)
         out.loc[idx] = stats.norm.ppf(cdf)
@@ -499,7 +499,7 @@ def _standardize(
 def _gamma_with_zero_mass(vals: np.ndarray, min_per_group: int) -> np.ndarray | None:
     """SPI's fit: a point mass at zero (probability q) and a gamma on the positive values."""
     pos = vals[vals > 0]
-    if len(pos) < min_per_group:
+    if len(pos) < max(2, min_per_group) or np.all(pos == pos[0]):
         return None
     q = float((vals == 0).mean())
     a, loc, scl = stats.gamma.fit(pos, floc=0.0)
@@ -534,8 +534,8 @@ def standardized_precipitation_index(
         removes the seasonal cycle (standard practice). When ``False``, fit one
         gamma to all accumulated values.
     min_per_group:
-        Minimum positive values needed to fit a gamma for a group; groups with
-        fewer yield ``NaN``.
+        Minimum positive values needed to fit a gamma for a group. Groups with
+        too few positive values or no spread among them yield ``NaN``.
 
     Returns
     -------

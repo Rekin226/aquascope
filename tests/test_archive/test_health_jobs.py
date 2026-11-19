@@ -237,7 +237,7 @@ def test_the_forecast_record_counts_the_scorecard_and_says_when_it_failed(tmp_pa
 
     _dump(tmp_path / "verify" / "manifest.json", {"n_rows": 90, "pairs": 500, "complete": False, "unread": 4})
     assert hj.summarise("forecast-archive", tmp_path)["notes"] == [
-        "scorecard incomplete (4 files unread in its time budget), not published"]
+        "scorecard incomplete (4 files unread), not published"]
 
     _dump(tmp_path / "forecasts" / "manifest.json", {"issues": [{"date": "2026-11-19", "verify": {"error": "x"}}]})
     assert hj.summarise("forecast-archive", tmp_path)["notes"] == ["scorecard failed: x"]

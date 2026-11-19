@@ -418,11 +418,11 @@ def _read_parquet_bytes(data: bytes | None) -> pd.DataFrame | None:
 
 
 def _fetch_within(fetch: Callable[[str], pd.DataFrame | None], paths: list[str], *, workers: int,
-                  deadline: float | None) -> tuple[list[pd.DataFrame | None], int]:
+                  deadline: float | None) -> tuple[list[pd.DataFrame | None], set[int]]:
     """``fetch`` every path in parallel, keeping what arrived by ``deadline`` (``time.monotonic()``); returns the
-    frames in order (None for a missing or late file) and how many were left unread for time."""
+    frames in order (None for an unread file) and the indices of files that missed the deadline."""
     if not paths:
-        return [], 0
+        return [], set()
     pool = ThreadPoolExecutor(max_workers=max(1, workers))
     futures = {pool.submit(fetch, p): i for i, p in enumerate(paths)}
     timeout = None if deadline is None else max(0.0, deadline - time.monotonic())
@@ -434,7 +434,7 @@ def _fetch_within(fetch: Callable[[str], pd.DataFrame | None], paths: list[str],
             got[futures[f]] = f.result()
         except Exception as exc:  # noqa: BLE001 - one unreadable file is skipped, not fatal
             logger.info("could not read %s: %s", paths[futures[f]], exc)
-    return got, len(late)
+    return got, {futures[f] for f in late}
 
 
 def read_archive(archive: str | Path | None = None, *, repo_id: str = DEFAULT_REPO, since: date | None = None,
@@ -449,8 +449,8 @@ def read_archive(archive: str | Path | None = None, *, repo_id: str = DEFAULT_RE
 
     Reading the Hub, ``manifest`` replaces the published ``forecasts/manifest.json`` and a file present under
     ``overlay`` (a build folder, same paths) is read from there instead: the daily job passes the manifest and the
-    files it has just written, before they are published. ``budget_s`` caps the reading; files not read by then
-    are counted in ``meta["unread"]`` and the scores are then incomplete.
+    files it has just written, before they are published. ``meta["unread"]`` counts files that missed the
+    ``budget_s`` deadline and unreadable issued files listed in the manifest. Status snapshots can have gaps.
     """
     unread = 0
     if archive is not None:
@@ -481,8 +481,10 @@ def read_archive(archive: str | Path | None = None, *, repo_id: str = DEFAULT_RE
             return _read_parquet_bytes(_get(published_url(path, repo_id)))
 
         paths = [files[d] for d in chosen] + [f"forecasts/status/{d.isoformat()}.parquet" for d in snaps]
-        frames, unread = _fetch_within(fetch, paths, workers=workers, deadline=deadline)
+        frames, late = _fetch_within(fetch, paths, workers=workers, deadline=deadline)
         issued, got = frames[:len(chosen)], frames[len(chosen):]
+        unread_issues = {i for i, frame in enumerate(issued) if frame is None}
+        unread = len(late | unread_issues)
         status = [s.assign(snapshot=d.isoformat()) for d, s in zip(snaps, got) if s is not None]
         snaps = [d for d, s in zip(snaps, got) if s is not None]
         issued = [x for x in issued if x is not None]

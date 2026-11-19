@@ -146,6 +146,17 @@ def test_run_writes_the_snapshot_the_issue_and_the_manifest(monkeypatch, tmp_pat
     assert man["issues"][-1]["dropped"] == {"daily cap": 1, "no fresh value": 1}
     assert man["status"]["file"] == "forecasts/status/latest.parquet" and "CC BY 4.0" in man["about"]
     assert info["n_gauges"] == 1 and info["status_gauges"] == 2
+    # Then the scorecard, from the files this run wrote (nothing to pair yet on the first day).
+    assert man["issues"][-1]["verify"] == info["verify"] and info["verify"]["complete"] is True
+    assert (tmp_path / "verify" / "manifest.json").exists()
+
+
+def test_run_can_skip_the_scorecard(monkeypatch, tmp_path):
+    monkeypatch.setattr(fa, "read_published_json", lambda path, repo_id=fa.DEFAULT_REPO: {})
+    monkeypatch.setattr(fa, "read_published_rows", lambda path, repo_id=fa.DEFAULT_REPO: [])
+    monkeypatch.setattr(fa, "scorecard", lambda *a, **k: pytest.fail("no scorecard at a zero budget"))
+    info = fa.run(tmp_path, manifest={}, catalog=[], today=TODAY, workers=1, verify_budget_s=0)
+    assert "verify" not in info and not (tmp_path / "verify").exists()
 
 
 def _glofas_forecast(**kw):
@@ -282,6 +293,36 @@ def test_publish_uploads_only_the_forecasts_folder(monkeypatch, tmp_path):
     assert fa.publish(tmp_path) == "https://hf.co/commit/1"
     assert seen["files"] == ["forecasts/manifest.json", "forecasts/status/latest.json"]
     assert seen["message"] == "forecasts: issue 2026-10-08"
+
+
+def _scorecard_files(out, *, complete=True):
+    v = out / "verify"
+    v.mkdir(parents=True)
+    (v / "forecast_skill.parquet").write_text("table")
+    (v / "summary.json").write_text("{}")
+    (v / "manifest.json").write_text(json.dumps({"complete": complete, "unread": 0 if complete else 3}))
+
+
+@pytest.mark.parametrize("complete", [True, False])
+def test_publish_adds_the_scorecard_only_when_complete(monkeypatch, tmp_path, complete):
+    root = tmp_path / "forecasts"
+    root.mkdir()
+    (root / "manifest.json").write_text(json.dumps({"issues": [{"date": "2026-10-08"}]}))
+    _scorecard_files(tmp_path, complete=complete)
+    (tmp_path / "feeds").mkdir()
+    (tmp_path / "feeds" / "index.json").write_text("{}")
+    seen = {}
+
+    def fake_publish(folder, repo_id, token=None, commit_message=None):
+        seen["files"] = sorted(p.relative_to(folder).as_posix() for p in Path(folder).rglob("*") if p.is_file())
+        seen["message"] = commit_message
+        return "https://hf.co/commit/2"
+
+    monkeypatch.setattr("aquascope.archive.publish.publish_folder", fake_publish)
+    fa.publish(tmp_path)
+    scorecard = ["verify/forecast_skill.parquet", "verify/manifest.json", "verify/summary.json"]
+    assert seen["files"] == ["forecasts/manifest.json"] + (scorecard if complete else [])
+    assert seen["message"] == "forecasts: issue 2026-10-08" + (", scorecard" if complete else "")
 
 
 def test_the_workflow_runs_daily_and_a_smoke_run_never_publishes():

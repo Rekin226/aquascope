@@ -13,9 +13,15 @@ python -m aquascope.archive.verify --out build --since 2026-10-08
 ```
 
 It writes `build/verify/forecast_skill.parquet` (one row per model, variant, lead day and month),
-`build/verify/forecast_skill_gauges.parquet` (each gauge's own record, below) and `build/verify/summary.json`
-(pair counts, the 1-day-lead headline, error by lead, the per-gauge window and trust counts). Everything is computed from
-the published files by code: no key, no model call, and the same files give the same numbers.
+`build/verify/forecast_skill_gauges.parquet` (each gauge's own record, below), `build/verify/summary.json`
+(pair counts, the 1-day-lead headline, error by lead, the per-gauge window and trust counts) and
+`build/verify/manifest.json` (what was read). Everything is computed from the published files by code: no key,
+no model call, and the same files give the same numbers.
+
+The daily `forecast-archive` job runs the same scoring right after each issue, on every issue so far, and
+publishes these files as the Archive's `verify/` prefix ([Archive layout](archive-layout.md)). The
+scorecard has 10 minutes of its own (`--verify-budget-min`); when some input could not be read in that time, the
+day's files are kept in the run's artifact but not published, and the job's health record says so.
 
 ## Pairing
 
@@ -25,7 +31,10 @@ value's own date, not the snapshot's; when several snapshots carry the same day,
 positive flows are scored, on both sides, because the errors are in log flow.
 
 Raw and corrected-to-the-gauge values are separate rows (`variant` = `raw` or `corrected`), each with its own
-pair count. Today only GEOGLOWS is issued corrected, so GloFAS has raw rows only.
+pair count. Both models are issued corrected to the gauge: GEOGLOWS from its retrospective simulation, GloFAS
+(since #790) from its reanalysis at the gauge's cell. A gauge's GloFAS rows stay raw until its reanalysis record
+has been read, which the daily job does within a call budget, so GloFAS corrected pairs ramp in over the first
+weeks and its corrected rows rest on fewer gauges than the raw ones until then.
 
 ## The scores
 
@@ -106,6 +115,8 @@ nothing.
   revisions are not picked up.
 - **A month is short.** A gauge's 30-day window holds a few dozen pairs at best, so its trust word can change from
   one week to the next. The card always gives the pair count and the dates next to the factor.
+- **GloFAS corrected is young.** Its corrected values started with #790 (November 2026), so its corrected rows
+  cover fewer days and gauges than GEOGLOWS corrected; compare them on matching months and leads.
 
 ## References
 

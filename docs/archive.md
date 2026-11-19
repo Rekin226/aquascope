@@ -254,6 +254,15 @@ then recorded; the skill the Explorer shows today is the correction's skill on t
 `python -m aquascope.archive.forecasts run|publish --out build`. A run with `max_items` set is a smoke run and
 never publishes.
 
+### The forecast scorecard (`verify/`)
+
+Right after each issue, the same job scores every issue so far against what the gauges then recorded (#785) and
+publishes the result with `forecasts/` in one commit: `verify/forecast_skill.parquet` (median log error, CRPS,
+hit rate and false alarm ratio per model, raw and corrected, lead day and month, each with its pair count),
+`verify/summary.json` (the headline) and `verify/manifest.json` (what was read, and whether all of it was read
+within the scorecard's 10 minutes; an incomplete run is not published). What the scores mean and where they stop:
+[Forecast verification](forecast-verification.md). Locally: `aquascope evidence verify --out build`.
+
 ### Floods ahead (`forecasts/warnings/`)
 
 Once a day the `flood-warnings` workflow (#546) reads the whole GEOGLOWS v2 global forecast

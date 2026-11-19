@@ -12,9 +12,15 @@ aquascope evidence verify --out build --archive ./gauges  # a local copy of the 
 python -m aquascope.archive.verify --out build --since 2026-10-08
 ```
 
-It writes `build/verify/forecast_skill.parquet` (one row per model, variant, lead day and month) and
-`build/verify/summary.json` (pair counts, the 1-day-lead headline, error by lead). Everything is computed from
-the published files by code: no key, no model call, and the same files give the same numbers.
+It writes `build/verify/forecast_skill.parquet` (one row per model, variant, lead day and month),
+`build/verify/summary.json` (pair counts, the 1-day-lead headline, error by lead) and `build/verify/manifest.json`
+(what was read). Everything is computed from the published files by code: no key, no model call, and the same
+files give the same numbers.
+
+The daily `forecast-archive` job runs the same scoring right after each issue, on every issue so far, and
+publishes the three files as the Archive's `verify/` prefix ([Archive layout](archive-layout.md)). The
+scorecard has 10 minutes of its own (`--verify-budget-min`); when some input could not be read in that time, the
+day's files are kept in the run's artifact but not published, and the job's health record says so.
 
 ## Pairing
 
@@ -24,7 +30,10 @@ value's own date, not the snapshot's; when several snapshots carry the same day,
 positive flows are scored, on both sides, because the errors are in log flow.
 
 Raw and corrected-to-the-gauge values are separate rows (`variant` = `raw` or `corrected`), each with its own
-pair count. Today only GEOGLOWS is issued corrected, so GloFAS has raw rows only.
+pair count. Both models are issued corrected to the gauge: GEOGLOWS from its retrospective simulation, GloFAS
+(since #790) from its reanalysis at the gauge's cell. A gauge's GloFAS rows stay raw until its reanalysis record
+has been read, which the daily job does within a call budget, so GloFAS corrected pairs ramp in over the first
+weeks and its corrected rows rest on fewer gauges than the raw ones until then.
 
 ## The scores
 
@@ -64,8 +73,9 @@ between models and leads, not with a CRPS computed from full ensembles elsewhere
   explains why raw GEOGLOWS, which forecasts too little water at most gauges, rarely raises an alarm.
 - **The observation is provisional.** It is the agency's newest daily value when the snapshot was made; later
   revisions are not picked up.
-- **Not yet published.** This is the scoring core. A daily `verify/` prefix in the Archive, GloFAS corrected to
-  the gauge, the river card line and the evidence ladder ranking follow in later steps of #785.
+- **GloFAS corrected is young.** Its corrected values started with #790 (November 2026), so its corrected rows
+  cover fewer days and gauges than GEOGLOWS corrected; compare them on matching months and leads.
+- **Not on the map yet.** The river card line and the evidence ladder ranking follow in later steps of #785.
 
 ## References
 

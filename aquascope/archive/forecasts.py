@@ -18,12 +18,16 @@ Layout under ``<out>/forecasts/`` (the only folder this job publishes; the catal
     status/latest.json         when the snapshot was made and which sources it covers
     status/<YYYY-MM-DD>.parquet  the same snapshot, kept by date
 
+After the issue, the run scores every issue so far against the gauge (:mod:`aquascope.archive.verify`, #785),
+reading the published files plus the ones it has just written, and writes ``<out>/verify/`` (``forecast_skill.parquet``,
+``summary.json``, ``manifest.json``), which ``publish`` uploads with ``forecasts/`` in the same commit.
+
 Licences: GEOGLOWS v2 output is CC BY 4.0; Open-Meteo serves GloFAS under CC BY 4.0. Both are model output and
 labelled so. ``river_id`` is a TDX-Hydro reach identifier; no river geometry is stored.
 
 Run by ``.github/workflows/forecast-archive.yml``:
 
-    python -m aquascope.archive.forecasts run --out build [--max-gauges 250] [--max-items N]
+    python -m aquascope.archive.forecasts run --out build [--max-gauges 250] [--max-items N] [--verify-budget-min 10]
     python -m aquascope.archive.forecasts publish --out build
 
 Needs the ``archive`` extra (pyarrow, huggingface_hub).
@@ -67,6 +71,8 @@ GLOFAS_RECORD_REFRESH_DAYS = 365
 GLOFAS_CALL_BUDGET = 4000
 #: Weighted calls a minute, under the free tier's 600.
 GLOFAS_CALLS_PER_MINUTE = 500
+#: The scorecard's own time budget, after the issue (reading the published issues and snapshots dominates).
+VERIFY_BUDGET_S = 10 * 60
 
 ABOUT = ("Issued forecasts and the daily status snapshot for AquaScope's Archive gauges (#517). Model output: "
          "GEOGLOWS v2 (GEOGloWS ECMWF Streamflow Service, CC BY 4.0) and GloFAS v4 via Open-Meteo (CC BY 4.0). "
@@ -447,12 +453,14 @@ def _parallel(fn: Callable[[Any], Any], items: list[Any], workers: int) -> list[
 def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, max_gauges: int = DEFAULT_MAX_GAUGES,
         max_items: int | None = None, workers: int = 4, time_budget_s: float = 75 * 60, days: int = 15,
         today: date | None = None, manifest: dict[str, Any] | None = None,
-        catalog: list[dict[str, Any]] | None = None, glofas_calls: float = GLOFAS_CALL_BUDGET) -> dict[str, Any]:
+        catalog: list[dict[str, Any]] | None = None, glofas_calls: float = GLOFAS_CALL_BUDGET,
+        verify_budget_s: float = VERIFY_BUDGET_S) -> dict[str, Any]:
     """Build today's status snapshot and forecast issue under ``<out>/forecasts/`` and return a summary.
 
     ``max_items`` caps the gauges looked at (a smoke run); ``max_gauges`` caps the ones forecast. Gauges past the
     caps or the time budget are counted under ``dropped`` in the manifest, by reason. ``glofas_calls`` caps the
-    Open-Meteo calls spent on new GloFAS records (:func:`glofas_records`).
+    Open-Meteo calls spent on new GloFAS records (:func:`glofas_records`). Then the scorecard (:func:`scorecard`)
+    gets ``verify_budget_s`` of its own (0 skips it).
     """
     started = time.monotonic()
     today = today or datetime.now(timezone.utc).date()
@@ -548,12 +556,51 @@ def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, max_gauges: int = DEFAU
            "licence": LICENCE, "columns": COLUMNS, "status": {**meta, "file": f"{FOLDER}/status/latest.parquet"},
            "issues": sorted(issues, key=lambda i: i["date"])}
     (root / "manifest.json").write_text(json.dumps(doc, indent=1))
+    if verify_budget_s > 0:
+        entry["verify"] = doc["issues"][-1]["verify"] = scorecard(out, doc, repo_id=repo_id, budget_s=verify_budget_s)
+        (root / "manifest.json").write_text(json.dumps(doc, indent=1))
     return {"status_gauges": len(rows), "status_sources": meta["sources"], **entry}
 
 
+def scorecard(out: str | Path, manifest: dict[str, Any], *, repo_id: str = DEFAULT_REPO,
+              budget_s: float = VERIFY_BUDGET_S) -> dict[str, Any]:
+    """Score every issue in ``manifest`` against the gauge into ``<out>/verify/`` (#785) and say how it went.
+
+    Reads the published issues and snapshots, with the ones this run wrote under ``<out>`` taking their place.
+    Never raises: a failure is returned as ``error`` (and kept in the forecast manifest and the job's health
+    notes) so the forecast issue is still published.
+    """
+    from aquascope.archive import verify
+
+    try:
+        doc = verify.run(out, repo_id=repo_id, manifest=manifest, overlay=out, budget_s=budget_s)
+    except Exception as exc:  # noqa: BLE001 - the scorecard must not cost the day's issue
+        logger.warning("forecast scorecard failed: %s", exc)
+        return {"error": f"{type(exc).__name__}: {exc}"[:300]}
+    man = json.loads((Path(out) / verify.FOLDER / verify.MANIFEST).read_text())
+    logger.info("scorecard: %d rows from %d pairs in %s s%s", man["n_rows"], man["pairs"], man["seconds"],
+                "" if man["complete"] else f", {man['unread']} files unread (time budget)")
+    return {"rows": man["n_rows"], "pairs": man["pairs"], "issues": doc["inputs"]["issues"]["n"],
+            "complete": man["complete"], "seconds": man["seconds"]}
+
+
+def _scorecard_ready(folder: Path) -> bool:
+    """A complete scorecard: all its files, and every published file it needed was read in time."""
+    from aquascope.archive import verify
+
+    try:
+        man = json.loads((folder / verify.MANIFEST).read_text())
+    except (OSError, ValueError):
+        return False
+    return bool(man.get("complete")) and all((folder / n).is_file() for n in (verify.TABLE, verify.SUMMARY))
+
+
 def publish(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None = None) -> str:
-    """Upload ``<out>/forecasts`` and nothing else to the Archive dataset (needs HF_TOKEN with write access)."""
+    """Upload ``<out>/forecasts``, and ``<out>/verify`` when its scorecard is complete, and nothing else to the
+    Archive dataset in one commit (needs HF_TOKEN with write access). An incomplete or missing scorecard leaves
+    the published ``verify/`` as it was."""
     from aquascope.archive.publish import publish_folder
+    from aquascope.archive.verify import FOLDER as VERIFY
 
     src = Path(out) / FOLDER
     if not (src / "manifest.json").exists():
@@ -562,7 +609,11 @@ def publish(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None =
         stage = Path(tmp) / FOLDER
         shutil.copytree(src, stage)
         day = json.loads((src / "manifest.json").read_text())["issues"][-1]["date"]
-        return publish_folder(Path(tmp), repo_id, token=token, commit_message=f"forecasts: issue {day}")
+        message = f"forecasts: issue {day}"
+        if _scorecard_ready(Path(out) / VERIFY):
+            shutil.copytree(Path(out) / VERIFY, Path(tmp) / VERIFY)
+            message += ", scorecard"
+        return publish_folder(Path(tmp), repo_id, token=token, commit_message=message)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -577,6 +628,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--time-budget-min", type=float, default=75.0)
     p.add_argument("--glofas-calls", type=float, default=GLOFAS_CALL_BUDGET,
                    help="Open-Meteo weighted calls a run may spend on new GloFAS records")
+    p.add_argument("--verify-budget-min", type=float, default=VERIFY_BUDGET_S / 60,
+                   help="minutes for the scorecard after the issue (verify/, #785); 0 skips it")
     p = sub.add_parser("publish")
     p.add_argument("--out", required=True)
     p.add_argument("--repo", default=os.environ.get("HF_DATASET", DEFAULT_REPO))
@@ -586,7 +639,8 @@ def main(argv: list[str] | None = None) -> int:
         logging.getLogger(noisy).setLevel(logging.WARNING)
     if a.cmd == "run":
         info = run(a.out, repo_id=a.repo, max_gauges=a.max_gauges, max_items=a.max_items, workers=a.workers,
-                   time_budget_s=a.time_budget_min * 60, glofas_calls=a.glofas_calls)
+                   time_budget_s=a.time_budget_min * 60, glofas_calls=a.glofas_calls,
+                   verify_budget_s=a.verify_budget_min * 60)
     else:
         info = {"commit": publish(a.out, repo_id=a.repo)}
     print(json.dumps(info, indent=1, default=str))

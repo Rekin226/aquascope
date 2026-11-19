@@ -50,6 +50,7 @@ published except `health/`, whose writer was merged on 2026-10-12 and publishes 
 | `forecasts/` (`issued/`, `status/`, `reaches.parquet`) | live | experimental |
 | `forecasts/warnings/` | live | experimental |
 | `feeds/` | live | experimental |
+| `verify/` | from the next `forecast-archive.yml` run (added in 1.3.0) | experimental |
 | `flowstatus/climatology/` | live | experimental |
 | `flowstatus/` (daily files) | live | experimental |
 | `scout/` | live | experimental |
@@ -183,6 +184,22 @@ daily (14:23 UTC), with `python -m aquascope.archive.warnings`. Model output, no
 
 Licence: CC BY-NC-SA 4.0, because the return-period thresholds come from GEOGLOWS's retrospective return periods,
 which their metadata licenses that way. The forecast itself is CC BY 4.0.
+
+## `verify/`: the forecast scorecard (experimental)
+
+Written by `forecast-archive.yml`, daily, right after the issue and in the same commit as `forecasts/`
+(`aquascope.archive.verify`, #785). Every issue so far is scored against the gauge values in the status snapshots,
+so the files are rewritten whole each day. A run that cannot read every input within its time budget (10 minutes)
+leaves the published files as they were. See [Forecast verification](forecast-verification.md).
+
+| File | What |
+| --- | --- |
+| `verify/forecast_skill.parquet` | one row per model, variant (`raw`, `corrected`), lead day and month (`YYYY-MM`, or `all`): `model`, `variant`, `lead_day`, `month`, `n_pairs`, `n_gauges`, `first_valid`, `last_valid`, `enough_pairs`, `median_abs_log10_error`, `factor`, `median_log10_error`, `crps_log10`, `n_crps`, `n_threshold`, `hits`, `misses`, `false_alarms`, `correct_negatives`, `hit_rate`, `false_alarm_ratio` |
+| `verify/summary.json` | `about`, `made`, `min_pairs`, `method`, `inputs`, `file`, `pairs` (per model and variant), `headline` (the 1-day lead), `by_lead` |
+| `verify/manifest.json` | `updated`, `files`, `n_rows`, `pairs`, `pairs_by_model`, `min_pairs`, `issues`, `snapshots`, `unread`, `complete`, `seconds`, `licence` |
+
+Licence: computed from GEOGLOWS v2 and GloFAS (Open-Meteo) output, both CC BY 4.0, against gauge data under each
+source's terms.
 
 ## `feeds/`: per-gauge Atom feeds (experimental)
 

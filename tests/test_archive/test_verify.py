@@ -224,3 +224,93 @@ def test_cli_writes_the_table_and_the_summary(tmp_path, monkeypatch, capsys):
     assert doc["min_pairs"] == 2 and doc["inputs"]["issues"]["n"] == 2
     assert doc["pairs"]["geoglows"]["corrected"] > 0 and doc["pairs"]["glofas"]["corrected"] == 0
     assert "headline" in json.loads(capsys.readouterr().out)
+
+
+# ── the daily job: the Hub plus the files just written, a time budget ─────────
+
+
+def _hub_and_build(tmp_path, monkeypatch, *, delay: float = 0.0):
+    """The 2026-10-01 issue and the 2026-10-03 snapshot published; the 2026-10-02 issue and the 2026-10-04
+    snapshot only in the build folder, as right after the forecast step."""
+    import io
+    import time as _time
+
+    from aquascope.archive import forecasts as fa
+
+    def parquet(df):
+        buf = io.BytesIO()
+        df.to_parquet(buf)
+        return buf.getvalue()
+
+    snaps = dict(tuple(STATUS.groupby("snapshot")))
+    hub = {"forecasts/issued/2026-10-01.parquet": parquet(ISSUED),
+           "forecasts/status/2026-10-03.parquet": parquet(snaps["2026-10-03"].drop(columns="snapshot"))}
+    asked = []
+
+    def fake_get(url):
+        path = url.split("/resolve/main/", 1)[1]
+        asked.append(path)
+        if path.endswith("manifest.json"):
+            raise AssertionError("the job passes its own manifest")
+        _time.sleep(delay)
+        return hub.get(path)
+
+    monkeypatch.setattr(fa, "_get", fake_get)
+    build = tmp_path / "build"
+    (build / "forecasts" / "issued").mkdir(parents=True)
+    (build / "forecasts" / "status").mkdir(parents=True)
+    ISSUED.assign(issue_date="2026-10-02", valid_date="2026-10-03", lead_day=1).to_parquet(
+        build / "forecasts" / "issued" / "2026-10-02.parquet")
+    snaps["2026-10-04"].drop(columns="snapshot").to_parquet(build / "forecasts" / "status" / "2026-10-04.parquet")
+    manifest = {"status": {"date": "2026-10-04"},
+                "issues": [{"date": "2026-10-01", "file": "forecasts/issued/2026-10-01.parquet"},
+                           {"date": "2026-10-02", "file": "forecasts/issued/2026-10-02.parquet"}]}
+    return build, manifest, asked
+
+
+def test_the_job_reads_the_hub_with_its_own_new_files_in_place(tmp_path, monkeypatch):
+    build, manifest, asked = _hub_and_build(tmp_path, monkeypatch)
+    issued, status, meta = vf.read_archive(None, manifest=manifest, overlay=build)
+    assert set(issued["issue_date"]) == {"2026-10-01", "2026-10-02"}
+    assert set(status["snapshot"]) == {"2026-10-03", "2026-10-04"}
+    assert meta["unread"] == 0 and meta["snapshots"]["last"] == "2026-10-04"
+    # Only what the build folder lacks is asked of the Hub (snapshots from the first issue on, missing ones too).
+    assert sorted(asked) == ["forecasts/issued/2026-10-01.parquet", "forecasts/status/2026-10-01.parquet",
+                             "forecasts/status/2026-10-02.parquet", "forecasts/status/2026-10-03.parquet"]
+
+
+def test_run_writes_a_manifest_beside_the_scores(tmp_path, monkeypatch):
+    build, manifest, _ = _hub_and_build(tmp_path, monkeypatch)
+    vf.run(build, manifest=manifest, overlay=build, min_pairs=2)
+    man = json.loads((build / "verify" / "manifest.json").read_text())
+    assert man["files"] == ["verify/forecast_skill.parquet", "verify/summary.json"]
+    assert man["complete"] is True and man["unread"] == 0 and man["pairs"] > 0
+    assert man["n_rows"] == len(pd.read_parquet(build / "verify" / "forecast_skill.parquet"))
+    assert man["issues"]["n"] == 2 and man["pairs_by_model"]["geoglows"]["corrected"] > 0
+
+
+def test_files_past_the_time_budget_are_counted_not_waited_for(tmp_path, monkeypatch):
+    build, manifest, _ = _hub_and_build(tmp_path, monkeypatch, delay=1.0)
+    vf.run(build, manifest=manifest, overlay=build, budget_s=0.05)
+    man = json.loads((build / "verify" / "manifest.json").read_text())
+    # At least the four slow Hub files; a slow runner may not finish the two local reads in time either.
+    assert man["unread"] >= 4 and man["complete"] is False and man["seconds"] < 1.0
+
+
+def test_the_forecast_job_scores_after_the_issue(tmp_path, monkeypatch):
+    from aquascope.archive import forecasts as fa
+
+    build, manifest, _ = _hub_and_build(tmp_path, monkeypatch)
+    got = fa.scorecard(build, manifest)
+    assert got["complete"] is True and got["issues"] == 2 and got["pairs"] > 0 and got["rows"] > 0
+    assert (build / "verify" / "summary.json").exists()
+
+
+def test_a_failed_scorecard_never_costs_the_issue(tmp_path, monkeypatch):
+    from aquascope.archive import forecasts as fa
+
+    def boom(*a, **k):
+        raise RuntimeError("hub down")
+
+    monkeypatch.setattr(vf, "run", boom)
+    assert fa.scorecard(tmp_path, {"issues": []}) == {"error": "RuntimeError: hub down"}

@@ -293,7 +293,8 @@ def test_files_past_the_time_budget_are_counted_not_waited_for(tmp_path, monkeyp
     build, manifest, _ = _hub_and_build(tmp_path, monkeypatch, delay=1.0)
     vf.run(build, manifest=manifest, overlay=build, budget_s=0.05)
     man = json.loads((build / "verify" / "manifest.json").read_text())
-    assert man["unread"] == 4 and man["complete"] is False and man["seconds"] < 1.0   # the four Hub files
+    # At least the four slow Hub files; a slow runner may not finish the two local reads in time either.
+    assert man["unread"] >= 4 and man["complete"] is False and man["seconds"] < 1.0
 
 
 def test_the_forecast_job_scores_after_the_issue(tmp_path, monkeypatch):

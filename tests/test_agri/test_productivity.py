@@ -127,6 +127,15 @@ class TestEstimateWaPORProductivity:
         assert abs(result.aggregate_value - 80.0) < 0.001
         assert abs(result.table.iloc[1]["metric_value"] - 80.0) < 0.001
 
+    def test_wapor_carbon_unit_stays_a_source_unit_ratio(self) -> None:
+        result = estimate_wapor_productivity(
+            metric_id="biomass_water_productivity",
+            aeti_df=_wapor_frame("AETI", [2.0], "mm/day"),
+            npp_df=_wapor_frame("NPP", [3.0], "gC/m²/day"),
+        )
+        assert result.output_unit == "ratio_from_source_units"
+        assert result.table.iloc[0]["NPP_unit"] == "gC/m²/day"
+
     def test_attaches_optional_aquastat_context(self) -> None:
         result = estimate_wapor_productivity(
             metric_id="biomass_water_productivity",

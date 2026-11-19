@@ -4777,8 +4777,18 @@ def cmd_agri_plan(args: argparse.Namespace) -> None:
     precip_series = None
 
     if args.eto_file:
+        eto_frame = _load_dataframe(args.eto_file)
+        if {"source", "start_date", "end_date"}.issubset(eto_frame.columns):
+            import pandas as pd
+
+            wapor_rows = eto_frame[eto_frame["source"].astype("string").str.casefold() == "wapor"]
+            start = pd.to_datetime(wapor_rows["start_date"], errors="coerce")
+            end = pd.to_datetime(wapor_rows["end_date"], errors="coerce")
+            if (end > start).any():
+                logger.error("--eto-file requires daily reference ET. WaPOR multi-day records cannot be used directly.")
+                sys.exit(1)
         eto_series = series_from_dataframe(
-            _load_dataframe(args.eto_file),
+            eto_frame,
             value_columns=("eto_mm", "value", "et0_fao_evapotranspiration"),
             parameter=args.eto_parameter,
         )
@@ -6127,7 +6137,7 @@ def main() -> None:
     p_agri_plan = agri_sub.add_parser("plan", help="Create an irrigation plan from files or coordinates")
     p_agri_plan.add_argument("--crop", required=True, help="Crop name (e.g. maize, wheat_winter, rice_paddy)")
     p_agri_plan.add_argument("--planting-date", required=True, help="Planting date YYYY-MM-DD")
-    p_agri_plan.add_argument("--eto-file", default=None, help="Path to ET0 data file (WaPOR/Open-Meteo/CSV/JSON)")
+    p_agri_plan.add_argument("--eto-file", default=None, help="Path to a daily reference ET series (CSV or JSON)")
     p_agri_plan.add_argument("--precip-file", default=None, help="Path to precipitation data file (CSV/JSON)")
     p_agri_plan.add_argument(
         "--eto-parameter",

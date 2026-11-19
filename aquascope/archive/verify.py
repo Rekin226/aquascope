@@ -19,10 +19,13 @@ Every row carries its pair count, gauges and date range, and ``enough_pairs`` is
 published files by code only, no key and no model call. ``docs/forecast-verification.md`` says what the scores
 mean and where they stop.
 
-Writes ``<out>/verify/forecast_skill.parquet`` and ``<out>/verify/summary.json``:
+Writes ``<out>/verify/forecast_skill.parquet``, ``<out>/verify/summary.json`` and ``<out>/verify/manifest.json``:
 
     python -m aquascope.archive.verify --out build [--archive DIR] [--days N] [--since D] [--until D]
     aquascope evidence verify --out build --days 14
+
+The daily forecast archive job (:mod:`aquascope.archive.forecasts`) runs it after each issue, on the published
+files plus that day's new ones, and publishes ``verify/`` with ``forecasts/``.
 
 Needs the ``archive`` extra (pyarrow).
 """
@@ -34,8 +37,9 @@ import io
 import json
 import logging
 import os
-from collections.abc import Iterable
-from concurrent.futures import ThreadPoolExecutor
+import time
+from collections.abc import Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -59,6 +63,7 @@ __all__ = [
 FOLDER = "verify"
 TABLE = "forecast_skill.parquet"
 SUMMARY = "summary.json"
+MANIFEST = "manifest.json"
 DEFAULT_REPO = "Rekin226/aquascope-gauges"
 #: Below this many pairs a score is published but flagged (``enough_pairs`` false).
 MIN_PAIRS = 30
@@ -265,15 +270,42 @@ def _read_parquet_bytes(data: bytes | None) -> pd.DataFrame | None:
     return pd.read_parquet(io.BytesIO(data)) if data else None
 
 
+def _fetch_within(fetch: Callable[[str], pd.DataFrame | None], paths: list[str], *, workers: int,
+                  deadline: float | None) -> tuple[list[pd.DataFrame | None], int]:
+    """``fetch`` every path in parallel, keeping what arrived by ``deadline`` (``time.monotonic()``); returns the
+    frames in order (None for a missing or late file) and how many were left unread for time."""
+    if not paths:
+        return [], 0
+    pool = ThreadPoolExecutor(max_workers=max(1, workers))
+    futures = {pool.submit(fetch, p): i for i, p in enumerate(paths)}
+    timeout = None if deadline is None else max(0.0, deadline - time.monotonic())
+    done, late = wait(futures, timeout=timeout)
+    pool.shutdown(wait=False, cancel_futures=True)
+    got: list[pd.DataFrame | None] = [None] * len(paths)
+    for f in done:
+        try:
+            got[futures[f]] = f.result()
+        except Exception as exc:  # noqa: BLE001 - one unreadable file is skipped, not fatal
+            logger.info("could not read %s: %s", paths[futures[f]], exc)
+    return got, len(late)
+
+
 def read_archive(archive: str | Path | None = None, *, repo_id: str = DEFAULT_REPO, since: date | None = None,
-                 until: date | None = None, days: int | None = None, workers: int = 8
-                 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+                 until: date | None = None, days: int | None = None, workers: int = 8,
+                 manifest: dict[str, Any] | None = None, overlay: str | Path | None = None,
+                 budget_s: float | None = None) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     """The issued rows and status snapshots to score, from a local copy of the Archive or the Hub.
 
     ``archive`` is a folder holding ``forecasts/issued/`` and ``forecasts/status/`` (None reads the published
     dataset). Issues are chosen by date (``since``, ``until``, then the newest ``days`` of them); snapshots are
     read from the first chosen issue to the newest one available, since a forecast is verified after it is issued.
+
+    Reading the Hub, ``manifest`` replaces the published ``forecasts/manifest.json`` and a file present under
+    ``overlay`` (a build folder, same paths) is read from there instead: the daily job passes the manifest and the
+    files it has just written, before they are published. ``budget_s`` caps the reading; files not read by then
+    are counted in ``meta["unread"]`` and the scores are then incomplete.
     """
+    unread = 0
     if archive is not None:
         root = Path(archive) / "forecasts"
         issued_paths = {d: p for p in (root / "issued").glob("*.parquet") if (d := _date_of(p.name))}
@@ -285,7 +317,10 @@ def read_archive(archive: str | Path | None = None, *, repo_id: str = DEFAULT_RE
     else:
         from aquascope.archive.forecasts import _get, published_url, read_published_json
 
-        manifest = read_published_json("forecasts/manifest.json", repo_id)
+        if manifest is None:
+            manifest = read_published_json("forecasts/manifest.json", repo_id)
+        local = Path(overlay) if overlay is not None else None
+        deadline = None if budget_s is None else time.monotonic() + budget_s
         files = {d: i["file"] for i in manifest.get("issues") or [] if i.get("file") and (d := _date_of(i["date"]))}
         chosen = _window(list(files), since=since, until=until, days=days)
         snaps: list[date] = []
@@ -294,11 +329,13 @@ def read_archive(archive: str | Path | None = None, *, repo_id: str = DEFAULT_RE
             snaps = [chosen[0] + timedelta(days=k) for k in range((max(newest, chosen[-1]) - chosen[0]).days + 1)]
 
         def fetch(path: str) -> pd.DataFrame | None:
+            if local is not None and (local / path).is_file():
+                return pd.read_parquet(local / path)
             return _read_parquet_bytes(_get(published_url(path, repo_id)))
 
-        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-            issued = list(pool.map(fetch, [files[d] for d in chosen]))
-            got = list(pool.map(fetch, [f"forecasts/status/{d.isoformat()}.parquet" for d in snaps]))
+        paths = [files[d] for d in chosen] + [f"forecasts/status/{d.isoformat()}.parquet" for d in snaps]
+        frames, unread = _fetch_within(fetch, paths, workers=workers, deadline=deadline)
+        issued, got = frames[:len(chosen)], frames[len(chosen):]
         status = [s.assign(snapshot=d.isoformat()) for d, s in zip(snaps, got) if s is not None]
         snaps = [d for d, s in zip(snaps, got) if s is not None]
         issued = [x for x in issued if x is not None]
@@ -308,16 +345,21 @@ def read_archive(archive: str | Path | None = None, *, repo_id: str = DEFAULT_RE
             "issues": {"n": len(chosen), "first": chosen[0].isoformat() if chosen else None,
                        "last": chosen[-1].isoformat() if chosen else None, "rows": int(len(issued_df))},
             "snapshots": {"n": len(snaps), "first": snaps[0].isoformat() if snaps else None,
-                          "last": snaps[-1].isoformat() if snaps else None}}
+                          "last": snaps[-1].isoformat() if snaps else None},
+            "unread": unread}
     return issued_df, status_df, meta
 
 
 def run(out: str | Path, *, archive: str | Path | None = None, repo_id: str = DEFAULT_REPO,
         since: date | None = None, until: date | None = None, days: int | None = None,
-        min_pairs: int = MIN_PAIRS) -> dict[str, Any]:
-    """Read, pair, score and write ``<out>/verify/forecast_skill.parquet`` and ``summary.json``; returns the
-    summary."""
-    issued, status, meta = read_archive(archive, repo_id=repo_id, since=since, until=until, days=days)
+        min_pairs: int = MIN_PAIRS, manifest: dict[str, Any] | None = None, overlay: str | Path | None = None,
+        budget_s: float | None = None) -> dict[str, Any]:
+    """Read, pair, score and write ``<out>/verify/forecast_skill.parquet``, ``summary.json`` and
+    ``manifest.json``; returns the summary. ``manifest``, ``overlay`` and ``budget_s`` go to
+    :func:`read_archive`."""
+    started = time.monotonic()
+    issued, status, meta = read_archive(archive, repo_id=repo_id, since=since, until=until, days=days,
+                                        manifest=manifest, overlay=overlay, budget_s=budget_s)
     pairs = pair(issued, observations(status))
     table = score(pairs, min_pairs=min_pairs)
     folder = Path(out) / FOLDER
@@ -325,6 +367,16 @@ def run(out: str | Path, *, archive: str | Path | None = None, repo_id: str = DE
     table.to_parquet(folder / TABLE, index=False, compression="zstd")
     doc = summary(table, min_pairs=min_pairs, inputs={**meta, "pairs": int(len(pairs))})
     (folder / SUMMARY).write_text(json.dumps(doc, indent=1, default=str))
+    man = {"about": "The issued forecasts scored against the gauge (#785); see summary.json and "
+                    "docs/forecast-verification.md.",
+           "updated": doc["made"], "files": [f"{FOLDER}/{TABLE}", f"{FOLDER}/{SUMMARY}"],
+           "n_rows": int(len(table)), "pairs": int(len(pairs)), "pairs_by_model": doc["pairs"],
+           "min_pairs": min_pairs, "issues": meta["issues"], "snapshots": meta["snapshots"],
+           "unread": meta["unread"], "complete": meta["unread"] == 0,
+           "seconds": round(time.monotonic() - started, 1),
+           "licence": "computed from GEOGLOWS v2 and GloFAS (Open-Meteo) output, both CC BY 4.0, against gauge "
+                      "data under each source's terms"}
+    (folder / MANIFEST).write_text(json.dumps(man, indent=1, default=str))
     return doc
 
 
@@ -334,7 +386,8 @@ def _iso(s: str | None) -> date | None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m aquascope.archive.verify", description=(__doc__ or "").split("\n")[0])
-    ap.add_argument("--out", required=True, help="Writes <out>/verify/forecast_skill.parquet and summary.json")
+    ap.add_argument("--out", required=True,
+                    help="Writes <out>/verify/forecast_skill.parquet, summary.json and manifest.json")
     ap.add_argument("--archive", default=None, help="A local copy of the dataset (default: the Hub)")
     ap.add_argument("--repo", default=os.environ.get("HF_DATASET", DEFAULT_REPO))
     ap.add_argument("--since", default=None, help="First issue date, YYYY-MM-DD")

@@ -74,6 +74,8 @@ _RAINFALL_ERROR = (
 class TaiwanWRAIoTCollector(BaseCollector):
     """
     Collect real-time hydrological data from the WRA IoT open-data API.
+    Released under the WRA IoT portal's 政府網站資料開放宣告
+    (https://iot.wra.gov.tw/information.jsp).
 
     Parameters
     ----------

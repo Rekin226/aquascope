@@ -127,6 +127,31 @@ class TestSPEI:
         spei = standardized_precipitation_evapotranspiration_index(precip, pet, 1).dropna()
         assert spei.index.min() >= pet.index.min()
 
+    def test_aligns_by_local_calendar_month_across_timezones(self):
+        precip, temp = _monthly(20)
+        pet = thornthwaite_pet(temp, 51.4)
+        precip.index = precip.index.tz_localize("Pacific/Kiritimati")
+        expected = standardized_precipitation_evapotranspiration_index(precip, pet.set_axis(precip.index), 3)
+        pet.index = (pet.index + pd.offsets.MonthEnd(0)).tz_localize("Pacific/Honolulu")
+
+        result = standardized_precipitation_evapotranspiration_index(precip, pet, 3)
+
+        assert expected.notna().sum() == len(precip) - 2
+        pd.testing.assert_series_equal(result, expected)
+
+    @pytest.mark.parametrize("pet_at_month_end", [False, True])
+    def test_missing_pet_month_invalidates_windows_that_include_it(self, pet_at_month_end):
+        precip, temp = _monthly()
+        missing = pd.Timestamp("2010-03-01")
+        pet = thornthwaite_pet(temp, 51.4).drop(missing)
+        if pet_at_month_end:
+            pet.index = pet.index + pd.offsets.MonthEnd(0)
+
+        spei = standardized_precipitation_evapotranspiration_index(precip, pet, 3)
+
+        expected = precip.index[2:].difference(pd.date_range(missing, periods=3, freq="MS"))
+        pd.testing.assert_index_equal(spei.index, expected)
+
     def test_bad_inputs_raise(self):
         precip, temp = _monthly()
         pet = thornthwaite_pet(temp, 51.4)

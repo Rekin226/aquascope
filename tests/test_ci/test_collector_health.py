@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -202,6 +203,55 @@ def test_a_missing_secret_is_not_a_failure(health, monkeypatch, capsys) -> None:
     code = health.main(["--source", "taiwan_moenv", "--no-issue"])
     assert code == 0
     assert "NEEDS_KEY" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("source", "secret_env"),
+    [
+        (
+            "brazil_ana",
+            {
+                "ANA_HIDROWEB_IDENTIFICADOR": "BRAZIL_ANA_IDENTIFICADOR",
+                "ANA_HIDROWEB_SENHA": "BRAZIL_ANA_SENHA",
+            },
+        ),
+        ("copernicus", {"CDSAPI_KEY": "COPERNICUS_CDS_API_KEY"}),
+    ],
+)
+def test_sweep_passes_configured_credentials_to_the_probe(health, monkeypatch, capsys, source, secret_env) -> None:
+    yaml = pytest.importorskip("yaml", reason="PyYAML arrives with the dev extra")
+    workflow_path = SCRIPT.parents[1] / "workflows" / "collector-health.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    sweep = next(step for step in workflow["jobs"]["sweep"]["steps"] if step.get("id") == "sweep")
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    for env_name, secret_name in secret_env.items():
+        assert sweep["env"].get(env_name) == f"${{{{ secrets.{secret_name} }}}}"
+        monkeypatch.delenv(env_name, raising=False)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(health, "run_probe", lambda *a, **k: pytest.fail("must skip without credentials"))
+        assert health.main(["--source", source, "--no-issue"]) == 0
+        assert "NEEDS_KEY" in capsys.readouterr().out
+
+    for env_name in secret_env:
+        monkeypatch.setenv(env_name, "test-value")
+    _patch(monkeypatch, _FakeCollector([{"a": 1}]))
+    assert health.main(["--source", source, "--no-issue"]) == 0
+    assert f"[{source}] OK 1 records" in capsys.readouterr().out
+
+
+def test_moenv_health_probe_reads_only_one_page(health, monkeypatch) -> None:
+    from aquascope.collectors.taiwan_moenv import TaiwanMOENVCollector
+
+    row = {"siteid": "1685", "sampledate": "2026-09-21 12:30:59", "itemname": "氣溫", "itemvalue": "33.2"}
+    client = Mock(get_json=Mock(side_effect=[{"records": [row, row]}, AssertionError("unexpected second page")]))
+    _patch(monkeypatch, TaiwanMOENVCollector(client=client))
+
+    result = health.run_probe("taiwan_moenv", health.PROBES["taiwan_moenv"])
+
+    assert result.status == health.OK
+    assert result.records == 2
+    client.get_json.assert_called_once()
 
 
 def test_an_informational_failure_is_not_a_failure(health, monkeypatch, capsys) -> None:

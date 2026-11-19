@@ -408,8 +408,17 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://iot.wra.gov.tw/",
         variables=("groundwater_level",),
         output_model="WaterQualitySample",
-        license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Water Resources Agency, Ministry of Economic Affairs (Open Government Data License 1.0)",
+        # The IoT portal (read 2026-11-16) never names the Open Government Data
+        # License: its 政府網站資料開放宣告 (https://iot.wra.gov.tw/information.jsp)
+        # grants free, non-exclusive, sub-licensable re-use provided the source is
+        # stated. Record that declaration rather than claiming the OGDL.
+        license="WRA-Open-Data-Declaration (free re-use with attribution)", redistributable=True,
+        attribution=(
+            "經濟部水利署水資源物聯網入口網 (Water Resources Agency, MOEA, Water Resources IoT portal), "
+            "https://iot.wra.gov.tw/; the portal's 政府網站資料開放宣告 "
+            "(https://iot.wra.gov.tw/information.jsp) grants re-use provided the source is stated; "
+            "real-time groundwater level only (rainfall needs a paid membership)"
+        ),
     ),
     "taiwan_datagov": _s(
         key="taiwan_datagov", label="Taiwan data.gov.tw", region="Taiwan",

@@ -54,10 +54,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Optional: without one, the source reports NEEDS_KEY instead of failing.
-          BRAZIL_ANA_IDENTIFICADOR: ${{ secrets.BRAZIL_ANA_IDENTIFICADOR }}
-          BRAZIL_ANA_SENHA: ${{ secrets.BRAZIL_ANA_SENHA }}
+          ANA_HIDROWEB_IDENTIFICADOR: ${{ secrets.BRAZIL_ANA_IDENTIFICADOR }}
+          ANA_HIDROWEB_SENHA: ${{ secrets.BRAZIL_ANA_SENHA }}
           TAIWAN_MOENV_API_KEY: ${{ secrets.TAIWAN_MOENV_API_KEY }}
-          COPERNICUS_CDS_API_KEY: ${{ secrets.COPERNICUS_CDS_API_KEY }}
+          CDSAPI_KEY: ${{ secrets.COPERNICUS_CDS_API_KEY }}
           USGS_API_KEY: ${{ secrets.USGS_API_KEY }}
         run: |
           python .github/scripts/collector_health.py \

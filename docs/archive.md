@@ -244,14 +244,24 @@ days old. It writes only under `forecasts/`; the catalogue and the observations 
 | `forecasts/status/latest.parquet` | each live gauge's flow today against normal: `source`, `station_id`, `value_date`, `value`, `percentile`, `class`, `n_years` (the Explorer's "Today vs normal" colouring) | derived from the mirrored observations |
 | `forecasts/status/latest.json` | when the snapshot was made, the sources it covers, the count per class | |
 | `forecasts/status/<date>.parquet` | the same snapshot, kept by date (every day; see [retention](#retention-of-the-daily-files)) | |
-| `forecasts/issued/<date>.parquet` | for up to 250 of those gauges with a snapped GEOGLOWS reach: the GEOGLOWS and GloFAS forecasts as issued that day, one row per gauge, model and valid day, the ensemble statistics raw and (GEOGLOWS) corrected to the gauge, the GEOGLOWS run's start date (`init_date`) and the lead day from it, the correction's hindcast KGE, the reach-to-gauge mean-flow ratio, and the gauge's own 2- to 100-year flows (`gauge_q2` to `gauge_q100`) | GEOGLOWS v2 and Open-Meteo (GloFAS v4) output, both CC BY 4.0 |
-| `forecasts/reaches.parquet` | each gauge's GEOGLOWS `river_id`, the snap distance and the GloFAS cell used; IDs only, no geometry | |
-| `forecasts/manifest.json` | every issue date, how many gauges, and how many were dropped and why (the daily cap, the time budget, no fresh value, no river reach) | |
+| `forecasts/issued/<date>.parquet` | for up to 250 of those gauges with a snapped GEOGLOWS reach: the GEOGLOWS and GloFAS forecasts as issued that day, one row per gauge, model and valid day, the ensemble statistics raw and corrected to the gauge (GEOGLOWS from its retrospective simulation, GloFAS from its reanalysis at the cell, both by the same flow-duration mapping), the GEOGLOWS run's start date (`init_date`) and the lead day from it, the hindcast KGE of the row's model's correction, the reach-to-gauge mean-flow ratio, and the gauge's own 2- to 100-year flows (`gauge_q2` to `gauge_q100`) | GEOGLOWS v2 and Open-Meteo (GloFAS v4) output, both CC BY 4.0 |
+| `forecasts/glofas_record/<source>/<station_id>.parquet` | the last 10 years of the GloFAS reanalysis at the gauge's cell (`date`, `q`, `lat`, `lon`), which the GloFAS correction is fitted on. Read once and re-read yearly: Open-Meteo's free tier counts a request as one call per two weeks of data, so a run reads new records only up to a call budget (4,000 by default) and a gauge's GloFAS rows stay raw until its record is in | Open-Meteo (GloFAS v4) output, CC BY 4.0 |
+| `forecasts/reaches.parquet` | each gauge's GEOGLOWS `river_id`, the snap distance, the GloFAS cell used and when its GloFAS record was read (`glofas_record_at`); IDs only, no geometry | |
+| `forecasts/manifest.json` | every issue date, how many gauges, and how many were dropped and why (the daily cap, the time budget, no fresh value, no river reach), how many had GloFAS corrected, and the GloFAS records read, fetched and left for a later run | |
 
 The point of keeping what was issued is forecast skill at each lead time, measured later against what the gauge
 then recorded; the skill the Explorer shows today is the correction's skill on the simulation. Every step is also
 `python -m aquascope.archive.forecasts run|publish --out build`. A run with `max_items` set is a smoke run and
 never publishes.
+
+### The forecast scorecard (`verify/`)
+
+Right after each issue, the same job scores every issue so far against what the gauges then recorded (#785) and
+publishes the result with `forecasts/` in one commit: `verify/forecast_skill.parquet` (median log error, CRPS,
+hit rate and false alarm ratio per model, raw and corrected, lead day and month, each with its pair count),
+`verify/summary.json` (the headline) and `verify/manifest.json` (what was read, and whether all of it was read
+within the scorecard's 10 minutes; an incomplete run is not published). What the scores mean and where they stop:
+[Forecast verification](forecast-verification.md). Locally: `aquascope evidence verify --out build`.
 
 ### Floods ahead (`forecasts/warnings/`)
 

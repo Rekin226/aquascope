@@ -96,29 +96,22 @@ def standardised_groundwater_index(
 def drought_events(index: pd.Series, threshold: float = -1.0) -> list[DroughtEvent]:
     """Identify drought events as runs of *index* at or below *threshold*.
 
-    Works on any standardised index (SGI or SPI). Returns events ordered in
-    time, each with duration, accumulated severity, and peak (most negative)
-    value.
+    Missing index values and omitted calendar months in a ``DatetimeIndex``
+    break a run. Observations within the same month may belong to one run.
+    Returns events in time order, with duration in
+    observations, accumulated severity, and peak (most negative) value.
     """
-    s = index.dropna().sort_index()
-    below = s <= threshold
-    events: list[DroughtEvent] = []
-    run_start: pd.Timestamp | None = None
-    prev: pd.Timestamp | None = None
-    for ts, flag in below.items():
-        if flag and run_start is None:
-            run_start = ts
-        elif not flag and run_start is not None:
-            seg = s.loc[run_start:prev]
-            events.append(DroughtEvent(run_start, prev, len(seg),
-                                       float(seg.sum()), float(seg.min())))
-            run_start = None
-        prev = ts
-    if run_start is not None:
-        seg = s.loc[run_start:prev]
-        events.append(DroughtEvent(run_start, prev, len(seg),
-                                   float(seg.sum()), float(seg.min())))
-    return events
+    s = index.sort_index(kind="stable")
+    below = s.le(threshold).fillna(False)
+    starts = ~below.shift(fill_value=False)
+    if isinstance(s.index, pd.DatetimeIndex):
+        months = pd.Series(s.index.year * 12 + s.index.month, index=s.index)
+        starts |= months.diff().gt(1)
+    groups = starts.cumsum()
+    return [
+        DroughtEvent(segment.index[0], segment.index[-1], len(segment), float(segment.sum()), float(segment.min()))
+        for _, segment in s[below].groupby(groups[below], sort=False)
+    ]
 
 
 @dataclass

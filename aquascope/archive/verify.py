@@ -232,7 +232,8 @@ def score(pairs: pd.DataFrame, *, min_pairs: int = MIN_PAIRS) -> pd.DataFrame:
     """The scores per model, variant (``raw`` / ``corrected``), lead day and month, one row each.
 
     ``month`` is the valid date's ``YYYY-MM``, plus :data:`ALL_MONTHS` pooling every month. A variant with no
-    usable pair in a group (GloFAS corrected, while it is not issued) has no row.
+    usable pair in a group (GloFAS corrected, while it is not issued) has no row. If no group can be scored,
+    the table is empty.
     """
     rows: list[dict[str, Any]] = []
     if pairs is None or pairs.empty:
@@ -245,6 +246,8 @@ def score(pairs: pd.DataFrame, *, min_pairs: int = MIN_PAIRS) -> pd.DataFrame:
                 if got:
                     rows.append({"model": model, "variant": variant, "lead_day": int(lead), "month": month, **got})
     out = pd.DataFrame(rows)
+    if out.empty:
+        return out
     return out.sort_values(["model", "variant", "month", "lead_day"], kind="stable").reset_index(drop=True)
 
 

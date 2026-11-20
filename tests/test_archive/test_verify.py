@@ -209,6 +209,27 @@ def test_read_archive_picks_issues_by_date(tmp_path):
     assert meta["issues"]["first"] == meta["issues"]["last"] == "2026-10-01"
 
 
+def test_run_writes_empty_scores_when_paired_forecasts_are_zero(tmp_path):
+    archive = _local_archive(tmp_path / "arch")
+    for path in (archive / "forecasts" / "issued").glob("*.parquet"):
+        issued = pd.read_parquet(path)
+        for field in ("mean", "median", "p25", "p75"):
+            issued[field] = 0.0
+            issued[field + "_c"] = None
+        issued.to_parquet(path)
+
+    out = tmp_path / "out"
+    summary = vf.run(out, archive=archive)
+    folder = out / vf.FOLDER
+
+    assert summary["inputs"]["pairs"] > 0
+    assert summary["pairs"] == {} and summary["headline"] == []
+    assert pd.read_parquet(folder / vf.TABLE).empty
+    assert pd.read_parquet(folder / vf.GAUGE_TABLE).empty
+    manifest = json.loads((folder / vf.MANIFEST).read_text())
+    assert manifest["n_rows"] == 0 and manifest["complete"]
+
+
 def test_cli_writes_the_table_and_the_summary(tmp_path, monkeypatch, capsys):
     root = _local_archive(tmp_path / "arch")
     out = tmp_path / "out"

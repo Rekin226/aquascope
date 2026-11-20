@@ -69,13 +69,25 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PUBLISH: ${{ secrets.HF_TOKEN != '' && github.event_name == 'schedule' }}
+          ISSUE: ${{ github.event_name == 'schedule' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          if [ "$PUBLISH" = "true" ]; then
+            # The full install may have failed before installing the Archive extra.
+            if ! python3 -c 'import huggingface_hub' 2>/dev/null; then
+              python3 -m pip install -q "huggingface_hub>=0.20" || \
+                echo "::warning::[collector-health] could not install huggingface_hub for Archive publishing"
+            fi
+          elif [ "$ISSUE" = "true" ]; then
+            echo "::warning::[collector-health] the health record was not published: HF_TOKEN is not configured"
+          fi
           python3 .github/scripts/job_health.py report collector-health \
             --status "${{ steps.sweep.outcome == 'success' && 'success' || 'failure' }}" \
             --require "sweep=${{ steps.sweep.outcome }}" \
             --started "$JOB_STARTED" --run-url "$RUN_URL" \
-            --issue "${{ github.event_name == 'schedule' }}"
+            --publish "$PUBLISH" --issue "$ISSUE"
 
       # The sweep exits 1 only for a source that should have answered and did not:
       # NEEDS_KEY (no secret on this runner) and the probes marked informational

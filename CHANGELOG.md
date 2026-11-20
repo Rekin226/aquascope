@@ -20,6 +20,7 @@ All notable changes to AquaScope are documented here.
 - **`india_wris` licence audit** (#207): keep `license="unknown"` and `redistributable=False` after reading the first-party terms — [NWIC's copyright policy](https://nwic.gov.in/copyrightpolicy) forbids reproducing the site's contents without permission, and the Hydro-Meteorological Data Dissemination Policy, 2018 (§6.1, §6.3) guarantees only free download and acknowledgement — and replace the "terms not yet verified" attribution with India-WRIS and the Ministry of Jal Shakti.
 
 ### Fixed
+- **Forecast verification handles zero-flow forecasts**: write an empty scorecard when none of the paired forecasts can be scored in log flow, instead of crashing while sorting the results.
 - **Collector sweep Archive health record**: publish the result of each scheduled sweep when `HF_TOKEN` is configured, including failed sweeps. Manual dispatch still writes only to the run summary.
 - **Read actual WaPOR v3 observations** (#773): use the FAO raster catalog and bounded byte ranges to calculate an area-weighted mean for each requested dekad. RET, AETI and NPP use the same periods, retain their original units and exclude nodata.
 - **Site drought indices exclude partial months at the ends of daily records**: begin and end the monthly gauge and ERA5 inputs at calendar boundaries so the latest SPI and SPEI do not use a month truncated by the fetch window.

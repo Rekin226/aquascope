@@ -68,11 +68,12 @@ branches:
         expects:
           - check: min_years
             value: 30
-            path: years
+            path: spei_years
           - check: not_empty
             path: indices
-          - check: not_empty
-            path: current.spei
+          - check: min_samples
+            value: 1
+            path: spei_samples
         fallback:
           step:
             tool: drought_indices
@@ -149,11 +150,12 @@ branches:
         expects:
           - check: min_years
             value: 20
-            path: years
+            path: spei_years
           - check: not_empty
             path: indices
-          - check: not_empty
-            path: current.spei
+          - check: min_samples
+            value: 1
+            path: spei_samples
       - id: s2
         tool: low_flow_context
         method: flow_duration
@@ -266,11 +268,12 @@ branches:
         expects:
           - check: min_years
             value: 30
-            path: years
+            path: spei_years
           - check: not_empty
             path: indices
-          - check: not_empty
-            path: current.spei
+          - check: min_samples
+            value: 1
+            path: spei_samples
       - id: s2
         tool: low_flow_context
         method: flow_duration

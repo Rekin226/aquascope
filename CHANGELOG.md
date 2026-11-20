@@ -21,9 +21,12 @@ All notable changes to AquaScope are documented here.
 
 ### Fixed
 - **SPI keeps results when a month cannot be fitted**: leave a calendar month unavailable when its positive precipitation totals are all equal, instead of failing the entire index calculation.
+- **Read actual WaPOR v3 observations** (#773): use the FAO raster catalog and bounded byte ranges to calculate an area-weighted mean for each requested dekad. RET, AETI and NPP use the same periods, retain their original units and exclude nodata.
+- **Site drought indices exclude partial months at the ends of daily records**: begin and end the monthly gauge and ERA5 inputs at calendar boundaries so the latest SPI and SPEI do not use a month truncated by the fetch window.
 - **SPEI matches precipitation and evapotranspiration by calendar month**: month-start and month-end records can be combined, and the result keeps the precipitation dates.
 - **SPI and SPEI skip windows with missing months**: require consecutive calendar months when accumulating precipitation or climatic water balance. A longer timescale with no complete window is unavailable while shorter timescales can still return results.
 - **Drought events stop at missing months**: groundwater, SPI and SPEI event summaries separate below-threshold runs across omitted months or missing index values.
+- **Drought plans verify SPEI coverage**: require enough months with both precipitation and PET, and at least one fitted value for each requested timescale.
 - **Taiwan MOENV reads the river water-quality dataset**: use `WQX_P_01` instead of the air-quality station catalog and parse the sampling timestamp, station identifier and name from its documented fields. The live health check requests just one page of two records.
 - **Record the declaration behind the WRA IoT source** (#473): [the IoT portal's 政府網站資料開放宣告](https://iot.wra.gov.tw/information.jsp) (read 2026-11-16) grants free, non-exclusive, sub-licensable re-use provided the source is stated, and neither it nor the API guide names the Open Government Data License, so `taiwan_wra_iot` now records that declaration instead of `OGDL-Taiwan-1.0` and its attribution carries the notice requirement and the page URL.
 - **Pass Brazil ANA and Copernicus credentials to the weekly collector sweep** (#738): map the existing GitHub secrets to the environment variables the probes and collectors read. Without credentials, those probes still report `NEEDS_KEY`.

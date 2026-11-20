@@ -27,6 +27,7 @@ DROUGHT = {
     "station": {"source": "uk_ea", "station_id": "R1", "variable": "precipitation", "unit": "mm",
                 "start": "1990-01-01", "end": "2026-08-01", "years": 36.6, "n_months": 439},
     "timescales": [1, 3, 12], "months": 439, "start": "1990-01", "end": "2026-08", "years": 36.6,
+    "spei_years": 439 / 12, "spei_samples": {"1": 439, "3": 437, "12": 428},
     "pet_method": "thornthwaite",
     "current": {"date": "2026-08", "spi": {"1": -0.42, "3": -1.13, "12": -0.87},
                 "spei": {"1": -0.61, "3": -1.36, "12": -1.05}},

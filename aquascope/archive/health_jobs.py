@@ -164,7 +164,7 @@ def _forecasts(root: Path) -> dict[str, Any]:
     if verify.get("error"):
         notes.append(f"scorecard failed: {verify['error']}")
     elif v and not v.get("complete"):
-        notes.append(f"scorecard incomplete ({v.get('unread')} files unread in its time budget), not published")
+        notes.append(f"scorecard incomplete ({v.get('unread')} files unread), not published")
     return {"counts": {"gauges": issue.get("n_gauges"), "rows": issue.get("n_rows"),
                        "status_gauges": (m.get("status") or {}).get("n"), "feeds": feeds or None,
                        "verify_rows": v.get("n_rows"), "verify_pairs": v.get("pairs")},

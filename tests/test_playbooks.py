@@ -491,7 +491,9 @@ def test_keyless_drought_status_end_to_end():
     assert [c[0] for c in calls] == ["drought_indices", "low_flow_context", "drought_propagation"]
     assert calls[0][1]["timescales"] == [1, 3, 12] and calls[2][1]["station_id"] == "W1"
     assert all(g["passed"] for g in res.gates) and len(res.gates) == 7
-    for needle in ("SPEI (thornthwaite PET): -1 at 1 month, -1.4 at 3 months", "moderately dry, in drought",
+    # The 1-month value uses the legacy summary date; the 3-month row has no date of its own.
+    for needle in ("SPEI (thornthwaite PET): -1 at 1 month as of 2026-07-01, -1.4 at 3 months,",
+                   "moderately dry, in drought",
                    "averages -0.35 (SPEI the drier)", "0.31 C per decade", "Q95 12.3 m3/s", "lag of 2 months",
                    "uk_ea R1"):
         assert needle in res.answer, needle

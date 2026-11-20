@@ -25,6 +25,7 @@ All notable changes to AquaScope are documented here.
 - **Read actual WaPOR v3 observations** (#773): use the FAO raster catalog and bounded byte ranges to calculate an area-weighted mean for each requested dekad. RET, AETI and NPP use the same periods, retain their original units and exclude nodata.
 - **Site drought indices exclude partial months at the ends of daily records**: begin and end the monthly gauge and ERA5 inputs at calendar boundaries so the latest SPI and SPEI do not use a month truncated by the fetch window.
 - **SPEI matches precipitation and evapotranspiration by calendar month**: month-start and month-end records can be combined, and the result keeps the precipitation dates.
+- **SPI keeps results when a month cannot be fitted**: leave a calendar month unavailable when its positive precipitation totals are all equal, instead of failing the entire index calculation.
 - **SPI and SPEI skip windows with missing months**: require consecutive calendar months when accumulating precipitation or climatic water balance. A longer timescale with no complete window is unavailable while shorter timescales can still return results.
 - **Drought events stop at missing months**: groundwater, SPI and SPEI event summaries separate below-threshold runs across omitted months or missing index values.
 - **Drought plans verify SPEI coverage**: require enough months with both precipitation and PET, and at least one fitted value for each requested timescale.

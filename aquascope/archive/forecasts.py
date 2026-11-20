@@ -579,7 +579,7 @@ def scorecard(out: str | Path, manifest: dict[str, Any], *, repo_id: str = DEFAU
         return {"error": f"{type(exc).__name__}: {exc}"[:300]}
     man = json.loads((Path(out) / verify.FOLDER / verify.MANIFEST).read_text())
     logger.info("scorecard: %d rows from %d pairs in %s s%s", man["n_rows"], man["pairs"], man["seconds"],
-                "" if man["complete"] else f", {man['unread']} files unread (time budget)")
+                "" if man["complete"] else f", {man['unread']} files unread")
     return {"rows": man["n_rows"], "pairs": man["pairs"], "issues": doc["inputs"]["issues"]["n"],
             "complete": man["complete"], "seconds": man["seconds"]}
 

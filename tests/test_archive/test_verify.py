@@ -384,6 +384,25 @@ def test_run_writes_a_manifest_beside_the_scores(tmp_path, monkeypatch):
     assert man["issues"]["n"] == 2 and man["pairs_by_model"]["geoglows"]["corrected"] > 0
 
 
+@pytest.mark.parametrize("data", [None, b"not parquet"], ids=["missing", "corrupt"])
+def test_an_unread_issued_file_keeps_the_scorecard_from_publishing(tmp_path, monkeypatch, data):
+    from aquascope.archive import forecasts as fa
+
+    build, manifest, _ = _hub_and_build(tmp_path, monkeypatch)
+    get = fa._get
+    path = manifest["issues"][0]["file"]
+    monkeypatch.setattr(fa, "_get", lambda url: data if url.endswith(f"/{path}") else get(url))
+
+    vf.run(build, manifest=manifest, overlay=build, min_pairs=2)
+
+    folder = build / "verify"
+    recorded = json.loads((folder / "manifest.json").read_text())
+    assert recorded["pairs"] > 0
+    assert recorded["unread"] == 1
+    assert recorded["complete"] is False
+    assert not fa._scorecard_ready(folder)
+
+
 def test_files_past_the_time_budget_are_counted_not_waited_for(tmp_path, monkeypatch):
     build, manifest, _ = _hub_and_build(tmp_path, monkeypatch, delay=1.0)
     vf.run(build, manifest=manifest, overlay=build, budget_s=0.05)

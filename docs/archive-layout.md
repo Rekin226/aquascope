@@ -189,8 +189,9 @@ which their metadata licenses that way. The forecast itself is CC BY 4.0.
 
 Written by `forecast-archive.yml`, daily, right after the issue and in the same commit as `forecasts/`
 (`aquascope.archive.verify`, #785). Every issue so far is scored against the gauge values in the status snapshots,
-so the files are rewritten whole each day. A run that cannot read every input within its time budget (10 minutes)
-leaves the published files as they were. See [Forecast verification](forecast-verification.md).
+so the files are rewritten whole each day. A run that cannot read an issued forecast file listed in the manifest
+or that reaches its time limit while reading (10 minutes) leaves the published scorecard in place. See
+[Forecast verification](forecast-verification.md).
 
 | File | What |
 | --- | --- |

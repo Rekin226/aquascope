@@ -1,0 +1,180 @@
+{
+ "id": "kingston-flood",
+ "question": "What is the 100-year flood of the Thames at Kingston, and how sure can we be?",
+ "shows": "Finding a gauge, fitting a flood frequency curve, and quoting the confidence interval.",
+ "answer": "I ran out of tool-call steps before finishing. Here is what the tools returned so far; ask a narrower question or raise --max-steps.",
+ "markdown": "# What is the 100-year flood of the Thames at Kingston, and how sure can we be?\n\nI ran out of tool-call steps before finishing. Here is what the tools returned so far; ask a narrower question or raise --max-steps.\n\n## What this answer does not establish\n\n- The answer does not say which station or record the numbers come from.\n\n## Data\n\n- **uk_ea / 8496ce69-482c-406a-a2f0-ac418ef8f099** · 1883-10-01 to 2026-10-19 (143.0 years) · licence OGL-UK-3.0 · © Environment Agency copyright and/or database right 2015. All rights reserved.\n\n## Methods and citations\n\n1. **Flow-duration curve.** Empirical exceedance probabilities of daily flow (Weibull plotting positions); Q95 and Q10 read from the curve. _Vogel, R. M., & Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage., 120(4), 485-504._\n2. **GEV fitted by L-moments.** Annual maxima (calendar years) fitted to a Generalized Extreme Value distribution with L-moment estimators (Hosking 1990); return levels from the fitted quantile function. _Hosking, J. R. M. (1990). L-moments: analysis and estimation of distributions using linear combinations of order statistics. J. R. Stat. Soc. B, 52(1), 105-124._\n3. **Log-Pearson III (Bulletin 17C style).** Log-transformed annual maxima fitted to a Pearson type III distribution; station skew, frequency factors and analytical confidence limits after Bulletin 17C. _England, J. F. Jr. et al. (2018). Guidelines for determining flood flow frequency, Bulletin 17C. USGS Techniques and Methods 4-B5._\n4. **Mann-Kendall trend on annual means.** Non-parametric Mann-Kendall test with Sen's slope on the annual mean series. _Mann, H. B. (1945). Nonparametric tests against trend. Econometrica, 13, 245-259; Sen, P. K. (1968). Estimates of the regression coefficient based on Kendall's tau. J. Am. Stat. Assoc., 63(324), 1379-1389._\n5. **GEV (MLE, L-moment seeded) with bootstrap CI.** Maximum-likelihood GEV seeded from L-moments with the shape bounded to |k| <= 0.5; 90 % confidence bands from 1,000 bootstrap resamples of the annual maxima. _Coles, S. (2001). An Introduction to Statistical Modeling of Extreme Values. Springer._\n\n---\nProduced by aquascope 1.2.0 (`aquascope ask`), model openai/gpt-oss-120b via groq, 2026-11-16 13:48 UTC. Tools called: assess_site, flood_frequency, find_stations, find_stations, find_stations, find_stations, find_stations, find_stations. Numbers come from the tool results; the model wrote the prose.",
+ "tool_calls": [
+  {
+   "name": "assess_site",
+   "arguments": {
+    "lat": 51.41,
+    "lon": -0.3,
+    "problem": "flood_risk",
+    "return_period": 100
+   },
+   "ok": true,
+   "summary": "{\"point\": {\"lat\": 51.41, \"lon\": -0.3}, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"63b6ae06-60fc-4e92-8337-aa0e5fdd7e79\", \"name\": \"Kingston Hogsmill\", \"rive"
+  },
+  {
+   "name": "flood_frequency",
+   "arguments": {
+    "bootstrap_ci": true,
+    "return_periods": [
+     100
+    ],
+    "source": "uk_ea",
+    "station_id": "8496ce69-482c-406a-a2f0-ac418ef8f099"
+   },
+   "ok": true,
+   "summary": "{\"source\": \"uk_ea\", \"station_id\": \"8496ce69-482c-406a-a2f0-ac418ef8f099\", \"agency\": \"Environment Agency\", \"license\": \"OGL-UK-3.0\", \"attribution\": \"© Environment"
+  },
+  {
+   "name": "find_stations",
+   "arguments": {
+    "limit": 5,
+    "near": [
+     51.41,
+     -0.3
+    ],
+    "query": "Thames"
+   },
+   "ok": true,
+   "summary": "{\"n_catalog\": 75970, \"n_returned\": 5, \"limit\": 5, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"E00302A\", \"site_id\": \"E00302A\", \"name\": \"THAMES_TEDDINGTON WEI"
+  },
+  {
+   "name": "find_stations",
+   "arguments": {
+    "limit": 10,
+    "near": [
+     51.41,
+     -0.3
+    ],
+    "query": "Thames water level"
+   },
+   "ok": true,
+   "summary": "{\"n_catalog\": 75970, \"n_returned\": 10, \"limit\": 10, \"stations\": [{\"source\": \"usgs\", \"station_id\": \"USGS-452600084472001\", \"site_id\": \"USGS-452600084472001\", \"na"
+  },
+  {
+   "name": "find_stations",
+   "arguments": {
+    "limit": 20,
+    "near": [
+     51.41,
+     -0.3
+    ],
+    "query": "Thames gauge"
+   },
+   "ok": true,
+   "summary": "{\"n_catalog\": 75970, \"n_returned\": 20, \"limit\": 20, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"E00302A\", \"site_id\": \"E00302A\", \"name\": \"THAMES_TEDDINGTON W"
+  },
+  {
+   "name": "find_stations",
+   "arguments": {
+    "limit": 10,
+    "near": [
+     51.41,
+     -0.3
+    ],
+    "query": "Kingston Thames"
+   },
+   "ok": true,
+   "summary": "{\"n_catalog\": 75970, \"n_returned\": 10, \"limit\": 10, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"8496ce69-482c-406a-a2f0-ac418ef8f099\", \"site_id\": \"8496ce69-"
+  },
+  {
+   "name": "find_stations",
+   "arguments": {
+    "limit": 20,
+    "near": [
+     51.41,
+     -0.3
+    ],
+    "query": "Thames"
+   },
+   "ok": true,
+   "summary": "{\"n_catalog\": 75970, \"n_returned\": 20, \"limit\": 20, \"stations\": [{\"source\": \"uk_ea\", \"station_id\": \"E00302A\", \"site_id\": \"E00302A\", \"name\": \"THAMES_TEDDINGTON W"
+  },
+  {
+   "name": "find_stations",
+   "arguments": {
+    "limit": 5,
+    "near": [
+     51.41,
+     -0.3
+    ],
+    "query": "Kingston Thames water level"
+   },
+   "ok": true,
+   "summary": "{\"n_catalog\": 75970, \"n_returned\": 5, \"limit\": 5, \"stations\": [{\"source\": \"usgs\", \"station_id\": \"USGS-452600084472001\", \"site_id\": \"USGS-452600084472001\", \"name"
+  }
+ ],
+ "data_used": [
+  {
+   "label": "uk_ea / 8496ce69-482c-406a-a2f0-ac418ef8f099",
+   "period": "1883-10-01 to 2026-10-19 (143.0 years)",
+   "license": "OGL-UK-3.0",
+   "attribution": "© Environment Agency copyright and/or database right 2015. All rights reserved."
+  }
+ ],
+ "methods": [
+  {
+   "name": "Flow-duration curve",
+   "text": "Empirical exceedance probabilities of daily flow (Weibull plotting positions); Q95 and Q10 read from the curve.",
+   "citation": "Vogel, R. M., & Fennessey, N. M. (1994). Flow-duration curves I: new interpretation and confidence intervals. J. Water Resour. Plann. Manage., 120(4), 485-504."
+  },
+  {
+   "name": "GEV fitted by L-moments",
+   "text": "Annual maxima (calendar years) fitted to a Generalized Extreme Value distribution with L-moment estimators (Hosking 1990); return levels from the fitted quantile function.",
+   "citation": "Hosking, J. R. M. (1990). L-moments: analysis and estimation of distributions using linear combinations of order statistics. J. R. Stat. Soc. B, 52(1), 105-124."
+  },
+  {
+   "name": "Log-Pearson III (Bulletin 17C style)",
+   "text": "Log-transformed annual maxima fitted to a Pearson type III distribution; station skew, frequency factors and analytical confidence limits after Bulletin 17C.",
+   "citation": "England, J. F. Jr. et al. (2018). Guidelines for determining flood flow frequency, Bulletin 17C. USGS Techniques and Methods 4-B5."
+  },
+  {
+   "name": "Mann-Kendall trend on annual means",
+   "text": "Non-parametric Mann-Kendall test with Sen's slope on the annual mean series.",
+   "citation": "Mann, H. B. (1945). Nonparametric tests against trend. Econometrica, 13, 245-259; Sen, P. K. (1968). Estimates of the regression coefficient based on Kendall's tau. J. Am. Stat. Assoc., 63(324), 1379-1389."
+  },
+  {
+   "name": "GEV (MLE, L-moment seeded) with bootstrap CI",
+   "text": "Maximum-likelihood GEV seeded from L-moments with the shape bounded to |k| <= 0.5; 90 % confidence bands from 1,000 bootstrap resamples of the annual maxima.",
+   "citation": "Coles, S. (2001). An Introduction to Statistical Modeling of Extreme Values. Springer."
+  }
+ ],
+ "checks": [
+  {
+   "name": "tools_were_used",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "numbers_come_from_tools",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "years_traceable",
+   "passed": true,
+   "detail": ""
+  },
+  {
+   "name": "record_is_named",
+   "passed": false,
+   "detail": "The answer does not say which station or record the numbers come from."
+  },
+  {
+   "name": "river_matches_the_question",
+   "passed": true,
+   "detail": ""
+  }
+ ],
+ "study": "# An AquaScope study: the steps behind an answer, so it can be run again.\n#   aquascope run study.yaml\ntitle: \"What is the 100-year flood of the Thames at Kingston, and how sure can we be?\"\nquestion: \"What is the 100-year flood of the Thames at Kingston, and how sure can we be?\"\ncreated: \"2026-11-16T13:48:10+00:00\"\naquascope_version: \"1.2.0\"\nauthor: \"analyst\"\nmodel: \"openai/gpt-oss-120b\"\nsteps:\n  - tool: \"assess_site\"\n    arguments:\n      lat: 51.41\n      lon: -0.3\n      problem: \"flood_risk\"\n      return_period: 100\n  - tool: \"flood_frequency\"\n    arguments:\n      bootstrap_ci: true\n      return_periods: [100]\n      source: \"uk_ea\"\n      station_id: \"8496ce69-482c-406a-a2f0-ac418ef8f099\"\n  - tool: \"find_stations\"\n    arguments:\n      limit: 5\n      near: [51.41, -0.3]\n      query: \"Thames\"\n  - tool: \"find_stations\"\n    arguments:\n      limit: 10\n      near: [51.41, -0.3]\n      query: \"Thames water level\"\n  - tool: \"find_stations\"\n    arguments:\n      limit: 20\n      near: [51.41, -0.3]\n      query: \"Thames gauge\"\n  - tool: \"find_stations\"\n    arguments:\n      limit: 10\n      near: [51.41, -0.3]\n      query: \"Kingston Thames\"\n  - tool: \"find_stations\"\n    arguments:\n      limit: 20\n      near: [51.41, -0.3]\n      query: \"Thames\"\n  - tool: \"find_stations\"\n    arguments:\n      limit: 5\n      near: [51.41, -0.3]\n      query: \"Kingston Thames water level\"\n",
+ "steps": 8,
+ "model": "openai/gpt-oss-120b",
+ "provider": "groq",
+ "recorded": "2026-11-16T13:48:10+00:00",
+ "aquascope_version": "1.2.0",
+ "error": null
+}

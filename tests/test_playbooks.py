@@ -404,6 +404,7 @@ def test_result_placeholders_are_validated_and_resolved_by_the_runner():
 
 DROUGHT = {"latitude": 51.415, "longitude": -0.308, "pet_method": "thornthwaite",
            "precipitation_source": "uk_ea R1 (gauge)",
+           "spei_years": 439 / 12, "spei_samples": {"1": 439, "3": 437, "12": 428},
            "station": {"source": "uk_ea", "station_id": "R1", "variable": "precipitation", "unit": "mm", "years": 36.6},
            "timescales": [1, 3, 12], "headline_timescale": 3, "headline_index": "spei", "threshold": -1.0,
            "months": 439, "start": "1990-01-01", "end": "2026-07-01", "years": 36.6, "status": "moderately_dry",

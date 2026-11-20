@@ -228,6 +228,22 @@ def test_summaries_read_each_jobs_own_manifest(tmp_path):
     assert hj.summarise("bulletin", tmp_path)["counts"] == {"classed": 1821, "considered": 3000}
 
 
+def test_the_forecast_record_counts_the_scorecard_and_says_when_it_failed(tmp_path):
+    _dump(tmp_path / "forecasts" / "manifest.json", {"status": {"n": 240}, "issues": [
+        {"date": "2026-11-19", "n_gauges": 238, "n_rows": 9000, "verify": {"rows": 120, "pairs": 80000}}]})
+    _dump(tmp_path / "verify" / "manifest.json", {"n_rows": 120, "pairs": 80000, "complete": True, "unread": 0})
+    s = hj.summarise("forecast-archive", tmp_path)
+    assert s["counts"]["verify_rows"] == 120 and s["counts"]["verify_pairs"] == 80000 and s["notes"] == []
+
+    _dump(tmp_path / "verify" / "manifest.json", {"n_rows": 90, "pairs": 500, "complete": False, "unread": 4})
+    assert hj.summarise("forecast-archive", tmp_path)["notes"] == [
+        "scorecard incomplete (4 files unread in its time budget), not published"]
+
+    _dump(tmp_path / "forecasts" / "manifest.json", {"issues": [{"date": "2026-11-19", "verify": {"error": "x"}}]})
+    assert hj.summarise("forecast-archive", tmp_path)["notes"] == ["scorecard failed: x"]
+    assert "verify/" in hj.JOBS["forecast-archive"].writes
+
+
 def test_a_run_that_wrote_nothing_still_summarises(tmp_path):
     for key in hj.JOBS:
         s = hj.summarise(key, tmp_path / "missing")

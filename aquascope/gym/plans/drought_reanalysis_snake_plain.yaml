@@ -23,9 +23,9 @@ steps:
   - tool: drought_indices
     method: spei_reanalysis
     gates:
-      - {check: min_years, path: years}
+      - {check: min_years, path: spei_years}
       - {check: not_empty, path: indices}
-      - {check: not_empty, path: current.spei}
+      - {check: min_samples, path: spei_samples}
   - tool: low_flow_context
     method: low_flow_frequency
     alternatives:

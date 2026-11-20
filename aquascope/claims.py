@@ -33,6 +33,18 @@ def dataset_identity(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def drought_index_current(payload: dict[str, Any], name: str, scale: int | str) -> tuple[Any, str | None]:
+    """Return the current value and date for one index and scale, with a fallback for older results."""
+    for row in payload.get("indices") or []:
+        if str(row.get("timescale")) == str(scale):
+            index = row.get(name) or {}
+            if "current" in index:
+                return index["current"], index.get("date")
+            break
+    current = payload.get("current") or {}
+    return (current.get(name) or {}).get(str(scale)), current.get("date")
+
+
 def flood_result(payload: dict[str, Any], step: str, fit_name: str, index: int) -> dict[str, Any]:
     """Identity and uncertainty for one quantile of one fitted distribution."""
     ffa = payload["ffa"]

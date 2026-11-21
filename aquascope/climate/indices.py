@@ -449,16 +449,21 @@ def precipitation_concentration_index(precip_monthly: pd.Series) -> float:
 
 # ── Standardised indices: SPI and SPEI share one core ───────────────────
 def _accumulate(series: pd.Series, scale: int, what: str) -> pd.Series:
-    """``series`` summed over ``scale`` months, the first ``scale - 1`` months dropped."""
+    """Sum complete windows of ``scale`` consecutive calendar months."""
     if not isinstance(series.index, pd.DatetimeIndex):
         raise ValueError(f"{what} must have a DatetimeIndex.")
     if scale < 1:
         raise ValueError("scale must be >= 1 month.")
     s = series.sort_index().astype(float)
-    acc = s.rolling(scale).sum().dropna()
-    if acc.empty:
+    acc = s.rolling(scale).sum()
+    if not acc.notna().any():
         raise ValueError("Series too short for the requested accumulation scale.")
-    return acc
+    if scale > 1:
+        months = pd.Series(s.index.year * 12 + s.index.month, index=s.index)
+        adjacent = months.diff().eq(1)
+        complete_window = adjacent.rolling(scale - 1).sum().eq(scale - 1)
+        acc = acc.where(complete_window)
+    return acc.dropna()
 
 
 def _standardize(
@@ -473,7 +478,7 @@ def _standardize(
 
     ``probabilities(values, min_per_group)`` returns the non-exceedance
     probability of each value under the distribution fitted to that group, or
-    ``None`` when the group is too small to fit (left ``NaN``).
+    ``None`` when the group cannot be fitted (left ``NaN``).
     """
     out = pd.Series(np.nan, index=acc.index, dtype=float, name=name)
     groups = range(1, 13) if per_month else [None]
@@ -484,7 +489,7 @@ def _standardize(
             continue
         cdf = probabilities(vals, min_per_group)
         if cdf is None:
-            logger.debug("%s group %s has too few observations (< %d); left NaN.", name, g, min_per_group)
+            logger.debug("%s group %s could not be fitted; left NaN.", name, g)
             continue
         cdf = np.clip(np.asarray(cdf, dtype=float), 1e-6, 1 - 1e-6)
         out.loc[idx] = stats.norm.ppf(cdf)
@@ -494,7 +499,7 @@ def _standardize(
 def _gamma_with_zero_mass(vals: np.ndarray, min_per_group: int) -> np.ndarray | None:
     """SPI's fit: a point mass at zero (probability q) and a gamma on the positive values."""
     pos = vals[vals > 0]
-    if len(pos) < min_per_group:
+    if len(pos) < max(2, min_per_group) or np.all(pos == pos[0]):
         return None
     q = float((vals == 0).mean())
     a, loc, scl = stats.gamma.fit(pos, floc=0.0)
@@ -529,8 +534,8 @@ def standardized_precipitation_index(
         removes the seasonal cycle (standard practice). When ``False``, fit one
         gamma to all accumulated values.
     min_per_group:
-        Minimum positive values needed to fit a gamma for a group; groups with
-        fewer yield ``NaN``.
+        Minimum positive values needed to fit a gamma for a group. Groups with
+        too few positive values or no spread among them yield ``NaN``.
 
     Returns
     -------
@@ -663,7 +668,9 @@ def standardized_precipitation_evapotranspiration_index(
     pet_monthly:
         Monthly potential evapotranspiration (mm) on the same calendar
         (:func:`thornthwaite_pet` from temperature, or a FAO-56 ET0 sum). Only
-        months present in both series are used.
+        months present in both series are used. With one value per month, the
+        date labels can differ within the month and the result keeps the
+        precipitation labels. Inputs with repeated months use exact timestamps.
     timescale:
         Accumulation period in months (1, 3, 6, 12 are the usual set).
     per_month, min_per_group:
@@ -676,7 +683,16 @@ def standardized_precipitation_evapotranspiration_index(
     """
     if not isinstance(precip_monthly.index, pd.DatetimeIndex) or not isinstance(pet_monthly.index, pd.DatetimeIndex):
         raise ValueError("precip_monthly and pet_monthly must have a DatetimeIndex.")
-    p, e = precip_monthly.astype(float).align(pet_monthly.astype(float), join="inner")
+    p = precip_monthly.astype(float)
+    e = pet_monthly.astype(float)
+    p_months = precip_monthly.index.tz_localize(None).to_period("M")
+    pet_months = pet_monthly.index.tz_localize(None).to_period("M")
+    if p_months.is_unique and pet_months.is_unique:
+        shared = p_months.notna() & p_months.isin(pet_months)
+        p = p[shared]
+        e = e.set_axis(pet_months).reindex(p_months[shared]).set_axis(p.index)
+    else:
+        p, e = p.align(e, join="inner")
     if p.empty:
         raise ValueError("precip_monthly and pet_monthly share no months.")
     balance = (p - e).dropna()

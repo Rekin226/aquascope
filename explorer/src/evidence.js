@@ -14,6 +14,8 @@ import { addTableDownload, plot } from "./charts.js?v=__BUILD__";
 import { hideCard, setCard, setStatusEl } from "./shell.js?v=__BUILD__";
 import { Cancelled, callCancelable } from "./worker-client.js?v=__BUILD__";
 import { stationArea } from "./basins.js?v=__BUILD__";
+import { trustChip, verifiedRows } from "./track-record.js?v=__BUILD__";
+import { rankingRows } from "./track-record-core.js?v=__BUILD__";
 import {
   MODEL_COLORS, badge, bestByGauge, bestSql, gaugeSql, gradeColor, plainRow, skillLegend, skillTableRows, skillUrl,
 } from "./evidence-core.js?v=__BUILD__";
@@ -98,8 +100,21 @@ export async function showSkillBadge(r) {
 const card = () => $("st-evidence");
 const say = (text, kind = "info") => setStatusEl($("ev-status"), text, kind);
 
+// The models ranked a second way (#785): by how their issued forecasts verified against this gauge. Absent (and
+// the block hidden) when the Archive's verification has no row here.
+function renderForecasts(f) {
+  const box = $("ev-forecasts");
+  if (!box) return;
+  const rows = rankingRows(f);
+  box.hidden = !rows;
+  if (!rows) { box.innerHTML = ""; return; }
+  box.innerHTML = `<h4>Forecasts against this gauge</h4><p class="ev-sentence">${escapeHtml(f.sentence || "")}</p>` +
+    `<ol class="tr-rank">${rows.map((x) => `<li>${trustChip(x.trust)}<span>${escapeHtml(x.text)}</span></li>`).join("")}</ol>`;
+}
+
 export function resetEvidence() {
   run++;
+  renderForecasts(null);
   if (cancel) { cancel(); cancel = null; }
   doneKey = null;
   hideCard(card());
@@ -115,12 +130,12 @@ export async function startEvidence(r) {
   const my = ++run;
   setCard(card(), "loading", { message: "Reading GEOGLOWS and GloFAS for this gauge (about half a minute)…" });
   try {
-    const [area, published] = await Promise.all([stationArea(key), publishedRows(r)]);
+    const [area, published, verified] = await Promise.all([stationArea(key), publishedRows(r), verifiedRows(key)]);
     if (my !== run) return;
     const job = callCancelable("evidence", {
       args: {
         source: r.source, station_id: r.station_id, lat: r.lat, lon: r.lon,
-        area_km2: area ? area.area : null, published,
+        area_km2: area ? area.area : null, published, verified,
       },
     });
     cancel = job.cancel;
@@ -172,6 +187,7 @@ function render(res, r) {
     `<tfoot><tr><td colspan="11" class="muted">Q2, Q10, Q100: the model's 2-, 10- and 100-year flow against the gauge's, each from its own fit. ` +
     `Grade A: KGE 0.75 and up, B: 0.5, C: above −0.41, D: no better than the mean flow; one letter lower when the 100-year flow is off by more than half.</td></tr></tfoot>`;
   addTableDownload($("ev-actions"), table, `${r.source}-${r.station_id}-model-skill.csv`);
+  renderForecasts(res.forecasts);
   const notes = [...(res.notes || [])];
   notes.push(`Gauge record ${res.obs_start} to ${res.obs_end}; each model is scored over the days it shares with it. ` +
     "Models are modelled, not measured.");

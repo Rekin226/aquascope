@@ -84,8 +84,8 @@ JOBS: dict[str, Job] = {j.key: j for j in (
         layers=("gauges",), writes=("stations.parquet", "obs/", "basins/"),
         what="the station catalogue and the daily observations"),
     Job("forecast-archive", "Forecast archive", "forecast-archive.yml", "daily", DAY, 2 * DAY,
-        layers=("forecast-points",), writes=("forecasts/", "feeds/"),
-        what="each live gauge's status today and the forecasts as issued, and the per-gauge feeds"),
+        layers=("forecast-points",), writes=("forecasts/", "verify/", "feeds/"),
+        what="each live gauge's status today, the forecasts as issued, their scorecard and the per-gauge feeds"),
     Job("flood-warnings", "Floods ahead", "flood-warnings.yml", "daily", DAY, 2 * DAY,
         layers=("floods-ahead",), writes=("forecasts/warnings/",),
         what="the river reaches forecast to reach their 2-year flow"),
@@ -158,9 +158,17 @@ def _forecasts(root: Path) -> dict[str, Any]:
     m = _read(root / "forecasts" / "manifest.json")
     issue = (m.get("issues") or [{}])[-1]
     feeds = sum(1 for _ in (root / "feeds").glob("*/*.xml")) if (root / "feeds").is_dir() else 0
+    v = _read(root / "verify" / "manifest.json")
+    verify = issue.get("verify") or {}
+    notes = []
+    if verify.get("error"):
+        notes.append(f"scorecard failed: {verify['error']}")
+    elif v and not v.get("complete"):
+        notes.append(f"scorecard incomplete ({v.get('unread')} files unread), not published")
     return {"counts": {"gauges": issue.get("n_gauges"), "rows": issue.get("n_rows"),
-                       "status_gauges": (m.get("status") or {}).get("n"), "feeds": feeds or None},
-            "data_date": _day(issue.get("date"))}
+                       "status_gauges": (m.get("status") or {}).get("n"), "feeds": feeds or None,
+                       "verify_rows": v.get("n_rows"), "verify_pairs": v.get("pairs")},
+            "data_date": _day(issue.get("date")), "notes": notes}
 
 
 def _warnings(root: Path) -> dict[str, Any]:

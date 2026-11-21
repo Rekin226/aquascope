@@ -494,6 +494,7 @@ def model_skill(
     published: list[dict[str, Any]] | None = None,
     years: int | None = DEFAULT_YEARS,
     include_series: bool = False,
+    verified: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Score every global model at a gauge: the evidence ladder for one station.
 
@@ -508,6 +509,13 @@ def model_skill(
     has KGE, r, alpha, beta, NSE, PBIAS, the 2-, 10- and 100-year flows of gauge and model with the error in %,
     the grade and why, the model site and how it was matched, and a one-line disagreement sentence.
     ``include_series`` adds the plotting copies of the observed and modelled records under ``series``.
+
+    ``forecasts`` ranks the models a second way, by how their issued forecasts verified against this gauge
+    (:func:`aquascope.forecast_skill.rank_models`, #785): the newest 30 days at 1 to 3 days ahead, smallest
+    factor first, only where enough pairs exist. ``verified`` takes the gauge's rows of
+    ``verify/forecast_skill_gauges.parquet`` (the Explorer reads them with DuckDB); when neither ``verified``
+    nor ``published`` is given, they are read from the published table when pyarrow can (a caller passing
+    ``published`` has read the tables itself). Absent when the gauge has no verified forecast.
     """
     import pandas as pd
 
@@ -616,9 +624,25 @@ def model_skill(
         notes.append("NWM and Google GRRR are scored by the monthly skill run and published with the Archive; "
                      "this gauge has no published row yet.")
     out = {**base, "models": rows, **summarize(rows), "notes": notes}
+    ranked = _verified_ranking(source, station_id, verified, read=published is None)
+    if ranked is not None:
+        out["forecasts"] = ranked
     if include_series:
         out["series"] = plot
     return out
+
+
+def _verified_ranking(source: str | None, station_id: str | None, verified: list[dict[str, Any]] | None, *,
+                      read: bool = True) -> dict[str, Any] | None:
+    """The models ranked by verified forecast skill at the gauge (#785), or None with no verified rows."""
+    from aquascope import forecast_skill
+
+    rows = verified
+    if rows is None and read and source and station_id:
+        rows = forecast_skill.gauge_rows(source, station_id)
+    if not rows:
+        return None
+    return forecast_skill.rank_models(rows)
 
 
 # ── which model to lean on near a site (the Studio's input) ─────────────────

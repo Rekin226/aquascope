@@ -11,6 +11,8 @@ export const CONFIG = {
   flowstatusBase: "https://huggingface.co/datasets/Rekin226/aquascope-gauges/resolve/main/flowstatus/",
   // The monthly bulletin (#523): bulletins/index.json and bulletins/<YYYY-MM>/, written by bulletin.yml.
   bulletinsBase: "https://huggingface.co/datasets/Rekin226/aquascope-gauges/resolve/main/bulletins/",
+  // The forecast track record (#785): issued forecasts scored against the gauge daily (verify/, #785).
+  verifyBase: "https://huggingface.co/datasets/Rekin226/aquascope-gauges/resolve/main/verify/",
   // Watch (#521): the per-gauge Atom feeds and their index, written by the same daily workflow.
   feedsBase: "https://huggingface.co/datasets/Rekin226/aquascope-gauges/resolve/main/feeds/",
   // Job health (#593): every scheduled job's last run and expected cadence, written by each workflow's last step.

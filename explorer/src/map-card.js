@@ -28,6 +28,7 @@ import { plumeAlt, plumeKey, plumeSvg } from "./fews-core.js?v=__BUILD__";
 import { riverName } from "./place-search-core.js?v=__BUILD__";
 import { createWaterwayLookup } from "./waterway-name.js?v=__BUILD__";
 import { CONFIG } from "../config.js?v=__BUILD__";
+import { trackForGauge, trackForReach, trustChip } from "./track-record.js?v=__BUILD__";
 import {
   cardNumber, dayMonth, forecastPeak, lastDays, latestValue, placeCard, prettyUnit, snapshotSentence, sparkPaths,
 } from "./map-card-core.js?v=__BUILD__";
@@ -72,6 +73,8 @@ const el = () => $("map-card");
  *                             fews.js); it takes the place of the sparkline and the number
  *   chart: { svg, alt, key, label }   a small chart made by a layer's core module from published numbers
  *                             (the water balance's monthly bars, #557); also in place of the sparkline
+ *   trust: { head, lines: [{ text, trust }] }   the forecast track record here (#785, track-record.js): one
+ *                             line per model, each with its trust badge (good, fair, poor, unknown)
  *   note,                     an extra line (for example what a trace found)
  *   credit,                   where the numbers come from, with the licence
  *   details: () => void,      the Details button (omitted: no button)
@@ -192,6 +195,14 @@ function chartHtml(c) {
     (c.key ? `<p class="mc-chart-key">${c.key}</p>` : "");
 }
 
+// The forecast track record (#785): the words and the badges come from track-record-core.js, the numbers from the
+// Archive's verification.
+function trustHtml(t) {
+  if (!t || !t.lines || !t.lines.length) return "";
+  return `<div class="mc-trust"><p class="mc-trust-head">${escapeHtml(t.head || "")}</p><ul>` +
+    t.lines.map((l) => `<li>${trustChip(l.trust)}<span>${escapeHtml(l.text)}</span></li>`).join("") + "</ul></div>";
+}
+
 function render() {
   const card = el();
   if (!card || !spec) return;
@@ -209,6 +220,7 @@ function render() {
     ${s.sub ? `<p class="mc-sub">${escapeHtml(s.sub)}${s.waterwayCredit ? ` · ${WATERWAY_CREDIT}` : ""}</p>` : ""}
     ${statusHtml(s.status)}
     ${middle}
+    ${trustHtml(s.trust)}
     ${s.note ? `<p class="mc-note" role="status">${escapeHtml(s.note)}</p>` : ""}
     <div class="mc-actions">
       ${s.details ? `<button type="button" class="btn small primary" data-act="details" title="The full panel: the record, floods, flows, the model and more">Details</button>` : ""}
@@ -494,6 +506,8 @@ function fillGauge(m) {
       updateCard(m.id, patch);
     });
   }
+  // The forecast track record here (#785), when the Archive's verification has this gauge.
+  void trackForGauge(m.key).then((t) => { if (t && live()) updateCard(m.id, { trust: t }); });
   // A forecast gauge (#556): the plume corrected to it takes the sparkline's place.
   void forecastPoints().then(() => {
     const fp = live() ? gaugePlume(m.key, m.series || null) : null;
@@ -638,6 +652,7 @@ function onSnap(m, snap) {
     updateCard(m.id, {
       status: { text: snapLine(snap), muted: true },
       spark: null,
+      trust: null,
       // The nearest gauge, when it is near enough to matter.
       figure: near && near.d <= NEAR_GAUGE_KM ? { value: near.d < 10 ? near.d.toFixed(1) : String(Math.round(near.d)), unit: " km",
         label: `to the nearest gauge, ${near.r.name || near.r.station_id}` } : null,
@@ -671,6 +686,7 @@ function onSnap(m, snap) {
     waterwayCredit: Boolean(m.waterwayName),
     lngLat: Number.isFinite(snap.snap_lat) ? [snap.snap_lon, snap.snap_lat] : m.spec.lngLat,
     status: { pending: "Reading the 15-day forecast…" },
+    trust: null,
     credit: GEOGLOWS_SHORT,
     details: () => openDetails("panel-point", "now"),
     // A reach taken from the offer above gets its Trace button back.
@@ -682,6 +698,9 @@ function onSnap(m, snap) {
       replayButton({ river_id: snap.river_id, lat: snap.snap_lat, lon: snap.snap_lon, name: named })],
   });
   void loadForecast(m, snap);
+  // The forecast track record on this reach (#785): the gauges on it, raw as the card's forecast is.
+  const reachId = snap.river_id;
+  void trackForReach(reachId).then((t) => { if (t && model === m && m.reachId === reachId) updateCard(m.id, { trust: t }); });
 }
 
 // The quick forecast from a light worker (the next 15 days only), then the simulated record's status from

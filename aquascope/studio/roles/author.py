@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aquascope import __version__
-from aquascope.claims import flood_result
+from aquascope.claims import drought_index_current, flood_result
 from aquascope.studio.model import Model, compact
 from aquascope.studio.prompts import AUTHOR, AUTHOR_FIX
 from aquascope.studio.workspace import Workspace
@@ -330,10 +330,11 @@ def _numbers_for(sid: str, tool: str, p: dict[str, Any], rp: Any) -> list[dict[s
             [t for t in scales if str(t) != str(head)]
         for t in ordered:
             for name in ("spi", "spei"):
-                v = (cur.get(name) or {}).get(t)
+                v, observed = drought_index_current(p, name, t)
                 if v is not None:
                     cls = _drought_class(v)
-                    add(f"{name.upper()} at {t} months, {cur.get('date')}" + (f" ({cls})" if cls else ""), v, "",
+                    when = f", {observed}" if observed else ""
+                    add(f"{name.upper()} at {t} months{when}" + (f" ({cls})" if cls else ""), v, "",
                         **({"class": cls} if cls else {}))
         temp = p.get("temperature") or {}
         add("ERA5 temperature trend", temp.get("trend_c_per_decade"), "C per decade")

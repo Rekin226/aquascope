@@ -157,8 +157,11 @@ _ANNOTATIONS: dict[str, dict[str, Any]] = {
         "kind": "site", "yields": ["spi", "spei", "drought_events", "temperature_trend"],
         "methods": ["spi", "spei", "spei_reanalysis"],
         "tables": ["indices_monthly", "drought_events", "index_divergence"], "figures": ["drought_strip"],
-        "gates": [{"check": "not_empty", "path": "indices"}, {"check": "not_empty", "path": "current.spi"},
-                  {"check": "not_empty", "path": "current.spei"}, {"check": "min_years", "path": "years"}],
+        "gates": [
+            {"check": "not_empty", "path": "indices"}, {"check": "not_empty", "path": "current.spi"},
+            {"check": "min_samples", "value": 1, "path": "spei_samples"},
+            {"check": "min_years", "path": "years"}, {"check": "min_years", "path": "spei_years"},
+        ],
     },
     "drought_propagation": {
         "kind": "station", "yields": ["sgi", "lag"], "methods": ["sgi"],

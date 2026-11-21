@@ -1290,6 +1290,19 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
 .mc-num small { font-size: .7rem; font-weight: 520; color: var(--muted); letter-spacing: 0; }
 .mc-fig-label { margin-top: 2px; font-size: .64rem; line-height: 1.3; color: var(--muted); }
 .mc-note { margin: 0 0 .5rem; padding: .35rem .5rem; font-size: .74rem; line-height: 1.4; color: var(--ink-2); background: var(--bg-soft); border-radius: var(--radius-xs); }
+/* The forecast track record (#785): a quiet head and one line per model, each led by its trust badge. */
+.mc-trust { margin: 0 0 .5rem; font-size: .72rem; line-height: 1.4; color: var(--ink-2); }
+.mc-trust-head { margin: 0 0 .15rem; color: var(--muted); font-size: .66rem; }
+.mc-trust ul, .tr-key, .tr-rank { list-style: none; margin: 0; padding: 0; }
+.mc-trust li, .tr-key li, .tr-rank li { display: flex; align-items: baseline; gap: .4rem; margin: .1rem 0; }
+.trust-chip {
+  flex: none; display: inline-block; min-width: 3.3em; text-align: center; font-size: .62rem; font-weight: 650;
+  line-height: 1.5; color: #1b1b1b; background: var(--trust, #b0bec5); border-radius: 999px; padding: 0 .4rem;
+}
+.tr-key { font-size: .7rem; margin: .3rem 0; }
+.ev-forecasts { margin-top: .6rem; }
+.ev-forecasts h4 { margin: 0 0 .3rem; font-size: .8rem; }
+.tr-rank { font-size: .78rem; }
 .mc-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
 .mc-actions .btn.small { padding: .32rem .55rem; }
 .mc-credit { margin: .5rem 0 0; font-size: .63rem; line-height: 1.4; color: var(--muted); }

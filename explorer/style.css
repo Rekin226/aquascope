@@ -1271,6 +1271,7 @@ body.workbench-mode .drawer { right: auto; left: 50%; transform: translateX(-50%
 .mc-close:hover { background: var(--bg-soft); color: var(--ink); }
 .mc-title { font-size: 1rem; line-height: 1.25; margin: .05rem 0 .1rem; overflow-wrap: anywhere; }
 .mc-sub { margin: 0; font-size: .71rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mc-sub a { color: inherit; }
 .mc-status { display: flex; align-items: baseline; gap: .45rem; margin: .55rem 0 .45rem; font-size: .81rem; line-height: 1.42; color: var(--ink-2); }
 .mc-status.muted { color: var(--muted); }
 .mc-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; transform: translateY(1px); box-shadow: 0 0 0 1px rgba(0, 0, 0, .14); }

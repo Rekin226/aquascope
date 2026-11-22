@@ -261,6 +261,7 @@
    "BrazilANACollector",
    "CAMELSBRCollector",
    "CAMELSCLCollector",
+   "CanadaHydatCollector",
    "CollectorError",
    "ColoradoCDSSCollector",
    "CopernicusCollector",

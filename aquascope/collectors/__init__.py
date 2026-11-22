@@ -6,6 +6,7 @@ from aquascope.collectors.bom import BOMCollector
 from aquascope.collectors.brazil_ana import BrazilANACollector
 from aquascope.collectors.camels_br import CAMELSBRCollector
 from aquascope.collectors.camels_cl import CAMELSCLCollector
+from aquascope.collectors.canada_hydat import CanadaHydatCollector
 from aquascope.collectors.colorado_cdss import ColoradoCDSSCollector
 from aquascope.collectors.copernicus import CopernicusCollector
 from aquascope.collectors.eu_wfd import EUWFDCollector
@@ -40,7 +41,6 @@ from aquascope.collectors.uk_ea import UKEACollector
 from aquascope.collectors.usgs import USGSCollector
 from aquascope.collectors.wapor import WaPORCollector
 from aquascope.collectors.wqp import WQPCollector
-from aquascope.collectors.canada_hydat import CanadaHydatCollector
 
 __all__ = [
     "AquastatCollector",

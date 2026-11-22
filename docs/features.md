@@ -4,7 +4,7 @@ Complete capability reference for AquaScope. For installation and a quick exampl
 
 ---
 
-## Data Collection (37 sources)
+## Data Collection (38 sources)
 
 - **Taiwan** — MOENV water quality, WRA levels / reservoirs / groundwater (annual and daily) / FHY / IoT, CWA climate, Civil IoT sensors, data.gov.tw
 - **Americas** — USGS streamflow, NOAA NWPS, Colorado DWR/CDSS, Water Quality Portal (400+ agencies), CAMELS-CL, CAMELS-BR, ANA Hidroweb

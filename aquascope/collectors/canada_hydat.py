@@ -71,7 +71,8 @@ class CanadaHydatCollector(BaseCollector):
         Raises:
             CollectorError: When a request fails.
         """
-        params: dict[str, str | int] = {"f": "json", "limit": PAGE_SIZE, "offset": 0}
+        params: dict[str, str | int] = {"f": "json", "limit": PAGE_SIZE}
+        offset = 0
 
         station = (station_id or "").strip()
         if station:
@@ -83,6 +84,7 @@ class CanadaHydatCollector(BaseCollector):
 
         features: list[dict] = []
         while True:
+            params["offset"] = offset
             try:
                 data = self.client.get_json(DAILY_MEAN_PATH, params=params)
             except Exception as exc:
@@ -101,7 +103,7 @@ class CanadaHydatCollector(BaseCollector):
                 break  # a short page is the last page
             if max_items is not None and len(features) >= max_items:
                 break
-            params["offset"] += PAGE_SIZE
+            offset += PAGE_SIZE
 
         if max_items is not None:
             features = features[:max_items]
@@ -121,7 +123,7 @@ class CanadaHydatCollector(BaseCollector):
                 if discharge is None:
                     logger.debug("Skipping row: no discharge")
                     continue
-                
+
                 # The API stores float32, so 4.98 arrives as 4.980000019073486.
                 # Six significant figures removes that noise.
                 discharge_cms = float(f"{float(discharge):.6g}")

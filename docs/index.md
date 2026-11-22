@@ -11,7 +11,7 @@ No installation; core Explorer workflows need no API key.
 [![Tests](https://img.shields.io/badge/tests-5200%2B%20passing-brightgreen.svg)](https://github.com/Rekin226/aquascope/actions)
 [![GitHub stars](https://img.shields.io/github/stars/Rekin226/aquascope?style=social)](https://github.com/Rekin226/aquascope/stargazers)
 
-AquaScope unifies **37 global water-data sources** behind one Python schema. On top of that it layers a full scientific computing stack, from **flood-frequency methods** to **FAO-56 crop water requirements**, wrapped in an AI engine that scores **27 research methodologies** against your dataset and auto-executes **26 analysis pipelines**. Regression checks include the CAMELS benchmark with 5,200+ tests across the project.
+AquaScope unifies **38 global water-data sources** behind one Python schema. On top of that it layers a full scientific computing stack, from **flood-frequency methods** to **FAO-56 crop water requirements**, wrapped in an AI engine that scores **27 research methodologies** against your dataset and auto-executes **26 analysis pipelines**. Regression checks include the CAMELS benchmark with 5,200+ tests across the project.
 The daily benchmark inputs are synthetic; flood benchmarks also use observed USGS annual peaks.
 See [validation scope](validation_scope.md) for comparators and limitations.
 
@@ -54,7 +54,7 @@ pip install "aquascope[all]"       # everything: ML, viz, spatial, dashboard
 | CMIP6 change factors through a calibrated GR4J |  ✅     |   no    |    no    |          no           |
 | Baseflow separation (Lyne-Hollick, Eckhardt) |    ✅     |   no    |    no    |          no           |
 | FAO-56 Penman–Monteith ET₀ + crop water      |    ✅     |   no    |    no    |          no           |
-| 37 unified data collectors                   |    ✅     |   no    |    no    |       per-source       |
+| 38 unified data collectors                   |    ✅     |   no    |    no    |       per-source       |
 | AI methodology recommender                   |    ✅     |   no    |    no    |          no           |
 | Interactive Streamlit dashboard              |    ✅     |   no    |    no    |          no           |
 | Free, MIT, Python-native                     |    ✅     | partial |    ✅    |        varies         |

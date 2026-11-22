@@ -175,3 +175,66 @@ def test_repairable_diagnoses(diag, expected):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     assert mod._repairable(diag) is expected
+
+
+def _no_fix_client(calls: list[dict]) -> type:
+    """An SDK-shaped client that records the call and answers ``no_fix``."""
+
+    class Client:
+        class chat:  # noqa: N801 - mimics the SDK shape
+            class completions:  # noqa: N801
+                @staticmethod
+                def create(**kw):
+                    calls.append(kw)
+                    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+                        content='{"action":"no_fix","confidence":0.9,"explanation":"endpoint down"}'))])
+
+    return Client
+
+
+def test_a_prompt_over_a_known_window_is_refused_before_the_model(monkeypatch):
+    from aquascope.ai_engine import providers as providers_mod
+
+    monkeypatch.setattr(providers_mod, "context_limit", lambda provider: 1_000)
+    ev = repair.Evidence("x", "err", "diag", "aquascope/collectors/x.py", "print(1)")
+    calls: list[dict] = []
+    with pytest.raises(repair.PromptTooLargeError) as excinfo:
+        repair.propose_repair(ev, client=_no_fix_client(calls), model="m", provider="groq")
+    assert not calls and "model was not called" in str(excinfo.value)
+    assert "1,000-character" in str(excinfo.value) and "groq" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("provider", ["openai", "groq", "huggingface", "custom", None])
+def test_a_bom_sized_prompt_is_sent_when_the_window_is_unknown_or_large(provider):
+    """#752: 34k characters exceeds the 24k-character trimming budget but fits these models' windows."""
+    ev = repair.Evidence("x", "err", "diag", "aquascope/collectors/x.py", "x" * 34_000)
+    calls: list[dict] = []
+    prop = repair.propose_repair(ev, client=_no_fix_client(calls), model="m", provider=provider)
+    assert prop.action == "no_fix" and len(calls) == 1
+    assert len(calls[0]["messages"][1]["content"]) > 24_000
+
+
+def test_a_413_from_the_endpoint_becomes_an_explanation():
+    from aquascope.ai_engine.llm_transport import LLMHTTPError
+
+    ev = repair.Evidence("x", "err", "diag", "aquascope/collectors/x.py", "print(1)")
+
+    class Client:
+        class chat:  # noqa: N801
+            class completions:  # noqa: N801
+                @staticmethod
+                def create(**kw):
+                    raise LLMHTTPError(413, '{"error": "request too large"}', "https://api.groq.com/openai/v1")
+
+    with pytest.raises(repair.PromptTooLargeError) as excinfo:
+        repair.propose_repair(ev, client=Client(), model="m", provider="groq")
+    assert "HTTP 413" in str(excinfo.value) and "larger-window" in str(excinfo.value) and "groq" in str(excinfo.value)
+
+
+def test_repair_source_explains_a_prompt_that_does_not_fit(monkeypatch):
+    ev = repair.Evidence("x", "err", "diag", "aquascope/collectors/x.py", "print(1)")
+    monkeypatch.setattr(repair, "gather_evidence", lambda *a, **kw: ev)
+    monkeypatch.setattr(repair, "propose_repair", lambda e, **k: (_ for _ in ()).throw(repair.PromptTooLargeError(
+        "the repair prompt is 40,000 characters, over the 24,000-character limit for m")))
+    r = repair.repair_source("x", "err", "diag")
+    assert r.outcome == "error" and r.note.startswith("the repair prompt is") and "model call failed" not in r.note

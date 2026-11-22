@@ -15,7 +15,8 @@
       "browser": true,
       "note": null,
       "api": "openai",
-      "context_chars": null
+      "context_chars": null,
+      "context_window": 131072
     },
     {
       "id": "anthropic",
@@ -32,7 +33,8 @@
       "browser": true,
       "note": "Pay as you go. In the browser use a key created for a single workspace: keys that span several need a workspace id header the page does not ask for.",
       "api": "anthropic",
-      "context_chars": 200000
+      "context_chars": 200000,
+      "context_window": 200000
     },
     {
       "id": "huggingface",
@@ -49,7 +51,8 @@
       "browser": true,
       "note": null,
       "api": "openai",
-      "context_chars": null
+      "context_chars": null,
+      "context_window": 131072
     },
     {
       "id": "openai",
@@ -65,7 +68,8 @@
       "browser": true,
       "note": null,
       "api": "openai",
-      "context_chars": null
+      "context_chars": null,
+      "context_window": 128000
     },
     {
       "id": "mistral",
@@ -81,7 +85,8 @@
       "browser": true,
       "note": null,
       "api": "openai",
-      "context_chars": null
+      "context_chars": null,
+      "context_window": 128000
     },
     {
       "id": "openrouter",
@@ -97,7 +102,8 @@
       "browser": true,
       "note": null,
       "api": "openai",
-      "context_chars": null
+      "context_chars": null,
+      "context_window": 128000
     },
     {
       "id": "custom",
@@ -110,7 +116,8 @@
       "browser": true,
       "note": "Any endpoint that speaks /chat/completions with tool calling.",
       "api": "openai",
-      "context_chars": null
+      "context_chars": null,
+      "context_window": null
     }
   ]
 }

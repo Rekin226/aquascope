@@ -39,6 +39,18 @@ class TestSPI:
         # Different accumulation -> different series (and SPI-12 starts later).
         assert spi12.dropna().index.min() > spi3.dropna().index.min()
 
+    @pytest.mark.parametrize("scale", [1, 3, 12])
+    def test_missing_months_do_not_contribute_to_accumulation(self, scale):
+        precip = _monthly_precip()
+        months = pd.date_range("1990-01-31", periods=len(precip), freq=pd.offsets.MonthEnd(), tz="Asia/Taipei")
+        precip.index = months
+        missing = months.get_loc(pd.Timestamp("2010-03-31", tz="Asia/Taipei"))
+
+        spi = standardized_precipitation_index(precip.drop(months[missing]), scale=scale)
+
+        expected = months[scale - 1 :].difference(months[missing : missing + scale])
+        pd.testing.assert_index_equal(spi.index, expected)
+
     def test_non_datetime_index_raises(self):
         with pytest.raises(ValueError, match="DatetimeIndex"):
             standardized_precipitation_index(pd.Series([1.0, 2.0, 3.0]))
@@ -52,6 +64,20 @@ class TestSPI:
         precip.iloc[::5] = 0.0  # inject dry months
         spi = standardized_precipitation_index(precip, scale=1)
         assert np.isfinite(spi.dropna()).all()
+
+    @pytest.mark.parametrize("include_zeros", [False, True])
+    def test_constant_positive_month_leaves_other_months_available(self, include_zeros):
+        precip = _monthly_precip()
+        control = standardized_precipitation_index(precip, scale=1)
+        february = precip.index.month == 2
+        precip.loc[february] = 50.0
+        if include_zeros:
+            precip.loc[precip.index[february][::3]] = 0.0
+
+        spi = standardized_precipitation_index(precip, scale=1)
+
+        assert spi.loc[february].isna().all()
+        pd.testing.assert_series_equal(spi.loc[~february], control.loc[~february])
 
 
 @pytest.mark.parametrize(

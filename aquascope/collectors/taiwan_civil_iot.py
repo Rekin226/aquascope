@@ -2,7 +2,7 @@
 Collector for Taiwan Civil IoT Data Service Platform — Water Resources.
 
 Uses OGC SensorThings API v1.1:
-    https://sta.ci.taiwan.gov.tw/STA_WaterResource_v2/v1.1/
+    https://sta.colife.org.tw/STA_WaterResource_v2/v1.1/
 
 Provides real-time sensor data for:
 - River water level stations (WRA)
@@ -27,7 +27,7 @@ from aquascope.utils.http_client import CachedHTTPClient, RateLimiter
 
 logger = logging.getLogger(__name__)
 
-CIVIL_IOT_BASE = "https://sta.ci.taiwan.gov.tw/STA_WaterResource_v2/v1.1"
+CIVIL_IOT_BASE = "https://sta.colife.org.tw/STA_WaterResource_v2/v1.1"
 
 
 class TaiwanCivilIoTCollector(BaseCollector):
@@ -48,7 +48,6 @@ class TaiwanCivilIoTCollector(BaseCollector):
                 base_url=CIVIL_IOT_BASE,
                 rate_limiter=RateLimiter(max_calls=10, period_seconds=60),
                 cache_ttl_seconds=600,
-                verify=False,
             )
         )
 

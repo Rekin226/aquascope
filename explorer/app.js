@@ -29,6 +29,7 @@ import { clearRiver, initRiver } from "./src/river.js?v=__BUILD__";
 import { initNow } from "./src/now.js?v=__BUILD__";
 import { initBulletin } from "./src/bulletin.js?v=__BUILD__";
 import { initFloodsAhead } from "./src/floods-ahead.js?v=__BUILD__";  // Floods ahead (#546), on by default
+import { initTrackRecord } from "./src/track-record.js?v=__BUILD__";  // the forecast track record (#785)
 import { initFlowStatus } from "./src/flowstatus-layer.js?v=__BUILD__";  // Flow vs normal on the rivers (#559)
 import { initFloodDepth } from "./src/flood-depth.js?v=__BUILD__";  // flood depth where floods are forecast (#554)
 import { initFloodSection } from "./src/flood-section.js?v=__BUILD__";  // a section and a hydrograph (#621)
@@ -208,6 +209,7 @@ function bringMapOnline(url) {
   if (url.rivers === false) state.riversOn = false;   // on by default (#545); a link can say rivers=0
   if (state.riversOn) { setRiversVisible(true); renderCredits(); }
   initFloodsAhead();
+  initTrackRecord();
   initFlowStatus();
   initFloodDepth();
   initFloodSection();   // the model tools on the mesh row (#621, #622)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -140,12 +141,13 @@ def test_every_job_names_a_workflow_that_exists_and_every_scheduled_workflow_is_
             assert j.key in ("mirror-context", "repair")  # dispatched, or only with a model key
         else:
             assert j.stale_after_hours > j.cadence_hours
-    scheduled = {p.name for p in WORKFLOWS.glob("*.yml") if re.search(r"^\s+schedule:", p.read_text(), re.M)}
+    scheduled = {p.name for p in WORKFLOWS.glob("*.yml")
+                 if re.search(r"^\s+schedule:", p.read_text(encoding="utf-8"), re.M)}
     assert scheduled <= {j.workflow for j in hj.JOBS.values()}
 
 
 def test_the_layers_are_legend_rows_the_explorer_has():
-    legend = (ROOT / "explorer" / "src" / "map-legend-core.js").read_text()
+    legend = (ROOT / "explorer" / "src" / "map-legend-core.js").read_text(encoding="utf-8")
     order = re.search(r"ROW_ORDER = \[(.*?)\]", legend, re.S).group(1)
     rows = set(re.findall(r'"([a-z-]+)"', order))
     for j in hj.JOBS.values():
@@ -226,6 +228,22 @@ def test_summaries_read_each_jobs_own_manifest(tmp_path):
     assert hj.summarise("bulletin", tmp_path)["counts"] == {"classed": 1821, "considered": 3000}
 
 
+def test_the_forecast_record_counts_the_scorecard_and_says_when_it_failed(tmp_path):
+    _dump(tmp_path / "forecasts" / "manifest.json", {"status": {"n": 240}, "issues": [
+        {"date": "2026-11-19", "n_gauges": 238, "n_rows": 9000, "verify": {"rows": 120, "pairs": 80000}}]})
+    _dump(tmp_path / "verify" / "manifest.json", {"n_rows": 120, "pairs": 80000, "complete": True, "unread": 0})
+    s = hj.summarise("forecast-archive", tmp_path)
+    assert s["counts"]["verify_rows"] == 120 and s["counts"]["verify_pairs"] == 80000 and s["notes"] == []
+
+    _dump(tmp_path / "verify" / "manifest.json", {"n_rows": 90, "pairs": 500, "complete": False, "unread": 4})
+    assert hj.summarise("forecast-archive", tmp_path)["notes"] == [
+        "scorecard incomplete (4 files unread), not published"]
+
+    _dump(tmp_path / "forecasts" / "manifest.json", {"issues": [{"date": "2026-11-19", "verify": {"error": "x"}}]})
+    assert hj.summarise("forecast-archive", tmp_path)["notes"] == ["scorecard failed: x"]
+    assert "verify/" in hj.JOBS["forecast-archive"].writes
+
+
 def test_a_run_that_wrote_nothing_still_summarises(tmp_path):
     for key in hj.JOBS:
         s = hj.summarise(key, tmp_path / "missing")
@@ -282,17 +300,22 @@ def test_a_second_failure_comments_and_a_success_closes():
 
 def test_the_runner_reports_offline_and_writes_the_summary(tmp_path):
     summary = tmp_path / "summary.md"
+    env = {"GITHUB_STEP_SUMMARY": str(summary), "PATH": os.defpath}
+    if os.name == "nt":
+        # Windows Python needs SystemRoot even in an otherwise isolated environment.
+        env["SystemRoot"] = os.environ["SystemRoot"]
     _dump(tmp_path / "build" / "forecasts" / "manifest.json", {"issues": [{"date": "2026-10-12", "n_gauges": 3}]})
     out = subprocess.run(
         [sys.executable, "-I", str(ROOT / ".github" / "scripts" / "job_health.py"), "report", "forecast-archive",
          "--root", str(tmp_path / "build"), "--out", str(tmp_path / "h"), "--status", "success",
          "--event", "schedule", "--require", "publish=skipped", "--started", "2026-10-12T10:00:00Z"],
-        capture_output=True, text=True, env={"GITHUB_STEP_SUMMARY": str(summary), "PATH": "/usr/bin:/bin"},
+        capture_output=True, text=True, encoding="utf-8",
+        env=env,
         cwd=tmp_path, check=True)
     assert "failure: publish did not run" in out.stdout
-    rec = json.loads((tmp_path / "h" / "health" / "jobs" / "forecast-archive.json").read_text())
+    rec = json.loads((tmp_path / "h" / "health" / "jobs" / "forecast-archive.json").read_text(encoding="utf-8"))
     assert rec["last_run"]["counts"] == {"gauges": 3}
-    assert "Job health: forecast-archive" in summary.read_text()
+    assert "Job health: forecast-archive" in summary.read_text(encoding="utf-8")
 
 
 def test_status_lines_say_when_nothing_is_published():
@@ -311,7 +334,7 @@ def _health_runs(text: str) -> list[str]:
 @pytest.mark.parametrize("key", list(hj.JOBS))
 def test_every_job_is_reported_by_its_workflow_whatever_the_outcome(key):
     yaml = pytest.importorskip("yaml")
-    doc = yaml.safe_load((WORKFLOWS / hj.JOBS[key].workflow).read_text())
+    doc = yaml.safe_load((WORKFLOWS / hj.JOBS[key].workflow).read_text(encoding="utf-8"))
     found = [(job, step) for job in doc["jobs"].values() for step in job.get("steps", [])
              if f"report {key} " in (step.get("run") or "")]
     assert found, f"{hj.JOBS[key].workflow} does not report {key}"
@@ -323,13 +346,25 @@ def test_every_job_is_reported_by_its_workflow_whatever_the_outcome(key):
 
 @pytest.mark.parametrize("path", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
 def test_a_workflow_that_files_job_health_issues_may_write_issues(path):
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     if "job_health.py report" in text and "--issue false" not in text:
         assert re.search(r"^\s+issues: write", text, re.M), path.name
 
 
+def test_the_collector_sweep_publishes_health_only_on_schedule_with_a_token():
+    yaml = pytest.importorskip("yaml")
+    workflow = yaml.safe_load((WORKFLOWS / "collector-health.yml").read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["sweep"]["steps"]
+    reporter = next(step for step in steps if "job_health.py report collector-health" in step.get("run", ""))
+
+    assert reporter["env"]["HF_TOKEN"] == "${{ secrets.HF_TOKEN }}"
+    assert reporter["env"]["PUBLISH"] == "${{ secrets.HF_TOKEN != '' && github.event_name == 'schedule' }}"
+    assert reporter["env"]["ISSUE"] == "${{ github.event_name == 'schedule' }}"
+    assert '--publish "$PUBLISH" --issue "$ISSUE"' in reporter["run"]
+
+
 def test_the_harvest_fails_a_scheduled_run_that_published_nothing():
-    text = (WORKFLOWS / "harvest.yml").read_text()
+    text = (WORKFLOWS / "harvest.yml").read_text(encoding="utf-8")
     step = text[text.index("Fail when a scheduled run published nothing"):]
     assert "steps.publish.outcome != 'success'" in step.split("\n")[1]
     assert "github.event_name == 'schedule'" in step.split("\n")[1]

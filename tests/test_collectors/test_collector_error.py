@@ -92,34 +92,24 @@ class TestCachedHTTPClientFormatting:
 
 
 class TestJapanMLITCollectorError:
-    def test_fetch_raw_raises_collector_error_on_404(self):
+    def test_fetch_raw_refuses_without_touching_the_client(self):
         client = MagicMock()
-        client.get_json.side_effect = _make_http_status_runtime_error("http://www1.river.go.jp/cgi-bin/", 404)
         collector = JapanMLITCollector(client=client)
 
         with pytest.raises(CollectorError) as exc_info:
             collector.fetch_raw(station_id="12345")
 
         assert exc_info.value.source == "japan_mlit"
-        assert exc_info.value.status_code == 404
-        assert "404" in str(exc_info.value)
+        assert "robots.txt disallows" in str(exc_info.value)
+        assert exc_info.value.status_code is None
+        client.get_bytes.assert_not_called()
+        client.get_json.assert_not_called()
 
-    def test_fetch_raw_raises_collector_error_on_network_error(self):
+    def test_fetch_raw_refuses_a_prefecture_too(self):
         client = MagicMock()
-        client.get_json.side_effect = httpx.ConnectError("host unreachable")
-        collector = JapanMLITCollector(client=client)
-
-        with pytest.raises(CollectorError) as exc_info:
-            collector.fetch_raw(station_id="12345")
-
-        assert exc_info.value.source == "japan_mlit"
-        assert isinstance(exc_info.value.cause, httpx.ConnectError)
-
-    def test_fetch_raw_returns_empty_list_on_empty_data(self):
-        client = MagicMock()
-        client.get_json.return_value = []
-        collector = JapanMLITCollector(client=client)
-        assert collector.fetch_raw(station_id="12345") == []
+        with pytest.raises(CollectorError):
+            JapanMLITCollector(client=client).fetch_raw(prefecture="Tokyo")
+        client.get_bytes.assert_not_called()
 
 
 class TestKoreaWAMISCollectorError:

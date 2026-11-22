@@ -1,0 +1,715 @@
+{
+ "site": {
+  "lat": 24.15,
+  "lon": 120.68,
+  "source": "taiwan_cwa",
+  "station_id": "467490",
+  "name": "臺中",
+  "country": "TW",
+  "variables": [
+   "climate",
+   "precipitation"
+  ],
+  "period_start": "1896-01-01",
+  "period_end": null,
+  "years": 130.9
+ },
+ "captured": "2026-11-18",
+ "command": "aquascope assess 24.15 120.68 --json",
+ "recon": {
+  "point": {
+   "lat": 24.15,
+   "lon": 120.68
+  },
+  "stations": [
+   {
+    "source": "taiwan_cwa",
+    "station_id": "467490",
+    "name": "臺中",
+    "river": null,
+    "distance_km": 0.6,
+    "latitude": 24.14574,
+    "longitude": 120.68408,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "1896-01-01",
+    "period_end": null,
+    "years": 130.9,
+    "url": "https://codis.cwa.gov.tw/StationData?station=467490"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0F9U0",
+    "name": "南屯",
+    "river": null,
+    "distance_km": 4.5,
+    "latitude": 24.13701,
+    "longitude": 120.63797,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2011-05-19",
+    "period_end": null,
+    "years": 15.5,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0F9U0"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0F970",
+    "name": "大坑",
+    "river": null,
+    "distance_km": 5.0,
+    "latitude": 24.17314,
+    "longitude": 120.72229,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2011-11-01",
+    "period_end": null,
+    "years": 15.0,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0F970"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0F9T0",
+    "name": "西屯",
+    "river": null,
+    "distance_km": 5.1,
+    "latitude": 24.17949,
+    "longitude": 120.64127,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2011-05-10",
+    "period_end": null,
+    "years": 15.5,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0F9T0"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C1F970",
+    "name": "大坑",
+    "river": null,
+    "distance_km": 6.2,
+    "latitude": 24.17157,
+    "longitude": 120.73622,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "1992-01-23",
+    "period_end": "2011-10-31",
+    "years": 19.8,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C1F970"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0F9N0",
+    "name": "大里",
+    "river": null,
+    "distance_km": 6.8,
+    "latitude": 24.09246,
+    "longitude": 120.70138,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2011-05-26",
+    "period_end": null,
+    "years": 15.5,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0F9N0"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0F9S0",
+    "name": "烏日",
+    "river": null,
+    "distance_km": 7.4,
+    "latitude": 24.10706,
+    "longitude": 120.6241,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2011-05-26",
+    "period_end": null,
+    "years": 15.5,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0F9S0"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0F9O0",
+    "name": "潭子",
+    "river": null,
+    "distance_km": 7.4,
+    "latitude": 24.21311,
+    "longitude": 120.70393,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2011-03-29",
+    "period_end": null,
+    "years": 15.6,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0F9O0"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C1F960",
+    "name": "水湳",
+    "river": null,
+    "distance_km": 8.4,
+    "latitude": 24.2213,
+    "longitude": 120.65233,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "1992-01-23",
+    "period_end": "2005-11-21",
+    "years": 13.8,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C1F960"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0F9A0",
+    "name": "中竹林",
+    "river": null,
+    "distance_km": 8.9,
+    "latitude": 24.10356,
+    "longitude": 120.75106,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2011-11-01",
+    "period_end": "2024-01-08",
+    "years": 12.2,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0F9A0"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C2F9A0",
+    "name": "中竹林",
+    "river": null,
+    "distance_km": 8.9,
+    "latitude": 24.10356,
+    "longitude": 120.75106,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2024-01-08",
+    "period_end": null,
+    "years": 2.9,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C2F9A0"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C1F9A0",
+    "name": "中竹林",
+    "river": null,
+    "distance_km": 8.9,
+    "latitude": 24.1038,
+    "longitude": 120.75149,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2002-01-29",
+    "period_end": "2011-10-31",
+    "years": 9.8,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C1F9A0"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0F9X0",
+    "name": "大雅(中科園區)",
+    "river": null,
+    "distance_km": 9.2,
+    "latitude": 24.21528,
+    "longitude": 120.62445,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2015-07-31",
+    "period_end": null,
+    "years": 11.3,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0F9X0"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C1F990",
+    "name": "橫山",
+    "river": null,
+    "distance_km": 10.6,
+    "latitude": 24.21908,
+    "longitude": 120.60734,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "1992-05-21",
+    "period_end": "2008-03-31",
+    "years": 15.9,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C1F990"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0F990",
+    "name": "橫山",
+    "river": null,
+    "distance_km": 10.7,
+    "latitude": 24.21911,
+    "longitude": 120.60731,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2008-04-01",
+    "period_end": "2015-07-30",
+    "years": 7.3,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0F990"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C1F000",
+    "name": "大肚",
+    "river": null,
+    "distance_km": 10.9,
+    "latitude": 24.15297,
+    "longitude": 120.5726,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "1992-05-05",
+    "period_end": "2011-10-31",
+    "years": 19.5,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C1F000"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C1F9B0",
+    "name": "桐林",
+    "river": null,
+    "distance_km": 10.9,
+    "latitude": 24.0663,
+    "longitude": 120.73538,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2002-01-30",
+    "period_end": "2011-10-31",
+    "years": 9.7,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C1F9B0"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C1F9B1",
+    "name": "桐林",
+    "river": null,
+    "distance_km": 10.9,
+    "latitude": 24.06617,
+    "longitude": 120.73519,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2011-11-01",
+    "period_end": null,
+    "years": 15.0,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C1F9B1"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0F000",
+    "name": "大肚",
+    "river": null,
+    "distance_km": 11.0,
+    "latitude": 24.15295,
+    "longitude": 120.57212,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2011-11-01",
+    "period_end": "2023-06-29",
+    "years": 11.7,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0F000"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C2F000",
+    "name": "大肚",
+    "river": null,
+    "distance_km": 11.0,
+    "latitude": 24.15295,
+    "longitude": 120.57212,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2024-01-08",
+    "period_end": null,
+    "years": 2.9,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C2F000"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0FA50",
+    "name": "霧峰",
+    "river": null,
+    "distance_km": 12.2,
+    "latitude": 24.0419,
+    "longitude": 120.6995,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2023-03-10",
+    "period_end": null,
+    "years": 3.7,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0FA50"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0F9M0",
+    "name": "豐原",
+    "river": null,
+    "distance_km": 12.3,
+    "latitude": 24.25432,
+    "longitude": 120.72069,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2011-04-07",
+    "period_end": null,
+    "years": 15.6,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0F9M0"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "G2F820",
+    "name": "農試所(霧峰)",
+    "river": null,
+    "distance_km": 13.2,
+    "latitude": 24.03126,
+    "longitude": 120.68813,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "1987-07-01",
+    "period_end": null,
+    "years": 39.4,
+    "url": "https://codis.cwa.gov.tw/StationData?station=G2F820"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C0F9I0",
+    "name": "神岡",
+    "river": null,
+    "distance_km": 13.8,
+    "latitude": 24.27248,
+    "longitude": 120.65831,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2011-11-01",
+    "period_end": null,
+    "years": 15.0,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C0F9I0"
+   },
+   {
+    "source": "taiwan_cwa",
+    "station_id": "C1F9I0",
+    "name": "神岡",
+    "river": null,
+    "distance_km": 13.8,
+    "latitude": 24.27268,
+    "longitude": 120.65873,
+    "variables": [
+     "climate",
+     "precipitation"
+    ],
+    "period_start": "2005-11-28",
+    "period_end": "2011-10-31",
+    "years": 5.9,
+    "url": "https://codis.cwa.gov.tw/StationData?station=C1F9I0"
+   }
+  ],
+  "catchment": {
+   "hybas_id": 4120951790,
+   "area_km2": 381.6,
+   "upstream_area_km2": 381.6,
+   "n_sub_basins": 3,
+   "elevation_m": 239.0,
+   "precipitation_mm_yr": 1986.0,
+   "aridity": 1.63,
+   "dams": 0.0,
+   "snow_cover_pct": 0.0,
+   "source": "BasinATLAS (HydroATLAS v1.0)"
+  },
+  "context": {
+   "years_by_variable": {
+    "precipitation": 130.9
+   },
+   "resolution_by_variable": {
+    "precipitation": "daily"
+   },
+   "area_km2": 381.6,
+   "return_period": null,
+   "donors": 10,
+   "completeness_by_variable": {},
+   "longest_gap_days": {},
+   "flagged_fraction": {},
+   "change_points": {},
+   "available": [
+    "forcing",
+    "gcms>=3",
+    "glofas",
+    "temperature"
+   ],
+   "ungauged": false
+  },
+  "sufficiency": [
+   {
+    "method": "change_point_test",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Change-point and trend tests (Pettitt, PELT, Mann-Kendall)",
+    "tool": "change_points",
+    "station": {
+     "source": "taiwan_cwa",
+     "station_id": "467490"
+    }
+   },
+   {
+    "method": "climate_projection",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "CMIP6 ensemble change factors on the baseline statistic",
+    "tool": "climate_projection",
+    "station": null
+   },
+   {
+    "method": "crop_water_requirement",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Crop water requirement (single or dual Kc)",
+    "tool": "crop_water_demand",
+    "station": null
+   },
+   {
+    "method": "fao56_et0",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "FAO-56 Penman-Monteith reference evapotranspiration",
+    "tool": "reference_et",
+    "station": null
+   },
+   {
+    "method": "glofas_cross_check",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "GloFAS modelled discharge as an independent check",
+    "tool": "anywhere",
+    "station": null
+   },
+   {
+    "method": "regional_index_flood",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Regional index-flood frequency analysis (Hosking and Wallis)",
+    "tool": "regional_flood",
+    "station": null
+   },
+   {
+    "method": "regionalize_signatures",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Flow signatures transferred from donors",
+    "tool": "regionalize_signatures",
+    "station": null
+   },
+   {
+    "method": "spei",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Standardized Precipitation-Evapotranspiration Index",
+    "tool": "drought_indices",
+    "station": {
+     "source": "taiwan_cwa",
+     "station_id": "467490"
+    }
+   },
+   {
+    "method": "spei_reanalysis",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "SPI and SPEI from ERA5 reanalysis for the cell (no rain gauge)",
+    "tool": "drought_indices",
+    "station": null
+   },
+   {
+    "method": "spi",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Standardized Precipitation Index",
+    "tool": "drought_indices",
+    "station": {
+     "source": "taiwan_cwa",
+     "station_id": "467490"
+    }
+   },
+   {
+    "method": "trend_mann_kendall",
+    "status": "defensible",
+    "reason": "the record supports it",
+    "label": "Mann-Kendall trend with Sen's slope",
+    "tool": "analyze_station",
+    "station": {
+     "source": "taiwan_cwa",
+     "station_id": "467490"
+    }
+   },
+   {
+    "method": "similar_basins",
+    "status": "marginal",
+    "reason": "meant for an ungauged point; a gauge is available here",
+    "label": "Donor gauges by catchment similarity",
+    "tool": "similar_basins",
+    "station": null
+   },
+   {
+    "method": "at_site_flood_frequency",
+    "status": "not_defensible",
+    "reason": "no discharge record at this site",
+    "label": "At-site flood frequency (GEV, LP3 / Bulletin 17C)",
+    "tool": "analyze_station",
+    "station": null
+   },
+   {
+    "method": "baseflow_separation",
+    "status": "not_defensible",
+    "reason": "no discharge record at this site",
+    "label": "Baseflow separation and baseflow index",
+    "tool": "baseflow",
+    "station": null
+   },
+   {
+    "method": "flow_duration",
+    "status": "not_defensible",
+    "reason": "no discharge record at this site",
+    "label": "Flow duration curve and Q95",
+    "tool": "analyze_station",
+    "station": null
+   },
+   {
+    "method": "gauge_comparison",
+    "status": "not_defensible",
+    "reason": "no discharge record at this site",
+    "label": "Gauges side by side (regime, floods and low flows per unit area)",
+    "tool": "compare_gauges",
+    "station": null
+   },
+   {
+    "method": "gr4j_calibration",
+    "status": "not_defensible",
+    "reason": "no discharge record at this site",
+    "label": "GR4J rainfall-runoff calibration",
+    "tool": "catchment_model",
+    "station": null
+   },
+   {
+    "method": "groundwater_trend",
+    "status": "not_defensible",
+    "reason": "no groundwater level record at this site",
+    "label": "Groundwater-level trend (m/yr) with confidence interval",
+    "tool": "analyze_station",
+    "station": null
+   },
+   {
+    "method": "iwqi",
+    "status": "not_defensible",
+    "reason": "no water-quality samples here",
+    "label": "Irrigation water quality (SAR, sodium percentage, RSC, FAO 29 restriction)",
+    "tool": "iwqi",
+    "station": null
+   },
+   {
+    "method": "low_flow_frequency",
+    "status": "not_defensible",
+    "reason": "no discharge record at this site",
+    "label": "Low-flow frequency (annual minima)",
+    "tool": "analyze_station",
+    "station": null
+   },
+   {
+    "method": "nonstationary_gev",
+    "status": "not_defensible",
+    "reason": "no discharge record at this site",
+    "label": "Nonstationary GEV (time-varying location, likelihood-ratio test)",
+    "tool": "nonstationary_flood",
+    "station": null
+   },
+   {
+    "method": "pot_gpd",
+    "status": "not_defensible",
+    "reason": "no discharge record at this site",
+    "label": "Peaks over threshold (Generalised Pareto)",
+    "tool": "pot_flood",
+    "station": null
+   },
+   {
+    "method": "recharge_wtf",
+    "status": "not_defensible",
+    "reason": "no groundwater level record at this site",
+    "label": "Recharge by water-table fluctuation",
+    "tool": "recharge",
+    "station": null
+   },
+   {
+    "method": "sgi",
+    "status": "not_defensible",
+    "reason": "no groundwater level record at this site",
+    "label": "Standardized Groundwater Index",
+    "tool": "sgi_drought",
+    "station": null
+   },
+   {
+    "method": "supply_reliability",
+    "status": "not_defensible",
+    "reason": "no discharge record at this site",
+    "label": "Run-of-river supply reliability against a demand (flow-duration screening)",
+    "tool": "supply_reliability",
+    "station": null
+   },
+   {
+    "method": "water_quality_index",
+    "status": "not_defensible",
+    "reason": "no water-quality samples here",
+    "label": "Water quality index against guideline values (CCME WQI 1.0, NSF WQI)",
+    "tool": "wqi",
+    "station": null
+   }
+  ],
+  "notes": [
+   "Record resolution is not in the catalog; daily is assumed for every variable.",
+   "Record quality was not assessed for precipitation: no local Archive mirror is configured (set AQUASCOPE_ARCHIVE_DIR); the judgement uses the catalog span only.",
+   "10 donor gauges from a pool of 42,224 gauged catchments.",
+   "ERA5 temperature and forcing and GloFAS discharge are assumed reachable for any point on land (Open-Meteo); not checked here.",
+   "CMIP6 change factors: seven HighResMIP models through the Open-Meteo Climate API (1950-2050, one high-emission pathway), assumed reachable; not checked here."
+  ]
+ }
+}

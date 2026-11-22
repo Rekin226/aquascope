@@ -1527,6 +1527,7 @@ def _station_entry(row: dict[str, Any], lat: float, lon: float, today: date) -> 
         "source": row.get("source"),
         "station_id": row.get("station_id"),
         "name": row.get("name"),
+        "river": row.get("river"),
         "distance_km": round(_haversine_km(lat, lon, float(row["latitude"]), float(row["longitude"])), 1),
         "latitude": round(float(row["latitude"]), 5),
         "longitude": round(float(row["longitude"]), 5),

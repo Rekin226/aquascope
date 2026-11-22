@@ -846,9 +846,9 @@ def standardized_indices(precip_monthly: pd.Series, pet_monthly: pd.Series | Non
 
     The block the ``spei`` analysis and the site-level ``drought_indices`` tool
     both return: per timescale the current value and class of each index, the
-    worst month, the drought events (runs at or below ``threshold``) and the
-    thinned series; ``current`` and ``status`` summarise the headline
-    timescale (3 months when it is among them, else the first).
+    worst month, the drought events (runs at or below ``threshold`` split by
+    missing months), and the thinned series. ``current`` and ``status``
+    summarise the headline timescale (3 months when it is among them, else the first).
     """
     from aquascope.climate.indices import (
         drought_class,
@@ -873,7 +873,7 @@ def standardized_indices(precip_monthly: pd.Series, pet_monthly: pd.Series | Non
             "current": jsonable(s.iloc[-1]), "class": drought_class(float(s.iloc[-1])),
             "date": s.index[-1].date().isoformat(), "worst": jsonable(s.min()),
             "worst_date": s.idxmin().date().isoformat(), "n": int(len(s)),
-            "events": len(drought_events(s, threshold=threshold)),
+            "events": len(drought_events(index, threshold=threshold)),
         }
 
     rows: list[dict[str, Any]] = []

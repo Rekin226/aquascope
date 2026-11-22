@@ -373,7 +373,7 @@ def test_a_smoke_build_is_marked_and_never_published(archive, tmp_path, monkeypa
     out = tmp_path / "out"
     assert bulletin.main(["build", "--archive", str(archive), "--out", str(out), "--month", "2026-09",
                           "--smoke"]) == 0
-    assert json.loads((out / "bulletins" / "index.json").read_text())["latest"] == "2026-09"
+    assert json.loads((out / "bulletins" / "index.json").read_text(encoding="utf-8"))["latest"] == "2026-09"
     with pytest.raises(RuntimeError, match="smoke"):
         bulletin.publish(out)
     calls = []

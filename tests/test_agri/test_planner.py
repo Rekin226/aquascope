@@ -90,6 +90,45 @@ class TestPlanIrrigation:
 
 
 class TestAgriCli:
+    def test_agri_plan_rejects_multiday_wapor_reference_et(self, tmp_path, monkeypatch, caplog):
+        eto_path = tmp_path / "wapor.json"
+        eto_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "source": "WAPOR",
+                        "cube_code": "RET",
+                        "date": "2025-05-11",
+                        "start_date": "2025-05-11",
+                        "end_date": "2025-05-20",
+                        "value": 8.4,
+                        "unit": "mm/day",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "aquascope",
+                "agri",
+                "plan",
+                "--crop",
+                "maize",
+                "--planting-date",
+                "2025-05-11",
+                "--eto-file",
+                str(eto_path),
+            ],
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+        assert excinfo.value.code == 1
+        assert "--eto-file requires daily reference ET" in caplog.text
+
     def test_collect_help_lists_fao_sources(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:

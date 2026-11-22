@@ -254,6 +254,107 @@ def _unit_named(unit: str, answer: str) -> bool:
     return any(form.replace(" ", "") in flat for form in _unit_spellings(unit))
 
 
+#: Words a river name shares with every other river name. "River Thames" and
+#: "the river at Kingston" are not the same river.
+_RIVER_NOISE = frozenset(
+    {"river", "the", "la", "le", "el", "rio", "riviere", "fluss", "wadi", "arroyo", "stream", "creek"}
+)
+
+
+def _river_words(river: str) -> tuple[str, ...]:
+    """The words of a river name that say which river it is."""
+    return tuple(
+        w
+        for w in re.split(r"[^\w]+", normalise(river or "").casefold())
+        if w and w not in _RIVER_NOISE
+    )
+
+
+def _names_river(text: str, river: str) -> bool:
+    """Does ``text`` (already folded and casefolded) name ``river``?"""
+    words = _river_words(river)
+    if not words:
+        return False
+    return re.search(r"\b" + r"[\s\-]+".join(map(re.escape, words)) + r"\b", text) is not None
+
+
+def _stations_with_rivers(results: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Every station object in the results that says which river it is on."""
+    found: dict[str, dict[str, Any]] = {}
+    stack = [r.get("payload") for r in results]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            sid, river = item.get("station_id"), item.get("river")
+            if isinstance(sid, str) and isinstance(river, str) and river.strip():
+                found.setdefault(sid.casefold(), item)
+            stack.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)
+    return found
+
+
+def _river_check(answer: str, question: str, results: list[dict[str, Any]]) -> Check | None:
+    """Was the record behind the answer on a river the question names? (#731)
+
+    ``record_is_named`` asks only whether a record was named. The Kingston
+    recording answered a question about the Thames with the Hogsmill, a
+    tributary whose 100-year flood is 50 times smaller, and passed every check.
+    When the question names a river that a result can identify, and every
+    station the answer used sits on some other river, the answer is to a
+    different question.
+
+    Returns ``None`` when no result carries a river name, or when the question
+    names no river the results know: a check that cannot run is not a failure.
+    """
+    if not question:
+        return None
+    known = _stations_with_rivers(results)
+    if not known:
+        return None
+    folded = normalise(question).casefold()
+    asked = {sid: st for sid, st in known.items() if _names_river(folded, str(st.get("river")))}
+    if not asked:
+        return None
+    # The station a tool was pointed at: the numbers are that station's.
+    used: dict[str, dict[str, Any]] = {}
+    for r in results:
+        payload = r.get("payload")
+        if isinstance(payload, dict):
+            sid = payload.get("station_id")
+            if isinstance(sid, str) and sid.casefold() in known:
+                used.setdefault(sid.casefold(), known[sid.casefold()])
+    # The station the prose names. Longest name first: "Kingston Hogsmill" also
+    # contains "Kingston", and the longer name is the one the sentence means.
+    prose = normalise(answer).casefold()
+    named: dict[str, dict[str, Any]] = {}
+    claimed: list[str] = []
+    for sid, st in sorted(known.items(), key=lambda kv: len(str(kv[1].get("name") or "")), reverse=True):
+        name = str(st.get("name") or "").casefold()
+        if sid[:12] in prose:
+            named.setdefault(sid, st)
+            claimed.append(name or sid[:12])
+        elif name and name in prose and not any(name in c for c in claimed):
+            named.setdefault(sid, st)
+            claimed.append(name)
+    quoted = {**used, **named}
+    if not quoted:
+        return None
+    # Every station the answer leans on has to sit on a river the question names:
+    # one on the mainstem because the number is the mainstem's, and one named in
+    # the prose because a sentence about the Hogsmill is not about the Thames.
+    off = {sid: st for sid, st in quoted.items() if sid not in asked}
+    if not off:
+        return Check("river_matches_the_question", True)
+    on = ", ".join(f"{st.get('name')} ({st.get('river')})" for st in list(off.values())[:3])
+    wants = ", ".join(sorted({str(st["river"]) for st in asked.values()})[:3])
+    return Check(
+        "river_matches_the_question",
+        False,
+        f"The answer quotes {on}, but the question names {wants}.",
+    )
+
+
 def verify(answer: str, tool_results: list[dict[str, Any]], *, question: str = "") -> Verification:
     """Run the deterministic checks over an answer and the results behind it.
 
@@ -431,5 +532,10 @@ def verify(answer: str, tool_results: list[dict[str, Any]], *, question: str = "
             "record_is_named", named,
             "" if named else "The answer does not say which station or record the numbers come from.",
         ))
+
+    # 7. Was the record behind the answer on a river the question names? (#731)
+    river = _river_check(answer, question, ok_results)
+    if river is not None:
+        v.checks.append(river)
 
     return v

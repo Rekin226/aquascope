@@ -312,6 +312,7 @@ def test_number_tokens_carry_the_unit_the_words_give():
 
 @pytest.mark.parametrize("line, token, unit, value", [
     ("take half a cubic metre per second", "half", "m3/s", 0.5),
+    ("take half a cumec", "half", "m3/s", 0.5),
     ("take a quarter of a litre per second", "a quarter", "l/s", 0.00025),
     ("take half a megalitre per day", "half", "ML/day", 500 / 86400),
     ("take a half cubic metre per second", "a half", "m3/s", 0.5),

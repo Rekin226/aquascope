@@ -109,6 +109,13 @@ SOURCES: dict[str, SourceMeta] = {
         license="US-PD", redistributable=True,
         attribution="NOAA National Water Prediction Service (public domain)",
     ),
+    # WQP aggregates USGS NWIS and EPA WQX records and asks for no verbatim
+    # attribution: USGS-produced data are public domain and credit is only
+    # requested (checked 2026-11-15):
+    # https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    # EPA geospatial data default to public domain, while non-EPA items stay
+    # with their owner, hence the per-organization caveat below:
+    # https://www.epa.gov/web-policies-and-procedures/epa-disclaimers
     "wqp": _s(
         key="wqp", label="Water Quality Portal", region="United States",
         description="EPA/USGS harmonised water-quality samples by state",
@@ -163,6 +170,11 @@ SOURCES: dict[str, SourceMeta] = {
         license="DWS NIWIS terms (academic, research or personal use)", redistributable=False,
         attribution="Department of Water and Sanitation, Republic of South Africa (copyright proprietor)",
     ),
+    # Colorado DWR's portal Terms of Service (https://dwr.state.co.us/Portal/TermsOfUse.htm,
+    # read 2026-11-15) grant no licence and require applications that use the feed to carry the
+    # disclaimer reproduced in ``attribution``. ``license`` stays "unknown" on purpose: with
+    # ``redistributable=False`` that keeps the archive bundle filtering this source out
+    # (see ``aquascope/archive/zenodo.py::unverified``).
     "colorado_cdss": _s(
         key="colorado_cdss",
         label="Colorado DWR/CDSS",
@@ -177,7 +189,18 @@ SOURCES: dict[str, SourceMeta] = {
         output_model="StreamflowReading",
         license="unknown",
         redistributable=False,
-        attribution="Colorado Division of Water Resources",
+        # The portal asks applications to reproduce this block verbatim; keep the casing (#473).
+        attribution=(
+            "Colorado Division of Water Resources (CDSS/HydroBase). "
+            "\"The data made available here has been modified for use from its original source, "
+            "which is the State of Colorado. THE STATE OF COLORADO MAKES NO REPRESENTATIONS OR "
+            "WARRANTY AS TO THE COMPLETENESS, ACCURACY, TIMELINESS, OR CONTENT OF ANY DATA MADE "
+            "AVAILABLE THROUGH THIS SITE. THE STATE OF COLORADO EXPRESSLY DISCLAIMS ALL "
+            "WARRANTIES, WHETHER EXPRESS OR IMPLIED, INCLUDING ANY IMPLIED WARRANTIES OF "
+            "MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE. The data is subject to change "
+            "as modifications and updates are complete. It is understood that the information "
+            "contained in the Web feed is being used at one's own risk.\""
+        ),
     ),
     "brazil_ana": _s(
         key="brazil_ana", label="ANA Hidroweb", region="Brazil",
@@ -252,6 +275,14 @@ SOURCES: dict[str, SourceMeta] = {
         attribution="Hydroscope, the Greek National Databank for Hydrological and Meteorological Information",
         browser_reachable=False,  # plain http, and CORS only for localhost (#408)
     ),
+    # Licence: https://openhi.net/licence/ (page modified 2020-05-13, checked
+    # 2026-11-16) says, verbatim: "The OpenHi.net data are provided under the
+    # Creative Commons Attribution-ShareAlike International 4.0 licence". The
+    # Greek twin (https://openhi.net/licence-el/) says the same. CC BY-SA 4.0
+    # section 3(a)(1) asks for a hyperlink to the material, a link to the
+    # licence, and an indication that the material was modified; the collector
+    # converts units and the Archive folds the 15-minute series to daily values,
+    # so the attribution carries all three.
     "greece_openhi": _s(
         key="greece_openhi", label="Greece OpenHi.net", region="Greece",
         description="Live 15-minute discharge, stage, rainfall, climate and water quality from the ITIA/NTUA network",
@@ -262,7 +293,11 @@ SOURCES: dict[str, SourceMeta] = {
         supports_station_lookup=True,
         output_model="StreamflowReading | WaterLevelReading | ClimateReading | WaterQualitySample",
         license="CC-BY-SA-4.0", redistributable=True,
-        attribution="OpenHi.net, Open Hydrosystem Information Network (ITIA, NTUA), CC BY-SA 4.0",
+        attribution=(
+            "OpenHi.net, Open Hydrosystem Information Network (ITIA, NTUA), https://openhi.net/, "
+            "licensed CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/); "
+            "modified by AquaScope (units converted; 15-minute series aggregated to daily in the Archive)"
+        ),
         browser_reachable=False,  # CORS only for localhost; the Explorer serves the archive mirror (#408)
     ),
     "poland_imgw": _s(
@@ -292,8 +327,20 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://discodata.eea.europa.eu/",
         variables=("water_quality",),
         output_model="WaterQualitySample",
-        license="EEA-standard-reuse", redistributable=True,
-        attribution="European Environment Agency (EEA), standard re-use policy",
+        # EEA's own terms, read 2026-11-15. The Legal notice
+        # (https://www.eea.europa.eu/en/legal-notice, modified 2026-07-02) publishes EEA material under
+        # CC BY 4.0 and requires the Agency to be acknowledged as the original source: "provided that the
+        # EEA is always acknowledged as the original source of the material ... Such acknowledgment must be
+        # included in each copy of the material". The dataset's own record
+        # (https://sdi.eea.europa.eu/catalogue/datahub/api/records/77976729-1aeb-4b61-a673-83db6c6a2ab2)
+        # says "License CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Copyright holder:
+        # European Environment Agency (EEA)" with "No limitations to public access": re-use is free of
+        # charge for commercial and non-commercial purposes, so the source stays redistributable.
+        license="CC-BY-4.0", redistributable=True,
+        attribution=(
+            "© European Environment Agency (EEA), Waterbase – Water Quality ICM, 2025 (CC BY 4.0); "
+            "compiled by the EEA from the WISE SoE reporting by EEA member and cooperating countries"
+        ),
     ),
     # ── Asia ────────────────────────────────────────────────────────────
     "taiwan_wra_level": _s(
@@ -360,7 +407,12 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("water_level", "precipitation", "discharge"),
         output_model="WaterQualitySample",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Water Resources Agency, Ministry of Economic Affairs (Open Government Data License 1.0)",
+        attribution=(
+            "經濟部水利署 2017 [防災資訊服務網]；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之 (Water Resources Agency, MOEA; "
+            "Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "taiwan_wra_iot": _s(
         key="taiwan_wra_iot", label="Taiwan WRA IoT", region="Taiwan",
@@ -369,8 +421,17 @@ SOURCES: dict[str, SourceMeta] = {
         homepage="https://iot.wra.gov.tw/",
         variables=("groundwater_level",),
         output_model="WaterQualitySample",
-        license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Water Resources Agency, Ministry of Economic Affairs (Open Government Data License 1.0)",
+        # The IoT portal (read 2026-11-16) never names the Open Government Data
+        # License: its 政府網站資料開放宣告 (https://iot.wra.gov.tw/information.jsp)
+        # grants free, non-exclusive, sub-licensable re-use provided the source is
+        # stated. Record that declaration rather than claiming the OGDL.
+        license="WRA-Open-Data-Declaration (free re-use with attribution)", redistributable=True,
+        attribution=(
+            "經濟部水利署水資源物聯網入口網 (Water Resources Agency, MOEA, Water Resources IoT portal), "
+            "https://iot.wra.gov.tw/; the portal's 政府網站資料開放宣告 "
+            "(https://iot.wra.gov.tw/information.jsp) grants re-use provided the source is stated; "
+            "real-time groundwater level only (rainfall needs a paid membership)"
+        ),
     ),
     "taiwan_datagov": _s(
         key="taiwan_datagov", label="Taiwan data.gov.tw", region="Taiwan",
@@ -380,7 +441,13 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("water_level", "groundwater_level"),
         output_model="WaterLevelReading",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="data.gov.tw, Open Government Data License 1.0",
+        attribution=(
+            "經濟部水利署 (Water Resources Agency, MOEA) 2017 [即時水位資料]；"
+            "經濟部水利署 2023 [即時地下水水位資料]；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之"
+            " (Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "taiwan_civil_iot": _s(
         key="taiwan_civil_iot", label="Taiwan Civil IoT", region="Taiwan",
@@ -390,7 +457,12 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("water_level", "discharge", "precipitation"),
         output_model="WaterQualitySample",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Civil IoT Taiwan, Open Government Data License 1.0",
+        attribution=(
+            "國家災害防救科技中心 (NCDR) Civil IoT 水利感測資料；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之"
+            " (Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "taiwan_cwa": _s(
         key="taiwan_cwa", label="Taiwan CWA climate stations", region="Taiwan",
@@ -401,7 +473,13 @@ SOURCES: dict[str, SourceMeta] = {
         supports_station_lookup=True,
         output_model="ClimateReading",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Central Weather Administration, Open Government Data License 1.0",
+        attribution=(
+            "交通部中央氣象署 CODiS 氣候觀測資料查詢服務"
+            " (政府網站資料開放宣告: https://www.cwa.gov.tw/V8/C/information.html)；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之"
+            " (Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "taiwan_moenv": _s(
         key="taiwan_moenv", label="Taiwan MOENV", region="Taiwan",
@@ -412,17 +490,33 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("water_quality",),
         output_model="WaterQualitySample",
         license="OGDL-Taiwan-1.0", redistributable=True,
-        attribution="Ministry of Environment, Open Government Data License 1.0",
+        attribution=(
+            "環境部 (Ministry of Environment) 2013 [河川水質監測資料]；"
+            "此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，"
+            "使用者於遵守本條款各項規定之前提下，得利用之"
+            " (Open Government Data License: https://data.gov.tw/license)"
+        ),
     ),
     "japan_mlit": _s(
         key="japan_mlit", label="Japan MLIT", region="Japan",
-        description="Water level, discharge, quality and rainfall by prefecture",
+        description=(
+            "Not offered: the Water Information Database disallows its data "
+            "path for every crawler and asks programmatic users to use the "
+            "paid 水防災オープンデータ service instead"
+        ),
         agency="Ministry of Land, Infrastructure, Transport and Tourism", country="JPN",
-        homepage="http://www1.river.go.jp/",
+        homepage="https://www1.river.go.jp/",
         variables=("water_level", "discharge", "water_quality", "precipitation"),
         output_model="WaterQualitySample",
         license="Public Data License (Version 1.0)", redistributable=True,
-        attribution="Ministry of Land, Infrastructure, Transport and Tourism",
+        attribution=(
+            "Ministry of Land, Infrastructure, Transport and Tourism "
+            "(Public Data License 1.0, https://www1.river.go.jp/)"
+        ),
+        # robots.txt disallows /water-inf-app/ (Crawl-delay: 3600) and the FAQ
+        # points at the paid 水防災オープンデータ service, so neither the
+        # package nor a browser reads the site (#168).
+        browser_reachable=False,
     ),
     # These HRFCO terms cover its own water-level, discharge and rainfall series.
     # Dam storage and water quality follow their respective owners' terms and must
@@ -449,7 +543,7 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("water_level",),
         output_model="WaterLevelReading",
         license="unknown", redistributable=False,
-        attribution="India-WRIS (terms not yet verified)",
+        attribution="India-WRIS, Ministry of Jal Shakti, Government of India",
     ),
     # ── Oceania ─────────────────────────────────────────────────────────
     "bom": _s(
@@ -538,8 +632,11 @@ SOURCES: dict[str, SourceMeta] = {
         variables=("evapotranspiration",),
         supports_bbox=True,
         output_model="WaPORObservation",
-        license="CC-BY-4.0", redistributable=True,
-        attribution="FAO WaPOR (CC BY 4.0)",
+        # FAO's own catalogue record for WaPOR v3 states CC BY-NC-SA 4.0 in the
+        # dataset citation and in resourceConstraints (checked 2026-11-15):
+        # https://data.apps.fao.org/catalog/iso/ab083169-4ef6-4185-b39c-700ba01dcd52
+        license="CC-BY-NC-SA-4.0", redistributable=False,
+        attribution="FAO WaPOR database, License: CC BY-NC-SA 4.0",
     ),
 }
 
@@ -644,10 +741,11 @@ CONTEXT_LAYERS: dict[str, ContextLayerMeta] = {
     "actual_et": ContextLayerMeta(
         key="actual_et", short="FAO WaPOR",
         label="Actual evapotranspiration (FAO WaPOR v3)", provider="FAO",
-        description="Annual actual evapotranspiration and interception (AETI) at 300 m, 2018 onward. The licence "
-                    "is the one recorded for the wapor source; FAO's terms for commercial use are not confirmed",
-        license="CC-BY-4.0",
-        attribution="FAO WaPOR v3, L1 AETI annual",
+        description="Annual actual evapotranspiration and interception (AETI) at 300 m, 2018 onward, from the "
+                    "wapor source; FAO's WaPOR catalogue (read 2026-11-15) states CC BY-NC-SA 4.0, so the "
+                    "non-commercial and share-alike terms apply to this layer too",
+        license="CC-BY-NC-SA-4.0",
+        attribution="FAO WaPOR v3, L1 AETI annual (CC BY-NC-SA 4.0)",
         homepage="https://data.apps.fao.org/wapor/",
         citation="FAO (2024). WaPOR v3. https://www.fao.org/in-action/remote-sensing-for-water-productivity/",
     ),

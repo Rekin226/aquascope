@@ -223,8 +223,12 @@ def write(entries: list[ShowcaseEntry], out_dir: str | Path) -> dict[str, str]:
         # A model will happily answer over a failed tool call. That is what
         # `tools_were_used` catches, and an answer with nothing behind it is the
         # last thing to publish as a worked example.
-        if any(c.get("name") == "tools_were_used" and not c.get("passed") for c in entry.checks):
-            logger.warning("skipping %s: no tool call succeeded, so there is nothing to show", entry.id)
+        # An answer that quotes a gauge on a different river is the answer to a
+        # different question, and publishing it teaches the wrong habit (#731).
+        unpublished = {"tools_were_used", "river_matches_the_question"}
+        bad = [c for c in entry.checks if c.get("name") in unpublished and not c.get("passed")]
+        if bad:
+            logger.warning("skipping %s: %s", entry.id, bad[0].get("detail") or bad[0].get("name"))
             continue
         path = out / f"{entry.id}.json"
         path.write_text(json.dumps(entry.to_dict(), indent=1, ensure_ascii=False) + "\n", encoding="utf-8")

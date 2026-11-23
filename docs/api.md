@@ -22,7 +22,7 @@ The most common entry points live in `aquascope.api`:
 
 ## Data collectors
 
-37 unified collectors. Every collector returns records in the same Pydantic schema.
+38 unified collectors. Every collector returns records in the same Pydantic schema.
 
 ::: aquascope.collectors
     options:

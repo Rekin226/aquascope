@@ -146,6 +146,19 @@ SOURCES: dict[str, SourceMeta] = {
         license="CC-BY-4.0", redistributable=True,
         attribution="Chagas et al. (2020), CAMELS-BR",
     ),
+    "canada_hydat": _s(
+        key="canada_hydat", label="Canada HYDAT", region="Canada",
+        description="Daily mean river discharge from the HYDAT archive (Water Survey of Canada)",
+        agency="Environment and Climate Change Canada", country="CAN",
+        homepage="https://api.weather.gc.ca/collections/hydrometric-daily-mean",
+        variables=("discharge",),
+        output_model="StreamflowReading",
+        license="Open Government Licence - Canada", redistributable=True,
+        attribution=(
+            "Contains information licensed under the Open Government Licence - Canada. "
+            "Source: Environment and Climate Change Canada, Water Survey of Canada (HYDAT)."
+        ),
+    ),
     # ── Africa ──────────────────────────────────────────────────────────
     "south_africa_dws": _s(
         key="south_africa_dws", label="South Africa DWS Verified Hydrology", region="South Africa",
@@ -842,6 +855,7 @@ def build_collector(source_key: str, api_key: str | None = None, **ctor_kwargs):
         "uk_ea": lambda: c.UKEACollector(),
         "bom": lambda: c.BOMCollector(),
         "colorado_cdss": lambda: c.ColoradoCDSSCollector(api_key=api_key),
+        "canada_hydat": lambda: c.CanadaHydatCollector(),
     }
     if source_key not in factories:
         raise ValueError(f"Unknown source {source_key!r}. Available: {source_keys()}")

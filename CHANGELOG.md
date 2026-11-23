@@ -13,6 +13,7 @@ All notable changes to AquaScope are documented here.
   Short runs still show the largest inflow and outflow reached within the simulated hours.
 - Study can compare runoff and peak flow before and after a land-use change under the same 24-hour storm.
   The Explorer, CLI and MCP use the sketchpad's TR-55 calculation and export a screening-grade comparison.
+- **Canada HYDAT collector (#18)**: daily mean discharge from ECCC's MSC GeoMet OGC API, with no API key required.
 
 ## [1.3.0] - 2026-11-22
 

@@ -39,7 +39,7 @@ No installation; core Explorer workflows need no API key.
 
 ---
 
-AquaScope unifies **37 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top, from **flood-frequency methods** to **FAO-56 crop water requirements**, wrapped in an AI engine that scores **27 research methodologies** against your dataset and auto-executes **26 analysis pipelines**. Regression checks include the CAMELS benchmark with 5,200+ tests across the project.
+AquaScope unifies **38 global water-data sources** behind one Python schema, then layers a full scientific computing stack on top, from **flood-frequency methods** to **FAO-56 crop water requirements**, wrapped in an AI engine that scores **27 research methodologies** against your dataset and auto-executes **26 analysis pipelines**. Regression checks include the CAMELS benchmark with 5,200+ tests across the project.
 The daily benchmark inputs are synthetic; flood benchmarks also use observed USGS annual peaks.
 See [validation scope](docs/validation_scope.md) for comparators and limitations.
 
@@ -199,7 +199,7 @@ For the full capability list see [docs/features.md](docs/features.md).
 | CMIP6 change factors through a calibrated GR4J, in one study | ✅ | — | — | — |
 | Baseflow separation (Lyne-Hollick, Eckhardt) | ✅ | — | — | — |
 | FAO-56 Penman-Monteith ET₀ + crop water | ✅ | — | — | — |
-| 37 unified data collectors | ✅ | — | — | per-source |
+| 38 unified data collectors | ✅ | — | — | per-source |
 | AI methodology recommender (OpenAI / Groq / HF / Ollama) | ✅ | — | — | — |
 | Interactive Streamlit dashboard | ✅ | — | — | — |
 | Free, MIT, Python-native | ✅ | partial | ✅ | varies |
@@ -273,7 +273,7 @@ print(sig.flashiness_index)    # Richards-Baker flashiness index
 
 22 signatures across magnitude, variability, timing, recession, and flashiness — see [docs/features.md](docs/features.md#hydrological-analysis).
 
-### 3. Collect data from any of the 37 sources
+### 3. Collect data from any of the 38 sources
 
 ```python
 from aquascope import find_stations
@@ -457,7 +457,7 @@ aquascope flood 230567275 --flow 954 --levee ring.geojson --crest 15.1   # a scr
 aquascope well --at 4.88 45.76 --rate 1000 --days 90   # Theis drawdown round a pumping well
 aquascope landuse --polygon '[[4.955,45.70],[4.97,45.70],[4.97,45.708],[4.955,45.708]]' --use residential_1_8 --rain 100
 
-# Interactive Streamlit dashboard — multipage workspace with 37 live sources,
+# Interactive Streamlit dashboard — multipage workspace with 38 live sources,
 # smart auto-insights, and fully interactive Plotly charts
 aquascope dashboard
 
@@ -471,9 +471,9 @@ Run `aquascope --help` for the full command list.
 
 ## 🌍 Data sources at a glance
 
-37 data collectors spanning five regions (highlights below, full list in the [docs](docs/data_sources.md)):
+38 data collectors spanning five regions (highlights below, full list in the [docs](docs/data_sources.md)):
 
-- 🌎 **Americas** — USGS (streamflow + WQ), NOAA NWPS (US streamflow), Colorado DWR/CDSS, Water Quality Portal (400+ agencies), CAMELS-CL (Chile), CAMELS-BR and ANA Hidroweb (Brazil)
+- 🌎 **Americas** — USGS (streamflow + WQ), NOAA NWPS (US streamflow), Colorado DWR/CDSS, Water Quality Portal (400+ agencies), Canada HYDAT, CAMELS-CL (Chile), CAMELS-BR and ANA Hidroweb (Brazil)
 - 🌍 **Europe** — EU Water Framework Directive, Copernicus GloFAS, France Hub'Eau, Germany PEGELONLINE, England's Environment Agency, Ireland OPW, Greece Hydroscope (national archive) and OpenHi.net (live telemetry), Poland IMGW-PIB (daily archive from 1951 and the live network)
 - 🌍 **Africa** — South Africa DWS (verified discharge and water level)
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / CWA / Civil IoT / DataGov, Korea WAMIS, India WRIS, Australia BOM
@@ -498,7 +498,7 @@ Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/d
 | Resource | What it covers |
 | :--- | :--- |
 | [Features](docs/features.md) | Full capability list — hydrology, agriculture, ML, spatial, I/O |
-| [Data sources](docs/data_sources.md) | All 37 sources, endpoints, API-key requirements |
+| [Data sources](docs/data_sources.md) | All 38 sources, endpoints, API-key requirements |
 | [Theory guide](docs/theory.md) | Equations, DOI citations, decision trees for every method |
 | [Methodology matrix](docs/methodology_matrix.md) | When to use which method |
 | [Architecture](docs/guides/architecture.md) | How AquaScope is structured internally |

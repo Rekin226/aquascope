@@ -35,6 +35,7 @@ pip install "aquascope[all]"       # everything: ML, viz, spatial, dashboard
 - 🌊 **Pull water data** from USGS, NOAA NWPS, Colorado DWR/CDSS, the US Water Quality Portal, England's Environment Agency, France Hub'Eau, Germany PEGELONLINE, Ireland OPW, Greece Hydroscope, Poland IMGW-PIB, EU WFD, Taiwan MOENV / WRA / CWA, Korea WAMIS, India WRIS, South Africa DWS, Australia BOM, Brazil ANA Hidroweb, CAMELS-CL and CAMELS-BR, GRDC, GEMStat, Copernicus GloFAS, OpenMeteo, FAO AQUASTAT, FAO WaPOR and UN SDG 6, with one unified Python API.
 - 📈 **Run hydrological analyses**: flood frequency (GEV / LP3 / Gumbel / non-stationary GEV, with separate EMA routines), baseflow separation, rating curves, and 22 hydrological signatures.
 - 🌾 **Plan agricultural water**: FAO-56 Penman–Monteith ET₀, crop water requirements for 26 crops (olive, grape, citrus and winter wheat resolved by variety and canopy), irrigation scheduling, and soil water balance with auto-irrigation.
+- 🔭 **Now and next**: today's flow against normal and the 15-day GEOGLOWS and GloFAS forecast corrected to the gauge, with each gauge's track record: issued forecasts scored against what the gauge then measured. See [forecast verification](forecast-verification.md).
 - 🤖 **Ask the AI engine**: describe your goal in plain English, get a recommended methodology scored against your dataset, and auto-execute it.
 - 🧑‍🔬 **Run a study**: from a question to a gated plan and a report bundle, keyless. The [advanced studies](advanced_studies.md) test whether the flood is changing, calibrate GR4J for "what if" scenarios and carry CMIP6 models through it to 2050.
 - 🧭 **Read the context of any place**: `aquascope context LAT LON` (also over MCP and in the Explorer's Context tab): flood events in the news and Sentinel-1 radar floods 2014-2024, surface water since 1984, modelled flood depth, dams, soil, actual ET and the nearest rain gauge, each with its licence. See [the Explorer docs](explorer.md#context-of-a-place).
@@ -87,6 +88,7 @@ pip install "aquascope[all]"       # everything: ML, viz, spatial, dashboard
 ## Validation and reproducibility
 
 - **5,200+ tests** across every collector, hydrology method, and pipeline.
+- **A weekly live sweep of every collector**: each source is asked for a small slice of real data, so a collector that quietly stops returning data shows up.
 - **CAMELS benchmark**: synthetic daily regression fixtures and observed annual peaks for ten catchments, bundled at `data/camels_benchmark/`, run on every CI build.
 - **Every method cited**: equations, decision trees, and DOI references for all 27 methodologies live in the [theory guide](theory.md).
 - **JOSS paper in preparation**: see [`paper.md`](https://github.com/Rekin226/aquascope/blob/main/paper.md) and [`paper.bib`](https://github.com/Rekin226/aquascope/blob/main/paper.bib).
@@ -102,8 +104,8 @@ pip install "aquascope[all]"       # everything: ML, viz, spatial, dashboard
   author  = {AquaScope Contributors},
   year    = {2026},
   url     = {https://github.com/Rekin226/aquascope},
-  version = {1.2.0},
-  doi     = {10.5281/zenodo.24125206},
+  version = {1.3.0},
+  doi     = {10.5281/zenodo.21903143},
   license = {MIT}
 }
 ```

@@ -410,6 +410,7 @@ aquascope river record --at 46.948 7.452          # that reach's simulated daily
 aquascope river trace --at 46.948 7.452           # follow it to the sea: length, path, the gauges, dams and countries it passes
 aquascope river dams --at 46.948 7.452            # the dams upstream of that reach and the degree of regulation
 aquascope now --station usgs/USGS-01350000        # today against normal, and the 15-day forecast corrected to the gauge
+aquascope evidence verify --out verify --days 30  # how close the issued forecasts came to the gauge, per model and lead day
 aquascope bulletin 2026-09 --out bulletin         # last month's state of the rivers: HydroSOS classes, HTML and Markdown
 aquascope warnings --bbox -10 35 30 60            # floods ahead: reaches expected to reach their 2-year flow in 15 days
 aquascope flowstatus --bbox -10 35 30 60          # every big reach's flow today against its normal for the month
@@ -485,6 +486,7 @@ Full details, endpoints, and API-key requirements: [docs/data_sources.md](docs/d
 ## 🧪 Scientifically validated
 
 - **5,200+ tests** covering every collector, hydrology method, and pipeline (spatial and ARIMA tests require the optional `[all]` / `[ml]` extras)
+- **A weekly live sweep of every collector** asks each source for a small slice of real data and records OK, EMPTY, FAIL, TIMEOUT or NEEDS_KEY, so a collector that quietly stops returning data shows up
 - **CAMELS benchmark** — a 10-catchment validation subset of the [CAMELS dataset](https://ral.ucar.edu/solutions/products/camels) ships with the repo at `data/camels_benchmark/` and runs as part of CI
 - **Every method cited** — equations, decision trees, and DOI references for all 27 methodologies live in the [theory guide](docs/theory.md)
 - **JOSS paper in preparation** — see [`paper.md`](paper.md) and [`paper.bib`](paper.bib)
@@ -625,8 +627,8 @@ If you use AquaScope in your research, please cite:
   author  = {Ouédraogo, Abdoul Rachid},
   year    = {2026},
   url     = {https://github.com/Rekin226/aquascope},
-  version = {1.2.0},
-  doi     = {10.5281/zenodo.24125206},
+  version = {1.3.0},
+  doi     = {10.5281/zenodo.21903143},
   license = {MIT}
 }
 ```

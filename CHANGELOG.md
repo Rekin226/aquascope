@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+- Reservoir routing now reports peak reduction and delay only when the simulation captures both peaks.
+  Short runs still show the largest inflow and outflow reached within the simulated hours.
+
 ## [1.3.0] - 2026-11-22
 
 Forecasts scored against the gauge, and drought indices that respect missing months. The daily forecast

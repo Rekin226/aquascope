@@ -1489,12 +1489,19 @@ def _route_reservoir(args: argparse.Namespace) -> None:
         sys.exit(1)
     r = res["reservoir"]
     print(f"  {res['message']}")
-    print(f"  At the dam: in {r['peak_in_cms']:,.0f} m3/s after {r['peak_in_h']:g} h, out {r['peak_out_cms']:,.0f} m3/s "
-          f"after {r['peak_out_h']:g} h ({r['reduction_pct']:g} % lower); {r['flood_storage_m3']:,.0f} m3 held at most.")
+    if r["reduction_pct"] is None:
+        for name, hour in (("Inflow", r["peak_in_h"]), ("Outflow", r["peak_out_h"])):
+            if hour is not None:
+                print(f"  {name} peaked at the dam after {hour:g} h.")
+        print(f"  Maximum storage above the crest during this run: {r['flood_storage_m3']:,.0f} m3.")
+    else:
+        print(f"  At the dam: in {r['peak_in_cms']:,.0f} m3/s after {r['peak_in_h']:g} h, "
+              f"out {r['peak_out_cms']:,.0f} m3/s after {r['peak_out_h']:g} h ({r['reduction_pct']:g} % lower); "
+              f"{r['flood_storage_m3']:,.0f} m3 held at most.")
     w = r["without"]
-    if w.get("furthest_peak_cms") is not None:
-        print(f"  Furthest down (reach {w['furthest_river_id']}): {w['furthest_peak_with_cms']:,.0f} m3/s with the "
-              f"reservoir, {w['furthest_peak_cms']:,.0f} m3/s without.")
+    if w.get("furthest_peak_cms") is not None and w.get("furthest_peak_with_cms") is not None:
+        print(f"  Furthest down (reach {w['furthest_river_id']}), maxima during this run: "
+              f"{w['furthest_peak_with_cms']:,.0f} m3/s with the reservoir, {w['furthest_peak_cms']:,.0f} m3/s without.")
     for note in res.get("notes") or []:
         print(f"  {note}")
     print(f"  {r['check']}")

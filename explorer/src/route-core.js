@@ -158,7 +158,8 @@ export function headline(res) {
 /** The action log's line for a run. */
 export function logLabel(res) {
   const rv = res && res.reservoir;
-  if (rv) return `A flood through a reservoir, ${Number(rv.reduction_pct)} % lower past the dam`;
+  if (rv) return finite(rv.reduction_pct) ? `A flood through a reservoir, ${Number(rv.reduction_pct)} % lower past the dam`
+    : "A flood through a reservoir, peak reduction unknown in this run";
   const st = res && res.storm;
   if (st) return `Route a storm of ${Number(st.rain_mm)} mm in ${hoursWords(st.duration_h)}`;
   const i = (res && res.inflow) || {};

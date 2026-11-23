@@ -472,7 +472,7 @@ Run `aquascope --help` for the full command list.
 
 38 data collectors spanning five regions (highlights below, full list in the [docs](docs/data_sources.md)):
 
-- 🌎 **Americas** — USGS (streamflow + WQ), NOAA NWPS (US streamflow), Colorado DWR/CDSS, Water Quality Portal (400+ agencies), CAMELS-CL (Chile), CAMELS-BR and ANA Hidroweb (Brazil)
+- 🌎 **Americas** — USGS (streamflow + WQ), NOAA NWPS (US streamflow), Colorado DWR/CDSS, Water Quality Portal (400+ agencies), Canada HYDAT, CAMELS-CL (Chile), CAMELS-BR and ANA Hidroweb (Brazil)
 - 🌍 **Europe** — EU Water Framework Directive, Copernicus GloFAS, France Hub'Eau, Germany PEGELONLINE, England's Environment Agency, Ireland OPW, Greece Hydroscope (national archive) and OpenHi.net (live telemetry), Poland IMGW-PIB (daily archive from 1951 and the live network)
 - 🌍 **Africa** — South Africa DWS (verified discharge and water level)
 - 🌏 **Asia-Pacific** — Taiwan MOENV / WRA / CWA / Civil IoT / DataGov, Korea WAMIS, India WRIS, Australia BOM

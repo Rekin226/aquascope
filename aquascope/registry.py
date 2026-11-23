@@ -147,16 +147,16 @@ SOURCES: dict[str, SourceMeta] = {
         attribution="Chagas et al. (2020), CAMELS-BR",
     ),
     "canada_hydat": _s(
-            key="canada_hydat", label="Canada HYDAT", region="Canada",
-            description="Daily mean river discharge from the HYDAT archive (Water Survey of Canada)",
-            agency="Environment and Climate Change Canada", country="CAN",
-            homepage="https://www.canada.ca/en/services/environment/",
-            variables=("discharge",),
-            output_model="StreamflowReading",
-            license="Open Government Licence - Canada", redistributable=False,
-            attribution=(
-                "Contains information licensed under the Open Government Licence - Canada."
-                "Source: Environment and Climate Change Canada, Water Survey of Canada (HYDAT)"
+        key="canada_hydat", label="Canada HYDAT", region="Canada",
+        description="Daily mean river discharge from the HYDAT archive (Water Survey of Canada)",
+        agency="Environment and Climate Change Canada", country="CAN",
+        homepage="https://api.weather.gc.ca/collections/hydrometric-daily-mean",
+        variables=("discharge",),
+        output_model="StreamflowReading",
+        license="Open Government Licence - Canada", redistributable=True,
+        attribution=(
+            "Contains information licensed under the Open Government Licence - Canada. "
+            "Source: Environment and Climate Change Canada, Water Survey of Canada (HYDAT)."
         ),
     ),
     # ── Africa ──────────────────────────────────────────────────────────

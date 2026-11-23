@@ -735,6 +735,15 @@ def _sentences_for(tool: str, payload: dict[str, Any], study: Study) -> list[str
         if bits:
             out.append(f"Signatures transferred from {payload.get('n_donors_available') or ''} donors "
                        f"({payload.get('method')}): " + "; ".join(bits) + ".")
+    elif tool == "route_flood":
+        if payload.get("message"):
+            out.append(payload["message"])
+        if (check := payload.get("check", {}).get("summary")):
+            out.append(check)
+        out.extend(payload.get("notes") or [])
+    elif tool == "landuse_change":
+        out.extend(payload[k] for k in ("summary", "assumptions", "check") if payload.get(k))
+        out.extend(payload.get("notes") or [])
     elif tool == "anywhere":
         cl = payload.get("climate") or {}
         if cl.get("precipitation_mm_per_year") is not None:

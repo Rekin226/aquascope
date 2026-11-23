@@ -1609,7 +1609,10 @@ def studio_start(
     studio_say, or say "just go") or, when nothing needs asking, the `plan` to review (approve it with
     studio_approve) or `declined` with the reason. Keyless unless a provider/model is given. Keep the returned
     `workspace` dict and pass it to the next studio_* call: the tools are stateless.
-    intake: playbook intake fields, for example {"return_period": 100}.
+    intake: playbook intake fields, for example {"return_period": 100}. For a land-use study, pass
+    {"landuse_change": {"polygon": [[lon, lat], ...], "use": "paved", "rain_mm": 80}}; soil_group,
+    cover and tc_hours may also be supplied inside that scenario. To route a flood wave, pass e.g.
+    {"route_flood": {"river_id": 230494421, "duration_h": 12, "peak_cms": 600}}.
     """
     try:
         studio = _studio(None, lat=float(lat), lon=float(lon), intake=intake, provider=provider, model=model,

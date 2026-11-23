@@ -123,6 +123,27 @@ def _tree(ws: Workspace, *, branch: str | None = None) -> Study:
     """The playbook tree's plan for this site, promoted to version 3. Raises ``playbooks.Declined``."""
     from aquascope import playbooks as pbk
 
+    kind = ws.brief.kind
+    if kind in catalogue.SCENARIO_TOOLS:
+        row = next((r for r in _recon(ws).get("sufficiency", []) if r.get("method") == kind), {})
+        if not row.get("scenario"):
+            raise pbk.Declined(row.get("reason") or f"Supply the client's {kind} scenario.", kind="refused")
+        entry = catalogue.entries()[kind]
+        if kind == "landuse_change":
+            rationale = "Compare runoff and peak discharge from the drawn area under the same design storm."
+            caveat = "TR-55 screening for the supplied design storm."
+        else:
+            rationale = "Route the supplied wave downstream and compare its hydrograph at the first and last reach."
+            caveat = "Screening of added discharge only. Flood depth and inundation extent require a hydraulic model."
+        step = {"id": "s1", "tool": entry.id, "method": entry.id, "arguments": row["scenario"],
+                "rationale": rationale, "expects": entry.gates}
+        errors = _errors_of([step], ws)
+        if errors:
+            raise pbk.Declined("; ".join(errors), kind="refused")
+        study = Study(question=ws.brief.problem, steps=[Step.from_dict(step)], author="rules", created=_now(),
+                      problem={"kind": entry.id, "site": dict(ws.site or {}), "params": dict(ws.brief.intake)},
+                      plan={"citations": [entry.citation], "caveats": [caveat]})
+        return _promote(ws, study, author="rules")
     pb = _playbook(ws)
     if pb is None:
         raise pbk.Declined("no playbook applies", kind="no_playbook")
@@ -364,7 +385,9 @@ def _stations_of(ws: Workspace) -> set[tuple[str, str]] | None:
 
 
 def _errors_of(steps: list[dict[str, Any]], ws: Workspace) -> list[str]:
-    errors = catalogue.validate_plan(steps, sufficiency=sufficiency_for_validation(ws), stations=_stations_of(ws))
+    errors = catalogue.validate_plan(steps, sufficiency=sufficiency_for_validation(ws) or [], stations=_stations_of(ws))
+    if ws.brief.kind in catalogue.SCENARIO_TOOLS and not any(st["tool"] == ws.brief.kind for st in steps):
+        errors.append(f"The plan requires the {ws.brief.kind} step for the client's scenario.")
     for st in steps:
         errors += _placeholder_errors(st)
     return errors
@@ -574,7 +597,8 @@ def _decline(ws: Workspace, reason: str) -> None:
     """Decline, unless the reason is data the user could bring: then the study waits for it (#419)."""
     from aquascope.studio.requests import data_request_for
 
-    request = data_request_for(ws, reason)
+    # These studies need the client's scenario settings. An uploaded station record cannot supply them.
+    request = None if ws.brief.kind in catalogue.SCENARIO_TOOLS else data_request_for(ws, reason)
     if request is not None and not ws.brief.intake.get("_no_request"):
         _wait(ws, request)
         return
@@ -627,7 +651,7 @@ def plan(ws: Workspace, model: Model | None) -> Study | None:
 
     known = sorted(p["id"] for p in pbk.list_playbooks() if "error" not in p)
     study: Study | None = None
-    if model:
+    if model and ws.brief.kind not in catalogue.SCENARIO_TOOLS:
         rule = _playbook_rule_decline(ws)
         if rule:
             # The playbook declines by one of its own rules (an inundation map, a cause without pumping data, a
@@ -652,7 +676,7 @@ def plan(ws: Workspace, model: Model | None) -> Study | None:
                 _decline(ws, "The model's plan did not pass the validator and no playbook covers this problem: "
                          + "; ".join(errors[:6]))
                 return None
-    elif ws.brief.playbook:
+    elif ws.brief.playbook or ws.brief.kind in catalogue.SCENARIO_TOOLS:
         try:
             study = _upload_tree(ws) if wants_upload(ws) else _tree(ws)
         except pbk.Declined as exc:
@@ -712,7 +736,7 @@ def wants_upload(ws: Workspace) -> bool:
     """Plan on an attached table when the text points at it (my/own/this record, data, file, table, upload, csv)
     or when no gauge within reach carries the variable the playbook needs."""
     uploads = _uploads(ws)
-    if not uploads:
+    if not uploads or ws.brief.kind in catalogue.SCENARIO_TOOLS:
         return False
     if _UPLOAD_WORDS.search(ws.brief.problem or ""):
         return True

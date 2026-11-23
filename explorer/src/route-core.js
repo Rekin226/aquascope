@@ -158,7 +158,8 @@ export function headline(res) {
 /** The action log's line for a run. */
 export function logLabel(res) {
   const rv = res && res.reservoir;
-  if (rv) return `A flood through a reservoir, ${Number(rv.reduction_pct)} % lower past the dam`;
+  if (rv) return finite(rv.reduction_pct) ? `A flood through a reservoir, ${Number(rv.reduction_pct)} % lower past the dam`
+    : "A flood through a reservoir, peak reduction unknown in this run";
   const st = res && res.storm;
   if (st) return `Route a storm of ${Number(st.rain_mm)} mm in ${hoursWords(st.duration_h)}`;
   const i = (res && res.inflow) || {};
@@ -209,6 +210,17 @@ export function routeArgs({ kind, peak, rp, duration, block }) {
     out.return_period = t;
   }
   return out;
+}
+
+/** A Study can replay a specified wave from its starting reach. Recorded flows have a different source. */
+export function routeStudyArgs(target, args) {
+  const { river_id, lat, lon } = target;
+  const fields = ["peak_cms", "return_period", "duration_h", "shape", "hours", "max_reaches"];
+  if (!Number.isSafeInteger(Number(river_id)) || Number(river_id) <= 0 ||
+      !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 ||
+      !args?.duration_h || (args.peak_cms == null) === (args.return_period == null) ||
+      Object.keys(args).some((key) => !fields.includes(key))) return null;
+  return { lat, lon, scenario: { river_id: Number(river_id), ...args } };
 }
 
 /** The towns in the basemap's own label tiles (OpenMapTiles "place"): [{ name, lat, lon, kind: "town" }]. */

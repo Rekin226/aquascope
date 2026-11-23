@@ -24,6 +24,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from aquascope.studio import catalogue
 from aquascope.studio.workspace import Dataset, Inventory, Workspace
 
 __all__ = ["FLOOD_PLAYBOOKS", "REGULATION_PLAYBOOKS", "choose_column", "context_layers", "reach_dataset", "scout",
@@ -273,6 +274,32 @@ def scout(ws: Workspace) -> Inventory:
     site = dict(ws.site or {})
     if site.get("lat") is None or site.get("lon") is None:
         raise ValueError("the workspace names no site (lat, lon)")
+    kind = ws.brief.kind
+    if kind in catalogue.SCENARIO_TOOLS:
+        # The user's scenario can be checked before looking up any site data.
+        from aquascope.methods import SiteContext, assess_method
+
+        scenario = ws.brief.intake.get(kind) if kind in ws.brief.stated else None
+        try:
+            catalogue.validate_scenario(kind, scenario)
+        except ValueError as exc:
+            row = assess_method(kind, SiteContext())
+            row["reason"] = str(exc)
+        else:
+            if kind == "landuse_change":
+                evidence = "land-use scenario"
+                reason = ("The drawn area, proposed use and design storm are specified. "
+                          "The land cover, soil and terrain inputs are checked when the analysis runs.")
+            else:
+                evidence = "routing scenario"
+                reason = ("The starting reach, flood magnitude and duration are specified. "
+                          "The routing network is read when the analysis runs.")
+            row = assess_method(kind, SiteContext(available={evidence}))
+            row["reason"] = reason
+            row["scenario"] = scenario
+        ws.inventory = Inventory(site=site, recon={"point": site, "sufficiency": [row]})
+        ws.event("scout", "inventory", row["reason"])
+        return ws.inventory
     recon = _scout({"lat": float(site["lat"]), "lon": float(site["lon"])}, ws.brief.playbook, dict(ws.brief.intake),
                    _say(ws))
     ctx = recon.get("context") or {}

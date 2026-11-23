@@ -46,7 +46,7 @@ import numpy as np
 __all__ = [
     "DISTRIBUTIONS", "HYSOGS_URL", "LICENCES", "TR55", "USES", "WORLDCOVER", "WORLDCOVER_TILES",
     "check", "composite_cn", "cover_fractions", "landuse_change", "lag_tc", "land_slope", "peak_discharge",
-    "pond_factor", "runoff_depth", "soil_groups", "unit_peak",
+    "pond_factor", "runoff_depth", "soil_groups", "study_landuse_change", "unit_peak", "validate_study_scenario",
 ]
 
 #: TR-55's curve numbers used here, (A, B, C, D), with the table they come from. Average runoff condition, Ia = 0.2S.
@@ -480,6 +480,93 @@ def land_slope(polygon: Any, *, fetch: Callable[[str], bytes] | None = None) -> 
 
 
 # ── the change ──────────────────────────────────────────────────────────────
+
+
+def validate_study_scenario(params: Mapping[str, Any]) -> None:
+    """Check the client's scenario before proposing a Study or reading any tiles."""
+    if not isinstance(params, Mapping):
+        raise ValueError("landuse_change needs an object with polygon, use and rain_mm")
+    allowed = {"polygon", "use", "rain_mm", "distribution", "soil_group", "impervious_pct", "cover",
+               "slope_pct", "tc_hours"}
+    unknown = set(params) - allowed
+    if unknown:
+        raise ValueError(f"unknown land-use scenario inputs: {', '.join(sorted(map(str, unknown)))}")
+    missing = [key for key in ("polygon", "use", "rain_mm") if params.get(key) is None]
+    if missing:
+        raise ValueError(f"Land-use screening needs the client's {', '.join(missing)} "
+                         "(drawn area, proposed cover and 24-hour design storm in mm).")
+    polygon = params["polygon"]
+    if isinstance(polygon, Mapping):
+        geom = polygon.get("geometry", polygon)
+        if (not isinstance(geom, Mapping) or geom.get("type") != "Polygon"
+                or not isinstance(geom.get("coordinates"), list) or len(geom["coordinates"]) != 1):
+            raise ValueError("polygon must be one GeoJSON Polygon without holes, or a ring of [lon, lat] points")
+    try:
+        ring = _ring(polygon)
+    except (TypeError, KeyError, IndexError, OverflowError, ValueError) as exc:
+        raise ValueError(f"Invalid polygon: {exc}") from exc
+    if not np.all(np.isfinite(ring)):
+        raise ValueError("polygon must enclose a positive area with finite coordinates")
+    x, y = (ring - ring[0]).T
+    if np.sum(x * np.roll(y, -1) - y * np.roll(x, -1)) == 0:
+        raise ValueError("polygon must enclose a positive area with finite coordinates")
+    use = params["use"]
+    if use not in USES:
+        raise ValueError(f"use must be one of {', '.join(USES)}")
+
+    def number(key: str, value: Any) -> float:
+        if isinstance(value, bool) or not isinstance(value, (float, int)):
+            raise ValueError(f"{key} must be a finite number")
+        try:
+            n = float(value)
+        except OverflowError as exc:
+            raise ValueError(f"{key} must be a finite number") from exc
+        if not math.isfinite(n):
+            raise ValueError(f"{key} must be a finite number")
+        return n
+
+    if not 1 <= number("rain_mm", params["rain_mm"]) <= 2000:
+        raise ValueError("rain_mm must be from 1 to 2000 mm for the 24-hour design storm")
+    if params.get("distribution", "II") not in DISTRIBUTIONS:
+        raise ValueError(f"distribution must be one of {', '.join(DISTRIBUTIONS)}")
+    if use == "impervious" and params.get("impervious_pct") is None:
+        raise ValueError("use 'impervious' needs impervious_pct")
+    if params.get("impervious_pct") is not None and not 0 <= number("impervious_pct", params["impervious_pct"]) <= 100:
+        raise ValueError("impervious_pct must be from 0 to 100")
+    if params.get("soil_group") is not None and params["soil_group"] not in GROUPS:
+        raise ValueError("soil_group must be A, B, C or D")
+    if params.get("tc_hours") is not None and not 0.1 <= number("tc_hours", params["tc_hours"]) <= 10:
+        raise ValueError("tc_hours must be from 0.1 to 10 hours for the TR-55 graphical peak")
+    if params.get("slope_pct") is not None and number("slope_pct", params["slope_pct"]) <= 0:
+        raise ValueError("slope_pct must be above zero")
+    if params.get("tc_hours") is None and polygon_area_km2(ring) > 19 * SQKM_PER_SQMI:
+        raise ValueError("polygon exceeds the 19-square-mile limit for the lag equation; supply a measured tc_hours")
+    cover = params.get("cover")
+    if cover is not None:
+        if not isinstance(cover, Mapping) or not cover:
+            raise ValueError("cover must map WorldCover codes to area shares")
+        has_land = False
+        valid_codes = {str(k) for k in WORLDCOVER}
+        for code, share in cover.items():
+            if str(code) not in valid_codes:
+                raise ValueError(f"unknown WorldCover code {code!r} in cover")
+            if number("cover share", share) < 0:
+                raise ValueError("cover shares must be non-negative")
+            if share > 0 and WORLDCOVER[int(code)]["tr55"] not in (None, "pond"):
+                has_land = True
+        if not has_land:
+            raise ValueError("cover needs a positive share of land with a TR-55 curve number")
+
+
+def study_landuse_change(**scenario: Any) -> dict[str, Any]:
+    """Screen the supplied change. A Study needs no river lookup to compare runoff inside the polygon."""
+    validate_study_scenario(scenario)
+    result = landuse_change(**scenario, outlet=False)
+    result["grade"] = "screening"
+    result["reference_check"] = check()
+    if not result["reference_check"]["ok"]:
+        result["check"] = "The TR-55 or NEH 630 reference examples failed to reproduce."
+    return result
 
 
 def _use_cn(use: str, soils: Mapping[str, float], impervious_pct: float | None) -> tuple[float, str]:

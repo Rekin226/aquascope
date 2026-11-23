@@ -45,6 +45,7 @@ from aquascope.studio.deliverables._payload import (
     variable_of,
     year_of,
 )
+from aquascope.studio.hydrograph import route_hydrograph_of
 from aquascope.studio.workspace import MEDIA_TYPES, Artifact
 from aquascope.viz import publication as pub
 
@@ -1234,6 +1235,25 @@ def _scenario_bars(payload: dict[str, Any], unit: str | None, site: dict[str, An
     return fig, caption
 
 
+def _route_hydrograph(payload: dict[str, Any], unit: str | None, site: dict[str, Any] | None) -> Drawn | None:
+    hydro = route_hydrograph_of(payload)
+    if hydro is None:
+        return None
+    fig, ax = _figure()
+    ax.plot(hydro["hours"], hydro["start_cms"], color=PRIMARY, label=f"Start · reach {hydro['start_river_id']}")
+    ax.plot(hydro["hours"], hydro["end_cms"], color=DANGER, linestyle="--",
+            label=f"End · reach {hydro['end_river_id']}")
+    ax.set_xlabel("Time since routing began (h)")
+    ax.set_ylabel("Added flow (m³/s)")
+    ax.set_ylim(bottom=0)
+    ax.legend()
+    caption = (f"Hourly modelled added flow at the start (reach {hydro['start_river_id']}) and end "
+               f"(reach {hydro['end_river_id']}) of the routed path during the simulated window.")
+    if payload.get("attribution"):
+        caption += f" {payload['attribution']}"
+    return fig, caption
+
+
 def _landuse_runoff(payload: dict[str, Any], unit: str | None, site: dict[str, Any] | None) -> Drawn | None:
     before = num((payload.get("before") or {}).get("q_mm"))
     after = num((payload.get("after") or {}).get("q_mm"))
@@ -1329,6 +1349,7 @@ MAKERS: dict[str, Callable[[dict[str, Any], str | None, dict[str, Any] | None], 
     "model_fit": _model_fit,
     "scenario_bars": _scenario_bars,
     "landuse_runoff": _landuse_runoff,
+    "route_hydrograph": _route_hydrograph,
     "projection_spread": _projection_spread,
     "regional_growth": _regional_growth,
 }

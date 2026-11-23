@@ -240,6 +240,7 @@ def _reach_record_tool(lat: float | None = None, lon: float | None = None, river
 
 def _tool_specs() -> list[ToolSpec]:
     from aquascope import mcp_server as t
+    from aquascope import routing
     from aquascope.explore import anywhere
     from aquascope.sketch import landuse
 
@@ -420,6 +421,23 @@ def _tool_specs() -> list[ToolSpec]:
                                               "years": {"type": "integer"}},
              "required": ["source", "station_id"]},
             t.low_flow_context,
+        ),
+        ToolSpec(
+            "route_flood",
+            "Route a user-supplied flood wave downstream with GEOGLOWS Muskingum parameters. Supply a reach ID, "
+            "duration in hours and exactly one of peak_cms or return_period. Returns hourly added flow in m3/s "
+            "at the start and last modelled reach, with the routing check and screening limitations.",
+            {"type": "object", "properties": {
+                "river_id": {"type": "integer", "minimum": 100_000_000, "maximum": 999_999_999},
+                "duration_h": {"type": "number", "minimum": 1, "maximum": routing.MAX_HOURS,
+                               "description": "At least 1 h for a block and over 1 h for a triangle (hourly samples)."},
+                "peak_cms": {"type": "number", "exclusiveMinimum": 0, "maximum": 1_000_000},
+                "return_period": {"type": "number", "minimum": 2, "maximum": 500},
+                "shape": {"type": "string", "enum": list(routing.SHAPES), "default": "triangle"},
+                "hours": {"type": "integer", "minimum": 1, "maximum": routing.MAX_HOURS},
+                "max_reaches": {"type": "integer", "minimum": 1, "maximum": routing.MAX_PATH},
+            }, "required": ["river_id", "duration_h"], "additionalProperties": False},
+            routing.study_route_flood,
         ),
         ToolSpec(
             "landuse_change",

@@ -212,6 +212,17 @@ export function routeArgs({ kind, peak, rp, duration, block }) {
   return out;
 }
 
+/** A Study can replay a specified wave from its starting reach. Recorded flows have a different source. */
+export function routeStudyArgs(target, args) {
+  const { river_id, lat, lon } = target;
+  const fields = ["peak_cms", "return_period", "duration_h", "shape", "hours", "max_reaches"];
+  if (!Number.isSafeInteger(Number(river_id)) || Number(river_id) <= 0 ||
+      !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180 ||
+      !args?.duration_h || (args.peak_cms == null) === (args.return_period == null) ||
+      Object.keys(args).some((key) => !fields.includes(key))) return null;
+  return { lat, lon, scenario: { river_id: Number(river_id), ...args } };
+}
+
 /** The towns in the basemap's own label tiles (OpenMapTiles "place"): [{ name, lat, lon, kind: "town" }]. */
 export function townsFrom(features) {
   const seen = new Set();

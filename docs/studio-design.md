@@ -219,6 +219,26 @@ For MCP, pass the same scenario object under `intake.landuse_change` to `studio_
 The report and before/after table label the results as screening estimates. The TR-55 worked
 examples check the calculation. Local design use would also need measured site inputs.
 
+### Route a flood wave downstream
+
+In the Explorer, run **Route it** with a specified peak or return period, then open Study and
+choose **Study this routed flood wave**. The Study reuses the starting reach and wave inputs
+from the run displayed on the map.
+
+This CLI example starts at the Dresden reach of the Elbe with a hypothetical 600 m³/s peak:
+
+```sh
+aquascope studio "Route a flood wave downstream" --lat 51.05 --lon 13.74 --yes \
+  --intake 'route_flood={"river_id":230494421,"peak_cms":600,"duration_h":12,"hours":48,"max_reaches":3}'
+```
+
+Pass the same object under `intake.route_flood` to MCP's `studio_start`. The router reads
+public GEOGLOWS data without an API key. The table and plot show hourly **added flow** in
+m³/s at the starting reach and the last reach modelled. If the window ends while the wave
+is still rising, the largest value in the table is only the largest value within that window.
+The historical check compares routing with the GEOGLOWS retrospective simulation. Site-specific
+calibration would need observations.
+
 ## The honesty rules, kept
 
 Every number in the report comes from a tool result and passes the gates

@@ -115,6 +115,14 @@ test("a drawn land-use change can start a Study without a selected station or po
 
 // ── the waiting board ────────────────────────────────────────────────────────
 
+test("a routed flood can start a Study from the displayed wave without a selected station", (t) => {
+  resetState();
+  t.mock.method(actions, "routeStudyArgs", () => ({ scenario: { river_id: 230494421 }, lat: 51, lon: 13 }));
+  assert.match(BOARDS.intake(), /data-act="study-route"/);
+  actions.routeStudyArgs = () => null;
+  assert.doesNotMatch(BOARDS.intake(), /data-act="study-route"/);
+});
+
 test("the waiting board shows the request, and Continue without only when the crew allows it", () => {
   resetState();
   S.ws = {

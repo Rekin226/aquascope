@@ -258,9 +258,13 @@ function intakeHtml() {
   const landuse = !started && actions.landuseStudyArgs()
     ? '<button type="button" class="chip" data-act="study-landuse">Compare runoff for the drawn land-use change</button>'
     : "";
-  const empty = landuse ? "Drawn land-use area" : '<span class="muted">Pick a gauge or a spot on the map first.</span>';
+  const route = !started && actions.routeStudyArgs()
+    ? '<button type="button" class="chip" data-act="study-route">Study this routed flood wave</button>'
+    : "";
+  const empty = [landuse && "Drawn land-use area", route && "Routed flood wave"].filter(Boolean).join(" · ") ||
+    '<span class="muted">Pick a gauge or a spot on the map first.</span>';
   const place = w ? w.html : empty;
-  return `<p class="study-where">${place}</p>${landuse}${tries}${model}${data}${resume}${recorded}`;
+  return `<p class="study-where">${place}</p>${landuse}${route}${tries}${model}${data}${resume}${recorded}`;
 }
 
 // What a study can be, as questions to start one with: the design flow, and the studies that come after it
@@ -927,8 +931,8 @@ async function start(text, { intake: given = null, site = null } = {}) {
       if (my !== S.run) return;
       if (read) ({ intake, brief } = read);
     }
-    if (given?.landuse_change) {
-      // The scenario describes its own area; station and donor records cannot establish its runoff.
+    if (given?.landuse_change || given?.route_flood) {
+      // These scenarios use their supplied polygon or river reach.
       S.catchment = S.area = S.donors = null;
       S.siteReady = true;
     } else {
@@ -958,7 +962,9 @@ async function callStudio(op, extra = {}) {
   S.declined = null;
   setBusy(true);
   try {
-    if (op === "approve" || op === "follow_up" || op === "add_table" || op === "steer") {
+    const routeOnly = op === "approve" && S.ws.study?.steps?.length === 1 &&
+      S.ws.study.steps[0].tool === "route_flood";
+    if (!routeOnly && (op === "approve" || op === "follow_up" || op === "add_table" || op === "steer")) {
       await ensureCatalogInWorker();
       // A resumed study (a reload, a dropped workspace.json) has not read its site yet.
       if (S.site && !S.siteReady) await loadSiteInfo(S.site, my);
@@ -1725,6 +1731,15 @@ function onBoardClick(e) {
       const label = "Drawn land-use area";
       start("Compare runoff before and after this land-use change.", {
         intake: { landuse_change: scenario }, site: { key: `p/${lat},${lon}`, lat, lon, text: label, html: label },
+      });
+    }
+    else if (what === "study-route") {
+      const route = actions.routeStudyArgs();
+      if (!route || S.busy || S.ws) return;
+      const { lat, lon, scenario } = route;
+      const label = `River reach ${scenario.river_id}`;
+      start("Route this flood wave downstream.", {
+        intake: { route_flood: scenario }, site: { key: `p/${lat},${lon}`, lat, lon, text: label, html: label },
       });
     }
     else if (what === "my-data") { S.useMyData = !S.useMyData; renderBoard(); }

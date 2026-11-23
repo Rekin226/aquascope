@@ -70,6 +70,7 @@ TOOL_WORDS = {
     "climate_projection": "climate projection (CMIP6)",
     "catchment_model": "rainfall-runoff model",
     "landuse_change": "land-use change and storm runoff (TR-55)",
+    "route_flood": "flood-wave routing (Muskingum)",
     "recharge": "groundwater recharge",
     "pot_flood": "peaks-over-threshold flood frequency",
     "nonstationary_flood": "nonstationary flood frequency",
@@ -352,6 +353,8 @@ def facts_of(ws: Workspace) -> Facts:  # noqa: C901 - one pass over the workspac
                         "arguments": r.get("arguments") or step.get("arguments") or {},
                         "fallback_used": bool(r.get("fallback_used")),
                         "error": _clean_reason(r.get("error") or (_payload(r).get("error") if not ran else ""))})
+        if r.get("tool") == "route_flood" and isinstance(res, dict) and res.get("attribution"):
+            f.steps[-1]["attribution"] = res["attribution"]
         for g in r.get("gates") or []:
             if not isinstance(g, dict):
                 continue

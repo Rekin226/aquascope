@@ -210,7 +210,7 @@ function chartSvg(res) {
   const lines = c.paths.map((p) => `<path class="st-q rv-${p.role}" d="${p.d}"/>`).join("");
   const ticks = c.ticks.map((t) => `<text x="${t.x}" y="${c.h - 4}" text-anchor="middle">${escapeHtml(t.label)}</text>`).join("");
   const key = c.paths.map((p) => `<span class="st-key rv-${p.role}"><i></i>${p.role === "inflow" ? "Into the lake" : "Out over the spillway"}, ` +
-    `${escapeHtml(flowWords(p.peak_cms))} m³/s</span>`).join("");
+    `up to ${escapeHtml(flowWords(p.peak_cms))} m³/s</span>`).join("");
   return `<svg class="st-chart" viewBox="0 0 ${c.w} ${c.h}" role="img" aria-label="The flow into the lake and out of it, hour by hour">` +
     `<line class="st-axis" x1="${c.pad.l}" x2="${c.w - c.pad.r}" y1="${c.y0}" y2="${c.y0}"/>` +
     `<text x="${c.pad.l - 4}" y="${c.yTop + 4}" text-anchor="end">${escapeHtml(flowWords(c.top))}</text>` +

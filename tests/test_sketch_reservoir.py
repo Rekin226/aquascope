@@ -193,6 +193,7 @@ def test_a_reservoir_flattens_the_flood_and_routes_its_outflow_on(toy, monkeypat
     assert res["ok"]
     r = res["reservoir"]
     assert r["peak_out_cms"] < r["peak_in_cms"] and 0 < r["reduction_pct"] < 100 and r["delay_h"] > 0
+    assert (r["peak_in_h"], r["peak_out_h"], r["delay_h"], r["reduction_pct"]) == (9, 18, 9, 95.1)
     assert r["without"]["peak_at_dam_cms"] == pytest.approx(r["peak_in_cms"], rel=0.01)
     # downstream of the dam the wave is the reservoir's outflow routed on: lower than without it
     rows = {row["river_id"]: row for row in res["reaches"]}
@@ -208,6 +209,26 @@ def test_a_reservoir_flattens_the_flood_and_routes_its_outflow_on(toy, monkeypat
     assert not r["overtopped"] and r["edge_below_top_pct"] == 0
     assert "NEH" in r["check"] and res["message"].startswith("A reservoir of")
     json.dumps(res)
+
+
+@pytest.mark.parametrize(("hours", "duration", "peak_in_h", "peak_in", "peak_out"), [
+    (8, 12, None, 437, 2.93),     # both flows are still rising
+    (10, 12, 9, 492, 8.90),       # only the inflow has crested
+    (18, 12, 9, 492, 24.3),       # the outflow maximum falls exactly on the final sample
+    (8, 1, None, 0, 0),           # the short triangle falls between hourly samples
+])
+def test_only_report_reservoir_peaks_captured_in_the_run(toy, monkeypatch, hours, duration, peak_in_h,
+                                                         peak_in, peak_out):
+    win, z, ring = _flat_lake(monkeypatch)
+    dam = {"river_id": IDS["B"], "order": 3, "lon": 8.1, "lat": 47.1, "downstream_id": IDS["C"]}
+    run = rv.route_reservoir(ring, z=z, window=win, dam=dam, crest_m=5, top_m=12, width_m=10,
+                             peak_cms=600, duration_h=duration, from_river_id=IDS["A"], hours=hours)
+    r = run["reservoir"]
+    assert r["peak_in_cms"] == max(r["inflow_cms"]) == peak_in
+    assert r["peak_out_cms"] == max(r["outflow_cms"]) == peak_out
+    assert r["peak_in_h"] == peak_in_h and r["peak_out_h"] is None
+    assert r["delay_h"] is None and r["reduction_pct"] is None
+    assert "% lower" not in run["message"]
 
 
 def test_a_small_spillway_overtops_the_dam(toy, monkeypatch):
@@ -280,7 +301,8 @@ def test_cli_prints_the_check_against_the_book(capsys, monkeypatch):
     assert "Example 17-2" in out and "Largest difference 0.51 ft3/s; peak 364.2 ft3/s on day 5.3" in out
 
 
-def test_cli_and_mcp_route_a_drawn_reservoir(toy, monkeypatch, capsys):
+@pytest.mark.parametrize("hours", [12, 200])
+def test_cli_and_mcp_route_a_drawn_reservoir(toy, monkeypatch, capsys, hours):
     from aquascope import cli
     from aquascope.mcp_server import route_reservoir
 
@@ -289,14 +311,21 @@ def test_cli_and_mcp_route_a_drawn_reservoir(toy, monkeypatch, capsys):
     monkeypatch.setattr(rv, "plan", lambda polygon, reaches=None: {"ok": True, "dam": dam, "window": win})
     monkeypatch.setattr(fs, "terrain_window", lambda x0, y0, nx, ny, zoom, fetch=None: {"z": z})
     res = route_reservoir(ring, crest_m=5.0, top_m=12.0, width_m=10.0, peak_cms=600.0, duration_h=12,
-                          from_river_id=IDS["A"], hours=200)
+                          from_river_id=IDS["A"], hours=hours)
     assert res["ok"] and "frames" not in res and "curve" not in res["reservoir"]
     monkeypatch.setattr("sys.argv", ["aquascope", "route", "reservoir", "--polygon", json.dumps(ring), "--crest", "5",
                                      "--top", "12", "--width", "10", "--peak", "600", "--duration", "12",
-                                     "--from", str(IDS["A"]), "--hours", "200"])
+                                     "--from", str(IDS["A"]), "--hours", str(hours)])
     cli.main()
     out = capsys.readouterr().out
-    assert "At the dam: in " in out and "% lower" in out and "NEH" in out
+    assert "NEH" in out
+    if hours == 12:
+        assert res["reservoir"]["peak_out_h"] is None
+        assert "Inflow peaked at the dam after 9 h." in out
+        assert "Maximum storage above the crest during this run" in out
+        assert "% lower" not in out and "Outflow peaked" not in out
+    else:
+        assert "At the dam: in " in out and "% lower" in out
 
 
 # ── Ask the map's draw_reservoir ────────────────────────────────────────────

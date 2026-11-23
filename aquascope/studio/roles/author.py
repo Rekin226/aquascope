@@ -312,6 +312,14 @@ def _numbers_for(sid: str, tool: str, p: dict[str, Any], rp: Any) -> list[dict[s
                 if e.get("low") is not None and e.get("high") is not None:
                     add(f"{label} band, low", e["low"], u)
                     add(f"{label} band, high", e["high"], u)
+    elif tool == "landuse_change":
+        change = p.get("change") or {}
+        for key, label, units in (("q_mm", "Change in runoff depth", "mm"),
+                                  ("peak_cms", "Change in peak flow", "m3/s")):
+            evidence = {"basis": f"change.{key}", "method_check": p.get("check"),
+                        "assumptions": [p["assumptions"]] if p.get("assumptions") else [],
+                        "limitations": p.get("notes") or []}
+            add(label, change.get(key), units, evidence=evidence)
     elif tool in _ADVANCED_TOOLS:
         out += _advanced_numbers(sid, tool, p, rp)
     elif tool == "anywhere":

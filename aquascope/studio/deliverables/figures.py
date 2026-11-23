@@ -1234,6 +1234,27 @@ def _scenario_bars(payload: dict[str, Any], unit: str | None, site: dict[str, An
     return fig, caption
 
 
+def _landuse_runoff(payload: dict[str, Any], unit: str | None, site: dict[str, Any] | None) -> Drawn | None:
+    before = num((payload.get("before") or {}).get("q_mm"))
+    after = num((payload.get("after") or {}).get("q_mm"))
+    rain = num(payload.get("rain_mm"))
+    if before is None or after is None or rain is None:
+        return None
+    if not all(payload.get(key) for key in ("use_label", "distribution", "check")):
+        return None
+    caption = (f"Screening estimate of runoff under current cover and {payload['use_label']} for the "
+               f"{rain:g} mm, type {payload['distribution']} design storm. {payload['check']}")
+    fig, ax = _figure(height=2.5)
+    bars = ax.barh(["Before", "After"], [before, after], color=[SECONDARY, PRIMARY], height=0.6)
+    ax.invert_yaxis()
+    ax.margins(x=0.15)
+    ax.set_xlim(left=0)
+    ax.bar_label(bars, labels=[f"{before:g}", f"{after:g}"], padding=3)
+    ax.set_xlabel("Runoff depth (mm)")
+    ax.set_title("Screening estimate · TR-55 runoff worked examples 2-1 to 2-4")
+    return fig, caption
+
+
 def _projection_spread(payload: dict[str, Any], unit: str | None, site: dict[str, Any] | None) -> Drawn | None:
     rows = payload.get("models") or []
     ens = payload.get("ensemble") or {}
@@ -1307,6 +1328,7 @@ MAKERS: dict[str, Callable[[dict[str, Any], str | None, dict[str, Any] | None], 
     "pot_frequency": _pot_frequency,
     "model_fit": _model_fit,
     "scenario_bars": _scenario_bars,
+    "landuse_runoff": _landuse_runoff,
     "projection_spread": _projection_spread,
     "regional_growth": _regional_growth,
 }

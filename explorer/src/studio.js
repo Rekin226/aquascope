@@ -255,7 +255,12 @@ function intakeHtml() {
     : "";
   const recorded = !started ? recordedChipsHtml(S.index, { showAll: S.moreRecorded }) : "";
   const tries = !started && w ? tryChipsHtml(Boolean(state.selected)) : "";
-  return `<p class="study-where">${w ? w.html : `<span class="muted">Pick a gauge or a spot on the map first.</span>`}</p>${tries}${model}${data}${resume}${recorded}`;
+  const landuse = !started && actions.landuseStudyArgs()
+    ? '<button type="button" class="chip" data-act="study-landuse">Compare runoff for the drawn land-use change</button>'
+    : "";
+  const empty = landuse ? "Drawn land-use area" : '<span class="muted">Pick a gauge or a spot on the map first.</span>';
+  const place = w ? w.html : empty;
+  return `<p class="study-where">${place}</p>${landuse}${tries}${model}${data}${resume}${recorded}`;
 }
 
 // What a study can be, as questions to start one with: the design flow, and the studies that come after it
@@ -899,8 +904,8 @@ async function maybeNarrateOnDevice() {
 
 // ── start, say, approve ─────────────────────────────────────────────────────
 
-async function start(text, { intake: given = null } = {}) {
-  const w = where();
+async function start(text, { intake: given = null, site = null } = {}) {
+  const w = site || where();
   if (!w) { note("Pick a gauge or a spot on the map first.", "warn"); return; }
   const my = ++S.run;
   S.site = w;
@@ -922,8 +927,14 @@ async function start(text, { intake: given = null } = {}) {
       if (my !== S.run) return;
       if (read) ({ intake, brief } = read);
     }
-    await ensureCatalogInWorker();
-    await loadSiteInfo(w, my);
+    if (given?.landuse_change) {
+      // The scenario describes its own area; station and donor records cannot establish its runoff.
+      S.catchment = S.area = S.donors = null;
+      S.siteReady = true;
+    } else {
+      await ensureCatalogInWorker();
+      await loadSiteInfo(w, my);
+    }
     if (my !== S.run) return;
     const tables = {};
     for (const f of S.files) tables[f.id] = f.csv;
@@ -1707,6 +1718,15 @@ function onBoardClick(e) {
     else if (what === "stop") stop();
     else if (what === "bundle") downloadArtifact("bundle");
     else if (what === "again") reset();
+    else if (what === "study-landuse") {
+      const scenario = actions.landuseStudyArgs();
+      if (!scenario || S.busy || S.ws) return;
+      const [lon, lat] = scenario.polygon[0];
+      const label = "Drawn land-use area";
+      start("Compare runoff before and after this land-use change.", {
+        intake: { landuse_change: scenario }, site: { key: `p/${lat},${lon}`, lat, lon, text: label, html: label },
+      });
+    }
     else if (what === "my-data") { S.useMyData = !S.useMyData; renderBoard(); }
     else if (what === "resume") resumeSaved();
     else if (what === "rerun") rerunRecorded();

@@ -123,6 +123,23 @@ def _tree(ws: Workspace, *, branch: str | None = None) -> Study:
     """The playbook tree's plan for this site, promoted to version 3. Raises ``playbooks.Declined``."""
     from aquascope import playbooks as pbk
 
+    if ws.brief.kind == "landuse_change":
+        row = next((r for r in _recon(ws).get("sufficiency", []) if r.get("method") == "landuse_change"), {})
+        if not row.get("scenario"):
+            raise pbk.Declined(row.get("reason") or "Supply the polygon, proposed use and design storm.",
+                               kind="refused")
+        entry = catalogue.entries()["landuse_change"]
+        step = {"id": "s1", "tool": entry.id, "method": entry.id, "arguments": row["scenario"],
+                "rationale": "Compare runoff and peak discharge from the drawn area under the same design storm.",
+                "expects": entry.gates}
+        errors = _errors_of([step], ws)
+        if errors:
+            raise pbk.Declined("; ".join(errors), kind="refused")
+        study = Study(question=ws.brief.problem, steps=[Step.from_dict(step)], author="rules", created=_now(),
+                      problem={"kind": entry.id, "site": dict(ws.site or {}), "params": dict(ws.brief.intake)},
+                      plan={"citations": [entry.citation],
+                            "caveats": ["TR-55 screening for the supplied design storm."]})
+        return _promote(ws, study, author="rules")
     pb = _playbook(ws)
     if pb is None:
         raise pbk.Declined("no playbook applies", kind="no_playbook")
@@ -365,6 +382,8 @@ def _stations_of(ws: Workspace) -> set[tuple[str, str]] | None:
 
 def _errors_of(steps: list[dict[str, Any]], ws: Workspace) -> list[str]:
     errors = catalogue.validate_plan(steps, sufficiency=sufficiency_for_validation(ws), stations=_stations_of(ws))
+    if ws.brief.kind == "landuse_change" and not any(st["tool"] == "landuse_change" for st in steps):
+        errors.append("The plan does not compare runoff for the requested land-use change.")
     for st in steps:
         errors += _placeholder_errors(st)
     return errors
@@ -627,7 +646,7 @@ def plan(ws: Workspace, model: Model | None) -> Study | None:
 
     known = sorted(p["id"] for p in pbk.list_playbooks() if "error" not in p)
     study: Study | None = None
-    if model:
+    if model and ws.brief.kind != "landuse_change":
         rule = _playbook_rule_decline(ws)
         if rule:
             # The playbook declines by one of its own rules (an inundation map, a cause without pumping data, a
@@ -652,7 +671,7 @@ def plan(ws: Workspace, model: Model | None) -> Study | None:
                 _decline(ws, "The model's plan did not pass the validator and no playbook covers this problem: "
                          + "; ".join(errors[:6]))
                 return None
-    elif ws.brief.playbook:
+    elif ws.brief.playbook or ws.brief.kind == "landuse_change":
         try:
             study = _upload_tree(ws) if wants_upload(ws) else _tree(ws)
         except pbk.Declined as exc:
@@ -712,7 +731,7 @@ def wants_upload(ws: Workspace) -> bool:
     """Plan on an attached table when the text points at it (my/own/this record, data, file, table, upload, csv)
     or when no gauge within reach carries the variable the playbook needs."""
     uploads = _uploads(ws)
-    if not uploads:
+    if not uploads or ws.brief.kind == "landuse_change":
         return False
     if _UPLOAD_WORDS.search(ws.brief.problem or ""):
         return True

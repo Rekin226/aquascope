@@ -273,6 +273,27 @@ def scout(ws: Workspace) -> Inventory:
     site = dict(ws.site or {})
     if site.get("lat") is None or site.get("lon") is None:
         raise ValueError("the workspace names no site (lat, lon)")
+    if ws.brief.kind == "landuse_change":
+        # A drawn-area scenario needs no station record or catchment lookup.
+        from aquascope.methods import SiteContext, assess_method
+        from aquascope.sketch.landuse import validate_study_scenario
+
+        scenario = ws.brief.intake.get("landuse_change") if "landuse_change" in ws.brief.stated else None
+        try:
+            if scenario is not None and not isinstance(scenario, dict):
+                raise ValueError("landuse_change must be an object with polygon, use and rain_mm")
+            validate_study_scenario(scenario or {})
+        except ValueError as exc:
+            row = assess_method("landuse_change", SiteContext())
+            row["reason"] = str(exc)
+        else:
+            row = assess_method("landuse_change", SiteContext(available={"land-use scenario"}))
+            row["reason"] = ("The drawn area, proposed use and design storm are specified. "
+                             "The land cover, soil and terrain inputs are checked when the analysis runs.")
+            row["scenario"] = scenario
+        ws.inventory = Inventory(site=site, recon={"point": site, "sufficiency": [row]})
+        ws.event("scout", "inventory", row["reason"])
+        return ws.inventory
     recon = _scout({"lat": float(site["lat"]), "lon": float(site["lon"])}, ws.brief.playbook, dict(ws.brief.intake),
                    _say(ws))
     ctx = recon.get("context") or {}

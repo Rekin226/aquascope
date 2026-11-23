@@ -241,6 +241,7 @@ def _reach_record_tool(lat: float | None = None, lon: float | None = None, river
 def _tool_specs() -> list[ToolSpec]:
     from aquascope import mcp_server as t
     from aquascope.explore import anywhere
+    from aquascope.sketch import landuse
 
     num = {"type": "number"}
     years_cap = "Optional cap on the record: the last N years. Leave it out for the full record (the default)."
@@ -419,6 +420,28 @@ def _tool_specs() -> list[ToolSpec]:
                                               "years": {"type": "integer"}},
              "required": ["source", "station_id"]},
             t.low_flow_context,
+        ),
+        ToolSpec(
+            "landuse_change",
+            "TR-55 screening of runoff and peak flow before and after a land-use change. Use only the client's "
+            "polygon, proposed use and 24-hour storm. Missing baselines are read from WorldCover, HYSOGs and terrain.",
+            {"type": "object", "properties": {
+                "polygon": {"anyOf": [{"type": "array", "minItems": 3, "items": {"type": "array", "items": num}},
+                                      {"type": "object"}],
+                            "description": "A ring of [lon, lat] points or a single GeoJSON Polygon without holes."},
+                "use": {"type": "string", "enum": list(landuse.USES)},
+                "rain_mm": {"type": "number", "minimum": 1, "maximum": 2000, "description": "24-hour design rain, mm."},
+                "distribution": {"type": "string", "enum": list(landuse.DISTRIBUTIONS), "default": "II"},
+                "soil_group": {"type": "string", "enum": list(landuse.GROUPS)},
+                "impervious_pct": {"type": "number", "minimum": 0, "maximum": 100,
+                                   "description": "Connected impervious area (%), required for use=impervious."},
+                "cover": {"type": "object", "additionalProperties": num,
+                          "description": "Baseline WorldCover code mapped to area share."},
+                "slope_pct": {"type": "number", "exclusiveMinimum": 0, "description": "Average land slope (%)."},
+                "tc_hours": {"type": "number", "minimum": 0.1, "maximum": 10,
+                             "description": "Time of concentration (hours)."},
+            }, "required": ["polygon", "use", "rain_mm"]},
+            landuse.study_landuse_change,
         ),
         ToolSpec(
             "supply_reliability",

@@ -169,6 +169,7 @@ export const actions = {
   selectPoint: () => {},
   openAsk: () => {},
   openStudy: () => {},
+  landuseStudyArgs: () => null,
   applyUrl: () => {},
   refreshMapData: () => {},
   setOverlay: () => {},       // layer-ui.js: turn an overlay on or off as if from the rail

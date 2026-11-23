@@ -448,6 +448,14 @@ def _coerce_all(ws: Workspace, known: dict[str, Any], *, keep_unknown: bool) -> 
 # ── the model's brief, and a caller's ───────────────────────────────────────
 
 
+def _model_intake(obj: dict[str, Any]) -> dict[str, Any]:
+    """A model may read a textual brief, but the drawn scenario must come directly from the client."""
+    intake = obj.get("intake")
+    if not isinstance(intake, dict):
+        return {}
+    return {k: v for k, v in intake.items() if k != "landuse_change" and v is not None}
+
+
 def _apply_brief(ws: Workspace, obj: dict[str, Any], known: dict[str, Any], *, questions: bool = True) -> None:
     """Copy what a model (or a caller's model) wrote into the brief, kept within what the playbooks and the
     registry know. With ``questions`` False the object's questions are ignored (an answer round)."""
@@ -472,9 +480,8 @@ def _apply_brief(ws: Workspace, obj: dict[str, Any], known: dict[str, Any], *, q
         b.kind = obj["kind"]
         if b.playbook is None and obj["kind"] in by_problem:
             b.playbook = by_problem[obj["kind"]]
-    intake = obj.get("intake")
-    if isinstance(intake, dict):
-        b.intake.update({k: v for k, v in intake.items() if v is not None})
+    if isinstance(obj.get("intake"), dict):
+        b.intake.update(_model_intake(obj))
         _coerce_all(ws, known, keep_unknown=b.playbook not in known)
     if not questions:
         return
@@ -552,6 +559,17 @@ def _open(ws: Workspace, model: Model | None, text: str, tables: dict[str, Any] 
     preset = {k: v for k, v in b.intake.items() if v is not None}    # the caller's own intake (--intake)
     b.problem = text
     playbook, ambiguous = choose_playbook(text)
+    # Land use is also a possible cause in the groundwater playbook. A runoff comparison is its own question.
+    landuse = re.search(r"\b(?:chang(?:e|ing) (?:the )?land use|land[- ]use changes?)\b", text, re.I)
+    command = re.match(r"\s*(?:please )?change (?:the )?land use\b", text, re.I)
+    if "landuse_change" in preset or command or (landuse and re.search(r"\brunoff\b|\bpeak flow\b|TR-55", text, re.I)):
+        b.kind = "landuse_change"
+        b.decision = "Compare runoff before and after the proposed land-use change"
+        b.quantities = ["runoff depth", "peak discharge"]
+        if "landuse_change" in preset:
+            b.stated.append("landuse_change")
+        b.ready = True
+        return _message(ws)
     playbook = playbook if playbook in known else None
     hints = intake_hints(text, playbook)
     for k, v in hints.items():
@@ -679,8 +697,7 @@ def _answer(ws: Workspace, model: Model | None, text: str, proposed: dict[str, A
         for q in open_qs:
             if answers.get(q.id) is not None:
                 q.answer = answers[q.id]
-        if isinstance(reply.get("intake"), dict):
-            b.intake.update({k: v for k, v in reply["intake"].items() if v is not None})
+        b.intake.update(_model_intake(reply))
         if isinstance(reply.get("assumptions"), list):
             b.assumptions += [str(a) for a in reply["assumptions"]]
         if reply.get("ready") is True:
@@ -863,9 +880,7 @@ def classify_follow_up(ws: Workspace, model: Model | None, text: str) -> dict[st
         if obj and obj.get("kind") in ("question", "change"):
             if obj["kind"] == "question":
                 return {"kind": "question", "answer": str(obj.get("answer") or report.get("answer") or "")}
-            intake = obj.get("intake") if isinstance(obj.get("intake"), dict) else {}
-            return {"kind": "change", "intake": {k: v for k, v in intake.items() if v is not None},
-                    "request": str(obj.get("request") or text)}
+            return {"kind": "change", "intake": _model_intake(obj), "request": str(obj.get("request") or text)}
     from aquascope.studio.roles.methodologist import FOLLOW_UP_RULES
 
     known = known_playbooks()

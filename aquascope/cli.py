@@ -3664,6 +3664,13 @@ def cmd_studio(args: argparse.Namespace) -> None:
             sys.exit(1)
     try:
         intake = _parse_intake(args.intake)
+        if "landuse_change" in intake:
+            try:
+                intake["landuse_change"] = json.loads(intake["landuse_change"])
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"--intake landuse_change is invalid JSON: {exc.msg}") from exc
+            if not isinstance(intake["landuse_change"], dict):
+                raise ValueError("--intake landuse_change expects a JSON object with polygon, use and rain_mm")
     except ValueError as exc:
         logger.error("%s", exc)
         sys.exit(1)
@@ -6016,7 +6023,8 @@ def main() -> None:
         action="append",
         default=[],
         metavar="KEY=VALUE",
-        help="An intake field, e.g. --intake return_period=200 (repeatable)",
+        help="An intake field, e.g. --intake return_period=200 (repeatable). For landuse_change, "
+             "supply a JSON object with polygon, use and rain_mm.",
     )
     p_studio.add_argument(
         "--provider",

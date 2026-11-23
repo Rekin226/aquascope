@@ -67,6 +67,7 @@ HERO: dict[str, tuple[str, ...]] = {
     "irrigation_feasibility": ("demand_monthly", "et0_monthly", "reliability_curve"),
     "climate_change": ("projection_spread", "scenario_bars"),
     "catchment_response": ("model_fit", "scenario_bars"),
+    "landuse_change": ("landuse_runoff",),
 }
 
 #: Figures that belong in the body for a problem kind after the hero (others go to the appendix).
@@ -614,7 +615,7 @@ def _control_rows(f: Facts, style: HouseStyle, kind: str) -> list[tuple[str, str
 def _title(f: Facts) -> tuple[str, str]:
     """(title, subtitle): what was estimated, where."""
     t = _design_t(f)
-    pb = f.playbook
+    pb = f.playbook or f.kind
     if f.asks_trend:
         head = "Flood trend assessment"
     elif _no_design(f):
@@ -626,7 +627,8 @@ def _title(f: Facts) -> tuple[str, str]:
                 "groundwater_decline": "Groundwater level assessment", "ungauged_flow": "Flow estimate for an "
                 "ungauged site", "water_quality": "Water quality assessment", "irrigation_feasibility":
                 "Irrigation water demand assessment", "climate_change": "Climate change sensitivity assessment",
-                "catchment_response": "Catchment response assessment", "flood_change": "Flood change assessment"
+                "catchment_response": "Catchment response assessment", "flood_change": "Flood change assessment",
+                "landuse_change": "Land-use change and storm runoff"
                 }.get(pb, "Hydrological assessment")
     sub = f.site_name or (f"Site at {tx.coord(f.lat, f.lon)}" if f.lat is not None else "")
     return head, sub
@@ -717,7 +719,7 @@ def build_report(ws: Workspace, style: HouseStyle | None = None, facts: Facts | 
 
     # 5 Results
     doc.add(Heading("Results"))
-    hero_kinds = HERO.get(f.playbook, ())
+    hero_kinds = HERO.get(f.playbook or f.kind, ())
     supporting = SUPPORTING.get(f.playbook, ())
     handled_steps: set[str] = set()
     if f.ffa and not f.asks_trend:
@@ -1423,7 +1425,7 @@ def build_memo(ws: Workspace, style: HouseStyle | None = None, facts: Facts | No
     figs = _figures(ws)
     hero = None
     placer = _Placer(figs, {"frequency_curve": f.ffa.get("step", ""), "trend": f.trend.get("step", "")})
-    for kind in HERO.get(f.playbook, ()) + ("frequency_curve", "trend", "signatures_band", "fdc", "series"):
+    for kind in HERO.get(f.playbook or f.kind, ()) + ("frequency_curve", "trend", "signatures_band", "fdc", "series"):
         hero = placer.take(kind)
         if hero is not None:
             break

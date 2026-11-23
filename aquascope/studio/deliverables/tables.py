@@ -83,6 +83,7 @@ CAPTIONS: dict[str, str] = {
     "pot_table": "Peaks-over-threshold (GPD) and annual-maximum (GEV) return levels at {record}.",
     "model_skill": "GR4J parameters and skill on the calibration and validation years at {record}.",
     "scenarios": "What-if runs of the calibrated GR4J at {record}: change in mean, low and high flow.",
+    "landuse_runoff": "Screening estimates for the drawn area before and after the land-use change.",
     "projection_models": "CMIP6 HighResMIP change factors per model at {record}.",
     "projection_ensemble": "CMIP6 ensemble: median, range and agreement on the sign, per quantity.",
     "regional_sites": "Gauges pooled in the regional study: record, index flood, at-site and pooled 100-year flow.",
@@ -604,6 +605,18 @@ def _scenario_table(payload: dict[str, Any]) -> Table | None:
     return cols, [[r.get(c) for c in cols] for r in runs]
 
 
+def _landuse_runoff(payload: dict[str, Any]) -> Table | None:
+    before, after = payload.get("before"), payload.get("after")
+    if not before or not after or not payload.get("check"):
+        return None
+    cols = ["scenario", "land_use", "storm_mm", "distribution", "curve_number", "runoff_mm", "peak_m3_s",
+            "tc_h", "grade", "method_check"]
+    rows = [[scenario, use, payload.get("rain_mm"), payload.get("distribution"), run.get("cn"), run.get("q_mm"),
+             run.get("peak_cms"), run.get("tc_h"), "screening", payload.get("check")]
+            for scenario, use, run in (("before", "Current cover", before), ("after", payload.get("use_label"), after))]
+    return cols, rows
+
+
 def _projection_models(payload: dict[str, Any]) -> Table | None:
     rows = payload.get("models") or []
     if not rows:
@@ -688,6 +701,7 @@ MAKERS: dict[str, Callable[[dict[str, Any]], Table | None]] = {
     "pot_table": _pot_table,
     "model_skill": _model_skill,
     "scenarios": _scenario_table,
+    "landuse_runoff": _landuse_runoff,
     "projection_models": _projection_models,
     "projection_ensemble": _projection_ensemble,
     "regional_sites": _regional_sites,

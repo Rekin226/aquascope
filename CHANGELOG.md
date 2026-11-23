@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+- Study can compare runoff and peak flow before and after a land-use change under the same 24-hour storm.
+  The Explorer, CLI and MCP use the sketchpad's TR-55 calculation and export a screening-grade comparison.
+
 ## [1.3.0] - 2026-11-22
 
 Forecasts scored against the gauge, and drought indices that respect missing months. The daily forecast

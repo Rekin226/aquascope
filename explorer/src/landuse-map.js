@@ -349,6 +349,11 @@ export function initLanduse() {
   $("lu-rain").value = START.rain_mm;
   $("lu-dist").value = START.distribution;
   $("lu-imp").value = START.impervious_pct;
+  // Study takes the drawn outline and the current form values, without having to run the map calculation first.
+  actions.landuseStudyArgs = () => {
+    if (!value) return null;
+    try { return landuseArgs({ ...inputs(), polygon: value.polygon }); } catch { return null; }
+  };
   registerSlotWriter("landuse", (v) => paint(v || null));
   for (const id of ["lu-use", "lu-rain", "lu-dist", "lu-soil", "lu-imp"]) $(id).addEventListener("input", syncOutputs);
   $("lu-form").addEventListener("submit", (e) => { e.preventDefault(); void run({ by: "rules" }); });

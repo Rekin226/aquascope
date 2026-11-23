@@ -31,6 +31,7 @@ from aquascope.studio.deliverables._payload import (
     series_of,
     stations_of,
 )
+from aquascope.studio.hydrograph import route_hydrograph_of
 from aquascope.studio.workspace import MEDIA_TYPES, Artifact
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,7 @@ CAPTIONS: dict[str, str] = {
     "model_skill": "GR4J parameters and skill on the calibration and validation years at {record}.",
     "scenarios": "What-if runs of the calibrated GR4J at {record}: change in mean, low and high flow.",
     "landuse_runoff": "Screening estimates for the drawn area before and after the land-use change.",
+    "route_hydrograph": "Hourly modelled added flow at the start and end of the routed path (m³/s).",
     "projection_models": "CMIP6 HighResMIP change factors per model at {record}.",
     "projection_ensemble": "CMIP6 ensemble: median, range and agreement on the sign, per quantity.",
     "regional_sites": "Gauges pooled in the regional study: record, index flood, at-site and pooled 100-year flow.",
@@ -605,6 +607,15 @@ def _scenario_table(payload: dict[str, Any]) -> Table | None:
     return cols, [[r.get(c) for c in cols] for r in runs]
 
 
+def _route_hydrograph(payload: dict[str, Any]) -> Table | None:
+    hydro = route_hydrograph_of(payload)
+    if hydro is None:
+        return None
+    cols = ["hour", "start_added_flow_m3_s", "end_added_flow_m3_s", "start_river_id", "end_river_id"]
+    return cols, [[h, start, end, hydro["start_river_id"], hydro["end_river_id"]]
+                  for h, start, end in zip(hydro["hours"], hydro["start_cms"], hydro["end_cms"])]
+
+
 def _landuse_runoff(payload: dict[str, Any]) -> Table | None:
     before, after = payload.get("before"), payload.get("after")
     if not before or not after or not payload.get("check"):
@@ -702,6 +713,7 @@ MAKERS: dict[str, Callable[[dict[str, Any]], Table | None]] = {
     "model_skill": _model_skill,
     "scenarios": _scenario_table,
     "landuse_runoff": _landuse_runoff,
+    "route_hydrograph": _route_hydrograph,
     "projection_models": _projection_models,
     "projection_ensemble": _projection_ensemble,
     "regional_sites": _regional_sites,

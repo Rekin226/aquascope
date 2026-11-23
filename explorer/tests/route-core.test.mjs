@@ -4,10 +4,21 @@ import assert from "node:assert/strict";
 
 import {
   RAMP, busiestFrame, cardPlaces, flatterWords, flowWords, frameFeatureStates, frameLabel, frameStates, headline, hoursWords, logLabel,
-  pathBounds, pathFilterExpr, peakShares, placeFeatures, reachedBounds, routeArgs, townsFrom, waveColorExpr,
+  pathBounds, pathFilterExpr, peakShares, placeFeatures, reachedBounds, routeArgs, routeStudyArgs, townsFrom, waveColorExpr,
   waveWidthExpr,
 } from "../src/route-core.js";
 import { slotOf } from "../src/map-actions-core.js";
+
+test("Study reuses the exact displayed wave and its source, including zero coordinates", () => {
+  const target = { river_id: "230494421", lat: 0, lon: 8 };
+  const wave = { return_period: 5, duration_h: 8, shape: "block", hours: 24 };
+  assert.deepEqual(routeStudyArgs(target, wave), {
+    lat: 0, lon: 8, scenario: { river_id: 230494421, ...wave },
+  });
+  assert.equal(routeStudyArgs({ ...target, lat: null }, wave), null);
+  assert.equal(routeStudyArgs(target, { ...wave, inflow_cms: [0, 30] }), null);
+  assert.equal(routeStudyArgs(target, { ...wave, peak_cms: 50 }), null);
+});
 
 // A small answer shaped like aquascope.routing.route's.
 const RESULT = {

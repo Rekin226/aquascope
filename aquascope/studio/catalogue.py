@@ -35,6 +35,19 @@ _NOT_STEPS = frozenset({
 #: so a workbench step can take it with ``from_step``.
 LOAD_TABLE = "load_table"
 
+# These methods take a structured scenario supplied by the client during intake.
+SCENARIO_TOOLS = frozenset({"landuse_change", "route_flood"})
+
+
+def validate_scenario(tool: str, scenario: Any) -> None:
+    if tool == "landuse_change":
+        from aquascope.sketch.landuse import validate_study_scenario
+    elif tool == "route_flood":
+        from aquascope.routing import validate_study_scenario
+    else:
+        raise ValueError(f"{tool} is not a scenario tool")
+    validate_study_scenario(scenario)
+
 
 @dataclass
 class Entry:
@@ -179,6 +192,13 @@ _ANNOTATIONS: dict[str, dict[str, Any]] = {
         "tables": ["landuse_runoff"], "figures": ["landuse_runoff"],
         "gates": [{"check": "not_empty", "path": "change"},
                   {"check": "status_is", "path": "reference_check.ok", "value": True}],
+    },
+    "route_flood": {
+        "kind": "site", "yields": ["hydrograph"], "methods": ["route_flood"],
+        "tables": ["route_hydrograph"], "figures": ["route_hydrograph"],
+        "gates": [{"check": "not_empty", "path": "hydrograph"},
+                  {"check": "status_is", "path": "hydrograph_check.ok", "value": True},
+                  {"check": "not_empty", "path": "check.summary"}],
     },
     "supply_reliability": {
         "kind": "site", "yields": ["reliability", "fdc"], "methods": ["supply_reliability", "regionalize_signatures"],
@@ -498,25 +518,23 @@ def validate_step(step: dict[str, Any], *, known_ids: set[str] | None = None,
     for k in entry.required:
         if k not in args and not (k == "from_step" and "from_step" in args):
             errors.append(f"step {sid}: {tool} needs argument {k!r}")
-    if tool == "landuse_change" and all(k in args for k in entry.required):
-        from aquascope.sketch.landuse import validate_study_scenario
-
+    if tool in SCENARIO_TOOLS and all(k in args for k in entry.required):
         try:
-            validate_study_scenario(args)
+            validate_scenario(tool, args)
         except ValueError as exc:
             errors.append(f"step {sid}: {exc}")
         if sufficiency is not None:
             row = next((r for r in sufficiency if r.get("method") == tool), {})
             if row.get("scenario") != args:
-                errors.append(f"step {sid}: landuse_change needs the scenario supplied by the user")
+                errors.append(f"step {sid}: {tool} needs the scenario supplied by the user")
             if step.get("method") != tool:
-                errors.append(f"step {sid}: landuse_change must name its TR-55 screening method")
-            # A model may neither drop the worked-example check nor accept a failed check.
+                errors.append(f"step {sid}: {tool} must name its screening method")
+            # A model may neither drop the scenario checks nor accept a failed check.
             for required in entry.gates:
                 matches = [g for g in expects if isinstance(g, dict) and g.get("check") == required["check"]
                            and g.get("path") == required["path"]]
                 if not matches or ("value" in required and any(g.get("value") is not True for g in matches)):
-                    errors.append(f"step {sid}: landuse_change requires the gate {required}")
+                    errors.append(f"step {sid}: {tool} requires the gate {required}")
     for k, v in list(args.items()):
         schema = entry.arguments.get(k)
         allowed_values = schema.get("enum") if isinstance(schema, dict) else None

@@ -169,6 +169,17 @@ METHODS: dict[str, MethodPrecondition] = {
             sensitive_to=("regulation",),
         ),
         MethodPrecondition(
+            "route_flood",
+            "Route a flood wave downstream (Muskingum screening)",
+            None,
+            needs=("routing scenario",),
+            tool="route_flood",
+            problems=("route_flood",),
+            citation="McCarthy (1938), Muskingum routing; David et al. (2011), RAPID, doi:10.1175/2011JHM1345.1.",
+            note="Needs a GEOGLOWS reach, a flood duration and an inflow peak or return period. The hydrograph "
+                 "describes the wave's contribution to downstream flow.",
+        ),
+        MethodPrecondition(
             "landuse_change",
             "Runoff and peak flow before and after a land-use change (TR-55 screening)",
             None,

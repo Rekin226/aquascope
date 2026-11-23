@@ -848,6 +848,7 @@ json.dumps(studio_table(_a["name"], _a["data"]), default=str)
   // A run draws figures and, at the end, the documents; narrate rewrites the
   // report and remakes the documents with the new prose.
   if (args.op === "approve" || args.op === "follow_up" || args.op === "narrate") {
+    await maximaCodec(args.workspace?.brief?.intake?.route_flood);
     await ensurePlotting(id);
     await ensureDocs(id);
   }

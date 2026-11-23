@@ -24,6 +24,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from aquascope.studio import catalogue
 from aquascope.studio.workspace import Dataset, Inventory, Workspace
 
 __all__ = ["FLOOD_PLAYBOOKS", "REGULATION_PLAYBOOKS", "choose_column", "context_layers", "reach_dataset", "scout",
@@ -273,23 +274,28 @@ def scout(ws: Workspace) -> Inventory:
     site = dict(ws.site or {})
     if site.get("lat") is None or site.get("lon") is None:
         raise ValueError("the workspace names no site (lat, lon)")
-    if ws.brief.kind == "landuse_change":
-        # A drawn-area scenario needs no station record or catchment lookup.
+    kind = ws.brief.kind
+    if kind in catalogue.SCENARIO_TOOLS:
+        # The user's scenario can be checked before looking up any site data.
         from aquascope.methods import SiteContext, assess_method
-        from aquascope.sketch.landuse import validate_study_scenario
 
-        scenario = ws.brief.intake.get("landuse_change") if "landuse_change" in ws.brief.stated else None
+        scenario = ws.brief.intake.get(kind) if kind in ws.brief.stated else None
         try:
-            if scenario is not None and not isinstance(scenario, dict):
-                raise ValueError("landuse_change must be an object with polygon, use and rain_mm")
-            validate_study_scenario(scenario or {})
+            catalogue.validate_scenario(kind, scenario)
         except ValueError as exc:
-            row = assess_method("landuse_change", SiteContext())
+            row = assess_method(kind, SiteContext())
             row["reason"] = str(exc)
         else:
-            row = assess_method("landuse_change", SiteContext(available={"land-use scenario"}))
-            row["reason"] = ("The drawn area, proposed use and design storm are specified. "
-                             "The land cover, soil and terrain inputs are checked when the analysis runs.")
+            if kind == "landuse_change":
+                evidence = "land-use scenario"
+                reason = ("The drawn area, proposed use and design storm are specified. "
+                          "The land cover, soil and terrain inputs are checked when the analysis runs.")
+            else:
+                evidence = "routing scenario"
+                reason = ("The starting reach, flood magnitude and duration are specified. "
+                          "The routing network is read when the analysis runs.")
+            row = assess_method(kind, SiteContext(available={evidence}))
+            row["reason"] = reason
             row["scenario"] = scenario
         ws.inventory = Inventory(site=site, recon={"point": site, "sufficiency": [row]})
         ws.event("scout", "inventory", row["reason"])

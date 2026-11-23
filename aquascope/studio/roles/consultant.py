@@ -27,6 +27,7 @@ import itertools
 import re
 from typing import Any
 
+from aquascope.studio import catalogue
 from aquascope.studio.model import Model, compact
 from aquascope.studio.prompts import CONSULTANT, CONSULTANT_ANSWERS, CONSULTANT_FOLLOW_UP
 from aquascope.studio.workspace import Message, Question, Workspace
@@ -449,11 +450,11 @@ def _coerce_all(ws: Workspace, known: dict[str, Any], *, keep_unknown: bool) -> 
 
 
 def _model_intake(obj: dict[str, Any]) -> dict[str, Any]:
-    """A model may read a textual brief, but the drawn scenario must come directly from the client."""
+    """Scenario parameters must come directly from the client."""
     intake = obj.get("intake")
     if not isinstance(intake, dict):
         return {}
-    return {k: v for k, v in intake.items() if k != "landuse_change" and v is not None}
+    return {k: v for k, v in intake.items() if k not in catalogue.SCENARIO_TOOLS and v is not None}
 
 
 def _apply_brief(ws: Workspace, obj: dict[str, Any], known: dict[str, Any], *, questions: bool = True) -> None:
@@ -471,15 +472,16 @@ def _apply_brief(ws: Workspace, obj: dict[str, Any], known: dict[str, Any], *, q
             setattr(b, key, items if questions else list(dict.fromkeys([*getattr(b, key), *items])))
     if isinstance(obj.get("deliverables"), list) and obj["deliverables"]:
         b.deliverables = [str(x) for x in obj["deliverables"]]
-    playbook = obj.get("playbook")
-    by_problem = {pb.problem: pid for pid, pb in known.items()}
-    if isinstance(playbook, str) and playbook in known:
-        b.playbook = playbook
-        b.kind = known[playbook].problem
-    elif isinstance(obj.get("kind"), str):
-        b.kind = obj["kind"]
-        if b.playbook is None and obj["kind"] in by_problem:
-            b.playbook = by_problem[obj["kind"]]
+    if b.kind not in catalogue.SCENARIO_TOOLS:
+        playbook = obj.get("playbook")
+        kind = obj.get("kind")
+        if isinstance(playbook, str) and playbook in known:
+            b.playbook = playbook
+            b.kind = known[playbook].problem
+        elif isinstance(kind, str) and kind not in catalogue.SCENARIO_TOOLS:
+            b.kind = kind
+            if b.playbook is None:
+                b.playbook = {pb.problem: pid for pid, pb in known.items()}.get(kind)
     if isinstance(obj.get("intake"), dict):
         b.intake.update(_model_intake(obj))
         _coerce_all(ws, known, keep_unknown=b.playbook not in known)
@@ -559,19 +561,28 @@ def _open(ws: Workspace, model: Model | None, text: str, tables: dict[str, Any] 
     preset = {k: v for k, v in b.intake.items() if v is not None}    # the caller's own intake (--intake)
     b.problem = text
     playbook, ambiguous = choose_playbook(text)
+    playbook = playbook if playbook in known else None
+    hints = intake_hints(text, playbook)
     # Land use is also a possible cause in the groundwater playbook. A runoff comparison is its own question.
     landuse = re.search(r"\b(?:chang(?:e|ing) (?:the )?land use|land[- ]use changes?)\b", text, re.I)
     command = re.match(r"\s*(?:please )?change (?:the )?land use\b", text, re.I)
+    routing = re.search(r"\brout(?:e|ing) (?:a |the |this |my )?(?:\d+[- ]year |design )?"
+                        r"(?:flood(?: wave)?|wave|hydrograph|pulse|release)\b", text, re.I)
     if "landuse_change" in preset or command or (landuse and re.search(r"\brunoff\b|\bpeak flow\b|TR-55", text, re.I)):
         b.kind = "landuse_change"
         b.decision = "Compare runoff before and after the proposed land-use change"
         b.quantities = ["runoff depth", "peak discharge"]
-        if "landuse_change" in preset:
-            b.stated.append("landuse_change")
+    elif hints.get("decision") != "inundation extent" and (
+        "route_flood" in preset or routing or re.fullmatch(r"\s*(?:please )?route it[.!]?\s*", text, re.I)
+    ):
+        b.kind = "route_flood"
+        b.decision = "Route the supplied flood wave downstream from the selected reach"
+        b.quantities = ["upstream and downstream added discharge over time"]
+    if b.kind in catalogue.SCENARIO_TOOLS:
+        if b.kind in preset:
+            b.stated.append(b.kind)
         b.ready = True
         return _message(ws)
-    playbook = playbook if playbook in known else None
-    hints = intake_hints(text, playbook)
     for k, v in hints.items():
         b.intake.setdefault(k, v)
     b.playbook = playbook

@@ -607,6 +607,9 @@ Thanks to these wonderful people who make AquaScope possible ([emoji key](CONTRI
       <td align="center" valign="top" width="20%"><a href="https://github.com/Duo-ee"><img src="https://avatars.githubusercontent.com/u/113885053?v=4&size=100" width="100px" height="100px" alt="Duo"/><br /><sub><b>Duo</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Duo-ee" title="Documentation">📖</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Duo-ee" title="Code">💻</a> <a href="https://github.com/Rekin226/aquascope/commits?author=Duo-ee" title="Tests">⚠️</a> <a href="https://github.com/Rekin226/aquascope/pulls?q=is%3Apr+reviewed-by%3ADuo-ee" title="Reviewed Pull Requests">👀</a> <a href="#research-Duo-ee" title="Research">🔬</a></td>
       <td align="center" valign="top" width="20%"><a href="https://github.com/Ikaly03"><img src="https://avatars.githubusercontent.com/u/342365651?v=4&size=100" width="100px" height="100px" alt="Francklin03"/><br /><sub><b>Francklin03</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=Ikaly03" title="Code">💻</a></td>
     </tr>
+    <tr>
+      <td align="center" valign="top" width="20%"><a href="https://github.com/yspread"><img src="https://avatars.githubusercontent.com/u/203701901?v=4&size=100" width="100px" height="100px" alt="Rafael Pavon Diesner"/><br /><sub><b>Rafael Pavon Diesner</b></sub></a><br /><a href="https://github.com/Rekin226/aquascope/commits?author=yspread" title="Code">💻</a></td>
+    </tr>
   </tbody>
 </table>
 

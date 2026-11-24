@@ -603,7 +603,10 @@ def assess_method(method: MethodPrecondition | str, ctx: SiteContext) -> dict[st
         if years_found:
             years_text = ", ".join(str(y) for y in years_found[:3])
             status = MARGINAL
-            reasons.append(f"a regime shift around {years_text} sits inside the record; a stationary fit spans two regimes")
+            reasons.append(
+                f"a regime shift around {years_text} sits inside the record; "
+                "a stationary fit spans two regimes"
+            )
     for cond in pre.sensitive_to:
         if cond in ctx.available:
             status = MARGINAL

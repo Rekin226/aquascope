@@ -849,6 +849,11 @@ json.dumps(studio_table(_a["name"], _a["data"]), default=str)
   // report and remakes the documents with the new prose.
   if (args.op === "approve" || args.op === "follow_up" || args.op === "narrate") {
     await maximaCodec(args.workspace?.brief?.intake?.route_flood);
+    // Planning reads all reach curves, including for an explicit flow.
+    if (args.workspace?.brief?.intake?.flood_inundation ||
+        args.workspace?.study?.steps?.some((step) => step.tool === "flood_inundation")) {
+      await maximaCodec({ return_period: 100 });
+    }
     await ensurePlotting(id);
     await ensureDocs(id);
   }

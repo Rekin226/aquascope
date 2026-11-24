@@ -210,6 +210,7 @@ class Inventory:
 
 MEDIA_TYPES = {
     "png": "image/png",
+    "tif": "image/tiff",
     "svg": "image/svg+xml",
     "csv": "text/csv",
     "md": "text/markdown",

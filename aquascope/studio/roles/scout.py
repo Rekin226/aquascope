@@ -290,6 +290,9 @@ def scout(ws: Workspace) -> Inventory:
                 evidence = "land-use scenario"
                 reason = ("The drawn area, proposed use and design storm are specified. "
                           "The land cover, soil and terrain inputs are checked when the analysis runs.")
+            elif kind == "flood_inundation":
+                evidence = "inundation scenario"
+                reason = "Location and flood magnitude are specified; the run checks the reach and terrain."
             else:
                 evidence = "routing scenario"
                 reason = ("The starting reach, flood magnitude and duration are specified. "
@@ -353,6 +356,15 @@ def scout(ws: Workspace) -> Inventory:
         inv.notes.append(f"{dataset_id}: {ds.note or (ds.quality or {}).get('reason') or 'listed'}")
         ws.event("scout", "upload", f"{dataset_id}: {(ds.quality or {}).get('verdict')}, "
                  f"{ds.n or 0} values" + (f", {ds.years} years of {ds.variable}" if ds.years else ""))
+    if ws.brief.playbook == "flood_risk" and ws.brief.intake.get("decision") == "inundation extent":
+        from aquascope.methods import assess_inundation_scenario
+
+        scenario = {"lat": site["lat"], "lon": site["lon"], "return_period": ws.brief.intake.get("return_period", 100)}
+        inv.recon["sufficiency"] = [r for r in inv.sufficiency if r.get("method") != "flood_inundation"]
+        if reach is None and reach_note:  # an actual negative snap, not a failed network read
+            inv.recon["inundation_reach_error"] = reach_note
+        row = assess_inundation_scenario(scenario, missing_reach=inv.recon.get("inundation_reach_error"))
+        inv.recon["sufficiency"].append(row)
     ws.inventory = inv
     ws.event("scout", "inventory", f"{len(inv.datasets)} dataset(s): "
              + ", ".join(f"{d.id} ({d.years:g} y)" if d.years else d.id for d in inv.datasets[:8]))

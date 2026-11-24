@@ -73,8 +73,7 @@ def test_a_site_the_data_cannot_support_makes_unsolvable_tasks():
 
 
 def test_probes_are_read_off_the_playbooks_decline_rules_and_rotate_over_sites():
-    assert gt.decline_probes("flood_risk") == [{"intake": {"decision": "inundation extent"},
-                                                "rule": "Inundation extent (which streets or fields"}]
+    assert gt.decline_probes("flood_risk") == []
     assert gt.decline_probes("groundwater_decline")[0]["intake"] == {"attribute_cause": True}
     assert gt.decline_probes("ungauged_flow") == [], "its only decline reads the reconnaissance"
     assert gt.decline_probes("drought_status")[0]["intake"] == {"flash_drought": True}
@@ -84,16 +83,16 @@ def test_probes_are_read_off_the_playbooks_decline_rules_and_rotate_over_sites()
     tasks = gt.tasks_from_playbooks([LONG, SHORT, POINT], None, recon=fake_recon, probes=1)
     assert len(tasks) == 24, "seven playbooks and one probe per site"
     probes = [t for t in tasks if t.probe]
-    assert [t.playbook for t in probes] == ["drought_status", "flood_risk", "groundwater_decline"]
+    assert [t.playbook for t in probes] == ["drought_status", "groundwater_decline", "irrigation_feasibility"]
     assert all(t.unsolvable and t.expected["decline_kind"] == "declined" for t in probes)
     assert probes[0].intake["flash_drought"] is True and "flash drought" in probes[0].problem
-    assert probes[1].intake["decision"] == "inundation extent" and "inundation extent" in probes[1].problem
-    assert probes[2].intake["attribute_cause"] is True and "why" in probes[2].problem
+    assert probes[1].intake["attribute_cause"] is True and "why" in probes[1].problem
+    assert probes[2].intake["decision"] == "daily schedule"
     # the base tasks: supply_reliability with no demand stated declines at every site, and so does
     # water_quality where no sampled parameters are within reach (three sites each), plus the three probes
     assert sum(t.unsolvable for t in tasks) == 3 + 3 + 3
     everything = gt.tasks_from_playbooks([LONG], None, recon=fake_recon, probes=None)
-    assert len(everything) == 7 + 6 and sum(t.unsolvable for t in everything) == 2 + 6
+    assert len(everything) == 7 + 5 and sum(t.unsolvable for t in everything) == 2 + 5
     assert [t.playbook for t in gt.tasks_from_playbooks([LONG], None, recon=fake_recon, probes=0)] == [
         "drought_status", "flood_risk", "groundwater_decline", "irrigation_feasibility", "supply_reliability",
         "ungauged_flow", "water_quality"]
@@ -148,7 +147,7 @@ def test_split_and_site_key_are_deterministic():
 
 
 def test_jsonl_round_trip(tmp_path):
-    tasks = gt.tasks_from_playbooks([LONG, POINT], ["flood_risk"], recon=fake_recon, probes=1)
+    tasks = gt.tasks_from_playbooks([LONG, POINT], ["groundwater_decline"], recon=fake_recon, probes=1)
     path = gt.write_tasks(tasks, tmp_path / "tasks.jsonl")
     back = gt.read_tasks(path)
     assert [t.to_dict() for t in back] == [t.to_dict() for t in tasks]

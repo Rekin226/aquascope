@@ -156,9 +156,12 @@ def test_declines_print_their_own_sentence():
     with pytest.raises(pbk.Declined) as exc:
         pbk.plan("flood_risk", recon({"discharge": 12}, [dict(STATION, years=12)], donors=1), {"return_period": 100})
     assert exc.value.kind == "declined" and "36 years" in exc.value.reason and "100 years" in exc.value.reason
-    with pytest.raises(pbk.Declined) as exc:
-        pbk.plan("flood_risk", LONG, {"decision": "inundation extent"})
-    assert "out of scope" in exc.value.reason
+    inundation = pbk.plan("flood_risk", LONG, {"decision": "inundation extent"})
+    assert inundation.plan["branch"] == "inundation"
+    step = inundation.steps[0]
+    assert step.tool == step.method == "flood_inundation"
+    assert step.expects == [{"check": "not_empty", "path": "depth"},
+                               {"check": "status_is", "path": "check.ok", "value": True}]
     with pytest.raises(pbk.Declined) as exc:
         pbk.plan("ungauged_flow", recon(None, [], donors=2))
     assert "three donor" in exc.value.reason and "2 found" in exc.value.reason

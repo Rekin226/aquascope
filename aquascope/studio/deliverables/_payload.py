@@ -27,6 +27,32 @@ BULK_KEYS = frozenset({
 })
 
 
+def inundation_description(payload: dict[str, Any]) -> str:
+    """Describe the requested flow, run and historical-water comparison without inventing results."""
+    summary = payload.get("summary") or {}
+    check = payload.get("check") or {}
+    flow = summary.get("flow") or "unspecified flow"
+    if "year" not in str(flow).lower() and num(summary.get("flow_cms")) is not None:
+        flow = f"{num(summary['flow_cms']):g} m3/s (specified flow)"
+    hours = num(summary.get("hours_run"))
+    steady = num(summary.get("steady_at_h"))
+    duration = f"Simulated {hours:g} hours" if hours is not None else "Simulation duration unavailable"
+    if steady is not None:
+        duration += f"; steady state reached at {steady:g} hours"
+    elif hours is not None:
+        duration += "; steady state not reached, extent may not be final"
+    status = str(check.get("status") or "unavailable")
+    csi = num(check.get("csi"))
+    comparison = (f"CSI of {csi:.3f}" if status == "compared" and csi is not None
+                  else "no CSI is reported")
+    grade = payload.get("grade") or "unspecified"
+    period = num(check.get("return_period"))
+    against = (f"JRC CEMS-GloFAS {period:g}-year flood hazard depth" if period is not None
+               else "JRC CEMS-GloFAS flood hazard depth")
+    return (f"Requested {flow}; grade: {grade}. {duration}. {against}: {comparison} (status: {status}); the "
+            "hazard map is modelled too, so this is a consistency check, not validation.")
+
+
 def num(x: Any) -> float | None:
     """A finite float, or None."""
     if x is None or isinstance(x, bool):

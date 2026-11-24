@@ -1618,7 +1618,8 @@ def studio_start(
     intake: playbook intake fields, for example {"return_period": 100}. For a land-use study, pass
     {"landuse_change": {"polygon": [[lon, lat], ...], "use": "paved", "rain_mm": 80}}; soil_group,
     cover and tc_hours may also be supplied inside that scenario. To route a flood wave, pass e.g.
-    {"route_flood": {"river_id": 230494421, "duration_h": 12, "peak_cms": 600}}.
+    {"route_flood": {"river_id": 230494421, "duration_h": 12, "peak_cms": 600}}. For a depth map, pass e.g.
+    {"flood_inundation": {"river_id": 230494421, "return_period": 100}}.
     """
     try:
         studio = _studio(None, lat=float(lat), lon=float(lon), intake=intake, provider=provider, model=model,

@@ -214,7 +214,7 @@ def _files() -> list[Path]:
 
 def list_playbooks() -> list[dict[str, Any]]:
     """Every playbook shipped with the package: id, title, problem, branches and intake fields."""
-    out = []
+    out: list[dict[str, Any]] = []
     for path in _files():
         try:
             pb = load(path)
@@ -371,9 +371,9 @@ def validate(playbook: str | Playbook | dict[str, Any]) -> list[str]:
                 elif ns == "intake" and key not in intake_names:
                     errors.append(f"branch {b.id}, step {s.id}: placeholder intake.{key} is not an intake field")
             ids.append(s.id)
-    for i, d in enumerate(pb.declines):
-        errors += [f"decline {i + 1}: {e}" for e in _check_conditions(d.when)]
-        if not d.say.strip():
+    for i, decline in enumerate(pb.declines):
+        errors += [f"decline {i + 1}: {e}" for e in _check_conditions(decline.when)]
+        if not decline.say.strip():
             errors.append(f"decline {i + 1}: says nothing")
     for i, c in enumerate(pb.caveats):
         if isinstance(c, Caveat):
@@ -580,9 +580,9 @@ def _holds(cond: Condition, ctx: dict[str, Any]) -> bool:
         present = got is not None
         return present if (want is None or want is True) else not present
     if op == "==":
-        return got == want
+        return bool(got == want)
     if op == "!=":
-        return got != want
+        return bool(got != want)
     if op == "in":
         if want is None:
             return False
@@ -739,6 +739,13 @@ def _method_status(method: str, recon: dict[str, Any], intake: dict[str, Any]) -
 
     if method not in METHODS:
         return {"method": method, "status": "not_defensible", "reason": f"unknown method {method!r}"}
+    if method == "flood_inundation":
+        from aquascope.methods import assess_inundation_scenario
+
+        point = recon.get("point") or {}
+        return assess_inundation_scenario({"lat": point.get("lat"), "lon": point.get("lon"),
+                                           "return_period": intake.get("return_period")},
+                                          missing_reach=recon.get("inundation_reach_error"))
     pre = METHODS[method]
     c = recon.get("context")
     if not isinstance(c, dict):

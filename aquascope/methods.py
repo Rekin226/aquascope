@@ -19,6 +19,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from aquascope.flood_depth import CITATION as FLOOD_DEPTH_CITATION
+
 __all__ = [
     "METHODS",
     "MethodPrecondition",
@@ -178,6 +180,18 @@ METHODS: dict[str, MethodPrecondition] = {
             citation="McCarthy (1938), Muskingum routing; David et al. (2011), RAPID, doi:10.1175/2011JHM1345.1.",
             note="Needs a GEOGLOWS reach, a flood duration and an inflow peak or return period. The hydrograph "
                  "describes the wave's contribution to downstream flow.",
+        ),
+        MethodPrecondition(
+            "flood_inundation",
+            "Screening inundation depth from a reach (local-inertial shallow water)",
+            None,
+            needs=("inundation scenario",),
+            tool="flood_inundation",
+            problems=("flood_risk", "flood_inundation"),
+            citation=("Bates et al. (2010), doi:10.1016/j.jhydrol.2010.03.027; de Almeida et al. (2012), "
+                      f"doi:10.1029/2011WR011570; {FLOOD_DEPTH_CITATION}."),
+            note=("Needs a GEOGLOWS reach and Terrarium terrain at run time. No surveyed bathymetry; the model "
+                  "burns a one-cell channel and applies the same return period across tributaries."),
         ),
         MethodPrecondition(
             "landuse_change",
@@ -589,9 +603,12 @@ def assess_method(method: MethodPrecondition | str, ctx: SiteContext) -> dict[st
     if "stationarity" in pre.assumes and ctx.change_points:
         years_found = sorted({int(y) for key in (pre.variable or "", "") for y in ctx.change_points.get(key, ())})
         if years_found:
-            years = ", ".join(str(y) for y in years_found[:3])
+            years_text = ", ".join(str(y) for y in years_found[:3])
             status = MARGINAL
-            reasons.append(f"a regime shift around {years} sits inside the record; a stationary fit spans two regimes")
+            reasons.append(
+                f"a regime shift around {years_text} sits inside the record; "
+                "a stationary fit spans two regimes"
+            )
     for cond in pre.sensitive_to:
         if cond in ctx.available:
             status = MARGINAL
@@ -599,6 +616,21 @@ def assess_method(method: MethodPrecondition | str, ctx: SiteContext) -> dict[st
                            _SENSITIVE_WORDS.get(cond, f"sensitive to {cond}, which is present here"))
 
     return {"method": pre.id, "status": status, "reason": "; ".join(reasons) if reasons else "the record supports it"}
+
+
+def assess_inundation_scenario(scenario: Any, *, missing_reach: str | None = None) -> dict[str, Any]:
+    """Check the client's reach/point and inflow; terrain and network reads happen only on execution."""
+    from aquascope.floodsim import validate_flood_scenario
+
+    if missing_reach:
+        return {**assess_method("flood_inundation", SiteContext()), "reason": missing_reach}
+    try:
+        validate_flood_scenario(scenario)
+    except ValueError as exc:
+        return {**assess_method("flood_inundation", SiteContext()), "reason": str(exc)}
+    row = assess_method("flood_inundation", SiteContext(available={"inundation scenario"}))
+    return {**row, "scenario": dict(scenario),
+            "reason": "The location and flood magnitude are specified; the run checks the reach and terrain."}
 
 
 def sufficiency_table(ctx: SiteContext, *, problem: str | None = None) -> list[dict[str, Any]]:

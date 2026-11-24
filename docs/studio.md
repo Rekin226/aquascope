@@ -28,6 +28,20 @@ the spend ceiling is $1 unless `--max-usd` says otherwise. For scripts, give eve
 on the line: `aquascope studio "PROBLEM" --at USGS-01013500 --yes` (or `--lat`/`--lon`). Without the `studio`
 extra the bundle holds only the Markdown and HTML report and the tables, and the CLI says so.
 
+For a flood-depth map, ask which ground floods and how deep at the selected point, for example:
+
+```bash
+aquascope studio "Map the inundation extent of the 100-year flood" --lat 38.94978 --lon -77.12764 --yes
+```
+
+The flood-risk playbook uses a GEOGLOWS reach and Terrarium terrain, not a flood-frequency fit at a gauge.
+For an explicit map scenario the CLI accepts a JSON object in `--intake 'flood_inundation={"river_id":230494421,"flow_cms":600}'`, and MCP accepts the same object
+under `studio_start(..., intake={"flood_inundation": ...})`. The bundle includes a float32 GeoTIFF (EPSG:3857); its depths are screening estimates,
+not surveyed flood levels at individual properties. The study also compares the run with JRC CEMS-GloFAS's
+modelled hazard depth for the nearest published return period (10, 20, 50, 75, 100, 200 or 500 years) and
+reports CSI, hit rate and false alarm ratio: both surfaces are models, so this is a consistency check, not
+validation.
+
 Beyond the design flow, the Studio plans three [advanced studies](advanced_studies.md): whether the flood is changing
 (`flood_change`), how the river changes with the climate by 2050 (`climate_change`) and what happens if the rain drops
 or it warms (`catchment_response`).

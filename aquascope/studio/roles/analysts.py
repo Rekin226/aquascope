@@ -292,6 +292,29 @@ def _kinds_for(study: Study, sid: str) -> list[str] | None:
     return KINDS_BY_METHOD.get(step.method)
 
 
+def _depth_raster(ws: Workspace, sid: str, tool: str | None, payload: Any) -> Artifact | None:
+    """Export the depth grid as a float32 GeoTIFF without altering the reusable payload."""
+    if tool != "flood_inundation" or not isinstance(payload, dict):
+        return None
+    pack = payload.get("depth")
+    if not isinstance(pack, dict):
+        return None
+    from aquascope import floodsim
+
+    try:
+        data = floodsim.to_geotiff_bytes(pack, floodsim.depth_from_payload(pack))
+    except Exception as exc:  # noqa: BLE001 - no raster is a note, not a stop
+        ws.event("analyst", "raster_skipped", f"{type(exc).__name__}: {exc}", step=sid)
+        return None
+    from aquascope.studio.deliverables._payload import inundation_description
+
+    summary = payload.get("summary") or {}
+    caption = (f"Flood depth at reach {summary.get('river_id')}: float32 GeoTIFF in EPSG:3857, dry cells nodata. "
+               f"{inundation_description(payload)}")
+    return Artifact(id=f"tif-{sid}-depth", kind="data", name=f"rasters/{sid}_depth.tif", data=data,
+                    media_type="image/tiff", caption=caption, step=sid, meta={"kind": "depth", "tool": tool})
+
+
 def _draw(ws: Workspace, run: StudyRun, drawn: set[str], on_artifact: Any, study: Study | None = None) -> None:
     """Call the deliverables' makers on every result not drawn yet (the figure kinds limited by the step's
     method when it names one); an event when they cannot be."""
@@ -329,6 +352,9 @@ def _draw(ws: Workspace, run: StudyRun, drawn: set[str], on_artifact: Any, study
                 made += list(figs or [])
             except Exception as exc:  # noqa: BLE001 - a figure that cannot be drawn is a note, not a stop
                 ws.event("analyst", "figures_skipped", f"{type(exc).__name__}: {exc}", step=sid)
+            raster = _depth_raster(ws, sid, rec.get("tool"), payload)
+            if raster is not None:
+                made.append(raster)
             try:
                 made += list(tables_for(sid, rec.get("tool"), payload) or [])
             except Exception as exc:  # noqa: BLE001

@@ -312,6 +312,12 @@ def assess_site(
     would use. Respect it: do not run a method marked not_defensible, say why, and offer what is defensible.
     problem narrows the table: flood_risk, ungauged_flow, drought, groundwater_decline, supply_reliability,
     climate_change, irrigation, water_quality. return_period is the T the question asks for, if any.
+    The context also carries the record's quality per variable when the Archive mirror was read (a local copy
+    in AQUASCOPE_ARCHIVE_DIR, or the Hugging Face dataset with AQUASCOPE_ARCHIVE_HUB=1): completeness_by_variable
+    (share of days with a value), longest_gap_days, flagged_fraction (provisional or suspect) and change_points
+    (Pettitt shift years). A variable missing from them was not assessed (the notes say why): that is unknown, not
+    clean. When you report a result, say a long gap, a large flagged share or a change point plainly, with the
+    reason a method was marked marginal.
     """
     from aquascope.explore import assess_site as _assess
 

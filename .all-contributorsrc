@@ -389,6 +389,16 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "slotadavid",
+      "name": "Dávid Slota",
+      "avatar_url": "https://avatars.githubusercontent.com/u/175992335?v=4",
+      "profile": "https://github.com/slotadavid",
+      "contributions": [
+        "code",
+        "test"
+      ]
     }
   ],
   "commitType": "docs"

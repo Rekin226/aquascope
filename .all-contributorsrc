@@ -370,6 +370,16 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "sanchezhenrique",
+      "name": "Henrique Sanchez",
+      "avatar_url": "https://avatars.githubusercontent.com/u/132634883?v=4",
+      "profile": "https://github.com/sanchezhenrique",
+      "contributions": [
+        "code",
+        "test"
+      ]
     }
   ],
   "commitType": "docs"

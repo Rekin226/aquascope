@@ -399,6 +399,15 @@
         "code",
         "test"
       ]
+    },
+    {
+      "login": "yspread",
+      "name": "Rafael Pavon Diesner",
+      "avatar_url": "https://avatars.githubusercontent.com/u/203701901?v=4",
+      "profile": "https://github.com/yspread",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs"

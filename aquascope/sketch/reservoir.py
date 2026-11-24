@@ -322,6 +322,13 @@ def _series(q: Any) -> list[float]:
     return [_sig(float(v)) for v in q]
 
 
+def _peak(q: Any, dt_h: float) -> tuple[float, float | None]:
+    """Maximum in the run and its hour, if a positive crest was captured before the last sample (as in Route it)."""
+    j = int(q.argmax())
+    peak = float(q[j])
+    return peak, j * dt_h if peak > 0 and j < len(q) - 1 else None
+
+
 def route_reservoir(polygon: Any, *, z: Any = None, window: dict[str, Any] | None = None,
                     dam: dict[str, Any] | None = None,
                     crest_m: float = DEFAULTS["crest_m"], top_m: float | None = None,
@@ -347,7 +354,9 @@ def route_reservoir(polygon: Any, *, z: Any = None, window: dict[str, Any] | Non
     Returns the routed result (``reaches``, ``frames`` and the rest, as Route it's) with ``reservoir``: the inflow
     and outflow hydrographs at the dam, the peaks and the peak reduction, the highest level and storage, whether
     the dam is overtopped, the stage-storage table and its source, and ``without`` (the same run with no
-    reservoir: its peak at the dam and furthest down).
+    reservoir: its peak at the dam and furthest down). Flow, level and storage maxima are over the hours routed.
+    A dam peak hour is null if there is no positive flow or the maximum first occurs at the last sample; the
+    reduction and delay are null unless both peak hours are known.
     """
     import numpy as np
 
@@ -414,11 +423,22 @@ def route_reservoir(polygon: Any, *, z: Any = None, window: dict[str, Any] | Non
                                        "upstream of the reservoir, or draw the storm over its catchment."),
                 "attribution": routing.ATTRIBUTION}
     q_in, q_out, s_run = rec["inflow"], rec["outflow"], rec["storage"]
-    peak_in, peak_out = float(q_in.max()), float(q_out.max())
+    dt_h = routing.DT_S / 3600.0
+    peak_in, t_in = _peak(q_in, dt_h)
+    peak_out, t_out = _peak(q_out, dt_h)
     s_max = float(s_run.max()) + s_crest
     level_max = float(np.interp(s_max, vol, levels)) if s_max <= vol[-1] else float(levels[-1])
     over = bool(s_max > float(np.interp(bed + top, levels, vol)) + 1e-6)
-    t_in, t_out = int(np.argmax(q_in)), int(np.argmax(q_out))
+    if t_in is not None and t_out is not None:
+        reduction = round(100.0 * (1.0 - peak_out / peak_in), 1)
+        delay = t_out - t_in
+        peaks = (f"{what} peaks at {peak_in:,.0f} m³/s at the dam and leaves at {peak_out:,.0f} m³/s, "
+                 f"{reduction:g} % lower and {delay:g} h later.")
+    else:
+        reduction = delay = None
+        peaks = (f"{what}. Over the {run['hours']} h routed, the maximum inflow at the dam was {peak_in:,.3g} m³/s "
+                 f"and the maximum outflow was {peak_out:,.3g} m³/s. "
+                 + ("The run did not capture both peaks." if peak_in > 0 else "No flood flow was sampled at the dam."))
     ref = [r for r in base.get("reaches") or [] if int(r["river_id"]) == dam_id]
     far = run.get("furthest") or {}
     if storm is not None and run.get("outlets"):
@@ -447,11 +467,9 @@ def route_reservoir(polygon: Any, *, z: Any = None, window: dict[str, Any] | Non
         "dam": dam, "crest_m": crest, "top_m": top, "width_m": float(width_m),
         "coefficient": float(coefficient) if coefficient is not None else round(float(_weir_c()), 4),
         "bed_m": round(bed, 2), "crest_level_m": round(bed + crest, 2), "top_level_m": round(bed + top, 2),
-        "inflow_cms": _series(q_in), "outflow_cms": _series(q_out), "dt_h": routing.DT_S / 3600.0,
+        "inflow_cms": _series(q_in), "outflow_cms": _series(q_out), "dt_h": dt_h,
         "peak_in_cms": routing._sig(peak_in), "peak_out_cms": routing._sig(peak_out),
-        "peak_in_h": t_in * routing.DT_S / 3600.0, "peak_out_h": t_out * routing.DT_S / 3600.0,
-        "reduction_pct": round(100.0 * (1.0 - peak_out / peak_in), 1) if peak_in > 0 else None,
-        "delay_h": (t_out - t_in) * routing.DT_S / 3600.0,
+        "peak_in_h": t_in, "peak_out_h": t_out, "reduction_pct": reduction, "delay_h": delay,
         "flood_storage_m3": routing._sig(float(s_run.max())), "stored_end_m3": routing._sig(float(s_run[-1])),
         "max_level_m": round(level_max, 2),
         "max_depth_m": round(level_max - bed, 2), "overtopped": over,
@@ -477,9 +495,8 @@ def route_reservoir(polygon: Any, *, z: Any = None, window: dict[str, Any] | Non
                      "that full would spread past the area drawn, which this storage leaves out.")
     run.update(reservoir=res_block, notes=notes)
     run["message"] = (f"A reservoir of {res_block['area_drawn_km2']:g} km² drawn on reach {dam_id}, spillway "
-                      f"{float(width_m):g} m wide at {crest:g} m: {what} peaks at {peak_in:,.0f} m³/s at the dam and "
-                      f"leaves at {peak_out:,.0f} m³/s, {res_block['reduction_pct']:g} % lower and "
-                      f"{res_block['delay_h']:g} h later. The water rises to {res_block['max_depth_m']:g} m above "
+                      f"{float(width_m):g} m wide at {crest:g} m: {peaks} During the run the water rises to "
+                      f"{res_block['max_depth_m']:g} m above "
                       "the lowest ground" + (", over the top of the dam." if over else "."))
     return run
 

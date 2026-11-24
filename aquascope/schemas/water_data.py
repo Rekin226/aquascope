@@ -48,6 +48,7 @@ class DataSource(str, Enum):
     GREECE_HYDROSCOPE = "greece_hydroscope"
     GREECE_OPENHI = "greece_openhi"
     POLAND_IMGW = "poland_imgw"
+    CANADA_HYDAT = "canada_hydat"
 
     PEGELONLINE = "pegelonline"
     BOM = "bom"

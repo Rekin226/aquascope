@@ -72,23 +72,19 @@ existing hydrology and field-scale agriculture modules.
 
 ### 2. WaPOR v3 API for evapotranspiration and productivity
 
-**Status:** partially scaffolded in `WaPORCollector`
+**Status:** `WaPORCollector` reads a bounded window from each official [WaPOR v3](https://www.fao.org/in-action/remote-sensing-for-water-productivity/wapor-data-access/en) raster. Supply a WGS84 bounding box in west, south, east, north order. The collector weights each valid pixel by its area within that box on a spherical Earth. Pixels with no data do not contribute.
 
-**Verified access pattern already used in the repo**
+`start_date` and `end_date` are inclusive. Each observation reports its full source dekad even if only part of it overlaps the request. Without dates, the collector uses the 2020 calendar year. A start date on its own uses today as the end date.
 
-- `GET /catalog/workspaces/WAPOR-3/cubes/{cube_code}`
+The three Level 1 mapsets share dekadal periods, so results for the same area can be joined:
 
-**Key query inputs already reflected in the collector**
+- `RET` (`L1-RET-D`), reference evapotranspiration in mm/day
+- `AETI` (`L1-AETI-D`), actual evapotranspiration and interception in mm/day
+- `NPP` (`L1-NPP-D`), net primary production in gC/m²/day
 
-- `startDate`
-- `endDate`
-- `bbox`
+Each record is a rate for one source dekad. NPP measures carbon mass.
 
-**Priority cube codes**
-
-- `RET` — Reference evapotranspiration
-- `AETI` — Actual evapotranspiration and interception
-- `NPP` — Net primary production
+Only HTTP byte ranges are read. Each request is limited to 100 dekads, 250,000 intersected cells per raster, and 32 MiB of raster data in total. Split larger date ranges or areas.
 
 **What AquaScope should produce**
 
@@ -430,15 +426,10 @@ Expected outputs:
 **Question:** how much irrigation water is needed for maize during the current
 season in a target area?
 
-Proposed command flow:
+Supply a daily ET0 series for irrigation planning. The WaPOR collector's
+dekadal rates are for period-level comparisons such as Workflow C.
 
 ```bash
-aquascope collect --source wapor \
-  --bbox 30.50,29.80,31.10,30.20 \
-  --variable RET \
-  --start-date 2026-04-01 \
-  --end-date 2026-07-31
-
 aquascope collect --source openmeteo \
   --mode weather \
   --lat 29.95 \
@@ -449,7 +440,7 @@ aquascope collect --source openmeteo \
 aquascope agri plan \
   --crop maize \
   --planting-date 2026-04-01 \
-  --eto-file data/raw/wapor_ret_latest.json \
+  --eto-file data/raw/daily_eto.csv \
   --precip-file data/raw/openmeteo_latest.json \
   --soil-fc 0.30 \
   --soil-wp 0.15 \
@@ -464,7 +455,7 @@ Expected outputs:
 
 ### Workflow C. Water Productivity Comparison
 
-**Question:** where is agricultural water converted to biomass most efficiently?
+**Question:** how does net primary production per unit of actual evapotranspiration vary across the selected dekads?
 
 Proposed command flow:
 
@@ -479,14 +470,15 @@ aquascope collect --source wapor \
   --bbox 30.50,29.80,31.10,30.20 \
   --variable AETI \
   --start-date 2023-01-01 \
-  --end-date 2023-12-31
+  --end-date 2023-01-31
 
 aquascope collect --source wapor \
   --bbox 30.50,29.80,31.10,30.20 \
   --variable NPP \
   --start-date 2023-01-01 \
-  --end-date 2023-12-31
+  --end-date 2023-01-31
 
+# Replace these paths with the filenames printed by the corresponding collect commands.
 aquascope agri productivity \
   --aquastat-file data/raw/aquastat_latest.json \
   --aeti-file data/raw/wapor_aeti_latest.json \
@@ -495,7 +487,8 @@ aquascope agri productivity \
 
 Expected outputs:
 
-- biomass-per-water indicators
+- NPP carbon-to-ET ratios in the source units for each matching dekad
+- an aggregate formed from the matching period rates, with no weighting by dekad duration
 - region or country benchmark charts
 - combined policy plus biophysical productivity report
 
@@ -507,8 +500,7 @@ If only one agriculture feature is implemented next, it should be this:
 
 1. expose `aquastat` and `wapor` in the CLI
 2. add `aquascope agri plan`
-3. use WaPOR `RET` plus Open-Meteo precipitation as the first supported
-   irrigation-planning workflow
+3. use daily Open-Meteo reference ET and precipitation for irrigation planning
 
 That is the shortest path from existing code to a distinctive user-facing
 feature.

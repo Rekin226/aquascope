@@ -135,6 +135,78 @@ def test_a_release_is_a_block(toy):
     assert res["reaches"][-1]["peak_cms"] < 100.0
 
 
+def test_study_keeps_hourly_endpoint_flows_without_rounding(toy):
+    peak = 555.12345678
+    start, end = TOY_IDS["B"], TOY_IDS["C"]
+    result = routing.study_route_flood(river_id=start, peak_cms=peak, duration_h=3, hours=48)
+    wave = result["hydrograph"]
+    assert (wave["start_river_id"], wave["end_river_id"]) == (start, end)
+    assert wave["hours"] == list(range(49))
+    assert wave["start_cms"] == routing.hydrograph(peak, 3, 48).tolist()
+    # The receiving reach has k = dt and x = 0.36. At t=1 only the new inflow contributes.
+    assert wave["end_cms"][1] == pytest.approx(peak * (1 - 0.72) / (1 + 1.28), rel=1e-12)
+    assert sum(wave["end_cms"]) == pytest.approx(sum(wave["start_cms"]), rel=1e-6)
+    assert result["grade"] == "screening" and result["hydrograph_check"]["ok"]
+    assert result["check"]["summary"] == routing.CHECK["summary"] and result["licence"]
+    assert "frames" not in result
+    assert "hydrograph" not in routing.route(start, peak_cms=peak, duration_h=3, along=False)
+
+
+def test_study_keeps_the_last_modelled_reach_when_only_the_start_has_peaked(toy):
+    start = TOY_IDS["A"]
+    result = routing.study_route_flood(river_id=start, peak_cms=400, duration_h=3, hours=2)
+    assert result["furthest"]["river_id"] == start
+    assert result["hydrograph"]["end_river_id"] == TOY_IDS["C"]
+    assert result["hydrograph"]["hours"] == [0, 1, 2]
+    assert result["reaches"][-1]["peak_h"] is None and "not resolved" in result["message"]
+
+
+def test_study_on_a_single_reach_returns_the_same_wave_at_both_ends(toy):
+    start = TOY_IDS["B"]
+    result = routing.study_route_flood(river_id=start, peak_cms=100, duration_h=2, shape="block", max_reaches=1)
+    wave = result["hydrograph"]
+    assert wave["start_river_id"] == wave["end_river_id"] == start
+    assert wave["start_cms"] == wave["end_cms"]
+    assert result["truncated"] and "Only reach" in result["message"]
+
+
+@pytest.mark.parametrize("changes", [
+    {"river_id": True}, {"river_id": 1}, {"river_id": "230000101"}, {"duration_h": None},
+    {"duration_h": 0}, {"duration_h": 721}, {"duration_h": float("nan")}, {"peak_cms": True},
+    {"peak_cms": float("inf")}, {"peak_cms": 0}, {"peak_cms": 1_000_001}, {"return_period": 10},
+    {"shape": "square"}, {"hours": 0}, {"hours": 1.5}, {"hours": 721}, {"max_reaches": True},
+    {"max_reaches": 4001}, {"frames": False},
+])
+def test_study_rejects_invalid_wave_inputs_before_routing(changes):
+    scenario = {"river_id": TOY_IDS["A"], "peak_cms": 100, "duration_h": 12}
+    with pytest.raises(ValueError):
+        routing.study_route_flood(**{**scenario, **changes})
+
+
+def test_study_requires_one_supported_design_flow():
+    scenario = {"river_id": TOY_IDS["A"], "duration_h": 12}
+    with pytest.raises(ValueError, match="exactly one"):
+        routing.validate_study_scenario(scenario)
+    for rp in (1, 501, float("nan")):
+        with pytest.raises(ValueError, match="return_period"):
+            routing.validate_study_scenario({**scenario, "return_period": rp})
+
+
+@pytest.mark.parametrize(("shape", "duration"), [("triangle", 1), ("block", 0.5)])
+def test_study_rejects_a_wave_that_no_hourly_sample_captures(shape, duration):
+    with pytest.raises(ValueError, match="hourly sample"):
+        routing.validate_study_scenario({"river_id": TOY_IDS["A"], "peak_cms": 100,
+                                         "shape": shape, "duration_h": duration})
+
+
+@pytest.mark.parametrize("downstream", [[0.0], [0.0, float("nan")], [0.0, -1.0]])
+def test_study_checks_flow_samples_before_reporting_screening_results(monkeypatch, downstream):
+    wave = {"hours": [0, 1], "start_cms": [0.0, 100.0], "end_cms": downstream}
+    monkeypatch.setattr(routing, "route", lambda **kw: {"hydrograph": wave})
+    with pytest.raises(ValueError, match="aligned, finite, non-negative"):
+        routing.study_route_flood(river_id=TOY_IDS["A"], peak_cms=100, shape="block", duration_h=1)
+
+
 def test_route_needs_a_size_and_holds_its_bounds(toy):
     with pytest.raises(ValueError):
         routing.route(TOY_IDS["A"], along=False)
@@ -157,6 +229,9 @@ def test_the_return_period_flow_is_flood_its_design_flow(toy, monkeypatch):
     d = res["inflow"]["design"]
     assert d["method"] == "Log-Pearson III" and d["n_years"] == 85 and d["words"] in res["inflow"]["source"]
     assert "10-year flow" in res["inflow"]["source"] and "flows" in res["licence"]
+    study = routing.study_route_flood(river_id=TOY_IDS["A"], return_period=10, duration_h=24)
+    assert study["inflow"]["design"] == d and study["licence"] == res["licence"]
+    assert max(study["hydrograph"]["start_cms"]) == pytest.approx(want)
     with pytest.raises(ValueError):
         routing.route(TOY_IDS["A"], return_period=1000, along=False)
 

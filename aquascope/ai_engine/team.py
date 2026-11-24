@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aquascope import __version__
+from aquascope.claims import drought_index_current
 from aquascope.study import Study, StudyRun, run_study
 
 logger = logging.getLogger(__name__)
@@ -734,6 +735,15 @@ def _sentences_for(tool: str, payload: dict[str, Any], study: Study) -> list[str
         if bits:
             out.append(f"Signatures transferred from {payload.get('n_donors_available') or ''} donors "
                        f"({payload.get('method')}): " + "; ".join(bits) + ".")
+    elif tool == "route_flood":
+        if payload.get("message"):
+            out.append(payload["message"])
+        if (check := payload.get("check", {}).get("summary")):
+            out.append(check)
+        out.extend(payload.get("notes") or [])
+    elif tool == "landuse_change":
+        out.extend(payload[k] for k in ("summary", "assumptions", "check") if payload.get(k))
+        out.extend(payload.get("notes") or [])
     elif tool == "anywhere":
         cl = payload.get("climate") or {}
         if cl.get("precipitation_mm_per_year") is not None:
@@ -965,28 +975,41 @@ def _drought_sentences(payload: dict[str, Any]) -> list[str]:
     st = payload.get("station") or {}
     where = (f"rain gauge {st.get('source')} {st.get('station_id')} ({_fmt(st.get('years'))} years of "
              f"{st.get('variable', 'precipitation')} in {st.get('unit', 'mm')})" if st else f"{src}")
-    cur = payload.get("current") or {}
-    spi = cur.get("spi") or {}
-    spei = cur.get("spei") or {}
     scales = payload.get("timescales") or []
+
+    def latest(name: str) -> list[str]:
+        parts = []
+        for scale in scales:
+            value, observed = drought_index_current(payload, name, scale)
+            if value is not None:
+                when = f" as of {observed}" if observed else ""
+                parts.append(f"{_fmt(value, 2)} at {_months(scale)}{when}")
+        return parts
+
+    spi, spei = latest("spi"), latest("spei")
     if spi:
-        parts = [f"{_fmt(spi.get(str(s)), 2)} at {_months(s)}" for s in scales if spi.get(str(s)) is not None]
         out.append(f"Drought indices on {where}, {payload.get('months')} months from {payload.get('start')} to "
-                   f"{payload.get('end')} ({_fmt(payload.get('years'))} years), as of {cur.get('date')}: SPI "
-                   + ", ".join(parts) + ".")
+                   f"{payload.get('end')} ({_fmt(payload.get('years'))} years): SPI " + ", ".join(spi) + ".")
     if spei:
-        parts = [f"{_fmt(spei.get(str(s)), 2)} at {_months(s)}" for s in scales if spei.get(str(s)) is not None]
-        out.append(f"SPEI ({payload.get('pet_method')} PET): " + ", ".join(parts) + ".")
+        pet_method = payload.get("pet_method")
+        label = f"SPEI ({pet_method} PET)" if pet_method else "SPEI"
+        out.append(f"{label}: " + ", ".join(spei) + ".")
     head = payload.get("headline_timescale")
-    state = "in drought" if payload.get("in_drought") else "not in drought"
-    out.append(f"Status on the {str(payload.get('headline_index', 'index')).upper()} at {_months(head)}: "
-               f"{str(payload.get('status', '')).replace('_', ' ')}, {state} at the {payload.get('threshold')} "
-               f"threshold.")
+    name = str(payload.get("headline_index") or "index")
+    value, observed = drought_index_current(payload, name, head) if head is not None else (None, None)
+    label = f"Drought status on the {name.upper()} at {_months(head)}" if head is not None else "Drought status"
+    if value is None or payload.get("status") in (None, "unknown"):
+        out.append(f"{label} could not be determined from the available record.")
+    else:
+        state = "in drought" if payload.get("in_drought") else "not in drought"
+        when = f" as of {observed}" if observed else ""
+        out.append(f"{label}{when}: {str(payload['status']).replace('_', ' ')}, {state} at the "
+                   f"{payload.get('threshold')} threshold.")
     for row in payload.get("indices") or []:
         if row.get("timescale") != head:
             continue
         d = row.get("divergence") or {}
-        lead = row.get("spei") or row.get("spi") or {}
+        lead = row.get(name) or {}
         if lead.get("worst") is not None:
             out.append(f"The worst value at {_months(head)} on record was {_fmt(lead['worst'], 2)} in "
                        f"{lead.get('worst_date')}; {lead.get('events')} drought events at or below "

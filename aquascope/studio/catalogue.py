@@ -35,6 +35,19 @@ _NOT_STEPS = frozenset({
 #: so a workbench step can take it with ``from_step``.
 LOAD_TABLE = "load_table"
 
+# These methods take a structured scenario supplied by the client during intake.
+SCENARIO_TOOLS = frozenset({"landuse_change", "route_flood"})
+
+
+def validate_scenario(tool: str, scenario: Any) -> None:
+    if tool == "landuse_change":
+        from aquascope.sketch.landuse import validate_study_scenario
+    elif tool == "route_flood":
+        from aquascope.routing import validate_study_scenario
+    else:
+        raise ValueError(f"{tool} is not a scenario tool")
+    validate_study_scenario(scenario)
+
 
 @dataclass
 class Entry:
@@ -72,7 +85,8 @@ class Entry:
         """The short form the model reads."""
         return {
             "tool": self.id, "about": self.about[:160], "kind": self.kind,
-            "arguments": {k: (v.get("type") or "any") for k, v in self.arguments.items()},
+            "arguments": {k: (v.get("type") or " or ".join(s["type"] for s in v.get("anyOf", []) if "type" in s)
+                              or "any") for k, v in self.arguments.items()},
             "required": self.required, "yields": self.yields, "methods": self.methods,
             # The paths are the ones the payload really has; a plan should copy them.
             "gates": [{"check": g["check"], "path": g.get("path")} for g in self.gates],
@@ -157,8 +171,11 @@ _ANNOTATIONS: dict[str, dict[str, Any]] = {
         "kind": "site", "yields": ["spi", "spei", "drought_events", "temperature_trend"],
         "methods": ["spi", "spei", "spei_reanalysis"],
         "tables": ["indices_monthly", "drought_events", "index_divergence"], "figures": ["drought_strip"],
-        "gates": [{"check": "not_empty", "path": "indices"}, {"check": "not_empty", "path": "current.spi"},
-                  {"check": "not_empty", "path": "current.spei"}, {"check": "min_years", "path": "years"}],
+        "gates": [
+            {"check": "not_empty", "path": "indices"}, {"check": "not_empty", "path": "current.spi"},
+            {"check": "min_samples", "value": 1, "path": "spei_samples"},
+            {"check": "min_years", "path": "years"}, {"check": "min_years", "path": "spei_years"},
+        ],
     },
     "drought_propagation": {
         "kind": "station", "yields": ["sgi", "lag"], "methods": ["sgi"],
@@ -169,6 +186,19 @@ _ANNOTATIONS: dict[str, dict[str, Any]] = {
         "kind": "station", "yields": ["low_flow"], "methods": ["low_flow_frequency", "baseflow_separation"],
         "tables": ["low_flow_stats"], "figures": ["fdc"],
         "gates": [{"check": "min_years", "path": "years"}],
+    },
+    "landuse_change": {
+        "kind": "site", "yields": ["before", "after", "change"], "methods": ["landuse_change"],
+        "tables": ["landuse_runoff"], "figures": ["landuse_runoff"],
+        "gates": [{"check": "not_empty", "path": "change"},
+                  {"check": "status_is", "path": "reference_check.ok", "value": True}],
+    },
+    "route_flood": {
+        "kind": "site", "yields": ["hydrograph"], "methods": ["route_flood"],
+        "tables": ["route_hydrograph"], "figures": ["route_hydrograph"],
+        "gates": [{"check": "not_empty", "path": "hydrograph"},
+                  {"check": "status_is", "path": "hydrograph_check.ok", "value": True},
+                  {"check": "not_empty", "path": "check.summary"}],
     },
     "supply_reliability": {
         "kind": "site", "yields": ["reliability", "fdc"], "methods": ["supply_reliability", "regionalize_signatures"],
@@ -477,6 +507,10 @@ def validate_step(step: dict[str, Any], *, known_ids: set[str] | None = None,
     if not isinstance(args, dict):
         errors.append(f"step {sid}: arguments must be a mapping")
         args = {}
+    expects = step.get("expects") or []
+    if not isinstance(expects, list):
+        errors.append(f"step {sid}: expects must be a list of gates")
+        expects = []
     allowed = set(entry.arguments) | {"from_step"}
     for k in args:
         if k not in allowed:
@@ -484,6 +518,23 @@ def validate_step(step: dict[str, Any], *, known_ids: set[str] | None = None,
     for k in entry.required:
         if k not in args and not (k == "from_step" and "from_step" in args):
             errors.append(f"step {sid}: {tool} needs argument {k!r}")
+    if tool in SCENARIO_TOOLS and all(k in args for k in entry.required):
+        try:
+            validate_scenario(tool, args)
+        except ValueError as exc:
+            errors.append(f"step {sid}: {exc}")
+        if sufficiency is not None:
+            row = next((r for r in sufficiency if r.get("method") == tool), {})
+            if row.get("scenario") != args:
+                errors.append(f"step {sid}: {tool} needs the scenario supplied by the user")
+            if step.get("method") != tool:
+                errors.append(f"step {sid}: {tool} must name its screening method")
+            # A model may neither drop the scenario checks nor accept a failed check.
+            for required in entry.gates:
+                matches = [g for g in expects if isinstance(g, dict) and g.get("check") == required["check"]
+                           and g.get("path") == required["path"]]
+                if not matches or ("value" in required and any(g.get("value") is not True for g in matches)):
+                    errors.append(f"step {sid}: {tool} requires the gate {required}")
     for k, v in list(args.items()):
         schema = entry.arguments.get(k)
         allowed_values = schema.get("enum") if isinstance(schema, dict) else None
@@ -513,8 +564,8 @@ def validate_step(step: dict[str, Any], *, known_ids: set[str] | None = None,
     for d in step.get("depends_on") or []:
         if str(d) not in ids:
             errors.append(f"step {sid}: depends_on {d!r} is not an earlier step of the plan")
-    for g in step.get("expects") or []:
-        if not isinstance(g, dict) or g.get("check") not in CHECKS:
+    for g in expects:
+        if not isinstance(g, dict) or not isinstance(g.get("check"), str) or g["check"] not in CHECKS:
             errors.append(f"step {sid}: gate {g!r} is not one of {sorted(CHECKS)}")
             continue
         if repair:
@@ -523,7 +574,7 @@ def validate_step(step: dict[str, Any], *, known_ids: set[str] | None = None,
     if method:
         from aquascope.methods import METHODS
 
-        if method not in METHODS:
+        if not isinstance(method, str) or method not in METHODS:
             errors.append(f"step {sid}: method {method!r} is not in the registry")
         elif entry.methods and method not in entry.methods:
             errors.append(f"step {sid}: {tool} does not apply method {method!r} (it applies {entry.methods})")

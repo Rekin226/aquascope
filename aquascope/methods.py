@@ -169,6 +169,29 @@ METHODS: dict[str, MethodPrecondition] = {
             sensitive_to=("regulation",),
         ),
         MethodPrecondition(
+            "route_flood",
+            "Route a flood wave downstream (Muskingum screening)",
+            None,
+            needs=("routing scenario",),
+            tool="route_flood",
+            problems=("route_flood",),
+            citation="McCarthy (1938), Muskingum routing; David et al. (2011), RAPID, doi:10.1175/2011JHM1345.1.",
+            note="Needs a GEOGLOWS reach, a flood duration and an inflow peak or return period. The hydrograph "
+                 "describes the wave's contribution to downstream flow.",
+        ),
+        MethodPrecondition(
+            "landuse_change",
+            "Runoff and peak flow before and after a land-use change (TR-55 screening)",
+            None,
+            needs=("land-use scenario",),
+            tool="landuse_change",
+            problems=("landuse_change",),
+            citation="USDA SCS (1986), Urban Hydrology for Small Watersheds, TR-55, chapters 2 and 4; "
+                     "USDA NRCS National Engineering Handbook, part 630, chapter 15 (time of concentration).",
+            note="Needs a drawn area, proposed cover and a 24-hour design storm. Treats the area as one small "
+                 "homogeneous watershed and compares its runoff and peak under the same storm.",
+        ),
+        MethodPrecondition(
             "supply_reliability",
             "Run-of-river supply reliability against a demand (flow-duration screening)",
             "discharge",

@@ -436,6 +436,23 @@ def model_skill(source: str | None = None, station_id: str | None = None, lat: f
     return res
 
 
+def forecast_skill(station_id: str | None = None, source: str | None = None, lat: float | None = None,
+                   lon: float | None = None, model: str | None = None, lead_days: Any = None,
+                   variant: str | None = None) -> dict[str, Any]:
+    """How well the issued GEOGLOWS and GloFAS forecasts came true at a gauge, scored against what the gauge then
+    recorded (#785), from the Archive's daily verification (verify/). Give station_id (with source when the id is
+    not unique) or lat/lon (the nearest forecast gauge within 25 km). model (geoglows, glofas), variant (raw,
+    corrected to the gauge) and lead_days (a day like 2, or a window like [1, 3]) narrow the rows. Each row covers
+    the newest 30 days: n_pairs and the dates, factor (half the forecasts were within this factor of the gauge),
+    median log10 error, CRPS, exceedances of the gauge's 2-year flow, and trust (good up to a factor of 2, fair up
+    to 4, poor beyond, unknown below 30 pairs). `ranking` orders the models at 1 to 3 days ahead; `network` is the
+    same lead for every gauge pooled. Quote the pair count with any score: the record is weeks old."""
+    from aquascope import forecast_skill as fs
+
+    return fs.forecast_skill(station_id, source=source, lat=lat, lon=lon, model=model, lead_days=lead_days,
+                             variant=variant)
+
+
 def model_to_lean_on(lat: float, lon: float, radius_km: float = 150.0) -> dict[str, Any]:
     """Which global model (GEOGLOWS, NWM, Google GRRR) tracked the gauges near a site best, from the published
     monthly skill table: the median KGE of each over the nearest graded gauges within radius_km. For an ungauged
@@ -1598,7 +1615,10 @@ def studio_start(
     studio_say, or say "just go") or, when nothing needs asking, the `plan` to review (approve it with
     studio_approve) or `declined` with the reason. Keyless unless a provider/model is given. Keep the returned
     `workspace` dict and pass it to the next studio_* call: the tools are stateless.
-    intake: playbook intake fields, for example {"return_period": 100}.
+    intake: playbook intake fields, for example {"return_period": 100}. For a land-use study, pass
+    {"landuse_change": {"polygon": [[lon, lat], ...], "use": "paved", "rain_mm": 80}}; soil_group,
+    cover and tc_hours may also be supplied inside that scenario. To route a flood wave, pass e.g.
+    {"route_flood": {"river_id": 230494421, "duration_h": 12, "peak_cms": 600}}.
     """
     try:
         studio = _studio(None, lat=float(lat), lon=float(lon), intake=intake, provider=provider, model=model,
@@ -1847,6 +1867,7 @@ def build_server():
     server.tool()(upstream_dams)
     server.tool()(model_skill)
     server.tool()(model_to_lean_on)
+    server.tool()(forecast_skill)
     server.tool()(flow_status)
     server.tool()(flow_forecast)
     server.tool()(forecast_plume)

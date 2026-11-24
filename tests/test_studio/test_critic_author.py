@@ -3,9 +3,14 @@ one rewrite they earn."""
 
 from __future__ import annotations
 
+import numpy as np
+import pandas as pd
+
+from aquascope.ai_engine import team
 from aquascope.studio.model import Model
 from aquascope.studio.roles import analysts, author, critic, methodologist, scout
 from aquascope.studio.workspace import Workspace
+from aquascope.workbench import standardized_indices
 from tests.test_studio.conftest import DROUGHT, PROBLEM, RECON, RICH, FakeModel, fake_tools, patched
 
 
@@ -21,6 +26,33 @@ def _ran(problem: str = PROBLEM, playbook: str = "flood_risk", intake: dict | No
         methodologist.plan(ws, None)
         analysts.run(ws, None)
     return ws
+
+
+def test_drought_report_uses_latest_month_for_each_index_and_timescale():
+    months = pd.date_range("1990-01-01", "2025-12-01", freq="MS")
+    rain = pd.Series(np.random.default_rng(22).gamma(3, 20, len(months)), index=months)
+    pet = pd.Series(40.0, index=months[:-3])
+    result = standardized_indices(rain.drop(pd.Timestamp("2025-02-01")), pet)
+
+    labels = [row["label"] for row in author._numbers_for("s1", "drought_indices", result, None)]
+    assert any(label.startswith("SPI at 3 months, 2025-12-01") for label in labels)
+    assert any(label.startswith("SPI at 12 months, 2025-01-01") for label in labels)
+    assert any(label.startswith("SPEI at 3 months, 2025-09-01") for label in labels)
+    spi, spei, *_ = team._drought_sentences(result)
+    assert "at 3 months as of 2025-12-01" in spi
+    assert "at 12 months as of 2025-01-01" in spi
+    assert "at 3 months as of 2025-09-01" in spei
+
+
+def test_drought_report_does_not_call_an_unavailable_index_not_in_drought():
+    months = pd.date_range("2024-01-01", periods=24, freq="MS")
+    rain = pd.Series(range(1, 25), dtype=float, index=months)
+    result = standardized_indices(rain)
+
+    text = " ".join(team._drought_sentences(result))
+    assert "could not be determined" in text
+    assert "not in drought" not in text
+    assert "as of None" not in text
 
 
 def test_the_template_report_has_every_section_in_order_with_numbers_from_the_results(no_deliverables):

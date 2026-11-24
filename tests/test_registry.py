@@ -131,6 +131,22 @@ def test_taiwan_wra_fhy_attribution_includes_ogdl_exhibit_notice():
     assert "https://data.gov.tw/license" in attribution
 
 
+def test_taiwan_wra_iot_records_the_portal_declaration_not_the_ogdl():
+    """The IoT portal states its own 政府網站資料開放宣告, not the OGDL (#473).
+
+    https://iot.wra.gov.tw/information.jsp (read 2026-11-16) grants free,
+    non-exclusive, sub-licensable re-use and asks only that the source be
+    stated ("然使用時，應註明出處"); neither that page nor the API guide names
+    the Open Government Data License, so the registry records the declaration
+    instead of claiming the OGDL.
+    """
+    source = SOURCES["taiwan_wra_iot"]
+    assert source.license == "WRA-Open-Data-Declaration (free re-use with attribution)"
+    assert source.redistributable
+    assert "政府網站資料開放宣告" in source.attribution
+    assert "https://iot.wra.gov.tw/information.jsp" in source.attribution
+
+
 def test_poland_imgw_attribution_keeps_both_imgw_notices_verbatim():
     """#473: the terms require both notices word for word, source and processing side by side (§ 5 ust. 3 and 4)."""
     attribution = SOURCES["poland_imgw"].attribution
@@ -196,6 +212,28 @@ def test_eu_wfd_records_the_eea_cc_by_terms():
     assert "eu_wfd" in redistributable_sources()
     assert meta.attribution.startswith("© European Environment Agency (EEA)")
     assert "Waterbase" in meta.attribution and "CC BY 4.0" in meta.attribution
+
+
+def test_greece_openhi_attribution_links_the_cc_by_sa_licence_and_notes_the_changes():
+    """#473: OpenHi.net states CC BY-SA 4.0 and section 3(a)(1) also asks for the licence link.
+
+    The bilingual licence page (https://openhi.net/licence/, page modified 2020-05-13, checked
+    2026-11-16) says "The OpenHi.net data are provided under the Creative Commons
+    Attribution-ShareAlike International 4.0 licence", and its Greek twin
+    (https://openhi.net/licence-el/) says the same. Sharing an adapted copy therefore also needs
+    a link to the licence and an indication of the changes, so the attribution names the network,
+    links both the dataset and the licence, and records that AquaScope converts units and folds
+    the 15-minute series to daily values in the Archive.
+    """
+    meta = SOURCES["greece_openhi"]
+    assert meta.license == "CC-BY-SA-4.0"
+    assert meta.redistributable is True
+    assert "greece_openhi" in redistributable_sources()
+    assert "OpenHi.net" in meta.attribution
+    assert "ITIA" in meta.attribution and "NTUA" in meta.attribution
+    assert "https://openhi.net/" in meta.attribution
+    assert "https://creativecommons.org/licenses/by-sa/4.0/" in meta.attribution
+    assert "modified by AquaScope" in meta.attribution
 
 
 def test_copernicus_points_at_the_early_warning_data_store():
@@ -276,6 +314,26 @@ def test_station_catalogs_keeps_failures_visible():
     assert empty == []
 
 
+def test_colorado_cdss_carries_the_state_disclaimer():
+    """The DWR terms ask downstream sites to reproduce the disclaimer verbatim (#473)."""
+    meta = SOURCES["colorado_cdss"]
+    assert meta.license == "unknown"
+    assert meta.redistributable is False
+    required = (
+        "The data made available here has been modified for use from its original source, "
+        "which is the State of Colorado.",
+        "THE STATE OF COLORADO MAKES NO REPRESENTATIONS OR WARRANTY AS TO THE COMPLETENESS, "
+        "ACCURACY, TIMELINESS, OR CONTENT OF ANY DATA MADE AVAILABLE THROUGH THIS SITE.",
+        "THE STATE OF COLORADO EXPRESSLY DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS OR IMPLIED, "
+        "INCLUDING ANY IMPLIED WARRANTIES OF MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.",
+        "The data is subject to change as modifications and updates are complete.",
+        "It is understood that the information contained in the Web feed is being used at one's "
+        "own risk.",
+    )
+    for sentence in required:
+        assert sentence in meta.attribution
+
+
 def test_a_wrapped_catalog_failure_keeps_its_cause():
     """BOM wraps every failed parameter type in one RuntimeError; the 503 under it must reach the health report
     (#498), or the harvest files the outage as an unclassified code fault."""
@@ -340,3 +398,56 @@ def test_plain_http_catalog_sources_are_declared_browser_unreachable(built):
 def test_browser_reachable_defaults_on():
     unreachable = sorted(k for k, m in SOURCES.items() if not m.browser_reachable)
     assert unreachable == ["bom", "greece_hydroscope", "greece_openhi", "japan_mlit", "poland_imgw"], unreachable
+
+@pytest.mark.parametrize(
+    "source_id",
+    ["taiwan_datagov", "taiwan_civil_iot", "taiwan_cwa", "taiwan_moenv"],
+)
+def test_taiwan_sources_carry_the_ogdl_exhibit_notice(source_id):
+    """The OGDL asks for the Exhibit notice, not just the licence name (#473).
+
+    The English licence text at https://data.gov.tw/license (read 2026-11-16)
+    says in section 3.2 that a user "must make an explicit notice of statement
+    as attribution requested in the Exhibit", and that failing to comply voids
+    the granted rights ab initio. The Exhibit asks for the provider, the
+    dataset, the sentence below and the licence URL, so every Taiwanese source
+    in the registry carries the sentence and the link.
+    """
+    source = SOURCES[source_id]
+    assert source.license == "OGDL-Taiwan-1.0"
+    assert source.redistributable
+    assert "政府資料開放授權條款 (Open Government Data License)" in source.attribution
+    assert "使用者於遵守本條款各項規定之前提下，得利用之" in source.attribution
+    assert "https://data.gov.tw/license" in source.attribution
+
+
+@pytest.mark.parametrize(
+    ("source_id", "notice"),
+    [
+        (
+            "taiwan_datagov",
+            "經濟部水利署 (Water Resources Agency, MOEA) 2017 [即時水位資料]；"
+            "經濟部水利署 2023 [即時地下水水位資料]",
+        ),
+        (
+            "taiwan_moenv",
+            "環境部 (Ministry of Environment) 2013 [河川水質監測資料]",
+        ),
+    ],
+)
+def test_taiwan_sources_name_the_dataset_and_release_year(source_id, notice):
+    """The Exhibit names each data.gov.tw dataset and its release year (#473).
+
+    The years come from the `上架日期` column of the data.gov.tw dataset export
+    (read 2026-11-16): 25768 即時水位資料 2017-09-12, 161082 即時地下水水位資料
+    2023-02-23 and 6078 河川水質監測資料 2013-05-22.
+    """
+    assert notice in SOURCES[source_id].attribution
+
+
+def test_taiwan_cwa_cites_codis_and_its_declaration():
+    """The collector uses CODiS, whose footer links to CWA's declaration."""
+    attribution = SOURCES["taiwan_cwa"].attribution
+    assert "交通部中央氣象署 CODiS 氣候觀測資料查詢服務" in attribution
+    assert "https://www.cwa.gov.tw/V8/C/information.html" in attribution
+    assert "氣象觀測站-全測站逐時氣象資料" not in attribution

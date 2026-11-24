@@ -34,11 +34,12 @@ from __future__ import annotations
 import io
 import math
 from collections import OrderedDict
+from collections.abc import Mapping
 from typing import Any
 
 __all__ = [
     "CHECK", "DT_S", "MAX_HOURS", "METHOD", "SHAPES", "hydrograph", "places_on_path", "plan", "retro_check",
-    "route", "route_network", "route_storm",
+    "route", "route_network", "route_storm", "study_route_flood", "validate_study_scenario",
 ]
 
 #: The routing step, in seconds: GEOGLOWS v2 routes hourly ERA5 runoff, so its step is an hour.
@@ -463,7 +464,8 @@ def route(river_id: int | str | None = None, *, lat: float | None = None, lon: f
           shape: str = "triangle", hours: int | None = None, max_reaches: int = MAX_PATH,
           along: bool = True, places: list[dict[str, Any]] | None = None, frames: bool = True,
           stations: list[dict[str, Any]] | None = None, inflow_cms: list[float] | None = None,
-          inflow_source: str | None = None, through: dict[int, Any] | None = None) -> dict[str, Any]:
+          inflow_source: str | None = None, through: dict[int, Any] | None = None,
+          endpoint_hydrograph: bool = False) -> dict[str, Any]:
     """A flood wave from a reach down its river to the sea: what arrives where, when, and how flat.
 
     Water enters at the downstream end of ``river_id`` (or the reach snapped at ``lat``/``lon``): a hydrograph
@@ -479,6 +481,7 @@ def route(river_id: int | str | None = None, *, lat: float | None = None, lon: f
     (:func:`aquascope.rivers.trace_downstream`) and ``places`` lists the Archive gauges on it and any ``places``
     given (``[{"name", "lat", "lon"}]``, towns for example) with the wave where they stand. ``frames`` is the
     animation for the map (each reach's flow as a share of the peak that entered, every few hours).
+    ``endpoint_hydrograph`` retains the hourly flows in m3/s for the first and last modelled reaches.
 
     ``inflow_cms`` replaces the made-up hydrograph with a real one (#659): the flow leaving the reach, one value an
     hour from the first (m3/s), routed for as many hours as it has (``hours`` at most) with every reach on the path
@@ -576,6 +579,11 @@ def route(river_id: int | str | None = None, *, lat: float | None = None, lon: f
         res["notes"].append(f"Followed {len(path):,} reaches; the river goes on.")
     if frames:
         res["frames"] = _frames(ids, series, rows, n_steps, DT_S, peak)
+    if endpoint_hydrograph:
+        res["hydrograph"] = {
+            "start_river_id": ids[0], "end_river_id": ids[-1], "hours": list(range(n_steps + 1)),
+            "start_cms": series[0].tolist(), "end_cms": series[-1].tolist(),
+        }
     res["places"] = []
     res["geometry"] = None
     if along:
@@ -590,6 +598,68 @@ def route(river_id: int | str | None = None, *, lat: float | None = None, lon: f
             res["notes"].append(f"The gauges and towns on the way are unavailable: {exc}")
     res["message"] = _message(res)
     return res
+
+
+def validate_study_scenario(scenario: Mapping[str, Any]) -> None:
+    """Check a user-supplied flood wave before the Study reads the reach or its design flow."""
+    from aquascope import rivers
+
+    if not isinstance(scenario, Mapping):
+        raise ValueError("route_flood needs an object with river_id, duration_h and peak_cms or return_period")
+    unknown = set(scenario) - {"river_id", "duration_h", "peak_cms", "return_period", "shape", "hours", "max_reaches"}
+    if unknown:
+        raise ValueError(f"unknown route_flood inputs: {', '.join(sorted(map(str, unknown)))}")
+    river_id = scenario.get("river_id")
+    if type(river_id) is not int or not 100_000_000 <= river_id <= 999_999_999:
+        raise ValueError("river_id must be a nine-digit GEOGLOWS reach number")
+    rivers._river_id(river_id)
+    if ("peak_cms" in scenario) == ("return_period" in scenario):
+        raise ValueError("supply exactly one of peak_cms or return_period")
+
+    def number(key: str) -> int | float:
+        value = scenario.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{key} must be a number")
+        return value
+
+    duration = number("duration_h")
+    if not 0 < duration <= MAX_HOURS:
+        raise ValueError(f"duration_h must be above 0 and at most {MAX_HOURS} hours")
+    if "peak_cms" in scenario and not 0 < number("peak_cms") <= 1_000_000:
+        raise ValueError("peak_cms must be above 0 and at most 1,000,000 m3/s")
+    if "return_period" in scenario and not 2 <= number("return_period") <= 500:
+        raise ValueError("return_period must be between 2 and 500 years")
+    shape = scenario.get("shape", "triangle")
+    if shape not in SHAPES:
+        raise ValueError(f"shape must be one of {SHAPES}")
+    # Both waves start at zero; a triangle is also zero at the end of its duration.
+    if duration < 1 or (shape == "triangle" and duration == 1):
+        raise ValueError("The specified flood has no positive flow at an hourly sample; increase its duration.")
+    for key, limit in (("hours", MAX_HOURS), ("max_reaches", MAX_PATH)):
+        if key in scenario and (type(scenario[key]) is not int or not 1 <= scenario[key] <= limit):
+            raise ValueError(f"{key} must be an integer between 1 and {limit}")
+
+
+def study_route_flood(**scenario: Any) -> dict[str, Any]:
+    """Route the client's flood scenario and retain the hourly added flow at both ends."""
+    validate_study_scenario(scenario)
+    result = route(**scenario, along=False, frames=False, endpoint_hydrograph=True)
+    wave = result["hydrograph"]
+    for values in (wave["start_cms"], wave["end_cms"]):
+        if len(values) != len(wave["hours"]) or not all(math.isfinite(q) and q >= 0 for q in values):
+            raise ValueError("The hourly hydrographs need aligned, finite, non-negative flows.")
+    if not any(wave["start_cms"]):
+        raise ValueError("The specified flood has no positive flow at an hourly sample; increase its duration.")
+    result["hydrograph_check"] = {"ok": True, "summary": "Both reaches have finite, non-negative flows at every hour."}
+    result["grade"] = "screening"
+    if wave["start_river_id"] == wave["end_river_id"]:
+        result["message"] = f"Only reach {wave['start_river_id']} was modelled; both series are its hourly added flow."
+    else:
+        result["message"] = (f"The screening hydrograph gives hourly added flow from reach {wave['start_river_id']} "
+                             f"to reach {wave['end_river_id']} over {result['hours']} hours.")
+        if result["reaches"][-1]["peak_h"] is None:
+            result["message"] += " The downstream peak was not resolved within that window."
+    return result
 
 
 def _hours_words(h: float | None) -> str:

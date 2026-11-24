@@ -175,7 +175,8 @@ _k = json.loads(${payload})
 _same = (_STORE.get("source"), str(_STORE.get("station_id"))) == (_k.get("source"), str(_k.get("station_id")))
 _res = _ev.model_skill(_k.get("source"), _k.get("station_id"), series=_STORE.get("series") if _same else None,
                        lat=_k.get("lat"), lon=_k.get("lon"), area_km2=_k.get("area_km2"),
-                       published=_k.get("published") or [], include_series=True)
+                       published=_k.get("published") or [], include_series=True,
+                       verified=_k.get("verified") or [])
 json.dumps(_res, default=str)
 `;
   const out = await pyodide.runPythonAsync(code);
@@ -847,6 +848,7 @@ json.dumps(studio_table(_a["name"], _a["data"]), default=str)
   // A run draws figures and, at the end, the documents; narrate rewrites the
   // report and remakes the documents with the new prose.
   if (args.op === "approve" || args.op === "follow_up" || args.op === "narrate") {
+    await maximaCodec(args.workspace?.brief?.intake?.route_flood);
     await ensurePlotting(id);
     await ensureDocs(id);
   }

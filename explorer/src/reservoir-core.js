@@ -100,6 +100,13 @@ export function damHydrographs(res) {
 export function reservoirHeadline(res) {
   const r = res && res.reservoir;
   if (!r) return "";
+  if (!finite(r.reduction_pct)) {
+    const describe = (name, cms, hour) => finite(hour)
+      ? `${name} peaked at ${flowWords(cms)} m³/s after ${hoursWords(hour)}.`
+      : `${name} reached at most ${flowWords(cms)} m³/s during this run.`;
+    return [describe("Inflow", r.peak_in_cms, r.peak_in_h), describe("Outflow", r.peak_out_cms, r.peak_out_h),
+      "The peak reduction and delay are unknown."].join(" ");
+  }
   return `The reservoir takes the flood's peak at the dam from ${flowWords(r.peak_in_cms)} to ${flowWords(r.peak_out_cms)} m³/s, ` +
     `${Number(r.reduction_pct)} % lower and ${hoursWords(r.delay_h)} later.`;
 }
@@ -108,15 +115,17 @@ export function reservoirHeadline(res) {
 export function reservoirFacts(res) {
   const r = res && res.reservoir;
   if (!r) return [];
+  const during = finite(r.reduction_pct) ? "" : " in this run";
   const rows = [
     { label: "The flood", value: r.what },
-    { label: "Highest water", value: `${r.max_depth_m} m above the lowest ground${r.overtopped ? ", over the dam" : ""}` },
-    { label: "Held at most", value: volumeM3(r.flood_storage_m3) + " above the crest" },
+    { label: "Highest water" + during, value: `${r.max_depth_m} m above the lowest ground${r.overtopped ? ", over the dam" : ""}` },
+    { label: "Held at most" + during, value: volumeM3(r.flood_storage_m3) + " above the crest" },
     { label: "The dam", value: `crest ${r.crest_m} m, top ${r.top_m} m, spillway ${r.width_m} m wide` },
   ];
   const w = r.without || {};
   if (finite(w.furthest_peak_cms) && finite(w.furthest_peak_with_cms)) {
-    rows.push({ label: "Furthest down", value: `${flowWords(w.furthest_peak_with_cms)} m³/s, without it ${flowWords(w.furthest_peak_cms)} m³/s` });
+    rows.push({ label: "Furthest down", value: `Up to ${flowWords(w.furthest_peak_with_cms)} m³/s with the reservoir, ` +
+      `${flowWords(w.furthest_peak_cms)} m³/s without it during this run` });
   }
   return rows;
 }

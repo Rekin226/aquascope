@@ -21,7 +21,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { S, BOARDS, addFiles, boardStatus } from "../src/studio.js";
-import { state } from "../src/core.js?v=__BUILD__";
+import { actions, state } from "../src/core.js?v=__BUILD__";
 
 const METHODS = new Set([
   "addEventListener", "removeEventListener", "focus", "blur", "click", "scrollIntoView",
@@ -105,7 +105,23 @@ test("boardStatus gives waiting its own board instead of folding it into running
   assert.equal(boardStatus(), "running", "a call in flight still wins, waiting or not");
 });
 
+test("a drawn land-use change can start a Study without a selected station or point", (t) => {
+  resetState();
+  t.mock.method(actions, "landuseStudyArgs", () => ({ polygon: [[1, 2], [1, 3], [2, 2]] }));
+  assert.match(BOARDS.intake(), /data-act="study-landuse"/);
+  actions.landuseStudyArgs = () => null;
+  assert.doesNotMatch(BOARDS.intake(), /data-act="study-landuse"/);
+});
+
 // ── the waiting board ────────────────────────────────────────────────────────
+
+test("a routed flood can start a Study from the displayed wave without a selected station", (t) => {
+  resetState();
+  t.mock.method(actions, "routeStudyArgs", () => ({ scenario: { river_id: 230494421 }, lat: 51, lon: 13 }));
+  assert.match(BOARDS.intake(), /data-act="study-route"/);
+  actions.routeStudyArgs = () => null;
+  assert.doesNotMatch(BOARDS.intake(), /data-act="study-route"/);
+});
 
 test("the waiting board shows the request, and Continue without only when the crew allows it", () => {
   resetState();

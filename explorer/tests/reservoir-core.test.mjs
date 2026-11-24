@@ -65,10 +65,24 @@ test("the card says the package's numbers", () => {
   const facts = reservoirFacts(RESULT);
   assert.deepEqual(facts.map((f) => f.label), ["The flood", "Highest water", "Held at most", "The dam", "Furthest down"]);
   assert.equal(facts[2].value, "2.5 million m³ above the crest");
-  assert.equal(facts[4].value, "20 m³/s, without it 38 m³/s");
+  assert.equal(facts[4].value, "Up to 20 m³/s with the reservoir, 38 m³/s without it during this run");
   const c = hydroChart(damHydrographs(RESULT));
   assert.deepEqual(c.paths.map((p) => p.role), ["inflow", "outflow"]);
   assert.equal(c.top, 64.1);
+});
+
+test("a truncated window shows the known peak time and the highest outflow so far", () => {
+  const res = { ...RESULT, reservoir: { ...RESULT.reservoir, peak_out_h: null, reduction_pct: null, delay_h: null } };
+  assert.match(reservoirHeadline(res), /Inflow peaked at 64 m³\/s after 2 h/);
+  assert.match(reservoirHeadline(res), /Outflow reached at most 25 m³\/s during this run/);
+  assert.doesNotMatch(reservoirHeadline(res), /% lower|later|n\/a/);
+  assert.match(logLabel(res), /peak reduction unknown/);
+  assert.ok(reservoirFacts(res).some(f => f.label === "Highest water in this run"));
+
+  const dry = { reservoir: { peak_in_cms: 0, peak_out_cms: 0, peak_in_h: null, peak_out_h: null,
+    reduction_pct: null, delay_h: null } };
+  assert.match(reservoirHeadline(dry), /Inflow reached at most 0 m³\/s/);
+  assert.doesNotMatch(reservoirHeadline(dry), /peaked|rising|% lower|after 0 h/);
 });
 
 test("the lake and the run each have their slot in the log", () => {

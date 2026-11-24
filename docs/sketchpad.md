@@ -168,14 +168,15 @@ And the flood:
 **Route it through** runs `route_reservoir`: Route it's Muskingum down GEOGLOWS's network, with
 the dam's reach's outflow passed through the reservoir (`routing.route_network`'s `through`)
 before it goes on. The wave on the time bar is the flattened one past the dam. The same run is
-made without the reservoir, so the card says how much lower the peak is furthest down.
+made without the reservoir, so the card compares the highest flows reached furthest down during the run.
 
 ![A storm of 80 mm in 6 h drawn upstream and sent through the lake: deep purple above the dam, paler below it; at the dam 169 m³/s in, 106 m³/s out, and 85 m³/s at the outlet instead of 129 m³/s](img/sketchpad/reservoir-storm-desktop.jpg)
 
 The card says, all from the package: the peak into the lake and out over the spillway, how much
 lower and how much later; the highest water above the lowest ground (and whether it overtops
 the dam); the most held above the crest; the peak furthest down with the reservoir and without
-it; and the two hydrographs at the dam, hour by hour.
+it; and the two hydrographs at the dam, hour by hour. If either flow is still rising at the end,
+the card shows the highest flows reached so far. Extend the run to measure the reduction and delay.
 
 **Drag a corner** of the lake: the river and the terrain are found again, and after a run the
 flood is routed through it again. The lake and every run are in the action log, each undoable.

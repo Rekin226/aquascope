@@ -164,6 +164,11 @@ def others(station: dict, donors: dict) -> dict[str, dict]:
     rng = random.Random(5)
     sgi = [round(rng.gauss(0, 1), 3) for _ in mi]
     return {
+        "landuse_runoff": {"before": {"q_mm": 12}, "after": {"q_mm": 35}, "rain_mm": 50,
+                           "distribution": "II", "use_label": "Paved", "check": "TR-55 worked examples."},
+        "route_hydrograph": {"hydrograph_check": {"ok": True},
+                             "hydrograph": {"hours": [0, 1, 2], "start_river_id": 230494421,
+                                            "end_river_id": 230486804, "start_cms": [0, 10, 0], "end_cms": [0, 3, 6]}},
         "propagation": {"source": "bgs", "station_id": "W1", "latitude": 51.4, "longitude": -0.3,
                         "sgi": {"threshold": -1.0, "n": 120},
                         "propagation": {"best": {"timescale": 12, "lag_months": 3, "correlation": 0.71, "n": 110},

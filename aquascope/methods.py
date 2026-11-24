@@ -19,6 +19,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from aquascope.flood_depth import CITATION as FLOOD_DEPTH_CITATION
+
 __all__ = [
     "METHODS",
     "MethodPrecondition",
@@ -187,7 +189,7 @@ METHODS: dict[str, MethodPrecondition] = {
             tool="flood_inundation",
             problems=("flood_risk", "flood_inundation"),
             citation=("Bates et al. (2010), doi:10.1016/j.jhydrol.2010.03.027; de Almeida et al. (2012), "
-                      "doi:10.1029/2011WR011570; JRC Global Surface Water (Pekel et al., doi:10.1038/nature20584)."),
+                      f"doi:10.1029/2011WR011570; {FLOOD_DEPTH_CITATION}."),
             note=("Needs a GEOGLOWS reach and Terrarium terrain at run time. No surveyed bathymetry; the model "
                   "burns a one-cell channel and applies the same return period across tributaries."),
         ),

@@ -1600,11 +1600,42 @@ def _catchment_subset(desc: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-#: Where a local copy of the Archive dataset is mounted (#375). When it is set, :func:`assess_site` reads
-#: each chosen station's daily values from ``<dir>/obs/<variable>/<source>/<station_id>.csv.gz`` and fills
-#: the quality half of its :class:`~aquascope.methods.SiteContext`. Unset (the default) keeps the fast
-#: metadata-only path: no observation is read, from an agency or from Hugging Face.
+#: A local copy of the Archive dataset, if you have one (#375). Point this at it and :func:`assess_site` reads
+#: each chosen station's daily values from ``<dir>/obs/<variable>/<source>/<station_id>.csv.gz`` to fill the
+#: quality half of its :class:`~aquascope.methods.SiteContext`. Left unset, nothing is read from disk; the
+#: record is judged on its catalog span unless the Hugging Face read below is turned on.
 ARCHIVE_MIRROR_ENV = "AQUASCOPE_ARCHIVE_DIR"
+
+#: Opt-in read of the same files from the Archive dataset on Hugging Face (#375 follow-up). ``1`` (or
+#: ``true``/``yes``/``on``) lets :func:`assess_site` fetch each chosen station's file from the Hub when no local
+#: mirror holds it; ``assess_site(archive_hub=True)`` and ``aquascope assess --archive-hub`` do the same for one
+#: call. Off by default, so the default reconnaissance stays offline and as fast as the catalog.
+ARCHIVE_HUB_ENV = "AQUASCOPE_ARCHIVE_HUB"
+
+#: Seconds one Hub read may take before the record is judged on its catalog span instead.
+_HUB_TIMEOUT_S = 30.0
+
+
+def _archive_hub_on(archive_hub: bool | None = None) -> bool:
+    """Whether the Hub read is on: the caller's choice when given, else :data:`ARCHIVE_HUB_ENV`."""
+    if archive_hub is not None:
+        return bool(archive_hub)
+    return os.environ.get(ARCHIVE_HUB_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_archived(data: bytes, where: str) -> tuple[pd.Series, pd.Series] | None:
+    """An Archive ``.csv.gz`` as (daily values, quality per day), or None when it does not parse.
+
+    Shared by the local mirror and the Hub read so both give the same record for the same file.
+    """
+    from aquascope.archive.observations import read_csv_gz
+
+    try:
+        value, quality = read_csv_gz(data, include_quality=True)  # type: ignore[misc]
+    except Exception:  # noqa: BLE001 - a corrupt file is the same as a missing one here
+        logger.info("archive file unreadable: %s", where, exc_info=True)
+        return None
+    return value, quality
 
 
 def _mirror_series(
@@ -1622,19 +1653,47 @@ def _mirror_series(
     directory = root if root is not None else os.environ.get(ARCHIVE_MIRROR_ENV)
     if not directory:
         return None
-    from aquascope.archive.observations import obs_path, read_csv_gz
+    from aquascope.archive.observations import obs_path
 
     path = obs_path(Path(directory), variable, source, station_id)
     try:
         data = path.read_bytes()
     except OSError:
         return None
+    return _parse_archived(data, str(path))
+
+
+def _hub_url(source: str, station_id: str, variable: str) -> str:
+    """The station's file in the Archive dataset on Hugging Face, in the same layout as a local mirror."""
+    from aquascope.archive.catalog import catalog_url
+    from aquascope.archive.observations import obs_path
+
+    return catalog_url(filename=obs_path(Path(), variable, source, station_id).as_posix())
+
+
+def _hub_series(source: str, station_id: str, variable: str) -> tuple[pd.Series, pd.Series] | None:
+    """One station's archived daily values read from the Archive on Hugging Face, or None when it has none.
+
+    Only mirrored stations have a file, a small share of the catalogue, so a 404 is the common answer and means
+    "not mirrored"; any other failure is treated the same way: the reconnaissance never fails on the Hub. Uses
+    ``urllib`` like :func:`aquascope.archive.observations.fetch_archived_series`, so it also runs in the
+    Explorer's browser worker.
+    """
+    import urllib.error
+    import urllib.request
+
+    url = _hub_url(source, station_id, variable)
     try:
-        value, quality = read_csv_gz(data, include_quality=True)  # type: ignore[misc]
-    except Exception:  # noqa: BLE001 - a corrupt mirror file is the same as a missing one here
-        logger.info("archive mirror file unreadable: %s", path, exc_info=True)
+        with urllib.request.urlopen(url, timeout=_HUB_TIMEOUT_S) as resp:  # noqa: S310 - fixed https host
+            data = resp.read()
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            logger.info("archive hub read failed for %s: HTTP %s", url, exc.code)
         return None
-    return value, quality
+    except Exception as exc:  # noqa: BLE001 - the Hub is an opt-in extra, never a hard dependency
+        logger.info("archive hub read failed for %s: %s", url, exc)
+        return None
+    return _parse_archived(data, url)
 
 
 def record_quality_half(
@@ -1760,6 +1819,7 @@ def assess_site(
     donors: int | None = None,
     change_points: list[int] | None = None,
     probe_km: float = 0.0,
+    archive_hub: bool | None = None,
 ) -> dict[str, Any]:
     """What can be answered at a place: the gauges in reach, the catchment, and what the record supports.
 
@@ -1785,6 +1845,11 @@ def assess_site(
     values and reports completeness, longest gap, flagged fraction and Pettitt change points per variable.
     Without a mirror those fields stay empty and the judgement uses the catalog span alone; no observation is
     fetched, so the default path never calls an agency and stays as fast as the catalog.
+
+    ``archive_hub=True`` (or ``AQUASCOPE_ARCHIVE_HUB=1``; ``None``, the default, reads that variable) opts in to
+    reading the same per-station files from the Archive dataset on Hugging Face for the stations no local mirror
+    holds: no download of the whole dataset, never an agency call. A station the Archive does not mirror (a 404),
+    a failed read or an unreadable file keeps the metadata-only note.
 
     Returns ``{"point", "stations", "catchment", "context", "sufficiency", "notes"}``.
     """
@@ -1893,16 +1958,23 @@ def assess_site(
         if end is not None and (today - end).days > _STALE_AFTER_YEARS * 365:
             notes.append(f"The {what} record at {_label(st)} ends in {end.year}.")
 
-    # ── the quality half (#375): a local Archive mirror is read; without one the record is metadata-only
+    # ── the quality half (#375): a local Archive mirror is read, then (opt-in) the Archive on Hugging Face;
+    #    without either the record is metadata-only
     completeness_by: dict[str, float] = {}
     longest_gap_by: dict[str, int] = {}
     flagged_by: dict[str, float] = {}
     record_change_points: dict[str, list[int]] = {}
     mirrored: list[str] = []
+    read_from: dict[str, str] = {}
     metadata_only: list[str] = []
     mirror_root = os.environ.get(ARCHIVE_MIRROR_ENV)
+    hub = _archive_hub_on(archive_hub)
     for var, st in station_by.items():
         got = _mirror_series(str(st["source"]), str(st["station_id"]), var)
+        read_from[var] = "local Archive mirror"
+        if got is None and hub:
+            got = _hub_series(str(st["source"]), str(st["station_id"]), var)
+            read_from[var] = "Archive on Hugging Face"
         if got is None:
             metadata_only.append(var)
             continue
@@ -1920,7 +1992,7 @@ def assess_site(
         record_change_points[var] = list(half["change_points"])
     for var in mirrored:
         day_word = "day" if longest_gap_by[var] == 1 else "days"
-        line = (f"{var.replace('_', ' ').capitalize()} record (local Archive mirror): "
+        line = (f"{var.replace('_', ' ').capitalize()} record ({read_from[var]}): "
                 f"{completeness_by[var]:.1%} of the days between its first and last observation carry a value, "
                 f"at most {longest_gap_by[var]:,} {day_word} missing in one gap, "
                 f"{flagged_by[var]:.1%} flagged provisional or suspect")
@@ -1933,6 +2005,10 @@ def assess_site(
             why = f"the local Archive mirror at {mirror_root} holds no usable file for it"
         else:
             why = f"no local Archive mirror is configured (set {ARCHIVE_MIRROR_ENV})"
+        if hub:
+            why += ", and the Archive on Hugging Face has no usable file for it"
+        else:
+            why += f" and the Hugging Face read is off (set {ARCHIVE_HUB_ENV}=1 to turn it on)"
         notes.append(f"Record quality was not assessed for {names}: {why}; "
                      "the judgement uses the catalog span only.")
 

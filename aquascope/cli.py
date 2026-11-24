@@ -1938,6 +1938,22 @@ def cmd_basins(args: argparse.Namespace) -> None:
     print(f"\n  {res['attribution']}")
 
 
+def _quality_tail(ctx: dict, var: str) -> str:
+    """The quality half of one variable's record (#375) as a suffix for its line, or "" when it was not read."""
+    completeness = (ctx.get("completeness_by_variable") or {}).get(var)
+    if completeness is None:
+        return ""
+    gap = int((ctx.get("longest_gap_days") or {}).get(var, 0))
+    parts = [f"{completeness:.1%} complete", f"longest gap {gap:,} day{'' if gap == 1 else 's'}"]
+    flagged = (ctx.get("flagged_fraction") or {}).get(var)
+    if flagged:
+        parts.append(f"{flagged:.1%} flagged")
+    shifts = (ctx.get("change_points") or {}).get(var) if isinstance(ctx.get("change_points"), dict) else None
+    if shifts:
+        parts.append("change point " + ", ".join(str(y) for y in shifts))
+    return "  ·  " + ", ".join(parts)
+
+
 def _format_assessment(res: dict, *, radius_km: float) -> str:
     """The assess_site result as a short table: defensible first, one line per method with its reason."""
     from aquascope.methods import DEFENSIBLE, MARGINAL, NOT_DEFENSIBLE
@@ -1963,7 +1979,7 @@ def _format_assessment(res: dict, *, radius_km: float) -> str:
         for var, yr in years.items():
             st = next((s for s in stations if var in (s.get("variables") or []) and s.get("years") == yr), None)
             tail = f", {st.get('name') or st['station_id']} ({st['source']}/{st['station_id']})" if st else ""
-            lines.append(f"  {var.replace('_', ' ')}: {yr:g} yr{tail}")
+            lines.append(f"  {var.replace('_', ' ')}: {yr:g} yr{tail}{_quality_tail(ctx, var)}")
     else:
         lines.append("  no gauge record within reach: ungauged")
     width = max((len(r["label"]) for r in rows), default=20)
@@ -1984,8 +2000,10 @@ def cmd_assess(args: argparse.Namespace) -> None:
     """`aquascope assess LAT LON`: what can be answered at a place, from the catalog and BasinATLAS, no agency call."""
     from aquascope.explore import assess_site
 
+    hub = {"archive_hub": True} if args.archive_hub else {}  # unset leaves AQUASCOPE_ARCHIVE_HUB to decide
     res = assess_site(
-        args.lat, args.lon, radius_km=args.radius_km, problem=args.problem, return_period=args.return_period
+        args.lat, args.lon, radius_km=args.radius_km, problem=args.problem, return_period=args.return_period,
+        **hub,
     )
     if args.json:
         print(json.dumps(res, indent=2, ensure_ascii=False))
@@ -5703,6 +5721,11 @@ def main() -> None:
     )
     p_assess.add_argument("--radius-km", type=float, default=50.0, help="How far a gauge may be to count (default 50)")
     p_assess.add_argument("--return-period", type=float, default=None, help="The T (years) the question asks for")
+    p_assess.add_argument(
+        "--archive-hub", action="store_true",
+        help="Read each counted record's quality (completeness, gaps, flags, change points) from the Archive on "
+             "Hugging Face; experimental (same as AQUASCOPE_ARCHIVE_HUB=1)",
+    )
     p_assess.add_argument("--json", action="store_true")
 
     p_ctx = sub.add_parser(

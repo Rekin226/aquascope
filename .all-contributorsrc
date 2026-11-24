@@ -380,6 +380,15 @@
         "code",
         "test"
       ]
+    },
+    {
+      "login": "EricCL6",
+      "name": "EricCosta",
+      "avatar_url": "https://avatars.githubusercontent.com/u/82791557?v=4",
+      "profile": "https://github.com/EricCL6",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs"

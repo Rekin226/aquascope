@@ -132,6 +132,9 @@ def _tree(ws: Workspace, *, branch: str | None = None) -> Study:
         if kind == "landuse_change":
             rationale = "Compare runoff and peak discharge from the drawn area under the same design storm."
             caveat = "TR-55 screening for the supplied design storm."
+        elif kind == "flood_inundation":
+            rationale = "Simulate the supplied flood over terrain and export its peak depth grid."
+            caveat = "Screening grade, without surveyed bathymetry; not a property-level flood determination."
         else:
             rationale = "Route the supplied wave downstream and compare its hydrograph at the first and last reach."
             caveat = "Screening of added discharge only. Flood depth and inundation extent require a hydraulic model."
@@ -203,14 +206,18 @@ def sufficiency_for_validation(ws: Workspace) -> list[dict[str, Any]] | None:
 _GENERIC_TABLE_TOOLS = frozenset({"eda", "quality", "preprocess", "insights"})
 
 
-def _catalogue_for(problem: str | None, *, uploads: bool) -> list[dict[str, Any]]:
+def _catalogue_for(ws: Workspace, *, uploads: bool) -> list[dict[str, Any]]:
     """The catalogue as the Methodologist reads it: the entries that serve the problem, the generic site and
     station tools, the table tools (a step such as water_quality_samples, get_timeseries or load_table feeds
     them with from_step), ``about`` cut short. Tokens matter."""
     from aquascope.methods import METHODS
 
+    problem = ws.brief.kind
     rows: list[dict[str, Any]] = []
     for row in catalogue.compact(problem):
+        if (row["tool"] == "flood_inundation" and problem != "flood_inundation"
+                and ws.brief.intake.get("decision") != "inundation extent"):
+            continue
         entry = catalogue.get(row["tool"])
         if entry is None or entry.kind == "recon" or entry.id == "find_stations":
             continue
@@ -388,6 +395,9 @@ def _errors_of(steps: list[dict[str, Any]], ws: Workspace) -> list[str]:
     errors = catalogue.validate_plan(steps, sufficiency=sufficiency_for_validation(ws) or [], stations=_stations_of(ws))
     if ws.brief.kind in catalogue.SCENARIO_TOOLS and not any(st["tool"] == ws.brief.kind for st in steps):
         errors.append(f"The plan requires the {ws.brief.kind} step for the client's scenario.")
+    if (ws.brief.playbook == "flood_risk" and ws.brief.intake.get("decision") == "inundation extent"
+            and not any(st.get("tool") == "flood_inundation" for st in steps)):
+        errors.append("The client asked for inundation depth; a design flow alone cannot map it.")
     for st in steps:
         errors += _placeholder_errors(st)
     return errors
@@ -519,7 +529,7 @@ def plan_context(ws: Workspace) -> tuple[str, dict[str, Any]]:
         "uploads": uploads or None,
         "brief": _brief_compact(ws),
         "inventory": _inventory_compact(ws),
-        "catalogue": _catalogue_for(ws.brief.kind, uploads=bool(uploads)),
+        "catalogue": _catalogue_for(ws, uploads=bool(uploads)),
         "gates": CHECKS,
         "exemplar": exemplar,
     }
@@ -539,7 +549,7 @@ def change_context(ws: Workspace, request: str) -> tuple[str, dict[str, Any]]:
         "request": request, "brief": _brief_compact(ws),
         "steps": [{**s.to_dict(), "outcome": results.get(s.id)} for s in (base.steps if base else [])],
         "inventory": _inventory_compact(ws),
-        "catalogue": _catalogue_for(ws.brief.kind, uploads=uploads), "gates": CHECKS,
+        "catalogue": _catalogue_for(ws, uploads=uploads), "gates": CHECKS,
     }
 
 

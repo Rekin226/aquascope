@@ -572,6 +572,10 @@ def _open(ws: Workspace, model: Model | None, text: str, tables: dict[str, Any] 
         b.kind = "landuse_change"
         b.decision = "Compare runoff before and after the proposed land-use change"
         b.quantities = ["runoff depth", "peak discharge"]
+    elif "flood_inundation" in preset:
+        b.kind = "flood_inundation"
+        b.decision = "Map the screening inundation extent and depth for the supplied flood"
+        b.quantities = ["inundation extent", "water depth above terrain"]
     elif hints.get("decision") != "inundation extent" and (
         "route_flood" in preset or routing or re.fullmatch(r"\s*(?:please )?route it[.!]?\s*", text, re.I)
     ):

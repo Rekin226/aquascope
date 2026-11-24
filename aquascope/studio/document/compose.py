@@ -69,6 +69,7 @@ HERO: dict[str, tuple[str, ...]] = {
     "catchment_response": ("model_fit", "scenario_bars"),
     "landuse_change": ("landuse_runoff",),
     "route_flood": ("route_hydrograph",),
+    "flood_inundation": ("inundation_map",),
 }
 
 #: Figures that belong in the body for a problem kind after the hero (others go to the appendix).
@@ -234,7 +235,7 @@ def _t(t: float | None) -> str:
 
 
 def _is_flood(f: Facts) -> bool:
-    if (f.playbook or f.kind) == "route_flood":
+    if (f.playbook or f.kind) in ("route_flood", "flood_inundation"):
         return False
     return f.playbook in ("flood_risk", "flood_change") or "flood" in f.question.lower()
 
@@ -995,6 +996,11 @@ def _data_para(f: Facts) -> str:
     if (f.playbook or f.kind) == "route_flood":
         credits = dict.fromkeys(step["attribution"] for step in f.steps if step.get("attribution"))
         return " ".join(["The hourly series are the modelled discharge added by the specified flood wave.", *credits])
+    if (f.playbook or f.kind) == "flood_inundation":
+        return ("The depth raster is a screening inundation of the terrain window around the reach: a local-inertial "
+                "shallow-water run on Terrarium terrain with the GEOGLOWS reach burnt in. It is not a surveyed "
+                "floodplain map. The comparison is with JRC CEMS-GloFAS's modelled return-period hazard "
+                "depth, so it is a consistency check, not event validation.")
     if not r:
         return ("No measured record at the site was used. The estimates rest on the datasets listed in "
                 "{tab:data}.")
@@ -1245,6 +1251,12 @@ def _generic_section(doc: Document, ws: Workspace, f: Facts, step: dict[str, Any
     prose = f.prose.get(f"results-{step['id']}", "")
     prose = _STEP_NOISE.sub("", prose)
     sentences = [x for x in re.split(r"(?<=[.!?])\s+", " ".join(prose.split())) if x and len(x) > 3]
+    if tool == "flood_inundation" and step.get("ran"):
+        result = next((r.get("result") for r in (ws.run or {}).get("results", [])
+                       if r.get("id") == step["id"] and isinstance(r.get("result"), dict)), {})
+        from aquascope.studio.deliverables._payload import inundation_description
+
+        sentences.insert(0, inundation_description(result))
     if not step.get("ran"):
         sentences = [f"This analysis did not complete: {step.get('error') or 'no usable result'}."]
     has_figure = any(a.kind == "figure" and a.step == step["id"] and a.media_type == "image/png"

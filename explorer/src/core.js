@@ -171,6 +171,7 @@ export const actions = {
   openStudy: () => {},
   landuseStudyArgs: () => null,
   routeStudyArgs: () => null,
+  floodStudyArgs: () => null,
   applyUrl: () => {},
   refreshMapData: () => {},
   setOverlay: () => {},       // layer-ui.js: turn an overlay on or off as if from the rail

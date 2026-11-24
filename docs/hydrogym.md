@@ -76,8 +76,7 @@ kinds exist. Data-driven declines arise on their own (an ungauged point with
 fewer than three donor gauges; a lumped method the registry refuses at this
 catchment size). *Probes* are read off each playbook's own decline rules:
 every rule whose conditions are all over `intake.*` fields becomes an intake
-that triggers it (flood risk asked as an inundation map; a groundwater
-decline asked with its cause). By default each site gets one probe, rotating
+that triggers it (for example, a groundwater decline asked with its cause). By default each site gets one probe, rotating
 over the rules across the suite (`--probes all` gives every probe at every
 site, `--probes 0` none), so about a quarter of a suite is unsolvable.
 
@@ -237,7 +236,7 @@ when the data or the brief cannot carry the question. The registry
 (`aquascope.methods`) decides what is defensible; the playbook branch is the
 starting point and the off-tree briefs go beyond it.
 
-Twenty-five cases on seven sites, from three sources and two continents (the
+The cases below use sites from three sources and two continents (the
 Potomac at Little Falls, USGS, 96 years of discharge and sampled water
 quality; the Malad River near Gooding on the Snake River plain, USGS, 110
 years, discharge and water quality; Fish Creek near Battle Mountain, USGS,
@@ -252,7 +251,7 @@ away; La Vègre à Asnières-sur-Vègre, Hub'Eau, 46 years):
 | flood_risk | `flood_at_site_potomac` | trend pre-test, two fits with a band and the spread, T = 100 at 96 years |
 | | `flood_short_record_fish_creek` | 8.5 years: the record summarised, the fit forbidden (below the 10-year floor), donors and transferred signatures, T = 50 |
 | | `flood_regional_nevada` | no gauge: catchment, donors, transferred signatures; every station tool forbidden |
-| | `flood_inundation_declined_potomac` | inundation extent: declined |
+| | `flood_inundation_potomac` | inundation extent: screening depth grid |
 | ungauged_flow | `ungauged_at_gauge_oregon` | the 22-year gauge's flow-duration curve, the signatures transferred to the point beside it |
 | | `ungauged_regional_nevada` | catchment, donors, signatures with band and skill |
 | groundwater_decline | `gw_well_tetbury` | Sen's slope with Mann-Kendall at the 50-year borehole, the SGI, recharge optional; the drawdown tool forbidden (no T, S, Q) |
@@ -275,7 +274,7 @@ away; La Vègre à Asnières-sur-Vègre, Hub'Eau, 46 years):
 | off-tree (irrigation_feasibility) | `offtree_supply_crop_vegre` | the crop demand first, the gauge's record in its own right, then the screening of the peak demand |
 | off-tree (drought_status) | `offtree_drought_well_river_tetbury` | the indices, the propagation to the borehole, the borehole's trend and the river's low-flow context, all required |
 
-Seven cases decline. One data-driven decline of the playbooks (fewer than
+Six cases decline. One data-driven decline of the playbooks (fewer than
 three donors at an ungauged point) does not arise at any real site, because
 the donor pool is the whole archive (37,053 gauged catchments), so the
 declines are the intake rules and the water-quality rule. The

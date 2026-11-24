@@ -31,7 +31,7 @@ import { packedRamp, paintGrid } from "./mesh-views-core.js?v=__BUILD__";
 import { clearMesh, currentMesh, onMeshCleared, openModelFile, runMeshTool } from "./mesh-view.js?v=__BUILD__";
 import { setMeshLens } from "./mesh-views.js?v=__BUILD__";
 import {
-  FLOODSIM_CREDIT, LABEL, WET_M, corners, depthOverTerrain, pxLonLat, runLoop, summary, terrariumElevation, ugridFile,
+  FLOODSIM_CREDIT, LABEL, WET_M, corners, depthOverTerrain, floodStudyArgs, pxLonLat, runLoop, summary, terrariumElevation, ugridFile,
   unpackDepth, wallContact, wallWords, wetBox, windowTiles, hm, flowLine, clockLabel, clockSummary, depthTag,
 } from "./floodsim-core.js?v=__BUILD__";
 import { createGpuSim, gpuAvailable } from "./floodsim-gpu.js?v=__BUILD__";
@@ -1041,6 +1041,7 @@ export async function floodReach(reach, a = {}, { by = "rules" } = {}) {
 }
 
 export function initFloodIt() {
+  actions.floodStudyArgs = () => shown ? floodStudyArgs(shown) : null;
   actions.openFloodIt = (t) => floodIt(t);
   actions.floodReach = floodReach;
   actions.sketchFlood = sketchAction;

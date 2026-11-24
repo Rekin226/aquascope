@@ -42,6 +42,20 @@ function sandbox() {
   return { ctx, posted, delays };
 }
 
+test("Study loads maxima codec for an approved inundation step", async () => {
+  for (const [workspace, expected] of [
+    [{ brief: { intake: {} }, study: { steps: [{ tool: "flood_inundation" }] } }, 1],
+    [{ brief: { intake: { flood_inundation: { flow_cms: 12 } } }, study: { steps: [] } }, 1],
+    [{ brief: { intake: {} }, study: { steps: [{ tool: "return_periods" }] } }, 0],
+  ]) {
+    const { ctx } = sandbox();
+    ctx.__loads = [];
+    vm.runInContext('ensureStudioPython = async () => {}; ensurePlotting = async () => {}; ensureDocs = async () => {}; maximaCodec = async (args) => { if (args) __loads.push(args); };', ctx);
+    await ctx.onmessage({ data: { type: "studio", id: 1, op: "approve", workspace } });
+    assert.equal(ctx.__loads.length, expected);
+  }
+});
+
 // Two calls of each type, the first slower to start than the second: the order that cleared the first one's
 // arguments when they travelled through one global per type (several gauges selected quickly).
 const CASES = [

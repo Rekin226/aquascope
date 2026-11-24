@@ -326,6 +326,11 @@ def _payload_for(kind: str, station: dict, drought: dict, donors: dict, climate:
         return climate, None
     if kind == "samples_by_parameter":
         return samples, None
+    if kind == "inundation_map":
+        from aquascope.floodsim import depth_payload
+
+        grid = {"window": {"x0": 0, "y0": 0, "nx": 2, "ny": 2, "zoom": 10}}
+        return {"depth": depth_payload(grid, [[1, 0], [2, 3]]), "summary": {"river_id": 1}}, None
     if kind == "site_map":
         return others["site_map"], {**SITE, "stations": recon["stations"]}
     if kind in ADVANCED_KINDS:

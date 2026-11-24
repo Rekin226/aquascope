@@ -735,7 +735,7 @@ def _sentences_for(tool: str, payload: dict[str, Any], study: Study) -> list[str
         if bits:
             out.append(f"Signatures transferred from {payload.get('n_donors_available') or ''} donors "
                        f"({payload.get('method')}): " + "; ".join(bits) + ".")
-    elif tool == "route_flood":
+    elif tool in ("route_flood", "flood_inundation"):
         if payload.get("message"):
             out.append(payload["message"])
         if (check := payload.get("check", {}).get("summary")):

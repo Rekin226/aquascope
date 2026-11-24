@@ -36,12 +36,14 @@ _NOT_STEPS = frozenset({
 LOAD_TABLE = "load_table"
 
 # These methods take a structured scenario supplied by the client during intake.
-SCENARIO_TOOLS = frozenset({"landuse_change", "route_flood"})
+SCENARIO_TOOLS = frozenset({"landuse_change", "route_flood", "flood_inundation"})
 
 
 def validate_scenario(tool: str, scenario: Any) -> None:
     if tool == "landuse_change":
         from aquascope.sketch.landuse import validate_study_scenario
+    elif tool == "flood_inundation":
+        from aquascope.floodsim import validate_flood_scenario as validate_study_scenario
     elif tool == "route_flood":
         from aquascope.routing import validate_study_scenario
     else:
@@ -199,6 +201,12 @@ _ANNOTATIONS: dict[str, dict[str, Any]] = {
         "gates": [{"check": "not_empty", "path": "hydrograph"},
                   {"check": "status_is", "path": "hydrograph_check.ok", "value": True},
                   {"check": "not_empty", "path": "check.summary"}],
+    },
+    "flood_inundation": {
+        "kind": "site", "yields": ["summary", "depth"], "methods": ["flood_inundation"],
+        "tables": ["inundation_summary"], "figures": ["inundation_map"],
+        "gates": [{"check": "not_empty", "path": "depth"},
+                  {"check": "status_is", "path": "check.ok", "value": True}],
     },
     "supply_reliability": {
         "kind": "site", "yields": ["reliability", "fdc"], "methods": ["supply_reliability", "regionalize_signatures"],

@@ -1,0 +1,28 @@
+# Screening reference plan; the archived benchmark results keep the old decline case unchanged.
+id: flood_inundation_potomac
+playbook: flood_risk
+title: Screening inundation extent at Little Falls
+brief: >-
+  Screen the 100-year flood inundation extent and depth along the Potomac below Little Falls.
+intake:
+  return_period: 100
+  decision: inundation extent
+site:
+  name: Potomac River near Washington, DC (Little Falls pump station)
+  lat: 38.94978
+  lon: -77.12764
+  source: usgs
+  station_id: USGS-01646500
+  years: 96.5
+  recon: potomac_little_falls
+expected_branch: inundation
+steps:
+  - tool: flood_inundation
+    method: flood_inundation
+    gates:
+      - {check: not_empty, path: depth}
+      - {check: status_is, path: check.ok, value: true}
+rationale: >-
+  A terrain-based local-inertial model provides a screening depth grid, not a definitive map of individual
+  streets or houses. Terrain errors, absent bathymetry, simplified channels and simultaneous return-period
+  forcing limit its use; check model status and depth, and use a calibrated local hydraulic model for decisions.

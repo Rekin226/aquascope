@@ -1254,6 +1254,42 @@ def _route_hydrograph(payload: dict[str, Any], unit: str | None, site: dict[str,
     return fig, caption
 
 
+def _inundation_map(payload: dict[str, Any], unit: str | None, site: dict[str, Any] | None) -> Drawn | None:
+    pack = payload.get("depth")
+    summary = payload.get("summary")
+    if not isinstance(pack, dict) or not isinstance(summary, dict) or not summary:
+        return None
+    import numpy as np
+
+    from aquascope.floodsim import depth_from_payload
+
+    try:
+        depth = np.asarray(depth_from_payload(pack), dtype=float)
+    except (KeyError, TypeError, ValueError):
+        return None
+    if depth.ndim != 2 or not depth.size:
+        return None
+    fig, ax = _figure(height=3.6)
+    shown = np.ma.masked_where(depth <= 0.05, depth)
+    im = ax.imshow(shown, origin="upper", cmap="Blues", interpolation="nearest", vmin=0)
+    bar = fig.colorbar(im, ax=ax, shrink=0.85)
+    bar.set_label("Flood depth above the terrain (m)")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_xlabel("Terrain window of the screened reach")
+    rid = summary.get("river_id")
+    from aquascope.studio.deliverables._payload import inundation_description
+
+    wet = num(summary.get("wet_km2"))
+    deepest = num(summary.get("max_depth_m"))
+    caption = f"Flood on the terrain window around reach {rid}. {inundation_description(payload)}"
+    if wet is not None and deepest is not None:
+        caption += f" {wet:g} km2 wet, deepest {deepest:.2f} m."
+    caption += (" No bathymetry, terrain errors of metres and a one-cell channel; the depth is "
+                "above the terrain surface, not a surveyed floodplain.")
+    return fig, caption
+
+
 def _landuse_runoff(payload: dict[str, Any], unit: str | None, site: dict[str, Any] | None) -> Drawn | None:
     before = num((payload.get("before") or {}).get("q_mm"))
     after = num((payload.get("after") or {}).get("q_mm"))
@@ -1350,6 +1386,7 @@ MAKERS: dict[str, Callable[[dict[str, Any], str | None, dict[str, Any] | None], 
     "scenario_bars": _scenario_bars,
     "landuse_runoff": _landuse_runoff,
     "route_hydrograph": _route_hydrograph,
+    "inundation_map": _inundation_map,
     "projection_spread": _projection_spread,
     "regional_growth": _regional_growth,
 }

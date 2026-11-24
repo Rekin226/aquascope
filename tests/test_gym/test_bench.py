@@ -86,7 +86,9 @@ def _tools(calls):
 
 @pytest.fixture(scope="module")
 def suite():
-    return gt.tasks_from_playbooks([LONG, SHORT, POINT], ["flood_risk", "ungauged_flow"], recon=fake_recon, probes=1)
+    tasks = gt.tasks_from_playbooks([LONG, SHORT, POINT], ["flood_risk", "ungauged_flow", "groundwater_decline"],
+                                    recon=fake_recon, probes=1)
+    return [t for t in tasks if t.playbook != "groundwater_decline" or t.probe]
 
 
 def test_the_tree_scores_every_task_on_its_own_keys(suite, tmp_path):
@@ -136,7 +138,7 @@ def test_the_keyless_team_and_an_unsolvable_probe(suite):
     probe = next(t for t in suite if t.probe and t.site.get("station_id") == "3400TH")
     (res,) = gb.run_bench([probe], "team")
     assert res.unsolvable and res.declined and res.declined_correctly and res.correct
-    assert res.model is None and res.tokens == 0 and "Inundation extent" in (res.declined_reason or "")
+    assert res.model is None and res.tokens == 0 and "pumping" in (res.declined_reason or "")
     assert not res.answer_present and res.branch_chosen is None
     md = gb.leaderboard([res])
     assert "| team | keyless | 1 (0 + 1) | - | - (0) | 100 % |" in md
@@ -150,7 +152,7 @@ def test_the_ask_loop_is_read_off_its_tool_calls_and_its_answer(suite):
         [("assess_site", {"lat": 51.415, "lon": -0.308})],
         [("flood_frequency", {"source": "uk_ea", "station_id": "3400TH"})],
         "The 100-year flow at Kingston (uk_ea 3400TH, 1986-08-17 to 2026-08-15) is about 520 m3/s by GEV.",
-        "Inundation extent is out of scope: it needs a hydraulic model over terrain, which these tools do not run.",
+        "I cannot attribute the groundwater decline to pumping without pumping records.",
     ])
     with patch("aquascope.mcp_server.assess_site", return_value=fake_recon(51.415, -0.308)), \
          patch("aquascope.mcp_server.flood_frequency", return_value=FLOW):

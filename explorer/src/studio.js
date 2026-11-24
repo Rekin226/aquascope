@@ -261,10 +261,12 @@ function intakeHtml() {
   const route = !started && actions.routeStudyArgs()
     ? '<button type="button" class="chip" data-act="study-route">Study this routed flood wave</button>'
     : "";
-  const empty = [landuse && "Drawn land-use area", route && "Routed flood wave"].filter(Boolean).join(" · ") ||
+  const flood = !started && actions.floodStudyArgs()
+    ? '<button type="button" class="chip" data-act="study-flood">Study this screening flood</button>' : "";
+  const empty = [landuse && "Drawn land-use area", route && "Routed flood wave", flood && "Screening flood"].filter(Boolean).join(" · ") ||
     '<span class="muted">Pick a gauge or a spot on the map first.</span>';
   const place = w ? w.html : empty;
-  return `<p class="study-where">${place}</p>${landuse}${route}${tries}${model}${data}${resume}${recorded}`;
+  return `<p class="study-where">${place}</p>${landuse}${route}${flood}${tries}${model}${data}${resume}${recorded}`;
 }
 
 // What a study can be, as questions to start one with: the design flow, and the studies that come after it
@@ -1740,6 +1742,15 @@ function onBoardClick(e) {
       const label = `River reach ${scenario.river_id}`;
       start("Route this flood wave downstream.", {
         intake: { route_flood: scenario }, site: { key: `p/${lat},${lon}`, lat, lon, text: label, html: label },
+      });
+    }
+    else if (what === "study-flood") {
+      const flood = actions.floodStudyArgs();
+      if (!flood || S.busy || S.ws) return;
+      const { lat, lon, scenario } = flood;
+      const label = `River reach ${scenario.river_id}`;
+      start("Study this screening flood inundation.", {
+        intake: { flood_inundation: scenario }, site: { key: `p/${lat},${lon}`, lat, lon, text: label, html: label },
       });
     }
     else if (what === "my-data") { S.useMyData = !S.useMyData; renderBoard(); }

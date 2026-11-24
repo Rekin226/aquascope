@@ -239,8 +239,8 @@ def _reach_record_tool(lat: float | None = None, lon: float | None = None, river
 
 
 def _tool_specs() -> list[ToolSpec]:
+    from aquascope import floodsim, routing
     from aquascope import mcp_server as t
-    from aquascope import routing
     from aquascope.explore import anywhere
     from aquascope.sketch import landuse
 
@@ -438,6 +438,21 @@ def _tool_specs() -> list[ToolSpec]:
                 "max_reaches": {"type": "integer", "minimum": 1, "maximum": routing.MAX_PATH},
             }, "required": ["river_id", "duration_h"], "additionalProperties": False},
             routing.study_route_flood,
+        ),
+        ToolSpec(
+            "flood_inundation",
+            "Screening inundation depth at a reach or point (local-inertial run on Terrarium terrain); supply "
+            "river_id or lat and lon, and return_period or flow_cms. Screening grade.",
+            {"type": "object", "properties": {
+                "river_id": {"type": "integer", "minimum": 100_000_000, "maximum": 999_999_999},
+                "lat": {"type": "number", "minimum": -90, "maximum": 90},
+                "lon": {"type": "number", "minimum": -180, "maximum": 180},
+                "return_period": {"type": "number", "minimum": 2, "maximum": 500},
+                "flow_cms": {"type": "number", "exclusiveMinimum": 0, "maximum": 100_000},
+                "hours": {"type": "number", "exclusiveMinimum": 0, "maximum": floodsim.CAP_HOURS},
+                "coarse": {"type": "boolean"},
+            }, "required": [], "additionalProperties": False},
+            floodsim.study_flood_inundation,
         ),
         ToolSpec(
             "landuse_change",

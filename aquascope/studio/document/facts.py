@@ -71,6 +71,7 @@ TOOL_WORDS = {
     "catchment_model": "rainfall-runoff model",
     "landuse_change": "land-use change and storm runoff (TR-55)",
     "route_flood": "flood-wave routing (Muskingum)",
+    "flood_inundation": "screening inundation depth (local-inertial shallow water)",
     "recharge": "groundwater recharge",
     "pot_flood": "peaks-over-threshold flood frequency",
     "nonstationary_flood": "nonstationary flood frequency",

@@ -616,6 +616,21 @@ def _route_hydrograph(payload: dict[str, Any]) -> Table | None:
                   for h, start, end in zip(hydro["hours"], hydro["start_cms"], hydro["end_cms"])]
 
 
+def _inundation_summary(payload: dict[str, Any]) -> Table | None:
+    summary = payload.get("summary")
+    if not isinstance(summary, dict) or not summary:
+        return None
+    cols = ["river_id", "flow", "flow_cms", "equivalent_return_period", "hours_run", "steady_at_h",
+            "wet_km2", "max_depth_m", "cells", "cell_m", "nx", "ny", "zoom", "grade", "method",
+            "check_status", "csi", "steady_status"]
+    check = payload.get("check") or {}
+    steady = ("reached" if summary.get("steady_at_h") is not None else
+              "not_reached" if summary.get("hours_run") is not None else "unknown")
+    values = {**summary, "equivalent_return_period": summary.get("return_period"), "grade": payload.get("grade"),
+              "check_status": check.get("status"), "csi": check.get("csi"), "steady_status": steady}
+    return cols, [[values.get(c) for c in cols]]
+
+
 def _landuse_runoff(payload: dict[str, Any]) -> Table | None:
     before, after = payload.get("before"), payload.get("after")
     if not before or not after or not payload.get("check"):
@@ -714,6 +729,7 @@ MAKERS: dict[str, Callable[[dict[str, Any]], Table | None]] = {
     "scenarios": _scenario_table,
     "landuse_runoff": _landuse_runoff,
     "route_hydrograph": _route_hydrograph,
+    "inundation_summary": _inundation_summary,
     "projection_models": _projection_models,
     "projection_ensemble": _projection_ensemble,
     "regional_sites": _regional_sites,
@@ -777,6 +793,10 @@ def tables_for(step_id: str, tool: str, payload: dict[str, Any], *, names: list[
             continue
         columns, rows = table
         caption = CAPTIONS.get(name, f"{name.replace('_', ' ')} for {{record}}.").format(record=record)
+        if name == "inundation_summary":
+            from aquascope.studio.deliverables._payload import inundation_description
+
+            caption = inundation_description(payload)
         out.append(Artifact(id=f"tab-{step_id}-{name}", kind="table", name=f"tables/{step_id}_{name}.csv",
                             data=csv_bytes(columns, rows), media_type=MEDIA_TYPES["csv"], caption=caption,
                             step=step_id, meta={"columns": list(columns), "rows": len(rows), "name": name,

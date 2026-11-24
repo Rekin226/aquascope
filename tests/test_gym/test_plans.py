@@ -59,6 +59,15 @@ def test_the_reference_plans_load_and_validate():
     assert [r["id"] for r in rows] == [r.id for r in REFS] and rows[0]["site"]
 
 
+def test_inundation_reference_is_a_screening_plan():
+    ref = BY_ID["flood_inundation_potomac"]
+    assert not ref.decline and ref.expected_branch == "inundation"
+    step, = ref.required_steps
+    assert step.tool == step.method == "flood_inundation"
+    assert step.gates == [{"check": "not_empty", "path": "depth"},
+                          {"check": "status_is", "path": "check.ok"}]
+
+
 def test_the_recon_is_narrowed_to_the_playbooks_problem_like_the_scout_does():
     from aquascope.methods import METHODS
 
@@ -99,7 +108,7 @@ def test_validation_catches_an_unknown_tool_a_forbidden_required_step_and_a_miss
     lost = gp.Reference.from_dict({**BY_ID["flood_at_site_potomac"].to_dict(), "site": {"lat": 1, "lon": 2,
                                                                                          "recon": "missing"}})
     assert any("recon 'missing'" in e for e in gp.validate_reference(lost))
-    declined = gp.Reference.from_dict({**BY_ID["flood_inundation_declined_potomac"].to_dict(),
+    declined = gp.Reference.from_dict({**BY_ID["wq_health_verdict_declined_potomac"].to_dict(),
                                        "decline_kind": "whatever"})
     assert any("decline_kind" in e for e in gp.validate_reference(declined))
 
@@ -465,15 +474,15 @@ def test_an_alternative_step_covers_the_tool_the_method_and_the_check():
 def test_rescore_reads_the_stored_plans_again_without_running_the_agent(tmp_path, monkeypatch):
     out = tmp_path / "tree.jsonl"
     rows = gp.run_plan_bench(None, "tree", out=out, case_ids=["offtree_atsite_vs_regional_potomac",
-                                                              "flood_inundation_declined_potomac"])
+                                                              "wq_health_verdict_declined_potomac"])
     assert sorted(r.score for r in rows if r.score is not None) == [1.0]
     easier = gp.Reference.from_dict({**BY_ID["offtree_atsite_vs_regional_potomac"].to_dict(), "steps": [
         {"tool": "analyze_station", "method": "trend_mann_kendall"},
         {"tool": "flood_frequency", "method": "at_site_flood_frequency"}]})
     stored = gp.load_plan_results([out], latest=False)
-    again = gp.rescore_plans(stored, [easier, BY_ID["flood_inundation_declined_potomac"]])
+    again = gp.rescore_plans(stored, [easier, BY_ID["wq_health_verdict_declined_potomac"]])
     by_case = {r.case_id: r.score for r in again}
-    assert by_case["flood_inundation_declined_potomac"] is None
+    assert by_case["wq_health_verdict_declined_potomac"] is None
     # the composed plan carries the two regional steps, which the easier reference counts as extraneous
     assert by_case["offtree_atsite_vs_regional_potomac"] == pytest.approx(0.94, abs=0.01)
     assert again[0].explain and any(r.decline_correct is None for r in again)

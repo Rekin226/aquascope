@@ -1600,10 +1600,10 @@ def _catchment_subset(desc: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-#: Where a local copy of the Archive dataset is mounted (#375). When it is set, :func:`assess_site` reads
-#: each chosen station's daily values from ``<dir>/obs/<variable>/<source>/<station_id>.csv.gz`` and fills
-#: the quality half of its :class:`~aquascope.methods.SiteContext`. Unset (the default) keeps the fast
-#: metadata-only path: no observation is read, from an agency or from Hugging Face.
+#: A local copy of the Archive dataset, if you have one (#375). Point this at it and :func:`assess_site` reads
+#: each chosen station's daily values from ``<dir>/obs/<variable>/<source>/<station_id>.csv.gz`` to fill the
+#: quality half of its :class:`~aquascope.methods.SiteContext`. Left unset, nothing is read from disk; the
+#: record is judged on its catalog span unless the Hugging Face read below is turned on.
 ARCHIVE_MIRROR_ENV = "AQUASCOPE_ARCHIVE_DIR"
 
 #: Opt-in read of the same files from the Archive dataset on Hugging Face (#375 follow-up). ``1`` (or

@@ -40,9 +40,6 @@ checklist:
     ask: What do you need to know about flooding here?
     why: Each goal takes a different method, a trend test, a design estimate or a quick screen.
     options:
-      - value: flood attenuation
-        label: How a drawn reservoir reduces a flood peak
-        match: \b(flood attenuation|attenuat\w* (?:the |a )?flood|reservoir.{0,35}(?:flood peak|attenuat))\b
       - value: flood trend
         label: Whether floods are getting bigger (trend)
         match: \b(worse|bigger|larger|more (often|frequent|severe)|increas\w*|ris(e|es|ing)|trend\w*)\b
@@ -58,6 +55,9 @@ checklist:
       - value: inundation extent
         label: Where the water goes and how deep (screening map)
         match: \b(inundat\w*|flood map|flood extent|how deep|depth|streets|fields)\b
+      - value: flood attenuation
+        label: How a drawn reservoir reduces a flood peak
+        match: \b(flood attenuation|attenuat\w* (?:the |a )?flood|reservoir.{0,35}(?:flood peak|attenuat))\b
   - field: return_period
     when:
       - path: intake.decision

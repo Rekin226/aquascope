@@ -263,10 +263,12 @@ function intakeHtml() {
     : "";
   const flood = !started && actions.floodStudyArgs()
     ? '<button type="button" class="chip" data-act="study-flood">Study this screening flood</button>' : "";
-  const empty = [landuse && "Drawn land-use area", route && "Routed flood wave", flood && "Screening flood"].filter(Boolean).join(" · ") ||
+  const reservoir = !started && actions.reservoirStudyArgs()
+    ? '<button type="button" class="chip" data-act="study-reservoir">Study this reservoir flood</button>' : "";
+  const empty = [reservoir && "Drawn reservoir", landuse && "Drawn land-use area", route && "Routed flood wave", flood && "Screening flood"].filter(Boolean).join(" · ") ||
     '<span class="muted">Pick a gauge or a spot on the map first.</span>';
   const place = w ? w.html : empty;
-  return `<p class="study-where">${place}</p>${landuse}${route}${flood}${tries}${model}${data}${resume}${recorded}`;
+  return `<p class="study-where">${place}</p>${landuse}${route}${flood}${reservoir}${tries}${model}${data}${resume}${recorded}`;
 }
 
 // What a study can be, as questions to start one with: the design flow, and the studies that come after it
@@ -933,7 +935,7 @@ async function start(text, { intake: given = null, site = null } = {}) {
       if (my !== S.run) return;
       if (read) ({ intake, brief } = read);
     }
-    if (given?.landuse_change || given?.route_flood) {
+    if (given?.landuse_change || given?.route_flood || given?.reservoir_routing) {
       // These scenarios use their supplied polygon or river reach.
       S.catchment = S.area = S.donors = null;
       S.siteReady = true;
@@ -996,7 +998,12 @@ function send(given) {
   if (!S.ws) { start(text); return; }
   const st = S.ws.status;
   if (st === "done") callStudio("follow_up", { text });
-  else if (st === "intake" || st === "review" || st === "waiting") callStudio("say", { text });
+  else if (st === "intake" || st === "review" || st === "waiting") {
+    const drawn = st === "intake" && S.ws.brief?.playbook === "flood_risk" &&
+      /^(how a drawn reservoir reduces a flood peak|flood attenuation)$/i.test(text) && actions.reservoirStudyArgs();
+    const sameSite = drawn && drawn.lat === S.ws.site?.lat && drawn.lon === S.ws.site?.lon;
+    callStudio("say", sameSite ? { text, reservoir_routing: drawn.scenario } : { text });
+  }
   else if (st === "declined") { reset(); start(text); }
 }
 
@@ -1742,6 +1749,15 @@ function onBoardClick(e) {
       const label = `River reach ${scenario.river_id}`;
       start("Route this flood wave downstream.", {
         intake: { route_flood: scenario }, site: { key: `p/${lat},${lon}`, lat, lon, text: label, html: label },
+      });
+    }
+    else if (what === "study-reservoir") {
+      const drawn = actions.reservoirStudyArgs();
+      if (!drawn || S.busy || S.ws) return;
+      const { lat, lon, scenario } = drawn;
+      start("Compare flood inflow and outflow at this reservoir.", {
+        intake: { decision: "flood attenuation", reservoir_routing: scenario },
+        site: { key: `p/${lat},${lon}`, lat, lon, text: "Drawn reservoir", html: "Drawn reservoir" },
       });
     }
     else if (what === "study-flood") {

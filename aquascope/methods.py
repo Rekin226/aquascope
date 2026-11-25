@@ -20,6 +20,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from aquascope.flood_depth import CITATION as FLOOD_DEPTH_CITATION
+from aquascope.sketch.reservoir import METHOD as RESERVOIR_METHOD
 
 __all__ = [
     "METHODS",
@@ -169,6 +170,12 @@ METHODS: dict[str, MethodPrecondition] = {
             citation="Vogel & Fennessey (1994)",
             assumes=("stationarity",),
             sensitive_to=("regulation",),
+        ),
+        MethodPrecondition(
+            "reservoir_routing", "Level-pool routing through a drawn reservoir", None,
+            needs=("reservoir scenario",), tool="reservoir_routing", problems=("flood_risk",),
+            citation=RESERVOIR_METHOD["citation"],
+            note="Single-event screening using terrain-derived storage and an uncontrolled spillway.",
         ),
         MethodPrecondition(
             "route_flood",
@@ -616,6 +623,18 @@ def assess_method(method: MethodPrecondition | str, ctx: SiteContext) -> dict[st
                            _SENSITIVE_WORDS.get(cond, f"sensitive to {cond}, which is present here"))
 
     return {"method": pre.id, "status": status, "reason": "; ".join(reasons) if reasons else "the record supports it"}
+
+
+def assess_reservoir_scenario(scenario: Any) -> dict[str, Any]:
+    """Check the client-supplied reservoir and flood before any terrain or network reads."""
+    from aquascope.sketch.reservoir_study import validate_scenario
+
+    try:
+        validate_scenario(scenario)
+    except ValueError as exc:
+        return {**assess_method("reservoir_routing", SiteContext()), "reason": str(exc)}
+    row = assess_method("reservoir_routing", SiteContext(available={"reservoir scenario"}))
+    return {**row, "scenario": scenario, "reason": "Reservoir geometry and flood inputs are specified."}
 
 
 def assess_inundation_scenario(scenario: Any, *, missing_reach: str | None = None) -> dict[str, Any]:

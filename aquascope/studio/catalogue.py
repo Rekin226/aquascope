@@ -36,12 +36,14 @@ _NOT_STEPS = frozenset({
 LOAD_TABLE = "load_table"
 
 # These methods take a structured scenario supplied by the client during intake.
-SCENARIO_TOOLS = frozenset({"landuse_change", "route_flood", "flood_inundation"})
+SCENARIO_TOOLS = frozenset({"landuse_change", "route_flood", "flood_inundation", "reservoir_routing"})
 
 
 def validate_scenario(tool: str, scenario: Any) -> None:
     if tool == "landuse_change":
         from aquascope.sketch.landuse import validate_study_scenario
+    elif tool == "reservoir_routing":
+        from aquascope.sketch.reservoir_study import validate_scenario as validate_study_scenario
     elif tool == "flood_inundation":
         from aquascope.floodsim import validate_flood_scenario as validate_study_scenario
     elif tool == "route_flood":
@@ -194,6 +196,13 @@ _ANNOTATIONS: dict[str, dict[str, Any]] = {
         "tables": ["landuse_runoff"], "figures": ["landuse_runoff"],
         "gates": [{"check": "not_empty", "path": "change"},
                   {"check": "status_is", "path": "reference_check.ok", "value": True}],
+    },
+    "reservoir_routing": {
+        "kind": "site", "yields": ["hydrograph", "summary"], "methods": ["reservoir_routing"],
+        "tables": ["reservoir_hydrograph"], "figures": ["reservoir_hydrograph"],
+        "gates": [{"check": "not_empty", "path": "hydrograph.inflow_cms"},
+                  {"check": "not_empty", "path": "hydrograph.outflow_cms"},
+                  {"check": "status_is", "path": "check.ok", "value": True}],
     },
     "route_flood": {
         "kind": "site", "yields": ["hydrograph"], "methods": ["route_flood"],

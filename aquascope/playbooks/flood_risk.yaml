@@ -25,7 +25,7 @@ intake:
   - name: decision
     label: What is being decided
     type: choice
-    options: [flood trend, design flow, risk screening, insurance, inundation extent]
+    options: [flood trend, design flow, risk screening, insurance, inundation extent, flood attenuation]
     default: design flow
   - name: years
     label: Years of record to use (empty for the whole record; a trend needs at least 20)
@@ -55,6 +55,9 @@ checklist:
       - value: inundation extent
         label: Where the water goes and how deep (screening map)
         match: \b(inundat\w*|flood map|flood extent|how deep|depth|streets|fields)\b
+      - value: flood attenuation
+        label: How a drawn reservoir reduces a flood peak
+        match: \b(flood attenuation|attenuat\w* (?:the |a )?flood|reservoir.{0,35}(?:flood peak|attenuat))\b
   - field: return_period
     when:
       - path: intake.decision
@@ -89,6 +92,26 @@ checklist:
       - value: 30
         label: The last 30 years
 branches:
+  - id: reservoir_attenuation
+    when:
+      - path: intake.decision
+        op: "=="
+        value: flood attenuation
+    rationale: Route the supplied event through the drawn reservoir and compare inflow and outflow at the dam.
+    steps:
+      - id: s1
+        tool: reservoir_routing
+        method: reservoir_routing
+        arguments_from_intake: reservoir_routing
+        rationale: Single-event level-pool routing with terrain-derived storage and an uncontrolled spillway.
+        expects:
+          - check: not_empty
+            path: hydrograph.inflow_cms
+          - check: not_empty
+            path: hydrograph.outflow_cms
+          - check: status_is
+            path: check.ok
+            value: true
   - id: inundation
     when:
       - path: intake.decision
@@ -421,8 +444,8 @@ branches:
 declines:
   - when:
       - path: intake.decision
-        op: "!="
-        value: inundation extent
+        op: in
+        value: [flood trend, design flow, risk screening, insurance]
       - path: derived.return_period_beyond_cap
         op: "=="
         value: true
@@ -437,6 +460,13 @@ declines:
       a regional screening.
 caveats:
   - say: >-
+      This screens one flood through a drawn reservoir. The level-pool solver is checked against NRCS NEH
+      Example 17-2. Site storage and spillway assumptions need independent verification.
+    when:
+      - path: intake.decision
+        op: "=="
+        value: flood attenuation
+  - say: >-
       Screening depths are relative to the terrain surface, without surveyed bathymetry. The model is not
       a property-level or regulatory flood map. Read the reference comparison with the depth grid.
     when:
@@ -448,8 +478,8 @@ caveats:
       stationary, and any climate scenario is an overlay on it, not a nonstationary fit.
     when:
       - path: intake.decision
-        op: "!="
-        value: inundation extent
+        op: in
+        value: [flood trend, design flow, risk screening, insurance]
   - say: >-
       Rare quantiles move with the distribution and the estimator. Two fits (GEV by L-moments and Log-Pearson
       III) are compared by their point estimates; intervals are attached only to the estimator that produced
@@ -457,16 +487,16 @@ caveats:
       as disagreement, not averaged away.
     when:
       - path: intake.decision
-        op: "!="
-        value: inundation extent
+        op: in
+        value: [flood trend, design flow, risk screening, insurance]
   - say: >-
       The catchment has upstream dams (degree of regulation above zero in BasinATLAS): the annual maxima are
       those of the operated river, and a frequency fit on them describes it as operated, not the natural
       flood regime.
     when:
       - path: intake.decision
-        op: "!="
-        value: inundation extent
+        op: in
+        value: [flood trend, design flow, risk screening, insurance]
       - path: derived.dams
         op: ">"
         value: 0
@@ -475,8 +505,8 @@ caveats:
       from it are indicative only.
     when:
       - path: intake.decision
-        op: "!="
-        value: inundation extent
+        op: in
+        value: [flood trend, design flow, risk screening, insurance]
       - path: context.years_by_variable.discharge
         op: "<"
         value: 20
@@ -485,8 +515,8 @@ caveats:
       from it are indicative only.
     when:
       - path: intake.decision
-        op: "!="
-        value: inundation extent
+        op: in
+        value: [flood trend, design flow, risk screening, insurance]
       - path: context.years_by_variable.discharge
         op: exists
         value: false
@@ -496,8 +526,8 @@ caveats:
       estimate, never an input to it.
     when:
       - path: intake.decision
-        op: "!="
-        value: inundation extent
+        op: in
+        value: [flood trend, design flow, risk screening, insurance]
       - path: context.flood_history.events
         op: ">"
         value: 0

@@ -215,7 +215,8 @@
             "design flow",
             "risk screening",
             "insurance",
-            "inundation extent"
+            "inundation extent",
+            "flood attenuation"
           ],
           "required": false,
           "help": null,
@@ -235,6 +236,7 @@
         }
       ],
       "branches": [
+        "reservoir_attenuation",
         "inundation",
         "trend",
         "at_site",

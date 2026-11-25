@@ -28,6 +28,15 @@ the spend ceiling is $1 unless `--max-usd` says otherwise. For scripts, give eve
 on the line: `aquascope studio "PROBLEM" --at USGS-01013500 --yes` (or `--lat`/`--lon`). Without the `studio`
 extra the bundle holds only the Markdown and HTML report and the tables, and the CLI says so.
 
+In **Flood risk at a site**, choose **How a drawn reservoir reduces a flood peak**.
+After routing a flood through a drawn reservoir in the Explorer, choose **Study this reservoir flood**.
+The bundle includes hourly modelled inflow and outflow at the dam as a CSV and a hydrograph. Peak
+reduction and delay require both peaks to fall inside the simulation window. The calculation screens one
+event using an uncontrolled spillway and terrain-derived storage. It cannot estimate long-term supply yield.
+For CLI or MCP, supply a `reservoir_routing` intake object with the polygon ring of longitude/latitude
+pairs, `crest_m`, `top_m`, and `width_m`. Specify the flood with `duration_h` and either `peak_cms`
+or `return_period`, or pass a drawn `storm` with its polygon and rainfall in millimetres (`rain_mm`).
+
 For a flood-depth map, ask which ground floods and how deep at the selected point, for example:
 
 ```bash

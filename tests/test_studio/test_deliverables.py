@@ -166,6 +166,8 @@ def others(station: dict, donors: dict) -> dict[str, dict]:
     return {
         "landuse_runoff": {"before": {"q_mm": 12}, "after": {"q_mm": 35}, "rain_mm": 50,
                            "distribution": "II", "use_label": "Paved", "check": "TR-55 worked examples."},
+        "reservoir_hydrograph": {"hydrograph": {"hour": [0, 1, 2], "inflow_cms": [0, 6, 2],
+                                               "outflow_cms": [0, 2, 3]}},
         "route_hydrograph": {"hydrograph_check": {"ok": True},
                              "hydrograph": {"hours": [0, 1, 2], "start_river_id": 230494421,
                                             "end_river_id": 230486804, "start_cms": [0, 10, 0], "end_cms": [0, 3, 6]}},

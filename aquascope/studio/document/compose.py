@@ -69,6 +69,7 @@ HERO: dict[str, tuple[str, ...]] = {
     "catchment_response": ("model_fit", "scenario_bars"),
     "landuse_change": ("landuse_runoff",),
     "route_flood": ("route_hydrograph",),
+    "reservoir_routing": ("reservoir_hydrograph",),
     "flood_inundation": ("inundation_map",),
 }
 
@@ -235,7 +236,7 @@ def _t(t: float | None) -> str:
 
 
 def _is_flood(f: Facts) -> bool:
-    if (f.playbook or f.kind) in ("route_flood", "flood_inundation"):
+    if f.report_kind in ("route_flood", "flood_inundation", "reservoir_routing"):
         return False
     return f.playbook in ("flood_risk", "flood_change") or "flood" in f.question.lower()
 
@@ -620,7 +621,7 @@ def _control_rows(f: Facts, style: HouseStyle, kind: str) -> list[tuple[str, str
 def _title(f: Facts) -> tuple[str, str]:
     """(title, subtitle): what was estimated, where."""
     t = _design_t(f)
-    pb = f.playbook or f.kind
+    pb = f.report_kind
     if f.asks_trend:
         head = "Flood trend assessment"
     elif _no_design(f):
@@ -633,6 +634,7 @@ def _title(f: Facts) -> tuple[str, str]:
                 "ungauged site", "water_quality": "Water quality assessment", "irrigation_feasibility":
                 "Irrigation water demand assessment", "climate_change": "Climate change sensitivity assessment",
                 "catchment_response": "Catchment response assessment", "flood_change": "Flood change assessment",
+                "reservoir_routing": "Flood routing through a drawn reservoir",
                 "landuse_change": "Land-use change and storm runoff", "route_flood": "Flood-wave routing"
                 }.get(pb, "Hydrological assessment")
     sub = f.site_name or (f"Site at {tx.coord(f.lat, f.lon)}" if f.lat is not None else "")
@@ -724,7 +726,7 @@ def build_report(ws: Workspace, style: HouseStyle | None = None, facts: Facts | 
 
     # 5 Results
     doc.add(Heading("Results"))
-    hero_kinds = HERO.get(f.playbook or f.kind, ())
+    hero_kinds = HERO.get(f.report_kind, ())
     supporting = SUPPORTING.get(f.playbook, ())
     handled_steps: set[str] = set()
     if f.ffa and not f.asks_trend:
@@ -993,6 +995,10 @@ def _catchment_para(f: Facts) -> str:
 
 def _data_para(f: Facts) -> str:
     r = f.record
+    if f.report_kind == "reservoir_routing":
+        return ("The table and figure compare modelled inflow and outflow at the dam for one flood. "
+                "Storage is estimated from Terrarium terrain and outflow from an uncontrolled spillway. "
+                "The level-pool calculation is checked against NRCS NEH 630 Example 17-2.")
     if (f.playbook or f.kind) == "route_flood":
         credits = dict.fromkeys(step["attribution"] for step in f.steps if step.get("attribution"))
         return " ".join(["The hourly series are the modelled discharge added by the specified flood wave.", *credits])
@@ -1444,7 +1450,7 @@ def build_memo(ws: Workspace, style: HouseStyle | None = None, facts: Facts | No
     figs = _figures(ws)
     hero = None
     placer = _Placer(figs, {"frequency_curve": f.ffa.get("step", ""), "trend": f.trend.get("step", "")})
-    for kind in HERO.get(f.playbook or f.kind, ()) + ("frequency_curve", "trend", "signatures_band", "fdc", "series"):
+    for kind in HERO.get(f.report_kind, ()) + ("frequency_curve", "trend", "signatures_band", "fdc", "series"):
         hero = placer.take(kind)
         if hero is not None:
             break

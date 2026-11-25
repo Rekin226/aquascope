@@ -155,6 +155,7 @@ class StepTemplate(BaseModel):
     id: str
     tool: str
     arguments: dict[str, Any] = Field(default_factory=dict)
+    arguments_from_intake: str | None = None  # A complete scenario supplied by the client.
     rationale: str | None = None
     method: str | None = None
     expects: list[dict[str, Any]] = Field(default_factory=list)
@@ -739,6 +740,10 @@ def _method_status(method: str, recon: dict[str, Any], intake: dict[str, Any]) -
 
     if method not in METHODS:
         return {"method": method, "status": "not_defensible", "reason": f"unknown method {method!r}"}
+    if method == "reservoir_routing":
+        from aquascope.methods import assess_reservoir_scenario
+
+        return assess_reservoir_scenario(intake.get("reservoir_routing"))
     if method == "flood_inundation":
         from aquascope.methods import assess_inundation_scenario
 
@@ -831,9 +836,14 @@ def plan(
             notes.append(f"step {t.id} dropped: it depends on a dropped step")
             dropped.add(t.id)
             continue
+        arguments = _fill(t.arguments, step_ctx)
+        if t.arguments_from_intake:
+            arguments = intake.get(t.arguments_from_intake)
+            if not isinstance(arguments, dict):
+                raise Declined(f"Supply the {t.arguments_from_intake} scenario.", kind="intake", playbook=pb.id)
         steps.append(Step(
             tool=t.tool,
-            arguments=_fill(dict(t.arguments), step_ctx),
+            arguments=arguments,
             id=t.id,
             rationale=_fill(t.rationale, step_ctx) if t.rationale else None,
             method=t.method,

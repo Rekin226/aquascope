@@ -85,6 +85,7 @@ CAPTIONS: dict[str, str] = {
     "model_skill": "GR4J parameters and skill on the calibration and validation years at {record}.",
     "scenarios": "What-if runs of the calibrated GR4J at {record}: change in mean, low and high flow.",
     "landuse_runoff": "Screening estimates for the drawn area before and after the land-use change.",
+    "reservoir_hydrograph": "Screening inflow and outflow at the dam during the simulated flood (m³/s).",
     "route_hydrograph": "Hourly modelled added flow at the start and end of the routed path (m³/s).",
     "projection_models": "CMIP6 HighResMIP change factors per model at {record}.",
     "projection_ensemble": "CMIP6 ensemble: median, range and agreement on the sign, per quantity.",
@@ -607,6 +608,14 @@ def _scenario_table(payload: dict[str, Any]) -> Table | None:
     return cols, [[r.get(c) for c in cols] for r in runs]
 
 
+def _reservoir_hydrograph(payload: dict[str, Any]) -> Table | None:
+    hydro = payload.get("hydrograph") or {}
+    if not hydro.get("inflow_cms"):
+        return None
+    return ["hour", "inflow_m3_s", "outflow_m3_s"], [list(row) for row in
+            zip(hydro["hour"], hydro["inflow_cms"], hydro["outflow_cms"], strict=True)]
+
+
 def _route_hydrograph(payload: dict[str, Any]) -> Table | None:
     hydro = route_hydrograph_of(payload)
     if hydro is None:
@@ -729,6 +738,7 @@ MAKERS: dict[str, Callable[[dict[str, Any]], Table | None]] = {
     "scenarios": _scenario_table,
     "landuse_runoff": _landuse_runoff,
     "route_hydrograph": _route_hydrograph,
+    "reservoir_hydrograph": _reservoir_hydrograph,
     "inundation_summary": _inundation_summary,
     "projection_models": _projection_models,
     "projection_ensemble": _projection_ensemble,

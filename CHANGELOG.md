@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+- Flood-risk studies can screen how a drawn reservoir attenuates one flood, with an inflow/outflow CSV,
+  hydrograph and a level-pool solver check against NRCS NEH Example 17-2.
+
 - Flood it can run as a screening inundation study from the Explorer, CLI or MCP. Its bundle includes a
   georeferenced peak-depth raster, and the study reports the agreement (CSI, hit rate, false alarm ratio)
   with JRC CEMS-GloFAS's modelled return-period hazard depth as a consistency check. The flood-risk

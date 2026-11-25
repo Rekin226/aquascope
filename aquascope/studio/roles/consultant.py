@@ -254,6 +254,8 @@ def _rules_questions(pb: Any | None, ws: Workspace, known: dict[str, Any],
 
 
 def _rules_quantities(playbook: str | None, intake: dict[str, Any]) -> list[str]:
+    if playbook == "flood_risk" and intake.get("decision") == "flood attenuation":
+        return ["modelled inflow and outflow at the dam during the flood"]
     rp = intake.get("return_period")
     table = {
         "flood_risk": (["the trend in annual flood peaks: Sen's slope and the Mann-Kendall p-value"]
@@ -438,7 +440,7 @@ def _coerce_all(ws: Workspace, known: dict[str, Any], *, keep_unknown: bool) -> 
     for k, v in b.intake.items():
         if k in coerced:
             continue
-        if v is not None and (keep_unknown or k in _TABLE_INTAKE):
+        if v is not None and (keep_unknown or k in _TABLE_INTAKE or k == "reservoir_routing"):
             out[k] = v
     for k, v in coerced.items():
         if v is not None:
@@ -563,6 +565,11 @@ def _open(ws: Workspace, model: Model | None, text: str, tables: dict[str, Any] 
     playbook, ambiguous = choose_playbook(text)
     playbook = playbook if playbook in known else None
     hints = intake_hints(text, playbook)
+    if preset.get("decision") == "flood attenuation" or (
+        "reservoir_routing" in preset and "decision" not in preset and playbook != "supply_reliability"
+    ):
+        playbook, ambiguous = "flood_risk", False
+        preset["decision"] = b.intake["decision"] = "flood attenuation"
     # Land use is also a possible cause in the groundwater playbook. A runoff comparison is its own question.
     landuse = re.search(r"\b(?:chang(?:e|ing) (?:the )?land use|land[- ]use changes?)\b", text, re.I)
     command = re.match(r"\s*(?:please )?change (?:the )?land use\b", text, re.I)
@@ -576,7 +583,7 @@ def _open(ws: Workspace, model: Model | None, text: str, tables: dict[str, Any] 
         b.kind = "flood_inundation"
         b.decision = "Map the screening inundation extent and depth for the supplied flood"
         b.quantities = ["inundation extent", "water depth above terrain"]
-    elif hints.get("decision") != "inundation extent" and (
+    elif preset.get("decision") != "flood attenuation" and hints.get("decision") != "inundation extent" and (
         "route_flood" in preset or routing or re.fullmatch(r"\s*(?:please )?route it[.!]?\s*", text, re.I)
     ):
         b.kind = "route_flood"

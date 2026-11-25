@@ -171,6 +171,7 @@ export const actions = {
   openStudy: () => {},
   landuseStudyArgs: () => null,
   routeStudyArgs: () => null,
+  reservoirStudyArgs: () => null,
   floodStudyArgs: () => null,
   applyUrl: () => {},
   refreshMapData: () => {},

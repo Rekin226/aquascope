@@ -714,6 +714,8 @@ def _studio_dispatch(a, on_event, on_artifact, store):
     if op == "add_table":
         return _studio_reply(s, s.add_table(str(a.get("name") or "table"), str(a.get("csv") or "")))
     if op == "say":
+        if a.get("reservoir_routing") is not None and s.ws.brief.playbook == "flood_risk":
+            s.ws.brief.intake["reservoir_routing"] = a["reservoir_routing"]
         for _name, _csv in (a.get("tables") or {}).items():
             s.add_table(str(_name), str(_csv))
         return _studio_reply(s, _studio_say(s, str(a.get("text") or ""), _proposed(a)))
@@ -849,6 +851,7 @@ json.dumps(studio_table(_a["name"], _a["data"]), default=str)
   // report and remakes the documents with the new prose.
   if (args.op === "approve" || args.op === "follow_up" || args.op === "narrate") {
     await maximaCodec(args.workspace?.brief?.intake?.route_flood);
+    await maximaCodec(args.workspace?.brief?.intake?.reservoir_routing);
     // Planning reads all reach curves, including for an explicit flow.
     if (args.workspace?.brief?.intake?.flood_inundation ||
         args.workspace?.study?.steps?.some((step) => step.tool === "flood_inundation")) {

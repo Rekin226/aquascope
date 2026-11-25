@@ -321,6 +321,13 @@ def _numbers_for(sid: str, tool: str, p: dict[str, Any], rp: Any) -> list[dict[s
                 if e.get("low") is not None and e.get("high") is not None:
                     add(f"{label} band, low", e["low"], u)
                     add(f"{label} band, high", e["high"], u)
+    elif tool == "reservoir_routing":
+        summary = p.get("summary") or {}
+        for key, label, units in (("peak_in_cms", "Maximum inflow at the dam during the run", "m3/s"),
+                                  ("peak_out_cms", "Maximum outflow at the dam during the run", "m3/s"),
+                                  ("reduction_pct", "Flood peak reduction", "%"), ("delay_h", "Flood peak delay", "h")):
+            if summary.get(key) is not None:
+                add(label, summary[key], units, evidence={"basis": f"summary.{key}"})
     elif tool == "route_flood":
         hydro = route_hydrograph_of(p)
         if hydro:

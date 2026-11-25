@@ -45,7 +45,7 @@ GRADES = ("established", "indicative", "screening", "not_established")
 #: Tools whose numbers come from regional transfer, reanalysis or a model rather than a record at the place
 #: (reach_record is the GEOGLOWS v2 simulation, #516).
 _SCREENING_TOOLS = frozenset({"anywhere", "similar_basins", "regionalize_signatures", "describe_catchment",
-                              "reach_record", "landuse_change", "route_flood"})
+                              "reach_record", "landuse_change", "route_flood", "reservoir_routing"})
 _SCREENING_METHODS = frozenset({"spei_reanalysis", "regionalize_signatures", "similar_basins", "glofas_cross_check"})
 #: Tools whose failure does not lower the answer's grade: they frame or cross-check, they do not carry it.
 _SIDE_TOOLS = frozenset({"anywhere", "describe_catchment", "similar_basins", "assess_site", "reach_record"})
@@ -218,6 +218,7 @@ _KIND_ANSWERS: dict[str, str] = {
     "climate_change": r"cmip6 median",
     "catchment_response": r"change in mean flow",
     "landuse_change": r"change in runoff depth|change in peak flow",
+    "reservoir_routing": r"maximum (inflow|outflow) at the dam",
     "route_flood": r"largest added flow at the end",
     "regional_flood": r"pooled|return level",
 }

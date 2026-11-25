@@ -215,6 +215,8 @@ def _catalogue_for(ws: Workspace, *, uploads: bool) -> list[dict[str, Any]]:
     problem = ws.brief.kind
     rows: list[dict[str, Any]] = []
     for row in catalogue.compact(problem):
+        if row["tool"] == "reservoir_routing" and ws.brief.intake.get("decision") != "flood attenuation":
+            continue
         if (row["tool"] == "flood_inundation" and problem != "flood_inundation"
                 and ws.brief.intake.get("decision") != "inundation extent"):
             continue
@@ -398,6 +400,9 @@ def _errors_of(steps: list[dict[str, Any]], ws: Workspace) -> list[str]:
     if (ws.brief.playbook == "flood_risk" and ws.brief.intake.get("decision") == "inundation extent"
             and not any(st.get("tool") == "flood_inundation" for st in steps)):
         errors.append("The client asked for inundation depth; a design flow alone cannot map it.")
+    if (ws.brief.playbook == "flood_risk" and ws.brief.intake.get("decision") == "flood attenuation"
+            and not any(st.get("tool") == "reservoir_routing" for st in steps)):
+        errors.append("The reservoir flood-attenuation decision requires routing the supplied event through the dam.")
     for st in steps:
         errors += _placeholder_errors(st)
     return errors

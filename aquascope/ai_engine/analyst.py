@@ -242,7 +242,7 @@ def _tool_specs() -> list[ToolSpec]:
     from aquascope import floodsim, routing
     from aquascope import mcp_server as t
     from aquascope.explore import anywhere
-    from aquascope.sketch import landuse
+    from aquascope.sketch import landuse, reservoir_study
 
     num = {"type": "number"}
     years_cap = "Optional cap on the record: the last N years. Leave it out for the full record (the default)."
@@ -421,6 +421,18 @@ def _tool_specs() -> list[ToolSpec]:
                                               "years": {"type": "integer"}},
              "required": ["source", "station_id"]},
             t.low_flow_context,
+        ),
+        ToolSpec(
+            "reservoir_routing",
+            "Screen the effect of a drawn reservoir on one flood. Supply a polygon, dam dimensions and "
+            "a design wave or storm. Returns inflow and outflow at the dam over the simulated hours.",
+            {"type": "object", "properties": {
+                "polygon": {"type": "array", "minItems": 3, "items": {"type": "array", "items": num}},
+                "crest_m": num, "top_m": num, "width_m": num, "peak_cms": num, "return_period": num,
+                "duration_h": num, "hours": {"type": "integer"}, "from_river_id": {"type": "integer"},
+                "storm": {"type": "object", "description": "Storm polygon, rainfall, duration and runoff fraction."},
+            }, "required": ["polygon", "crest_m", "top_m", "width_m"], "additionalProperties": False},
+            reservoir_study.study_reservoir,
         ),
         ToolSpec(
             "route_flood",

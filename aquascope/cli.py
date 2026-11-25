@@ -3683,6 +3683,7 @@ def cmd_studio(args: argparse.Namespace) -> None:
     try:
         intake = _parse_intake(args.intake)
         for key, fields in (("landuse_change", "polygon, use and rain_mm"),
+                            ("reservoir_routing", "polygon, dam dimensions and a flood scenario"),
                             ("route_flood", "river_id, duration_h and either peak_cms or return_period"),
                             ("flood_inundation", "a reach or point and a flood magnitude")):
             if key not in intake:
@@ -6050,8 +6051,8 @@ def main() -> None:
         action="append",
         default=[],
         metavar="KEY=VALUE",
-        help="An intake field, e.g. --intake return_period=200 (repeatable). landuse_change, flood_inundation and "
-             "route_flood take JSON objects.",
+        help="An intake field, e.g. --intake return_period=200 (repeatable). landuse_change, flood_inundation, "
+             "route_flood and reservoir_routing take JSON objects.",
     )
     p_studio.add_argument(
         "--provider",

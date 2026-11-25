@@ -312,6 +312,12 @@ def assess_site(
     would use. Respect it: do not run a method marked not_defensible, say why, and offer what is defensible.
     problem narrows the table: flood_risk, ungauged_flow, drought, groundwater_decline, supply_reliability,
     climate_change, irrigation, water_quality. return_period is the T the question asks for, if any.
+    The context also carries the record's quality per variable when the Archive mirror was read (a local copy
+    in AQUASCOPE_ARCHIVE_DIR, or the Hugging Face dataset with AQUASCOPE_ARCHIVE_HUB=1): completeness_by_variable
+    (share of days with a value), longest_gap_days, flagged_fraction (provisional or suspect) and change_points
+    (Pettitt shift years). A variable missing from them was not assessed (the notes say why): that is unknown, not
+    clean. When you report a result, say a long gap, a large flagged share or a change point plainly, with the
+    reason a method was marked marginal.
     """
     from aquascope.explore import assess_site as _assess
 
@@ -1609,7 +1615,11 @@ def studio_start(
     studio_say, or say "just go") or, when nothing needs asking, the `plan` to review (approve it with
     studio_approve) or `declined` with the reason. Keyless unless a provider/model is given. Keep the returned
     `workspace` dict and pass it to the next studio_* call: the tools are stateless.
-    intake: playbook intake fields, for example {"return_period": 100}.
+    intake: playbook intake fields, for example {"return_period": 100}. For a land-use study, pass
+    {"landuse_change": {"polygon": [[lon, lat], ...], "use": "paved", "rain_mm": 80}}; soil_group,
+    cover and tc_hours may also be supplied inside that scenario. To route a flood wave, pass e.g.
+    {"route_flood": {"river_id": 230494421, "duration_h": 12, "peak_cms": 600}}. For a depth map, pass e.g.
+    {"flood_inundation": {"river_id": 230494421, "return_period": 100}}.
     """
     try:
         studio = _studio(None, lat=float(lat), lon=float(lon), intake=intake, provider=provider, model=model,

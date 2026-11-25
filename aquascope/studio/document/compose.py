@@ -67,6 +67,9 @@ HERO: dict[str, tuple[str, ...]] = {
     "irrigation_feasibility": ("demand_monthly", "et0_monthly", "reliability_curve"),
     "climate_change": ("projection_spread", "scenario_bars"),
     "catchment_response": ("model_fit", "scenario_bars"),
+    "landuse_change": ("landuse_runoff",),
+    "route_flood": ("route_hydrograph",),
+    "flood_inundation": ("inundation_map",),
 }
 
 #: Figures that belong in the body for a problem kind after the hero (others go to the appendix).
@@ -232,6 +235,8 @@ def _t(t: float | None) -> str:
 
 
 def _is_flood(f: Facts) -> bool:
+    if (f.playbook or f.kind) in ("route_flood", "flood_inundation"):
+        return False
     return f.playbook in ("flood_risk", "flood_change") or "flood" in f.question.lower()
 
 
@@ -367,7 +372,8 @@ def _generic_answer(f: Facts) -> str:
     label = str(h.get("label") or "").strip()
     if label:
         lab = label[:1].lower() + label[1:] if not label[:2].isupper() else label
-        return f"The {lab} at {f.site_label} is {tx.value(h['value'], h.get('unit'))}."
+        where = "" if (f.playbook or f.kind) == "route_flood" else f" at {f.site_label}"
+        return f"The {lab}{where} is {tx.value(h['value'], h.get('unit'))}."
     ans = re.sub(r"\s*\((established|indicative|screening|not established)\)\.?$", ".", h.get("answer") or "")
     return tx.sentence(ans)
 
@@ -614,7 +620,7 @@ def _control_rows(f: Facts, style: HouseStyle, kind: str) -> list[tuple[str, str
 def _title(f: Facts) -> tuple[str, str]:
     """(title, subtitle): what was estimated, where."""
     t = _design_t(f)
-    pb = f.playbook
+    pb = f.playbook or f.kind
     if f.asks_trend:
         head = "Flood trend assessment"
     elif _no_design(f):
@@ -626,7 +632,8 @@ def _title(f: Facts) -> tuple[str, str]:
                 "groundwater_decline": "Groundwater level assessment", "ungauged_flow": "Flow estimate for an "
                 "ungauged site", "water_quality": "Water quality assessment", "irrigation_feasibility":
                 "Irrigation water demand assessment", "climate_change": "Climate change sensitivity assessment",
-                "catchment_response": "Catchment response assessment", "flood_change": "Flood change assessment"
+                "catchment_response": "Catchment response assessment", "flood_change": "Flood change assessment",
+                "landuse_change": "Land-use change and storm runoff", "route_flood": "Flood-wave routing"
                 }.get(pb, "Hydrological assessment")
     sub = f.site_name or (f"Site at {tx.coord(f.lat, f.lon)}" if f.lat is not None else "")
     return head, sub
@@ -717,7 +724,7 @@ def build_report(ws: Workspace, style: HouseStyle | None = None, facts: Facts | 
 
     # 5 Results
     doc.add(Heading("Results"))
-    hero_kinds = HERO.get(f.playbook, ())
+    hero_kinds = HERO.get(f.playbook or f.kind, ())
     supporting = SUPPORTING.get(f.playbook, ())
     handled_steps: set[str] = set()
     if f.ffa and not f.asks_trend:
@@ -986,6 +993,14 @@ def _catchment_para(f: Facts) -> str:
 
 def _data_para(f: Facts) -> str:
     r = f.record
+    if (f.playbook or f.kind) == "route_flood":
+        credits = dict.fromkeys(step["attribution"] for step in f.steps if step.get("attribution"))
+        return " ".join(["The hourly series are the modelled discharge added by the specified flood wave.", *credits])
+    if (f.playbook or f.kind) == "flood_inundation":
+        return ("The depth raster is a screening inundation of the terrain window around the reach: a local-inertial "
+                "shallow-water run on Terrarium terrain with the GEOGLOWS reach burnt in. It is not a surveyed "
+                "floodplain map. The comparison is with JRC CEMS-GloFAS's modelled return-period hazard "
+                "depth, so it is a consistency check, not event validation.")
     if not r:
         return ("No measured record at the site was used. The estimates rest on the datasets listed in "
                 "{tab:data}.")
@@ -1236,6 +1251,12 @@ def _generic_section(doc: Document, ws: Workspace, f: Facts, step: dict[str, Any
     prose = f.prose.get(f"results-{step['id']}", "")
     prose = _STEP_NOISE.sub("", prose)
     sentences = [x for x in re.split(r"(?<=[.!?])\s+", " ".join(prose.split())) if x and len(x) > 3]
+    if tool == "flood_inundation" and step.get("ran"):
+        result = next((r.get("result") for r in (ws.run or {}).get("results", [])
+                       if r.get("id") == step["id"] and isinstance(r.get("result"), dict)), {})
+        from aquascope.studio.deliverables._payload import inundation_description
+
+        sentences.insert(0, inundation_description(result))
     if not step.get("ran"):
         sentences = [f"This analysis did not complete: {step.get('error') or 'no usable result'}."]
     has_figure = any(a.kind == "figure" and a.step == step["id"] and a.media_type == "image/png"
@@ -1423,7 +1444,7 @@ def build_memo(ws: Workspace, style: HouseStyle | None = None, facts: Facts | No
     figs = _figures(ws)
     hero = None
     placer = _Placer(figs, {"frequency_curve": f.ffa.get("step", ""), "trend": f.trend.get("step", "")})
-    for kind in HERO.get(f.playbook, ()) + ("frequency_curve", "trend", "signatures_band", "fdc", "series"):
+    for kind in HERO.get(f.playbook or f.kind, ()) + ("frequency_curve", "trend", "signatures_band", "fdc", "series"):
         hero = placer.take(kind)
         if hero is not None:
             break

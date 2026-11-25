@@ -1489,12 +1489,19 @@ def _route_reservoir(args: argparse.Namespace) -> None:
         sys.exit(1)
     r = res["reservoir"]
     print(f"  {res['message']}")
-    print(f"  At the dam: in {r['peak_in_cms']:,.0f} m3/s after {r['peak_in_h']:g} h, out {r['peak_out_cms']:,.0f} m3/s "
-          f"after {r['peak_out_h']:g} h ({r['reduction_pct']:g} % lower); {r['flood_storage_m3']:,.0f} m3 held at most.")
+    if r["reduction_pct"] is None:
+        for name, hour in (("Inflow", r["peak_in_h"]), ("Outflow", r["peak_out_h"])):
+            if hour is not None:
+                print(f"  {name} peaked at the dam after {hour:g} h.")
+        print(f"  Maximum storage above the crest during this run: {r['flood_storage_m3']:,.0f} m3.")
+    else:
+        print(f"  At the dam: in {r['peak_in_cms']:,.0f} m3/s after {r['peak_in_h']:g} h, "
+              f"out {r['peak_out_cms']:,.0f} m3/s after {r['peak_out_h']:g} h ({r['reduction_pct']:g} % lower); "
+              f"{r['flood_storage_m3']:,.0f} m3 held at most.")
     w = r["without"]
-    if w.get("furthest_peak_cms") is not None:
-        print(f"  Furthest down (reach {w['furthest_river_id']}): {w['furthest_peak_with_cms']:,.0f} m3/s with the "
-              f"reservoir, {w['furthest_peak_cms']:,.0f} m3/s without.")
+    if w.get("furthest_peak_cms") is not None and w.get("furthest_peak_with_cms") is not None:
+        print(f"  Furthest down (reach {w['furthest_river_id']}), maxima during this run: "
+              f"{w['furthest_peak_with_cms']:,.0f} m3/s with the reservoir, {w['furthest_peak_cms']:,.0f} m3/s without.")
     for note in res.get("notes") or []:
         print(f"  {note}")
     print(f"  {r['check']}")
@@ -1931,6 +1938,22 @@ def cmd_basins(args: argparse.Namespace) -> None:
     print(f"\n  {res['attribution']}")
 
 
+def _quality_tail(ctx: dict, var: str) -> str:
+    """The quality half of one variable's record (#375) as a suffix for its line, or "" when it was not read."""
+    completeness = (ctx.get("completeness_by_variable") or {}).get(var)
+    if completeness is None:
+        return ""
+    gap = int((ctx.get("longest_gap_days") or {}).get(var, 0))
+    parts = [f"{completeness:.1%} complete", f"longest gap {gap:,} day{'' if gap == 1 else 's'}"]
+    flagged = (ctx.get("flagged_fraction") or {}).get(var)
+    if flagged:
+        parts.append(f"{flagged:.1%} flagged")
+    shifts = (ctx.get("change_points") or {}).get(var) if isinstance(ctx.get("change_points"), dict) else None
+    if shifts:
+        parts.append("change point " + ", ".join(str(y) for y in shifts))
+    return "  ·  " + ", ".join(parts)
+
+
 def _format_assessment(res: dict, *, radius_km: float) -> str:
     """The assess_site result as a short table: defensible first, one line per method with its reason."""
     from aquascope.methods import DEFENSIBLE, MARGINAL, NOT_DEFENSIBLE
@@ -1956,7 +1979,7 @@ def _format_assessment(res: dict, *, radius_km: float) -> str:
         for var, yr in years.items():
             st = next((s for s in stations if var in (s.get("variables") or []) and s.get("years") == yr), None)
             tail = f", {st.get('name') or st['station_id']} ({st['source']}/{st['station_id']})" if st else ""
-            lines.append(f"  {var.replace('_', ' ')}: {yr:g} yr{tail}")
+            lines.append(f"  {var.replace('_', ' ')}: {yr:g} yr{tail}{_quality_tail(ctx, var)}")
     else:
         lines.append("  no gauge record within reach: ungauged")
     width = max((len(r["label"]) for r in rows), default=20)
@@ -1977,8 +2000,10 @@ def cmd_assess(args: argparse.Namespace) -> None:
     """`aquascope assess LAT LON`: what can be answered at a place, from the catalog and BasinATLAS, no agency call."""
     from aquascope.explore import assess_site
 
+    hub = {"archive_hub": True} if args.archive_hub else {}  # unset leaves AQUASCOPE_ARCHIVE_HUB to decide
     res = assess_site(
-        args.lat, args.lon, radius_km=args.radius_km, problem=args.problem, return_period=args.return_period
+        args.lat, args.lon, radius_km=args.radius_km, problem=args.problem, return_period=args.return_period,
+        **hub,
     )
     if args.json:
         print(json.dumps(res, indent=2, ensure_ascii=False))
@@ -3657,6 +3682,17 @@ def cmd_studio(args: argparse.Namespace) -> None:
             sys.exit(1)
     try:
         intake = _parse_intake(args.intake)
+        for key, fields in (("landuse_change", "polygon, use and rain_mm"),
+                            ("route_flood", "river_id, duration_h and either peak_cms or return_period"),
+                            ("flood_inundation", "a reach or point and a flood magnitude")):
+            if key not in intake:
+                continue
+            try:
+                intake[key] = json.loads(intake[key])
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"--intake {key} is invalid JSON: {exc.msg}") from exc
+            if not isinstance(intake[key], dict):
+                raise ValueError(f"--intake {key} expects a JSON object with {fields}")
     except ValueError as exc:
         logger.error("%s", exc)
         sys.exit(1)
@@ -5686,6 +5722,11 @@ def main() -> None:
     )
     p_assess.add_argument("--radius-km", type=float, default=50.0, help="How far a gauge may be to count (default 50)")
     p_assess.add_argument("--return-period", type=float, default=None, help="The T (years) the question asks for")
+    p_assess.add_argument(
+        "--archive-hub", action="store_true",
+        help="Read each counted record's quality (completeness, gaps, flags, change points) from the Archive on "
+             "Hugging Face; experimental (same as AQUASCOPE_ARCHIVE_HUB=1)",
+    )
     p_assess.add_argument("--json", action="store_true")
 
     p_ctx = sub.add_parser(
@@ -6009,7 +6050,8 @@ def main() -> None:
         action="append",
         default=[],
         metavar="KEY=VALUE",
-        help="An intake field, e.g. --intake return_period=200 (repeatable)",
+        help="An intake field, e.g. --intake return_period=200 (repeatable). landuse_change, flood_inundation and "
+             "route_flood take JSON objects.",
     )
     p_studio.add_argument(
         "--provider",

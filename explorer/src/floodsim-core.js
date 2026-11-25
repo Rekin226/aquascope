@@ -12,6 +12,22 @@
 // near-steady-state rule, the cell velocities, a run's frames kept compactly, and the UGRID NetCDF file that hands
 // a run to the flood views (#619 to #622).
 
+// Only scenarios that the Study engine can reproduce are offered; never discard edits or hydrographs.
+export function floodStudyArgs(run) {
+  const t = run?.target, choice = run?.choice;
+  if (!t || !choice || (run.edits || []).length || !Number.isFinite(t.lat) || !Number.isFinite(t.lon) ||
+      Math.abs(t.lat) > 90 || Math.abs(t.lon) > 180 || !Number.isSafeInteger(t.river_id) || t.river_id < 100000000 || t.river_id > 999999999 ||
+      Object.keys(choice).some((key) => !["return_period", "flow_cms"].includes(key)) ||
+      (choice.return_period == null) === (choice.flow_cms == null) || !Number.isFinite(run.hours) || run.hours <= 0 || run.hours > 72 ||
+      typeof run.g?.coarse !== "boolean") return null;
+  const key = choice.return_period != null ? "return_period" : "flow_cms";
+  const value = Number(choice[key]);
+  if (!Number.isFinite(value) || value <= 0 || (key === "return_period" && (value < 2 || value > 500)) ||
+      (key === "flow_cms" && value > 100000)) return null;
+  return { lat: t.lat, lon: t.lon, scenario: { river_id: t.river_id, lat: t.lat, lon: t.lon, [key]: value,
+    hours: run.hours, coarse: Boolean(run.g.coarse) } };
+}
+
 export const G = 9.81;
 export const ALPHA = 0.7;
 export const THETA = 0.7;

@@ -52,11 +52,14 @@ checklist:
       - value: insurance
         label: A flood figure for insurance
         match: \binsur\w*
+      - value: inundation extent
+        label: Where the water goes and how deep (screening map)
+        match: \b(inundat\w*|flood map|flood extent|how deep|depth|streets|fields)\b
   - field: return_period
     when:
       - path: intake.decision
         op: in
-        value: [design flow, risk screening, insurance]
+        value: [design flow, risk screening, insurance, inundation extent]
     ask: Which flood size do you need?
     why: It sets the quantile the fit is read at, and how far past the record the estimate has to reach.
     options:
@@ -86,6 +89,33 @@ checklist:
       - value: 30
         label: The last 30 years
 branches:
+  - id: inundation
+    when:
+      - path: intake.decision
+        op: "=="
+        value: inundation extent
+    rationale: >-
+      The question is where the water goes and how deep for the T = {{ intake.return_period }} year flood at
+      {{ site.lat }}, {{ site.lon }}. A local-inertial shallow-water run on Terrarium terrain, with the GEOGLOWS
+      reach burnt in and the design flow at the point, gives a screening depth grid: which ground the water
+      covers and how deep it stands in the reach's corridor.
+    steps:
+      - id: s1
+        tool: flood_inundation
+        method: flood_inundation
+        arguments:
+          lat: "{{ site.lat }}"
+          lon: "{{ site.lon }}"
+          return_period: "{{ intake.return_period }}"
+        rationale: >-
+          Run the solver for the requested return period and export the depth grid. Screening grade: no
+          bathymetry, terrain errors of metres, a one-cell channel, every river at the same return period at once.
+        expects:
+          - check: not_empty
+            path: depth
+          - check: status_is
+            path: check.ok
+            value: true
   - id: trend
     when:
       - path: intake.decision
@@ -390,6 +420,9 @@ branches:
             path: ffa
 declines:
   - when:
+      - path: intake.decision
+        op: "!="
+        value: inundation extent
       - path: derived.return_period_beyond_cap
         op: "=="
         value: true
@@ -402,28 +435,38 @@ declines:
       years), and fewer than three donor gauges are available to extend it regionally. An estimate that far
       into the tail would be an extrapolation this playbook will not quote; ask for a shorter return period or
       a regional screening.
-  - when:
+caveats:
+  - say: >-
+      Screening depths are relative to the terrain surface, without surveyed bathymetry. The model is not
+      a property-level or regulatory flood map. Read the reference comparison with the depth grid.
+    when:
       - path: intake.decision
         op: "=="
         value: inundation extent
-    say: >-
-      Inundation extent (which streets or fields flood, and how deep) is out of scope: it needs a hydraulic
-      model over a terrain surface, which aquascope does not run. This playbook gives the design flow at the
-      point; the mapping is a separate study.
-caveats:
-  - >-
-    Design-flood guidance under climate change is immature (Wasko et al. 2024, HESS): the estimate here is
-    stationary, and any climate scenario is an overlay on it, not a nonstationary fit.
-  - >-
-    Rare quantiles move with the distribution and the estimator. Two fits (GEV by L-moments and Log-Pearson
-    III) are compared by their point estimates; intervals are attached only to the estimator that produced
-    them. GEV L-moments has no interval here; GEV MLE has a separate bootstrap interval. A spread above 25 percent is reported
-    as disagreement, not averaged away.
+  - say: >-
+      Design-flood guidance under climate change is immature (Wasko et al. 2024, HESS): the estimate here is
+      stationary, and any climate scenario is an overlay on it, not a nonstationary fit.
+    when:
+      - path: intake.decision
+        op: "!="
+        value: inundation extent
+  - say: >-
+      Rare quantiles move with the distribution and the estimator. Two fits (GEV by L-moments and Log-Pearson
+      III) are compared by their point estimates; intervals are attached only to the estimator that produced
+      them. GEV L-moments has no interval here; GEV MLE has a separate bootstrap interval. A spread above 25 percent is reported
+      as disagreement, not averaged away.
+    when:
+      - path: intake.decision
+        op: "!="
+        value: inundation extent
   - say: >-
       The catchment has upstream dams (degree of regulation above zero in BasinATLAS): the annual maxima are
       those of the operated river, and a frequency fit on them describes it as operated, not the natural
       flood regime.
     when:
+      - path: intake.decision
+        op: "!="
+        value: inundation extent
       - path: derived.dams
         op: ">"
         value: 0
@@ -431,6 +474,9 @@ caveats:
       GloFAS discharge is a model output for a grid cell of about 5 km, not a gauge reading; return levels
       from it are indicative only.
     when:
+      - path: intake.decision
+        op: "!="
+        value: inundation extent
       - path: context.years_by_variable.discharge
         op: "<"
         value: 20
@@ -438,6 +484,9 @@ caveats:
       GloFAS discharge is a model output for a grid cell of about 5 km, not a gauge reading; return levels
       from it are indicative only.
     when:
+      - path: intake.decision
+        op: "!="
+        value: inundation extent
       - path: context.years_by_variable.discharge
         op: exists
         value: false
@@ -446,6 +495,9 @@ caveats:
       with the site's data. They say that and when the place flooded, not how big the flood was: a check on the
       estimate, never an input to it.
     when:
+      - path: intake.decision
+        op: "!="
+        value: inundation extent
       - path: context.flood_history.events
         op: ">"
         value: 0

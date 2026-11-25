@@ -66,3 +66,38 @@ def test_assess_ungauged_says_so(monkeypatch, capsys):
     cli.main()
     out = capsys.readouterr().out
     assert "0 gauges within 50 km" in out and "catchment unknown" in out and "ungauged" in out
+
+
+def test_assess_shows_the_record_quality_and_passes_the_hub_opt_in(monkeypatch, capsys):
+    """#375 follow-up: the quality half on the variable's line, and --archive-hub reaching the engine."""
+    seen = {}
+    read = {**CANNED, "context": {**CANNED["context"], "completeness_by_variable": {"discharge": 0.9952},
+                                  "longest_gap_days": {"discharge": 174}, "flagged_fraction": {"discharge": 0.0021},
+                                  "change_points": {"discharge": [1991]}}}
+
+    def fake(lat, lon, **kwargs):
+        seen.update(kwargs)
+        return read
+
+    monkeypatch.setattr("aquascope.explore.assess_site", fake)
+    monkeypatch.setattr(sys, "argv", ["aquascope", "assess", "51.415", "-0.308", "--archive-hub"])
+    cli.main()
+    out = capsys.readouterr().out
+    assert seen["archive_hub"] is True
+    assert ("discharge: 143.7 yr, Kingston (uk_ea/8496ce69)  ·  99.5% complete, longest gap 174 days, 0.2% flagged, "
+            "change point 1991") in out
+
+
+def test_assess_without_a_quality_half_keeps_the_plain_line(monkeypatch, capsys):
+    seen = {}
+
+    def fake(lat, lon, **kwargs):
+        seen.update(kwargs)
+        return CANNED
+
+    monkeypatch.setattr("aquascope.explore.assess_site", fake)
+    monkeypatch.setattr(sys, "argv", ["aquascope", "assess", "51.415", "-0.308"])
+    cli.main()
+    out = capsys.readouterr().out
+    assert "archive_hub" not in seen  # unset: AQUASCOPE_ARCHIVE_HUB decides, off by default
+    assert "discharge: 143.7 yr, Kingston (uk_ea/8496ce69)\n" in out

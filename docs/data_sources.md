@@ -1,6 +1,6 @@
 # Data Sources
 
-AquaScope ships **37 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
+AquaScope ships **38 collectors** that normalise water data into typed Pydantic records. One API call per source, one schema across the toolkit.
 
 Most sources emit point observations and share the unified `water_data` schema (`WaterQualitySample`, `WaterLevelReading`, `ReservoirStatus`). Three aggregate/gridded sources use purpose-built record types that match their data shape: **FAO AQUASTAT** returns country-level `AquastatRecord`, **UN SDG 6** returns `SDG6Indicator`, and **FAO WaPOR** returns gridded `WaPORObservation`.
 
@@ -75,6 +75,7 @@ To request a new source, open an [issue](https://github.com/Rekin226/aquascope/i
 | [Korea WAMIS](https://www.wamis.go.kr) | `korea_wamis` | Korea | Hydrology, dam operations | REST | ✅ |
 | [India WRIS](https://indiawris.gov.in) | `india_wris` | India | River water level | REST | ✅ |
 | [GRDC](https://zenodo.org/records/19126732) | `grdc` | Global | River discharge (in-situ gauges + RSEG satellite) | Zenodo / Dataverse | ✅ |
+| [Canada HYDAT](https://api.weather.gc.ca/collections/hydrometric-daily-mean) | `canada_hydat` | Canada | Historical daily mean discharge | OGC API | ✅ |
 | [CAMELS-CL](https://www.cr2.cl/camels-cl/) | `camels_cl` | Chile | Daily observed streamflow, catchment attributes | ZIP / CSV | ✅ |
 | [CAMELS-BR](https://doi.org/10.5281/zenodo.3709337) | `camels_br` | Brazil | Daily observed streamflow, catchment attributes | ZIP / CSV | ✅ |
 | [ANA Hidroweb](https://www.snirh.gov.br/hidroweb/) | `brazil_ana` | Brazil | Telemetric streamflow, stage, rainfall | REST | ✅ |

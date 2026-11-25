@@ -21,7 +21,7 @@ import { call } from "./worker-client.js?v=__BUILD__";
 import { designFlowLine } from "./design-flow-core.js?v=__BUILD__";
 import {
   RAMP, busiestFrame, cardPlaces, flatterWords, flowWords, frameFeatureStates, frameLabel, headline, hoursWords, logLabel,
-  pathFilterExpr, placeFeatures, reachedBounds, routeArgs, townsFrom, waveColorExpr, waveOpacityExpr, waveWidthExpr,
+  pathFilterExpr, placeFeatures, reachedBounds, routeArgs, routeStudyArgs, townsFrom, waveColorExpr, waveOpacityExpr, waveWidthExpr,
 } from "./route-core.js?v=__BUILD__";
 
 const SRC = "river-rt-net";
@@ -309,7 +309,7 @@ export async function routeFlood(t, args, { by = "rules", command = "", label = 
     if (my !== running) return res;
     if (!res || !res.ok) throw new Error((res && res.error) || "no answer");
     const before = slotValue("route");
-    const value = { result: res, target: t };
+    const value = { result: res, target: t, study: routeStudyArgs(t, args) };
     panel().classList.add("done");
     paint(value, { play: true });
     logAction({ action: { type: "route", river_id: t.river_id, ...args }, before, after: value,
@@ -472,6 +472,7 @@ export function initRoute() {
   }
   actions.openRoute = openRoute;
   actions.routeFlood = routeFlood;
+  actions.routeStudyArgs = () => shown?.study ?? null;
   actions.selectedReach = selectedReach;
   globalThis.__aq = globalThis.__aq || {};
   globalThis.__aq.route = { open: openRoute, run, shown: () => shown, frame: drawFrame, step: (i) => setModelStep(i),

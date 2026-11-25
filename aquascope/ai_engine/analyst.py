@@ -239,8 +239,10 @@ def _reach_record_tool(lat: float | None = None, lon: float | None = None, river
 
 
 def _tool_specs() -> list[ToolSpec]:
+    from aquascope import floodsim, routing
     from aquascope import mcp_server as t
     from aquascope.explore import anywhere
+    from aquascope.sketch import landuse
 
     num = {"type": "number"}
     years_cap = "Optional cap on the record: the last N years. Leave it out for the full record (the default)."
@@ -419,6 +421,60 @@ def _tool_specs() -> list[ToolSpec]:
                                               "years": {"type": "integer"}},
              "required": ["source", "station_id"]},
             t.low_flow_context,
+        ),
+        ToolSpec(
+            "route_flood",
+            "Route a user-supplied flood wave downstream with GEOGLOWS Muskingum parameters. Supply a reach ID, "
+            "duration in hours and exactly one of peak_cms or return_period. Returns hourly added flow in m3/s "
+            "at the start and last modelled reach, with the routing check and screening limitations.",
+            {"type": "object", "properties": {
+                "river_id": {"type": "integer", "minimum": 100_000_000, "maximum": 999_999_999},
+                "duration_h": {"type": "number", "minimum": 1, "maximum": routing.MAX_HOURS,
+                               "description": "At least 1 h for a block and over 1 h for a triangle (hourly samples)."},
+                "peak_cms": {"type": "number", "exclusiveMinimum": 0, "maximum": 1_000_000},
+                "return_period": {"type": "number", "minimum": 2, "maximum": 500},
+                "shape": {"type": "string", "enum": list(routing.SHAPES), "default": "triangle"},
+                "hours": {"type": "integer", "minimum": 1, "maximum": routing.MAX_HOURS},
+                "max_reaches": {"type": "integer", "minimum": 1, "maximum": routing.MAX_PATH},
+            }, "required": ["river_id", "duration_h"], "additionalProperties": False},
+            routing.study_route_flood,
+        ),
+        ToolSpec(
+            "flood_inundation",
+            "Screening inundation depth at a reach or point (local-inertial run on Terrarium terrain); supply "
+            "river_id or lat and lon, and return_period or flow_cms. Screening grade.",
+            {"type": "object", "properties": {
+                "river_id": {"type": "integer", "minimum": 100_000_000, "maximum": 999_999_999},
+                "lat": {"type": "number", "minimum": -90, "maximum": 90},
+                "lon": {"type": "number", "minimum": -180, "maximum": 180},
+                "return_period": {"type": "number", "minimum": 2, "maximum": 500},
+                "flow_cms": {"type": "number", "exclusiveMinimum": 0, "maximum": 100_000},
+                "hours": {"type": "number", "exclusiveMinimum": 0, "maximum": floodsim.CAP_HOURS},
+                "coarse": {"type": "boolean"},
+            }, "required": [], "additionalProperties": False},
+            floodsim.study_flood_inundation,
+        ),
+        ToolSpec(
+            "landuse_change",
+            "TR-55 screening of runoff and peak flow before and after a land-use change. Use only the client's "
+            "polygon, proposed use and 24-hour storm. Missing baselines are read from WorldCover, HYSOGs and terrain.",
+            {"type": "object", "properties": {
+                "polygon": {"anyOf": [{"type": "array", "minItems": 3, "items": {"type": "array", "items": num}},
+                                      {"type": "object"}],
+                            "description": "A ring of [lon, lat] points or a single GeoJSON Polygon without holes."},
+                "use": {"type": "string", "enum": list(landuse.USES)},
+                "rain_mm": {"type": "number", "minimum": 1, "maximum": 2000, "description": "24-hour design rain, mm."},
+                "distribution": {"type": "string", "enum": list(landuse.DISTRIBUTIONS), "default": "II"},
+                "soil_group": {"type": "string", "enum": list(landuse.GROUPS)},
+                "impervious_pct": {"type": "number", "minimum": 0, "maximum": 100,
+                                   "description": "Connected impervious area (%), required for use=impervious."},
+                "cover": {"type": "object", "additionalProperties": num,
+                          "description": "Baseline WorldCover code mapped to area share."},
+                "slope_pct": {"type": "number", "exclusiveMinimum": 0, "description": "Average land slope (%)."},
+                "tc_hours": {"type": "number", "minimum": 0.1, "maximum": 10,
+                             "description": "Time of concentration (hours)."},
+            }, "required": ["polygon", "use", "rain_mm"]},
+            landuse.study_landuse_change,
         ),
         ToolSpec(
             "supply_reliability",

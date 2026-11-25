@@ -45,7 +45,7 @@ GRADES = ("established", "indicative", "screening", "not_established")
 #: Tools whose numbers come from regional transfer, reanalysis or a model rather than a record at the place
 #: (reach_record is the GEOGLOWS v2 simulation, #516).
 _SCREENING_TOOLS = frozenset({"anywhere", "similar_basins", "regionalize_signatures", "describe_catchment",
-                              "reach_record"})
+                              "reach_record", "landuse_change", "route_flood"})
 _SCREENING_METHODS = frozenset({"spei_reanalysis", "regionalize_signatures", "similar_basins", "glofas_cross_check"})
 #: Tools whose failure does not lower the answer's grade: they frame or cross-check, they do not carry it.
 _SIDE_TOOLS = frozenset({"anywhere", "describe_catchment", "similar_basins", "assess_site", "reach_record"})
@@ -167,6 +167,9 @@ def grade_for_step(ws: Workspace, sid: str) -> str:
     if tool in _SCREENING_TOOLS or method in _SCREENING_METHODS:
         return "screening"
     if via_fallback:
+        result = (rec.get("fallback") or {}).get("result")
+        if isinstance(result, dict) and result.get("grade") == "screening":
+            return "screening"
         return "indicative"
     row = _sufficiency(ws).get(method)
     if row and str(row.get("status") or "") in ("marginal", "marginally_defensible"):
@@ -214,6 +217,8 @@ _KIND_ANSWERS: dict[str, str] = {
     "flood_change": r"preferred model",
     "climate_change": r"cmip6 median",
     "catchment_response": r"change in mean flow",
+    "landuse_change": r"change in runoff depth|change in peak flow",
+    "route_flood": r"largest added flow at the end",
     "regional_flood": r"pooled|return level",
 }
 
@@ -558,6 +563,7 @@ def rules_findings(ws: Workspace) -> dict[str, Any]:
         decision["verdicts"] = verdicts
         decision["answer"] = (decision["answer"] + " " + " ".join(v["text"] for v in verdicts[:4])).strip()
     decision["conditions"].extend((decision.get("evidence") or {}).get("assumptions") or [])
+    decision["limitations"].extend((decision.get("evidence") or {}).get("limitations") or [])
     run = ws.run or {}
     if decision.get("evidence"):
         decision["evidence"].update({"grade": grade, "grade_scope": decision["grade_scope"],

@@ -43,11 +43,12 @@ numpy and the standard library only (the PNG tiles are decoded with zlib), so it
 
 from __future__ import annotations
 
+import base64
 import math
 import struct
 import time
 import zlib
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import numpy as np
@@ -61,7 +62,9 @@ __all__ = [
     "cell_velocity", "channel_depth", "compare_depths", "corridor",
     "decode_png_rgb", "edge_codes", "flood_reach", "flow_curve", "flow_for", "flow_words", "forecast_series",
     "frame_times",
-    "depth_over_terrain", "jrc_on_grid", "routed_series", "to_geotiff", "to_ugrid", "wall_contact", "wall_words",
+    "depth_from_payload", "depth_over_terrain", "depth_payload", "jrc_on_grid", "routed_series",
+    "study_flood_inundation", "to_geotiff", "to_geotiff_bytes", "to_ugrid", "validate_flood_scenario",
+    "wall_contact", "wall_words",
     "matched_flow", "pixel_size_m", "plan_window", "prepare_grid", "reach_curve", "return_period_for", "ritter",
     "run_grid",
     "run_summary", "simulate", "stream_reaches", "terrain_grid", "terrain_window", "terrarium_elevation", "window",
@@ -872,9 +875,10 @@ def jrc_on_grid(grid: dict[str, Any], return_period: int = 100) -> np.ndarray:
     from aquascope.flood_depth import NODATA, depth_url, tile_for
     from aquascope.utils.cog import COGNotFound, open_cog
 
-    nx, ny = grid.get("nx", grid["size"]), grid.get("ny", grid["size"])
+    win = grid.get("window") or grid
+    nx, ny = int(win["nx"]), int(win["ny"])
     rr, cc = np.mgrid[0:ny, 0:nx]
-    lon, lat = cell_lonlat(grid, rr, cc)
+    lon, lat = cell_lonlat(win, rr, cc)
     out = np.full((ny, nx), np.nan)
     names = {tile_for(float(la), float(lo)) for la, lo in ((lat.min(), lon.min()), (lat.min(), lon.max()),
                                                            (lat.max(), lon.min()), (lat.max(), lon.max()))}
@@ -1850,6 +1854,175 @@ def flood_reach(river_id: int | None = None, lat: float | None = None, lon: floa
     return {**out, "grid": g, "run": res, "summary": s}
 
 
+_FLOOD_FIELDS = ("river_id", "lat", "lon", "return_period", "flow_cms", "hours", "coarse")
+
+
+def to_geotiff(path: str, g: dict[str, Any], depth: Any, *, nodata: float = -9999.0) -> dict[str, Any]:
+    """Write a depth grid (m, rows north to south) as a single-band float32 GeoTIFF in Web Mercator (EPSG:3857),
+    the grid's own projection: dry cells (under 1 cm) get nodata."""
+    out = to_geotiff_bytes(g, depth, nodata=nodata)
+    win = g["window"]
+    px = 2 * math.pi * 6378137.0 / (256 * 2 ** win["zoom"])
+    with open(path, "wb") as f:
+        f.write(out)
+    return {"path": path, "width": win["nx"], "height": win["ny"], "crs": "EPSG:3857", "pixel_m": round(px, 4)}
+
+
+def depth_payload(g: dict[str, Any], depth: Any, *, level: int = 6) -> dict[str, Any]:
+    """A depth grid (m, rows north to south) as JSON-safe text: the grid window and float32 values, zlib-compressed
+    and base64-encoded, so a study can carry and print the raster without a byte blob."""
+    win = g["window"]
+    a = np.ascontiguousarray(np.asarray(depth, dtype="<f4").reshape(win["ny"], win["nx"]))
+    return {"window": {k: win[k] for k in ("x0", "y0", "nx", "ny", "zoom")},
+            "dtype": "float32", "encoding": "zlib+base64",
+            "data": base64.b64encode(zlib.compress(a.tobytes(), level)).decode("ascii")}
+
+
+def depth_from_payload(pack: Mapping[str, Any]) -> np.ndarray:
+    """The float32 depth grid (m, rows north to south, a float64 copy) in a depth_payload."""
+    win = pack["window"]
+    nx, ny = win["nx"], win["ny"]
+    if (pack.get("dtype") != "float32" or pack.get("encoding") != "zlib+base64"
+            or any(isinstance(n, bool) or not isinstance(n, int) or n <= 0 for n in (nx, ny))
+            or nx * ny > 4_000_000):
+        raise ValueError("invalid or oversized depth payload")
+    try:
+        compressed = base64.b64decode(pack["data"], validate=True)
+        decoder = zlib.decompressobj()
+        raw = decoder.decompress(compressed, nx * ny * 4 + 1)
+        if len(raw) != nx * ny * 4 or not decoder.eof or decoder.unused_data:
+            raise ValueError("invalid depth payload size or stream")
+    except (ValueError, TypeError, zlib.error) as exc:
+        raise ValueError("invalid depth payload") from exc
+    return np.frombuffer(raw, dtype="<f4").reshape(ny, nx).astype("f8")
+
+
+def validate_flood_scenario(scenario: Mapping[str, Any]) -> None:
+    """Reject a flood scenario a plan or a client supplied that study_flood_inundation cannot run."""
+    if not isinstance(scenario, Mapping):
+        raise ValueError("a flood scenario must be a mapping")
+    unknown = sorted(set(scenario) - set(_FLOOD_FIELDS))
+    if unknown:
+        raise ValueError(f"unknown flood scenario fields: {', '.join(unknown)}")
+    river_id = scenario.get("river_id")
+    lat, lon = scenario.get("lat"), scenario.get("lon")
+    if (lat is None) != (lon is None):
+        raise ValueError("lat and lon must be provided together")
+    if not isinstance(scenario.get("coarse", False), bool):
+        raise ValueError("coarse must be a boolean")
+    if river_id is None and (lat is None or lon is None):
+        raise ValueError("a flood scenario needs river_id, or both lat and lon")
+    if river_id is not None and (isinstance(river_id, bool) or not isinstance(river_id, int)
+                                 or not 100_000_000 <= river_id <= 999_999_999):
+        raise ValueError(f"river_id {river_id!r} is not a nine-digit GEOGLOWS reach id")
+    for name, value, low, high in (("lat", lat, -90.0, 90.0), ("lon", lon, -180.0, 180.0)):
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+            raise ValueError(f"{name} {value!r} is not a number")
+        if not low <= float(value) <= high:
+            raise ValueError(f"{name} {value!r} is outside [{low:g}, {high:g}]")
+    for name, value, low, high in (("return_period", scenario.get("return_period"), 2.0, 500.0),
+                                   ("flow_cms", scenario.get("flow_cms"), 0.0, 100_000.0),
+                                   ("hours", scenario.get("hours"), 0.0, float(CAP_HOURS))):
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+            raise ValueError(f"{name} {value!r} is not a number")
+        if float(value) < low or float(value) > high:
+            raise ValueError(f"{name} {value!r} is outside the study range")
+    if scenario.get("flow_cms") == 0:
+        raise ValueError("flow_cms must be positive")
+    if scenario.get("hours") == 0:
+        raise ValueError("hours must be positive")
+    if scenario.get("flow_cms") is not None and scenario.get("return_period") is not None:
+        raise ValueError("give a return_period or a flow_cms, not both")
+
+
+def study_flood_inundation(*, lat: float | None = None, lon: float | None = None, river_id: int | None = None,
+                           return_period: float | None = None, flow_cms: float | None = None,
+                           hours: float | None = None, coarse: bool = False,
+                           terrain_fetch: Callable[[str], bytes] | None = None,
+                           reference_fetch: Callable[[dict[str, Any]], Any] | None = None,
+                           **plan_kwargs: Any) -> dict[str, Any]:
+    """The reach's screening flood as a study step: flood_reach, the depth grid over the terrain and the run's
+    summary, in one payload.
+
+    return_period (years; 100 when neither flow is given) or flow_cms sets the inflow, hours caps the run, and
+    river_id or both lat and lon the reach. Returns a dict with summary, depth, check, grade and message: depth is
+    a depth_payload a figure, a table and to_geotiff_bytes can read back. The check compares the depth with
+    JRC CEMS-GloFAS's modelled hazard depth for the same return period.
+    """
+    scenario = {"river_id": river_id, "lat": lat, "lon": lon, "return_period": return_period,
+                "flow_cms": flow_cms, "hours": hours, "coarse": coarse}
+    validate_flood_scenario(scenario)
+    out = flood_reach(river_id=river_id, lat=lat, lon=lon, return_period=return_period, flow_cms=flow_cms,
+                      hours=hours, coarse=coarse, terrain_fetch=terrain_fetch, frames=False, **plan_kwargs)
+    g, run, summary = out["grid"], out["run"], dict(out["summary"])
+    depth = depth_over_terrain(g, run["h_max"])
+    wet = depth > 0.05
+    t = None if flow_cms is not None else float(return_period or 100)
+    if t is None:
+        assert flow_cms is not None
+        flow = f"{float(flow_cms):g} m3/s at the reach"
+    else:
+        flow = f"the T = {t:g} year flow"
+    elapsed = float(run["t_s"])
+    reached_end = run.get("steady_at_s") is not None or elapsed >= float(hours or CAP_HOURS) * 3600 - 1e-6
+    complete = bool(depth.size and np.isfinite(depth).all() and (depth >= 0).all()
+                    and math.isfinite(elapsed) and elapsed > 0 and reached_end)
+    check: dict[str, Any] = {
+        "ok": complete, "status": "unavailable", "reference": "JRC CEMS-GloFAS flood hazard depth",
+        "return_period": None, "csi": None, "hit_rate": None, "false_alarm_ratio": None,
+        "wet_cells": int(wet.sum()), "max_depth_m": round(float(np.max(depth)), 2) if complete else None,
+    }
+    from aquascope.flood_depth import depth_return_period
+
+    rp = depth_return_period(t) if t is not None else None
+    if rp is None:
+        check["status"] = "no_reference"
+        reason = ("The inflow was given as a flow, so no JRC return-period hazard map corresponds to it."
+                  if t is None else
+                  f"JRC publishes hazard maps from the 10-year flood up; the T = {t:g} year flow has none to "
+                  "compare with.")
+    else:
+        check["return_period"] = rp
+        try:
+            ref = np.asarray((reference_fetch or jrc_on_grid)(g, rp), dtype="f8")
+            if ref.shape != depth.shape:
+                raise ValueError("reference grid shape does not match model grid")
+            valid = np.isfinite(ref) & (ref >= 0)
+            metrics = compare_depths(depth, np.where(valid, ref, np.nan))
+            check.update(metrics)
+            if not metrics["cells"]:
+                check["status"] = "no_coverage"
+                reason = f"No JRC {rp}-year hazard pixels cover this grid."
+            elif metrics["csi"] is None:
+                check["status"] = "no_wet_cells"
+                reason = "Neither the run nor the hazard map is wet within covered cells; CSI is undefined."
+            else:
+                check["status"] = "compared"
+                rate = "" if metrics["hit_rate"] is None or metrics["false_alarm_ratio"] is None else (
+                    f", hit rate {metrics['hit_rate']:.3f}, false alarm ratio {metrics['false_alarm_ratio']:.3f}")
+                reason = (f"The JRC {rp}-year hazard depth agrees on CSI {metrics['csi']:.3f}{rate} over "
+                          f"{metrics['cells']} covered cells.")
+        except Exception as exc:
+            reason = f"JRC hazard depth comparison unavailable ({type(exc).__name__})."
+    if run.get("steady_at_s") is None:
+        reason += " Steady state was not reached; the simulated extent is not necessarily final."
+    if not complete:
+        reason = "The simulation did not complete cleanly. " + reason
+    check["summary"] = (f"{reason} The reference is JRC CEMS-GloFAS's modelled flood hazard depth (3 arc-seconds) "
+                        "for a different return period's flood, not an observed event and not JRC Global Surface "
+                        "Water; the map is modelled too, so agreement is a consistency check, not validation. "
+                        "Screening only: terrain errors of metres, no bathymetry, a one-cell channel and no "
+                        "unrepresented defences.")
+    message = (f"A screening flood for {flow} at reach {summary['river_id']}: {summary['wet_km2']:g} km2 wet, "
+               f"deepest {summary['max_depth_m']:g} m.")
+    return {"summary": summary, "depth": depth_payload(g, depth), "check": check, "grade": "screening",
+            "message": message}
+
+
 def _join(segments: list[tuple[float, float, float, float]]) -> list[list[tuple[float, float]]]:
     """(lon1, lat1, lon2, lat2) segments chained into polylines where one ends where the next starts."""
     lines: list[list[tuple[float, float]]] = []
@@ -1962,7 +2135,7 @@ def to_ugrid(path: str, g: dict[str, Any], res: dict[str, Any], *, start: str | 
     nx, zoom = win["nx"], win["zoom"]
     cells = kept_cells(res["h_max"])
     rows, cols = np.divmod(cells, nx)
-    corner = {}
+    corner: dict[int, int] = {}
 
     def node(r: int, c: int) -> int:
         key = r * (nx + 1) + c
@@ -2089,9 +2262,9 @@ def compare_exposure(g: dict[str, Any], before: Any, after: Any, read: dict[str,
     return out
 
 
-def to_geotiff(path: str, g: dict[str, Any], depth: Any, *, nodata: float = -9999.0) -> dict[str, Any]:
-    """Write a depth grid (m, rows north to south) as a single-band float32 GeoTIFF in Web Mercator (EPSG:3857),
-    the grid's own projection: dry cells (under 1 cm) get ``nodata``."""
+def to_geotiff_bytes(g: dict[str, Any], depth: Any, *, nodata: float = -9999.0) -> bytes:
+    """The bytes to_geotiff writes: a single-band float32 GeoTIFF in Web Mercator (EPSG:3857), the grid's own
+    projection; dry cells (under 1 cm) get nodata."""
     win = g["window"]
     a = np.asarray(depth, dtype="f4").reshape(win["ny"], win["nx"])
     a = np.where(a > 0.01, a, np.float32(nodata)).astype("<f4")
@@ -2100,10 +2273,10 @@ def to_geotiff(path: str, g: dict[str, Any], depth: Any, *, nodata: float = -999
     x0 = -math.pi * 6378137.0 + win["x0"] * px
     y0 = math.pi * 6378137.0 - win["y0"] * px
     h, w = a.shape
-    data = a.tobytes()
+    data = bytes(a.tobytes())
     keys = [1, 1, 0, 3, 1024, 0, 1, 1, 1025, 0, 1, 1, 3072, 0, 1, 3857]
     nod = (repr(float(nodata)) + "\0").encode()
-    entries = []   # (tag, type, count, value bytes)
+    entries: list[tuple[int, int, int, bytes]] = []   # (tag, type, count, value bytes)
     entries.append((256, 4, 1, struct.pack("<I", w)))
     entries.append((257, 4, 1, struct.pack("<I", h)))
     entries.append((258, 3, 1, struct.pack("<HH", 32, 0)))
@@ -2123,7 +2296,7 @@ def to_geotiff(path: str, g: dict[str, Any], depth: Any, *, nodata: float = -999
     ifd_size = 2 + 12 * n + 4
     extra_at = 8 + ifd_size
     extra = b""
-    fields = []
+    fields: list[tuple[int, int, int, bytes | None]] = []
     for tag, typ, count, val in entries:
         if val == b"DATA":
             fields.append((tag, typ, count, None))
@@ -2135,10 +2308,7 @@ def to_geotiff(path: str, g: dict[str, Any], depth: Any, *, nodata: float = -999
             extra += val + (b"\0" if len(val) % 2 else b"")
             fields.append((tag, typ, count, struct.pack("<I", off)))
     data_at = extra_at + len(extra)
-    out = b"II*\0" + struct.pack("<I", 8) + struct.pack("<H", n)
-    for tag, typ, count, val in fields:
-        out += struct.pack("<HHI", tag, typ, count) + (val if val is not None else struct.pack("<I", data_at))
-    out += struct.pack("<I", 0) + extra + data
-    with open(path, "wb") as f:
-        f.write(out)
-    return {"path": path, "width": w, "height": h, "crs": "EPSG:3857", "pixel_m": round(px, 4)}
+    out: bytes = b"II*\0" + struct.pack("<I", 8) + struct.pack("<H", n)
+    for tag, typ, count, value in fields:
+        out += struct.pack("<HHI", tag, typ, count) + (value if value is not None else struct.pack("<I", data_at))
+    return out + struct.pack("<I", 0) + extra + data

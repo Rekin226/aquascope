@@ -84,6 +84,26 @@ def test_keyless_declines_are_the_playbooks_words_or_the_missing_playbook():
     assert ws2.status == "declined" and "36 years" in ws2.declined_reason and ws2.messages[-1].kind == "declined"
 
 
+def test_inundation_needs_the_requested_site_magnitude_and_checks(monkeypatch):
+    # An unread network is unknown at planning time. The actual reach and terrain are checked during execution.
+    monkeypatch.setattr(scout, "reach_dataset", lambda *_: (None, None))
+    intake = {"decision": "inundation extent", "return_period": 50}
+    ws = _ws(intake=intake)
+    study = methodologist.plan(ws, None)
+    assert study and study.plan["branch"] == "inundation"
+    step, = (s.to_dict() for s in study.steps)
+    assert step["arguments"] == {**ws.site, "return_period": 50}
+    assert methodologist._errors_of([step], ws) == []
+    for args in ({**ws.site, "return_period": 100}, {**step["arguments"], "lon": 10}):
+        assert methodologist._errors_of([{**step, "arguments": args}], ws)
+    assert methodologist._errors_of([{**step, "expects": []}], ws)
+    assert methodologist._errors_of(VALID_PLAN["steps"], ws)
+
+    monkeypatch.setattr(scout, "reach_dataset", lambda *_: (None, "No river reach near this point"))
+    ws = _ws(intake=intake)
+    assert methodologist.plan(ws, None) is None and "No river reach" in ws.declined_reason
+
+
 def test_a_valid_model_plan_is_accepted_with_the_playbooks_caveats_attached():
     ws = _ws()
     client = FakeModel({"methodologist": [VALID_PLAN]})
@@ -251,17 +271,17 @@ def test_a_model_that_declines_is_final_and_the_tree_does_not_run(monkeypatch) -
     from tests.test_studio.conftest import RECON, FakeModel
 
     ws = Workspace(site={"lat": 51.415, "lon": -0.308})
-    ws.brief.problem = "Map the inundation extent for the 100-year flood"
+    ws.brief.problem = "Forecast the exact day of the next flood at this site"
     ws.brief.kind = ws.brief.playbook = "flood_risk"
     ws.brief.intake = {"return_period": 100}
 
     monkeypatch.setattr("aquascope.explore.assess_site", lambda *a, **k: RECON, raising=False)
     scout.scout(ws)
-    reason = "No tool in the catalogue maps an inundation extent; the flood tools give a flow, not a depth."
+    reason = "A design-flow estimate cannot predict the exact date of the next event."
     client = FakeModel({"methodologist": [{"decline": True, "reason": reason}]})
     model = Model.resolve(ws, client=client, model="fake", provider="custom")
     study = methodologist.plan(ws, model)
-    assert study is None and ws.status == "declined" and "inundation" in (ws.declined_reason or "")
+    assert study is None and ws.status == "declined" and ws.declined_reason == reason
     assert not any(e["event"] == "fallback" for e in ws.events), "a model's decline is final; the tree does not run"
 
 

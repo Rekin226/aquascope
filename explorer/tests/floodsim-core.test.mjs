@@ -7,8 +7,27 @@ import { readFileSync } from "node:fs";
 import {
   FLOODSIM_WGSL, NC_TYPES, areaVolume, cellVelocity, corners, createCpuSim, edgeCodes, flowAt, frameTimes, keptCells,
   mergeSources, packFrame, pixelSizeM, runLoop, steadyCheck, stopTimes, terrariumElevation, ugridFile, unpackDepth,
-  wetAtWall, wetBox, windowTiles, worldPx,
+  wetAtWall, wetBox, windowTiles, worldPx, floodStudyArgs,
 } from "../src/floodsim-core.js";
+
+test("Study preserves the displayed supported flood and rejects unsupported scenarios", () => {
+  const run = { target: { river_id: 230301988, lat: 0, lon: 0 }, choice: { return_period: 100 },
+    hours: 48, g: { coarse: true }, edits: [] };
+  assert.deepEqual(floodStudyArgs(run), { lat: 0, lon: 0, scenario: { river_id: 230301988, lat: 0, lon: 0, return_period: 100, hours: 48, coarse: true } });
+  assert.deepEqual(floodStudyArgs({ ...run, choice: { flow_cms: 12.5 } }).scenario,
+    { river_id: 230301988, lat: 0, lon: 0, flow_cms: 12.5, hours: 48, coarse: true });
+  for (const choice of [{ forecast: "peak" }, { routed: 100 }, { series: {} }, { flow_cms: 10, return_period: 2 }])
+    assert.equal(floodStudyArgs({ ...run, choice }), null);
+  assert.equal(floodStudyArgs({ ...run, edits: [{ kind: "levee" }] }), null);
+  assert.equal(floodStudyArgs({ ...run, target: { ...run.target, lat: null } }), null);
+  for (const choice of [{ return_period: 1.9 }, { return_period: 501 }, { flow_cms: 100001 }])
+    assert.equal(floodStudyArgs({ ...run, choice }), null);
+  for (const choice of [{ return_period: 2 }, { return_period: 500 }, { flow_cms: 100000 }])
+    assert.ok(floodStudyArgs({ ...run, choice }));
+  assert.equal(floodStudyArgs({ ...run, hours: 72.1 }), null);
+  assert.ok(floodStudyArgs({ ...run, hours: 72 }));
+  assert.equal(floodStudyArgs({ ...run, target: { ...run.target, river_id: 42 } }), null);
+});
 
 const fx = JSON.parse(readFileSync(new URL("../../tests/fixtures/floodsim_twin.json", import.meta.url), "utf8"));
 const fe = JSON.parse(readFileSync(new URL("../../tests/fixtures/floodsim_twin_edges.json", import.meta.url), "utf8"));

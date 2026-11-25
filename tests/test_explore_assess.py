@@ -390,3 +390,115 @@ def test_a_mirror_without_the_station_or_a_corrupt_file_is_a_note(small_catalog,
     assert res["context"]["completeness_by_variable"] == {}
     assert any("holds no usable file" in n for n in res["notes"])
     assert json.loads(json.dumps(res))
+
+
+# ── the opt-in read from the Archive on Hugging Face (#375 follow-up) ───────
+
+
+class _HubResponse:
+    """What ``urllib.request.urlopen`` hands back for a file the Hub has."""
+
+    def __init__(self, data: bytes):
+        self._data = data
+
+    def read(self) -> bytes:
+        return self._data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _hub_file(series, quality=None) -> bytes:
+    from aquascope.archive.observations import series_to_csv_gz
+
+    return series_to_csv_gz(series, quality=quality)
+
+
+def _not_found(url):
+    import urllib.error
+
+    return urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+
+def _hub_has_nothing(url, timeout=None):
+    raise _not_found(url)
+
+
+def test_the_hub_url_is_the_archive_layout_on_the_dataset():
+    url = explore._hub_url("uk_ea", "8496ce69", "discharge")
+    assert url == ("https://huggingface.co/datasets/Rekin226/aquascope-gauges/resolve/main/"
+                   "obs/discharge/uk_ea/8496ce69.csv.gz")
+    assert explore._hub_url("usgs", "a/b", "discharge").endswith("obs/discharge/usgs/a_b.csv.gz")
+
+
+def test_the_hub_read_is_off_by_default(small_catalog, archive):
+    with patch("urllib.request.urlopen") as urlopen:
+        res = explore.assess_site(51.415, -0.308)
+    urlopen.assert_not_called()  # opt-in: the default reconnaissance stays offline
+    assert res["context"]["completeness_by_variable"] == {}
+    note = next(n for n in res["notes"] if n.startswith("Record quality was not assessed"))
+    assert "set AQUASCOPE_ARCHIVE_HUB=1 to turn it on" in note
+
+
+@pytest.mark.parametrize("opt_in", ["argument", "env"])
+def test_a_hub_hit_fills_the_quality_half(small_catalog, archive, monkeypatch, opt_in):
+    index = pd.date_range("1960-01-01", "2019-12-31", freq="D")
+    series = pd.Series(np.where(index.year < 1991, 100.0, 50.0)
+                       + 5.0 * np.sin(2 * np.pi * index.day_of_year / 365.25), index=index)
+    quality = pd.Series("approved", index=index)
+    quality.iloc[:100] = "suspect"
+    asked: list[str] = []
+
+    def urlopen(url, timeout=None):
+        asked.append(url)
+        if url == explore._hub_url("uk_ea", "8496ce69", "discharge"):
+            return _HubResponse(_hub_file(series, quality))
+        raise _not_found(url)
+
+    kwargs = {"archive_hub": True} if opt_in == "argument" else {}
+    if opt_in == "env":
+        monkeypatch.setenv(explore.ARCHIVE_HUB_ENV, "1")
+    with patch("urllib.request.urlopen", side_effect=urlopen):
+        res = explore.assess_site(51.415, -0.308, problem="flood_risk", **kwargs)
+    assert explore._hub_url("uk_ea", "8496ce69", "discharge") in asked
+    assert all(u.startswith("https://huggingface.co/datasets/Rekin226/aquascope-gauges/") for u in asked)
+    ctx = res["context"]
+    assert ctx["completeness_by_variable"]["discharge"] == 1.0
+    assert ctx["longest_gap_days"]["discharge"] == 0
+    assert ctx["flagged_fraction"]["discharge"] == round(100 / len(index), 4)
+    assert ctx["change_points"]["discharge"] == [1991]
+    assert _row_for(res, "at_site_flood_frequency")["status"] == MARGINAL
+    assert any(n.startswith("Discharge record (Archive on Hugging Face):") for n in res["notes"])
+    assert json.loads(json.dumps(res))
+
+
+def test_a_hub_404_falls_back_to_the_metadata_only_note(small_catalog, archive):
+    with patch("urllib.request.urlopen", side_effect=_hub_has_nothing):
+        res = explore.assess_site(51.415, -0.308, archive_hub=True)
+    assert res["context"]["completeness_by_variable"] == {}
+    note = next(n for n in res["notes"] if n.startswith("Record quality was not assessed"))
+    assert "the Archive on Hugging Face has no usable file for it" in note
+    assert _row_for(res, "at_site_flood_frequency")["status"] == DEFENSIBLE  # judged on the catalog span, as before
+
+
+def test_a_hub_failure_or_a_corrupt_file_never_fails_the_reconnaissance(small_catalog, archive):
+    with patch("urllib.request.urlopen", side_effect=TimeoutError("slow")):
+        res = explore.assess_site(51.415, -0.308, archive_hub=True)
+    assert res["context"]["completeness_by_variable"] == {} and res["sufficiency"]
+    with patch("urllib.request.urlopen", return_value=_HubResponse(b"not a gzip file")):
+        res = explore.assess_site(51.415, -0.308, archive_hub=True)
+    assert res["context"]["completeness_by_variable"] == {} and res["sufficiency"]
+
+
+def test_a_local_mirror_is_read_before_the_hub(small_catalog, archive, tmp_path, monkeypatch):
+    _write_mirror(tmp_path, _daily_record())
+    monkeypatch.setenv(explore.ARCHIVE_MIRROR_ENV, str(tmp_path))
+    with patch("urllib.request.urlopen", side_effect=_hub_has_nothing) as urlopen:
+        res = explore.assess_site(51.415, -0.308, archive_hub=True)
+    assert res["context"]["completeness_by_variable"]["discharge"] == 1.0
+    assert any(n.startswith("Discharge record (local Archive mirror):") for n in res["notes"])
+    hub_reads = [c.args[0] for c in urlopen.call_args_list]
+    assert explore._hub_url("uk_ea", "8496ce69", "discharge") not in hub_reads  # the Hub only for what is missing

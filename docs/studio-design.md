@@ -201,6 +201,44 @@ this study does not establish, Recommendations, References, Appendix
 - **MCP**: `studio_start`, `studio_say`, `studio_approve`, `studio_follow_up`, `studio_narrate`, `studio_context`, `studio_export`, the workspace dict in and out.
 - **Explorer**: Study mode in the drawer (`explorer/src/studio.js`), a thin face over one worker message, `studio`, with `op` start, say, approve, follow_up, file, export (and table, an XLSX to CSV). `start` builds the Studio at the page's site with the attached tables and the page's catchment row (`describe_catchment` from it) and calls `say`; the others rebuild it with `Studio.from_dict` and call the method. Every reply is `{reply, workspace, status}` with the workspace WITHOUT artifact bytes; the worker keeps its own copy WITH them by workspace id, so `file` returns one artifact by id as base64 and `export` the bundle zip. `studio_progress` posts every event as it happens; `studio_artifact` posts every artifact, PNG figures with their bytes, SVG and CSV without. matplotlib is loaded with `loadPackage` before the first run, openpyxl and python-docx with micropip before the first bundle, never on a visit that runs no study.
 
+### Compare runoff for a land-use change
+
+In the Explorer, draw an area in **Change land use**, choose the proposed cover and storm,
+then open Study and choose **Compare runoff for the drawn land-use change**.
+The Study uses the same polygon and 24-hour storm for both covers.
+
+For example, this keyless CLI study uses a hypothetical 80 mm storm and supplies all baseline
+inputs so the runoff calculation can run offline:
+
+```sh
+aquascope studio "How would paving this area change runoff?" --lat 45.70 --lon 4.955 --yes \
+  --intake 'landuse_change={"polygon":[[4.955,45.70],[4.970,45.70],[4.970,45.708],[4.955,45.708]],"use":"paved","rain_mm":80,"soil_group":"C","cover":{"10":1},"tc_hours":0.5}'
+```
+
+For MCP, pass the same scenario object under `intake.landuse_change` to `studio_start`.
+The report and before/after table label the results as screening estimates. The TR-55 worked
+examples check the calculation. Local design use would also need measured site inputs.
+
+### Route a flood wave downstream
+
+In the Explorer, run **Route it** with a specified peak or return period, then open Study and
+choose **Study this routed flood wave**. The Study reuses the starting reach and wave inputs
+from the run displayed on the map.
+
+This CLI example starts at the Dresden reach of the Elbe with a hypothetical 600 m³/s peak:
+
+```sh
+aquascope studio "Route a flood wave downstream" --lat 51.05 --lon 13.74 --yes \
+  --intake 'route_flood={"river_id":230494421,"peak_cms":600,"duration_h":12,"hours":48,"max_reaches":3}'
+```
+
+Pass the same object under `intake.route_flood` to MCP's `studio_start`. The router reads
+public GEOGLOWS data without an API key. The table and plot show hourly **added flow** in
+m³/s at the starting reach and the last reach modelled. If the window ends while the wave
+is still rising, the largest value in the table is only the largest value within that window.
+The historical check compares routing with the GEOGLOWS retrospective simulation. Site-specific
+calibration would need observations.
+
 ## The honesty rules, kept
 
 Every number in the report comes from a tool result and passes the gates

@@ -7,6 +7,19 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+- Flood it can run as a screening inundation study from the Explorer, CLI or MCP. Its bundle includes a
+  georeferenced peak-depth raster, and the study reports the agreement (CSI, hit rate, false alarm ratio)
+  with JRC CEMS-GloFAS's modelled return-period hazard depth as a consistency check. The flood-risk
+  playbook now maps inundation rather than declining it.
+- Study can export hourly added flows at the start and downstream end of a routed flood wave
+  from the Explorer, CLI and MCP.
+- Reservoir routing now reports peak reduction and delay only when the simulation captures both peaks.
+  Short runs still show the largest inflow and outflow reached within the simulated hours.
+- Study can compare runoff and peak flow before and after a land-use change under the same 24-hour storm.
+  The Explorer, CLI and MCP use the sketchpad's TR-55 calculation and export a screening-grade comparison.
+- **Canada HYDAT collector (#18)**: daily mean discharge from ECCC's MSC GeoMet OGC API, with no API key required.
+- **Record quality from the Archive on Hugging Face, opt-in, and on `aquascope assess`'s lines** (#375, follow-up to #676). `assess_site(archive_hub=True)`, `AQUASCOPE_ARCHIVE_HUB=1` or `aquascope assess --archive-hub` (experimental) reads each counted station's `obs/<variable>/<source>/<station_id>.csv.gz` from the Hugging Face dataset when no local mirror (`AQUASCOPE_ARCHIVE_DIR`) holds it, so the quality half fills without downloading the whole dataset and never calls an agency; the local mirror and the Hub share one parser. A station the Archive does not mirror (a 404), a failed read or an unreadable file keeps the metadata-only note, which now also says how to turn the Hub read on. Off by default: the default reconnaissance still reads nothing. `aquascope assess` prints each variable's completeness, longest gap, flagged share and change points on its line, and the MCP tool `assess_site` describes the quality fields and asks for gaps, flags and shifts to be reported. The test suite ignores a developer's own `AQUASCOPE_ARCHIVE_DIR` and `AQUASCOPE_ARCHIVE_HUB`.
+
 ### Fixed
 - **River reach names** (#721): deployments can configure Overpass to find a named OpenStreetMap waterway near a snapped reach. The card displays its fallback immediately, reuses successful lookups, and links to OpenStreetMap attribution.
 

@@ -95,6 +95,11 @@ PROBES: dict[str, Probe] = {
         informational=True,
         note="packaged CAMELS-BR dataset: a large download, not a live API",
     ),
+
+    "canada_hydat": Probe(
+        kwargs={"station_id": "05BB001", "datetime_start": "2000-01-01", "datetime_end": "2000-01-07"},
+        note="Water Survey of Canada, Bow River at Banff",
+    ),
     # --- Africa --------------------------------------------------------------
     "south_africa_dws": Probe(
         kwargs={"station_id": "C1H001", "days": 7},

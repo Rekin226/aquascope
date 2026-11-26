@@ -118,10 +118,12 @@ def _in_window(row: dict[str, Any], leads: tuple[int, int]) -> bool:
 def pick(rows: list[dict[str, Any]], *, variant: str = "corrected",
          leads: tuple[int, int] = TRACK_LEADS) -> list[dict[str, Any]]:
     """One row per model for the card, in model order: the ``leads`` window, the asked ``variant`` when the model
-    has it, else raw."""
+    has it, else raw. For each variant prefer the best-sampled gauge, then source and station ID."""
     out = []
     for m in MODEL_ORDER:
         mine = [r for r in rows or [] if r.get("model") == m and _in_window(r, leads)]
+        mine.sort(key=lambda r: (-(_num(r.get("n_pairs")) or 0), str(r.get("source") or ""),
+                                 str(r.get("station_id") or "")))
         hit = next((r for r in mine if r.get("variant") == variant), None) \
             or next((r for r in mine if r.get("variant") == "raw"), None)
         if hit:

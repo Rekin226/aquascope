@@ -28,7 +28,8 @@ day's files are kept in the run's artifact but not published, and the job's heal
 An issued row (gauge, model, valid date, lead day) is matched with the gauge's value for the same day from the
 status snapshots. A snapshot carries each gauge's newest value, usually yesterday's, so the match is on the
 value's own date, not the snapshot's; when several snapshots carry the same day, the newest one wins. Only
-positive flows are scored, on both sides, because the errors are in log flow.
+finite, positive flows are scored, on both sides, because the errors are in log flow. A missing or infinite
+quantile excludes the pair from CRPS only.
 
 Raw and corrected-to-the-gauge values are separate rows (`variant` = `raw` or `corrected`), each with its own
 pair count. Both models are issued corrected to the gauge: GEOGLOWS from its retrospective simulation, GloFAS

@@ -148,6 +148,7 @@ nav:
     - Use cases: use_cases.md
   - Examples:
     - Potomac flood frequency: examples/potomac_flood_frequency.md
+    - Durance snowmelt and runoff: examples/durance_cemaneige.md
   - Guides:
     - Architecture: guides/architecture.md
     - Running pipelines: guides/running_pipelines.md

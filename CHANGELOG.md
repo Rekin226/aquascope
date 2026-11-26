@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+- CemaNeige can now partition precipitation and track snow by elevation band before GR4J. The rainfall-runoff
+  calibrator can fit the four GR4J parameters together with CemaNeige's thermal weighting and melt factor.
+
 - Forecast verification excludes infinite flow readings and forecasts from the sample count. An invalid
   quantile only removes that row from the probability score.
 

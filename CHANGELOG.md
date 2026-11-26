@@ -13,9 +13,6 @@ All notable changes to AquaScope are documented here.
 - On reaches with several gauges, the river card and Floods ahead now use the same best-sampled gauge
   for the raw GEOGLOWS track record, even when the Archive returns the gauges in a different order.
 
-- A [New Zealand crosswalk benchmark](benchmarks/swot_crosswalk.md) compares GEOGLOWS reaches with SWOT
-  SWORD river reaches and reports how often their locations and drainage areas agree (#788).
-
 - Flood-risk studies can screen how a drawn reservoir attenuates one flood, with an inflow/outflow CSV,
   hydrograph and a level-pool solver check against NRCS NEH Example 17-2.
 
@@ -30,6 +27,9 @@ All notable changes to AquaScope are documented here.
 - Study can compare runoff and peak flow before and after a land-use change under the same 24-hour storm.
   The Explorer, CLI and MCP use the sketchpad's TR-55 calculation and export a screening-grade comparison.
 - **Canada HYDAT collector (#18)**: daily mean discharge from ECCC's MSC GeoMet OGC API, with no API key required.
+- A [New Zealand crosswalk benchmark](benchmarks/swot_crosswalk.md) compares GEOGLOWS reaches with SWOT
+  SWORD river reaches and reports how often their locations and drainage areas agree (#788).
+
 - **Record quality from the Archive on Hugging Face, opt-in, and on `aquascope assess`'s lines** (#375, follow-up to #676). `assess_site(archive_hub=True)`, `AQUASCOPE_ARCHIVE_HUB=1` or `aquascope assess --archive-hub` (experimental) reads each counted station's `obs/<variable>/<source>/<station_id>.csv.gz` from the Hugging Face dataset when no local mirror (`AQUASCOPE_ARCHIVE_DIR`) holds it, so the quality half fills without downloading the whole dataset and never calls an agency; the local mirror and the Hub share one parser. A station the Archive does not mirror (a 404), a failed read or an unreadable file keeps the metadata-only note, which now also says how to turn the Hub read on. Off by default: the default reconnaissance still reads nothing. `aquascope assess` prints each variable's completeness, longest gap, flagged share and change points on its line, and the MCP tool `assess_site` describes the quality fields and asks for gaps, flags and shifts to be reported. The test suite ignores a developer's own `AQUASCOPE_ARCHIVE_DIR` and `AQUASCOPE_ARCHIVE_HUB`.
 
 ## [1.3.0] - 2026-11-22

@@ -345,8 +345,8 @@ def by_gauge(pairs: pd.DataFrame, *, days: int = TRACK_DAYS, windows: Iterable[t
     out = pd.concat(frames, ignore_index=True)
     out["window_days"] = int(days)
     out["enough_pairs"] = out["n_pairs"] >= int(min_pairs)
-    out["median_abs_log10_error"] = out["median_abs_log10_error"].round(4)
     out["factor"] = (10 ** out["median_abs_log10_error"]).round(3)
+    out["median_abs_log10_error"] = out["median_abs_log10_error"].round(4)
     out["median_log10_error"] = out["median_log10_error"].round(4)
     out["crps_log10"] = out["crps_log10"].round(4)
     out["trust"] = [trust(f, e) for f, e in zip(out["factor"], out["enough_pairs"])]

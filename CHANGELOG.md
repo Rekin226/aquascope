@@ -13,6 +13,8 @@ All notable changes to AquaScope are documented here.
 - On reaches with several gauges, the river card and Floods ahead now use the same best-sampled gauge
   for the raw GEOGLOWS track record, even when the Archive returns the gauges in a different order.
 
+- Forecast scorecards now say which lead times lack a ranking when a gauge has verified forecasts at other leads.
+
 - Flood-risk studies can screen how a drawn reservoir attenuates one flood, with an inflow/outflow CSV,
   hydrograph and a level-pool solver check against NRCS NEH Example 17-2.
 

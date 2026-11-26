@@ -124,6 +124,35 @@ def read_published_json(path: str, repo_id: str = DEFAULT_REPO) -> dict[str, Any
         return {}
 
 
+def _issue_history(manifest: Any) -> list[dict[str, Any]]:
+    """Read the dated entries, keeping older entries with fewer fields intact."""
+    issues = manifest.get("issues") if isinstance(manifest, dict) else None
+    if not isinstance(issues, list):
+        raise ValueError("Forecast manifest has no valid issues list")
+    for issue in issues:
+        day = issue.get("date") if isinstance(issue, dict) else None
+        parsed = _d(day)
+        if parsed is None or parsed.isoformat() != day:
+            raise ValueError(f"Forecast manifest has an invalid issue date: {day!r}")
+    return issues
+
+
+def _published_issues(repo_id: str) -> list[dict[str, Any]]:
+    """Only an absent Hub file means there is no previous issue history."""
+    import httpx
+
+    url = published_url(f"{FOLDER}/manifest.json", repo_id)
+    response = httpx.get(url, follow_redirects=True, timeout=120)
+    if response.status_code == 404 and response.headers.get("X-Error-Code") == "EntryNotFound":
+        return []
+    response.raise_for_status()
+    try:
+        manifest = response.json()
+    except ValueError as exc:
+        raise ValueError(f"Unreadable forecast manifest at {url}") from exc
+    return _issue_history(manifest)
+
+
 def read_published_rows(path: str, repo_id: str = DEFAULT_REPO) -> list[dict[str, Any]]:
     import io
 
@@ -464,6 +493,7 @@ def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, max_gauges: int = DEFAU
     """
     started = time.monotonic()
     today = today or datetime.now(timezone.utc).date()
+    published = _published_issues(repo_id)
     root = Path(out) / FOLDER
     root.mkdir(parents=True, exist_ok=True)
     if manifest is None:
@@ -550,11 +580,12 @@ def run(out: str | Path, *, repo_id: str = DEFAULT_REPO, max_gauges: int = DEFAU
                                       if r["model"] == "glofas" and r.get("mean_c") is not None}),
              "glofas_record": gstats,
              "seconds": round(time.monotonic() - started, 1)}
-    published = read_published_json(f"{FOLDER}/manifest.json", repo_id)
-    issues = [i for i in published.get("issues") or [] if i.get("date") != entry["date"]] + [entry]
-    doc = {"about": ABOUT, "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-           "licence": LICENCE, "columns": COLUMNS, "status": {**meta, "file": f"{FOLDER}/status/latest.parquet"},
-           "issues": sorted(issues, key=lambda i: i["date"])}
+    issues = [i for i in published if i["date"] != entry["date"]] + [entry]
+    doc: dict[str, Any] = {
+        "about": ABOUT, "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "licence": LICENCE, "columns": COLUMNS, "status": {**meta, "file": f"{FOLDER}/status/latest.parquet"},
+        "issues": sorted(issues, key=lambda i: i["date"]),
+    }
     (root / "manifest.json").write_text(json.dumps(doc, indent=1))
     if verify_budget_s > 0:
         entry["verify"] = doc["issues"][-1]["verify"] = scorecard(out, doc, repo_id=repo_id, budget_s=verify_budget_s)
@@ -608,7 +639,13 @@ def publish(out: str | Path, *, repo_id: str = DEFAULT_REPO, token: str | None =
     with tempfile.TemporaryDirectory() as tmp:
         stage = Path(tmp) / FOLDER
         shutil.copytree(src, stage)
-        day = json.loads((src / "manifest.json").read_text())["issues"][-1]["date"]
+        issues = _issue_history(json.loads((stage / "manifest.json").read_text()))
+        if not issues:
+            raise ValueError("No forecast issue to publish")
+        missing = {i["date"] for i in _published_issues(repo_id)} - {i["date"] for i in issues}
+        if missing:
+            raise ValueError(f"Build is missing published forecast issues: {sorted(missing)}")
+        day = issues[-1]["date"]
         message = f"forecasts: issue {day}"
         if _scorecard_ready(Path(out) / VERIFY):
             shutil.copytree(Path(out) / VERIFY, Path(tmp) / VERIFY)

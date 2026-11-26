@@ -7,9 +7,6 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
-- CemaNeige can now partition precipitation and track snow by elevation band before GR4J. The rainfall-runoff
-  calibrator can fit the four GR4J parameters together with CemaNeige's thermal weighting and melt factor.
-
 - Forecast verification excludes infinite flow readings and forecasts from the sample count. An invalid
   quantile only removes that row from the probability score.
 
@@ -25,6 +22,9 @@ All notable changes to AquaScope are documented here.
   playbook now maps inundation rather than declining it.
 - Study can export hourly added flows at the start and downstream end of a routed flood wave
   from the Explorer, CLI and MCP.
+- CemaNeige can now partition precipitation and track snow by elevation band before GR4J. The rainfall-runoff
+  calibrator can fit the four GR4J parameters together with CemaNeige's thermal weighting and melt factor.
+
 - Reservoir routing now reports peak reduction and delay only when the simulation captures both peaks.
   Short runs still show the largest inflow and outflow reached within the simulated hours.
 - Study can compare runoff and peak flow before and after a land-use change under the same 24-hour storm.

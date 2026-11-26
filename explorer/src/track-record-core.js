@@ -101,11 +101,23 @@ export function trackLine(r, { minPairs = MIN_PAIRS } = {}) {
 
 const inWindow = (r, leads) => num(r.lead_min) === leads[0] && num(r.lead_max) === leads[1];
 
+// Prefer the most pairs, breaking ties by gauge ID so parquet row order cannot change the badge.
+function byGaugeSample(a, b) {
+  const count = (num(b.n_pairs) || 0) - (num(a.n_pairs) || 0);
+  if (count) return count;
+  for (const field of ["source", "station_id"]) {
+    const left = String(a[field] ?? ""), right = String(b[field] ?? "");
+    if (left < right) return -1;
+    if (left > right) return 1;
+  }
+  return 0;
+}
+
 /** One row per model for the card: the lead window, the asked variant when the model has it, else raw. */
 export function pick(rows, { variant = "corrected", leads = TRACK_LEADS } = {}) {
   const out = [];
   for (const m of MODEL_ORDER) {
-    const mine = (rows || []).filter((r) => r && r.model === m && inWindow(r, leads));
+    const mine = (rows || []).filter((r) => r && r.model === m && inWindow(r, leads)).sort(byGaugeSample);
     const hit = mine.find((r) => r.variant === variant) || mine.find((r) => r.variant === "raw");
     if (hit) out.push(hit);
   }
@@ -130,12 +142,11 @@ export function trackLines(rows, { variant = "corrected", leads = TRACK_LEADS, m
  * ahead classes the raw forecast), as {head, trust, text}. With no gauge on the reach the trust is unknown.
  */
 export function reachTrust(rows, { leads = TRACK_LEADS, minPairs = MIN_PAIRS } = {}) {
-  const mine = (rows || []).filter((r) => r && r.model === "geoglows" && r.variant === "raw" && inWindow(r, leads))
-    .sort((a, b) => (num(b.n_pairs) || 0) - (num(a.n_pairs) || 0));
+  const gauge = pick(rows, { variant: "raw", leads }).find((r) => r.model === "geoglows");
   const head = trackHead(TRACK_DAYS, leads);
-  if (!mine.length) return { head, trust: UNKNOWN, text: "GEOGLOWS: no gauge on this reach has a verified forecast yet." };
-  return { head: trackHead(Math.trunc(num(mine[0].window_days) || TRACK_DAYS), leads), trust: trustOf(mine[0]),
-    text: trackLine(mine[0], { minPairs }) };
+  if (!gauge) return { head, trust: UNKNOWN, text: "GEOGLOWS: no gauge on this reach has a verified forecast yet." };
+  return { head: trackHead(Math.trunc(num(gauge.window_days) || TRACK_DAYS), leads), trust: trustOf(gauge),
+    text: trackLine(gauge, { minPairs }) };
 }
 
 /**

@@ -59,6 +59,22 @@ def test_the_card_lines_are_the_package_lines():
 
 
 @needs_node
+def test_reach_card_and_floods_ahead_use_the_same_best_sampled_gauge():
+    raw = _rows()[0]
+    thin = {**raw, "station_id": "A", "n_pairs": 12, "enough_pairs": False, "trust": "unknown"}
+    best = {**raw, "station_id": "B"}
+    tied = {**raw, "station_id": "C", "factor": 1.5, "trust": "good"}
+    corrected = {**raw, "variant": "corrected", "n_pairs": 100}
+    for rows in ([thin, tied, best, corrected], [corrected, best, tied, thin]):
+        data = json.dumps(rows)
+        card = _js(f"m.trackLines({data}, {{variant: 'raw'}})")
+        badge = _js(f"m.reachTrust({data})")
+        assert card == fs.track_lines(rows, variant="raw")
+        assert card["lines"][0]["text"] == badge["text"] == fs.track_line(best)
+        assert card["lines"][0]["trust"] == badge["trust"] == best["trust"]
+
+
+@needs_node
 def test_the_ranking_items_are_the_package_lines():
     rank = fs.rank_models(_rows()[:4])
     items = _js(f"m.rankingRows({json.dumps(rank)})")

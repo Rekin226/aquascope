@@ -2883,16 +2883,12 @@ def cmd_gym(args: argparse.Namespace) -> None:
             return
         if args.plans_cmd == "rescore":
             reviews = json.loads(Path(args.reviews).read_text(encoding="utf-8")) if args.reviews else None
-            for path in args.results:
-                rows = gp.load_plan_results([path], latest=False)
-                rows = gp.rescore_plans(rows, plans_dir=args.plans, reviews=reviews)
-                target = Path(args.out) if args.out and len(args.results) == 1 else Path(path)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(
-                    "".join(json.dumps(r.to_dict(), ensure_ascii=False, default=str) + "\n" for r in rows),
-                    encoding="utf-8",
-                )
-                print(f"  {len(rows)} rows re-scored -> {target}")
+            try:
+                rescored_counts = gp.rescore_plan_files(args.results, out=args.out, plans_dir=args.plans, reviews=reviews)
+            except (OSError, ValueError) as exc:
+                sys.exit(f"Cannot rescore plans: {exc}")
+            for target, count in rescored_counts.items():
+                print(f"  {count} rows re-scored -> {target}")
             return
         if args.plans_cmd == "score":
             ref = gp.load_reference(args.id, args.plans)

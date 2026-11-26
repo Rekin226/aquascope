@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+- Rescoring saved benchmark plans preserves other phases and extra evidence in the same JSONL file.
+  It checks all inputs before replacing files and reports an error if multiple inputs share one `--out`.
+
 - Forecast verification excludes infinite flow readings and forecasts from the sample count. An invalid
   quantile only removes that row from the probability score.
 

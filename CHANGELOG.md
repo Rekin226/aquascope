@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+- Forecast verification excludes infinite flow readings and forecasts from the sample count. An invalid
+  quantile only removes that row from the probability score.
+
 - On reaches with several gauges, the river card and Floods ahead now use the same best-sampled gauge
   for the raw GEOGLOWS track record, even when the Archive returns the gauges in a different order.
 

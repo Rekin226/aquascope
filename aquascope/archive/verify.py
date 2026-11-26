@@ -164,12 +164,17 @@ def observations(status: pd.DataFrame) -> pd.DataFrame:
     return df[[*KEYS, "observed"]].reset_index(drop=True)
 
 
+def _positive_finite(values: np.ndarray) -> np.ndarray:
+    """Mask flows usable for log-scale verification."""
+    mask: np.ndarray = np.isfinite(values) & (values > 0)
+    return mask
+
+
 def pair(issued: pd.DataFrame, obs: pd.DataFrame) -> pd.DataFrame:
     """Issued forecast rows joined to the observed flow on source, station and valid date.
 
-    Keeps rows whose observed flow is positive; the forecast columns are left as issued (a variant is dropped per
-    score where its own value is missing or not positive). Adds ``observed`` and ``month`` (``YYYY-MM`` of the
-    valid date).
+    Keeps finite, positive observations. Each variant is scored where its own forecast is finite and positive.
+    Adds ``observed`` and ``month`` (``YYYY-MM`` of the valid date).
     """
     if issued is None or issued.empty or obs is None or obs.empty:
         return pd.DataFrame(columns=[*KEYS, "model", "lead_day", "observed", "month"])
@@ -177,7 +182,7 @@ def pair(issued: pd.DataFrame, obs: pd.DataFrame) -> pd.DataFrame:
     df["station_id"] = df["station_id"].astype(str)
     df["valid_date"] = df["valid_date"].astype(str).str[:10]
     out = df.merge(obs, on=KEYS, how="inner")
-    out = out[out["observed"] > 0].copy()
+    out = out[_positive_finite(out["observed"].to_numpy(float, na_value=np.nan))].copy()
     out["lead_day"] = pd.to_numeric(out["lead_day"], errors="coerce").astype("Int64")
     out = out[out["lead_day"].notna()]
     out["month"] = out["valid_date"].str[:7]
@@ -189,16 +194,16 @@ def _ratio(num: int, den: int) -> float | None:
 
 
 def _score_group(g: pd.DataFrame, suffix: str, min_pairs: int) -> dict[str, Any] | None:
-    point = pd.to_numeric(g.get(POINT + suffix), errors="coerce") if (POINT + suffix) in g else None
-    if point is None:
+    if POINT + suffix not in g:
         return None
-    ok = point.notna() & (point > 0)
-    g, point = g[ok], point[ok]
+    point = pd.to_numeric(g[POINT + suffix], errors="coerce").to_numpy(float, na_value=np.nan)
+    obs = g["observed"].to_numpy(float, na_value=np.nan)
+    ok = _positive_finite(point) & _positive_finite(obs)
+    g, point, obs = g[ok], point[ok], obs[ok]
     n = len(g)
     if n == 0:
         return None
-    obs = g["observed"].to_numpy(float)
-    err = np.log10(point.to_numpy(float)) - np.log10(obs)
+    err = np.log10(point) - np.log10(obs)
     med_abs = float(np.median(np.abs(err)))
     row: dict[str, Any] = {
         "n_pairs": n, "n_gauges": int(g[["source", "station_id"]].drop_duplicates().shape[0]),
@@ -209,17 +214,17 @@ def _score_group(g: pd.DataFrame, suffix: str, min_pairs: int) -> dict[str, Any]
     }
     cols = [c + suffix for _, c in QUANTILES]
     if all(c in g for c in cols):
-        qv = g[cols].apply(pd.to_numeric, errors="coerce")
-        qok = (qv.notna() & (qv > 0)).all(axis=1).to_numpy()
+        qv = g[cols].apply(pd.to_numeric, errors="coerce").to_numpy(float, na_value=np.nan)
+        qok = _positive_finite(qv).all(axis=1)
         if qok.any():
-            crps = crps_from_quantiles(np.log10(qv.to_numpy(float)[qok]), [lv for lv, _ in QUANTILES],
+            crps = crps_from_quantiles(np.log10(qv[qok]), [lv for lv, _ in QUANTILES],
                                        np.log10(obs[qok]))
             row["crps_log10"], row["n_crps"] = round(float(crps.mean()), 4), int(qok.sum())
     row.setdefault("crps_log10", None)
     row.setdefault("n_crps", 0)
     thr = pd.to_numeric(g[THRESHOLD], errors="coerce").to_numpy(float) if THRESHOLD in g else np.full(n, np.nan)
     tok = np.isfinite(thr) & (thr > 0)
-    o_ev, f_ev = obs[tok] > thr[tok], point.to_numpy(float)[tok] > thr[tok]
+    o_ev, f_ev = obs[tok] > thr[tok], point[tok] > thr[tok]
     hits, misses = int((o_ev & f_ev).sum()), int((o_ev & ~f_ev).sum())
     false_alarms, quiet = int((~o_ev & f_ev).sum()), int((~o_ev & ~f_ev).sum())
     row.update({"n_threshold": int(tok.sum()), "hits": hits, "misses": misses, "false_alarms": false_alarms,
@@ -273,20 +278,21 @@ def _long_errors(pairs: pd.DataFrame) -> pd.DataFrame:
     levels = [lv for lv, _ in QUANTILES]
     thr = pd.to_numeric(pairs[THRESHOLD], errors="coerce").to_numpy(float) if THRESHOLD in pairs \
         else np.full(len(pairs), np.nan)
-    obs = pairs["observed"].to_numpy(float)
+    obs = pairs["observed"].to_numpy(float, na_value=np.nan)
+    valid_obs = _positive_finite(obs)
     for variant, suffix in VARIANTS.items():
         if POINT + suffix not in pairs:
             continue
-        point = pd.to_numeric(pairs[POINT + suffix], errors="coerce").to_numpy(float)
-        ok = np.isfinite(point) & (point > 0)
+        point = pd.to_numeric(pairs[POINT + suffix], errors="coerce").to_numpy(float, na_value=np.nan)
+        ok = valid_obs & _positive_finite(point)
         if not ok.any():
             continue
         err = np.log10(point[ok]) - np.log10(obs[ok])
         crps = np.full(int(ok.sum()), np.nan)
         cols = [c + suffix for _, c in QUANTILES]
         if all(c in pairs for c in cols):
-            qv = pairs.loc[ok, cols].apply(pd.to_numeric, errors="coerce").to_numpy(float)
-            qok = np.isfinite(qv).all(axis=1) & (qv > 0).all(axis=1)
+            qv = pairs.loc[ok, cols].apply(pd.to_numeric, errors="coerce").to_numpy(float, na_value=np.nan)
+            qok = _positive_finite(qv).all(axis=1)
             if qok.any():
                 crps[qok] = crps_from_quantiles(np.log10(qv[qok]), levels, np.log10(obs[ok][qok]))
         t = thr[ok]

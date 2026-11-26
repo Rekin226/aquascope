@@ -107,6 +107,30 @@ def _one(table: pd.DataFrame, model: str, variant: str, lead: int, month: str = 
     return t.iloc[0].to_dict()
 
 
+def test_nonfinite_flows_do_not_count_as_verified_pairs():
+    days = [f"2026-10-{d:02d}" for d in range(2, 6)]
+    issued = pd.DataFrame([_issued_row("geoglows", "A", issue, day, 1, 10.0, corrected=10.0)
+                           for issue, day in zip(["2026-10-01", *days], days)])
+    issued.loc[1, "mean"] = math.inf
+    issued.loc[2, "p75"] = math.inf
+    status = _status(days[-1], [("A", day, obs) for day, obs in zip(days, [10.0, 10.0, 10.0, math.inf])])
+    pairs = vf.pair(issued, vf.observations(status))
+    assert list(pairs["valid_date"]) == days[:3]
+
+    table = vf.score(pairs, min_pairs=3)
+    gauges = vf.by_gauge(pairs, min_pairs=3, windows=[(1, 1)]).set_index("variant")
+    for variant, count, quantile_count in [("raw", 2, 1), ("corrected", 3, 3)]:
+        pooled = _one(table, "geoglows", variant, 1)
+        gauge = gauges.loc[variant]
+        assert pooled["n_pairs"] == gauge["n_pairs"] == count
+        assert pooled["enough_pairs"] == gauge["enough_pairs"] == (count >= 3)
+        assert pooled["n_threshold"] == gauge["n_threshold"] == count
+        assert pooled["n_crps"] == quantile_count
+        assert pooled["factor"] == gauge["factor"] == 1.0
+        assert pooled["crps_log10"] == gauge["crps_log10"] == 0.0
+    json.dumps(vf.summary(table, min_pairs=3), allow_nan=False)
+
+
 def test_raw_and_corrected_are_scored_separately():
     table = vf.score(vf.pair(ISSUED, vf.observations(STATUS)), min_pairs=1)
     raw, cor = _one(table, "geoglows", "raw", 1), _one(table, "geoglows", "corrected", 1)

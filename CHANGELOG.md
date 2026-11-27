@@ -46,6 +46,8 @@ All notable changes to AquaScope are documented here.
   The Explorer, CLI and MCP use the sketchpad's TR-55 calculation and export a screening-grade comparison.
 - The agricultural water-demand notebook now reports the days covered by weather data and separates daily
   water requirements from irrigation applications triggered by the soil-water balance.
+
+- Study manifests record the tool, arguments, result hash and gate outcomes of each fallback that ran.
 - **Canada HYDAT collector (#18)**: daily mean discharge from ECCC's MSC GeoMet OGC API, with no API key required.
 - A [New Zealand crosswalk benchmark](benchmarks/swot_crosswalk.md) compares GEOGLOWS reaches with SWOT
   SWORD river reaches and reports how often their locations and drainage areas agree (#788).

@@ -226,6 +226,8 @@ aquascope run study.yaml --out results/
 
 `aquascope run` calls the same tools with the same arguments, with no model in
 the loop, and writes `report.md`, `manifest.json` (aquascope version, times and
-a hash per step, so drift is visible) and `results.json`. The model writes the
+a hash per step, so drift is visible) and `results.json`. When a fallback runs,
+its tool, arguments, result hash, error and gates are recorded under the primary
+step's `fallback` entry in the manifest. The model writes the
 study; the engine runs the study. That is the reproducible unit, and it is what
 the declarative runner of #54 was for.

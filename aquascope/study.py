@@ -341,6 +341,21 @@ class StudyRun:
         return [g for g in self.gates if not g.get("passed")]
 
     def manifest(self) -> dict[str, Any]:
+        def step_receipt(r: dict[str, Any]) -> dict[str, Any]:
+            receipt = {
+                "id": r.get("id"),
+                "tool": r["tool"],
+                "arguments": r["arguments"],
+                "ok": r["ok"],
+                "result_sha256": r.get("sha256"),
+                "error": r.get("error"),
+                "gates": r.get("gates") or [],
+                "fallback_used": bool(r.get("fallback_used")),
+            }
+            if isinstance(fallback := r.get("fallback"), dict):
+                receipt["fallback"] = step_receipt(fallback)
+            return receipt
+
         return {
             "aquascope_version": __version__,
             "started": self.started,
@@ -351,19 +366,7 @@ class StudyRun:
             "stop_reason": self.stop_reason,
             "summary": self.summary,
             "failed_steps": self.failed_steps,
-            "steps": [
-                {
-                    "id": r.get("id"),
-                    "tool": r["tool"],
-                    "arguments": r["arguments"],
-                    "ok": r["ok"],
-                    "result_sha256": r.get("sha256"),
-                    "error": r.get("error"),
-                    "gates": r.get("gates") or [],
-                    "fallback_used": bool(r.get("fallback_used")),
-                }
-                for r in self.results
-            ],
+            "steps": [step_receipt(r) for r in self.results],
         }
 
     def to_markdown(self) -> str:

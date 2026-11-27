@@ -16,6 +16,9 @@ All notable changes to AquaScope are documented here.
 - On reaches with several gauges, the river card and Floods ahead now use the same best-sampled gauge
   for the raw GEOGLOWS track record, even when the Archive returns the gauges in a different order.
 
+- Donor searches and flow estimates for an ungauged point now compare its full upstream drainage area
+  with the donor gauges. A single BasinATLAS polygon could previously make a large river look like a small basin.
+
 - Forecast scorecards now say which lead times lack a ranking when a gauge has verified forecasts at other leads.
 
 - Flood-risk studies can screen how a drawn reservoir attenuates one flood, with an inflow/outflow CSV,

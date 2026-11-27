@@ -1218,6 +1218,19 @@ def _regional_section(doc: Document, f: Facts, placer: _Placer) -> None:
     doc.add(Para(" ".join(s)))
     doc.add(fig)
 
+    if comparison := reg.get("donor_count_sensitivity"):
+        rows = []
+        for row in comparison["estimates"].values():
+            five = tx.num(row["k5"], 4) if row["k5"] is not None else f"Unavailable ({row['n5']}/5)"
+            ten = tx.num(row["k10"], 4) if row["k10"] is not None else f"Unavailable ({row['n10']}/10)"
+            change = f"{row['change_pct']:+.2f} %" if row["change_pct"] is not None else "n/a"
+            rows.append([row["label"], five, ten, change])
+        doc.add(Table(id="donor-count-sensitivity", columns=["Flow signature", "5 donors", "10 donors", "Change"],
+                      rows=rows, align=["l", "r", "r", "r"],
+                      caption="Sensitivity to donor count for the same site and similarity ranking. Flows are in mm/d "
+                              "and changes are relative to five donors. An unavailable estimate shows the number "
+                              "of donors with a usable signature."))
+
 
 def _context_section(doc: Document, f: Facts, placer: _Placer) -> None:
     doc.add(Heading("Climate context and independent check", level=2))

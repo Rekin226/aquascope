@@ -1877,6 +1877,13 @@ def cmd_basins(args: argparse.Namespace) -> None:
             sk = skill.get(name) or {}
             tail = f"  LOO NSE {sk['nse']:.2f}, median error {sk['median_ape'] * 100:.0f} %" if sk else ""
             print(f"  {e['label']:<48} {e['value']:>10.3f} {e['unit']:<7} [{e['low']:.3f}, {e['high']:.3f}]{tail}")
+        if comparison := res.get("donor_count_sensitivity"):
+            print("  Similarity transfer with 5 vs 10 donors (mm/d; change relative to 5):")
+            for row in comparison["estimates"].values():
+                five = row["k5"] if row["k5"] is not None else f"unavailable ({row['n5']}/5)"
+                ten = row["k10"] if row["k10"] is not None else f"unavailable ({row['n10']}/10)"
+                change = f", {row['change_pct']:+.2f}%" if row["change_pct"] is not None else ""
+                print(f"    {row['label']}: {five} -> {ten}{change}")
         return
     if args.basins_cmd == "signatures":
         from aquascope.archive.bundles import read_bundle

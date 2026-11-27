@@ -18,6 +18,9 @@ All notable changes to AquaScope are documented here.
 
 - Forecast scorecards now say which lead times lack a ranking when a gauge has verified forecasts at other leads.
 
+- Ungauged-site similarity transfers compare mean, low (Q95) and high (Q05) flow using five and ten
+  donor catchments. The basins CLI and study report give both estimates and their percentage change.
+
 - Flood-risk studies can screen how a drawn reservoir attenuates one flood, with an inflow/outflow CSV,
   hydrograph and a level-pool solver check against NRCS NEH Example 17-2.
 

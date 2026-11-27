@@ -439,6 +439,7 @@ def facts_of(ws: Workspace) -> Facts:  # noqa: C901 - one pass over the workspac
             reg = f.regional
             if isinstance(p.get("estimates"), dict):
                 reg["estimates"] = p["estimates"]
+                reg["donor_count_sensitivity"] = p.get("donor_count_sensitivity")
                 reg["skill"] = ((p.get("skill") or {}).get("by_signature") or {}) \
                     if isinstance(p.get("skill"), dict) else {}
             k = p.get("k") or (p.get("similarity") or {}).get("k") if isinstance(p.get("similarity"), dict) \

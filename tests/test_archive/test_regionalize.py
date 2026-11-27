@@ -92,6 +92,70 @@ def test_similarity_transfer_recovers_the_twin_and_carries_a_band(world):
     assert all(d["station_id"] != "TWIN" for d in res2["similarity"]["donors"])
 
 
+def test_point_compares_five_and_ten_without_changing_the_requested_transfer(world, monkeypatch, capsys):
+    from argparse import Namespace
+
+    from aquascope.cli import cmd_basins
+
+    tab, cat, sig = world
+    kw = dict(table=tab, catalog=cat, signatures=sig)
+    desc = {"attributes": TARGET}
+    point = rg.regionalize_point(1, 2, k=3, desc=desc, skill=None, **kw)
+    target = {"latitude": 1, "longitude": 2, **desc}
+    reference = {k: rg.regionalize(target, k=k, **kw) for k in (3, 5, 10)}
+    assert point["similarity"] == reference[3]["similarity"]
+    comparison = point["donor_count_sensitivity"]
+    rows = comparison["estimates"]
+    donors = comparison["donors"]
+    assert [(d["source"], d["station_id"], d["score"]) for d in donors] == [
+        (d["source"], d["station_id"], d["score"]) for d in reference[10]["similarity"]["donors"]]
+    assert set(rows) == {"q_mean_mm", "q95_mm", "q05_mm"}
+    for name, row in rows.items():
+        assert (row["n5"], row["n10"]) == (5, 10)
+        assert row["k5"] == reference[5]["estimates"][name]["value"]
+        assert row["k10"] == reference[10]["estimates"][name]["value"]
+        assert row["change_pct"] == pytest.approx(100 * (row["k10"] / row["k5"] - 1), abs=0.1)
+        weights = [1 / (d["score"] + 0.05) for d in donors]
+        values = np.log(np.clip([d["signatures"][name] for d in donors], 1e-3, None))
+        assert row["k10"] == round(np.exp(np.average(values, weights=weights)), 4)
+    off = rg.regionalize_point(1, 2, k=3, desc=desc, skill=None, compare_donor_counts=False, **kw)
+    assert "donor_count_sensitivity" not in off and off["similarity"] == point["similarity"]
+    no_features = rg.regionalize_point(1, 2, desc={}, skill=None, **kw)
+    assert "donor_count_sensitivity" not in no_features
+
+    monkeypatch.setattr(rg, "regionalize_point", lambda *args, **kwargs: point)
+    cmd_basins(Namespace(basins_cmd="regionalize", lat=1, lon=2, k=3, method="similarity", json=False))
+    output = capsys.readouterr().out
+    assert "5 vs 10 donors" in output and "Q95" in output
+
+
+def test_donor_sensitivity_requires_complete_sets_per_signature(world):
+    tab, cat, sig = world
+    kw = dict(desc={"attributes": TARGET}, skill=None)
+    few = rg.regionalize_point(1, 2, table=tab.head(6), catalog=cat, signatures=sig, **kw)
+    row = few["donor_count_sensitivity"]["estimates"]["q95_mm"]
+    assert row["n5"] == 5 and row["n10"] == len(few["similarity"]["donors"]) < 10 and row["k5"] is not None
+    assert row["k10"] is None and row["change_pct"] is None
+
+    ranked = rg.regionalize_point(1, 2, table=tab, catalog=cat, signatures=sig, **kw)
+    first = ranked["similarity"]["donors"][0]
+    sig = sig.copy()
+    first_row = (sig.source == first["source"]) & (sig.station_id == first["station_id"])
+    sig.loc[first_row, "q95_mm"] = np.nan
+    sig.loc[first_row, "q05_mm"] = -np.inf
+    partial = rg.regionalize_point(1, 2, method="both", table=tab, catalog=cat, signatures=sig, **kw)
+    comparison = partial["donor_count_sensitivity"]
+    row = comparison["estimates"]["q95_mm"]
+    assert (row["n5"], row["n10"]) == (4, 9) and row["k5"] is None and row["k10"] is None
+    assert comparison["estimates"]["q05_mm"]["n10"] == 9
+    assert comparison["donors"][0]["signatures"]["q05_mm"] is None
+    assert comparison["estimates"]["q_mean_mm"]["change_pct"] is not None
+    assert partial["estimates"]["q05_mm"]["n_donors"] == 9
+    assert json.dumps(partial, allow_nan=False)
+    ridge = rg.regionalize_point(1, 2, method="regression", table=tab, catalog=cat, signatures=sig, **kw)
+    assert "donor_count_sensitivity" not in ridge
+
+
 def test_regression_transfer_tracks_precipitation(world):
     tab, cat, sig = world
     wet = dict(TARGET, precipitation_mm_yr=2200.0)

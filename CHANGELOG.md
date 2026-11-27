@@ -47,6 +47,9 @@ All notable changes to AquaScope are documented here.
 - The agricultural water-demand notebook now reports the days covered by weather data and separates daily
   water requirements from irrigation applications triggered by the soil-water balance.
 - **Canada HYDAT collector (#18)**: daily mean discharge from ECCC's MSC GeoMet OGC API, with no API key required.
+- A [New Zealand crosswalk benchmark](benchmarks/swot_crosswalk.md) compares GEOGLOWS reaches with SWOT
+  SWORD river reaches and reports how often their locations and drainage areas agree (#788).
+
 - **Record quality from the Archive on Hugging Face, opt-in, and on `aquascope assess`'s lines** (#375, follow-up to #676). `assess_site(archive_hub=True)`, `AQUASCOPE_ARCHIVE_HUB=1` or `aquascope assess --archive-hub` (experimental) reads each counted station's `obs/<variable>/<source>/<station_id>.csv.gz` from the Hugging Face dataset when no local mirror (`AQUASCOPE_ARCHIVE_DIR`) holds it, so the quality half fills without downloading the whole dataset and never calls an agency; the local mirror and the Hub share one parser. A station the Archive does not mirror (a 404), a failed read or an unreadable file keeps the metadata-only note, which now also says how to turn the Hub read on. Off by default: the default reconnaissance still reads nothing. `aquascope assess` prints each variable's completeness, longest gap, flagged share and change points on its line, and the MCP tool `assess_site` describes the quality fields and asks for gaps, flags and shifts to be reported. The test suite ignores a developer's own `AQUASCOPE_ARCHIVE_DIR` and `AQUASCOPE_ARCHIVE_HUB`.
 
 - The README links to a Japanese quickstart covering installation, flood frequency, baseflow and the CLI.

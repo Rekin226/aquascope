@@ -7,11 +7,16 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+- Gauge track records now compute the forecast error factor from the full-precision median, matching
+  the pooled score. Previously, rounding the median first could change a gauge's trust rating near a cutoff.
+
 - Forecast verification excludes infinite flow readings and forecasts from the sample count. An invalid
   quantile only removes that row from the probability score.
 
 - On reaches with several gauges, the river card and Floods ahead now use the same best-sampled gauge
   for the raw GEOGLOWS track record, even when the Archive returns the gauges in a different order.
+
+- Forecast scorecards now say which lead times lack a ranking when a gauge has verified forecasts at other leads.
 
 - Flood-risk studies can screen how a drawn reservoir attenuates one flood, with an inflow/outflow CSV,
   hydrograph and a level-pool solver check against NRCS NEH Example 17-2.

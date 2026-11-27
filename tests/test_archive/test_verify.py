@@ -320,6 +320,17 @@ def test_by_gauge_scores_each_gauge_over_the_newest_window():
     assert int(card.loc[("A", "geoglows", "raw")]["river_id"]) == 7
 
 
+@pytest.mark.parametrize(("mean", "factor", "trust"), [(20.0052, 2.001, "fair"), (40.006, 4.001, "poor")])
+def test_by_gauge_factor_matches_pooled_score_at_trust_thresholds(mean, factor, trust):
+    pairs = _gauge_pairs(days=30)
+    sample = (pairs["station_id"] == "A") & (pairs["model"] == "geoglows") & (pairs["lead_day"] == 1)
+    pairs = pairs[sample].assign(mean=mean)
+    pooled = _one(vf.score(pairs), "geoglows", "raw", 1)
+    gauge = vf.by_gauge(pairs, windows=[(1, 1)]).set_index("variant").loc["raw"]
+    assert gauge["factor"] == pooled["factor"] == factor
+    assert gauge["trust"] == trust
+
+
 def test_by_gauge_has_every_single_lead_too():
     t = vf.by_gauge(_gauge_pairs())
     single = t[(t["station_id"] == "A") & (t["model"] == "geoglows") & (t["variant"] == "raw")

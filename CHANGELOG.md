@@ -10,6 +10,9 @@ All notable changes to AquaScope are documented here.
 - Gauge track records now compute the forecast error factor from the full-precision median, matching
   the pooled score. Previously, rounding the median first could change a gauge's trust rating near a cutoff.
 
+- Rerunning a saved study records skipped steps and removes old results for steps after an explicit stop.
+  The saved plan, results and manifest now describe the same run.
+
 - Forecast verification excludes infinite flow readings and forecasts from the sample count. An invalid
   quantile only removes that row from the probability score.
 

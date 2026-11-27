@@ -1619,7 +1619,8 @@ def studio_start(
     {"landuse_change": {"polygon": [[lon, lat], ...], "use": "paved", "rain_mm": 80}}; soil_group,
     cover and tc_hours may also be supplied inside that scenario. To route a flood wave, pass e.g.
     {"route_flood": {"river_id": 230494421, "duration_h": 12, "peak_cms": 600}}. For a depth map, pass e.g.
-    {"flood_inundation": {"river_id": 230494421, "return_period": 100}}.
+    {"flood_inundation": {"river_id": 230494421, "return_period": 100}}. For a drawn reservoir, pass
+    reservoir_routing with its polygon, crest_m, top_m, width_m and the design flood or storm.
     """
     try:
         studio = _studio(None, lat=float(lat), lon=float(lon), intake=intake, provider=provider, model=model,

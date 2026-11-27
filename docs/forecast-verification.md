@@ -28,7 +28,8 @@ day's files are kept in the run's artifact but not published, and the job's heal
 An issued row (gauge, model, valid date, lead day) is matched with the gauge's value for the same day from the
 status snapshots. A snapshot carries each gauge's newest value, usually yesterday's, so the match is on the
 value's own date, not the snapshot's; when several snapshots carry the same day, the newest one wins. Only
-positive flows are scored, on both sides, because the errors are in log flow.
+finite, positive flows are scored, on both sides, because the errors are in log flow. A missing or infinite
+quantile excludes the pair from CRPS only.
 
 Raw and corrected-to-the-gauge values are separate rows (`variant` = `raw` or `corrected`), each with its own
 pair count. Both models are issued corrected to the gauge: GEOGLOWS from its retrospective simulation, GloFAS
@@ -87,7 +88,8 @@ gauges are still `unknown`.
 
 - **The river card.** A gauge's card lists, per model, "within a factor of X (N pairs, dates)" for 1 to 3 days
   ahead, corrected to the gauge where it was issued so, or "not enough pairs yet". A river reach's card does the
-  same, raw, from the gauges on that reach. Each line carries its trust badge.
+  same for raw forecasts, using the gauge with the most pairs for each model on that reach. Ties are broken
+  by source and station ID. Each line carries its trust badge.
 - **Floods ahead.** A flooded reach's card shows the trust badge of the raw GEOGLOWS forecast (what Floods ahead
   classes) at the best-sampled gauge on the reach, or `unknown` when no gauge on it has been verified.
 - **The legend.** "Forecast track record" in On the map explains the four words and gives every gauge pooled at

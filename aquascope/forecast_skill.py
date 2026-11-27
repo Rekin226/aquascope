@@ -118,10 +118,12 @@ def _in_window(row: dict[str, Any], leads: tuple[int, int]) -> bool:
 def pick(rows: list[dict[str, Any]], *, variant: str = "corrected",
          leads: tuple[int, int] = TRACK_LEADS) -> list[dict[str, Any]]:
     """One row per model for the card, in model order: the ``leads`` window, the asked ``variant`` when the model
-    has it, else raw."""
+    has it, else raw. For each variant prefer the best-sampled gauge, then source and station ID."""
     out = []
     for m in MODEL_ORDER:
         mine = [r for r in rows or [] if r.get("model") == m and _in_window(r, leads)]
+        mine.sort(key=lambda r: (-(_num(r.get("n_pairs")) or 0), str(r.get("source") or ""),
+                                 str(r.get("station_id") or "")))
         hit = next((r for r in mine if r.get("variant") == variant), None) \
             or next((r for r in mine if r.get("variant") == "raw"), None)
         if hit:
@@ -171,7 +173,7 @@ def rank_models(rows: list[dict[str, Any]], *, leads: tuple[int, int] = TRACK_LE
     when = f"over the last {days} days, {_leads(*leads)}"
     if not ranked:
         sentence = (f"No forecast has enough verified pairs here yet ({MIN_PAIRS} needed {when})."
-                    if window else "No issued forecast has been verified at this gauge.")
+                    if window else f"No matching scores are available to rank here {when}.")
     else:
         b = ranked[0]
         sentence = (f"Verified against this gauge {when}, {b['label']} did best: within a factor of "

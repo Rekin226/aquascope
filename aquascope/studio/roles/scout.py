@@ -275,6 +275,13 @@ def scout(ws: Workspace) -> Inventory:
     if site.get("lat") is None or site.get("lon") is None:
         raise ValueError("the workspace names no site (lat, lon)")
     kind = ws.brief.kind
+    if ws.brief.playbook == "flood_risk" and ws.brief.intake.get("decision") == "flood attenuation":
+        from aquascope.methods import assess_reservoir_scenario
+
+        row = assess_reservoir_scenario(ws.brief.intake.get("reservoir_routing"))
+        ws.inventory = Inventory(site=site, recon={"point": site, "sufficiency": [row]})
+        ws.event("scout", "inventory", row["reason"])
+        return ws.inventory
     if kind in catalogue.SCENARIO_TOOLS:
         # The user's scenario can be checked before looking up any site data.
         from aquascope.methods import SiteContext, assess_method

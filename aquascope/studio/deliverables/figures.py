@@ -1235,6 +1235,20 @@ def _scenario_bars(payload: dict[str, Any], unit: str | None, site: dict[str, An
     return fig, caption
 
 
+def _reservoir_hydrograph(payload: dict[str, Any], unit: str | None, site: dict[str, Any] | None) -> Drawn | None:
+    hydro = payload.get("hydrograph") or {}
+    if not hydro.get("inflow_cms"):
+        return None
+    fig, ax = _figure()
+    ax.plot(hydro["hour"], hydro["inflow_cms"], color=PRIMARY, label="Inflow")
+    ax.plot(hydro["hour"], hydro["outflow_cms"], color=DANGER, linestyle="--", label="Outflow")
+    ax.set_xlabel("Time since routing began (h)")
+    ax.set_ylabel("Discharge at dam (m³/s)")
+    ax.set_ylim(bottom=0)
+    ax.legend()
+    return fig, "Screening inflow and outflow at the drawn dam over the simulated flood."
+
+
 def _route_hydrograph(payload: dict[str, Any], unit: str | None, site: dict[str, Any] | None) -> Drawn | None:
     hydro = route_hydrograph_of(payload)
     if hydro is None:
@@ -1386,6 +1400,7 @@ MAKERS: dict[str, Callable[[dict[str, Any], str | None, dict[str, Any] | None], 
     "scenario_bars": _scenario_bars,
     "landuse_runoff": _landuse_runoff,
     "route_hydrograph": _route_hydrograph,
+    "reservoir_hydrograph": _reservoir_hydrograph,
     "inundation_map": _inundation_map,
     "projection_spread": _projection_spread,
     "regional_growth": _regional_growth,

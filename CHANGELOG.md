@@ -7,6 +7,23 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+- Gauge track records now compute the forecast error factor from the full-precision median, matching
+  the pooled score. Previously, rounding the median first could change a gauge's trust rating near a cutoff.
+
+- Forecast verification excludes infinite flow readings and forecasts from the sample count. An invalid
+  quantile only removes that row from the probability score.
+
+- The forecast archive stops the daily build when its published issue index cannot be read and rejects
+  uploads from builds missing previously published dates.
+
+- On reaches with several gauges, the river card and Floods ahead now use the same best-sampled gauge
+  for the raw GEOGLOWS track record, even when the Archive returns the gauges in a different order.
+
+- Forecast scorecards now say which lead times lack a ranking when a gauge has verified forecasts at other leads.
+
+- Flood-risk studies can screen how a drawn reservoir attenuates one flood, with an inflow/outflow CSV,
+  hydrograph and a level-pool solver check against NRCS NEH Example 17-2.
+
 - Flood it can run as a screening inundation study from the Explorer, CLI or MCP. Its bundle includes a
   georeferenced peak-depth raster, and the study reports the agreement (CSI, hit rate, false alarm ratio)
   with JRC CEMS-GloFAS's modelled return-period hazard depth as a consistency check. The flood-risk
@@ -15,10 +32,17 @@ All notable changes to AquaScope are documented here.
   from the Explorer, CLI and MCP.
 - Reservoir routing now reports peak reduction and delay only when the simulation captures both peaks.
   Short runs still show the largest inflow and outflow reached within the simulated hours.
+- Rescoring saved benchmark plans preserves other phases and extra evidence in the same JSONL file.
+  It checks all inputs before replacing files and reports an error if multiple inputs share one `--out`.
+
 - Study can compare runoff and peak flow before and after a land-use change under the same 24-hour storm.
   The Explorer, CLI and MCP use the sketchpad's TR-55 calculation and export a screening-grade comparison.
+- The agricultural water-demand notebook now reports the days covered by weather data and separates daily
+  water requirements from irrigation applications triggered by the soil-water balance.
 - **Canada HYDAT collector (#18)**: daily mean discharge from ECCC's MSC GeoMet OGC API, with no API key required.
 - **Record quality from the Archive on Hugging Face, opt-in, and on `aquascope assess`'s lines** (#375, follow-up to #676). `assess_site(archive_hub=True)`, `AQUASCOPE_ARCHIVE_HUB=1` or `aquascope assess --archive-hub` (experimental) reads each counted station's `obs/<variable>/<source>/<station_id>.csv.gz` from the Hugging Face dataset when no local mirror (`AQUASCOPE_ARCHIVE_DIR`) holds it, so the quality half fills without downloading the whole dataset and never calls an agency; the local mirror and the Hub share one parser. A station the Archive does not mirror (a 404), a failed read or an unreadable file keeps the metadata-only note, which now also says how to turn the Hub read on. Off by default: the default reconnaissance still reads nothing. `aquascope assess` prints each variable's completeness, longest gap, flagged share and change points on its line, and the MCP tool `assess_site` describes the quality fields and asks for gaps, flags and shifts to be reported. The test suite ignores a developer's own `AQUASCOPE_ARCHIVE_DIR` and `AQUASCOPE_ARCHIVE_HUB`.
+
+- The README links to a Japanese quickstart covering installation, flood frequency, baseflow and the CLI.
 
 ### Fixed
 - **River reach names** (#721): deployments can configure Overpass to find a named OpenStreetMap waterway near a snapped reach. The card displays its fallback immediately, reuses successful lookups, and links to OpenStreetMap attribution.

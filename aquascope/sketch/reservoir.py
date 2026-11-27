@@ -68,7 +68,7 @@ NEH_17_2 = {
 }
 
 #: The check, run by :func:`level_pool` on :data:`NEH_17_2` (tests/test_sketch_reservoir.py repeats it).
-CHECK = {
+CHECK: dict[str, Any] = {
     "reference": NEH_17_2["source"],
     "how": ("Table 17-12's inflow routed through Table 17-11's working curve with level_pool, the book's steps of "
             "0.5 and 0.1 day, from an empty pool at the first-stage crest; every outflow compared with the book's, "

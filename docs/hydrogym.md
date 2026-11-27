@@ -217,6 +217,8 @@ A changed answer, reference or reconnaissance needs a new review. The hashes do 
 records from a trusted source and disclose AI-assisted or preliminary reviews.
 Use `aquascope gym plans score CASE --candidate plan.json --reviews reviews.json`
 or `aquascope gym plans rescore results.jsonl --reviews reviews.json --out rescored.jsonl`.
+With one input, `--out` writes a separate copy. To rescore several files in place, omit `--out`.
+Other benchmark phases and extra fields in saved plan records are preserved.
 Rescoring is not a new agent run. Do not mix scorer versions in a resumed run.
 
 ### The cases

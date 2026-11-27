@@ -282,12 +282,15 @@ async function run({ by = "rules", command = "", label = "" } = {}) {
   tick();
   const timer = setInterval(tick, 1000);
   try {
-    const z = await terrainFor(lake.window);
+    const drawn = lake;
+    const z = await terrainFor(drawn.window);
     stage = "Routing the flood through the lake and on down the river";
-    const res = await call("reservoir", { op: "run", args: { polygon: lake.polygon, window: lake.window, dam: lake.dam, ...args }, z });
+    const res = await call("reservoir", { op: "run", args: { polygon: drawn.polygon, window: drawn.window, dam: drawn.dam, ...args }, z });
     if (my !== running) return res;
     if (!res || !res.ok) throw new Error((res && res.error) || "no answer");
-    showRouted(res, { river_id: lake.dam.river_id, lat: lake.dam.lat, lon: lake.dam.lon, reservoir: true, name: "Reservoir" },
+    const { river_id, lat, lon } = drawn.dam;
+    const study = { lat, lon, scenario: { polygon: drawn.polygon, ...args } };
+    showRouted(res, { river_id, lat, lon, reservoir: true, name: "Reservoir", study },
       { frame: false, label, by, command });
     frameLake();
     say(`Routed in ${Math.round((performance.now() - started) / 1000)} s. The wave plays on the time bar; drag a corner to move the lake.`, "ok");
@@ -363,6 +366,7 @@ export function initReservoir() {
   registerSketchTool({ id: "reservoir", label: "Draw a reservoir", hint: "A lake on a river, and the flood it flattens",
     icon: ICON, run: () => openReservoir() });
   actions.drawReservoir = drawReservoir;
+  actions.reservoirStudyArgs = () => wave?.target?.study ?? null;
   globalThis.__aq = globalThis.__aq || {};
   globalThis.__aq.reservoir = { open: openReservoir, run, frame: frameLake, lake: () => lake, wave: () => wave, other: () => other,
     drawReservoir };

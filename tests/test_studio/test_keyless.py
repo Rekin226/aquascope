@@ -50,7 +50,7 @@ def test_no_decision_is_asked_with_the_playbooks_options():
     ws = _ws()
     consultant.consult(ws, None, "What is the 1 in 50 flood here?")
     qs = ws.brief.open_questions
-    assert [q.id for q in qs] == ["decision"] and len(qs[0].options) == 5 and "trend" in qs[0].options[0]
+    assert [q.id for q in qs] == ["decision"] and len(qs[0].options) == 6 and "trend" in qs[0].options[0]
     assert qs[0].default.startswith("The flow to design for") and ws.brief.intake["return_period"] == 50
     consultant.consult(ws, None, "insurance")
     assert ws.brief.decision == "insurance" and ws.brief.intake["decision"] == "insurance" and ws.brief.ready

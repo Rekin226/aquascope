@@ -71,6 +71,7 @@ TOOL_WORDS = {
     "catchment_model": "rainfall-runoff model",
     "landuse_change": "land-use change and storm runoff (TR-55)",
     "route_flood": "flood-wave routing (Muskingum)",
+    "reservoir_routing": "single-event reservoir routing (level pool)",
     "flood_inundation": "screening inundation depth (local-inertial shallow water)",
     "recharge": "groundwater recharge",
     "pot_flood": "peaks-over-threshold flood frequency",
@@ -147,6 +148,12 @@ class Facts:
     version: str = ""
     created: str = ""
     workspace_id: str = ""
+
+    @property
+    def report_kind(self) -> str:
+        if self.playbook == "flood_risk" and [s["tool"] for s in self.steps] == ["reservoir_routing"]:
+            return "reservoir_routing"
+        return self.playbook or self.kind
 
     @property
     def established_anything(self) -> bool:

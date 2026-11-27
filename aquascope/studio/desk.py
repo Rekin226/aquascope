@@ -16,6 +16,7 @@ are thin faces over the same code. The reruns go through :class:`aquascope.studi
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
 from typing import Any
 
@@ -420,22 +421,25 @@ def resolve(ws: Workspace, comment_id: str, response: str = "", *, by: str = "")
 
 
 def _refit_q(values: list[float], t: float, estimator: str = "gev_lmoments") -> float | None:
-    """The T-year quantile of ``values`` (annual maxima) refitted with the reported distribution: Log-Pearson III
-    for lp3, GEV by L-moments otherwise (a GEV by maximum likelihood is refitted by L-moments, which is quick
-    and close; the basis column says so)."""
+    """Refit the reported point estimator on annual maxima, without resampling a confidence band."""
     try:
-        if estimator == "lp3":
-            import pandas as pd
-
-            from aquascope.hydrology.flood_frequency import fit_lp3
-
-            idx = pd.to_datetime([f"{1900 + i}-01-01" for i in range(len(values))])
-            r = fit_lp3(pd.Series(values, index=idx), return_periods=[t])
-        else:
+        if estimator == "gev_lmoments":
             from aquascope.hydrology.flood_frequency import fit_gev_lmoments
 
             r = fit_gev_lmoments(values, return_periods=[t])
-        return float(r.return_periods[t])
+        else:
+            import pandas as pd
+
+            from aquascope.hydrology.flood_frequency import fit_gev, fit_lp3
+
+            idx = pd.to_datetime([f"{1900 + i}-01-01" for i in range(len(values))])
+            peaks = pd.Series(values, index=idx)
+            if estimator == "lp3":
+                r = fit_lp3(peaks, return_periods=[t])
+            else:
+                r = fit_gev(peaks, return_periods=[t], ci_level=None)
+        q = float(r.return_periods[t])
+        return q if math.isfinite(q) else None
     except Exception:  # noqa: BLE001 - a case that cannot be fitted is left out, not raised
         return None
 
@@ -443,39 +447,37 @@ def _refit_q(values: list[float], t: float, estimator: str = "gev_lmoments") -> 
 def sensitivity(ws: Workspace) -> list[dict[str, Any]]:
     """The design value under the reasonable alternatives, computed from the annual maxima the study stored
     (no fetch): ``[{"case", "value", "change_pct", "n", "basis"}]``, the base first. The cases: each other
-    fitted distribution, the largest flood left out, only the most recent 30 and 50 years, and the excluded
-    years put back. Refits use GEV by L-moments. Empty for a study with no flood fit."""
-    payload = _ffa_payload(ws)
-    if payload is None:
+    fitted distribution, the largest flood left out, recent years, peaks since a significant Pettitt change,
+    and excluded years put back. Empty for a study with no flood fit."""
+    from aquascope.explore import MIN_YEARS_FOR_FFA
+    from aquascope.studio.document.compose import _design_t, _fits_at, _main_key
+    from aquascope.studio.document.facts import _payload, facts_of
+
+    facts = facts_of(ws)
+    t = _design_t(facts)
+    fits = _fits_at(facts, t)
+    chosen = _main_key(facts, fits)
+    if t is None or chosen is None:
         return []
+    # Match the step and estimator quoted in the report, including its fallback when a fit failed.
+    payload = next(_payload(r) for r in ws.run["results"] if str(r.get("id")) == facts.ffa["step"])
     ffa = payload["ffa"]
-    head = _headline(ws)
-    t = head.get("t")
-    base = head.get("value")
-    if t is None or base is None:
-        return []
+    base = fits[chosen]["q"]
     am = payload.get("annual_max") if isinstance(payload.get("annual_max"), dict) else {}
     years = [int(y) for y in am.get("year") or []]
     vals = [float(v) for v in am.get("v") or [] if v is not None]
     rows: list[dict[str, Any]] = []
 
-    def add(case: str, value: float | None, n: int | None, basis: str) -> None:
+    def add(case: str, value: float | None, n: int | None, basis: str, **years_used: int) -> None:
         if value is None:
             return
         rows.append({"case": case, "value": value, "n": n,
-                     "change_pct": (value - base) / base * 100 if base else None, "basis": basis})
+                     "change_pct": (value - base) / base * 100 if base else None, "basis": basis, **years_used})
 
-    chosen = estimator_of(ws)
     add(f"As reported: {ESTIMATORS.get(chosen, chosen)}", base, ffa.get("n_years"), "the study's fit")
-    try:
-        i = [float(x) for x in ffa.get("return_periods") or []].index(float(t))
-    except ValueError:
-        i = None
     for key, label in ESTIMATORS.items():
-        fit = (ffa.get("fits") or {}).get(key)
-        if key == chosen or i is None or not isinstance(fit, dict) or not fit.get("q") or fit["q"][i] is None:
-            continue
-        add(f"{label} instead", float(fit["q"][i]), ffa.get("n_years"), "the study's fit")
+        if key != chosen and key in fits:
+            add(f"{label} instead", fits[key]["q"], ffa.get("n_years"), "the study's fit")
     refit = "lp3" if chosen == "lp3" else "gev_lmoments"
     basis = f"{ESTIMATORS[refit]} refit"
     if len(vals) == len(years) and len(vals) >= 10:
@@ -488,6 +490,17 @@ def sensitivity(ws: Workspace) -> list[dict[str, Any]]:
                 recent = [vals[j] for j in order[-n:]]
                 add(f"Most recent {n} years only ({years[order[-n]]} to {years[order[-1]]})",
                     _refit_q(recent, t, refit), n, basis)
+        change = ffa.get("amax_change") or {}
+        change_year = change.get("change_year")
+        # Some older bundles kept only a subset of the plotted peaks. They cannot reproduce the fitted sample.
+        complete = len(set(years)) == len(years) == ffa.get("n_years") == change.get("n_years")
+        if complete and change.get("significant") and change_year in years and change_year > min(years):
+            post = [(years[j], vals[j]) for j in order if years[j] >= change_year and math.isfinite(vals[j])
+                    and (chosen != "lp3" or vals[j] > 0)]
+            if len(post) >= MIN_YEARS_FOR_FFA:
+                add(f"After the Pettitt change ({change_year} to {post[-1][0]}, {len(post)} annual peaks)",
+                    _refit_q([v for _, v in post], t, chosen), len(post), f"{ESTIMATORS[chosen]} refit",
+                    change_year=change_year, start_year=post[0][0], end_year=post[-1][0])
         ex = payload.get("annual_max_excluded") if isinstance(payload.get("annual_max_excluded"), dict) else None
         if ex and ex.get("v"):
             back = vals + [float(v) for v in ex["v"] if v is not None]

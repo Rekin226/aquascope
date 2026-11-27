@@ -146,6 +146,36 @@ def test_the_report_leads_with_the_answer_and_is_organised_by_question():
     assert levels.rows[levels.emphasis[0]][0] == "100" and "405–490" in levels.rows[levels.emphasis[0]]
 
 
+@pytest.mark.parametrize("decision", ["design flow", "flood trend"])
+def test_report_exports_the_post_change_sensitivity_for_either_question(decision):
+    from aquascope.studio.deliverables.report_md import report_markdown
+
+    ws = _gauged()
+    ws.brief.decision = decision
+    change = ws.run["results"][0]["result"]["ffa"]["amax_change"]
+    change.update(on="annual maxima", n_years=len(AMAX), significant=True, p_value=0.01)
+    md = report_markdown(ws)
+    assert "Sensitivity of the design value" in md
+    assert "| After the Pettitt change" in md
+
+
+def test_post_change_table_can_report_values_when_the_baseline_is_zero():
+    ws = _gauged()
+    ws.brief.decision = "flood trend"
+    ffa = ws.run["results"][0]["result"]["ffa"]
+    ffa["amax_change"].update(on="annual maxima", n_years=len(AMAX), significant=True, p_value=0.01)
+    ffa["fits"]["gev_lmoments"]["q"][-1] = 0.0
+    doc = docs.build_report(ws)
+    table = next(t for t in doc.tables if t.id == "sensitivity")
+    assert table.rows[0][1] == "0" and all(row[2] == "" for row in table.rows)
+
+
+def test_trend_report_omits_design_sensitivity_without_a_significant_shift():
+    ws = _gauged()
+    ws.brief.decision = "flood trend"
+    assert not any(t.id == "sensitivity" for t in docs.build_report(ws).tables)
+
+
 def test_the_report_text_is_written_for_a_reader():
     md = docs.render_markdown(docs.build_report(_gauged()))
     assert "m3/s" not in md and "m³/s" in md

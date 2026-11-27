@@ -79,6 +79,15 @@ def test_the_tool_answers_a_station_with_its_rows_ranking_and_the_network():
     assert res["min_pairs"] == 30 and res["trust_bands"][0]["trust"] == "good"
 
 
+@pytest.mark.parametrize(("model", "expected_rows"), [("geoglows", [(14, 3, 2.775)]), ("glofas", [])])
+def test_scorecard_names_the_window_when_no_scores_match_the_ranking(model, expected_rows):
+    gauges = pd.DataFrame([_row("geoglows", "raw", 2.775, 3, lo=14, hi=14)])
+    res = fs.forecast_skill(lat=45.0, lon=-122.0, model=model, lead_days=14, gauges=gauges, network=NETWORK)
+    assert [(r["lead_min"], r["n_pairs"], r["factor"]) for r in res["rows"]] == expected_rows
+    assert res["ranking"]["ranked"] == [] and res["ranking"]["leads"] == [1, 3]
+    assert res["sentence"] == "No matching scores are available to rank here over the last 30 days, 1 to 3 days ahead."
+
+
 def test_the_tool_narrows_by_model_variant_and_lead():
     res = fs.forecast_skill("A", source="usgs", model="glofas", lead_days=2, gauges=GAUGES, network=NETWORK)
     assert [(r["model"], r["lead_min"], r["lead_max"]) for r in res["rows"]] == [("glofas", 2, 2)]

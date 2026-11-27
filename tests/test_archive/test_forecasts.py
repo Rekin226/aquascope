@@ -6,6 +6,7 @@ import json
 from datetime import date
 from pathlib import Path
 
+import httpx
 import numpy as np
 import pandas as pd
 import pytest
@@ -119,8 +120,8 @@ def test_issue_one_writes_raw_and_corrected_rows_and_picks_the_glofas_cell_once(
 def test_run_writes_the_snapshot_the_issue_and_the_manifest(monkeypatch, tmp_path):
     from aquascope import nownext
 
-    monkeypatch.setattr(fa, "read_published_json", lambda path, repo_id=fa.DEFAULT_REPO: (
-        {"issues": [{"date": "2026-10-07", "n_gauges": 1}]} if path.endswith("manifest.json") else {}))
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: httpx.Response(
+        200, json={"issues": [{"date": "2026-10-07", "n_gauges": 1}]}, request=httpx.Request("GET", url)))
     monkeypatch.setattr(fa, "read_published_rows", lambda path, repo_id=fa.DEFAULT_REPO: [])
     monkeypatch.setattr(fa, "gauge_record", lambda source, sid, today: (
         (_series(), "") if sid != "a" else (_series(end="2026-09-01"), "")))
@@ -151,8 +152,51 @@ def test_run_writes_the_snapshot_the_issue_and_the_manifest(monkeypatch, tmp_pat
     assert (tmp_path / "verify" / "manifest.json").exists()
 
 
+@pytest.mark.parametrize(("status", "code", "content"), [
+    (503, "", b"unavailable"),
+    (None, "", b""),  # transport failure
+    (404, "RevisionNotFound", b"missing revision"),
+    (404, "", b"generic proxy error"),
+    (200, "", b"{"),  # truncated response
+    (200, "", b"{}"),
+    (200, "", b'{"issues": {}}'),
+    (200, "", b'{"issues": [{"n_gauges": 5}]}'),
+    (200, "", b'{"issues": [{"date": "2026-02-30"}]}'),
+])
+def test_unreadable_issue_history_preserves_the_previous_build(monkeypatch, tmp_path, status, code, content):
+    def get(url, **kwargs):
+        if status is None:
+            raise httpx.ConnectError("offline")
+        return httpx.Response(status, headers={"X-Error-Code": code}, content=content,
+                              request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx, "get", get)
+    monkeypatch.setattr(fa, "read_published_rows", lambda *a, **kw: [])
+    root = tmp_path / "forecasts"
+    root.mkdir()
+    previous = b'{"issues":[{"date":"2026-10-07"}]}'
+    (root / "manifest.json").write_bytes(previous)
+
+    with pytest.raises((ValueError, httpx.HTTPError)):
+        fa.run(tmp_path, manifest={}, catalog=[], today=TODAY, workers=1, verify_budget_s=0)
+
+    assert (root / "manifest.json").read_bytes() == previous
+    assert not (root / "status").exists()
+
+
+def test_first_issue_can_bootstrap_a_missing_hub_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: httpx.Response(
+        404, headers={"X-Error-Code": "EntryNotFound"}, request=httpx.Request("GET", url)))
+    monkeypatch.setattr(fa, "read_published_rows", lambda *a, **kw: [])
+
+    fa.run(tmp_path, manifest={}, catalog=[], today=TODAY, workers=1, verify_budget_s=0)
+
+    issues = json.loads((tmp_path / "forecasts" / "manifest.json").read_text())["issues"]
+    assert [entry["date"] for entry in issues] == [TODAY.isoformat()]
+
+
 def test_run_can_skip_the_scorecard(monkeypatch, tmp_path):
-    monkeypatch.setattr(fa, "read_published_json", lambda path, repo_id=fa.DEFAULT_REPO: {})
+    monkeypatch.setattr(fa, "_published_issues", lambda repo_id: [])
     monkeypatch.setattr(fa, "read_published_rows", lambda path, repo_id=fa.DEFAULT_REPO: [])
     monkeypatch.setattr(fa, "scorecard", lambda *a, **k: pytest.fail("no scorecard at a zero budget"))
     info = fa.run(tmp_path, manifest={}, catalog=[], today=TODAY, workers=1, verify_budget_s=0)
@@ -246,7 +290,7 @@ def test_run_issues_glofas_corrected_once_its_record_is_read(monkeypatch, tmp_pa
 
     reach = {"source": "uk_ea", "station_id": "b", "river_id": 760021611, "distance_m": 5.0, "lat": 51.5,
              "lon": 0.1, "glofas_lat": 51.5, "glofas_lon": 0.1, "snapped_at": "2026-10-01"}
-    monkeypatch.setattr(fa, "read_published_json", lambda path, repo_id=fa.DEFAULT_REPO: {})
+    monkeypatch.setattr(fa, "_published_issues", lambda repo_id: [])
     monkeypatch.setattr(fa, "read_published_rows", lambda path, repo_id=fa.DEFAULT_REPO: (
         [reach] if path.endswith("reaches.parquet") else []))
     monkeypatch.setattr(fa, "gauge_record", lambda source, sid, today: (_series(), ""))
@@ -269,14 +313,27 @@ def test_run_issues_glofas_corrected_once_its_record_is_read(monkeypatch, tmp_pa
 def test_run_stops_reading_records_at_half_the_time_budget(monkeypatch, tmp_path, budget):
     # A coarse clock may return the same tick for the start and the first read.
     monkeypatch.setattr(fa.time, "monotonic", lambda: 0.0)
-    monkeypatch.setattr(fa, "read_published_json", lambda path, repo_id=fa.DEFAULT_REPO: {})
+    monkeypatch.setattr(fa, "_published_issues", lambda repo_id: [])
     monkeypatch.setattr(fa, "read_published_rows", lambda path, repo_id=fa.DEFAULT_REPO: [])
     monkeypatch.setattr(fa, "gauge_record", lambda *a, **k: pytest.fail("no record past the budget"))
     info = fa.run(tmp_path, manifest=MANIFEST, catalog=[], today=TODAY, workers=1, time_budget_s=budget)
     assert info["dropped"] == {"time budget (records)": 3} and info["status_gauges"] == 0
 
 
+def test_publish_rejects_a_build_missing_a_published_issue(monkeypatch, tmp_path):
+    root = tmp_path / "forecasts"
+    root.mkdir()
+    (root / "manifest.json").write_text('{"issues": [{"date": "2026-10-08"}]}')
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: httpx.Response(
+        200, json={"issues": [{"date": "2026-10-07"}, {"date": "2026-10-08"}]}, request=httpx.Request("GET", url)))
+    monkeypatch.setattr("aquascope.archive.publish.publish_folder", lambda *a, **kw: pytest.fail("unexpected upload"))
+
+    with pytest.raises(ValueError, match="2026-10-07"):
+        fa.publish(tmp_path)
+
+
 def test_publish_uploads_only_the_forecasts_folder(monkeypatch, tmp_path):
+    monkeypatch.setattr(fa, "_published_issues", lambda repo_id: [])
     root = tmp_path / "forecasts"
     (root / "status").mkdir(parents=True)
     (root / "status" / "latest.json").write_text("{}")
@@ -305,6 +362,7 @@ def _scorecard_files(out, *, complete=True):
 
 @pytest.mark.parametrize("complete", [True, False])
 def test_publish_adds_the_scorecard_only_when_complete(monkeypatch, tmp_path, complete):
+    monkeypatch.setattr(fa, "_published_issues", lambda repo_id: [])
     root = tmp_path / "forecasts"
     root.mkdir()
     (root / "manifest.json").write_text(json.dumps({"issues": [{"date": "2026-10-08"}]}))

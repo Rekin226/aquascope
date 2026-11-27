@@ -32,6 +32,9 @@ All notable changes to AquaScope are documented here.
   from the Explorer, CLI and MCP.
 - Reservoir routing now reports peak reduction and delay only when the simulation captures both peaks.
   Short runs still show the largest inflow and outflow reached within the simulated hours.
+- Rescoring saved benchmark plans preserves other phases and extra evidence in the same JSONL file.
+  It checks all inputs before replacing files and reports an error if multiple inputs share one `--out`.
+
 - Study can compare runoff and peak flow before and after a land-use change under the same 24-hour storm.
   The Explorer, CLI and MCP use the sketchpad's TR-55 calculation and export a screening-grade comparison.
 - The agricultural water-demand notebook now reports the days covered by weather data and separates daily

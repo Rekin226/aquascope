@@ -173,7 +173,7 @@ def rank_models(rows: list[dict[str, Any]], *, leads: tuple[int, int] = TRACK_LE
     when = f"over the last {days} days, {_leads(*leads)}"
     if not ranked:
         sentence = (f"No forecast has enough verified pairs here yet ({MIN_PAIRS} needed {when})."
-                    if window else "No issued forecast has been verified at this gauge.")
+                    if window else f"No matching scores are available to rank here {when}.")
     else:
         b = ranked[0]
         sentence = (f"Verified against this gauge {when}, {b['label']} did best: within a factor of "

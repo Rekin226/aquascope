@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+- `extraterrestrial_radiation` now clamps `-tan(phi) * tan(delta)` to `[-1, 1]` before `acos` so high-latitude
+  stations above the polar circles return midnight-sun and polar-night values instead of raising `ValueError`.
+
 - Gauge track records now compute the forecast error factor from the full-precision median, matching
   the pooled score. Previously, rounding the median first could change a gauge's trust rating near a cutoff.
 

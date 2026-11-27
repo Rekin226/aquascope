@@ -341,20 +341,13 @@ class StudyRun:
         return [g for g in self.gates if not g.get("passed")]
 
     def manifest(self) -> dict[str, Any]:
-        def step_receipt(r: dict[str, Any]) -> dict[str, Any]:
-            receipt = {
-                "id": r.get("id"),
-                "tool": r["tool"],
-                "arguments": r["arguments"],
-                "ok": r["ok"],
-                "result_sha256": r.get("sha256"),
-                "error": r.get("error"),
-                "gates": r.get("gates") or [],
-                "fallback_used": bool(r.get("fallback_used")),
-            }
-            if isinstance(fallback := r.get("fallback"), dict):
-                receipt["fallback"] = step_receipt(fallback)
-            return receipt
+        def fallback_receipt(record: dict[str, Any]) -> dict[str, Any]:
+            fallback = record.get("fallback")
+            if not isinstance(fallback, dict):
+                return {}
+            receipt = {key: fallback.get(key) for key in ("id", "tool", "arguments", "ok", "error", "gates")}
+            receipt["result_sha256"] = fallback.get("sha256")
+            return {"fallback": receipt}
 
         return {
             "aquascope_version": __version__,
@@ -366,7 +359,20 @@ class StudyRun:
             "stop_reason": self.stop_reason,
             "summary": self.summary,
             "failed_steps": self.failed_steps,
-            "steps": [step_receipt(r) for r in self.results],
+            "steps": [
+                {
+                    "id": r.get("id"),
+                    "tool": r["tool"],
+                    "arguments": r["arguments"],
+                    "ok": r["ok"],
+                    "result_sha256": r.get("sha256"),
+                    "error": r.get("error"),
+                    "gates": r.get("gates") or [],
+                    "fallback_used": bool(r.get("fallback_used")),
+                    **fallback_receipt(r),
+                }
+                for r in self.results
+            ],
         }
 
     def to_markdown(self) -> str:

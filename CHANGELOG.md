@@ -7,6 +7,9 @@ All notable changes to AquaScope are documented here.
 
 ## [Unreleased]
 
+- Ungauged-site similarity transfers compare mean, low (Q95) and high (Q05) flow using five and ten
+  donor catchments. The basins CLI and study report give both estimates and their percentage change.
+
 - Gauge track records now compute the forecast error factor from the full-precision median, matching
   the pooled score. Previously, rounding the median first could change a gauge's trust rating near a cutoff.
 
@@ -17,9 +20,6 @@ All notable changes to AquaScope are documented here.
   for the raw GEOGLOWS track record, even when the Archive returns the gauges in a different order.
 
 - Forecast scorecards now say which lead times lack a ranking when a gauge has verified forecasts at other leads.
-
-- Ungauged-site similarity transfers compare mean, low (Q95) and high (Q05) flow using five and ten
-  donor catchments. The basins CLI and study report give both estimates and their percentage change.
 
 - Flood-risk studies can screen how a drawn reservoir attenuates one flood, with an inflow/outflow CSV,
   hydrograph and a level-pool solver check against NRCS NEH Example 17-2.

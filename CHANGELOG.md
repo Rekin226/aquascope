@@ -30,6 +30,7 @@ All notable changes to AquaScope are documented here.
   playbook now maps inundation rather than declining it.
 - Study can export hourly added flows at the start and downstream end of a routed flood wave
   from the Explorer, CLI and MCP.
+- `aquascope run study.yaml --dry-run` flags unknown tools in study steps and fallbacks before execution.
 - Reservoir routing now reports peak reduction and delay only when the simulation captures both peaks.
   Short runs still show the largest inflow and outflow reached within the simulated hours.
 - Rescoring saved benchmark plans preserves other phases and extra evidence in the same JSONL file.

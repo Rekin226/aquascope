@@ -300,10 +300,13 @@ with every change on record (`aquascope.studio.desk`).
   - the other fitted distributions,
   - the largest flood left out,
   - only the most recent 50 or 30 years,
+  - the years from a significant Pettitt change in the annual maxima onward, including the change year,
   - the excluded years put back.
 
-  It is computed from the stored annual maxima with the reported distribution, without a new fetch, and goes
-  in the report under the design flood.
+  The post-change row needs the full stored series of annual peaks and at least ten usable peaks from the
+  change onward. It uses the full-record estimator and return period, including the same L-moments fallback
+  when maximum likelihood is selected. The table is computed from the stored annual maxima without a new
+  fetch and appears in the report under the design flood.
 - **Review and sign-off.** Review comments are kept with their responses in an appendix. Signing as prepared,
   checked or approved fills the document control and moves the status from DRAFT to CHECKED to ISSUED.
 

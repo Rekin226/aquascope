@@ -25,6 +25,7 @@ All notable changes to AquaScope are documented here.
   georeferenced peak-depth raster, and the study reports the agreement (CSI, hit rate, false alarm ratio)
   with JRC CEMS-GloFAS's modelled return-period hazard depth as a consistency check. The flood-risk
   playbook now maps inundation rather than declining it.
+- Studio now records the hash of the saved result including station names, inherited units and trend metadata.
 - Study can export hourly added flows at the start and downstream end of a routed flood wave
   from the Explorer, CLI and MCP.
 - Reservoir routing now reports peak reduction and delay only when the simulation captures both peaks.

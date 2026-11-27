@@ -138,6 +138,11 @@ With a model, the model reads your replies into the same values; it cannot skip 
    `--style style.yaml` sets the organisation, project, names and logo. The raw record and
    the raw samples live in the workbook and the notebook; the documents say
    which sheet, and print the evidence tables only.
+   Each newly run step with a result records two fingerprints. `tool_result_sha256`
+   covers the original tool output for comparison with a replay. `sha256` covers the
+   JSON result saved in the workspace, including Studio's annotations and excluding
+   bulk series. Both use the first 16 hexadecimal characters of SHA-256. Older
+   workspaces may lack the original tool fingerprint.
 9. **Follow-up.** A question is answered from the workspace; a change (another
    return period, another statistic, another gauge, the donors) is planned,
    run and re-authored, reusing every step whose arguments and gates did not

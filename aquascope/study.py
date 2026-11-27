@@ -358,6 +358,7 @@ class StudyRun:
                     "arguments": r["arguments"],
                     "ok": r["ok"],
                     "result_sha256": r.get("sha256"),
+                    **({"tool_result_sha256": r["tool_result_sha256"]} if r.get("tool_result_sha256") else {}),
                     "error": r.get("error"),
                     "gates": r.get("gates") or [],
                     "fallback_used": bool(r.get("fallback_used")),
@@ -786,12 +787,19 @@ def _run_tool(func: Callable[..., Any], args: dict[str, Any]) -> tuple[Any, bool
     return payload, ok, (str(error) if error else None)
 
 
+def _result_hash(payload: Any) -> str:
+    """Hash a step's JSON payload as recorded in the provenance manifest."""
+    blob = json.dumps(payload, ensure_ascii=False, default=str, sort_keys=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
 def _record(step: Step, step_id: str, payload: Any, ok: bool, error: str | None, gates: list[dict[str, Any]]) -> dict:
-    blob = json.dumps(payload, ensure_ascii=False, default=str, sort_keys=True) if payload is not None else ""
+    digest = _result_hash(payload) if payload is not None else None
     return {
         "id": step_id, "tool": step.tool, "arguments": step.arguments, "ok": ok,
         "rationale": step.rationale,
-        "sha256": hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16] if blob else None,
+        "sha256": digest,
+        **({"tool_result_sha256": digest} if digest is not None else {}),
         "methods": (payload or {}).get("methods") if isinstance(payload, dict) else None,
         "result": payload,
         "error": error,
@@ -1019,6 +1027,8 @@ def _result_entry(rec: dict[str, Any]) -> dict[str, Any]:
     }
     if rec.get("sha256"):
         out["sha256"] = rec["sha256"]
+    if rec.get("tool_result_sha256"):
+        out["tool_result_sha256"] = rec["tool_result_sha256"]
     if rec.get("error"):
         out["error"] = rec["error"]
     if rec.get("failed_reason"):

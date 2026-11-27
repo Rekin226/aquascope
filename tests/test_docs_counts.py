@@ -38,6 +38,7 @@ CLI_PATTERNS = {
     "README.md": r"AquaScope ships a (\d+)-command CLI",
     "docs/features.md": r"\*\*(\d+) CLI commands\*\*",
     "docs/i18n/README.fr.md": r"CLI de (\d+) commandes",
+    "docs/i18n/README.ja.md": r"CLI には (\d+) 個のコマンド",
 }
 
 # Every hand-written mention of the source count, by file.
@@ -59,6 +60,7 @@ SOURCE_COUNT_PATTERNS = {
     "docs/api.md": [r"(\d+) unified collectors\. Every collector"],
     "docs/faq.md": [r"hydrology data from (\d+) global sources"],
     "docs/i18n/README.fr.md": [r"espace de travail multipage avec (\d+) sources"],
+    "docs/i18n/README.ja.md": [r"multipage workspace with (\d+) live sources"],
 }
 
 CROP_COUNT_PATTERNS = {
@@ -89,6 +91,7 @@ SIGNATURE_COUNT_PATTERNS = {
     "docs/index.md": [r"(\d+) hydrological signatures"],
     "docs/features.md": [r"\*\*(\d+) hydrological signatures\*\*"],
     "docs/i18n/README.fr.md": [r"(\d+) signatures couvrant"],
+    "docs/i18n/README.ja.md": [r"(\d+) 種類の水文シグネチャ"],
 }
 
 METHODOLOGY_COUNT_PATTERNS = {

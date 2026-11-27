@@ -1708,8 +1708,8 @@ def record_quality_half(
     Reuses :func:`aquascope.analysis.quality.assess_quality` for the three quality measures and
     :func:`aquascope.analysis.changepoint.pettitt_test` on annual means for the change point:
 
-    - ``completeness``: share of the daily calendar between the first and last observation that carries a
-      value. The calendar is daily because the catalog and the Archive both report daily values; an
+    - ``completeness``: share of the daily calendar between the first and last finite observation that carries a
+      finite value. The calendar is daily because the catalog and the Archive both report daily values; an
       observation-only series has no holes by construction, so the calendar is what makes a gap visible.
     - ``longest_gap_days``: the number of days the longest outage is missing, taken straight from the record's
       own index: the largest step between consecutive observations minus one, so a daily record with no
@@ -1731,6 +1731,8 @@ def record_quality_half(
     if series is None or len(series) == 0:
         return empty
 
+    import numpy as np
+
     from aquascope.analysis.quality import assess_quality
 
     raw = pd.Series(series)
@@ -1745,37 +1747,26 @@ def record_quality_half(
     if index.tz is not None:
         index = index.tz_localize(None)
 
-    values = pd.to_numeric(pd.Series(raw.to_numpy()), errors="coerce")
-    s = pd.Series(values.to_numpy(dtype=float), index=index).dropna()
-    s = s[~s.index.duplicated(keep="first")].sort_index()
-    if s.empty:
+    values = pd.to_numeric(raw, errors="coerce").to_numpy(dtype=float, na_value=np.nan)
+    observed = pd.DataFrame({
+        "station_id": station_id or variable, "reading_datetime": index, "parameter": variable, "value": values,
+    })
+    if quality is not None and len(quality) == len(index):
+        observed["quality"] = pd.Series(quality).to_numpy(dtype=object)
+    # Keep the flag from the same row as the first usable reading at each timestamp.
+    observed = observed.loc[np.isfinite(values)].drop_duplicates("reading_datetime").sort_values("reading_datetime")
+    if observed.empty:
         return empty
-
-    flags: pd.Series | None = None
-    if quality is not None:
-        flags = pd.Series(quality)
-        if len(flags) == len(index):
-            flags.index = index
-            flags = flags[~flags.index.duplicated(keep="first")].reindex(s.index)
-        else:
-            flags = None
 
     # Daily coverage counts calendar days, while quality flags below describe
     # the original observations (including multiple readings on one day).
+    s = observed.set_index("reading_datetime")["value"]
     day_values = s.groupby(s.index.normalize()).last()
     start, end = day_values.index.min(), day_values.index.max()
     daily = day_values.reindex(pd.date_range(start, end, freq="D"))
     calendar_report = assess_quality(pd.DataFrame({"value": daily.to_numpy(dtype=float)}))
     completeness = round(float(calendar_report.completeness_pct) / 100.0, 4)
 
-    observed = pd.DataFrame({
-        "station_id": station_id or variable,
-        "reading_datetime": s.index,
-        "parameter": variable,
-        "value": s.to_numpy(dtype=float),
-    })
-    if flags is not None:
-        observed["quality"] = flags.to_numpy(dtype=object)
     report = assess_quality(observed)
     # The longest gap comes from the index itself, not from ``report.temporal_gaps``: that keeps only the
     # first three gaps per station in date order, so a record with three short outages before a long hole

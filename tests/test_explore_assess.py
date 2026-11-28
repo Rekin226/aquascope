@@ -7,6 +7,7 @@ Analyst and the Explorer card all read (docs/solve-design.md).
 
 from __future__ import annotations
 
+import gzip
 import json
 from unittest.mock import patch
 
@@ -270,6 +271,22 @@ def test_a_single_observation_has_no_gap():
     assert half["longest_gap_days"] == 0
 
 
+def test_quality_flags_follow_the_first_finite_reading_at_each_timestamp():
+    dates = pd.to_datetime(["2024-01-02", "2024-01-02", "2024-01-01", "2024-01-02"])
+    values = pd.Series([np.inf, 0.0, 7.0, 8.0], index=dates)
+    flags = pd.Series(["suspect", "approved", "provisional", "suspect"], index=dates)
+    half = explore.record_quality_half(values, "discharge", quality=flags)
+    assert half["flagged_fraction"] == 0.5
+    assert half["completeness"] == 1.0
+
+
+def test_record_with_no_finite_values_has_the_empty_quality_result():
+    dates = pd.date_range("2024-01-01", periods=3)
+    half = explore.record_quality_half(pd.Series([-np.inf, np.nan, np.inf], index=dates), "discharge",
+                                       quality=pd.Series("suspect", index=dates))
+    assert half == {"completeness": 0.0, "longest_gap_days": 0, "flagged_fraction": 0.0, "change_points": []}
+
+
 def test_record_quality_groups_observations_by_calendar_day():
     index = pd.date_range("2024-01-01 09:00", periods=3, freq="D", tz="Europe/Warsaw")
     values = pd.Series([1.0, 2.0, 3.0], index=index)
@@ -425,6 +442,31 @@ def _not_found(url):
 
 def _hub_has_nothing(url, timeout=None):
     raise _not_found(url)
+
+
+@pytest.mark.parametrize("hub", [False, True], ids=["local-mirror", "hosted-archive"])
+def test_only_finite_archived_readings_count_toward_record_quality(small_catalog, archive, tmp_path, monkeypatch, hub):
+    from aquascope.archive.observations import obs_path
+
+    data = gzip.compress(b"date,value,quality\n2024-01-01,0,approved\n2024-01-02,inf,suspect\n"
+                         b"2024-01-03,-inf,provisional\n2024-01-05,21,approved\n"
+                         b"2024-01-06,24,approved\n2024-01-07,25,approved\n")
+    if hub:
+        def urlopen(url, timeout=None):
+            if url == explore._hub_url("uk_ea", "8496ce69", "discharge"):
+                return _HubResponse(data)
+            raise _not_found(url)
+
+        monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    else:
+        path = obs_path(tmp_path, "discharge", "uk_ea", "8496ce69")
+        path.parent.mkdir(parents=True)
+        path.write_bytes(data)
+        monkeypatch.setenv(explore.ARCHIVE_MIRROR_ENV, str(tmp_path))
+    ctx = explore.assess_site(51.415, -0.308, archive_hub=hub)["context"]
+    assert ctx["completeness_by_variable"]["discharge"] == 0.571
+    assert ctx["longest_gap_days"]["discharge"] == 3
+    assert ctx["flagged_fraction"]["discharge"] == 0.0
 
 
 def test_the_hub_url_is_the_archive_layout_on_the_dataset():

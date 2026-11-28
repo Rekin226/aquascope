@@ -308,21 +308,42 @@ def similar_basins(
     }
 
 
+def _target_drainage_area(target: dict[str, Any]) -> float | None:
+    """Use the outlet area for a point and the gauge's own drainage area for a station row."""
+    basin = target.get("sub_basin")
+    outlet_area = basin.get("up_area") if isinstance(basin, dict) else None
+    attrs = target.get("attributes")
+    if isinstance(attrs, dict):
+        # In a single-row catchment description, area_km2 is only the polygon's area.
+        candidates = (attrs.get("upstream_area_km2"), outlet_area, attrs.get("up_area"), attrs.get("area_km2"))
+    else:
+        candidates = (target.get("area_km2"), target.get("up_area"), target.get("upstream_area_km2"), outlet_area)
+    for value in candidates:
+        if isinstance(value, dict):
+            value = value.get("value")
+        if value is None or isinstance(value, bool):
+            continue
+        try:
+            area = float(value)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if math.isfinite(area) and area > 0:
+            return area
+    return None
+
+
 def _target_values(target: dict[str, Any]) -> dict[str, float | None]:
     """Feature values from a target dict (flat guide keys, or describe_catchment's nested attributes)."""
-    attrs = target.get("attributes") if isinstance(target.get("attributes"), dict) else target
+    nested = target.get("attributes")
+    attrs = nested if isinstance(nested, dict) else target
     out: dict[str, float | None] = {}
     for f, (col, _how, _w) in FEATURES.items():
+        if col == "area_km2":
+            out[f] = _target_drainage_area(target)
+            continue
         v = attrs.get(col)
         if isinstance(v, dict):
             v = v.get("value")
-        if v is None and col == "area_km2":
-            v = attrs.get("up_area")
-            if v is None:
-                ua = attrs.get("upstream_area_km2")
-                v = ua if isinstance(ua, (int, float)) else None
-            if v is None and isinstance(target.get("sub_basin"), dict):
-                v = target["sub_basin"].get("up_area")
         try:
             out[f] = None if v is None else float(v)
         except (TypeError, ValueError):

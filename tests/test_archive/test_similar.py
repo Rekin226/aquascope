@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from aquascope.archive import similar
-from aquascope.archive.basins import row_catchment_attributes
+from aquascope.archive.basins import describe_catchment_from_row, row_catchment_attributes
 
 
 def _table():
@@ -109,6 +109,30 @@ def test_target_from_describe_catchment_shape():
     assert vals["log_area"] == 1050.0 and vals["elevation"] == 310.0 and vals["snow"] is None
     flat = {"area_km2": 20.0, "up_area": 900.0, "elevation_m": 100.0}
     assert similar._target_values(flat)["log_area"] == 20.0  # a station row: its own area, not the sub-basin's
+
+
+def test_point_donors_rank_by_outlet_area_in_single_polygon_description():
+    sb = {"hybas_id": 1, "up_area": 1000.0, "sub_area": 20.0}
+    desc = describe_catchment_from_row(51.4, -0.3, sb, sb)
+    assert desc["attributes"]["area_km2"] == 20.0
+    tab = _table()
+    tab.loc[tab["station_id"] == "S0", "area_km2"] = 20.0
+    out = similar.similar_for_point(51.4, -0.3, k=1, method="similarity", desc=desc,
+                                    features=["log_area"], table=tab, catalog=_catalog(tab))
+    best = out["stations"][0]
+    assert best["station_id"] == "TWIN"
+    assert best["features"]["log_area"] == {"station": 1000.0, "target": 1000.0}
+
+
+@pytest.mark.parametrize(("attrs", "sub_basin", "expected"), [
+    ({"area_km2": 20}, {"up_area": 900}, 900),
+    ({"area_km2": 20, "upstream_area_km2": 900}, {}, 900),
+    ({"area_km2": 20, "upstream_area_km2": float("nan")}, {"up_area": 900}, 900),
+    ({"area_km2": {"value": 20, "unit": "km²"}}, {"up_area": 0}, 20),
+    ({"area_km2": -9999}, {"up_area": float("inf")}, None),
+])
+def test_point_area_uses_a_valid_fallback(attrs, sub_basin, expected):
+    assert similar._target_values({"attributes": attrs, "sub_basin": sub_basin})["log_area"] == expected
 
 
 def test_similar_for_station_excludes_itself(monkeypatch):

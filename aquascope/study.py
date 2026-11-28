@@ -342,6 +342,14 @@ class StudyRun:
         return [g for g in self.gates if not g.get("passed")]
 
     def manifest(self) -> dict[str, Any]:
+        def fallback_receipt(record: dict[str, Any]) -> dict[str, Any]:
+            fallback = record.get("fallback")
+            if not isinstance(fallback, dict):
+                return {}
+            receipt = {key: fallback.get(key) for key in ("id", "tool", "arguments", "ok", "error", "gates")}
+            receipt["result_sha256"] = fallback.get("sha256")
+            return {"fallback": receipt}
+
         return {
             "aquascope_version": __version__,
             "started": self.started,
@@ -362,6 +370,7 @@ class StudyRun:
                     "error": r.get("error"),
                     "gates": r.get("gates") or [],
                     "fallback_used": bool(r.get("fallback_used")),
+                    **fallback_receipt(r),
                 }
                 for r in self.results
             ],

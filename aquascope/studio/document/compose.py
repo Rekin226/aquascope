@@ -737,6 +737,7 @@ def build_report(ws: Workspace, style: HouseStyle | None = None, facts: Facts | 
         _trend_section(doc, f, placer)
     if f.asks_trend and f.ffa:
         _ffa_section(doc, f, placer)
+        _sensitivity_section(doc, ws, f)
     if _no_design(f) and (f.regional.get("converted") or f.glofas.get("ffa")):
         _screening_section(doc, f, placer)
     if f.regional.get("estimates"):
@@ -868,7 +869,7 @@ def _sensitivity_section(doc: Document, ws: Workspace, f: Facts) -> None:
         rows = sensitivity(ws)
     except Exception:  # noqa: BLE001 - the sensitivity is an aid; the report stands without it
         rows = []
-    if len(rows) < 2:
+    if len(rows) < 2 or (f.asks_trend and not any(r.get("change_year") is not None for r in rows)):
         return
     t = _design_t(f)
     u = tx.unit(f.ffa.get("unit") or "m3/s")
@@ -882,8 +883,10 @@ def _sensitivity_section(doc: Document, ws: Workspace, f: Facts) -> None:
     worst = max(rows[1:], key=lambda r: abs(r.get("change_pct") or 0))
     doc.add(Para(tx.clean_units(
         f"{{tab:sensitivity}} gives the {_t(t)}-year flood under the reasonable alternatives to the choices "
-        f"made in this study. The largest change is {worst['case'][:1].lower() + worst['case'][1:]}, "
-        f"{worst['change_pct']:+.0f} % ({tx.value(worst['value'], u)})."
+        "made in this study."
+        + (f" The largest change is {worst['case'][:1].lower() + worst['case'][1:]}, "
+           f"{worst['change_pct']:+.0f} % ({tx.value(worst['value'], u)})." if worst.get("change_pct") is not None
+           else "")
         + (" Every alternative stays within 10 % of the reported value." if spread and max(spread) <= 10 else "")
         + (" The recent decades alone give a markedly different flood than the whole record. That is worth a "
            "closer look at whether the record is one stationary sample, whatever the trend and step-change tests "
@@ -1217,6 +1220,19 @@ def _regional_section(doc: Document, f: Facts, placer: _Placer) -> None:
         s.append(f"{{fig:{fig.id}}} shows each signature with its band across donors.")
     doc.add(Para(" ".join(s)))
     doc.add(fig)
+
+    if comparison := reg.get("donor_count_sensitivity"):
+        rows = []
+        for row in comparison["estimates"].values():
+            five = tx.num(row["k5"], 4) if row["k5"] is not None else f"Unavailable ({row['n5']}/5)"
+            ten = tx.num(row["k10"], 4) if row["k10"] is not None else f"Unavailable ({row['n10']}/10)"
+            change = f"{row['change_pct']:+.2f} %" if row["change_pct"] is not None else "n/a"
+            rows.append([row["label"], five, ten, change])
+        doc.add(Table(id="donor-count-sensitivity", columns=["Flow signature", "5 donors", "10 donors", "Change"],
+                      rows=rows, align=["l", "r", "r", "r"],
+                      caption="Sensitivity to donor count for the same site and similarity ranking. Flows are in mm/d "
+                              "and changes are relative to five donors. An unavailable estimate shows the number "
+                              "of donors with a usable signature."))
 
 
 def _context_section(doc: Document, f: Facts, placer: _Placer) -> None:

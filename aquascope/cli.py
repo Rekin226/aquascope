@@ -796,7 +796,7 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 def cmd_run_study(args: argparse.Namespace) -> None:
     """Run a study file: the steps behind an answer, again, with no model in the loop."""
-    from aquascope.study import load, run_study, write_outputs
+    from aquascope.study import load, run_study, tool_names, write_outputs
 
     try:
         study = load(args.study)
@@ -809,12 +809,24 @@ def cmd_run_study(args: argparse.Namespace) -> None:
             print(f"  · {_format_event(event)}", file=sys.stderr)
 
     if args.dry_run:
+        calls = []
         print(f"{len(study.steps)} step(s) in {args.study}:")
         for i, step in enumerate(study.steps, 1):
+            step_id = step.id or f"s{i}"
+            calls.append((step_id, step.tool))
+            fallback = step.fallback
+            if isinstance(fallback, dict) and isinstance(fallback.get("step"), dict):
+                calls.append((f"{step_id}.fallback", str(fallback["step"].get("tool") or "")))
             label = f"{step.id}: " if step.id else ""
             print(f"  {i}. {label}{step.tool}({', '.join(f'{k}={v!r}' for k, v in step.arguments.items())})")
             for g in step.expects:
                 print(f"       gate {g.get('check')} {g.get('path') or g.get('paths') or ''} {g.get('value', '')}")
+        known_tools = set(tool_names())
+        unknown = [(step_id, tool) for step_id, tool in calls if tool not in known_tools]
+        if unknown:
+            for step_id, tool in unknown:
+                logger.error("%s: unknown tool %r", step_id, tool)
+            sys.exit(1)
         return
     run = run_study(study, on_event=on_event)
     if args.out:
@@ -2890,16 +2902,12 @@ def cmd_gym(args: argparse.Namespace) -> None:
             return
         if args.plans_cmd == "rescore":
             reviews = json.loads(Path(args.reviews).read_text(encoding="utf-8")) if args.reviews else None
-            for path in args.results:
-                rows = gp.load_plan_results([path], latest=False)
-                rows = gp.rescore_plans(rows, plans_dir=args.plans, reviews=reviews)
-                target = Path(args.out) if args.out and len(args.results) == 1 else Path(path)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(
-                    "".join(json.dumps(r.to_dict(), ensure_ascii=False, default=str) + "\n" for r in rows),
-                    encoding="utf-8",
-                )
-                print(f"  {len(rows)} rows re-scored -> {target}")
+            try:
+                rescored_counts = gp.rescore_plan_files(args.results, out=args.out, plans_dir=args.plans, reviews=reviews)
+            except (OSError, ValueError) as exc:
+                sys.exit(f"Cannot rescore plans: {exc}")
+            for target, count in rescored_counts.items():
+                print(f"  {count} rows re-scored -> {target}")
             return
         if args.plans_cmd == "score":
             ref = gp.load_reference(args.id, args.plans)
@@ -5145,7 +5153,7 @@ def main() -> None:
     p_run.add_argument("--config", default=None, help="Pipeline config as JSON string")
     p_run.add_argument("--output", default=None, help="Path to save results JSON")
     p_run.add_argument("--out", "-o", default=None, help="Study: write report.md, manifest.json and results.json here")
-    p_run.add_argument("--dry-run", action="store_true", help="Study: list the steps without running them")
+    p_run.add_argument("--dry-run", action="store_true", help="Study: list steps and check tool names without running them")
     p_run.add_argument("--quiet", "-q", action="store_true", help="Study: do not print steps as they run")
 
     # ── completion  ────────────────────────────────────────────────────

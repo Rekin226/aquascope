@@ -737,6 +737,7 @@ def build_report(ws: Workspace, style: HouseStyle | None = None, facts: Facts | 
         _trend_section(doc, f, placer)
     if f.asks_trend and f.ffa:
         _ffa_section(doc, f, placer)
+        _sensitivity_section(doc, ws, f)
     if _no_design(f) and (f.regional.get("converted") or f.glofas.get("ffa")):
         _screening_section(doc, f, placer)
     if f.regional.get("estimates"):
@@ -868,7 +869,7 @@ def _sensitivity_section(doc: Document, ws: Workspace, f: Facts) -> None:
         rows = sensitivity(ws)
     except Exception:  # noqa: BLE001 - the sensitivity is an aid; the report stands without it
         rows = []
-    if len(rows) < 2:
+    if len(rows) < 2 or (f.asks_trend and not any(r.get("change_year") is not None for r in rows)):
         return
     t = _design_t(f)
     u = tx.unit(f.ffa.get("unit") or "m3/s")
@@ -882,8 +883,10 @@ def _sensitivity_section(doc: Document, ws: Workspace, f: Facts) -> None:
     worst = max(rows[1:], key=lambda r: abs(r.get("change_pct") or 0))
     doc.add(Para(tx.clean_units(
         f"{{tab:sensitivity}} gives the {_t(t)}-year flood under the reasonable alternatives to the choices "
-        f"made in this study. The largest change is {worst['case'][:1].lower() + worst['case'][1:]}, "
-        f"{worst['change_pct']:+.0f} % ({tx.value(worst['value'], u)})."
+        "made in this study."
+        + (f" The largest change is {worst['case'][:1].lower() + worst['case'][1:]}, "
+           f"{worst['change_pct']:+.0f} % ({tx.value(worst['value'], u)})." if worst.get("change_pct") is not None
+           else "")
         + (" Every alternative stays within 10 % of the reported value." if spread and max(spread) <= 10 else "")
         + (" The recent decades alone give a markedly different flood than the whole record. That is worth a "
            "closer look at whether the record is one stationary sample, whatever the trend and step-change tests "

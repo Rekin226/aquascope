@@ -97,19 +97,19 @@ def assess_quality(df: pd.DataFrame) -> QualityReport:
         df_sorted = df.copy()
         df_sorted[dt_col] = pd.to_datetime(df_sorted[dt_col], errors="coerce")
         for station, grp in df_sorted.groupby("station_id"):
-            dates = grp[dt_col].dropna().sort_values()
+            # Several parameters may be measured in the same station visit.
+            dates = pd.DatetimeIndex(grp[dt_col].dropna().unique()).sort_values()
             if len(dates) < 3:
                 continue
-            diffs = dates.diff().dropna()
+            diffs = dates.to_series().diff().dropna()
             median_interval = diffs.median()
             if median_interval.days == 0:
                 continue
             big_gaps = diffs[diffs > median_interval * 3]
-            for gap in big_gaps.head(3):  # report top 3 gaps per station
-                idx = diffs[diffs == gap].index[0]
+            for end, gap in big_gaps.nlargest(3).items():
                 temporal_gaps.append({
                     "station": str(station),
-                    "gap_start": str(dates.loc[dates.index[dates.index.get_loc(idx) - 1]].date()),
+                    "gap_start": str((end - gap).date()),
                     "gap_days": int(gap.days),
                 })
         temporal_gaps = sorted(temporal_gaps, key=lambda x: x["gap_days"], reverse=True)[:10]
@@ -260,7 +260,8 @@ def print_quality_report(report: QualityReport) -> str:
     if report.temporal_gaps:
         lines.append("\n  Largest Temporal Gaps:")
         for gap in report.temporal_gaps[:5]:
-            lines.append(f"    Station {gap['station']}: {gap['gap_days']} days (from {gap['gap_start']})")
+            lines.append(f"    Station {gap['station']}: {gap['gap_days']} days between readings "
+                         f"(earlier reading {gap['gap_start']})")
 
     if report.unit_issues:
         lines.append("\n  Unit Consistency Issues:")

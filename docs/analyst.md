@@ -221,11 +221,21 @@ Every answer now also comes with the steps that produced it:
 
 ```bash
 aquascope ask "What is the 100-year flood of the Thames at Kingston?" --study study.yaml
+aquascope run study.yaml --dry-run
 aquascope run study.yaml --out results/
 ```
 
+`--dry-run` lists the steps without running them. It reports every unknown tool
+name, including ones in fallback steps, and exits with a nonzero status if it finds any.
+
 `aquascope run` calls the same tools with the same arguments, with no model in
 the loop, and writes `report.md`, `manifest.json` (aquascope version, times and
-a hash per step, so drift is visible) and `results.json`. The model writes the
+a hash per step, so drift is visible) and `results.json`. When a fallback runs,
+its tool, arguments, result hash, error and gates are recorded under the primary
+step's `fallback` entry in the manifest. The model writes the
 study; the engine runs the study. That is the reproducible unit, and it is what
 the declarative runner of #54 was for.
+
+For a version 2 or later plan, `results/study.yaml` records the outcome of each
+step reached during this run, including why a step with a failed dependency was skipped.
+If a gate stops the run, later steps stay in the plan with no result entry.

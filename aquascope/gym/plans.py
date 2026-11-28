@@ -46,8 +46,11 @@ import json
 import logging
 import math
 import re
+import shutil
+import tempfile
 import time
 from collections.abc import Callable, Iterable
+from contextlib import ExitStack
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -74,6 +77,7 @@ __all__ = [
     "methodologist_candidate",
     "plan_leaderboard",
     "recon_for",
+    "rescore_plan_files",
     "rescore_plans",
     "run_plan_bench",
     "score_plan",
@@ -1029,25 +1033,81 @@ def rescore_plans(results: Iterable[PlanResult], references: Iterable[Reference]
     references, is returned as it is. Rows keep their order.
     """
     refs = {r.id: r for r in (references if references is not None else load_references(plans_dir))}
-    out: list[PlanResult] = []
-    for r in results:
-        ref = refs.get(r.case_id)
-        if ref is None or r.error:
-            out.append(r)
-            continue
-        cand = Candidate(steps=[dict(st, gates=list(st.get("gates") or []), fallback=st.get("fallback"))
-                                for st in r.steps], declined=r.declined, reason=r.declined_reason,
-                         branch=r.branch, author=r.author)
-        scored = score_plan(ref, cand, reviews=reviews, plans_dir=plans_dir)
-        r.score = float(scored["score"]) if scored["score"] is not None else None
-        for key in ("coverage_tools", "coverage_methods", "coverage_gates", "extraneous", "decline_correct"):
-            setattr(r, key, scored[key])
-        r.forbidden_used = int(scored["forbidden_used"])
-        r.explain = list(scored["explain"])
-        r.tags = list(ref.tags)
-        r.decline_expected = ref.decline
-        out.append(r)
+    out = list(results)
+    for r in out:
+        if r.case_id in refs and not r.error:
+            for key, value in _rescored_fields(r, refs[r.case_id], plans_dir, reviews).items():
+                setattr(r, key, value)
     return out
+
+
+def _rescored_fields(row: PlanResult, ref: Reference, plans_dir: str | Path | None, reviews: Any) -> dict[str, Any]:
+    cand = Candidate(steps=[dict(st, gates=list(st.get("gates") or []), fallback=st.get("fallback"))
+                            for st in row.steps], declined=row.declined, reason=row.declined_reason,
+                     branch=row.branch, author=row.author)
+    scored = score_plan(ref, cand, reviews=reviews, plans_dir=plans_dir)
+    # First-try validation is an observation from the original run.
+    scored.pop("validator_errors_first_try", None)
+    return {**scored, "tags": list(ref.tags), "decline_expected": ref.decline}
+
+
+def _file_version(path: Path) -> tuple[int, int, int, int] | None:
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return None
+    return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns
+
+
+def rescore_plan_files(paths: Iterable[str | Path], *, out: str | Path | None = None,
+                       plans_dir: str | Path | None = None, reviews: Any = None) -> dict[Path, int]:
+    """Rescore recognized plan records, staging every file before replacing any destination."""
+    sources = [Path(p).resolve() for p in paths]
+    if out is not None and len(sources) != 1:
+        raise ValueError("--out requires exactly one input result file")
+    if len(set(sources)) != len(sources):
+        raise ValueError("the same input result file was given more than once")
+    output = Path(out).resolve() if out is not None else None
+    versions = {path: _file_version(path) for path in sources}
+    if output is not None and output not in versions:
+        versions[output] = _file_version(output)
+    refs = {r.id: r for r in load_references(plans_dir)}
+    counts: dict[Path, int] = {}
+    staged: dict[Path, Path] = {}
+    with ExitStack() as cleanup:
+        for source in sources:
+            target = output or source
+            target.parent.mkdir(parents=True, exist_ok=True)
+            count = 0
+            with source.open(encoding="utf-8", newline="") as src, tempfile.NamedTemporaryFile(
+                mode="w", dir=target.parent, delete=False, encoding="utf-8", newline=""
+            ) as tmp:
+                temp_path = Path(tmp.name)
+                cleanup.callback(temp_path.unlink, missing_ok=True)
+                for number, line in enumerate(src, 1):
+                    try:
+                        raw = json.loads(line) if line.strip() else None
+                        if (isinstance(raw, dict) and raw.get("phase", "plans") == "plans" and raw.get("agent")
+                                and isinstance(raw.get("case_id"), str) and raw["case_id"] in refs
+                                and not raw.get("error")):
+                            row = PlanResult.from_dict(raw)
+                            raw.update(_rescored_fields(row, refs[row.case_id], plans_dir, reviews))
+                            ending = line[len(line.rstrip("\r\n")):]
+                            line = json.dumps(raw, ensure_ascii=False) + ending
+                            count += 1
+                    except (ValueError, TypeError) as exc:
+                        raise ValueError(f"{source}:{number}: {exc}") from exc
+                    tmp.write(line)
+            shutil.copymode(target if target.exists() else source, temp_path)
+            if count or target != source:
+                staged[target] = temp_path
+            counts[target] = count
+        for path, version in versions.items():
+            if _file_version(path) != version:
+                raise ValueError(f"{path} changed during rescoring")
+        for target, temp_path in staged.items():
+            temp_path.replace(target)
+    return counts
 
 
 # ── the leaderboard ─────────────────────────────────────────────────────────

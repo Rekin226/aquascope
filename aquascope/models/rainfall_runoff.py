@@ -28,6 +28,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from aquascope.models.cemaneige import CemaNeige
+
 logger = logging.getLogger(__name__)
 
 # Standard GR4J parameter bounds from the literature (Perrin et al. 2003;
@@ -282,7 +284,7 @@ class CalibrationResult:
 
 
 def calibrate(
-    precip: pd.Series,
+    precip: pd.Series | CemaNeige,
     pet: pd.Series,
     observed: pd.Series,
     objective: str = "kge",
@@ -299,8 +301,9 @@ def calibrate(
 
     Parameters
     ----------
-    precip : pd.Series
-        Daily precipitation (mm/day).
+    precip : pd.Series or CemaNeige
+        Daily precipitation (mm/day), or prepared elevation-band forcing to fit
+        the two CemaNeige snow parameters CTG and Kf alongside X1-X4.
     pet : pd.Series
         Daily potential evapotranspiration (mm/day).
     observed : pd.Series
@@ -312,8 +315,9 @@ def calibrate(
         Initial days excluded from the objective calculation (but still
         simulated, to spin up store states).
     param_bounds : dict, optional
-        Override bounds for any of X1-X4; merged with
-        :data:`GR4J_PARAM_BOUNDS` defaults.
+        Override bounds for any of X1-X4 and, when using CemaNeige, CTG
+        (default 0–1) and Kf (default 0–10 mm per degree C per day).
+        Equal bounds hold a parameter fixed.
     seed : int, optional
         Random seed for reproducibility.
     maxiter : int
@@ -337,17 +341,34 @@ def calibrate(
     objective_fn = objective_fns[objective]
 
     bounds = dict(GR4J_PARAM_BOUNDS)
+    order = ["X1", "X2", "X3", "X4"]
+    if isinstance(precip, CemaNeige):
+        if not precip.index.equals(pet.index) or not precip.index.equals(observed.index):
+            raise ValueError("CemaNeige, PET and observed discharge must cover the same dates.")
+        if not np.isfinite(pet.to_numpy(dtype=float)).all() or (pet < 0).any():
+            raise ValueError("Daily PET must be finite and non-negative.")
+        if not 0 <= warmup_days < len(observed) or not np.isfinite(observed.iloc[warmup_days:]).any():
+            raise ValueError("CemaNeige calibration requires observations after the warm-up period.")
+        bounds.update({"CTG": (0.0, 1.0), "Kf": (0.0, 10.0)})
+        order.extend(["CTG", "Kf"])
     if param_bounds:
         bounds.update(param_bounds)
-    order = ["X1", "X2", "X3", "X4"]
+    if isinstance(precip, CemaNeige):
+        low, high = bounds["CTG"]
+        k_min, k_max = bounds["Kf"]
+        if not (0 <= low <= high <= 1 and 0 <= k_min <= k_max < np.inf):
+            raise ValueError("Calibration bounds must keep CTG in [0, 1] and Kf finite and non-negative.")
     bounds_list = [bounds[k] for k in order]
 
     obs_eval = observed.values[warmup_days:]
 
+    def simulate(x: np.ndarray) -> pd.Series:
+        model = GR4J(*(float(v) for v in x[:4]))
+        liquid = precip.simulate(ctg=float(x[4]), kf=float(x[5])).liquid if isinstance(precip, CemaNeige) else precip
+        return model.simulate(liquid, pet, warmup_days=warmup_days).streamflow
+
     def neg_objective(x: np.ndarray) -> float:
-        model = GR4J(x1=x[0], x2=x[1], x3=x[2], x4=x[3])
-        result = model.simulate(precip, pet, warmup_days=warmup_days)
-        sim_eval = result.streamflow.values[warmup_days:]
+        sim_eval = simulate(x).values[warmup_days:]
         score = objective_fn(obs_eval, sim_eval)
         if np.isnan(score):
             return 1e6  # heavily penalize degenerate parameter sets
@@ -363,15 +384,13 @@ def calibrate(
     )
 
     best_params = dict(zip(order, opt_result.x, strict=True))
-    best_model = GR4J(**{k.lower(): v for k, v in best_params.items()})
-    best_sim = best_model.simulate(precip, pet, warmup_days=warmup_days)
 
     return CalibrationResult(
         params=best_params,
         objective_value=float(-opt_result.fun),
         objective_name=objective,
         n_iterations=int(opt_result.nit),
-        simulated=best_sim.streamflow,
+        simulated=simulate(opt_result.x),
     )
 
 

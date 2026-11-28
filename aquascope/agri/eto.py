@@ -166,8 +166,9 @@ def extraterrestrial_radiation(latitude: float, doy: int) -> float:
     # Eq. 24: solar declination
     dr = 1.0 + 0.033 * math.cos(2.0 * math.pi * doy / 365.0)  # Eq. 23
     delta = 0.409 * math.sin(2.0 * math.pi * doy / 365.0 - 1.39)  # Eq. 24
-    # Eq. 25: sunset hour angle
-    ws = math.acos(-math.tan(phi) * math.tan(delta))  # Eq. 25
+    # Eq. 25: sunset hour angle (clamped for polar day / polar night)
+    cos_ws = max(-1.0, min(1.0, -math.tan(phi) * math.tan(delta)))
+    ws = math.acos(cos_ws)  # Eq. 25
     # Eq. 21
     gsc = 0.0820  # solar constant MJ/m²/min
     ra = (
@@ -176,7 +177,7 @@ def extraterrestrial_radiation(latitude: float, doy: int) -> float:
         * dr
         * (ws * math.sin(phi) * math.sin(delta) + math.cos(phi) * math.cos(delta) * math.sin(ws))
     )
-    return ra
+    return max(ra, 0.0)
 
 
 def clear_sky_radiation(ra: float, elevation: float) -> float:

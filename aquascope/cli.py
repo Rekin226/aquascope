@@ -796,7 +796,7 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 def cmd_run_study(args: argparse.Namespace) -> None:
     """Run a study file: the steps behind an answer, again, with no model in the loop."""
-    from aquascope.study import load, run_study, write_outputs
+    from aquascope.study import load, run_study, tool_names, write_outputs
 
     try:
         study = load(args.study)
@@ -809,12 +809,24 @@ def cmd_run_study(args: argparse.Namespace) -> None:
             print(f"  · {_format_event(event)}", file=sys.stderr)
 
     if args.dry_run:
+        calls = []
         print(f"{len(study.steps)} step(s) in {args.study}:")
         for i, step in enumerate(study.steps, 1):
+            step_id = step.id or f"s{i}"
+            calls.append((step_id, step.tool))
+            fallback = step.fallback
+            if isinstance(fallback, dict) and isinstance(fallback.get("step"), dict):
+                calls.append((f"{step_id}.fallback", str(fallback["step"].get("tool") or "")))
             label = f"{step.id}: " if step.id else ""
             print(f"  {i}. {label}{step.tool}({', '.join(f'{k}={v!r}' for k, v in step.arguments.items())})")
             for g in step.expects:
                 print(f"       gate {g.get('check')} {g.get('path') or g.get('paths') or ''} {g.get('value', '')}")
+        known_tools = set(tool_names())
+        unknown = [(step_id, tool) for step_id, tool in calls if tool not in known_tools]
+        if unknown:
+            for step_id, tool in unknown:
+                logger.error("%s: unknown tool %r", step_id, tool)
+            sys.exit(1)
         return
     run = run_study(study, on_event=on_event)
     if args.out:
@@ -1877,6 +1889,13 @@ def cmd_basins(args: argparse.Namespace) -> None:
             sk = skill.get(name) or {}
             tail = f"  LOO NSE {sk['nse']:.2f}, median error {sk['median_ape'] * 100:.0f} %" if sk else ""
             print(f"  {e['label']:<48} {e['value']:>10.3f} {e['unit']:<7} [{e['low']:.3f}, {e['high']:.3f}]{tail}")
+        if comparison := res.get("donor_count_sensitivity"):
+            print("  Similarity transfer with 5 vs 10 donors (mm/d; change relative to 5):")
+            for row in comparison["estimates"].values():
+                five = row["k5"] if row["k5"] is not None else f"unavailable ({row['n5']}/5)"
+                ten = row["k10"] if row["k10"] is not None else f"unavailable ({row['n10']}/10)"
+                change = f", {row['change_pct']:+.2f}%" if row["change_pct"] is not None else ""
+                print(f"    {row['label']}: {five} -> {ten}{change}")
         return
     if args.basins_cmd == "signatures":
         from aquascope.archive.bundles import read_bundle
@@ -5134,7 +5153,7 @@ def main() -> None:
     p_run.add_argument("--config", default=None, help="Pipeline config as JSON string")
     p_run.add_argument("--output", default=None, help="Path to save results JSON")
     p_run.add_argument("--out", "-o", default=None, help="Study: write report.md, manifest.json and results.json here")
-    p_run.add_argument("--dry-run", action="store_true", help="Study: list the steps without running them")
+    p_run.add_argument("--dry-run", action="store_true", help="Study: list steps and check tool names without running them")
     p_run.add_argument("--quiet", "-q", action="store_true", help="Study: do not print steps as they run")
 
     # ── completion  ────────────────────────────────────────────────────

@@ -10,6 +10,9 @@ All notable changes to AquaScope are documented here.
 - `extraterrestrial_radiation` now clamps `-tan(phi) * tan(delta)` to `[-1, 1]` before `acos` so high-latitude
   stations above the polar circles return midnight-sun and polar-night values instead of raising `ValueError`.
 
+- Ungauged-site similarity transfers compare mean, low (Q95) and high (Q05) flow using five and ten
+  donor catchments. The basins CLI and study report give both estimates and their percentage change.
+
 - Gauge track records now compute the forecast error factor from the full-precision median, matching
   the pooled score. Previously, rounding the median first could change a gauge's trust rating near a cutoff.
 

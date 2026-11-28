@@ -68,6 +68,7 @@ BOUNDS: dict[str, tuple[float | None, float | None]] = {
 }
 MIN_YEARS = 10.0
 RIDGE_LAMBDA = 1.0
+DONOR_COUNT_FLOWS = {"q_mean_mm": "Mean daily flow", "q95_mm": "Q95 (low flow)", "q05_mm": "Q05 (high flow)"}
 
 
 def signatures_url(repo_id: str = DEFAULT_REPO_ID) -> str:
@@ -212,6 +213,29 @@ def _unprep(v: float, how: str | None, name: str | None = None) -> float:
     return out
 
 
+def _weighted_mean(values: np.ndarray, weights: np.ndarray) -> float:
+    return float(np.sum((weights / weights.sum()) * values))
+
+
+def _donor_count_comparison(name: str, values: np.ndarray, weights: np.ndarray) -> dict[str, Any]:
+    """Compare complete prefixes of one similarity ranking with the same transfer as the primary estimate."""
+    how, unit, _ = SIGNATURES[name]
+    estimates: dict[int, float] = {}
+    counts = {}
+    for k in (5, 10):
+        counts[k] = int(np.isfinite(values[:k]).sum())
+        if counts[k] == k:
+            mean = _weighted_mean(_prep_y(values[:k], how), weights[:k])
+            estimates[k] = _unprep(mean, how, name)
+    five, ten = estimates.get(5), estimates.get(10)
+    return {
+        "label": DONOR_COUNT_FLOWS[name], "unit": unit, "n5": counts[5], "n10": counts[10],
+        "k5": round(five, 4) if five is not None else None,
+        "k10": round(ten, 4) if ten is not None else None,
+        "change_pct": round(100 * (ten - five) / five, 2) if five and ten is not None else None,
+    }
+
+
 def regionalize(
     target: dict[str, Any],
     *,
@@ -222,6 +246,7 @@ def regionalize(
     catalog: list[dict[str, Any]] | None = None,
     features: list[str] | None = None,
     exclude: tuple[str, str] | None = None,
+    compare_donor_counts: bool = False,
 ) -> dict[str, Any]:
     """Estimate the flow signatures of an ungauged catchment from gauged donors.
 
@@ -230,6 +255,9 @@ def regionalize(
     (inverse-distance-weighted mean over the ``k`` most similar donors with signatures),
     ``regression`` (ridge on standardised attributes over all donors), or ``both``.
     Returns per-signature estimates with an uncertainty band, the donors used, and the citation.
+    With ``compare_donor_counts``, compare the mean, Q95 and Q05 from the first five and ten donors
+    in the same similarity ranking when the site and the donor table have a common feature.
+    The primary transfer still uses the requested ``k``.
     """
     from aquascope.archive.catalog import load_stations
     from aquascope.archive.similar import _target_values, load_station_catchments
@@ -253,32 +281,43 @@ def regionalize(
     out: dict[str, Any] = {"method": method, "features_used": feats, "n_donors_available": int(len(donors_tab)),
                            "estimates": {}}
     if method in ("similarity", "both"):
-        ranked = similar_basins(target, k=k, method="similarity", require_discharge=True, table=donors_tab,
+        compare_donor_counts = compare_donor_counts and bool(feats)
+        primary_k = max(1, int(k))
+        ranked = similar_basins(target, k=max(primary_k, 10) if compare_donor_counts else primary_k,
+                                method="similarity", require_discharge=True, table=donors_tab,
                                 catalog=cat, features=feats)
         donors = ranked["stations"]
-        w = np.array([1.0 / (d["score"] + 0.05) for d in donors]) if donors else np.array([])
+        weights = np.array([1.0 / (d["score"] + 0.05) for d in donors])
         est: dict[str, Any] = {}
+        comparison = {}
+        comparison_donors: list[dict[str, Any]] = []
+        if compare_donor_counts:
+            comparison_donors = [{"source": d["source"], "station_id": d["station_id"], "score": d["score"],
+                                  "signatures": {}} for d in donors[:10]]
         for name, (how, unit, label) in SIGNATURES.items():
-            vals = []
-            for d in donors:
-                key = (d["source"], d["station_id"])
-                v = sig.at[key, name] if key in sig.index else None
-                vals.append(float("nan") if v is None or (isinstance(v, float) and math.isnan(v)) else float(v))
-            vals = np.array(vals, dtype=float)
-            ok = ~np.isnan(vals)
+            vals = np.array([sig.at[(d["source"], d["station_id"]), name] for d in donors], dtype=float)
+            if compare_donor_counts and name in DONOR_COUNT_FLOWS:
+                comparison[name] = _donor_count_comparison(name, vals, weights)
+                for donor, value in zip(comparison_donors, vals):
+                    donor["signatures"][name] = float(value) if np.isfinite(value) else None
+            vals = vals[:primary_k]
+            ok = np.isfinite(vals)
             if ok.sum() == 0:
                 continue
             y = _prep_y(vals[ok], how)
-            ww = w[ok] / w[ok].sum()
-            mean = float(np.sum(ww * y))
-            sd = float(np.sqrt(np.sum(ww * (y - mean) ** 2)))
+            ww = weights[:primary_k][ok]
+            mean = _weighted_mean(y, ww)
+            sd = float(np.sqrt(_weighted_mean((y - mean) ** 2, ww)))
             est[name] = {
                 "value": round(_unprep(mean, how, name), 4), "unit": unit, "label": label,
                 "low": round(_unprep(mean - sd, how, name), 4), "high": round(_unprep(mean + sd, how, name), 4),
                 "donor_min": round(float(np.min(vals[ok])), 4), "donor_max": round(float(np.max(vals[ok])), 4),
                 "n_donors": int(ok.sum()),
             }
-        out["similarity"] = {"estimates": est, "donors": donors, "k": len(donors)}
+        if compare_donor_counts:
+            out["donor_count_sensitivity"] = {"estimates": comparison, "donors": comparison_donors}
+        primary = donors[:primary_k]
+        out["similarity"] = {"estimates": est, "donors": primary, "k": len(primary)}
         out["estimates"] = est
     if method in ("regression", "both"):
         x, stats = _design_matrix(donors_tab, feats)
@@ -289,7 +328,7 @@ def regionalize(
             if name not in joined.columns:
                 continue
             y_raw = joined[name].to_numpy(dtype=float)
-            ok = ~np.isnan(y_raw)
+            ok = np.isfinite(y_raw)
             if ok.sum() < max(20, x.shape[1] + 5):
                 continue
             beta, rsd = _fit_ridge(x[ok], _prep_y(y_raw[ok], how))
@@ -335,6 +374,7 @@ def regionalize_point(lat: float, lon: float, *, k: int = 10, method: str = "sim
         return {"latitude": lat, "longitude": lon, "error": desc["error"]}
     target = {"latitude": lat, "longitude": lon, "attributes": desc.get("attributes", {}),
               "sub_basin": desc.get("sub_basin")}
+    kw.setdefault("compare_donor_counts", True)
     res = regionalize(target, k=k, method=method, **kw)
     res.update({"latitude": lat, "longitude": lon, "sub_basin": desc.get("sub_basin"),
                 "run_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})

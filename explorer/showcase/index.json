@@ -1,25 +1,47 @@
 {
- "generated": "2026-09-21T11:04:23+00:00",
- "aquascope_version": "0.18.0",
+ "generated": "2026-11-16T14:06:58+00:00",
+ "aquascope_version": "1.2.0",
  "note": "Recorded answers: the prose was written once by the model named in each entry. The tools can be re-run live in the page, with no key.",
  "examples": [
+  {
+   "id": "kingston-flood",
+   "question": "What is the 100-year flood of the Thames at Kingston, and how sure can we be?",
+   "shows": "Finding a gauge, fitting a flood frequency curve, and quoting the confidence interval.",
+   "tools": [
+    "assess_site",
+    "flood_frequency",
+    "find_stations",
+    "find_stations",
+    "find_stations",
+    "find_stations",
+    "find_stations",
+    "find_stations"
+   ],
+   "steps": 8,
+   "model": "openai/gpt-oss-120b",
+   "provider": "groq",
+   "recorded": "2026-11-16T13:48:10+00:00",
+   "checks_passed": 4,
+   "checks_total": 5
+  },
   {
    "id": "seine-loire-lowflow",
    "question": "Compare the low flows (Q95) of the Seine at Paris and the Loire at Blois.",
    "shows": "Two records in one answer, with the flow-duration curve behind each.",
    "tools": [
-    "find_stations",
-    "find_stations",
     "assess_site",
+    "assess_site",
+    "low_flow_context",
+    "find_stations",
     "low_flow_context",
     "low_flow_context"
    ],
-   "steps": 6,
+   "steps": 7,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T10:52:20+00:00",
-   "checks_passed": 5,
-   "checks_total": 5
+   "recorded": "2026-11-16T13:53:01+00:00",
+   "checks_passed": 6,
+   "checks_total": 6
   },
   {
    "id": "potomac-trend",
@@ -28,29 +50,34 @@
    "tools": [
     "find_stations",
     "assess_site",
-    "assess_site",
-    "analyze_station"
+    "change_points"
    ],
-   "steps": 5,
+   "steps": 4,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T10:55:19+00:00",
-   "checks_passed": 6,
-   "checks_total": 6
+   "recorded": "2026-11-16T13:55:08+00:00",
+   "checks_passed": 5,
+   "checks_total": 5
   },
   {
    "id": "taipei-london-climate",
    "question": "How wet is Taipei compared with London, and what is the aridity class of each?",
    "shows": "Two points with no gauge: ERA5 rainfall, FAO-56 ET0 and the aridity index.",
    "tools": [
+    "assess_site",
+    "assess_site",
+    "anywhere",
+    "anywhere",
+    "run_python",
+    "anywhere",
     "anywhere",
     "anywhere"
    ],
-   "steps": 3,
+   "steps": 8,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T10:57:15+00:00",
-   "checks_passed": 4,
+   "recorded": "2026-11-16T13:58:52+00:00",
+   "checks_passed": 3,
    "checks_total": 4
   },
   {
@@ -63,7 +90,7 @@
    "steps": 2,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T10:58:13+00:00",
+   "recorded": "2026-11-16T13:59:51+00:00",
    "checks_passed": 4,
    "checks_total": 4
   },
@@ -73,13 +100,19 @@
    "shows": "Prediction in ungauged basins: similar catchments, transferred signatures, and the skill of that transfer.",
    "tools": [
     "assess_site",
-    "regionalize_signatures"
+    "regionalize_signatures",
+    "regionalize_signatures",
+    "assess_site",
+    "regionalize_signatures",
+    "regionalize_signatures",
+    "assess_site",
+    "assess_site"
    ],
-   "steps": 3,
+   "steps": 8,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T10:59:35+00:00",
-   "checks_passed": 4,
+   "recorded": "2026-11-16T14:02:40+00:00",
+   "checks_passed": 3,
    "checks_total": 4
   },
   {
@@ -93,7 +126,7 @@
    "steps": 3,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T11:01:24+00:00",
+   "recorded": "2026-11-16T14:03:36+00:00",
    "checks_passed": 3,
    "checks_total": 4
   },
@@ -105,16 +138,16 @@
     "find_stations",
     "assess_site",
     "flood_frequency",
+    "assess_site",
+    "assess_site",
     "similar_basins",
     "flood_frequency",
-    "run_python",
-    "flood_frequency",
-    "run_python"
+    "similar_basins"
    ],
    "steps": 8,
    "model": "openai/gpt-oss-120b",
    "provider": "groq",
-   "recorded": "2026-09-21T11:04:23+00:00",
+   "recorded": "2026-11-16T14:06:58+00:00",
    "checks_passed": 3,
    "checks_total": 4
   }

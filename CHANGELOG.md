@@ -19,6 +19,8 @@ All notable changes to AquaScope are documented here.
 - The forecast archive stops the daily build when its published issue index cannot be read and rejects
   uploads from builds missing previously published dates.
 
+- **River reach names** (#721): deployments can configure Overpass to find a named OpenStreetMap waterway near a snapped reach. The card displays its fallback immediately, reuses successful lookups, and links to OpenStreetMap attribution.
+
 - On reaches with several gauges, the river card and Floods ahead now use the same best-sampled gauge
   for the raw GEOGLOWS track record, even when the Archive returns the gauges in a different order.
 

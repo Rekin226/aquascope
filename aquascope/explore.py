@@ -1713,9 +1713,8 @@ def record_quality_half(
       observation-only series has no holes by construction, so the calendar is what makes a gap visible.
     - ``longest_gap_days``: the number of days the longest outage is missing, taken straight from the record's
       own index: the largest step between consecutive observations minus one, so a daily record with no
-      missing day is 0 and a six-day outage is 6. ``assess_quality`` reports the first three gaps it finds in
-      date order, so it cannot be asked for the longest one: three short outages before a long hole would
-      hide the hole.
+      missing day is 0 and a six-day outage is 6. ``assess_quality`` only reports intervals exceeding
+      three times the station's normal sampling interval.
     - ``flagged_fraction``: share of observations whose ``quality`` flag is provisional or suspect; 0.0
       when ``quality`` is not given.
     - ``change_points``: the year of a Pettitt shift in the calendar years' means, when there is one. A
@@ -1777,10 +1776,7 @@ def record_quality_half(
     if flags is not None:
         observed["quality"] = flags.to_numpy(dtype=object)
     report = assess_quality(observed)
-    # The longest gap comes from the index itself, not from ``report.temporal_gaps``: that keeps only the
-    # first three gaps per station in date order, so a record with three short outages before a long hole
-    # used to report the short one (#375). The count is the days the gap is missing, not the step it spans:
-    # a daily record has no missing day, and a 14-year hole reads as the 5,114 days nobody observed.
+    # Count missing calendar days even when the interval is below the quality report's gap threshold.
     steps = day_values.index.to_series().diff().dropna()
     longest_gap = int(steps.max().days) - 1 if len(steps) else 0
     flagged_count = report.quality_counts.get("provisional", 0) + report.quality_counts.get("suspect", 0)

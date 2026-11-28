@@ -90,6 +90,28 @@ class TestQualityAssessment:
         assert "AquaScope" in text
         assert "Total records" in text
 
+    def test_largest_gaps_keep_their_dates_and_include_late_outages(self):
+        dates = pd.date_range("2020-01-01", "2020-02-19")
+        for start, count in [("2020-01-04", 6), ("2020-01-13", 6), ("2020-01-22", 6), ("2020-02-01", 15)]:
+            dates = dates.difference(pd.date_range(start, periods=count))
+        df = pd.DataFrame({"station_id": "S", "reading_datetime": dates[::-1]})
+        report = assess_quality(df)
+        assert report.temporal_gaps == [
+            {"station": "S", "gap_start": "2020-01-31", "gap_days": 16},
+            {"station": "S", "gap_start": "2020-01-03", "gap_days": 7},
+            {"station": "S", "gap_start": "2020-01-12", "gap_days": 7},
+        ]
+        assert "16 days between readings" in print_quality_report(report)
+
+    def test_observation_times_set_the_cadence_for_a_multi_parameter_station(self):
+        dates = pd.to_datetime(["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-10", "2020-01-11"])
+        df = pd.DataFrame({"station_id": "S", "sample_datetime": dates})
+        # Loading multiple parameters often also leaves repeated DataFrame index labels.
+        samples = pd.concat([df.assign(parameter="discharge"), df.assign(parameter="water_level")])
+        assert assess_quality(samples).temporal_gaps == [
+            {"station": "S", "gap_start": "2020-01-03", "gap_days": 7},
+        ]
+
 
 class TestQualityFlagBreakdown:
     def test_counts_and_fractions_when_quality_present(self):

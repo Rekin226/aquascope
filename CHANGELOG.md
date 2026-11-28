@@ -59,6 +59,9 @@ All notable changes to AquaScope are documented here.
 
 - The README links to a Japanese quickstart covering installation, flood frequency, baseflow and the CLI.
 
+- Station quality reports show the largest intervals between readings at their actual dates. Multiple
+  parameters recorded at the same time count as one visit when estimating the usual sampling interval.
+
 ## [1.3.0] - 2026-11-22
 
 Forecasts scored against the gauge, and drought indices that respect missing months. The daily forecast

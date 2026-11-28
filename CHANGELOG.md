@@ -13,6 +13,9 @@ All notable changes to AquaScope are documented here.
 - Gauge track records now compute the forecast error factor from the full-precision median, matching
   the pooled score. Previously, rounding the median first could change a gauge's trust rating near a cutoff.
 
+- Rerunning a saved study records skipped steps and removes old results for steps after an explicit stop.
+  The saved plan, results and manifest now describe the same run.
+
 - Forecast verification excludes infinite flow readings and forecasts from the sample count. An invalid
   quantile only removes that row from the probability score.
 
@@ -44,6 +47,8 @@ All notable changes to AquaScope are documented here.
   Short runs still show the largest inflow and outflow reached within the simulated hours.
 - Rescoring saved benchmark plans preserves other phases and extra evidence in the same JSONL file.
   It checks all inputs before replacing files and reports an error if multiple inputs share one `--out`.
+- `aquascope run study.yaml --dry-run` flags unknown tools in study steps and fallbacks before execution.
+- Study manifests record the tool, arguments, result hash and gate outcomes of each fallback that ran.
 
 - Study can compare runoff and peak flow before and after a land-use change under the same 24-hour storm.
   The Explorer, CLI and MCP use the sketchpad's TR-55 calculation and export a screening-grade comparison.
@@ -56,6 +61,9 @@ All notable changes to AquaScope are documented here.
 - **Record quality from the Archive on Hugging Face, opt-in, and on `aquascope assess`'s lines** (#375, follow-up to #676). `assess_site(archive_hub=True)`, `AQUASCOPE_ARCHIVE_HUB=1` or `aquascope assess --archive-hub` (experimental) reads each counted station's `obs/<variable>/<source>/<station_id>.csv.gz` from the Hugging Face dataset when no local mirror (`AQUASCOPE_ARCHIVE_DIR`) holds it, so the quality half fills without downloading the whole dataset and never calls an agency; the local mirror and the Hub share one parser. A station the Archive does not mirror (a 404), a failed read or an unreadable file keeps the metadata-only note, which now also says how to turn the Hub read on. Off by default: the default reconnaissance still reads nothing. `aquascope assess` prints each variable's completeness, longest gap, flagged share and change points on its line, and the MCP tool `assess_site` describes the quality fields and asks for gaps, flags and shifts to be reported. The test suite ignores a developer's own `AQUASCOPE_ARCHIVE_DIR` and `AQUASCOPE_ARCHIVE_HUB`.
 
 - The README links to a Japanese quickstart covering installation, flood frequency, baseflow and the CLI.
+
+- Station quality reports show the largest intervals between readings at their actual dates. Multiple
+  parameters recorded at the same time count as one visit when estimating the usual sampling interval.
 
 ## [1.3.0] - 2026-11-22
 

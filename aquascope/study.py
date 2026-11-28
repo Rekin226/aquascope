@@ -29,7 +29,8 @@ import hashlib
 import json
 import re
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from copy import deepcopy
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -341,6 +342,14 @@ class StudyRun:
         return [g for g in self.gates if not g.get("passed")]
 
     def manifest(self) -> dict[str, Any]:
+        def fallback_receipt(record: dict[str, Any]) -> dict[str, Any]:
+            fallback = record.get("fallback")
+            if not isinstance(fallback, dict):
+                return {}
+            receipt = {key: fallback.get(key) for key in ("id", "tool", "arguments", "ok", "error", "gates")}
+            receipt["result_sha256"] = fallback.get("sha256")
+            return {"fallback": receipt}
+
         return {
             "aquascope_version": __version__,
             "started": self.started,
@@ -361,6 +370,7 @@ class StudyRun:
                     "error": r.get("error"),
                     "gates": r.get("gates") or [],
                     "fallback_used": bool(r.get("fallback_used")),
+                    **fallback_receipt(r),
                 }
                 for r in self.results
             ],
@@ -847,18 +857,22 @@ def run_study(
     adds to or replaces the registry's tools by name: the browser worker,
     where BasinATLAS cannot be read, serves ``describe_catchment`` from what
     the page already holds. ``reuse`` (a steered rerun, :mod:`aquascope.studio.steering`) names exactly the
-    prior results to keep as they were, passed or failed; every other step runs again.
+    prior results to keep as they were, passed or failed; every other step runs again. A plan's saved
+    results are replaced by this run's records, including skips. Steps after an explicit stop have no record.
     """
     from aquascope.gates import evaluate
 
     if not isinstance(study, Study):
         study = load(study)
+    input_study = study
+    write_back = study.is_v2
+    if write_back:
+        # Keep the finished run's plan when the caller edits and reruns the same Study.
+        study = deepcopy(replace(study, results={}))
     say = on_event or (lambda _m: None)
     tools = {**_tools(), **(tools or {})}
     run = StudyRun(study=study, started=datetime.now(timezone.utc).isoformat(timespec="seconds"))
     done: dict[str, dict[str, Any]] = {}
-    # A version-1 study stays a version-1 file: results are written back only into a plan.
-    write_back = study.is_v2
     reusable = {r["id"]: r for r in (prior.results if prior else []) if r.get("ok") and r.get("gates_passed")}
     if reuse is not None:  # steering: exactly these prior results stand, the rest reruns
         reusable = {r["id"]: r for r in (prior.results if prior else []) if r.get("id") in set(reuse)}
@@ -907,8 +921,6 @@ def run_study(
             if not _established(rec):
                 run.ok = False
             done[step_id] = rec
-            if write_back and rec.get("fallback_used"):
-                study.results[step_id] = _result_entry(rec)
             continue
 
         old = reusable.get(step_id)
@@ -917,8 +929,6 @@ def run_study(
             rec = dict(old)
             run.results.append(rec)
             done[step_id] = rec
-            if write_back:
-                study.results[step_id] = _result_entry(rec)
             if not _established(rec):  # a failed result kept by a steered rerun is still a failure
                 run.ok = False
             continue
@@ -932,8 +942,6 @@ def run_study(
             run.results.append(rec)
             run.ok = False
             done[step_id] = rec
-            if write_back:
-                study.results[step_id] = _result_entry(rec)
             continue
 
         args = dict(step.arguments)
@@ -995,8 +1003,6 @@ def run_study(
                 say({"role": "runner", "step": step_id, "event": "failed", "detail": rec["failed_reason"]})
         run.results.append(rec)
         done[step_id] = rec
-        if write_back:
-            study.results[step_id] = _result_entry(rec)
         if not _established(rec):
             run.ok = False
         if run.stop_reason:
@@ -1006,6 +1012,9 @@ def run_study(
     run.finished = datetime.now(timezone.utc).isoformat(timespec="seconds")
     if run.stop_reason is None and not run.results and study.steps:
         run.ok = False
+    if write_back:
+        study.results = {r["id"]: _result_entry(r) for r in run.results}
+        input_study.results = study.results
     return run
 
 

@@ -102,7 +102,7 @@ def test_gates_are_evaluated_and_written_into_the_study():
     assert "results:" in study.to_yaml() and loads(study.to_yaml()).results["s2"]["ok"]
 
 
-def test_a_failed_gate_runs_the_fallback_once_and_records_it():
+def test_a_failed_gate_runs_the_fallback_once_and_records_it(tmp_path):
     calls: list = []
     study = _plan()
     study.steps[1].arguments = {"k": 1}
@@ -116,6 +116,17 @@ def test_a_failed_gate_runs_the_fallback_once_and_records_it():
     assert [c for c in calls if c[0] == "donors"] == [("donors", {"k": 1}), ("donors", {"k": 4})]
     assert study.results["s2"]["fallback_used"] and study.results["s2"]["fallback"]["tool"] == "donors"
     assert "fallback `donors(k=4)`: ok" in run.to_markdown()
+    write_outputs(run, tmp_path)
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    results = json.loads((tmp_path / "results.json").read_text(encoding="utf-8"))
+    assert "fallback" not in manifest["steps"][0]
+    step = manifest["steps"][1]
+    assert step["result_sha256"] == results[1]["sha256"]
+    fallback = step["fallback"]
+    assert fallback["tool"] == "donors" and fallback["arguments"] == {"k": 4}
+    assert fallback["id"] == "s2.fallback" and fallback["ok"] and fallback["gates"][0]["passed"]
+    assert fallback["result_sha256"] == results[1]["fallback"]["sha256"] != step["result_sha256"]
+    assert "result" not in fallback
 
 
 def test_a_fallback_that_fails_its_own_gate_fails_the_step_and_the_study_goes_on():
@@ -133,6 +144,8 @@ def test_a_fallback_that_fails_its_own_gate_fails_the_step_and_the_study_goes_on
     assert [f["id"] for f in failed] == ["s2"] and "did not pass its own gates" in failed[0]["reason"]
     assert run.summary == {"planned": 3, "ran": 3, "ok": 2, "failed": 1, "skipped": 0}
     assert study.results["s2"]["failed_reason"].startswith("gate failed")
+    fallback = run.manifest()["steps"][1]["fallback"]
+    assert fallback["ok"] and not fallback["gates"][0]["passed"]
 
 
 def test_a_failed_gate_without_a_fallback_fails_the_step_with_the_reason():
@@ -240,6 +253,44 @@ def test_a_prior_run_is_reused_for_steps_that_passed():
         second = run_study(study, on_event=events.append, prior=first)
     assert second.ok and [c for c in calls if c[0] == "probe"] == [("probe", {"years": 40})]
     assert any(e["event"] == "reused" and e["step"] == "s1" for e in events)
+
+
+def test_rerunning_a_saved_study_replaces_a_skipped_steps_old_success(tmp_path):
+    study = Study(question="How much flow?", version=2, steps=[
+        Step(tool="probe", id="gauge"), Step(tool="table", id="summary", arguments={"from_step": "gauge"},
+                                            depends_on=["gauge"])])
+    with patch("aquascope.study._tools", return_value=_fake_tools()):
+        previous = run_study(study)
+        write_outputs(previous, tmp_path / "first")
+        saved = loads((tmp_path / "first" / "study.yaml").read_text(encoding="utf-8"))
+        assert saved.results["summary"]["sha256"]
+        saved.steps[0].tool = "boom"
+        latest = run_study(saved)
+        write_outputs(latest, tmp_path / "latest")
+
+    receipt = loads((tmp_path / "latest" / "study.yaml").read_text(encoding="utf-8")).results
+    actual = json.loads((tmp_path / "latest" / "results.json").read_text(encoding="utf-8"))[1]
+    assert actual["skipped"] and not actual["ok"]
+    assert receipt["summary"]["skipped"] and not receipt["summary"]["ok"]
+    assert receipt["summary"]["error"] == actual["error"] and "sha256" not in receipt["summary"]
+    assert saved.results == receipt
+
+
+def test_stopped_rerun_keeps_only_current_receipts_and_preserves_the_prior_run():
+    study = _plan()
+    study.created = "2026-01-01T00:00:00+00:00"
+    study.steps.append(Step(tool="list_sources", id="tail"))
+    with patch("aquascope.study._tools", return_value=_fake_tools()):
+        first = run_study(study)
+        before = first.study.to_yaml()
+        study.steps[1].arguments = {"k": 0}
+        study.steps[1].fallback = "stop"
+        second = run_study(study, prior=first, reuse=["s1"])
+
+    assert second.stopped_at == "s2"
+    assert list(study.results) == [r["id"] for r in second.results] == ["s1", "s2"]
+    assert study.results["s1"]["sha256"] == first.study.results["s1"]["sha256"]
+    assert first.study.to_yaml() == before
 
 
 def test_an_unknown_tool_fails_the_step_and_the_run_goes_on():

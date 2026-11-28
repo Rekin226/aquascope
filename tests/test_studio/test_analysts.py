@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import types
@@ -9,6 +10,7 @@ import types
 from aquascope.studio.model import Model
 from aquascope.studio.roles import analysts, methodologist, scout
 from aquascope.studio.workspace import Artifact, Workspace
+from aquascope.study import Step, Study
 from tests.test_studio.conftest import (
     FLOW,
     PROBLEM,
@@ -67,6 +69,40 @@ def test_the_run_writes_results_gates_and_the_study_and_skips_figures_without_th
     assert ("analyst", "gates") in kinds and [a.id for a in ws.artifacts] == ["study-map"]
 
 
+def test_stored_hashes_cover_the_compacted_series_and_the_units_inherited_by_its_analysis(no_deliverables):
+    ws = Workspace()
+    ws.add_table("flows.csv", SERIES_CSV)
+    ws.set_study(Study(question="Check the flow record", steps=[
+        Step(id="source", tool="load_table", arguments={"table": "flows.csv"}),
+        Step(id="check", tool="quality", arguments={"from_step": "source"}),
+    ]))
+    with patched():
+        run = analysts.run(ws, None)
+    assert run.ok
+    saved = json.loads(ws.to_json())
+    source, analysis = saved["run"]["results"]
+    assert "series" not in source["result"]
+    assert analysis["result"]["unit"] == "m3/s" and analysis["result"]["variable"] == "discharge"
+    for record, manifest_step in zip((source, analysis), run.manifest()["steps"]):
+        blob = json.dumps(record["result"], ensure_ascii=False, sort_keys=True).encode("utf-8")
+        expected = hashlib.sha256(blob).hexdigest()[:16]
+        assert record["sha256"] == saved["study"]["results"][record["id"]]["sha256"] == expected
+        assert manifest_step["result_sha256"] == expected
+        assert manifest_step["tool_result_sha256"] == record["tool_result_sha256"] != expected
+
+    # Older workspaces recorded only one hash, sometimes after compaction. Its original tool hash is unknown.
+    del source["tool_result_sha256"]
+    del saved["study"]["results"]["source"]["tool_result_sha256"]
+    resumed = Workspace.from_dict(saved)
+    with patched():
+        reused = analysts.run(resumed, None, prior=analysts.prior_run(resumed), reuse=["source", "check"])
+    assert reused.ok and any(e["event"] == "reused" for e in resumed.events)
+    assert "tool_result_sha256" not in reused.results[0]
+    assert "tool_result_sha256" not in reused.manifest()["steps"][0]
+    assert "tool_result_sha256" not in resumed.study["results"]["source"]
+    assert reused.results[1]["tool_result_sha256"] == analysis["tool_result_sha256"]
+
+
 def test_figures_and_tables_are_made_per_step_when_the_makers_exist(monkeypatch):
     made: list = []
 
@@ -121,6 +157,10 @@ def test_a_failed_gate_runs_the_playbooks_fallback_then_the_specialists_proposal
     assert "spread_within" in failed_steps[0]["reason"] and failed_steps[1]["id"] == "s4", "s4 waits on s3"
     assert ws.run["summary"]["failed"] == 1 and ws.run["summary"]["planned"] == len(ws.run["results"])
     assert ws.run["results"][2]["fallback_used"] and ws.run["results"][2]["fallback"]["tool"] == "similar_basins"
+    fallback = json.loads(ws.to_json())["run"]["results"][2]["fallback"]
+    assert "trend_reported" in fallback["result"]
+    blob = json.dumps(fallback["result"], ensure_ascii=False, sort_keys=True).encode("utf-8")
+    assert fallback["sha256"] == hashlib.sha256(blob).hexdigest()[:16]
     assert ws.run["replans"] == 0, "keyless: no specialist"
 
     proposal = {"tool": "anywhere", "arguments": {"lat": 51.415, "lon": -0.308, "years": 20},

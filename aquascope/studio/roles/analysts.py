@@ -19,9 +19,7 @@ no thread pool here, in Pyodide or out of it.
 from __future__ import annotations
 
 import functools
-import hashlib
 import io
-import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -30,7 +28,7 @@ from aquascope.studio import catalogue
 from aquascope.studio.model import Model, compact
 from aquascope.studio.prompts import SPECIALIST
 from aquascope.studio.workspace import Artifact, Workspace
-from aquascope.study import Study, StudyRun, run_study
+from aquascope.study import Study, StudyRun, _result_hash, run_study
 
 __all__ = ["KINDS_BY_METHOD", "analyze_station_full", "flood_frequency_full", "load_table", "prior_run", "run"]
 
@@ -190,20 +188,19 @@ def _inherit_units(ws: Workspace, run: StudyRun, study: Study) -> None:
                 target[key] = source[key]
 
 
-def _strip_bulk(run: StudyRun, study: Study) -> None:
-    """Drop the daily series from the stored results (a workspace must not carry 50k points) and rehash."""
+def _finalize_results(run: StudyRun, study: Study) -> None:
+    """Drop bulk series and hash the payloads after Studio has annotated them."""
     for r in run.results:
         recs = [r]
         if isinstance(r.get("fallback"), dict):
             recs.append(r["fallback"])
         for rec in recs:
             p = rec.get("result")
-            if not isinstance(p, dict) or not any(k in p for k in _BULK_KEYS):
+            if not isinstance(p, dict):
                 continue
             for k in _BULK_KEYS:
                 p.pop(k, None)
-            blob = json.dumps(p, ensure_ascii=False, default=str, sort_keys=True)
-            rec["sha256"] = hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+            rec["sha256"] = _result_hash(p)
         sid = str(r.get("id"))
         if sid in study.results and r.get("sha256"):
             study.results[sid]["sha256"] = r["sha256"]
@@ -565,7 +562,7 @@ def run(ws: Workspace, model: Model | None, *, tools: dict[str, Any] | None = No
         replans += 1
         run_ = rerun(study)
 
-    _strip_bulk(run_, study)
+    _finalize_results(run_, study)
     ws.set_study(study)
     ws.run = {
         "ok": bool(run_.ok), "results": [dict(r) for r in run_.results], "gates": run_.gates,

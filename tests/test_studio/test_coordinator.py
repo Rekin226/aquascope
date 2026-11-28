@@ -3,6 +3,7 @@ what happens when a role fails."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 import pytest
@@ -43,8 +44,13 @@ def test_keyless_end_to_end_say_plan_approve_report_export(studio_factory, tmp_p
     assert back.version == 3 and back.plan["objective"] == PROBLEM
     with patched():
         rerun = run_study(back)
-    assert rerun.ok and [r["sha256"] for r in rerun.results] == [r["sha256"] for r in ws.run["results"]]
     saved = json.loads((tmp_path / "out" / "workspace.json").read_text(encoding="utf-8"))
+    assert rerun.ok and [r["id"] for r in rerun.results] == [r["id"] for r in saved["run"]["results"]]
+    for raw, stored in zip(rerun.results, saved["run"]["results"]):
+        entry = saved["study"]["results"][stored["id"]]
+        assert raw["sha256"] == stored["tool_result_sha256"] == entry["tool_result_sha256"]
+        blob = json.dumps(stored["result"], ensure_ascii=False, sort_keys=True).encode("utf-8")
+        assert hashlib.sha256(blob).hexdigest()[:16] == stored["sha256"] == entry["sha256"]
     assert saved["status"] == "done" and saved["study"]["version"] == 3
 
 

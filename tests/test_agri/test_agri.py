@@ -110,6 +110,24 @@ class TestExtraterrestrialRadiation:
         ra = extraterrestrial_radiation(45.0, 172)
         assert ra > 0
 
+    def test_polar_day_and_polar_night(self):
+        """High latitudes clamp sunset hour angle instead of raising math domain error."""
+        # Tromso (69.6 N): midnight sun at June solstice (~41.3 MJ/m2/day, FAO-56 Table 2.6), polar night in December
+        ra_summer = extraterrestrial_radiation(69.6, 172)
+        ra_winter = extraterrestrial_radiation(69.6, 355)
+        assert 40.0 < ra_summer < 43.0
+        assert ra_winter == 0.0
+
+        # Southern hemisphere polar night (June) and midnight sun (December)
+        assert extraterrestrial_radiation(-69.6, 172) == 0.0
+        assert extraterrestrial_radiation(-69.6, 355) > 40.0
+
+        # Exact poles stay finite and non-negative
+        assert extraterrestrial_radiation(90.0, 172) > 40.0
+        assert extraterrestrial_radiation(90.0, 355) == 0.0
+        assert extraterrestrial_radiation(-90.0, 172) == 0.0
+        assert extraterrestrial_radiation(-90.0, 355) > 40.0
+
 
 class TestClearSkyRadiation:
     def test_basic(self):
@@ -180,6 +198,33 @@ class TestPenmanMonteith:
             doy=15,
         )
         assert eto >= 0.0
+
+    def test_polar_latitude_midnight_sun_and_polar_night(self):
+        """Penman-Monteith works above the Arctic Circle in summer and winter."""
+        eto_summer = penman_monteith_daily(
+            t_min=8.0,
+            t_max=16.0,
+            rh_min=55.0,
+            rh_max=85.0,
+            u2=2.0,
+            rs=20.0,
+            latitude=69.6,
+            elevation=10.0,
+            doy=172,
+        )
+        eto_winter = penman_monteith_daily(
+            t_min=-6.0,
+            t_max=-2.0,
+            rh_min=75.0,
+            rh_max=90.0,
+            u2=2.0,
+            rs=0.0,
+            latitude=69.6,
+            elevation=10.0,
+            doy=355,
+        )
+        assert np.isfinite(eto_summer) and eto_summer > 0.0
+        assert np.isfinite(eto_winter) and eto_winter >= 0.0
 
 
 # =========================================================================

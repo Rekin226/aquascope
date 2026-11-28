@@ -113,6 +113,91 @@ def test_the_sensitivity_table_reads_the_stored_maxima(done):
     assert without["value"] < rows[0]["value"] * 1.5 and without["change_pct"] is not None
 
 
+@pytest.mark.parametrize("estimator", ["gev_lmoments", "lp3", "gev_bootstrap"])
+def test_post_change_compares_the_same_fit_at_the_reported_return_period(done, estimator):
+    import pandas as pd
+
+    from aquascope.hydrology.flood_frequency import fit_gev, fit_gev_lmoments, fit_lp3
+
+    ws = done[0].workspace
+    payload = desk._ffa_payload(ws)
+    # A gap after the change leaves exactly ten usable peaks, including the change year itself.
+    peaks = pd.Series(AMAX, index=pd.to_datetime([f"{y}-01-01" for y in YEARS])).drop(pd.Timestamp("2018-01-01"))
+    payload["annual_max"] = {"year": peaks.index.year.tolist(), "v": peaks.tolist()}
+    ffa = payload["ffa"]
+    ffa["n_years"] = len(peaks)
+    ffa["amax_change"] = {"test": "Pettitt", "significant": True, "change_year": 2015, "n_years": len(peaks)}
+    ws.brief.intake["return_period"] = 25
+    desk.desk_state(ws)["estimator"] = estimator
+    fitter = {"gev_lmoments": fit_gev_lmoments, "lp3": fit_lp3, "gev_bootstrap": fit_gev}[estimator]
+    kwargs = {"ci_level": None} if estimator == "gev_bootstrap" else {}
+    full = fitter(peaks, return_periods=ffa["return_periods"], **kwargs).return_periods
+    ffa["fits"][estimator] = {"q": [full[t] for t in ffa["return_periods"]]}
+    expected = fitter(peaks.loc["2015":], return_periods=[25], **kwargs).return_periods[25]
+
+    rows = desk.view(ws)["sensitivity"]
+    assert rows[0]["value"] == pytest.approx(full[25], abs=0.0001)
+    post = next(r for r in rows if r["case"].startswith("After the Pettitt change"))
+    assert "2015 to 2025, 10 annual peaks" in post["case"] and post["n"] == 10
+    assert (post["change_year"], post["start_year"], post["end_year"]) == (2015, 2015, 2025)
+    assert post["basis"] == desk.ESTIMATORS[estimator] + " refit"
+    assert post["value"] == pytest.approx(expected, abs=0.0001)
+    assert post["change_pct"] == pytest.approx((expected / full[25] - 1) * 100)
+    if estimator == "gev_bootstrap":
+        without = next(r for r in rows if r["case"].startswith("Without the largest flood"))
+        assert without["basis"] == "GEV (L-moments) refit"
+
+
+@pytest.mark.parametrize(("change", "estimator"), [
+    ({}, "gev_lmoments"),
+    ({"significant": False, "change_year": 2015}, "gev_lmoments"),
+    ({"significant": True, "change_year": 2017}, "gev_lmoments"),
+    ({"significant": True, "change_year": 2016}, "lp3"),
+])
+def test_post_change_requires_a_significant_peak_change_and_ten_usable_peaks(done, change, estimator):
+    ws = done[0].workspace
+    payload = desk._ffa_payload(ws)
+    payload["change_points"] = {"significant": True, "change_year": 2000}
+    payload["ffa"]["amax_change"] = {"n_years": len(YEARS), **change}
+    payload["annual_max"]["v"][-1] = 0  # LP3 cannot fit a zero-flow year.
+    desk.desk_state(ws)["estimator"] = estimator
+    assert not any(r["case"].startswith("After the Pettitt change") for r in desk.sensitivity(ws))
+
+
+def test_post_change_uses_the_reported_step_and_its_available_fit(done):
+    ws = done[0].workspace
+    # A second flood step wins in the report. Its GEV fit failed, so the report quotes its LP3 value.
+    first = next(r for r in ws.run["results"] if r["tool"] == "flood_frequency")
+    second = json.loads(json.dumps(first))
+    second["id"] = "second-flood"
+    ffa = second["result"]["ffa"]
+    ffa["fits"]["gev_lmoments"] = {"error": "fit unavailable"}
+    ffa["amax_change"] = {"significant": True, "change_year": 2015, "n_years": len(YEARS)}
+    ws.run["results"].append(second)
+    rows = desk.sensitivity(ws)
+    post = next(r for r in rows if r.get("change_year") == 2015)
+    assert post["basis"] == "Log-Pearson III refit"
+    assert rows[0]["value"] == ffa["fits"]["lp3"]["q"][ffa["return_periods"].index(100)]
+    assert post["change_pct"] == pytest.approx((post["value"] / rows[0]["value"] - 1) * 100)
+
+
+def test_post_change_skips_a_bundle_with_only_plotted_peaks(done):
+    ws = done[0].workspace
+    payload = desk._ffa_payload(ws)
+    payload["ffa"]["amax_change"] = {"significant": True, "change_year": 2000, "n_years": len(YEARS)}
+    payload["annual_max"] = {"year": YEARS[::2], "v": AMAX[::2]}
+    assert not any(r.get("change_year") for r in desk.sensitivity(ws))
+
+
+def test_post_change_omits_a_failed_refit(done):
+    ws = done[0].workspace
+    payload = desk._ffa_payload(ws)
+    payload["ffa"]["amax_change"] = {"significant": True, "change_year": 2015, "n_years": len(YEARS)}
+    payload["annual_max"]["v"][-11:] = [400.0] * 11
+    rows = desk.sensitivity(ws)
+    assert rows[0]["value"] is not None and not any(r.get("change_year") for r in rows)
+
+
 def test_the_report_carries_the_revisions_the_sensitivity_and_the_review(done):
     pytest.importorskip("matplotlib")
     from aquascope.studio.document import build_report, render_markdown

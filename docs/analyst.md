@@ -233,3 +233,7 @@ the loop, and writes `report.md`, `manifest.json` (aquascope version, times and
 a hash per step, so drift is visible) and `results.json`. The model writes the
 study; the engine runs the study. That is the reproducible unit, and it is what
 the declarative runner of #54 was for.
+
+For a version 2 or later plan, `results/study.yaml` records the outcome of each
+step reached during this run, including why a step with a failed dependency was skipped.
+If a gate stops the run, later steps stay in the plan with no result entry.
